@@ -2755,6 +2755,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V188 - clinical.patients.is_active no longer mirrors a pending
+         portal account (QA D27): puts back the records the old copy switched
+         off. Data-only UPDATE, idempotent, no DO blocks. (V186 reserved by
+         another branch.)
+         ================================================================= -->
+    <changeSet id="V188-patient-active-not-account-state" author="hms-team" runOnChange="false">
+        <sqlFile path="V188__patient_active_not_account_state.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V191: lab test definitions - re-file the rows create/update wrongly
          saved global back under their author's hospital (D30), and record
          the switched-on DRAFT/APPROVED rows as ACTIVE now that only ACTIVE

@@ -460,7 +460,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -470,6 +470,36 @@ class DepartmentServiceImplTest {
 
         assertThat(result.getName()).isEqualTo("Neurology");
         verify(departmentRepository).save(department);
+    }
+
+    @Test
+    void createDepartment_prefersActiveHospitalAdminAssignment() {
+        // D26: an admin who also holds another role at the same hospital must not
+        // hit "query did not return a unique result" — the admin assignment wins.
+        UUID userId = UUID.randomUUID();
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Neurology");
+        dto.setHospitalId(hospitalId);
+        UserRoleHospitalAssignment adminAssignment = UserRoleHospitalAssignment.builder()
+            .hospital(hospital).active(true).build();
+        Department createdDepartment = new Department();
+        createdDepartment.setName("Neurology");
+        createdDepartment.setHospital(hospital);
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        when(roleAssignmentRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            userId, hospitalId, "ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(adminAssignment));
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment))).thenReturn(createdDepartment);
+        when(departmentRepository.save(createdDepartment)).thenReturn(createdDepartment);
+        when(departmentMapper.toDepartmentResponseDTO(eq(createdDepartment), any(Locale.class)))
+            .thenReturn(new DepartmentResponseDTO());
+
+        departmentService.createDepartment(dto, locale);
+
+        verify(departmentMapper).toDepartment(any(), eq(hospital), isNull(), eq(adminAssignment));
+        verify(roleAssignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(any(), any());
     }
 
     @Test
@@ -542,7 +572,7 @@ class DepartmentServiceImplTest {
         lenient().when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId))
             .thenReturn(false);
         lenient().when(authService.getCurrentUserId()).thenReturn(userId);
-        lenient().when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        lenient().when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         lenient().when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment)))
             .thenReturn(department);
@@ -570,7 +600,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalByNameIgnoreCase("Test Hospital")).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("ICU", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -612,7 +642,7 @@ class DepartmentServiceImplTest {
         when(staffService.getStaffByUserEmail("doctor@test.com", locale)).thenReturn(List.of(staffDto));
         when(staffService.getStaffEntityById(staffId, locale)).thenReturn(staff);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), eq(staff), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -638,7 +668,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Radiology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -668,7 +698,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
@@ -698,7 +728,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
         assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
@@ -719,7 +749,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Oncology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -912,7 +942,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Pharmacy", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId))
             .thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
@@ -941,7 +971,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
@@ -970,7 +1000,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Lab", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(superAdminId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(superAdminId, hospitalId)).thenReturn(Optional.empty());
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(superAdminId, hospitalId)).thenReturn(Optional.empty());
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(true);
         when(roleRepository.findByCode("ROLE_HOSPITAL_ADMIN")).thenReturn(Optional.of(hospitalAdminRole));
         when(roleAssignmentRepository.findFirstByHospitalIdAndRole_Name(hospitalId, "ROLE_HOSPITAL_ADMIN"))
@@ -1003,7 +1033,7 @@ class DepartmentServiceImplTest {
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Test", hospitalId)).thenReturn(false);
         when(staffService.getStaffByUserEmail("unknown@test.com", locale)).thenReturn(List.of());
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1049,7 +1079,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Pediatrics", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1075,7 +1105,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Dermatology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1107,7 +1137,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1138,7 +1168,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Orthopedics", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);
@@ -1183,7 +1213,7 @@ class DepartmentServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("SuperAdminDept", hospitalId)).thenReturn(false);
         when(authService.getCurrentUserId()).thenReturn(userId);
-        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+        when(roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
             .thenReturn(Optional.of(assignment));
         when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
         when(departmentRepository.save(department)).thenReturn(department);

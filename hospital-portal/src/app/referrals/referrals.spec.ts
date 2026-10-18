@@ -80,7 +80,7 @@ describe('ReferralsComponent', () => {
   function flushInitRequests(): void {
     // ngOnInit triggers: load(), loadAssignedHospitals(), loadAllHospitals()
     httpMock.match((req) => req.url.includes('/referrals')).forEach((r) => r.flush([]));
-    const myHospReq = httpMock.match((req) => req.url.includes('/hospitals/me'));
+    const myHospReq = httpMock.match((req) => req.url === '/me/hospital');
     myHospReq.forEach((r) => r.flush(mockHospital));
     const allHospReq = httpMock.match((req) => req.url.includes('/hospitals'));
     allHospReq.forEach((r) => r.flush([mockHospital, mockHospital2]));
@@ -92,6 +92,16 @@ describe('ReferralsComponent', () => {
   it('should create', () => {
     flushInitRequests();
     expect(component).toBeTruthy();
+  });
+
+  it('QA D36: the destination picker reads the hospital directory, not the scoped list', () => {
+    fixture.detectChanges();
+    const directory = httpMock.match((req) => req.url === '/hospitals/directory');
+    expect(directory.length).toBe(1);
+    directory[0].flush([{ id: 'h2', name: 'Remote Hospital', city: 'Bobo' }]);
+    expect(httpMock.match((req) => req.url === '/hospitals').length).toBe(0);
+    flushInitRequests();
+    expect(component.allHospitals().map((h) => h.id)).toEqual(['h2']);
   });
 
   it('emptyForm should include new fields with defaults', () => {

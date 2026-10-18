@@ -64,5 +64,13 @@ public record BulkShiftRequestDTO(
     @Schema(description = "When true, dates that would produce a conflict (leave, overlap, day-off) are "
         + "silently skipped and recorded in the 'skipped' list instead of aborting the whole batch.",
         defaultValue = "true")
-    boolean skipConflicts
-) { }
+    Boolean skipConflicts
+) {
+    // A body that leaves this out or sends null gets the documented default
+    // (QA D23): Jackson 3 refuses a null for a primitive record component.
+    public BulkShiftRequestDTO {
+        if (skipConflicts == null) {
+            skipConflicts = Boolean.TRUE;
+        }
+    }
+}

@@ -61,6 +61,17 @@ public class HospitalController {
                 facilityType, locale));
     }
 
+    /**
+     * The hospital directory (QA D36): id, name and city of every active
+     * clinical hospital, for the destination picker of referrals. The list
+     * above is scoped to the caller's own hospitals.
+     */
+    @GetMapping("/directory")
+    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_RECEPTIONIST + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
+    public ResponseEntity<List<com.example.hms.payload.dto.HospitalDirectoryEntryDTO>> getHospitalDirectory() {
+        return ResponseEntity.ok(hospitalService.getHospitalDirectory());
+    }
+
     @GetMapping("/organization/{organizationId}")
     @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
     public ResponseEntity<List<HospitalResponseDTO>> getHospitalsByOrganization(@PathVariable UUID organizationId,

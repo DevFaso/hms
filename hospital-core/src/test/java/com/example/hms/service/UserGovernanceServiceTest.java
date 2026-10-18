@@ -112,6 +112,28 @@ class UserGovernanceServiceTest {
     }
 
     @Test
+    void forcePasswordResetToleratesOmittedTargetLists() {
+        // D32: a body with only usernames left userIds/emails null -> NPE -> 500.
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        user.setEmail("reset@example.com");
+        user.setUsername("resetuser");
+        when(userRepository.findByUsernameInIgnoreCase(any())).thenReturn(List.of(user));
+        when(userRepository.save(any(User.class))).thenReturn(user);
+
+        SuperAdminUserForcePasswordResetRequestDTO request = new SuperAdminUserForcePasswordResetRequestDTO();
+        request.setUserIds(null);
+        request.setEmails(null);
+        request.setUsernames(List.of("resetuser"));
+        request.setSendEmail(false);
+
+        SuperAdminUserForcePasswordResetResponseDTO response = service.forcePasswordReset(request);
+
+        assertThat(response.getSucceeded()).isEqualTo(1);
+        assertThat(response.getResults()).hasSize(1);
+    }
+
+    @Test
     void forcePasswordResetHandlesUsersFromIdsAndEmails() {
         UUID userId = UUID.randomUUID();
         User user = new User();

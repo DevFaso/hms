@@ -245,7 +245,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(status(put("/users/" + nurseA.getId()), doctor, Map.of("password", "Attacker-Chosen-1")))
             .isEqualTo(404);
         assertThat(status(get("/users/" + nurseA.getId()), doctor, null)).isEqualTo(404);
-        assertThat(status(delete("/users/" + nurseA.getId()), doctor, null)).isEqualTo(404);
+        // QA D55: a doctor is no longer a registrar, so the delete is refused at the door.
+        assertThat(status(delete("/users/" + nurseA.getId()), doctor, null)).isEqualTo(403);
     }
 
     @Test
@@ -509,18 +510,13 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a surgeon's compensation works: register the patient, discard the orphan")
+    @DisplayName("QA D55: a surgeon cannot open a patient registration POST /patients would refuse")
     void surgeonCompensation() throws Exception {
         User surgeon = account("surA", "ROLE_SURGEON", hospitalA);
         String token = hms(surgeon, "ROLE_SURGEON");
 
         MvcResult registered = perform(post("/users/admin-register"), token, signup("orphan", "PATIENT", hospitalA));
-        assertThat(registered.getResponse().getStatus()).isEqualTo(201);
-        UUID orphanId = idOf(registered);
-        createdUsers.add(orphanId);
-
-        assertThat(status(delete("/users/" + orphanId), token, null)).isEqualTo(200);
-        assertThat(userRepository.findById(orphanId).orElseThrow().isDeleted()).isTrue();
+        assertThat(registered.getResponse().getStatus()).isEqualTo(403);
     }
 
     // ------------------------------------------------- the directory's scope

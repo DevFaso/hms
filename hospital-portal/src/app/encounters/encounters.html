@@ -284,10 +284,20 @@
               <div class="note-history">
                 @for (n of noteHistory(); track n.id) {
                   <div class="note-history-item">
-                    <p class="notes-content">{{ n.content }}</p>
                     <span class="note-meta">
-                      {{ n.authorName }} — {{ n.createdAt | date: 'short' }}
+                      @if (n.changeKey) {
+                        <strong>{{ n.changeKey | translate }}</strong> ·
+                      }
+                      @if (n.authorName) {
+                        {{ n.authorName }} —
+                      }
+                      {{ n.changedAt | date: 'short' }}
                     </span>
+                    @for (section of n.sections; track section.labelKey) {
+                      <p class="notes-content">
+                        <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                      </p>
+                    }
                   </div>
                 }
               </div>

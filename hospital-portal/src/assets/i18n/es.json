@@ -1561,7 +1561,8 @@
     "SAVE_CHANGES": "Guardar Cambios",
     "SAVING": "Guardando…",
     "SEARCH": "Buscar",
-    "SEARCH_PATIENT": "Search patient...",
+    "SEARCH_PATIENT": "Buscar paciente…",
+    "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda.",
     "SELECT": "Seleccionar",
     "SELECT_HOSPITAL": "Select hospital",
     "SHOW_ACTIVE": "Show Active",
@@ -2357,7 +2358,14 @@
     "VIEW_AVS": "Resumen de visita",
     "VIEW_DETAILS": "Ver detalles",
     "VITALS": "Signos Vitales",
-    "WAITING_FOR_MD": "Esperando al médico"
+    "WAITING_FOR_MD": "Esperando al médico",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Creada",
+      "UPDATED": "Modificada",
+      "SIGNED": "Firmada",
+      "COSIGNED": "Refrendada",
+      "ADDENDUM": "Adenda añadida"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3529,7 +3537,6 @@
     "PAIN_REASSESSMENT": "Reevaluación del dolor",
     "PATIENTS_ASSIGNED": "Patients Assigned",
     "PATIENT_DETAILS": "Patient Details",
-    "PATIENT_ID": "ID del paciente",
     "PATIENT_LIST": "Patient List",
     "PENDING": "Pendiente",
     "PENDING_ORDERS": "Pending Orders",
@@ -3591,7 +3598,6 @@
     "OVERDUE_BADGE": "VENCIDO",
     "COMPLETED_PREFIX": "Completado",
     "BY_PREFIX": "por",
-    "PATIENT_UUID_PLACEHOLDER": "UUID del paciente",
     "VITALS_PLACEHOLDER": {
       "TEMP": "p. ej. 37,2",
       "HEART_RATE": "p. ej. 72",
@@ -5359,6 +5365,7 @@
         "USER_DELETE": "Usuario eliminado",
         "USER_DISABLE": "Usuario desactivado",
         "USER_ENABLE": "Usuario activado",
+        "USER_RESTORE": "Usuario restaurado",
         "USER_UPDATE": "Usuario actualizado",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook desactivado",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook registrado",
@@ -5943,10 +5950,10 @@
     "BACKUP_CODES": "Códigos de respaldo",
     "BACKUP_CODES_COPIED": "Códigos de respaldo copiados al portapapeles.",
     "BACKUP_CODES_HINT": "Guarde estos códigos en un lugar seguro. Cada uno solo puede usarse una vez.",
-    "CHANGE_PASSWORD": "Change Password",
+    "CHANGE_PASSWORD": "Cambiar la contraseña",
     "CHANGE_PHOTO": "Cambiar foto",
     "CHANGE_REQUIRED": "Cambio requerido",
-    "CONFIRM_PASSWORD": "Confirm Password",
+    "CONFIRM_PASSWORD": "Confirmar la contraseña",
     "CONNECTED_DEVICES": "Connected Devices",
     "COPY_CODES": "Copiar los códigos",
     "CREDENTIAL_HEALTH": "Estado de credenciales",
@@ -6001,7 +6008,7 @@
     "MFA_STATUS": "Estado MFA",
     "MIN_CHARS": "Minimum 8 characters",
     "NEVER": "Nunca",
-    "NEW_PASSWORD": "New Password",
+    "NEW_PASSWORD": "Nueva contraseña",
     "NOTIFICATIONS_PREF": "Notification Preferences",
     "NOTIFICATIONS_TAB": "Notifications",
     "NO_ACTIVITY": "Sin actividad reciente",
@@ -6012,7 +6019,7 @@
     "OVERVIEW": "Resumen",
     "PASSWORD": "Contraseña",
     "PASSWORD_CHANGE_REQUIRED": "Cambio de contraseña requerido",
-    "PASSWORD_MISMATCH": "Passwords do not match",
+    "PASSWORD_MISMATCH": "Las contraseñas no coinciden",
     "PASSWORD_STATUS": "Estado de la contraseña",
     "PASSWORD_TAB": "Password",
     "PASSWORD_UP_TO_DATE": "La contraseña está actualizada",
@@ -6112,7 +6119,17 @@
     "MFA_STEPUP_LOCKED": "Demasiados códigos incorrectos. Espere unos minutos y vuelva a intentarlo con un código actual o un código de respaldo sin usar.",
     "MFA_STEPUP_REUSED": "Ese código ya se utilizó. Espere el siguiente código de su aplicación de autenticación o use un código de respaldo sin usar.",
     "MFA_STEPUP_IMPERSONATION": "Una sesión de soporte no puede configurar ni cambiar el autenticador de esta cuenta. El titular de la cuenta debe hacerlo personalmente.",
-    "MFA_SET_UP": "Configurar una aplicación de autenticación"
+    "MFA_SET_UP": "Configurar una aplicación de autenticación",
+    "CHANGE_PASSWORD_DESC": "Introduzca su contraseña actual y elija una nueva de al menos 8 caracteres.",
+    "PASSWORD_TOO_SHORT": "La nueva contraseña debe tener al menos 8 caracteres.",
+    "PASSWORD_SAME_AS_CURRENT": "La nueva contraseña debe ser distinta de la actual.",
+    "PASSWORD_CHANGED": "Su contraseña se ha cambiado.",
+    "PASSWORD_CURRENT_WRONG": "La contraseña actual es incorrecta.",
+    "PASSWORD_CHANGE_REFUSED": "La nueva contraseña fue rechazada. Puede coincidir con una de sus 5 últimas contraseñas.",
+    "PASSWORD_CHANGE_FAILED": "No se pudo cambiar la contraseña. Inténtelo de nuevo.",
+    "PASSWORD_MANAGED_BY_SSO": "Su contraseña la gestiona su proveedor de inicio de sesión único.",
+    "SAVE_NEW_PASSWORD": "Guardar la nueva contraseña",
+    "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Aceptar",
@@ -7897,7 +7914,9 @@
     "HAND_OVER_FAILED": "No se pudo registrar la entrega.",
     "CANCEL_READY_SUCCESS": "Preparación cancelada.",
     "CANCEL_READY_FAILED": "No se pudo cancelar la preparación.",
-    "PREPARED_BY": "Preparada por {{name}}"
+    "PREPARED_BY": "Preparada por {{name}}",
+    "NO_PHARMACY_HINT": "Todavía no hay ninguna farmacia registrada para este hospital. Un administrador del hospital puede registrar una en el Registro de farmacias.",
+    "SELECT_PHARMACY": "Farmacia"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -10426,5 +10445,17 @@
       "BY_SUPPORT": "En su nombre: soporte de la plataforma ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Rol asignado: {{role}}"
     }
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",
+    "HEART_RATE": "La frecuencia cardíaca debe estar entre {{min}} y {{max}} lpm.",
+    "RESPIRATORY_RATE": "La frecuencia respiratoria debe estar entre {{min}} y {{max}} respiraciones por minuto.",
+    "SYSTOLIC": "La presión sistólica debe estar entre {{min}} y {{max}} mmHg.",
+    "DIASTOLIC": "La presión diastólica debe estar entre {{min}} y {{max}} mmHg.",
+    "SPO2": "La SpO2 debe estar entre {{min}} y {{max}} %.",
+    "GLUCOSE": "La glucemia debe estar entre {{min}} y {{max}} mg/dL.",
+    "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
+    "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
   }
 }

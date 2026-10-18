@@ -24,6 +24,22 @@ describe('PermissionService', () => {
     service = TestBed.inject(PermissionService);
   }
 
+  // ── Patient registration (QA D55): exactly the POST /patients roles ──
+
+  for (const role of ['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']) {
+    it(`${role} is not offered patient registration (POST /patients refuses it)`, () => {
+      setup([role]);
+      expect(service.hasPermission('Register Patients')).toBeFalse();
+    });
+  }
+
+  for (const role of ['ROLE_RECEPTIONIST', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN']) {
+    it(`${role} may register patients`, () => {
+      setup([role]);
+      expect(service.hasPermission('Register Patients')).toBeTrue();
+    });
+  }
+
   // ── Nurse Station RBAC ──────────────────────────────────────────
 
   it('ROLE_NURSE should have Access Nurse Station', () => {

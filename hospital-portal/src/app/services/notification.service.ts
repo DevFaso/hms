@@ -4,6 +4,12 @@ import { Observable, Subject } from 'rxjs';
 import { Client, IMessage } from '@stomp/stompjs';
 
 import { AuthService } from '../auth/auth.service';
+import {
+  SockJsConstructor,
+  WS_TICKET_URL,
+  backgroundRequestOptions,
+  openSockJs,
+} from './ws-transport';
 
 export interface Notification {
   id: string;
@@ -107,7 +113,7 @@ export class NotificationService {
 
     // T-38: exchange JWT for a short-lived WebSocket ticket, then hand it to SockJS.
     // Each call mints a fresh ticket so reconnects never reuse a stale (expired) one.
-    this.http.post<{ ticket: string }>('/auth/ws-ticket', {}).subscribe({
+    this.http.post<{ ticket: string }>(WS_TICKET_URL, {}, backgroundRequestOptions()).subscribe({
       next: (res) => {
         if (generation !== this.connectGeneration) return;
         const ticket = res?.ticket;
@@ -157,10 +163,10 @@ export class NotificationService {
       .then((mod) => {
         if (generation !== this.connectGeneration) return;
 
-        const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
+        const SockJSCtor = (mod.default ?? mod) as SockJsConstructor;
 
         this.stompClient = new Client({
-          webSocketFactory: () => new SockJSCtor(sockUrl),
+          webSocketFactory: () => openSockJs(SockJSCtor, sockUrl),
 
           // Disable StompJS's built-in reconnect (it would reuse the stale ticket).
           // We drive reconnects via scheduleReconnect() to mint a fresh ticket.

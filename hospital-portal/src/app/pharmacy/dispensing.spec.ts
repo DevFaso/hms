@@ -191,6 +191,20 @@ describe('DispensingComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('shows a hint instead of a blank selector when no pharmacy exists (QA D59)', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="no-pharmacy-hint"]')).toBeNull();
+    expect(el.querySelector('select.pharmacy-select')).not.toBeNull();
+
+    component.pharmacies.set([]);
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-testid="no-pharmacy-hint"]')?.textContent?.trim()).toBe(
+      'PHARMACY.NO_PHARMACY_HINT',
+    );
+    expect(el.querySelector('select.pharmacy-select')).toBeNull();
+  });
+
   it('should load pharmacies on init', () => {
     expect(pharmacySvc.listPharmacies).toHaveBeenCalled();
     expect(component.pharmacies().length).toBe(1);

@@ -46,7 +46,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         //   - super-admin: hospitalId optional. null  → global / LNME entry visible
         //                  to every tenant. non-null → tenant-specific entry attached
         //                  to that hospital (e.g. an SKU only one site stocks).
-        //   - hospital admin: hospitalId required and must equal their JWT scope.
+        //   - hospital admin: hospitalId defaults to the acting hospital and, when sent, must equal it.
         //                  An admin from Hospital A cannot insert a medication into
         //                  Hospital B's catalog, and cannot mint global entries —
         //                  global creation is a platform governance act.
@@ -85,16 +85,25 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
      */
     private Hospital resolveCreateHospital(UUID requestedHospitalId) {
         boolean superAdmin = roleValidator.isSuperAdminFromJwtClaim();
-        if (requestedHospitalId == null) {
-            if (!superAdmin) {
+        UUID targetHospitalId = requestedHospitalId;
+        if (targetHospitalId == null) {
+            if (superAdmin) {
+                return null;
+            }
+            // D34: a hospital admin's entry belongs to the hospital they act for;
+            // the form need not repeat it. The scope comes from the resolved
+            // acting scope, never from the request.
+            UUID activeScope = roleValidator.requireActiveHospitalId();
+            if (activeScope == null) {
                 throw new BusinessException(
                     "Hospital ID is required. Only super-admins may create global "
                         + "(platform-wide) medication catalog entries.");
             }
-            return null;
+            targetHospitalId = activeScope;
         }
-        Hospital hospital = hospitalRepository.findClinicalById(requestedHospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requestedHospitalId));
+        final UUID lookupId = targetHospitalId;
+        Hospital hospital = hospitalRepository.findClinicalById(lookupId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", lookupId));
         if (!superAdmin) {
             UUID activeScope = roleValidator.requireActiveHospitalId();
             if (!hospital.getId().equals(activeScope)) {

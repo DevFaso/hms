@@ -27,6 +27,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
+import { BACKGROUND_REQUEST } from '../services/ws-transport';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -49,7 +50,12 @@ const SILENT_403_PATTERNS = [
  * but if the two ever drift the chart must still open — the panel degrades to
  * its error text instead of the whole page redirecting to /error/403.
  */
-const SILENT_403_POST_PATTERNS = [/\/cds-services\/[^/?]+(\?|$)/];
+const SILENT_403_POST_PATTERNS = [
+  /\/cds-services\/[^/?]+(\?|$)/,
+  // The WebSocket ticket exchange (QA D35): the sockets retry with backoff;
+  // a refusal must never take the page the user is on to /error/403.
+  /\/auth\/ws-ticket(\?|$)/,
+];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 
@@ -330,6 +336,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');
         const isSilent =
+          req.context.get(BACKGROUND_REQUEST) ||
           ((req.method === 'GET' || req.method === 'HEAD') &&
             SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url))) ||
           (req.method === 'POST' &&
