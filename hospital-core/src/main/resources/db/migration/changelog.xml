@@ -2824,6 +2824,17 @@
     </changeSet>
 
     <!-- =================================================================
+         V197: default now() on the postpartum and newborn alert created_at
+         columns (QA D131). Two ALTERs, no DO block.
+         ================================================================= -->
+    <changeSet id="V197-maternity-alert-created-at-default" author="hms-team" runOnChange="false">
+        <sqlFile path="V197__maternity_alert_created_at_default.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V193: clinical.encounters.admission_id - an admission's own
          INPATIENT encounter (QA D134/D135/D136). No FK: admissions live in
          public and encounters in clinical, and the column is nullable for

@@ -291,4 +291,64 @@ class NewbornAssessmentServiceImplTest {
         assertThat(service.getRecentAssessments(patientId, hospitalId, 5)).isEmpty();
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(), eq(Map.of()), anyString());
     }
+
+    // ── QA D161 (D103 family) and D131 ────────────────────────────────────
+    // The maternity screen records the assessment on the MOTHER's chart: an
+    // adult chart recorded as male must be refused, as every obstetric record is.
+
+    @Test
+    void recordAssessmentOnAnAdultMaleChartIsRefused() {
+        patient.setDateOfBirth(LocalDate.of(1985, 5, 1));
+        patient.setGender("M");
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, request, recorderId));
+        assertEquals("maternity.patient.male", ex.getMessage());
+        verify(assessmentRepository, never()).save(any());
+    }
+
+    @Test
+    void recordAssessmentOnAMaleNeonateChartIsAccepted() {
+        patient.setGender("M");
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        assertNotNull(service.recordAssessment(patientId, request, recorderId));
+    }
+
+    @Test
+    void recordAssessmentOnTheMotherChartRefusesAnotherMothersDelivery() {
+        patient.setDateOfBirth(LocalDate.of(1995, 5, 1));
+        patient.setGender("F");
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        Patient otherMother = new Patient();
+        otherMother.setId(UUID.randomUUID());
+        delivery.setPatient(otherMother);
+        when(deliveryRecordRepository.findById(delivery.getId())).thenReturn(Optional.of(delivery));
+
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).deliveryRecordId(delivery.getId())
+            .apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, request, recorderId));
+        verify(assessmentRepository, never()).save(any());
+    }
+
+    @Test
+    void abnormalAssessmentAlertsCarryACreationTime() {
+        // QA D131: the alert rows were inserted with a NULL created_at, so every
+        // abnormal assessment failed to save.
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(5).apgarFiveMinute(6).build();
+
+        service.recordAssessment(patientId, request, recorderId);
+
+        ArgumentCaptor<NewbornAssessment> captor = ArgumentCaptor.forClass(NewbornAssessment.class);
+        verify(assessmentRepository).save(captor.capture());
+        assertTrue(!captor.getValue().getAlerts().isEmpty());
+        captor.getValue().getAlerts().forEach(alert -> assertNotNull(alert.getCreatedAt()));
+    }
 }
