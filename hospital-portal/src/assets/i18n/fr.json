@@ -4568,7 +4568,8 @@
       "DIAGNOSIS": "Diagnostic",
       "STATUS": "Statut",
       "NOT_ASSIGNED": "Non assigné",
-      "GENERAL": "Général"
+      "GENERAL": "Général",
+      "HOSPITAL_NAME_LABEL": "Établissement"
     },
     "BILLING": {
       "TITLE": "Facturation et paiements",

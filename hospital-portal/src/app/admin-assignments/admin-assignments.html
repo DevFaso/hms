@@ -23,6 +23,7 @@
   <!-- Filters -->
   <div class="filters-bar">
     <input
+      [attr.aria-label]="'ASSIGN_ADMIN.SEARCH' | translate"
       type="text"
       class="search-box"
       [ngModel]="filterSearch()"

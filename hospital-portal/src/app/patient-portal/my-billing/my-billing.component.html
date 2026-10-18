@@ -52,11 +52,10 @@
               }}</span>
               <span class="pli-sub"
                 >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
-                {{ inv.date | date: 'MMM d, yyyy' }}</span
+                {{ inv.date | date: 'mediumDate' }}</span
               >
               <span class="pli-meta"
-                >{{ 'PORTAL.BILLING.DUE' | translate }}
-                {{ inv.dueDate | date: 'MMM d, yyyy' }}</span
+                >{{ 'PORTAL.BILLING.DUE' | translate }} {{ inv.dueDate | date: 'mediumDate' }}</span
               >
             </div>
             <div class="pli-end">
