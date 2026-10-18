@@ -299,13 +299,9 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSupersedesResultId(superseded.getId());
         }
         LabResult saved = labResultRepository.save(result);
-        if (superseded != null) {
-            // Only the link is written on the released row; its value,
-            // release stamps and critical history stay exactly as released.
-            superseded.setSupersededByResultId(saved.getId());
-            labResultRepository.save(superseded);
-            auditCorrectionAfterCommit(superseded.getId(), saved.getId(), currentUserId);
-        }
+        // The released row is NOT marked superseded here: an unreleased (or
+        // later deleted) correction must not withdraw the value clinicians
+        // act on. The back-link is written when the correction is released.
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
@@ -325,6 +321,9 @@ public class LabResultServiceImpl implements LabResultService {
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
+        if (saved.isReleased()) {
+            linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
+        }
         if (saved.isReleased()) {
             completeOrderIfAllReleased(lockedOrder);
         }
@@ -782,6 +781,7 @@ public class LabResultServiceImpl implements LabResultService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         requireResultInActiveHospital(labResult);
         requireNotReleased(labResult);
+        clearSupersededBackLink(labResult);
         labResultRepository.deleteById(id);
     }
 
@@ -810,10 +810,52 @@ public class LabResultServiceImpl implements LabResultService {
         if (!target.isReleased()) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.notReleased"));
         }
-        if (target.getSupersededByResultId() != null) {
+        if (isSupersededByLiveResult(target)) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.alreadySuperseded"));
         }
         return target;
+    }
+
+    /**
+     * A back-link to a row that no longer exists (a correction deleted before
+     * this fix cleared links on delete) does not supersede anything.
+     */
+    private boolean isSupersededByLiveResult(LabResult target) {
+        UUID by = target.getSupersededByResultId();
+        return by != null && labResultRepository.existsById(by);
+    }
+
+    /**
+     * D81: the released original is withdrawn only once its correction is
+     * itself released. The order row is locked so two pending corrections of
+     * the same result cannot both be released over it; the target is re-read
+     * and re-checked under that lock.
+     */
+    private void linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
+        UUID targetId = correction.getSupersedesResultId();
+        if (targetId == null) {
+            return;
+        }
+        LabResult target = requireSupersedable(targetId, lockedOrder);
+        // Only the link is written on the released row; its value, release
+        // stamps and critical history stay exactly as released.
+        target.setSupersededByResultId(correction.getId());
+        labResultRepository.save(target);
+        auditCorrectionAfterCommit(target.getId(), correction.getId(), actorId);
+    }
+
+    /** Deleting a correction must leave the original it named current again. */
+    private void clearSupersededBackLink(LabResult deleted) {
+        UUID targetId = deleted.getSupersedesResultId();
+        if (targetId == null) {
+            return;
+        }
+        labResultRepository.findById(targetId)
+            .filter(target -> deleted.getId().equals(target.getSupersededByResultId()))
+            .ifPresent(target -> {
+                target.setSupersededByResultId(null);
+                labResultRepository.save(target);
+            });
     }
 
     /** D81: the correction's audit row names both results. Ids only. */
@@ -1131,6 +1173,11 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
         }
 
+        if (labResult.getSupersedesResultId() != null) {
+            LabOrder lockedOrder = labOrderRepository.findWithLockById(labResult.getLabOrder().getId())
+                .orElse(labResult.getLabOrder());
+            linkCorrectionOnRelease(labResult, lockedOrder, actorId);
+        }
         labResult.setReleased(true);
         labResult.setReleasedAt(LocalDateTime.now());
         labResult.setReleasedByUserId(actorId);

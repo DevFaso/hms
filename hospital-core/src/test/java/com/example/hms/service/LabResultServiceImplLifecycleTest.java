@@ -233,7 +233,7 @@ class LabResultServiceImplLifecycleTest {
     // ── D81: a correction is linked to the released result it replaces ────
 
     @Test
-    @DisplayName("D81 — a correction links both ways to the released result it supersedes")
+    @DisplayName("D81 — an entered correction names its target but does not withdraw it until released")
     void aCorrectionLinksToTheReleasedResult() {
         order.setStatus(LabOrderStatus.COMPLETED);
         stubEntryPath();
@@ -249,7 +249,7 @@ class LabResultServiceImplLifecycleTest {
         LabResult correction = saved.getAllValues().stream()
             .filter(r -> r != released).findFirst().orElseThrow();
         assertThat(correction.getSupersedesResultId()).isEqualTo(released.getId());
-        assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
+        assertThat(released.getSupersededByResultId()).isNull();
         // the released row keeps its value and its release
         assertThat(released.getResultValue()).isEqualTo("4.1");
         assertThat(released.isReleased()).isTrue();
@@ -263,6 +263,7 @@ class LabResultServiceImplLifecycleTest {
         LabResult unreleased = resultOn(order, false);
         LabResult alreadyReplaced = resultOn(order, true);
         alreadyReplaced.setSupersededByResultId(UUID.randomUUID());
+        when(labResultRepository.existsById(alreadyReplaced.getSupersededByResultId())).thenReturn(true);
         LabOrder otherOrder = new LabOrder();
         otherOrder.setId(UUID.randomUUID());
         LabResult elsewhere = resultOn(otherOrder, true);
@@ -274,6 +275,92 @@ class LabResultServiceImplLifecycleTest {
                 .isInstanceOf(BusinessException.class);
         }
         verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    /** A pending correction of {@code target}, with the release path stubbed. */
+    private LabResult stubReleasableCorrectionOf(LabResult target) {
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult correction = resultOn(order, false);
+        correction.setSupersedesResultId(target.getId());
+        when(labResultRepository.findById(correction.getId())).thenReturn(Optional.of(correction));
+        when(labResultRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(target, correction));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(correction)).thenReturn(LabResultResponseDTO.builder().build());
+        return correction;
+    }
+
+    @Test
+    @DisplayName("D81 — releasing the correction is what marks the original superseded")
+    void releasingTheCorrectionSupersedesTheOriginal() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
+        assertThat(released.getResultValue()).isEqualTo("4.1");
+        verify(labOrderRepository, atLeastOnce()).findWithLockById(order.getId());
+    }
+
+    @Test
+    @DisplayName("D81 — a second correction cannot be released over one already released")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aSecondCorrectionIsRefusedAtRelease() {
+        LabResult released = resultOn(order, true);
+        UUID firstCorrection = UUID.randomUUID();
+        released.setSupersededByResultId(firstCorrection);
+        when(labResultRepository.existsById(firstCorrection)).thenReturn(true);
+        LabResult second = stubReleasableCorrectionOf(released);
+
+        assertThatThrownBy(() -> service.releaseLabResult(second.getId(), true, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        assertThat(second.isReleased()).isFalse();
+        assertThat(released.getSupersededByResultId()).isEqualTo(firstCorrection);
+    }
+
+    @Test
+    @DisplayName("D81 — deleting a correction clears its link, and the original can be corrected again")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void deletingACorrectionFreesTheOriginal() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        LabResult stale = resultOn(order, false);
+        stale.setSupersedesResultId(released.getId());
+        released.setSupersededByResultId(stale.getId()); // a link written before this fix
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        when(labResultRepository.findById(stale.getId())).thenReturn(Optional.of(stale));
+
+        service.deleteLabResult(stale.getId(), Locale.ENGLISH);
+
+        assertThat(released.getSupersededByResultId()).isNull();
+        verify(labResultRepository).deleteById(stale.getId());
+
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+        service.createLabResult(request, Locale.ENGLISH);
+    }
+
+    @Test
+    @DisplayName("D81 — a back-link to a correction that no longer exists does not block a new one")
+    void aDanglingBackLinkIsFree() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        released.setSupersededByResultId(UUID.randomUUID()); // deleted before this fix
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository, atLeastOnce()).save(any(LabResult.class));
     }
 
     // ── B2: results drive the order ────────────────────────────────────────
