@@ -102,7 +102,7 @@ class AdmissionServiceImplTest {
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasMessageContaining("admission.provider.physician.required");
-        org.mockito.Mockito.verify(admissionRepository, org.mockito.Mockito.never()).save(any());
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test

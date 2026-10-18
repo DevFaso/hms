@@ -132,7 +132,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before prescribing
-        String allergyOverride = checkAllergyConflicts(patient, hospitalId, request);
+        String allergyOverride = checkAllergyConflicts(patient, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
@@ -918,7 +918,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before updating prescription
-        String allergyOverride = checkAllergyConflicts(patient, hospitalId, request);
+        String allergyOverride = checkAllergyConflicts(patient, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
@@ -1169,8 +1169,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter createEncounterSnapshot(Patient patient,
                                               Staff staff,
                                               UserRoleHospitalAssignment assignment) {
-        // The anchor sits at the hospital the assignment was resolved for (the
-        // acting hospital when one is pinned), not the staff row's home.
+        // Anchor at the hospital the assignment was resolved for, which is the
+        // acting hospital when one is pinned, rather than the staff home hospital.
         Hospital hospital = assignment != null && assignment.getHospital() != null
             ? assignment.getHospital() : staff.getHospital();
         if (staff.getHospital() == null || hospital == null) {
@@ -1249,7 +1249,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      *
      * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private String checkAllergyConflicts(Patient patient, UUID hospitalId, PrescriptionRequestDTO request) {
+    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request) {
         String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
             return null; // Cannot check without medication name
@@ -1369,14 +1369,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 null, null, null, UUID.randomUUID().toString());
             throw new CdsCriticalBlockException(message, List.of(card));
         }
-    }
-
-    private boolean isSevereAllergy(com.example.hms.enums.AllergySeverity severity) {
-        if (severity == null) {
-            return false;
-        }
-        return severity == com.example.hms.enums.AllergySeverity.SEVERE 
-            || severity == com.example.hms.enums.AllergySeverity.LIFE_THREATENING;
     }
 
     /** Strip newline/carriage-return characters to prevent log-injection attacks (S5145). */

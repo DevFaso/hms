@@ -130,8 +130,8 @@ public class PatientRecordPdfService {
         pages.field(t.get("pdf.record.field.bloodType"), p.getBloodType());
     }
 
-    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,
-                                        PdfLabels t) throws IOException {
+    private static void writeAllergies(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,
+                                       PdfLabels t) throws IOException {
         pages.heading(t.get("pdf.record.section.allergies"));
         boolean noStructured = storyboard.getAllergies() == null || storyboard.getAllergies().isEmpty();
         if (noStructured && allergySummary != null && !allergySummary.isBlank()) {
@@ -143,6 +143,11 @@ public class PatientRecordPdfService {
                 a.getAllergenDisplay(), label(t, a.getSeverity()), a.getReaction(),
                 label(t, a.getVerificationStatus())));
         }
+    }
+
+    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,
+                                        PdfLabels t) throws IOException {
+        writeAllergies(pages, storyboard, allergySummary, t);
 
         pages.heading(t.get("pdf.record.section.problems"));
         pages.rows(storyboard.getProblems(), pr -> join(SEPARATOR,
