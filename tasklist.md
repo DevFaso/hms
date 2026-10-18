@@ -5107,6 +5107,23 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   bootstrap/refresh/logout replies in `AuthController`) want the same `MessageUtil`
   treatment; the `/auth/me/change-password` and `/auth/me/change-username` replies noted
   in the bullet above are now translated. Open.
+- **QA run 2026-10-18 round 2, lab/pharmacy residuals (`fix/qa-r2-lab-pharmacy`).** D73,
+  D81, D82, D95, D106, D107, D108 and D124 are fixed there; this is what that PR left. (1)
+  D82 witness for controlled substances: nothing in the catalogue says which inventory
+  item is a controlled substance (only a prescription carries `controlled_substance`), so
+  a second-person witness on a stock movement needs a new catalogue classification, a
+  witness column on `stock_transactions` and a witness step in the stock screen - a new
+  feature. The PR closes the hole around it: manual DISPENSE is refused, every non-receipt
+  movement needs a reason, a lot-tracked item moves through its own lot, lot count
+  corrections move the item total and are recorded, and the performer is always the
+  signed-in user. (2) D73: a definition authored with no owning assignment while the hook
+  was nulling the hospital cannot be attributed and V192 leaves it global; a lab director
+  retires and re-authors any such row. (3) D107: critical limits are per reference range
+  and optional; a range without them keeps alerting on HIGH as before (fail-safe), so a
+  laboratory that wants HIGH labelled and not paged sets its limits. (4) D106: midwives
+  are kept out of lab ordering (RoleValidator says nothing has established that they
+  order); if the clinical lead decides they do, add MIDWIFE in RoleValidator, the
+  controller and `lab.ts` together. Open.
 
 - **Billing has no tariff / price-list screen (QA D72, round 2, 2026-10-18).**
   An invoice line is typed by hand (description, category, quantity, unit

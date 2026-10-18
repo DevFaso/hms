@@ -1367,6 +1367,12 @@ public class DispenseServiceImpl implements DispenseService {
      *                 prescriber should hear about (a fill), as opposed to
      *                 bookkeeping after a cancellation
      */
+    private boolean allFillsOwedAreComplete(Prescription prescription) {
+        long fillsOwed = 1L + (prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0);
+        return dispenseRepository.countCompleteFillsForPrescription(
+            prescription.getId(), DispenseRepository.NOT_A_FILL) >= fillsOwed;
+    }
+
     private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
@@ -1380,6 +1386,14 @@ public class DispenseServiceImpl implements DispenseService {
             // All dispenses cancelled — return to a dispensable state
             nextStatus = PrescriptionStatus.SIGNED;
         } else if (expected.signum() > 0 && dispensedToDate.compareTo(expected) >= 0) {
+            nextStatus = PrescriptionStatus.DISPENSED;
+        } else if (expected.signum() <= 0 && allFillsOwedAreComplete(prescription)) {
+            // D95: the prescription states no quantity (the prescribing form
+            // does not send one), so the lifetime total is 0 and the
+            // comparison above can never succeed: every fill, however
+            // complete, left it PARTIALLY_FILLED and in the queue. Without a
+            // quantity, a fill that handed over everything it asked for is the
+            // whole fill - one for the original and one per released refill.
             nextStatus = PrescriptionStatus.DISPENSED;
         } else {
             nextStatus = PrescriptionStatus.PARTIALLY_FILLED;

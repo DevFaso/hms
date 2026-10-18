@@ -20,4 +20,6 @@ public class LabResultReferenceRangeDTO {
     private Integer ageMax;
     private String gender;
     private String notes;
+    private Double criticalLow;
+    private Double criticalHigh;
 }

@@ -2932,7 +2932,9 @@
     "PLACEHOLDER_CATEGORY": "p. ej. Hematología",
     "PLACEHOLDER_UNIT": "p. ej. células/µL",
     "PLACEHOLDER_SAMPLE": "p. ej. Sangre",
-    "PLACEHOLDER_MINUTES": "Minutos"
+    "PLACEHOLDER_MINUTES": "Minutos",
+    "CRITICAL_LOW": "Límite crítico bajo (inferior a)",
+    "CRITICAL_HIGH": "Límite crítico alto (superior a)"
   },
   "LAB_RESULTS": {
     "TITLE": "Resultados de laboratorio",
@@ -3009,7 +3011,12 @@
     "SELF_RELEASED_HINT": "Liberado por la persona que lo ingresó, sin un segundo revisor",
     "SELF_RELEASE_TITLE": "¿Liberar su propio resultado?",
     "SELF_RELEASE_BODY": "Usted ingresó este resultado ({{test}} para {{patient}}). Liberarlo usted mismo, sin un segundo revisor, está permitido; quedará registrado y se mostrará como una autoliberación.",
-    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo"
+    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo",
+    "ENTER_CORRECTION": "Introducir corrección",
+    "CORRECTION": "Corrección",
+    "CORRECTION_OF": "Corrección del resultado liberado {{test}} ({{value}}). El valor liberado queda registrado, marcado como sustituido.",
+    "SUPERSEDED": "Sustituido",
+    "SUPERSEDED_HINT": "Una corrección sustituyó este resultado liberado; la corrección es el valor vigente."
   },
   "LAB_RELEASE": {
     "TITLE": "Lista de validación",
@@ -8056,7 +8063,11 @@
       "NASAL": "Nasal"
     },
     "NO_PHARMACY_HINT": "Todavía no hay ninguna farmacia registrada para este hospital. Un administrador del hospital puede registrar una en el Registro de farmacias.",
-    "SELECT_PHARMACY": "Farmacia"
+    "SELECT_PHARMACY": "Farmacia",
+    "RECEIPT_EXPIRY_REQUIRED": "Introduzca la fecha de caducidad del lote.",
+    "RECEIPT_LOT_EXPIRED": "Este lote está caducado y no puede ingresarse en el stock.",
+    "LOT_REQUIRED_FOR_MOVEMENT": "Este artículo se controla por lote: elija el lote al que se aplica el movimiento.",
+    "SELECT_LOT_OPTION": "Seleccione un lote"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -8110,7 +8121,8 @@
       "ALL": "Todos",
       "DRAFT": "Borrador",
       "PENDING_QA": "Pendiente de revisión de QA",
-      "PENDING_DIRECTOR": "Pendiente de aprobación del director"
+      "PENDING_DIRECTOR": "Pendiente de aprobación del director",
+      "APPROVED": "Aprobados, pendientes de activación"
     },
     "SEARCH_PLACEHOLDER": "Buscar por nombre, código o categoría…",
     "LOADING": "Cargando cola…",
@@ -8132,7 +8144,9 @@
       "REJECT_TITLE": "Rechazar",
       "APPROVE": "Aprobar",
       "APPROVE_TITLE": "Aprobar",
-      "CLOSE_TITLE": "Cerrar"
+      "CLOSE_TITLE": "Cerrar",
+      "ACTIVATE": "Activar",
+      "ACTIVATE_TITLE": "Activar para solicitudes"
     },
     "EMPTY": {
       "TITLE": "La cola está vacía",
@@ -8183,7 +8197,8 @@
       "REASON_REQUIRED": "Motivo de rechazo *",
       "REASON_PLACEHOLDER": "Explique el motivo del rechazo…",
       "CANCEL": "Cancelar",
-      "CONFIRM": "Confirmar"
+      "CONFIRM": "Confirmar",
+      "TITLE_ACTIVATE": "Activar la definición"
     },
     "TOAST": {
       "LOAD_QUEUE_FAILED": "Error al cargar la cola de aprobación",

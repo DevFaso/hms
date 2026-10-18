@@ -299,6 +299,19 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.tasksToComplete()).toBe(4);
   });
 
+  it('the lab pending card counts every order still waiting on the bench (D107)', () => {
+    const c = createComponent(['ROLE_LAB_SCIENTIST'], []);
+    expect(c.labPendingCount()).toBeNull();
+    c.labOpsSummary.set({
+      statusOrdered: 3,
+      statusPending: 0,
+      statusCollected: 2,
+      statusReceived: 1,
+      statusInProgress: 5,
+    } as Parameters<typeof c.labOpsSummary.set>[0]);
+    expect(c.labPendingCount()).toBe(6);
+  });
+
   // ── Hero hospital chip ──────────────────────────────────────
 
   it('fetches the active hospital name for the clinician hero', () => {
