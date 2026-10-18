@@ -109,6 +109,17 @@ public class InBasketServiceImpl implements InBasketService {
     @Override
     @Transactional
     public InBasketItemDTO createItem(CreateInBasketItemRequest request) {
+        return fileItem(request);
+    }
+
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public InBasketItemDTO createItemInNewTransaction(CreateInBasketItemRequest request) {
+        return fileItem(request);
+    }
+
+    /** The one body of both entry points; each brings its own transaction. */
+    private InBasketItemDTO fileItem(CreateInBasketItemRequest request) {
         // Deduplicate — don't create a second item for the same reference + recipient
         if (request.getReferenceId() != null
                 && inBasketItemRepository.existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
@@ -143,12 +154,6 @@ public class InBasketServiceImpl implements InBasketService {
         item = inBasketItemRepository.save(item);
         log.info("In-Basket item created: id={} type={} recipient={}", item.getId(), item.getItemType(), recipient.getId());
         return inBasketMapper.toDto(item);
-    }
-
-    @Override
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public InBasketItemDTO createItemInNewTransaction(CreateInBasketItemRequest request) {
-        return createItem(request);
     }
 
     // ─── helpers ──────────────────────────────────────────────

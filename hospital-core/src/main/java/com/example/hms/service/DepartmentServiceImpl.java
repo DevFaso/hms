@@ -355,7 +355,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public void deleteDepartment(UUID id, Locale locale) {
         Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", id));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
 
         enforceHospitalScopeOnEntity(department);
 

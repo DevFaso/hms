@@ -1153,7 +1153,8 @@ class LabTestDefinitionServiceImplTest {
             when(mapper.mapRangeDtosToEntities(List.of(widened)))
                 .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
 
-            assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of(widened)))
+            List<LabTestReferenceRangeDTO> widenedRanges = List.of(widened);
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, widenedRanges))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("ACTIVE");
             assertThat(definition.getReferenceRanges()).containsExactly(glucoseRange(6.1));

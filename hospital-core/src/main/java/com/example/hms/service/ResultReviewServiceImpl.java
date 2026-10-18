@@ -478,7 +478,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 abnormalFlag = AbnormalFlag.ABNORMAL.name();
                 direction = com.example.hms.enums.AbnormalDirection.valueOf(rangeFlag);
             }
-            case "NORMAL" -> {
+            case URGENCY_NORMAL -> {
                 abnormalFlag = AbnormalFlag.NORMAL.name();
                 direction = null;
             }
