@@ -164,12 +164,28 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.department.id = :departmentId
           AND s.active = true
           AND s.user.isDeleted = false
-          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE')
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
         ORDER BY s.name ASC
     """)
     List<Staff> findActiveProvidersByHospitalAndDepartment(
         @Param("hospitalId") UUID hospitalId,
         @Param("departmentId") UUID departmentId);
+
+    /**
+     * Departments of a hospital that have at least one bookable provider, with
+     * the same provider rule as {@link #findActiveProvidersByHospitalAndDepartment}
+     * (QA D169: the booking form offered departments nobody could be booked in,
+     * and a midwife was not bookable in maternity).
+     */
+    @Query("""
+        SELECT DISTINCT s.department.id FROM Staff s
+        WHERE s.hospital.id = :hospitalId
+          AND s.department IS NOT NULL
+          AND s.active = true
+          AND s.user.isDeleted = false
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')
+    """)
+    java.util.Set<UUID> findDepartmentIdsWithActiveProviders(@Param("hospitalId") UUID hospitalId);
 
     // ── MVP 3: Lab staff filtered by lab roles ──────────────────
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
