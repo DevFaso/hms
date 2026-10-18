@@ -169,13 +169,32 @@ public class DepartmentServiceImpl implements DepartmentService {
         // id and name only; the caller's own hospital also
         // gets the contact details, as before. "Own" is the hospital the
         // request acts at, from the one tenant resolver.
-        boolean ownHospital = hospitalId.equals(roleValidator.getCurrentHospitalId());
+        UUID actingHospitalId = roleValidator.getCurrentHospitalId();
+        boolean ownHospital = hospitalId.equals(actingHospitalId);
+        // QA D145: another hospital's directory exists for the referral form only, so only a
+        // clinician who writes referrals at the acting hospital reads it; an administrator or
+        // a receptionist of hospital A has no business listing hospital B's departments.
+        if (!ownHospital && !roleValidator.isSuperAdminFromJwtClaim()
+                && !writesReferralsAt(roleValidator.getCurrentUserId(), actingHospitalId)) {
+            throw new AccessDeniedException("Access denied");
+        }
         return departmentRepository.findByHospitalId(hospitalId).stream()
                 .filter(Department::isActive)
                 .map(dept -> ownHospital
                         ? new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber())
                         : new DepartmentMinimalDTO(dept.getId(), dept.getName(), null, null))
                 .toList();
+    }
+
+    private boolean writesReferralsAt(UUID userId, UUID hospitalId) {
+        if (userId == null || hospitalId == null) {
+            return false;
+        }
+        return roleValidator.isDoctor(userId, hospitalId)
+                || roleValidator.isPhysician(userId, hospitalId)
+                || roleValidator.isSurgeon(userId, hospitalId)
+                || roleValidator.isNurse(userId, hospitalId)
+                || roleValidator.isMidwife(userId, hospitalId);
     }
 
     @Override

@@ -582,8 +582,8 @@
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
               {{ 'USERS.CONFIRM_DELETE' | translate }}
-              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong
-              >?
+              <!-- QA D192: the sentence already ends with its own question mark. -->
+              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong>
             </p>
             <p class="delete-detail">
               {{ 'USERS.DELETE_WARNING' | translate }}

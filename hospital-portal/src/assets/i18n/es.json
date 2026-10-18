@@ -3227,8 +3227,10 @@
     "SSO_OR_USERNAME": "o inicie sesión con nombre de usuario",
     "SSO_UNAVAILABLE": "El inicio de sesión único no está disponible temporalmente. Utilice su nombre de usuario y contraseña para continuar.",
     "RESET_PASSWORD_TITLE": "Restablecer contraseña",
-    "FP_INSTRUCTION": "Introduzca la dirección de correo electrónico asociada a su cuenta y le enviaremos un enlace para restablecer su contraseña.",
+    "FP_INSTRUCTION": "Introduzca la dirección de correo electrónico o el número de teléfono de su cuenta y le enviaremos un enlace para restablecer su contraseña.",
     "EMAIL_ADDRESS": "Dirección de correo electrónico",
+    "EMAIL_OR_PHONE": "Correo electrónico o número de teléfono",
+    "ENTER_EMAIL_OR_PHONE": "Introduzca su dirección de correo electrónico o su número de teléfono.",
     "SENDING": "Enviando…",
     "SEND_RESET_LINK": "Enviar enlace de restablecimiento",
     "FORGOT_USERNAME_TITLE": "Nombre de usuario olvidado",
@@ -3252,7 +3254,7 @@
     "RA_INSTRUCTION": "Introduzca la dirección de correo de su cuenta y le enviaremos un nuevo enlace de activación, válido durante 24 horas.",
     "SEND_ACTIVATION_LINK": "Enviar el enlace de activación",
     "ACTIVATION_LINK_SENT": "Si esta dirección pertenece a una cuenta aún no activa, un nuevo enlace de activación está en camino. Es válido durante 24 horas.",
-    "RESET_LINK_SENT": "Si ese correo está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada."
+    "RESET_LINK_SENT": "Si ese correo o número de teléfono está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada o sus SMS."
   },
   "NAV": {
     "ADMINISTRATION": "Administración",

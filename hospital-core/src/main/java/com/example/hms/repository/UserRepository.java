@@ -150,18 +150,30 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * is listed by GET /users and must be found by role=NURSE too.
      * Unscoped (the super-admin), the role filter is unchanged: an active
      * assignment anywhere, or a global UserRole.
+     * QA D198: the username, e-mail and phone are matched only on rows whose
+     * contacts the caller can read, the same rule UserServiceImpl.directoryRow
+     * masks by: every row for a caller who may read contact details
+     * (contactSearch), otherwise only staff accounts holding no patient
+     * profile. A masked e-mail cannot be confirmed by searching for it, and a
+     * colleague's visible e-mail is still searchable.
      */
     String DIRECTORY_SEARCH_FILTERS = """
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(COALESCE(u.email, ''))    LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR ( :phoneDigits IS NOT NULL
-                     AND u.phoneNumber LIKE CONCAT('%', cast(:phoneDigits AS string), '%') )
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND ( LOWER(u.username)            LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR ( :phoneDigits IS NOT NULL
+                                AND u.phoneNumber LIKE CONCAT('%', cast(:phoneDigits AS string), '%') ) ) )
               )
           AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%')) )
               )
           AND ( :role IS NULL
                 OR EXISTS (
@@ -191,6 +203,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            @Param("phoneDigits") String phoneDigits,
                            @Param("role") String role,
                            @Param("email") String email,
+                           @Param("contactSearch") boolean contactSearch,
                            @Param("includeDeleted") boolean includeDeleted,
                            @Param("onlyDeleted") boolean onlyDeleted,
                            @Param("scoped") boolean scoped,

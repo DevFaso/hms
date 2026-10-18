@@ -507,12 +507,15 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.forgotPasswordLoading) return;
     this.error = '';
     this.forgotPasswordSuccess = '';
-    if (!this.forgotPasswordEmail) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+    const identifier = this.forgotPasswordEmail.trim();
+    if (!identifier) {
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
       return;
     }
     this.forgotPasswordLoading = true;
-    this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
+    // QA D171: a phone-only account gets its reset link by SMS.
+    const body = identifier.includes('@') ? { email: identifier } : { phone: identifier };
+    this.http.post<void>('/auth/password/request', body).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
         this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');

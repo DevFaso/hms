@@ -168,6 +168,21 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     roleContext.clearSession();
   });
 
+  it('QA D171: a phone number asks for the reset link by SMS, an address by e-mail', () => {
+    component.openForgotPassword();
+    component.forgotPasswordEmail = ' 70 20 20 20 ';
+    component.submitForgotPassword();
+    const byPhone = httpMock.expectOne((r) => r.url === '/auth/password/request');
+    expect(byPhone.request.body).toEqual({ phone: '70 20 20 20' });
+    byPhone.flush(null);
+
+    component.forgotPasswordEmail = 'a@b.c';
+    component.submitForgotPassword();
+    const byMail = httpMock.expectOne((r) => r.url === '/auth/password/request');
+    expect(byMail.request.body).toEqual({ email: 'a@b.c' });
+    byMail.flush(null);
+  });
+
   it('the resend-activation dialog opens alone and posts the address', () => {
     component.openForgotPassword();
     component.openResendActivation();
