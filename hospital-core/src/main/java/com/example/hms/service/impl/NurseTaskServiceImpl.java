@@ -331,7 +331,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // Try to find a real prescription matching the task ID
         // Locked: two concurrent administrations of the same prescription
         // must not both see the same dose as still due (D77).
-        Optional<Prescription> rxOpt = prescriptionRepository.findByIdForUpdate(medicationTaskId);
+        // Tenant-scoped lock: a foreign-hospital id must not lock that row.
+        Optional<Prescription> rxOpt = lockPrescription(medicationTaskId, hospitalId);
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
@@ -344,7 +345,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
-            requireStillPending(marRecord);
+            requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
@@ -453,7 +454,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Optional<MedicationAdministrationRecord> existing = marRepository.findById(marId);
         if (existing.isPresent()) return existing.get();
 
-        Prescription rx = prescriptionRepository.findByIdForUpdate(marId)
+        Prescription rx = lockPrescription(marId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nurse.mar.notFound", marId));
         validateHospitalMatch(rx.getHospital(), hospitalId);
 
@@ -932,14 +933,23 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * A MAR row may be finalised once. Refuses a row already recorded, and a
      * PENDING row whose slot another row has since closed (D77).
      */
-    private void requireStillPending(MedicationAdministrationRecord marRecord) {
-        if (marRecord.getStatus() != MedicationAdministrationStatus.PENDING) {
+    private void requireStillPending(MedicationAdministrationRecord marRecord, UUID hospitalId) {
+        Prescription rx = marRecord.getPrescription();
+        if (rx != null && rx.getId() != null) {
+            // Same per-prescription lock as the prescription path, taken
+            // BEFORE the status is checked so a concurrent finaliser is
+            // serialised behind it (D77), and scoped to the caller's tenant.
+            lockPrescription(rx.getId(), hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("nurse.medicationTask.notFound", marRecord.getId()));
+        }
+        // Re-read the status from the database after the lock: the managed
+        // entity was loaded before it and may be stale.
+        MedicationAdministrationStatus current = marRepository.findStatusById(marRecord.getId())
+            .orElse(marRecord.getStatus());
+        if (current != MedicationAdministrationStatus.PENDING) {
             throw new BusinessException("nurse.mar.alreadyRecorded");
         }
-        Prescription rx = marRecord.getPrescription();
         if (rx == null || rx.getId() == null) return;
-        // Same per-prescription lock as the prescription path.
-        prescriptionRepository.findByIdForUpdate(rx.getId());
         boolean slotClosed = marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
             .anyMatch(r -> r.getStatus() != MedicationAdministrationStatus.PENDING
                 && !r.getId().equals(marRecord.getId())
@@ -948,6 +958,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (slotClosed) {
             throw new BusinessException("nurse.mar.alreadyRecorded");
         }
+    }
+
+    /**
+     * PESSIMISTIC_WRITE lock on a prescription, within the acting hospital
+     * when there is one; only the global view locks by bare id.
+     */
+    private Optional<Prescription> lockPrescription(UUID prescriptionId, UUID hospitalId) {
+        return hospitalId != null
+            ? prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+            : prescriptionRepository.findByIdForUpdate(prescriptionId);
     }
 
     /** Build a human-readable dose string from Prescription fields. */

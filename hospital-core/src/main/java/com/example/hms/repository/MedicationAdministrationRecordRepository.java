@@ -52,6 +52,10 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
         @Param("from") LocalDateTime from,
         @Param("to") LocalDateTime to);
 
+    /** Current status straight from the database (bypasses a stale managed entity). */
+    @Query("SELECT m.status FROM MedicationAdministrationRecord m WHERE m.id = :id")
+    java.util.Optional<MedicationAdministrationStatus> findStatusById(@Param("id") UUID id);
+
     long countByHospital_IdAndStatusAndScheduledTimeBefore(
         UUID hospitalId, MedicationAdministrationStatus status, LocalDateTime before);
 }

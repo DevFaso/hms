@@ -159,6 +159,15 @@ class NurseTaskServiceImplTest {
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
         lenient().when(prescriptionRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
+        // The tenant-scoped lock behaves like the real query: the bare-id
+        // stub, filtered to the acting hospital.
+        lenient().when(prescriptionRepository.findByIdAndHospitalIdForUpdate(any(), any()))
+            .thenAnswer(inv -> prescriptionRepository.findByIdForUpdate(inv.getArgument(0))
+                .filter(p -> p.getHospital() != null
+                    && inv.getArgument(1).equals(p.getHospital().getId())));
+        lenient().when(marRepository.findStatusById(any()))
+            .thenAnswer(inv -> marRepository.findById(inv.getArgument(0))
+                .map(MedicationAdministrationRecord::getStatus));
         lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
@@ -1073,9 +1082,10 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
 
+        // The tenant-scoped lock never finds a foreign row: not found, no leak.
         assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, scopedHospitalId, request))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("does not belong to the scoped hospital");
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
 
     @Test
@@ -2952,6 +2962,7 @@ class NurseTaskServiceImplTest {
         Prescription rx = scheduledRx(hospitalId, "q12h");
         MedicationAdministrationRecord given = closedDose(rx, LocalDateTime.now(), MedicationAdministrationStatus.GIVEN);
         when(marRepository.findById(given.getId())).thenReturn(Optional.of(given));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         UUID marId = given.getId();
         NurseMedicationAdministrationRequestDTO again = givenRequest();
 
@@ -3002,5 +3013,45 @@ class NurseTaskServiceImplTest {
         assertThat(out.getId()).isEqualTo(verified.getId());
         assertThat(verified.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
         assertThat(verified.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
+    }
+
+    @Test
+    void D77_aForeignTenantPrescriptionIdIsNeverLockedByBareId() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription foreign = scheduledRx(UUID.randomUUID(), "q12h");
+        lenient().when(prescriptionRepository.findByIdForUpdate(foreign.getId())).thenReturn(Optional.of(foreign));
+        UUID rxId = foreign.getId();
+        org.mockito.Mockito.doReturn(Optional.empty())
+            .when(prescriptionRepository).findByIdAndHospitalIdForUpdate(rxId, hospitalId);
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, UUID.randomUUID(), hospitalId, given))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(rxId, hospitalId);
+        verify(prescriptionRepository, never()).findByIdForUpdate(rxId);
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void D77_aMarRowFinalisedConcurrentlyIsRefusedAfterTheLock() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        MedicationAdministrationRecord stale =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        when(marRepository.findById(stale.getId())).thenReturn(Optional.of(stale));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        // Another nurse committed GIVEN while this call waited on the lock.
+        org.mockito.Mockito.doReturn(Optional.of(MedicationAdministrationStatus.GIVEN))
+            .when(marRepository).findStatusById(stale.getId());
+        UUID marId = stale.getId();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, UUID.randomUUID(), hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.alreadyRecorded");
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, marRepository);
+        order.verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(rx.getId(), hospitalId);
+        order.verify(marRepository).findStatusById(marId);
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
 }
