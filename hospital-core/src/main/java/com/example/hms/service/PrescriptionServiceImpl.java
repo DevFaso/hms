@@ -970,8 +970,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
+        // QA D101: an unsigned prescription (DRAFT, PENDING_SIGNATURE) is the prescriber's
+        // work in progress, not something issued to the patient.
         java.util.List<Prescription> rows = prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
-            .getContent();
+            .getContent().stream()
+            .filter(p -> p.getStatus() != com.example.hms.enums.PrescriptionStatus.DRAFT
+                && p.getStatus() != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE)
+            .toList();
         // G15 AC-12: a fill waiting at the counter, one query for the list.
         java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(rows);
