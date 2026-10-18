@@ -166,7 +166,9 @@ describe('DocumentsTabComponent', () => {
     expect(component.formatSize(512)).toBe('512 B');
     expect(component.formatSize(48_211)).toBe('47 KB');
     // The decimal separator follows the cached UI locale (French by default), so derive it.
-    const decimal = new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1 }).format(3.4);
+    const decimal = new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1 }).format(
+      3.4,
+    );
     expect(component.formatSize(3_600_000)).toBe(`${decimal} MB`);
     expect(component.formatSize(null)).toBeNull();
   });
