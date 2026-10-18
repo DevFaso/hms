@@ -533,6 +533,35 @@ class InventoryServiceImplTest {
 
             assertThat(result).isNotNull();
         }
+
+        @Test
+        @DisplayName("D108: an expired lot is refused at goods receipt and nothing is counted")
+        void expiredLotIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setExpiryDate(LocalDate.now().minusDays(1));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D82: a receipt booked in a colleague's name is refused")
+        void receiverMustBeTheCaller() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedBy(UUID.randomUUID());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
     }
 
     // ── getStockLot ──────────────────────────────────────────────────────
@@ -716,6 +745,30 @@ class InventoryServiceImplTest {
             service.updateStockLot(stockLotId, dto);
 
             verify(stockLotRepository).setRemaining(eq(stockLotId), eq(new BigDecimal("7.00")), any());
+        }
+
+        @Test
+        @DisplayName("D82: a lot count correction moves the item total too and is recorded")
+        void lotCorrectionMovesTheItemAndIsRecorded() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .remainingQuantity(new BigDecimal("50.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId)
+                    .remainingQuantity(new BigDecimal("45.00"))
+                    .build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            service.updateStockLot(stockLotId, dto);
+
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(new BigDecimal("-5.00")), any());
+            ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getTransactionType()).isEqualTo(StockTransactionType.ADJUSTMENT);
         }
     }
 

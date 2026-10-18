@@ -2780,4 +2780,36 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V190: billing invoices - unique per-hospital invoice numbers, the
+         idempotent-create key and the per-hospital numbering counter (D94).
+         No DO block.
+         ================================================================= -->
+    <changeSet id="V190-billing-invoice-numbering-and-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V190__billing_invoice_numbering_and_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V192: lab test definitions - re-file the rows the entity hook kept
+         saving global after V191 (D73, regression of D30). Data-only,
+         idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V192-lab-test-definition-rescope-after-hook" author="hms-team" runOnChange="false">
+        <sqlFile path="V192__lab_test_definition_rescope_after_hook.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V195: lab results - supersedes link for corrections (D81). -->
+    <changeSet id="V195-lab-result-supersedes-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V195__lab_result_supersedes_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -856,6 +856,13 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("User account not found or inactive."));
         }
+        // QA D114: a refresh token minted before the last password change mints nothing.
+        if (com.example.hms.security.PasswordChangeCutoff.predates(
+                jwtTokenProvider.getIssuedAt(refreshToken), user.getPasswordChangedAt())) {
+            log.warn("🔄 [REFRESH] Refused — refresh token predates the last password change");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+        }
 
         // Closes Copilot review #4 on PR #224 — refuse to mint a new
         // super-admin access token from the surviving refresh cookie while
@@ -1111,7 +1118,7 @@ public class AuthController {
         // Update password, clear force-change flag, and record in history
         userService.changeOwnPassword(user.getId(), request.newPassword());
 
-        log.info("🔑 [CHANGE-PWD] Password changed for user='{}'; forcePasswordChange cleared.", username);
+        log.info("🔑 [CHANGE-PWD] Password changed for userId={}; forcePasswordChange cleared.", user.getId());
         return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve("auth.password.changed")));
     }
 

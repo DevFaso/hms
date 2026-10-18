@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 
 import { BillingComponent } from './billing';
 import { BillingService, BillingInvoiceResponse, InvoicePage } from '../services/billing.service';
@@ -53,8 +53,13 @@ describe('BillingComponent', () => {
       'getInvoicePdf',
       'emailInvoice',
       'recordPayment',
+      'getInvoice',
+      'getInvoiceItems',
+      'createInvoiceItem',
+      'deleteInvoiceItem',
     ]);
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
+    billingSpy.getInvoiceItems.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
     permissionSpy.hasAnyPermission.and.returnValue(true);
@@ -212,6 +217,62 @@ describe('BillingComponent', () => {
     expect(billingSpy.createInvoice).toHaveBeenCalled();
     expect(component.showModal()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('a create carries the picked patient and one idempotency key, and a double submit sends once (D92, D94)', () => {
+    fixture.detectChanges();
+    const pending = new Subject<BillingInvoiceResponse>();
+    billingSpy.createInvoice.and.returnValue(pending.asObservable());
+    component.openCreate();
+    component.onPatientPicked({
+      id: 'pat-9',
+      firstName: 'Awa',
+      lastName: 'Sawadogo',
+      active: true,
+    });
+    component.submitForm();
+    component.submitForm();
+    expect(billingSpy.createInvoice).toHaveBeenCalledTimes(1);
+    const req = billingSpy.createInvoice.calls.mostRecent().args[0];
+    expect(req.patientId).toBe('pat-9');
+    expect(req.clientRequestId).toBeTruthy();
+    expect('amountPaid' in req).toBeFalse();
+    expect('invoiceNumber' in req).toBeFalse();
+  });
+
+  it('offers only DRAFT/SENT on create and locks a paid status on edit (D91)', () => {
+    fixture.detectChanges();
+    component.openCreate();
+    expect(component.statusOptions()).toEqual(['DRAFT', 'SENT']);
+    component.openEdit(mockInvoice({ status: 'PARTIALLY_PAID' }));
+    expect(component.statusOptions()).toEqual(['PARTIALLY_PAID']);
+    expect(component.statusLocked()).toBeTrue();
+  });
+
+  it('adding a line re-reads the invoice so the recomputed total shows (D72)', () => {
+    fixture.detectChanges();
+    const inv = component.invoices()[0];
+    billingSpy.createInvoiceItem.and.returnValue(
+      of({
+        id: 'line-1',
+        billingInvoiceId: inv.id,
+        itemDescription: 'Consultation',
+        itemCategory: 'SERVICE',
+        quantity: 2,
+        unitPrice: 2500,
+        totalPrice: 5000,
+      }),
+    );
+    billingSpy.getInvoice.and.returnValue(of(mockInvoice({ totalAmount: 5000, balanceDue: 5000 })));
+    component.viewInvoice(inv);
+    component.newItemDescription.set('Consultation');
+    component.newItemQuantity.set(2);
+    component.newItemUnitPrice.set(2500);
+    component.addItem();
+    const req = billingSpy.createInvoiceItem.calls.mostRecent().args[0];
+    expect(req.billingInvoiceId).toBe(inv.id);
+    expect(req.unitPrice).toBe(2500);
+    expect(component.selectedInvoice()?.totalAmount).toBe(5000);
   });
 
   it('submitForm updates when editing', () => {

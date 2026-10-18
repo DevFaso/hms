@@ -2466,7 +2466,7 @@
           <span class="material-symbols-outlined stat-icon">science</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ labOpsSummary()?.statusPending ?? '—' }}</span
+          <span class="stat-value">{{ labPendingCount() ?? '—' }}</span
           ><span class="stat-label">{{ 'DASHBOARD.PENDING_LAB_ORDERS' | translate }}</span>
         </div>
       </a>

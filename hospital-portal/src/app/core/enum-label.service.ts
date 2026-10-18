@@ -521,6 +521,12 @@ export class EnumLabelService implements OnDestroy {
       PAID: 'Paid',
       CANCELLED: 'Cancelled',
     },
+    invoiceItemCategory: {
+      SERVICE: 'Service',
+      MEDICATION: 'Medication',
+      LAB_TEST: 'Lab Test',
+      GENERAL: 'General',
+    },
     allergyVerificationStatus: {
       UNCONFIRMED: 'Unconfirmed',
       PROVISIONAL: 'Provisional',

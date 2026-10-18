@@ -1449,7 +1449,24 @@
     "TO_DATE": "To",
     "UPDATED": "Invoice updated",
     "VIEW_DETAILS_TITLE": "View invoice details",
-    "NO_RECORDS_HINT": "No billing records available."
+    "NO_RECORDS_HINT": "No billing records available.",
+    "NUMBER_ASSIGNED_ON_SAVE": "Assigned automatically when the invoice is saved",
+    "STATUS_FOLLOWS_PAYMENTS": "This status follows the recorded payments. Record a payment to change it.",
+    "TOTAL_HINT": "For an invoice without lines. Once lines are added, the total is their sum.",
+    "TOTAL_FROM_LINES": "The total is the sum of the invoice lines.",
+    "LINES": "Invoice lines",
+    "NO_LINES": "No lines yet.",
+    "LINE_DESCRIPTION": "Description",
+    "LINE_CATEGORY": "Category",
+    "LINE_QUANTITY": "Quantity",
+    "LINE_UNIT_PRICE": "Unit price",
+    "LINE_TOTAL": "Line total",
+    "ADD_LINE": "Add line",
+    "REMOVE_LINE": "Remove line",
+    "ITEM_ADDED": "Line added",
+    "ITEM_REMOVED": "Line removed",
+    "ITEM_SAVE_FAILED": "The line could not be saved",
+    "ITEMS_LOAD_FAILED": "The invoice lines could not be loaded"
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -2917,7 +2934,9 @@
     "PLACEHOLDER_CATEGORY": "e.g. Hematology",
     "PLACEHOLDER_UNIT": "e.g. cells/mcL",
     "PLACEHOLDER_SAMPLE": "e.g. Blood",
-    "PLACEHOLDER_MINUTES": "Minutes"
+    "PLACEHOLDER_MINUTES": "Minutes",
+    "CRITICAL_LOW": "Critical low (below)",
+    "CRITICAL_HIGH": "Critical high (above)"
   },
   "LAB_RESULTS": {
     "TITLE": "Lab Results",
@@ -2994,7 +3013,12 @@
     "SELF_RELEASED_HINT": "Released by the person who entered it, without a second reviewer",
     "SELF_RELEASE_TITLE": "Release your own result?",
     "SELF_RELEASE_BODY": "You entered this result ({{test}} for {{patient}}). Releasing it yourself, without a second reviewer, is allowed; it will be recorded and shown as a self-release.",
-    "SELF_RELEASE_CONFIRM": "Release it myself"
+    "SELF_RELEASE_CONFIRM": "Release it myself",
+    "ENTER_CORRECTION": "Enter correction",
+    "CORRECTION": "Correction",
+    "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
+    "SUPERSEDED": "Superseded",
+    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value."
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",
@@ -5754,6 +5778,12 @@
         "ADJUSTMENT": "Adjustment",
         "TRANSFER": "Transfer",
         "RETURN": "Return"
+      },
+      "INVOICE_ITEM_CATEGORY": {
+        "SERVICE": "Service",
+        "MEDICATION": "Medication",
+        "LAB_TEST": "Lab test",
+        "GENERAL": "General"
       }
     },
     "DOCUMENTS": {
@@ -6227,7 +6257,7 @@
     "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
     "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
     "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
-    "PASSWORD_CHANGED": "Your password has been changed.",
+    "PASSWORD_CHANGED": "Your password has been changed. Sign in again with your new password.",
     "PASSWORD_CURRENT_WRONG": "The current password is incorrect.",
     "PASSWORD_CHANGE_REFUSED": "The new password was refused. It may match one of your last 5 passwords.",
     "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
@@ -8053,7 +8083,11 @@
     "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
     "SELECT_PHARMACY": "Pharmacy",
     "QTY_ON_HAND_COLUMN": "Qty on hand",
-    "REORDER_QTY_COLUMN": "Reorder qty"
+    "REORDER_QTY_COLUMN": "Reorder qty",
+    "RECEIPT_EXPIRY_REQUIRED": "Enter the lot's expiry date.",
+    "RECEIPT_LOT_EXPIRED": "This lot is past its expiry date and cannot be received into stock.",
+    "LOT_REQUIRED_FOR_MOVEMENT": "This item is tracked by lot: choose the lot the movement applies to.",
+    "SELECT_LOT_OPTION": "Select a lot"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -8107,7 +8141,8 @@
       "ALL": "All",
       "DRAFT": "Draft",
       "PENDING_QA": "Pending QA Review",
-      "PENDING_DIRECTOR": "Pending Director Approval"
+      "PENDING_DIRECTOR": "Pending Director Approval",
+      "APPROVED": "Approved, awaiting activation"
     },
     "SEARCH_PLACEHOLDER": "Search by name, code or category…",
     "LOADING": "Loading queue…",
@@ -8129,7 +8164,9 @@
       "REJECT_TITLE": "Reject",
       "APPROVE": "Approve",
       "APPROVE_TITLE": "Approve",
-      "CLOSE_TITLE": "Close"
+      "CLOSE_TITLE": "Close",
+      "ACTIVATE": "Activate",
+      "ACTIVATE_TITLE": "Activate for ordering"
     },
     "EMPTY": {
       "TITLE": "Queue is clear",
@@ -8180,7 +8217,8 @@
       "REASON_REQUIRED": "Rejection Reason *",
       "REASON_PLACEHOLDER": "Explain the reason for rejection…",
       "CANCEL": "Cancel",
-      "CONFIRM": "Confirm"
+      "CONFIRM": "Confirm",
+      "TITLE_ACTIVATE": "Activate Definition"
     },
     "TOAST": {
       "LOAD_QUEUE_FAILED": "Failed to load approval queue",
@@ -10631,7 +10669,8 @@
     "REFERENCE_PLACEHOLDER": "Transaction / policy",
     "SUBMIT": "Confirm payment",
     "PRINT": "Print",
-    "NEW_PAYMENT": "New payment"
+    "NEW_PAYMENT": "New payment",
+    "RECEIPT_NO_PATIENT": "Not on file"
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

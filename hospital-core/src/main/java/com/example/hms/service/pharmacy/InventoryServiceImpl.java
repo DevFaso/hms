@@ -149,10 +149,22 @@ public class InventoryServiceImpl implements InventoryService {
         InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
         enforceHospitalScope(item.getPharmacy());
 
-        User receivedByUser = dto.getReceivedBy() != null
-                ? userRepository.findById(dto.getReceivedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getReceivedBy()))
-                : resolveCurrentUser();
+        // D108: an expired lot is not stock. It was accepted at goods receipt
+        // and counted on hand, where the FEFO picker skips it but every total,
+        // reorder decision and report counted it.
+        if (dto.getExpiryDate() != null && dto.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.expired"));
+        }
+
+        // The receipt is recorded against the signed-in user (D82): a
+        // caller-supplied receiver let one user book a delivery in a
+        // colleague's name.
+        User receivedByUser = resolveCurrentUser();
+        if (dto.getReceivedBy() != null && !dto.getReceivedBy().equals(receivedByUser.getId())) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockTransaction.performer.notSelf"));
+        }
 
         StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
         StockLot savedLot = stockLotRepository.save(lot);
@@ -216,12 +228,26 @@ public class InventoryServiceImpl implements InventoryService {
     public StockLotResponseDTO updateStockLot(UUID id, StockLotRequestDTO dto) {
         StockLot lot = resolveStockLot(id);
         enforceHospitalScope(lot.getInventoryItem().getPharmacy());
+        BigDecimal remainingBefore = lot.getRemainingQuantity();
         stockLotMapper.updateEntity(lot, dto);
         StockLot saved = stockLotRepository.save(lot);
         if (dto.getRemainingQuantity() != null) {
             // A count correction, applied atomically (#825 round 5).
-            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
+            LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), now);
             refreshIfManaged(saved);
+            // D82: the item total moves with the lot, and the correction is a
+            // recorded ADJUSTMENT. It used to change the lot alone, silently,
+            // so the lots and the item total drifted apart.
+            BigDecimal delta = remainingBefore != null
+                    ? dto.getRemainingQuantity().subtract(remainingBefore) : BigDecimal.ZERO;
+            if (delta.signum() != 0) {
+                InventoryItem item = lot.getInventoryItem();
+                inventoryItemRepository.incrementOnHand(item.getId(), delta, now);
+                refreshIfManaged(item);
+                recordStockTransaction(item, saved, StockTransactionType.ADJUSTMENT, delta,
+                        "Lot count correction: lot " + saved.getLotNumber());
+            }
         }
         return stockLotMapper.toResponseDTO(saved);
     }

@@ -136,24 +136,13 @@ public class LabResultServiceImpl implements LabResultService {
         return createLabResult(request, true, senderHospitalId);
     }
 
-    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
-                                                 boolean ingested,
-                                                 UUID senderHospitalId) {
-        // The ingest caller's own standing, settled BEFORE the order is read.
-        // Every refusal in it depends on who is calling and which hospital the
-        // message names, never on the order, and each one is the missing-order
-        // 404 - so an order id that exists and one that does not get the same
-        // answer however the caller stands.
-        if (ingested) {
-            requireIngestCallerAtSender(request, senderHospitalId);
-        }
-
-        // Read first, lock later. The write lock on the order is needed only
-        // for the status decision further down, and taking it here held it
-        // across the permission checks and — before the side effects moved
-        // after the commit — across a blocking SMS gateway call.
-        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+    /**
+     * The tenant boundary for a new result: true when the caller is an
+     * ingest account with no hospital scope of its own (the allowlist pin is
+     * then the boundary), false when the order was compared against the
+     * acting scope.
+     */
+    private boolean requireOrderReachable(LabOrder labOrder, boolean ingested, UUID senderHospitalId) {
         // THE tenant boundary on the ingest path. The sending pair in the
         // message header was resolved against the MLLP allowlist before we
         // were called, and senderHospitalId is the hospital that entry points
@@ -189,6 +178,28 @@ public class LabResultServiceImpl implements LabResultService {
         if (!unscopedIngest) {
             requireOrderInActiveHospital(labOrder);
         }
+        return unscopedIngest;
+    }
+
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
+                                                 boolean ingested,
+                                                 UUID senderHospitalId) {
+        // The ingest caller's own standing, settled BEFORE the order is read.
+        // Every refusal in it depends on who is calling and which hospital the
+        // message names, never on the order, and each one is the missing-order
+        // 404 - so an order id that exists and one that does not get the same
+        // answer however the caller stands.
+        if (ingested) {
+            requireIngestCallerAtSender(request, senderHospitalId);
+        }
+
+        // Read first, lock later. The write lock on the order is needed only
+        // for the status decision further down, and taking it here held it
+        // across the permission checks and — before the side effects moved
+        // after the commit — across a blocking SMS gateway call.
+        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
+                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        boolean unscopedIngest = requireOrderReachable(labOrder, ingested, senderHospitalId);
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
         // requireActiveHospitalId THROWS when nothing resolves, which is an
@@ -248,6 +259,9 @@ public class LabResultServiceImpl implements LabResultService {
         // comes from a scalar projection, which is not served from the
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
+        if (!ingested) {
+            requireSpecimenTaken(committedStatus, lockedOrder);
+        }
 
         // A retried post records a second result, deliberately. Detecting the
         // retry meant comparing the fields a request carries, and the portal's
@@ -282,6 +296,7 @@ public class LabResultServiceImpl implements LabResultService {
             }
         }
 
+        LabResult superseded = ingested ? null : requireSupersedable(request.getSupersedesResultId(), lockedOrder);
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         if (!ingested) {
             // Ingest-only fields: a hand-entered result is nobody's
@@ -291,7 +306,13 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
         }
+        if (superseded != null) {
+            result.setSupersedesResultId(superseded.getId());
+        }
         LabResult saved = labResultRepository.save(result);
+        // The released row is NOT marked superseded here: an unreleased (or
+        // later deleted) correction must not withdraw the value clinicians
+        // act on. The back-link is written when the correction is released.
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
@@ -311,6 +332,9 @@ public class LabResultServiceImpl implements LabResultService {
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
+        if (saved.isReleased()) {
+            linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
+        }
         if (saved.isReleased()) {
             completeOrderIfAllReleased(lockedOrder);
         }
@@ -685,6 +709,7 @@ public class LabResultServiceImpl implements LabResultService {
         // Hospital scope enforcement
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         requireResultInActiveHospital(labResult);
+        requireNotReleased(labResult);
 
         // Amending a result is entering one. Same gate — otherwise a bedside
         // role blocked from creating a lab-performed result could simply
@@ -718,6 +743,24 @@ public class LabResultServiceImpl implements LabResultService {
         return labResultMapper.toResponseDTO(updated);
     }
 
+    /**
+     * D107: a laboratory result is the analysis of a specimen, so a hand
+     * entered one may not land on an order whose specimen was never
+     * collected (still ORDERED or PENDING). A point-of-care test is measured
+     * at the bedside with no specimen workflow and is exempt; an analyzer's
+     * message is evidence of its own sample.
+     */
+    private static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder) {
+        if (committedStatus != LabOrderStatus.ORDERED && committedStatus != LabOrderStatus.PENDING) {
+            return;
+        }
+        LabTestDefinition test = labOrder.getLabTestDefinition();
+        if (test != null && test.isPointOfCare()) {
+            return;
+        }
+        throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.specimen.required"));
+    }
+
     /** Clock skew tolerated between the entering workstation and the server. */
     private static final java.time.Duration RESULT_DATE_SKEW = java.time.Duration.ofMinutes(5);
 
@@ -748,7 +791,106 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         requireResultInActiveHospital(labResult);
+        requireNotReleased(labResult);
+        clearSupersededBackLink(labResult);
         labResultRepository.deleteById(id);
+    }
+
+    /**
+     * D81: a correction names the released result it replaces. It must be a
+     * released result on the SAME order (the order row is locked here, so two
+     * corrections cannot both claim it) that no correction has replaced yet.
+     */
+    private LabResult requireSupersedable(UUID supersedesResultId, LabOrder lockedOrder) {
+        if (supersedesResultId == null) {
+            return null;
+        }
+        LabResult target = labResultRepository.findById(supersedesResultId)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        if (target.getLabOrder() == null || !lockedOrder.getId().equals(target.getLabOrder().getId())) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.otherOrder"));
+        }
+        if (!target.isReleased()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.notReleased"));
+        }
+        if (isSupersededByLiveResult(target)) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.alreadySuperseded"));
+        }
+        return target;
+    }
+
+    /**
+     * A back-link to a row that no longer exists (a correction deleted before
+     * this fix cleared links on delete) does not supersede anything.
+     */
+    private boolean isSupersededByLiveResult(LabResult target) {
+        UUID by = target.getSupersededByResultId();
+        return by != null && labResultRepository.existsById(by);
+    }
+
+    /**
+     * D81: the released original is withdrawn only once its correction is
+     * itself released. The order row is locked so two pending corrections of
+     * the same result cannot both be released over it; the target is re-read
+     * and re-checked under that lock.
+     */
+    private void linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
+        UUID targetId = correction.getSupersedesResultId();
+        if (targetId == null) {
+            return;
+        }
+        LabResult target = requireSupersedable(targetId, lockedOrder);
+        // Only the link is written on the released row; its value, release
+        // stamps and critical history stay exactly as released.
+        target.setSupersededByResultId(correction.getId());
+        labResultRepository.save(target);
+        auditCorrectionAfterCommit(target.getId(), correction.getId(), actorId);
+    }
+
+    /** Deleting a correction must leave the original it named current again. */
+    private void clearSupersededBackLink(LabResult deleted) {
+        UUID targetId = deleted.getSupersedesResultId();
+        if (targetId == null) {
+            return;
+        }
+        labResultRepository.findById(targetId)
+            .filter(target -> deleted.getId().equals(target.getSupersededByResultId()))
+            .ifPresent(target -> {
+                target.setSupersededByResultId(null);
+                labResultRepository.save(target);
+            });
+    }
+
+    /** D81: the correction's audit row names both results. Ids only. */
+    private void auditCorrectionAfterCommit(UUID supersededId, UUID correctionId, UUID actorId) {
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LAB_RESULT_UPDATED)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Correction: result " + correctionId + " supersedes released result " + supersededId)
+                    .entityType("LabResult")
+                    .resourceId(supersededId.toString())
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Correction audit not written for result {}: {}", supersededId, ex.getMessage());
+            }
+        });
+    }
+
+    /**
+     * D81: a released result is a record the ordering clinician may already
+     * have acted on. Overwriting or deleting it in place left the row marked
+     * "released by" the director over a value they never released, with the
+     * critical notification still quoting the old one and no trail. A
+     * correction is entered as a NEW result on the same order: the released
+     * row stays as it was, and both are shown, which is the trail.
+     */
+    private static void requireNotReleased(LabResult labResult) {
+        if (labResult.isReleased()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.released.immutable"));
+        }
     }
 
     @Override
@@ -1042,6 +1184,11 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
         }
 
+        if (labResult.getSupersedesResultId() != null) {
+            LabOrder lockedOrder = labOrderRepository.findWithLockById(labResult.getLabOrder().getId())
+                .orElse(labResult.getLabOrder());
+            linkCorrectionOnRelease(labResult, lockedOrder, actorId);
+        }
         labResult.setReleased(true);
         labResult.setReleasedAt(LocalDateTime.now());
         labResult.setReleasedByUserId(actorId);
@@ -1802,7 +1949,7 @@ public class LabResultServiceImpl implements LabResultService {
         for (LabResult result : candidates) {
             if (queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-                if (dto != null && isCriticalSeverity(dto)) {
+                if (dto != null && labResultMapper.raisesCriticalAlert(result, dto.getSeverityFlag())) {
                     surfaced.add(result);
                     answer.add(dto);
                 }
@@ -1813,11 +1960,6 @@ public class LabResultServiceImpl implements LabResultService {
             .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate,
                 Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
-    }
-
-    private static boolean isCriticalSeverity(LabResultResponseDTO dto) {
-        return CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag())
-            || "HIGH".equalsIgnoreCase(dto.getSeverityFlag());
     }
 
     private LabResultComparisonDTO.ComparisonMetadata calculateComparison(LabResult current, LabResult previous, List<LabResultTrendPointDTO> trendHistory) {
@@ -1939,6 +2081,8 @@ public class LabResultServiceImpl implements LabResultService {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
                 .build())
             .toList();
     }

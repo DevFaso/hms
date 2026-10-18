@@ -101,6 +101,9 @@
   "immunizationStatus": {
     "reason": "PatientImmunization.status is a free String column (length 50), not an enum, so nothing can verify it. Its vocabulary is the comment on the field and the portal form that writes it: COMPLETED / NOT_DONE / REFUSED / DEFERRED / ENTERED_IN_ERROR."
   },
+  "invoiceItemCategory": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ItemCategory.java"
+  },
   "invoiceStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java"
   },

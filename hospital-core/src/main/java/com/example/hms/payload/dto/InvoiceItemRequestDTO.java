@@ -24,7 +24,7 @@ public class InvoiceItemRequestDTO {
 
     private UUID id;
 
-    @NotNull
+    /** Required on create; on update the line stays on its own invoice. */
     private UUID billingInvoiceId;
 
     @NotBlank
@@ -42,7 +42,7 @@ public class InvoiceItemRequestDTO {
     @NotNull
     private ItemCategory itemCategory;
 
-    @NotNull
+    /** The staff member the line is for; defaults to the caller's assignment. */
     private UUID assignmentId;
 
     private UUID relatedServiceId;

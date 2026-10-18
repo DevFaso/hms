@@ -51,7 +51,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can create.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -69,7 +69,7 @@ public class LabOrderController {
      * {@code /{id}} in reading order only; Spring matches the literal path first.
      */
     @GetMapping("/performing-labs")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "List performing laboratories",
                description = "Active hospitals other than the caller's own whose laboratory can perform an order")
     @ApiResponse(responseCode = "200", description = "Candidate laboratories retrieved successfully")
@@ -124,7 +124,7 @@ public class LabOrderController {
      * Doctors, Nurses, Staff, and Admins can update.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
     @Operation(summary = "Update Lab Order", description = "Updates a lab order by ID, including diagnosis, order-channel, and standing-order attestations")
     @ApiResponse(responseCode = "200", description = "Lab order updated successfully")
     @ApiResponse(responseCode = "404", description = "Lab order not found")

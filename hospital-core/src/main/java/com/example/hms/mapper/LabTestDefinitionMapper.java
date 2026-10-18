@@ -21,7 +21,8 @@ public class LabTestDefinitionMapper {
             return null;
         }
 
-        LabTestDefinition entity = LabTestDefinition.builder()
+        // The hospital is set by the service from the acting scope (D30/D73).
+        return LabTestDefinition.builder()
             .testCode(dto.getTestCode())
             .name(dto.getName())
             .category(dto.getCategory())
@@ -36,9 +37,6 @@ public class LabTestDefinitionMapper {
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
             .build();
-
-        entity.setHospital(null);
-        return entity;
     }
 
 
@@ -111,6 +109,8 @@ public class LabTestDefinitionMapper {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
@@ -129,6 +129,8 @@ public class LabTestDefinitionMapper {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

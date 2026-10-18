@@ -22,4 +22,11 @@ public class LabTestReferenceRange implements Serializable {
     private Integer ageMax;
     private String gender;
     private String notes;
+    /**
+     * D107: critical (panic) limits. A value strictly below {@code criticalLow}
+     * or strictly above {@code criticalHigh} grades CRITICAL and raises the
+     * critical-value alert; one merely outside min/max grades LOW/HIGH.
+     */
+    private Double criticalLow;
+    private Double criticalHigh;
 }
