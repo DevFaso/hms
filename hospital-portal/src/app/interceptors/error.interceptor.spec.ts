@@ -23,6 +23,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST } from '../services/step-up';
+import { backgroundRequestOptions } from '../services/ws-transport';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -316,6 +317,30 @@ describe('errorInterceptor', () => {
     http.post('/cds-services/hms-bpa-protocols', {}).subscribe({ error: (e) => (error = e) });
     httpMock
       .expectOne('/cds-services/hms-bpa-protocols')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D35: a 403 on the WebSocket ticket exchange never redirects the page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/auth/ws-ticket', {}).subscribe({ error: (e) => (error = e) });
+    httpMock.expectOne('/auth/ws-ticket').flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D35: a 403 on any request marked as background never redirects the page', () => {
+    let error: HttpErrorResponse | undefined;
+    http
+      .post('/some/background/call', {}, backgroundRequestOptions())
+      .subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/some/background/call')
       .flush(null, { status: 403, statusText: 'Forbidden' });
     httpMock.expectOne('/frontend-audit').flush({});
 

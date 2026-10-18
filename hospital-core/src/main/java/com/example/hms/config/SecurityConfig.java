@@ -424,6 +424,11 @@ public class SecurityConfig {
                     // and CSRF has nothing to protect. The native apps send no
                     // XSRF header, which made these unreachable for them.
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    // The WebSocket ticket exchange: same header-only bearer
+                    // auth, mints no cookie and changes no state. A stale
+                    // XSRF cookie after login rotation made it answer 403
+                    // (QA D35), leaving every socket unauthenticated.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
                     PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
@@ -623,13 +628,14 @@ public class SecurityConfig {
                 .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ADMIN_REGISTER_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
-                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
+                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s):
+                // the controller answers from the caller's OWN acting scope, so there is
+                // nothing a role list here protects. Every authenticated page resolves its
+                // hospital scope through it, and a role list kept drifting behind the roles
+                // that exist (role audit D7 added three; QA D33: the pharmacist was still
+                // missing and the pharmacy registry went to /error/403).
                 .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        // Role audit D7: every authenticated page resolves its
-                        // hospital scope here, so the chart 403s without it.
-                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST)
+                .authenticated()
 
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.

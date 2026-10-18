@@ -218,6 +218,7 @@ public class UserController {
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
     }
 
+    @WriteAudited(skip = true, reason = "service emits USER_RESTORE")
     @Operation(summary = "Restore a soft-deleted user")
     @PatchMapping("/{id}/restore")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")

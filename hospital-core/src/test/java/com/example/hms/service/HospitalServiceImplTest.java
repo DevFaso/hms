@@ -236,7 +236,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals returns full directory regardless of user scope (referral support)")
+    @DisplayName("QA D36: getAllHospitals returns only the caller's own hospitals; the directory serves referrals")
     void getAllHospitals_scopeFiltering() {
         UUID scopedId = UUID.randomUUID();
         UUID unscopedId = UUID.randomUUID();
@@ -250,9 +250,41 @@ class HospitalServiceImplTest {
 
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
 
-        // No scope filtering — both hospitals returned so clinicians can pick
-        // referral destinations across the network.
-        assertEquals(2, result.size());
+        // The full record is the caller's own hospitals' only.
+        assertEquals(1, result.size());
+        assertEquals("S-01", result.get(0).getCode());
+    }
+
+    @Test
+    @DisplayName("QA D36: the directory lists every active hospital with id, name and city only")
+    void getHospitalDirectory_listsActiveHospitalsMinimally() {
+        setScopedContext(UUID.randomUUID());
+        Hospital open = buildHospital(UUID.randomUUID(), "Open", "O-01");
+        open.setCity("Ouagadougou");
+        Hospital closed = buildHospital(UUID.randomUUID(), "Closed", "C-01");
+        closed.setActive(false);
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(List.of(open, closed));
+
+        var directory = hospitalService.getHospitalDirectory();
+
+        assertEquals(1, directory.size());
+        assertEquals(open.getId(), directory.get(0).id());
+        assertEquals("Open", directory.get(0).name());
+        assertEquals("Ouagadougou", directory.get(0).city());
+    }
+
+    @Test
+    @DisplayName("QA D36: the directory skips null rows and answers empty when the repository returns null")
+    void getHospitalDirectory_toleratesNulls() {
+        Hospital open = buildHospital(UUID.randomUUID(), "Open", "O-01");
+        java.util.List<Hospital> withNull = new java.util.ArrayList<>();
+        withNull.add(null);
+        withNull.add(open);
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(withNull);
+        assertEquals(1, hospitalService.getHospitalDirectory().size());
+
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(null);
+        assertEquals(0, hospitalService.getHospitalDirectory().size());
     }
 
     @Test
@@ -286,7 +318,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals returns results even when user has empty scope (directory is unscoped)")
+    @DisplayName("QA D36: a caller with no hospital gets no hospital records")
     void getAllHospitals_emptyScopeReturnsEmpty() {
         HospitalContextHolder.setContext(HospitalContext.builder()
                 .principalUserId(UUID.randomUUID()).principalUsername("user")
@@ -297,9 +329,8 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(h1));
 
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
-        // Hospital directory is unscoped — even users with empty scope see the
-        // full list so they can create referrals to other hospitals.
-        assertEquals(1, result.size());
+        // The referral destination picker reads getHospitalDirectory instead.
+        assertEquals(0, result.size());
     }
 
     // ═══════════════ getHospitalById ═══════════════
@@ -1379,7 +1410,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals returns hospitals with null id (no scope filtering)")
+    @DisplayName("QA D36: getAllHospitals drops a hospital with no id (it cannot be in scope)")
     void getAllHospitals_hospitalWithNullIdFiltered() {
         UUID scopedId = UUID.randomUUID();
         setScopedContext(scopedId);
@@ -1391,9 +1422,8 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
-        // No scope filtering — both hospitals returned (directory is public)
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, null, Locale.ENGLISH);
-        assertEquals(2, result.size());
+        assertEquals(1, result.size());
     }
 
     @Test

@@ -26,6 +26,13 @@ public interface HospitalService {
                                               String state,
                                               String facilityType,
                                               Locale locale);
+
+    /**
+     * The active clinical hospitals, as id, name and city only (QA D36): the
+     * destination picker of cross-hospital workflows. The full list stays
+     * scoped to the caller's own hospitals.
+     */
+    List<com.example.hms.payload.dto.HospitalDirectoryEntryDTO> getHospitalDirectory();
     HospitalResponseDTO getHospitalById(UUID id, Locale locale);
 
     /**

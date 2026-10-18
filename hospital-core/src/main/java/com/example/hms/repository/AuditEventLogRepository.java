@@ -67,6 +67,11 @@ public interface AuditEventLogRepository
     @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a GROUP BY a.eventType")
     List<Object[]> countByEventType();
 
+    /** {@link #countByEventType()} restricted to rows anchored at one of the given hospitals (QA D25). */
+    @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a "
+           + "WHERE a.assignment.hospital.id IN :hospitalIds GROUP BY a.eventType")
+    List<Object[]> countByEventTypeForHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
+
     /**
      * Per-hospital audit-event count over a date window. Roadmap row 44
      * (per-tenant cost observability) foundation pass. Grouped by the

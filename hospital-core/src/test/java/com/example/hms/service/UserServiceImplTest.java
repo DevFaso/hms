@@ -958,6 +958,27 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D51: a restore is audited as USER_RESTORE on the restored account, not a generic update")
+        void restoreIsAuditedAsUserRestore() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(java.time.LocalDateTime.now().minusDays(3));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(captor.capture());
+            AuditEventRequestDTO event = captor.getValue();
+            assertThat(event.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.USER_RESTORE);
+            assertThat(event.getResourceId()).isEqualTo(userId.toString());
+            assertThat(event.getEntityType()).isEqualTo("USER");
+            assertThat((Boolean) ((java.util.Map<?, ?>) event.getDetails()).get("reactivated")).isTrue();
+        }
+
+        @Test
         @DisplayName("D21: a pending invitee (never signed in, nothing confirmed) stays inactive and gets fresh codes")
         void neverActivatedStaysInactiveAndIsReinvited() {
             user.setDeleted(true);
