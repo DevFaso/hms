@@ -121,13 +121,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before prescribing
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        String allergyOverride = checkAllergyConflicts(patient, hospitalId, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
@@ -903,7 +904,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before updating prescription
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        String allergyOverride = checkAllergyConflicts(patient, hospitalId, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
@@ -911,6 +912,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionStatus statusBefore = existing.getStatus();
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        recordAllergyOverride(existing, allergyOverride);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -1091,8 +1093,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
         if (request.getStaffId() != null) {
-            return staffRepository.findById(request.getStaffId())
+            Staff named = staffRepository.findById(request.getStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
+            // QA D84: the prescriber of record is the signed-in prescriber; an
+            // order cannot be written under a colleague's (or a nurse's) name.
+            UUID namedUserId = named.getUser() != null ? named.getUser().getId() : null;
+            if (currentUserId != null && namedUserId != null && !currentUserId.equals(namedUserId)) {
+                throw new BusinessException("prescription.prescriber.must.be.self");
+            }
+            return named;
         }
         if (currentUserId == null) {
             throw new BusinessException("prescription.staff.context.missing");
@@ -1206,50 +1215,80 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * Check patient allergies against the medication being prescribed.
-     * Logs warnings and throws BusinessException if severe allergy found without override.
+     * Check patient allergies against the medication being prescribed (QA D83).
+     * Any active documented allergy that matches the drug — by name, ignoring
+     * accents, or by drug class (a penicillin allergy covers amoxicillin) —
+     * blocks the order unless the prescriber overrides it WITH a reason. The
+     * reason is stored on the prescription so the override is on record.
+     *
+     * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private void checkAllergyConflicts(Patient patient, UUID hospitalId, String medicationName, Boolean forceOverride) {
+    private String checkAllergyConflicts(Patient patient, UUID hospitalId, PrescriptionRequestDTO request) {
+        String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
-            return; // Cannot check without medication name
+            return null; // Cannot check without medication name
         }
 
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
-        String medLower = medicationName.toLowerCase();
-        
+        String med = normalizeDrugText(medicationName);
+        String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
+        boolean conflict = false;
         for (PatientAllergy allergy : allergies) {
-            if (allergy.isActive() && matchesAllergen(medLower, allergy.getAllergenDisplay())) {
-                handleAllergyConflict(patient, allergy, medicationName, forceOverride);
+            if (allergy.isActive() && matchesAllergen(med, allergy.getAllergenDisplay())) {
+                conflict = true;
+                handleAllergyConflict(patient, allergy, medicationName, request.getForceOverride(), reason);
             }
         }
+        return conflict ? reason : null;
     }
 
-    private boolean matchesAllergen(String medLower, String allergenDisplay) {
-        if (allergenDisplay == null) {
+    private static void recordAllergyOverride(Prescription prescription, String overrideReason) {
+        if (overrideReason != null) {
+            prescription.setOverrideReason(overrideReason);
+            prescription.setAllergiesReviewed(true);
+        }
+    }
+
+    /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */
+    static String normalizeDrugText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .trim();
+    }
+
+    static boolean matchesAllergen(String med, String allergenDisplay) {
+        String allergen = normalizeDrugText(allergenDisplay);
+        if (allergen.isEmpty() || med.isEmpty()) {
             return false;
         }
-        String allergenLower = allergenDisplay.toLowerCase();
-        return allergenLower.contains(medLower) || medLower.contains(allergenLower);
+        if (allergen.contains(med) || med.contains(allergen)) {
+            return true;
+        }
+        // "penicillin" / "pénicilline" / "penicilina": the whole -cillin class.
+        return allergen.contains("penicil") && (med.contains("cillin") || med.contains("cilin") || med.contains("penicil"));
     }
 
-    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName, Boolean forceOverride) {
+    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName,
+                                       Boolean forceOverride, String reason) {
         String severityStr = allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN";
-        String reaction = allergy.getReaction() != null ? allergy.getReaction() : "unspecified reaction";
 
-        logger.warn("ALLERGY ALERT: Patient {} has documented allergy to '{}' (severity: {}, reaction: {}). " +
-                   "Attempted to prescribe '{}'. Override: {}",
-                   patient.getId(), sanitizeLog(allergy.getAllergenDisplay()), severityStr,
-                   sanitizeLog(reaction), sanitizeLog(medicationName), forceOverride);
-        
-        if (isSevereAllergy(allergy.getSeverity()) && !Boolean.TRUE.equals(forceOverride)) {
-            throw new BusinessException(
-                String.format("ALLERGY CONFLICT: Patient has a documented %s allergy to '%s' with reaction: %s. " +
-                            "Cannot prescribe '%s' without explicit override. Review patient allergies before proceeding.",
-                            severityStr, allergy.getAllergenDisplay(), reaction, medicationName)
-            );
+        logger.warn("ALLERGY ALERT: patient {} has a documented {} allergy matching the prescribed drug. Override: {}",
+                   patient.getId(), severityStr, forceOverride);
+
+        if (!Boolean.TRUE.equals(forceOverride) || reason.isEmpty()) {
+            // Sent as a critical CDS card so the prescribing screen shows the
+            // alert and offers the override (with its mandatory reason).
+            String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
+                allergy.getAllergenDisplay(), severityStr, medicationName);
+            CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
+                null, null, null, UUID.randomUUID().toString());
+            throw new CdsCriticalBlockException(message, List.of(card));
         }
-        
-        logger.info("Prescription proceeding with documented {} allergy to '{}'", severityStr, allergy.getAllergenDisplay());
     }
 
     private boolean isSevereAllergy(com.example.hms.enums.AllergySeverity severity) {

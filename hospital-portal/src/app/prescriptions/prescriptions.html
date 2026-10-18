@@ -889,6 +889,20 @@
                   />
                   {{ 'CDS.FORCE_OVERRIDE' | translate }}
                 </label>
+                @if (form.forceOverride) {
+                  <label class="cds-override__label" for="cds-override-reason">
+                    {{ 'CDS.OVERRIDE_REASON' | translate }}
+                  </label>
+                  <textarea
+                    id="cds-override-reason"
+                    name="cds-override-reason"
+                    rows="2"
+                    maxlength="1024"
+                    required
+                    [(ngModel)]="form.overrideReason"
+                    data-testid="cds-override-reason"
+                  ></textarea>
+                }
               </div>
             } @else {
               <div class="cds-override">
@@ -912,7 +926,9 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="saving() || !form.medicationName"
+          [disabled]="
+            saving() || !form.medicationName || (form.forceOverride && !form.overrideReason?.trim())
+          "
         >
           {{
             saving()

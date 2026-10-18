@@ -80,6 +80,29 @@ class AdmissionServiceImplTest {
         patient = new Patient(); patient.setId(patientId);
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
         staff = new Staff(); staff.setId(staffId);
+        com.example.hms.model.User staffUser = new com.example.hms.model.User();
+        staffUser.setId(UUID.randomUUID());
+        staff.setUser(staffUser);
+        // The admitting provider is a doctor unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+    }
+
+    @Test
+    void admitPatient_refusesANurseAsAdmittingProvider() {
+        // QA D84: a nurse was accepted as admitting physician.
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("admission.provider.physician.required");
+        org.mockito.Mockito.verify(admissionRepository, org.mockito.Mockito.never()).save(any());
     }
 
     @Test

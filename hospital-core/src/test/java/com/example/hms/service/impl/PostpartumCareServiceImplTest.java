@@ -317,4 +317,34 @@ class PostpartumCareServiceImplTest {
         assertThat(service.getRecentObservations(patientId, hospitalId, null, 5)).isEmpty();
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(), eq(Map.of()), anyString());
     }
+
+    @Test
+    void aCriticalAlertThatClosesTheImmediateWindowLandsInEnhancedMonitoring() {
+        // QA D104: after a critical alert the checks fell back to every 480 min.
+        PostpartumCarePlan plan = PostpartumCarePlan.builder()
+            .patient(patient)
+            .hospital(hospital)
+            .build();
+        plan.setId(UUID.randomUUID());
+        plan.setImmediateObservationTarget(2);
+        plan.setImmediateObservationsCompleted(1);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        LocalDateTime observationTime = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(observationTime)
+            .stabilizationConfirmed(Boolean.TRUE)
+            .temperatureCelsius(38.5)
+            .foulLochiaOdor(Boolean.TRUE)
+            .educationCompleted(Boolean.TRUE)
+            .build();
+
+        service.recordObservation(patientId, request, recorderId);
+
+        assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
+        assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
+    }
 }

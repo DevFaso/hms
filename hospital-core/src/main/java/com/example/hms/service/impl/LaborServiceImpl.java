@@ -258,6 +258,11 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("A delivery record already exists for this labor episode.");
         }
 
+        LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
+        // QA D104: a birth cannot precede the recorded labour onset.
+        if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
+            throw new BusinessException("labor.delivery.beforeOnset");
+        }
         Staff deliveredBy = resolveStaff(request.getDeliveredByStaffId(), episode.getHospital());
         User documentedBy = resolveUser(recorderUserId);
 
@@ -267,7 +272,7 @@ public class LaborServiceImpl implements LaborService {
             .hospital(episode.getHospital())
             .deliveredByStaff(deliveredBy)
             .documentedBy(documentedBy)
-            .birthDateTime(request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now())
+            .birthDateTime(birthAt)
             .deliveryMode(request.getDeliveryMode())
             .liveBirth(request.getLiveBirth() == null || request.getLiveBirth())
             .numberOfInfants(request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1)

@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
+    "OVERRIDE_REASON": "Motif de la dérogation (enregistré sur la prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Avertissement",

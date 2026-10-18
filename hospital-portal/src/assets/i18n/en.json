@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
     "FORCE_OVERRIDE": "Override critical advisory after clinical review",
+    "OVERRIDE_REASON": "Reason for the override (recorded on the prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Warning",

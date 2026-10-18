@@ -174,6 +174,8 @@ export interface PrescriptionRequest {
   notes?: string;
   status?: PrescriptionStatusType;
   forceOverride?: boolean;
+  /** Required with forceOverride when a documented allergy matches (QA D83). */
+  overrideReason?: string;
   /**
    * Safeguard flags (P2 #15). Set-only: the backend refuses clearing a flag by
    * edit. controlledSubstance is deliberately not offered by the form yet —

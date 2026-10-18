@@ -476,6 +476,7 @@ export class PrescriptionsComponent implements OnInit {
     this.cdsAdvisories.set([]);
     this.cdsCriticalBlocked.set(false);
     this.form.forceOverride = undefined;
+    this.form.overrideReason = undefined;
   }
 
   /** Allow the clinician to dismiss non-blocking advisories without re-submitting. */

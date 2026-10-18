@@ -66,6 +66,10 @@ public class PrescriptionRequestDTO {
      */
     private Boolean forceOverride;
 
+    /** Why the prescriber overrides a documented allergy; required with forceOverride on a match (QA D83). */
+    @jakarta.validation.constraints.Size(max = 1024)
+    private String overrideReason;
+
     /**
      * Flag this prescription as a controlled substance (P2 #15).
      *

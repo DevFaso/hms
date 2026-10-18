@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -82,6 +83,21 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
 
+    /**
+     * QA D84 (D28 family): the admitting and attending providers must hold a
+     * physician role at the admission's hospital — a nurse is not one.
+     */
+    private void requirePhysician(Staff staff, UUID hospitalId) {
+        UUID userId = staff.getUser() != null ? staff.getUser().getId() : null;
+        boolean physician = userId != null
+            && (roleValidator.isDoctor(userId, hospitalId)
+                || roleValidator.isPhysician(userId, hospitalId)
+                || roleValidator.isSurgeon(userId, hospitalId));
+        if (!physician) {
+            throw new BusinessException("admission.provider.physician.required");
+        }
+    }
+
     @Override
     @Transactional
     public AdmissionResponseDTO admitPatient(AdmissionRequestDTO request) {
@@ -93,6 +109,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
+
+        requirePhysician(admittingProvider, hospital.getId());
 
         Admission admission = new Admission();
         admission.setPatient(patient);
@@ -108,6 +126,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAttendingPhysicianId() != null) {
             Staff attending = staffRepository.findById(request.getAttendingPhysicianId())
                 .orElseThrow(() -> new ResourceNotFoundException("admission.attendingPhysician.notFound", request.getAttendingPhysicianId()));
+            requirePhysician(attending, hospital.getId());
             admission.setAttendingPhysician(attending);
         }
 
@@ -166,6 +185,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAttendingPhysicianId() != null) {
             Staff attending = staffRepository.findById(request.getAttendingPhysicianId())
                 .orElseThrow(() -> new ResourceNotFoundException("admission.attendingPhysician.notFound", request.getAttendingPhysicianId()));
+            requirePhysician(attending, admission.getHospital().getId());
             admission.setAttendingPhysician(attending);
         }
 

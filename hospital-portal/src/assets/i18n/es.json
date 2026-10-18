@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",
     "FORCE_OVERRIDE": "Anular alerta crítica tras revisión clínica",
+    "OVERRIDE_REASON": "Motivo de la excepción (registrado en la receta)",
     "INDICATOR": {
       "INFO": "Información",
       "WARNING": "Advertencia",
