@@ -880,7 +880,7 @@ class DepartmentServiceImplTest {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
-            .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     // ========== getDepartmentStatistics edge case ==========

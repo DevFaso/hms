@@ -145,6 +145,12 @@ public class InBasketServiceImpl implements InBasketService {
         return inBasketMapper.toDto(item);
     }
 
+    @Override
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public InBasketItemDTO createItemInNewTransaction(CreateInBasketItemRequest request) {
+        return createItem(request);
+    }
+
     // ─── helpers ──────────────────────────────────────────────
 
     private long countByType(UUID userId, UUID hospitalId, InBasketItemType type) {

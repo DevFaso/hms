@@ -21,7 +21,7 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -256,8 +256,8 @@ class LabTestDefinitionServiceImplTest {
             when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.create(requestDTO))
-                    .isInstanceOf(EntityNotFoundException.class)
-                    .hasMessageContaining("Assignment not found");
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasMessageContaining("assignment.notfound");
         }
     }
 
@@ -294,7 +294,7 @@ class LabTestDefinitionServiceImplTest {
         when(repository.findById(defId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getById(defId))
-                .isInstanceOf(EntityNotFoundException.class);
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ---- getAll ----
@@ -326,7 +326,7 @@ class LabTestDefinitionServiceImplTest {
         when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
         assertThatThrownBy(() -> service.getById(defId))
-                .isInstanceOf(EntityNotFoundException.class);
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -463,7 +463,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.update(defId, requestDTO))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -506,7 +506,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.delete(defId))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -1106,7 +1106,7 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("SUBMIT_FOR_QA");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 
@@ -1119,6 +1119,112 @@ class LabTestDefinitionServiceImplTest {
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Unauthenticated");
+        }
+    }
+
+    // ── QA D159: reviewed ranges do not move without a new review ─────────
+
+    private LabTestReferenceRangeDTO glucoseRangeDto(double max) {
+        LabTestReferenceRangeDTO dto = new LabTestReferenceRangeDTO();
+        dto.setMinValue(3.9);
+        dto.setMaxValue(max);
+        dto.setUnit("mmol/L");
+        dto.setGender("ALL");
+        return dto;
+    }
+
+    private com.example.hms.model.LabTestReferenceRange glucoseRange(double max) {
+        return com.example.hms.model.LabTestReferenceRange.builder()
+            .minValue(3.9).maxValue(max).unit("mmol/L").gender("ALL").build();
+    }
+
+    @Test
+    void updateReferenceRanges_ofAnActiveDefinition_isRefusedAndNothingIsSaved() {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        LabTestReferenceRangeDTO widened = glucoseRangeDto(9.0);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(widened)))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of(widened)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("ACTIVE");
+            assertThat(definition.getReferenceRanges()).containsExactly(glucoseRange(6.1));
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void update_ofAnActiveDefinition_withTheSameRanges_isAllowed() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setReferenceRanges(List.of(glucoseRangeDto(6.1)));
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(requestDTO.getReferenceRanges()))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+        }
+    }
+
+    @Test
+    void update_ofAnActiveDefinition_withNewRanges_isRefused() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setReferenceRanges(List.of(glucoseRangeDto(9.0)));
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(requestDTO.getReferenceRanges()))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    @Test
+    void update_cannotSwitchOnADefinitionTheWorkflowHasNotActivated() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        definition.setActive(false);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        requestDTO.setAssignmentId(null);
+        requestDTO.setActive(true);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
         }
     }
 
@@ -1199,7 +1305,7 @@ class LabTestDefinitionServiceImplTest {
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of()))
-                    .isInstanceOf(EntityNotFoundException.class);
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 

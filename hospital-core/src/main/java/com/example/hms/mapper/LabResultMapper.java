@@ -179,6 +179,20 @@ public class LabResultMapper {
      * unit anywhere is still used (bare limits, no unit claimed), and so is
      * any range for a result that states no unit.
      */
+    /**
+     * QA D178: the severity the lab-results screen shows for this result
+     * (CRITICAL, LOW, HIGH, NORMAL or UNSPECIFIED), so every other screen
+     * can grade it the same way instead of guessing.
+     */
+    public String severityFlagOf(LabResult result) {
+        if (result == null) {
+            return FLAG_UNSPECIFIED;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        return determineSeverityFlag(result.getResultValue(), graded);
+    }
+
     public LabResultReferenceRangeDTO gradedReferenceRange(LabResult result) {
         if (result == null) {
             return null;

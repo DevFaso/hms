@@ -7,6 +7,7 @@ import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.enums.SignatureStatus;
+import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.ChatMessage;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
@@ -88,6 +89,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final PrescriptionRepository prescriptionRepository;
     private final com.example.hms.repository.NotificationRepository notificationRepository;
     private final MessageSource messageSource;
+    /** QA D178: grades a result exactly as the lab-results screen does. */
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     /**
      * Resolvable message key, not a sentence, and the key this codebase already
@@ -454,12 +457,40 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 : text("lab.test.fallback", locale);
         // The queue exposes the three-value family: the portal buckets on
         // the exact strings NORMAL/ABNORMAL/CRITICAL, direction lives on the row.
-        String abnormalFlag = result.getAbnormalFlag() != null
-                ? result.getAbnormalFlag().severity().name()
-                : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name());
+        //
+        // QA D178: graded from the reference range first, as the lab-results
+        // screen grades it, so the two screens agree. The row's stored flag
+        // (an analyzer's) is the fallback when no range applies. A row with
+        // neither used to read ABNORMAL, so a normal glucose and an ungraded
+        // count both showed "Anormal" here and NORMAL / NON EVALUE there.
+        String rangeFlag = labResultMapper != null ? labResultMapper.severityFlagOf(result) : null;
+        if (rangeFlag == null) {
+            rangeFlag = LabResultMapper.FLAG_UNSPECIFIED;
+        }
+        String abnormalFlag;
+        com.example.hms.enums.AbnormalDirection direction;
+        switch (rangeFlag) {
+            case LabResultMapper.FLAG_CRITICAL -> {
+                abnormalFlag = AbnormalFlag.CRITICAL.name();
+                direction = null;
+            }
+            case "LOW", "HIGH" -> {
+                abnormalFlag = AbnormalFlag.ABNORMAL.name();
+                direction = com.example.hms.enums.AbnormalDirection.valueOf(rangeFlag);
+            }
+            case "NORMAL" -> {
+                abnormalFlag = AbnormalFlag.NORMAL.name();
+                direction = null;
+            }
+            default -> {
+                abnormalFlag = result.getAbnormalFlag() != null
+                        ? result.getAbnormalFlag().severity().name() : LabResultMapper.FLAG_UNSPECIFIED;
+                direction = result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null;
+            }
+        }
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
-                .abnormalDirection(result.getAbnormalFlag() != null ? result.getAbnormalFlag().direction() : null)
+                .abnormalDirection(direction)
                 .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
                 .patientId(order.getPatient().getId())
                 .testName(testName)
@@ -473,10 +504,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private int abnormalityRank(String flag) {
         if (flag == null) return 0;
         return switch (flag.toUpperCase()) {
-            case SEVERITY_CRITICAL -> 3;
-            case "ABNORMAL" -> 2;
+            case SEVERITY_CRITICAL -> 4;
+            case "ABNORMAL" -> 3;
             case URGENCY_NORMAL -> 1;
-            default -> 0;
+            // QA D178: ungraded sits above NORMAL, as the portal's buckets draw it.
+            default -> 2;
         };
     }
 

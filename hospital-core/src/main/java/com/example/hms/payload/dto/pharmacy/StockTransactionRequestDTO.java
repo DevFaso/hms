@@ -41,6 +41,9 @@ public class StockTransactionRequestDTO {
 
     private UUID performedBy;
 
+    /** QA D157: the colleague who witnessed a controlled-substance movement. */
+    private UUID witnessedBy;
+
     // ── FU-2 (P-06 backend): first-class RECEIPT fields, optional for other types ──
 
     @Size(max = 120)
