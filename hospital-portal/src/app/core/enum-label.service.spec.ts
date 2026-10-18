@@ -85,6 +85,13 @@ describe('EnumLabelService', () => {
     expect(service.transform('ENTERED_IN_ERROR', 'immunizationStatus')).toBe('Entered in Error');
   });
 
+  it('a domain with no locale group reads the value from another group, not English (D121)', () => {
+    translate.setTranslation('fr', { PORTAL: { ENUM: { STATUS: { DRAFT: 'Brouillon' } } } }, true);
+    translate.use('fr');
+    expect(service.transform('DRAFT', 'noteStatus')).toBe('Brouillon');
+    expect(service.transform('DRAFT')).toBe('Brouillon');
+  });
+
   it("returns '' for a blank value so a template fallback can take over", () => {
     expect(service.transform(null, 'role')).toBe('');
     expect(service.transform(undefined, 'role')).toBe('');

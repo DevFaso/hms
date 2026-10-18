@@ -3028,7 +3028,7 @@
                 </div>
                 <div class="bill-amount-wrap">
                   <span class="bill-amount" [class.bill-due]="inv.balance > 0">
-                    ${{ inv.balance.toFixed(2) }}
+                    {{ formatInvoiceAmount(inv.balance) }}
                   </span>
                   <span class="bill-status" [attr.data-status]="inv.status">
                     {{ inv.status | enumLabel: 'invoiceStatus' }}

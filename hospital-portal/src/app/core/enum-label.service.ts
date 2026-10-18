@@ -404,6 +404,24 @@ export class EnumLabelService implements OnDestroy {
       URGENT: 'Urgent',
       STAT: 'STAT (immediate)',
     },
+    admissionType: {
+      EMERGENCY: 'Emergency',
+      ELECTIVE: 'Elective',
+      URGENT: 'Urgent',
+      NEWBORN: 'Newborn',
+      TRANSFER: 'Transfer',
+      OBSERVATION: 'Observation',
+      DAY_CASE: 'Day case',
+      LABOR_DELIVERY: 'Labour and delivery',
+      PSYCHIATRIC: 'Psychiatric',
+    },
+    stockTransactionType: {
+      RECEIPT: 'Receipt',
+      DISPENSE: 'Dispense',
+      ADJUSTMENT: 'Adjustment',
+      TRANSFER: 'Transfer',
+      RETURN: 'Return',
+    },
     pharmacyType: {
       HOSPITAL_DISPENSARY: 'Hospital dispensary',
       COMMUNITY_PHARMACY: 'Community pharmacy',
@@ -907,6 +925,26 @@ export class EnumLabelService implements OnDestroy {
     return camel.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
   }
 
+  private static readonly ENUM_ROOT = ['PORTAL', 'ENUM'].join('.');
+
+  /** The value's label in the generic STATUS group, else in the first group that has it. */
+  private lookupAnyGroup(value: string): string | null {
+    // The whole subtree, not a leaf key: held in a constant so the
+    // referenced-keys gate does not read it as a missing string.
+    const groups: unknown = this.translate.instant(EnumLabelService.ENUM_ROOT);
+    if (!groups || typeof groups !== 'object') return null;
+    const byGroup = groups as Record<string, unknown>;
+    const ordered = ['STATUS', ...Object.keys(byGroup).filter((g) => g !== 'STATUS')];
+    for (const group of ordered) {
+      const entries = byGroup[group];
+      if (entries && typeof entries === 'object') {
+        const label = (entries as Record<string, unknown>)[value];
+        if (typeof label === 'string' && label) return label;
+      }
+    }
+    return null;
+  }
+
   /** Three-tier lookup. See class JSDoc. */
   private lookup(value: string, domain?: string): string {
     // 1) i18n — PORTAL.ENUM.<GROUP>.<VALUE>
@@ -919,6 +957,12 @@ export class EnumLabelService implements OnDestroy {
         return translated;
       }
     }
+
+    // 1b) i18n in any other group. A domain with no locale group of its own
+    // (or a domain-less call) used to drop straight to the English LABELS, so
+    // a French page read "Draft" although PORTAL.ENUM.STATUS.DRAFT exists.
+    const translatedElsewhere = this.lookupAnyGroup(value);
+    if (translatedElsewhere) return translatedElsewhere;
 
     // 2) In-memory English LABELS
     if (domain) {

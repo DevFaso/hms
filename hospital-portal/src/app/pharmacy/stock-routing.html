@@ -55,7 +55,7 @@
           }}</span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.QTY_ON_HAND' | translate }}:</span>
+          <span class="label">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}:</span>
           <span class="value" [class.text-danger]="!stockResult()!.sufficient">
             {{ stockResult()!.quantityOnHand }}
           </span>

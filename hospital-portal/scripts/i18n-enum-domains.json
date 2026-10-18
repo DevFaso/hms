@@ -26,6 +26,12 @@
   "imagingOrderPriority": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderPriority.java"
   },
+  "admissionType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionType.java"
+  },
+  "stockTransactionType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/StockTransactionType.java"
+  },
   "pharmacyType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyType.java" },
   "procedureUrgency": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureUrgency.java"

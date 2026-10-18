@@ -368,7 +368,7 @@ export class PostpartumTabComponent {
   }
 
   phaseLabelKey(schedule: PostpartumSchedule): string {
-    return `POSTPARTUM.PHASE_${schedule.phase}`;
+    return schedule.phase ? `POSTPARTUM.PHASE_${schedule.phase}` : 'POSTPARTUM.PHASE_UNKNOWN';
   }
 
   alertClass(severity: string): string {

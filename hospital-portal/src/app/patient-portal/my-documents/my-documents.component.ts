@@ -8,6 +8,7 @@ import {
   PatientDocumentType,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
@@ -176,7 +177,10 @@ export class MyDocumentsComponent implements OnInit {
   }
 
   fileSizeKb(bytes: number): string {
-    return (bytes / 1024).toFixed(1);
+    return new Intl.NumberFormat(currentLocale(), {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(bytes / 1024);
   }
 
   private resetForm(): void {

@@ -24,6 +24,7 @@ import {
   PatientDocumentType,
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 /** Same order as the patient's own upload form; labels reuse its keys. */
 export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: string }[] = [
@@ -200,7 +201,7 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
     if (bytes === null || bytes === undefined) return null;
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
   }
 
   private serverMessage(err: unknown): string | null {
