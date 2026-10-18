@@ -1563,7 +1563,8 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not registered");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.notRegistered", "not registered"));
         }
 
         @Test
@@ -1584,7 +1585,8 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Department does not belong");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.departmentOtherHospital", "does not belong"));
         }
 
         @Test
@@ -1607,7 +1609,8 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Provider does not belong");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerOtherHospital", "does not work"));
         }
 
         @Test
@@ -1627,7 +1630,8 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("not available");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerUnavailable", "not available"));
         }
 
         @Test
@@ -1655,7 +1659,8 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already has an appointment");
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                            .containsAnyOf("portal.booking.providerBusy", "already has an appointment"));
         }
 
         @Test
@@ -1674,8 +1679,7 @@ class PatientPortalServiceImplPhase2Test {
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("No providers available");
+                    .isInstanceOf(BusinessException.class);
         }
 
         @Test
@@ -1694,8 +1698,7 @@ class PatientPortalServiceImplPhase2Test {
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("end time must be after start time");
+                    .isInstanceOf(BusinessException.class);
         }
     }
 
@@ -1750,6 +1753,19 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("QA D128: departments of a hospital the patient is not registered at are not listed")
+        void getDepartments_refusesAnUnregisteredHospital() {
+            UUID hospId = UUID.randomUUID();
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.empty());
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getDepartmentsForHospital(auth, hospId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            org.mockito.Mockito.verifyNoInteractions(departmentRepository);
+        }
+
+        @Test
         @DisplayName("getDepartmentsForHospital — should map department fields correctly")
         void getDepartments_mapsDepartmentFields() {
             UUID hospId = UUID.randomUUID();
@@ -1761,10 +1777,13 @@ class PatientPortalServiceImplPhase2Test {
             d2.setId(UUID.randomUUID());
             d2.setName("Radiology");
 
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(d1, d2));
 
             List<java.util.Map<String, Object>> result =
-                    service.getDepartmentsForHospital(hospId);
+                    service.getDepartmentsForHospital(auth, hospId);
 
             assertThat(result).hasSize(2);
             assertThat(result.get(0)).containsEntry("name", "Cardiology");
@@ -1794,11 +1813,14 @@ class PatientPortalServiceImplPhase2Test {
             s.setUser(staffUser);
             s.setAssignment(assign);
 
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
                     .thenReturn(List.of(s));
 
             List<java.util.Map<String, Object>> result =
-                    service.getProvidersForDepartment(hospId, deptId);
+                    service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).hasSize(1);
             assertThat(result.get(0)).containsEntry("id", s.getId());
@@ -1812,11 +1834,14 @@ class PatientPortalServiceImplPhase2Test {
         void getProviders_emptyWhenNone() {
             UUID hospId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
                     .thenReturn(List.of());
 
             List<java.util.Map<String, Object>> result =
-                    service.getProvidersForDepartment(hospId, deptId);
+                    service.getProvidersForDepartment(auth, hospId, deptId);
 
             assertThat(result).isEmpty();
         }

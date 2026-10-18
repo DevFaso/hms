@@ -1449,7 +1449,24 @@
     "TO_DATE": "Au",
     "UPDATED": "Facture mise à jour",
     "VIEW_DETAILS_TITLE": "Voir le détail de la facture",
-    "NO_RECORDS_HINT": "Aucune facture disponible."
+    "NO_RECORDS_HINT": "Aucune facture disponible.",
+    "NUMBER_ASSIGNED_ON_SAVE": "Attribué automatiquement à l'enregistrement de la facture",
+    "STATUS_FOLLOWS_PAYMENTS": "Ce statut découle des paiements enregistrés. Enregistrez un paiement pour le modifier.",
+    "TOTAL_HINT": "Pour une facture sans lignes. Dès qu'une ligne est ajoutée, le total est leur somme.",
+    "TOTAL_FROM_LINES": "Le total est la somme des lignes de la facture.",
+    "LINES": "Lignes de la facture",
+    "NO_LINES": "Aucune ligne pour le moment.",
+    "LINE_DESCRIPTION": "Désignation",
+    "LINE_CATEGORY": "Catégorie",
+    "LINE_QUANTITY": "Quantité",
+    "LINE_UNIT_PRICE": "Prix unitaire",
+    "LINE_TOTAL": "Total de la ligne",
+    "ADD_LINE": "Ajouter une ligne",
+    "REMOVE_LINE": "Supprimer la ligne",
+    "ITEM_ADDED": "Ligne ajoutée",
+    "ITEM_REMOVED": "Ligne supprimée",
+    "ITEM_SAVE_FAILED": "La ligne n'a pas pu être enregistrée",
+    "ITEMS_LOAD_FAILED": "Les lignes de la facture n'ont pas pu être chargées"
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -5188,6 +5205,12 @@
         "SENT": "Envoyée",
         "UNKNOWN": "Inconnu"
       },
+      "INVOICE_ITEM_CATEGORY": {
+        "SERVICE": "Prestation",
+        "MEDICATION": "Médicament",
+        "LAB_TEST": "Analyse de laboratoire",
+        "GENERAL": "Général"
+      },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmée",
         "ENTERED_IN_ERROR": "Saisie erronée",
@@ -6209,7 +6232,7 @@
     "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
     "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
     "PASSWORD_SAME_AS_CURRENT": "Le nouveau mot de passe doit être différent de l’actuel.",
-    "PASSWORD_CHANGED": "Votre mot de passe a été modifié.",
+    "PASSWORD_CHANGED": "Votre mot de passe a été modifié. Reconnectez-vous avec votre nouveau mot de passe.",
     "PASSWORD_CURRENT_WRONG": "Le mot de passe actuel est incorrect.",
     "PASSWORD_CHANGE_REFUSED": "Le nouveau mot de passe a été refusé. Il correspond peut-être à l’un de vos 5 derniers mots de passe.",
     "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",
@@ -10610,7 +10633,8 @@
     "REFERENCE_PLACEHOLDER": "Transaction / police",
     "SUBMIT": "Valider le paiement",
     "PRINT": "Imprimer",
-    "NEW_PAYMENT": "Nouveau paiement"
+    "NEW_PAYMENT": "Nouveau paiement",
+    "RECEIPT_NO_PATIENT": "Non renseigné"
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",

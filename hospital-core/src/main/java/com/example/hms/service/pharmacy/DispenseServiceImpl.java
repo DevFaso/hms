@@ -1015,7 +1015,15 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         enforceHospitalScope(dispense.getPharmacy());
-        return dispenseMapper.toResponseDTO(dispense);
+        DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
+        // QA D102: the checkout and its receipt show names, not raw ids.
+        if (dispense.getPatient() != null) {
+            dto.setPatientName(dispense.getPatient().getFullName());
+        }
+        if (dispense.getPharmacy() != null) {
+            dto.setPharmacyName(dispense.getPharmacy().getName());
+        }
+        return dto;
     }
 
     @Override

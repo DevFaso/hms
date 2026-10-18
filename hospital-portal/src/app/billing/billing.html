@@ -341,6 +341,118 @@
               <p>{{ inv.notes }}</p>
             </div>
           }
+
+          <div class="lines-section">
+            <h3>{{ 'BILLING.LINES' | translate }}</h3>
+            @if (itemsLoading()) {
+              <p class="field-hint">{{ 'COMMON.LOADING' | translate }}</p>
+            } @else if (items().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_LINES' | translate }}</p>
+            } @else {
+              <table class="lines-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'BILLING.LINE_DESCRIPTION' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_QUANTITY' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_UNIT_PRICE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_TOTAL' | translate }}</th>
+                    @if (canDelete || canEditLines(inv)) {
+                      <th scope="col">
+                        <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (it of items(); track it.id) {
+                    <tr>
+                      <td>
+                        {{ it.itemDescription }}
+                        <div class="cell-secondary">
+                          {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                        </div>
+                      </td>
+                      <td>{{ it.quantity }}</td>
+                      <td class="amount">{{ formatCurrency(it.unitPrice) }}</td>
+                      <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                      @if (canDelete || canEditLines(inv)) {
+                        <td>
+                          @if (canEditLines(inv)) {
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              [disabled]="itemSaving()"
+                              [title]="'BILLING.REMOVE_LINE' | translate"
+                              [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                              (click)="removeItem(it)"
+                            >
+                              <span class="material-symbols-outlined">delete</span>
+                            </button>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @if (canEditLines(inv)) {
+              <div class="line-form">
+                <div class="field">
+                  <label for="line-desc">{{ 'BILLING.LINE_DESCRIPTION' | translate }} *</label>
+                  <input
+                    id="line-desc"
+                    type="text"
+                    maxlength="255"
+                    [ngModel]="newItemDescription()"
+                    (ngModelChange)="newItemDescription.set($event)"
+                  />
+                </div>
+                <div class="field">
+                  <label for="line-cat">{{ 'BILLING.LINE_CATEGORY' | translate }}</label>
+                  <select
+                    id="line-cat"
+                    [ngModel]="newItemCategory()"
+                    (ngModelChange)="newItemCategory.set($event)"
+                  >
+                    @for (c of itemCategories; track c) {
+                      <option [value]="c">{{ c | enumLabel: 'invoiceItemCategory' }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="line-qty">{{ 'BILLING.LINE_QUANTITY' | translate }} *</label>
+                  <input
+                    id="line-qty"
+                    type="number"
+                    min="1"
+                    step="1"
+                    [ngModel]="newItemQuantity()"
+                    (ngModelChange)="newItemQuantity.set($event)"
+                  />
+                </div>
+                <div class="field">
+                  <label for="line-price">{{ 'BILLING.LINE_UNIT_PRICE' | translate }} *</label>
+                  <input
+                    id="line-price"
+                    type="number"
+                    min="0"
+                    [ngModel]="newItemUnitPrice()"
+                    (ngModelChange)="newItemUnitPrice.set($event)"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  [disabled]="!canAddItem()"
+                  (click)="addItem()"
+                >
+                  {{ 'BILLING.ADD_LINE' | translate }}
+                </button>
+              </div>
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -369,44 +481,31 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="bill-patientEmail">{{ 'BILLING.PATIENT_EMAIL' | translate }} *</label>
-            <input
-              id="bill-patientEmail"
-              type="email"
-              [(ngModel)]="form.patientEmail"
-              placeholder="patient&#64;example.com"
-              required
-            />
-          </div>
-          <div class="field">
-            <label for="bill-hospitalName">{{ 'BILLING.HOSPITAL_NAME' | translate }} *</label>
-            <input
-              id="bill-hospitalName"
-              type="text"
-              [(ngModel)]="form.hospitalName"
-              [placeholder]="'BILLING.HOSPITAL_NAME_PLACEHOLDER' | translate"
-              required
+            <label for="bill-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="bill-patient"
+              [selected]="formPatient()"
+              (selectedChange)="onPatientPicked($event)"
             />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="bill-invoiceNumber">{{ 'BILLING.INVOICE_NUM' | translate }} *</label>
-            <input
-              id="bill-invoiceNumber"
-              type="text"
-              [(ngModel)]="form.invoiceNumber"
-              placeholder="INV-0001"
-              required
-            />
+            <span class="field-label">{{ 'BILLING.INVOICE_NUM' | translate }}</span>
+            <p class="field-hint">
+              {{ editing() ? editingNumber() : ('BILLING.NUMBER_ASSIGNED_ON_SAVE' | translate) }}
+            </p>
           </div>
           <div class="field">
             <label for="bill-status">{{ 'COMMON.STATUS' | translate }} *</label>
-            <select id="bill-status" [(ngModel)]="form.status" required>
-              @for (s of invoiceStatuses; track s) {
+            <select id="bill-status" [(ngModel)]="form.status" [disabled]="statusLocked()" required>
+              @for (s of statusOptions(); track s) {
                 <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
               }
             </select>
+            @if (statusLocked()) {
+              <p class="field-hint">{{ 'BILLING.STATUS_FOLLOWS_PAYMENTS' | translate }}</p>
+            }
           </div>
         </div>
         <div class="form-row">
@@ -421,18 +520,19 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="bill-totalAmount">{{ 'BILLING.TOTAL_AMOUNT' | translate }} *</label>
+            <label for="bill-totalAmount">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</label>
             <input
               id="bill-totalAmount"
               type="number"
               [(ngModel)]="form.totalAmount"
+              [disabled]="editingHasLines()"
               min="0"
-              required
             />
-          </div>
-          <div class="field">
-            <label for="bill-amountPaid">{{ 'BILLING.AMOUNT_PAID' | translate }}</label>
-            <input id="bill-amountPaid" type="number" [(ngModel)]="form.amountPaid" min="0" />
+            <p class="field-hint">
+              {{
+                (editingHasLines() ? 'BILLING.TOTAL_FROM_LINES' : 'BILLING.TOTAL_HINT') | translate
+              }}
+            </p>
           </div>
         </div>
         <div class="field">
@@ -452,14 +552,7 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
-            !form.patientEmail ||
-            !form.hospitalName ||
-            !form.invoiceNumber ||
-            !form.invoiceDate ||
-            !form.dueDate
-          "
+          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
         >
           {{
             saving()

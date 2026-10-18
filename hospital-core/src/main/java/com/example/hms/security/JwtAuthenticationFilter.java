@@ -362,6 +362,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             HospitalContextHolder.clear();
             ImpersonationContextHolder.clear();
             return false;
+        } catch (org.springframework.security.authentication.CredentialsExpiredException beforePasswordChange) {
+            // QA D114: issued before the account's last password change.
+            log.warn("[JWT] Rejecting a token issued before the last password change.");
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            ImpersonationContextHolder.clear();
+            return false;
         } catch (BadCredentialsException notAnAccessToken) {
             // A refresh token presented as a bearer (TokenUse): 401, it is no session.
             log.warn("[JWT] Rejecting a refresh token presented as an access token.");

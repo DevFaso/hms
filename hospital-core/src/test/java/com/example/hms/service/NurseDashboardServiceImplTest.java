@@ -40,6 +40,9 @@ class NurseDashboardServiceImplTest {
     @Mock
     private PatientVitalSignService patientVitalSignService;
 
+    @Mock
+    private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+
     @InjectMocks
     private NurseDashboardServiceImpl nurseDashboardService;
 
@@ -66,6 +69,7 @@ class NurseDashboardServiceImplTest {
         registration.setMrn("MRN-42");
 
         PatientResponseDTO baseDto = PatientResponseDTO.builder()
+            .allergies("Peanuts")
             .patientName("Fallback Name")
             .build();
 

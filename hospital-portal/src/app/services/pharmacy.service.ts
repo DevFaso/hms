@@ -263,6 +263,10 @@ export interface DispenseResponse {
   id: string;
   prescriptionId: string;
   patientId: string;
+  /** The patient as a person reads them; sent by GET /pharmacy/dispense/{id} only (QA D102). */
+  patientName?: string;
+  /** The pharmacy name; GET /pharmacy/dispense/{id} only (QA D102). */
+  pharmacyName?: string;
   pharmacyId: string;
   stockLotId?: string;
   /** The dispensing user's id. */

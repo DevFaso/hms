@@ -152,8 +152,14 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO acknowledgeReferral(UUID referralId, String notes, UUID receivingProviderId) {
         GeneralReferral referral = findReferral(referralId);
+        UUID receivingHospitalId = requireReceivingSide(referral);
         Staff receivingProvider = staffRepository.findById(receivingProviderId)
             .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId));
+        // QA D90: the named receiver must work at the hospital the referral is addressed to.
+        if (receivingProvider.getHospital() == null
+                || !receivingProvider.getHospital().getId().equals(receivingHospitalId)) {
+            throw new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId);
+        }
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
@@ -165,6 +171,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO scheduleReferral(UUID referralId, ScheduleReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.schedule(request.getAppointmentTime(), request.getLocation());
 
@@ -253,6 +260,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO startReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.start();
         referral = referralRepository.save(referral);
@@ -264,6 +272,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO completeReferral(UUID referralId, String summary, String followUp) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.complete(summary, followUp);
         referral = referralRepository.save(referral);
@@ -275,6 +284,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO rejectReferral(UUID referralId, RejectReferralRequestDTO request) {
         GeneralReferral referral = findReferral(referralId);
+        requireReceivingSide(referral);
         ReferralStatus before = referral.getStatus();
         referral.reject(request.getReason());
         referral = referralRepository.save(referral);
@@ -439,6 +449,24 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";
+
+    /**
+     * QA D90: receiver-side transitions (acknowledge, schedule, start, complete, reject)
+     * belong to the hospital the referral is addressed to — the receiving hospital, or the
+     * sending hospital itself for an internal referral. {@link #findReferral} lets either
+     * side READ the referral; only the receiving side may act on it. Returns that hospital id.
+     */
+    private UUID requireReceivingSide(GeneralReferral referral) {
+        Hospital target = referral.getReceivingHospital() != null
+            ? referral.getReceivingHospital() : referral.getHospital();
+        UUID targetId = target != null ? target.getId() : null;
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(targetId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only the hospital this referral is addressed to can act on it.");
+        }
+        return targetId;
+    }
 
     private GeneralReferral findReferral(UUID referralId) {
         GeneralReferral referral = referralRepository.findById(referralId)

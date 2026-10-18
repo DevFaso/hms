@@ -2181,6 +2181,42 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D125: a non-administrator never reads a patient account's e-mail or username")
+        void nonAdministratorDoesNotSeePatientContacts() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            User patientAccount = new User();
+            patientAccount.setId(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
+            when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+                    .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
+                    .firstName("Pat").build());
+
+            var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
+
+            assertThat(row.getEmail()).isNull();
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getFirstName()).isEqualTo("Pat");
+        }
+
+        @Test
+        @DisplayName("QA D125: an administrator keeps a patient account's contact")
+        void administratorSeesPatientContacts() {
+            User patientAccount = new User();
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), true));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
+            when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+                    .builder().email("p@example.com").build());
+
+            assertThat(userService.getAllUsers(0, 10, false, false).getContent().get(0).getEmail())
+                    .isEqualTo("p@example.com");
+        }
+
+        @Test
         @DisplayName("an empty scope is an empty page, and no query runs")
         void emptyScopeIsAnEmptyPage() {
             when(accountAccess.requireDirectoryAccess())

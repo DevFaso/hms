@@ -62,6 +62,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -533,7 +534,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         // Verify patient is registered at this hospital
-        requireHospitalRegistration(patientId, dto.getHospitalId());
+        requireBookingRegistration(patientId, dto.getHospitalId());
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
@@ -541,7 +542,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
-            throw new BusinessException("Department does not belong to the selected hospital");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.departmentOtherHospital"));
         }
 
         // Resolve staff — explicit pick or first available in department
@@ -550,13 +551,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
                     .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
-                throw new BusinessException("Provider does not belong to the selected hospital");
+                throw new BusinessException(MessageUtil.resolve("portal.booking.providerOtherHospital"));
             }
         } else {
             List<Staff> available = staffRepository.findActiveProvidersByHospitalAndDepartment(
                     dto.getHospitalId(), dto.getDepartmentId());
             if (available.isEmpty()) {
-                throw new BusinessException("No providers available in the selected department");
+                throw new BusinessException(MessageUtil.resolve("portal.booking.noProvider"));
             }
             staff = available.get(0); // assign first available
         }
@@ -568,12 +569,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
         if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException("Appointment end time must be after start time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.endBeforeStart"));
         }
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException("The selected provider is not available at the requested time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
         }
 
         // Overlap check
@@ -586,13 +587,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
                 });
         if (hasConflict) {
-            throw new BusinessException("The selected provider already has an appointment at the requested time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
         }
 
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
                 .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable")));
 
         // Create the appointment
         Appointment appointment = new Appointment();
@@ -638,9 +639,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .toList();
     }
 
+    /**
+     * QA D128: the booking lookups answer only for a hospital the patient is actively
+     * registered at — the same list {@link #getMyHospitals} offers. Anything else is 404,
+     * so another hospital's departments and staff are not listed to a stranger.
+     */
+    private void requireActiveRegistration(Authentication auth, UUID hospitalId) {
+        UUID patientId = resolvePatientId(auth);
+        if (hospitalId == null
+                || registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId).isEmpty()) {
+            throw new ResourceNotFoundException("hospital.notFound", hospitalId);
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getDepartmentsForHospital(UUID hospitalId) {
+    public List<Map<String, Object>> getDepartmentsForHospital(Authentication auth, UUID hospitalId) {
+        requireActiveRegistration(auth, hospitalId);
         return departmentRepository.findByHospitalId(hospitalId).stream()
                 .map(d -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -653,7 +668,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getProvidersForDepartment(UUID hospitalId, UUID departmentId) {
+    public List<Map<String, Object>> getProvidersForDepartment(Authentication auth, UUID hospitalId, UUID departmentId) {
+        requireActiveRegistration(auth, hospitalId);
         return staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
                 .map(s -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -1131,18 +1147,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    /**
-     * Verify that the patient has an active registration at the given hospital,
-     * so a patient cannot act on behalf of a hospital they have never attended
-     * (IDOR / privilege escalation). Its consent callers went with E9 #65; the
-     * self-service write paths that remain still need it.
-     *
-     * @throws BusinessException (HTTP 400) when no active registration is found.
-     */
-    private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
+    /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
+    private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
-            throw new BusinessException(
-                    "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.notRegistered"));
         }
     }
 

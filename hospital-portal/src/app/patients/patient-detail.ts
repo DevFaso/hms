@@ -496,14 +496,13 @@ export class PatientDetailComponent implements OnInit {
   readonly documentsScope = computed(() => this.scopedHospitalId());
 
   /** Mirrors PatientDocumentStaffController.READ_ROLES: the roles that read a
-   *  chart, no lab roles, never ROLE_PATIENT (their reads stay on /me). */
+   *  chart clinically, no lab roles, no front desk or pharmacy (QA D112),
+   *  never ROLE_PATIENT (their reads stay on /me). */
   canViewDocuments(): boolean {
     return this.roleContext.hasAnyActiveRole([
       'ROLE_DOCTOR',
       'ROLE_NURSE',
       'ROLE_MIDWIFE',
-      'ROLE_PHARMACIST',
-      'ROLE_RECEPTIONIST',
       'ROLE_HOSPITAL_ADMIN',
       'ROLE_SUPER_ADMIN',
     ]);
