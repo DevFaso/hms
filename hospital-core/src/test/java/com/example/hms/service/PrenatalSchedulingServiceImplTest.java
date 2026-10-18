@@ -195,6 +195,62 @@ class PrenatalSchedulingServiceImplTest {
     }
 
     @Test
+    void generateScheduleNeverRecommendsAPastTargetOrAnInvertedWindow() {
+        // QA D47: on a Sunday, LMP + whole weeks lands on the previous Monday;
+        // the first visit's target was six days ago and its window ran from
+        // today back to three days ago.
+        LocalDate sunday = LocalDate.of(2024, 4, 7);
+        PrenatalSchedulingServiceImpl sundayService = new PrenatalSchedulingServiceImpl(
+            appointmentRepository, patientRepository, hospitalRepository, staffRepository,
+            appointmentService, notificationService,
+            Clock.fixed(Instant.parse("2024-04-07T10:00:00Z"), ZoneId.of("UTC")),
+            TestMessageSources.bundles(), patientLocaleResolver);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 1, 1))
+            .supplementalVisitWeeks(List.of(6, 14))
+            .build();
+
+        PrenatalScheduleResponseDTO response = sundayService.generateSchedule(request, Locale.US, SCHEDULER_USERNAME);
+
+        assertThat(response.getRecommendations()).isNotEmpty().allSatisfy(rec -> {
+            assertThat(rec.getTargetDate()).isAfterOrEqualTo(sunday);
+            assertThat(rec.getWindowStart()).isAfterOrEqualTo(sunday);
+            assertThat(rec.getWindowStart()).isBeforeOrEqualTo(rec.getTargetDate());
+            assertThat(rec.getWindowEnd()).isAfterOrEqualTo(rec.getTargetDate());
+        });
+        PrenatalVisitRecommendationDTO first = response.getRecommendations().get(0);
+        assertThat(first.getTargetDate()).isEqualTo(LocalDate.of(2024, 4, 8));
+        // Week 6 is behind this pregnancy; week 14 is still ahead.
+        assertThat(response.getRecommendations())
+            .extracting(PrenatalVisitRecommendationDTO::getGestationalWeek)
+            .doesNotContain(6)
+            .contains(14);
+    }
+
+    @Test
+    void generateScheduleRefusesAPatientRecordedAsMale() {
+        // QA D46: obstetric records were accepted for a MALE patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 1, 1))
+            .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.generateSchedule(request, Locale.US, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.mockito.Mockito.verifyNoInteractions(appointmentRepository);
+    }
+
+    @Test
     void reschedulePrenatalAppointmentDelegatesToAppointmentService() {
         UUID appointmentId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();

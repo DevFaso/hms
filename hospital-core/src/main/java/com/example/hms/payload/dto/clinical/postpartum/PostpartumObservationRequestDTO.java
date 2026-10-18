@@ -1,5 +1,8 @@
 package com.example.hms.payload.dto.clinical.postpartum;
 
+import com.example.hms.payload.dto.VitalSignLimits;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
 import com.example.hms.enums.PostpartumBladderStatus;
 import com.example.hms.enums.PostpartumEducationTopic;
 import com.example.hms.enums.PostpartumFundusTone;
@@ -65,6 +68,8 @@ public class PostpartumObservationRequestDTO {
     private LocalDateTime originalEntryTime;
 
     // --- Vital signs ---
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
     private Integer systolicBpMmHg;
     private Integer diastolicBpMmHg;

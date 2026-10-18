@@ -28,6 +28,8 @@ public class PatientVitalSignRequestDTO {
     @Size(max = 40)
     private String source;
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
 
     @Min(20)

@@ -56,6 +56,26 @@ export interface PagedResponse<T> {
   size: number;
 }
 
+/**
+ * Role codes whose holders may write a prescription and see patients as the
+ * accountable provider. Mirrors hospital-core's RoleValidator.canCreatePrescription
+ * (doctor, physician, surgeon, nurse, midwife) — the server refuses any other
+ * prescriber, so a picker must not offer an admin or a receptionist.
+ */
+export const CLINICAL_PROVIDER_ROLE_CODES: readonly string[] = [
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'NURSE',
+  'MIDWIFE',
+];
+
+/** True when the staff member's assignment role is a clinical provider role. */
+export function isClinicalProvider(staff: Pick<StaffResponse, 'roleCode'>): boolean {
+  const code = (staff.roleCode ?? '').toUpperCase().replace(/^ROLE_/, '');
+  return CLINICAL_PROVIDER_ROLE_CODES.includes(code);
+}
+
 @Injectable({ providedIn: 'root' })
 export class StaffService {
   private readonly http = inject(HttpClient);
