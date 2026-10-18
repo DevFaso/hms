@@ -159,6 +159,14 @@
                   <span class="status-badge status-released">{{
                     'LAB_RESULTS.RELEASED' | translate
                   }}</span>
+                  @if (r.supersededByResultId) {
+                    <span
+                      class="status-badge status-superseded"
+                      [title]="'LAB_RESULTS.SUPERSEDED_HINT' | translate"
+                      [attr.data-testid]="'superseded-' + r.id"
+                      >{{ 'LAB_RESULTS.SUPERSEDED' | translate }}</span
+                    >
+                  }
                   @if (r.selfReleased) {
                     <span
                       class="status-badge status-self-released"
@@ -168,6 +176,11 @@
                     >
                   }
                 } @else {
+                  @if (r.supersedesResultId) {
+                    <span class="status-badge status-correction">{{
+                      'LAB_RESULTS.CORRECTION' | translate
+                    }}</span>
+                  }
                   <span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
                   }}</span>
@@ -182,13 +195,25 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link edit-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(r)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!r.released) {
+                    <button
+                      class="action-link edit-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(r)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  } @else if (canCorrect(r)) {
+                    <!-- D81: released results are immutable; a correction is a new linked result. -->
+                    <button
+                      class="action-link edit-link"
+                      [attr.data-testid]="'correct-' + r.id"
+                      [title]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
+                      (click)="openCorrection(r)"
+                    >
+                      <span class="material-symbols-outlined">edit_note</span>
+                    </button>
+                  }
                   @if (canReleaseResult(r)) {
                     <button
                       class="action-link release-link"
@@ -240,13 +265,15 @@
                   >
                     <span class="material-symbols-outlined">timeline</span>
                   </button>
-                  <button
-                    class="action-link delete-link"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(r)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (!r.released) {
+                    <button
+                      class="action-link delete-link"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(r)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -469,7 +496,9 @@
           {{
             editing()
               ? ('LAB_RESULTS.EDIT_RESULT' | translate)
-              : ('LAB_RESULTS.NEW_RESULT' | translate)
+              : correcting()
+                ? ('LAB_RESULTS.ENTER_CORRECTION' | translate)
+                : ('LAB_RESULTS.NEW_RESULT' | translate)
           }}
         </h2>
         <button class="modal-close" (click)="closeModal()">
@@ -477,7 +506,15 @@
         </button>
       </div>
       <div class="modal-body">
-        @if (!editing()) {
+        @if (correcting(); as c) {
+          <p class="correction-note" data-testid="correction-note">
+            {{
+              'LAB_RESULTS.CORRECTION_OF'
+                | translate
+                  : { test: c.labTestName || c.labTestCode || '—', value: c.resultValue || '—' }
+            }}
+          </p>
+        } @else if (!editing()) {
           <div class="form-row">
             <div class="field">
               <label for="lr-orderId">{{ 'LAB.ORDER' | translate }} *</label>

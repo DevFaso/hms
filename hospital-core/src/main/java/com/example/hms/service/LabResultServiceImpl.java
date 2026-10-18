@@ -285,6 +285,7 @@ public class LabResultServiceImpl implements LabResultService {
             }
         }
 
+        LabResult superseded = ingested ? null : requireSupersedable(request.getSupersedesResultId(), lockedOrder);
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         if (!ingested) {
             // Ingest-only fields: a hand-entered result is nobody's
@@ -294,7 +295,17 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
         }
+        if (superseded != null) {
+            result.setSupersedesResultId(superseded.getId());
+        }
         LabResult saved = labResultRepository.save(result);
+        if (superseded != null) {
+            // Only the link is written on the released row; its value,
+            // release stamps and critical history stay exactly as released.
+            superseded.setSupersededByResultId(saved.getId());
+            labResultRepository.save(superseded);
+            auditCorrectionAfterCommit(superseded.getId(), saved.getId(), currentUserId);
+        }
 
         // An entered result IS the order's RESULTED state (B2). Nothing else
         // advanced the order, so released results never reached the ordering
@@ -782,6 +793,47 @@ public class LabResultServiceImpl implements LabResultService {
      * correction is entered as a NEW result on the same order: the released
      * row stays as it was, and both are shown, which is the trail.
      */
+    /**
+     * D81: a correction names the released result it replaces. It must be a
+     * released result on the SAME order (the order row is locked here, so two
+     * corrections cannot both claim it) that no correction has replaced yet.
+     */
+    private LabResult requireSupersedable(UUID supersedesResultId, LabOrder lockedOrder) {
+        if (supersedesResultId == null) {
+            return null;
+        }
+        LabResult target = labResultRepository.findById(supersedesResultId)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        if (target.getLabOrder() == null || !lockedOrder.getId().equals(target.getLabOrder().getId())) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.otherOrder"));
+        }
+        if (!target.isReleased()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.notReleased"));
+        }
+        if (target.getSupersededByResultId() != null) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.correction.alreadySuperseded"));
+        }
+        return target;
+    }
+
+    /** D81: the correction's audit row names both results. Ids only. */
+    private void auditCorrectionAfterCommit(UUID supersededId, UUID correctionId, UUID actorId) {
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.LAB_RESULT_UPDATED)
+                    .status(AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Correction: result " + correctionId + " supersedes released result " + supersededId)
+                    .entityType("LabResult")
+                    .resourceId(supersededId.toString())
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Correction audit not written for result {}: {}", supersededId, ex.getMessage());
+            }
+        });
+    }
+
     private static void requireNotReleased(LabResult labResult) {
         if (labResult.isReleased()) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.released.immutable"));

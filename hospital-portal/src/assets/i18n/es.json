@@ -2993,7 +2993,12 @@
     "SELF_RELEASED_HINT": "Liberado por la persona que lo ingresó, sin un segundo revisor",
     "SELF_RELEASE_TITLE": "¿Liberar su propio resultado?",
     "SELF_RELEASE_BODY": "Usted ingresó este resultado ({{test}} para {{patient}}). Liberarlo usted mismo, sin un segundo revisor, está permitido; quedará registrado y se mostrará como una autoliberación.",
-    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo"
+    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo",
+    "ENTER_CORRECTION": "Introducir corrección",
+    "CORRECTION": "Corrección",
+    "CORRECTION_OF": "Corrección del resultado liberado {{test}} ({{value}}). El valor liberado queda registrado, marcado como sustituido.",
+    "SUPERSEDED": "Sustituido",
+    "SUPERSEDED_HINT": "Una corrección sustituyó este resultado liberado; la corrección es el valor vigente."
   },
   "LAB_RELEASE": {
     "TITLE": "Lista de validación",

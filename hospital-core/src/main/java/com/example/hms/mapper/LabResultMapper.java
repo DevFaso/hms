@@ -91,6 +91,8 @@ public class LabResultMapper {
         .releasedAt(result.getReleasedAt())
         .releasedByFullName(result.getReleasedByDisplay())
         .selfReleased(result.isReleased() && enteredBy(result, result.getReleasedByUserId()))
+        .supersedesResultId(result.getSupersedesResultId() != null ? result.getSupersedesResultId().toString() : null)
+        .supersededByResultId(result.getSupersededByResultId() != null ? result.getSupersededByResultId().toString() : null)
         .enteredByUserId(enteredByUserIdOf(result) != null ? enteredByUserIdOf(result).toString() : null)
         .signedAt(result.getSignedAt())
         .signedBy(result.getSignedByDisplay())

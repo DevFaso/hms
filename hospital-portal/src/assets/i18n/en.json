@@ -2993,7 +2993,12 @@
     "SELF_RELEASED_HINT": "Released by the person who entered it, without a second reviewer",
     "SELF_RELEASE_TITLE": "Release your own result?",
     "SELF_RELEASE_BODY": "You entered this result ({{test}} for {{patient}}). Releasing it yourself, without a second reviewer, is allowed; it will be recorded and shown as a self-release.",
-    "SELF_RELEASE_CONFIRM": "Release it myself"
+    "SELF_RELEASE_CONFIRM": "Release it myself",
+    "ENTER_CORRECTION": "Enter correction",
+    "CORRECTION": "Correction",
+    "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
+    "SUPERSEDED": "Superseded",
+    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value."
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",

@@ -792,3 +792,22 @@
     font-weight: 600;
   }
 }
+
+/* D81: a released result a correction replaced, and the correction itself. */
+.status-superseded {
+  margin-left: 0.25rem;
+  background: #e5e7eb;
+  color: #374151;
+  text-decoration: line-through;
+}
+
+.status-correction {
+  margin-right: 0.25rem;
+  background: #e0f2fe;
+  color: #075985;
+}
+
+.correction-note {
+  margin: 0 0 1rem;
+  color: var(--text-secondary, #4b5563);
+}

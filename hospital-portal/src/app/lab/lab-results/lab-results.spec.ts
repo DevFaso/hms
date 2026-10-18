@@ -166,6 +166,51 @@ describe('LabResultsComponent', () => {
     expect(component.filtered()[0].patientFullName).toBe('Alice Smith');
   });
 
+  describe('D81: released results', () => {
+    function allowEntry(): void {
+      spyOn(
+        component as unknown as { canEnterResults: () => boolean },
+        'canEnterResults',
+      ).and.returnValue(true);
+    }
+
+    it('hides Edit and Delete on a released result and offers a correction instead', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('.delete-link')).toBeNull();
+      expect(host.querySelector('[data-testid="correct-result-1"]')).not.toBeNull();
+    });
+
+    it('opens the create modal on the same order, naming the released result', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+
+      component.openCorrection(component.results()[0]);
+
+      expect(component.showModal()).toBeTrue();
+      expect(component.editing()).toBeFalse();
+      expect(component.form.labOrderId).toBe('order-1');
+      expect(component.form.supersedesResultId).toBe('result-1');
+      expect(component.form.resultValue).toBe('');
+    });
+
+    it('marks a superseded result and offers no second correction of it', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersededByResultId: 'result-2' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
+    });
+  });
+
   it('should open create modal', () => {
     fixture.detectChanges();
     flushInit();

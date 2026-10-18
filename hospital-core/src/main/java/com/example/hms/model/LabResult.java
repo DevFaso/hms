@@ -241,6 +241,14 @@ public class LabResult extends BaseEntity {
     @Column(name = "released_by_display", length = 255)
     private String releasedByDisplay;
 
+    /** D81: the released result this one corrects (null for an original). */
+    @Column(name = "supersedes_result_id")
+    private UUID supersedesResultId;
+
+    /** D81: the correction that replaced this released result, once entered. */
+    @Column(name = "superseded_by_result_id")
+    private UUID supersededByResultId;
+
     @Column(name = "signed_at")
     private LocalDateTime signedAt;
 

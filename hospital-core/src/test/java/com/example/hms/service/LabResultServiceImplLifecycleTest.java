@@ -230,6 +230,52 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
+    // ── D81: a correction is linked to the released result it replaces ────
+
+    @Test
+    @DisplayName("D81 — a correction links both ways to the released result it supersedes")
+    void aCorrectionLinksToTheReleasedResult() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, atLeastOnce()).save(saved.capture());
+        LabResult correction = saved.getAllValues().stream()
+            .filter(r -> r != released).findFirst().orElseThrow();
+        assertThat(correction.getSupersedesResultId()).isEqualTo(released.getId());
+        assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
+        // the released row keeps its value and its release
+        assertThat(released.getResultValue()).isEqualTo("4.1");
+        assertThat(released.isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D81 — an unreleased, already-superseded or other-order target is refused, nothing saved")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aCorrectionOfAnInvalidTargetIsRefused() {
+        stubEntryPath();
+        LabResult unreleased = resultOn(order, false);
+        LabResult alreadyReplaced = resultOn(order, true);
+        alreadyReplaced.setSupersededByResultId(UUID.randomUUID());
+        LabOrder otherOrder = new LabOrder();
+        otherOrder.setId(UUID.randomUUID());
+        LabResult elsewhere = resultOn(otherOrder, true);
+        for (LabResult target : List.of(unreleased, alreadyReplaced, elsewhere)) {
+            when(labResultRepository.findById(target.getId())).thenReturn(Optional.of(target));
+            LabResultRequestDTO request = entryRequest();
+            request.setSupersedesResultId(target.getId());
+            assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
     // ── B2: results drive the order ────────────────────────────────────────
 
     @Test

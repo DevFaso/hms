@@ -2792,4 +2792,12 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V195: lab results - supersedes link for corrections (D81). -->
+    <changeSet id="V195-lab-result-supersedes-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V195__lab_result_supersedes_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
