@@ -33,6 +33,8 @@ import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.enums.PatientDocumentType;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Notification;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
@@ -328,9 +330,9 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
     public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getDepartments(
-            @PathVariable UUID hospitalId) {
+            Authentication auth, @PathVariable UUID hospitalId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
-                portalService.getDepartmentsForHospital(hospitalId)));
+                portalService.getDepartmentsForHospital(auth, hospitalId)));
     }
 
     @Operation(summary = "List providers for a department",
@@ -339,9 +341,9 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
     public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getProviders(
-            @PathVariable UUID hospitalId, @PathVariable UUID departmentId) {
+            Authentication auth, @PathVariable UUID hospitalId, @PathVariable UUID departmentId) {
         return ResponseEntity.ok(ApiResponseWrapper.success(
-                portalService.getProvidersForDepartment(hospitalId, departmentId)));
+                portalService.getProvidersForDepartment(auth, hospitalId, departmentId)));
     }
 
     // ── Cancel own appointment ───────────────────────────────────────────
@@ -636,14 +638,39 @@ public class PatientPortalController {
             @RequestPart("documentType") String documentTypeStr,
             @RequestParam(required = false) String collectionDate,
             @RequestParam(required = false) String notes) throws IOException {
-        PatientDocumentType documentType = PatientDocumentType.valueOf(documentTypeStr.toUpperCase());
         PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
-                .documentType(documentType)
-                .collectionDate(collectionDate != null ? java.time.LocalDate.parse(collectionDate) : null)
+                .documentType(parseDocumentType(documentTypeStr))
+                .collectionDate(parseCollectionDate(collectionDate))
                 .notes(notes)
                 .build();
         PatientDocumentResponseDTO result = documentService.uploadDocument(auth, file, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
+    }
+
+    /**
+     * QA D128: a bad document type or date is the caller's mistake: 400 in their language,
+     * never a 500 and never the Java enum's class name.
+     */
+    private static PatientDocumentType parseDocumentType(String raw) {
+        if (raw != null) {
+            for (PatientDocumentType candidate : PatientDocumentType.values()) {
+                if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                    return candidate;
+                }
+            }
+        }
+        throw new BusinessException(MessageUtil.resolve("portal.document.invalidType"));
+    }
+
+    private static java.time.LocalDate parseCollectionDate(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(raw.trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            throw new BusinessException(MessageUtil.resolve("portal.document.invalidDate"));
+        }
     }
 
     @Operation(summary = "List my uploaded documents")

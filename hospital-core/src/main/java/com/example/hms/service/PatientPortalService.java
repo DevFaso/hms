@@ -133,10 +133,10 @@ public interface PatientPortalService {
     List<Map<String, Object>> getMyHospitals(Authentication auth);
 
     /** Return departments for a given hospital. */
-    List<Map<String, Object>> getDepartmentsForHospital(UUID hospitalId);
+    List<Map<String, Object>> getDepartmentsForHospital(Authentication auth, UUID hospitalId);
 
     /** Return active providers (doctors/nurses) in a given hospital + department. */
-    List<Map<String, Object>> getProvidersForDepartment(UUID hospitalId, UUID departmentId);
+    List<Map<String, Object>> getProvidersForDepartment(Authentication auth, UUID hospitalId, UUID departmentId);
 
     // ── Cancel own appointment ───────────────────────────────────────────
     AppointmentResponseDTO cancelMyAppointment(Authentication auth, CancelAppointmentRequestDTO dto, Locale locale);
