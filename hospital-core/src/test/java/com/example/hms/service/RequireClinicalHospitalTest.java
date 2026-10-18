@@ -331,36 +331,29 @@ class RequireClinicalHospitalTest {
         @Mock private PatientRepository patientRepository;
         @Mock private BillingInvoiceRepository invoiceRepository;
         @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
         @InjectMocks private BillingInvoiceServiceImpl service;
 
         private BillingInvoiceRequestDTO request() {
             BillingInvoiceRequestDTO request = new BillingInvoiceRequestDTO();
             request.setPatientEmail("p@x.test");
-            request.setHospitalName("Pharmacie du Centre");
             return request;
         }
 
         @BeforeEach
         void stubs() {
             when(patientRepository.findByUsernameOrEmail(anyString())).thenReturn(Optional.of(patient()));
-            when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.of(pharmacy()));
+            // The invoice is written at the caller's acting hospital (no longer a
+            // hospital named in the body); a provider facility is not clinical.
+            when(actingScopeResolver.requirePinned()).thenReturn(PROVIDER_ID);
+            when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
+            when(hospitalRepository.findClinicalById(PROVIDER_ID)).thenReturn(Optional.empty());
         }
 
         @Test
         void invoiceAtAProviderIsNotFound() {
             assertAnsweredAsAMiss(() -> service.createInvoice(request(), Locale.ENGLISH),
-                () -> when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.empty()));
-        }
-
-        @Test
-        void invoiceMovedToAProviderIsNotFound() {
-            BillingInvoice existing = new BillingInvoice();
-            UUID invoiceId = UUID.randomUUID();
-            when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.of(existing));
-            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
-
-            assertAnsweredAsAMiss(() -> service.updateInvoice(invoiceId, request(), Locale.ENGLISH),
-                () -> when(hospitalRepository.findByNameIgnoreCase("Pharmacie du Centre")).thenReturn(Optional.empty()));
+                () -> when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.empty()));
         }
     }
 

@@ -6,9 +6,14 @@ import {
   BillingService,
   BillingInvoiceResponse,
   BillingInvoiceRequest,
+  InvoiceItemCategory,
+  InvoiceItemResponse,
   InvoiceStatus,
+  INVOICE_ITEM_CATEGORIES,
   INVOICE_STATUSES,
 } from '../services/billing.service';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -21,7 +26,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
@@ -75,6 +80,24 @@ export class BillingComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: BillingInvoiceRequest = this.emptyForm();
+  /** The patient chosen in the picker (QA D92: phone-only patients too). */
+  formPatient = signal<PatientResponse | null>(null);
+  /** The number of the invoice being edited; the server allocates it (QA D94). */
+  editingNumber = signal('');
+  /** The status the edited invoice has now; a paid status follows payments (QA D91). */
+  editingStatus = signal<InvoiceStatus>('DRAFT');
+  /** With lines, the total is their sum and cannot be typed (QA D72). */
+  editingHasLines = signal(false);
+
+  /* ── Invoice lines (detail panel) ── */
+  items = signal<InvoiceItemResponse[]>([]);
+  itemsLoading = signal(false);
+  itemSaving = signal(false);
+  newItemDescription = signal('');
+  newItemCategory = signal<InvoiceItemCategory>('SERVICE');
+  newItemQuantity = signal<number | null>(1);
+  newItemUnitPrice = signal<number | null>(null);
+  readonly itemCategories: InvoiceItemCategory[] = INVOICE_ITEM_CATEGORIES;
 
   showDeleteConfirm = signal(false);
   deletingInv = signal<BillingInvoiceResponse | null>(null);
@@ -103,19 +126,33 @@ export class BillingComponent implements OnInit {
 
   emptyForm(): BillingInvoiceRequest {
     return {
-      patientEmail: '',
-      hospitalName: '',
-      invoiceNumber: '',
+      patientId: '',
       invoiceDate: '',
       dueDate: '',
       totalAmount: 0,
-      amountPaid: 0,
       status: 'DRAFT',
     };
   }
 
+  /** Statuses staff may choose; PAID/PARTIALLY_PAID come from recorded payments. */
+  statusOptions(): InvoiceStatus[] {
+    if (!this.editing()) return ['DRAFT', 'SENT'];
+    const current = this.editingStatus();
+    if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
+    return ['DRAFT', 'SENT', 'CANCELLED'];
+  }
+
+  statusLocked(): boolean {
+    const current = this.editingStatus();
+    return this.editing() && (current === 'PAID' || current === 'PARTIALLY_PAID');
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
+    // One key per form: a double click or a retry creates one invoice (QA D94).
+    this.form.clientRequestId = crypto.randomUUID();
+    this.formPatient.set(null);
+    this.editingHasLines.set(false);
     this.editing.set(false);
     this.editingId.set(null);
     this.showModal.set(true);
@@ -123,20 +160,40 @@ export class BillingComponent implements OnInit {
 
   openEdit(inv: BillingInvoiceResponse): void {
     this.form = {
-      patientEmail: inv.patientEmail ?? '',
-      hospitalName: inv.hospitalName ?? '',
-      encounterReference: inv.encounterDescription,
-      invoiceNumber: inv.invoiceNumber ?? '',
+      patientId: inv.patientId ?? '',
       invoiceDate: inv.invoiceDate?.substring(0, 10) ?? '',
       dueDate: inv.dueDate?.substring(0, 10) ?? '',
       totalAmount: inv.totalAmount ?? 0,
-      amountPaid: inv.amountPaid ?? 0,
       status: inv.status ?? 'DRAFT',
       notes: inv.notes,
     };
+    this.formPatient.set(
+      inv.patientId
+        ? {
+            id: inv.patientId,
+            firstName: inv.patientFullName ?? '',
+            lastName: '',
+            email: inv.patientEmail,
+            phoneNumberPrimary: inv.patientPhone,
+            active: true,
+          }
+        : null,
+    );
+    this.editingNumber.set(inv.invoiceNumber ?? '');
+    this.editingStatus.set(inv.status ?? 'DRAFT');
+    this.editingHasLines.set(false);
+    this.billingService.getInvoiceItems(inv.id).subscribe({
+      next: (lines) => this.editingHasLines.set((lines ?? []).length > 0),
+      error: () => this.editingHasLines.set(false),
+    });
     this.editing.set(true);
     this.editingId.set(inv.id);
     this.showModal.set(true);
+  }
+
+  onPatientPicked(p: PatientResponse | null): void {
+    this.formPatient.set(p);
+    this.form.patientId = p?.id ?? '';
   }
 
   closeModal(): void {
@@ -144,6 +201,7 @@ export class BillingComponent implements OnInit {
   }
 
   submitForm(): void {
+    if (this.saving()) return;
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -295,10 +353,113 @@ export class BillingComponent implements OnInit {
 
   viewInvoice(inv: BillingInvoiceResponse): void {
     this.selectedInvoice.set(inv);
+    this.resetNewItem();
+    this.loadItems(inv.id);
   }
 
   closeDetail(): void {
     this.selectedInvoice.set(null);
+    this.items.set([]);
+  }
+
+  /* ── Invoice lines ── */
+
+  private loadItems(invoiceId: string): void {
+    this.itemsLoading.set(true);
+    this.billingService.getInvoiceItems(invoiceId).subscribe({
+      next: (lines) => {
+        this.items.set(lines ?? []);
+        this.itemsLoading.set(false);
+      },
+      error: () => {
+        this.items.set([]);
+        this.itemsLoading.set(false);
+        this.toast.error(this.translate.instant('BILLING.ITEMS_LOAD_FAILED'));
+      },
+    });
+  }
+
+  private resetNewItem(): void {
+    this.newItemDescription.set('');
+    this.newItemCategory.set('SERVICE');
+    this.newItemQuantity.set(1);
+    this.newItemUnitPrice.set(null);
+  }
+
+  canEditLines(inv: BillingInvoiceResponse): boolean {
+    return this.canEdit && inv.status !== 'CANCELLED';
+  }
+
+  canAddItem(): boolean {
+    const qty = this.newItemQuantity();
+    const price = this.newItemUnitPrice();
+    return (
+      !this.itemSaving() &&
+      this.newItemDescription().trim().length > 0 &&
+      !!qty &&
+      qty >= 1 &&
+      !!price &&
+      price > 0
+    );
+  }
+
+  addItem(): void {
+    const inv = this.selectedInvoice();
+    if (!inv || !this.canAddItem()) return;
+    this.itemSaving.set(true);
+    this.billingService
+      .createInvoiceItem({
+        billingInvoiceId: inv.id,
+        itemDescription: this.newItemDescription().trim(),
+        itemCategory: this.newItemCategory(),
+        quantity: this.newItemQuantity() ?? 1,
+        unitPrice: this.newItemUnitPrice() ?? 0,
+      })
+      .subscribe({
+        next: () => {
+          this.itemSaving.set(false);
+          this.resetNewItem();
+          this.toast.success(this.translate.instant('BILLING.ITEM_ADDED'));
+          this.refreshSelected(inv.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.itemSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
+  removeItem(item: InvoiceItemResponse): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
+    this.itemSaving.set(true);
+    this.billingService.deleteInvoiceItem(item.id).subscribe({
+      next: () => {
+        this.itemSaving.set(false);
+        this.toast.success(this.translate.instant('BILLING.ITEM_REMOVED'));
+        this.refreshSelected(inv.id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.itemSaving.set(false);
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'));
+      },
+    });
+  }
+
+  /** Re-read the invoice after a line change: the server recomputed its total. */
+  private refreshSelected(invoiceId: string): void {
+    this.loadItems(invoiceId);
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (updated) => {
+        if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
+        this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+        this.computeStats(this.invoices());
+        this.applyFilter();
+      },
+      error: () => this.toast.error(this.translate.instant('BILLING.LOAD_FAILED')),
+    });
   }
 
   downloadPdf(id: string): void {

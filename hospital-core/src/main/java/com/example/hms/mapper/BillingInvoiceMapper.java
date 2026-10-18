@@ -41,6 +41,7 @@ public class BillingInvoiceMapper {
         if (patient == null) return;
 
         String fullName = buildPatientName(patient);
+        dto.setPatientId(patient.getId() != null ? patient.getId().toString() : null);
         dto.setPatientFullName(fullName);
         dto.setPatientName(fullName);
         dto.setPatientEmail(patient.getEmail());

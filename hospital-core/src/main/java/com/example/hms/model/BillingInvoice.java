@@ -42,7 +42,7 @@ import java.util.Set;
     name = "billing_invoices",
     schema = "billing",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_bi_invoice_number", columnNames = "invoice_number")
+        @UniqueConstraint(name = "uk_bi_hospital_invoice_number", columnNames = {"hospital_id", "invoice_number"})
     },
     indexes = {
         @Index(name = "idx_bi_patient", columnList = "patient_id"),
@@ -115,6 +115,14 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "updated_by")
     private java.util.UUID updatedBy;
 
+    /**
+     * The key the portal sends with a create (QA D94): a retry or a double
+     * submit carrying the same key returns the invoice already created.
+     * Unique per hospital when present (V190).
+     */
+    @Column(name = "client_request_id")
+    private java.util.UUID clientRequestId;
+
     /* ---------- Helpers ---------- */
 
     public void addItem(InvoiceItem item) {
@@ -129,13 +137,18 @@ public class BillingInvoice extends BaseEntity {
         recomputeTotals();
     }
 
+    /**
+     * Total = sum of the lines held in memory. Used only by {@link #addItem}
+     * and {@link #removeItem}; the service recomputes from the database
+     * ({@code BillingInvoiceService.recomputeAndPersistTotals}), and the
+     * lifecycle callbacks no longer call it (QA D72).
+     */
     private void recomputeTotals() {
         BigDecimal sum = invoiceItems.stream()
-            .map(it -> it.getTotalPrice() != null ? it.getTotalPrice() : BigDecimal.ZERO)
+            .map(BillingInvoice::lineTotal)
             .reduce(BigDecimal.ZERO, BigDecimal::add);
         totalAmount = sum.setScale(2, RoundingMode.HALF_UP);
         if (amountPaid == null) amountPaid = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
-        // Optional: auto-status adjustments
         if (amountPaid.compareTo(BigDecimal.ZERO) == 0 && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
             status = InvoiceStatus.DRAFT;
         } else if (amountPaid.compareTo(totalAmount) >= 0 && totalAmount.compareTo(BigDecimal.ZERO) > 0) {
@@ -145,6 +158,14 @@ public class BillingInvoice extends BaseEntity {
         }
     }
 
+    private static BigDecimal lineTotal(InvoiceItem item) {
+        if (item.getTotalPrice() != null) return item.getTotalPrice();
+        if (item.getUnitPrice() != null && item.getQuantity() != null) {
+            return item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        }
+        return BigDecimal.ZERO;
+    }
+
     @PrePersist
     public void prePersist() {
         if (invoiceDate == null) invoiceDate = LocalDate.now();
@@ -152,8 +173,9 @@ public class BillingInvoice extends BaseEntity {
         if (amountPaid == null) amountPaid = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         if (totalAmount == null) totalAmount = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
         if (status == null) status = InvoiceStatus.DRAFT;
-        // Safety: totals reflect items
-        recomputeTotals();
+        // QA D72: no recompute here. It summed the in-memory line collection,
+        // which is empty on a create and unloaded on an update, so it wrote
+        // 0.00 over every total. The service owns the total.
         if (dueDate.isBefore(invoiceDate)) {
             throw new IllegalStateException("dueDate cannot be before invoiceDate");
         }
@@ -161,7 +183,6 @@ public class BillingInvoice extends BaseEntity {
 
     @PreUpdate
     public void preUpdate() {
-        recomputeTotals();
         if (dueDate.isBefore(invoiceDate)) {
             throw new IllegalStateException("dueDate cannot be before invoiceDate");
         }
