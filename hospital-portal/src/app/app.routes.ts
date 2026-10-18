@@ -289,7 +289,19 @@ export const routes: Routes = [
               import('./patients/patient-list').then((m) => m.PatientListComponent),
           },
           {
+            // Exactly the registrars POST /patients admits (QA D55): a doctor
+            // reached the form and got a 403 on submit.
             path: 'new',
+            canActivate: [RoleGuard],
+            data: {
+              roles: [
+                'ROLE_SUPER_ADMIN',
+                'ROLE_HOSPITAL_ADMIN',
+                'ROLE_RECEPTIONIST',
+                'ROLE_NURSE',
+                'ROLE_MIDWIFE',
+              ],
+            },
             loadComponent: () =>
               import('./patients/patient-form').then((m) => m.PatientFormComponent),
           },

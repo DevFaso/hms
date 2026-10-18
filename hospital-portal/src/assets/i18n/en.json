@@ -1562,6 +1562,7 @@
     "SAVING": "Saving…",
     "SEARCH": "Search",
     "SEARCH_PATIENT": "Search patient...",
+    "PATIENT_PICKER_NO_MATCH": "No patient matches this search.",
     "SELECT": "Select",
     "SELECT_HOSPITAL": "Select hospital",
     "SHOW_ACTIVE": "Show Active",

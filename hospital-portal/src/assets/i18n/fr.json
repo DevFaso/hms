@@ -1562,6 +1562,7 @@
     "SAVING": "Enregistrement…",
     "SEARCH": "Rechercher",
     "SEARCH_PATIENT": "Rechercher un patient…",
+    "PATIENT_PICKER_NO_MATCH": "Aucun patient ne correspond à cette recherche.",
     "SELECT": "Sélectionner",
     "SELECT_HOSPITAL": "Sélectionner un hôpital",
     "SHOW_ACTIVE": "Afficher Actifs",

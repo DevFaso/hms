@@ -9,5 +9,13 @@ public record EmailInvoiceRequest(
     java.util.List<@jakarta.validation.constraints.Email String> bcc,
     String message,
     String locale,
-    boolean attachPdf
-) {}
+    Boolean attachPdf
+) {
+    // A body that leaves this out or sends null gets the documented default
+    // (QA D23): Jackson 3 refuses a null for a primitive record component.
+    public EmailInvoiceRequest {
+        if (attachPdf == null) {
+            attachPdf = Boolean.FALSE;
+        }
+    }
+}

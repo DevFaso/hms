@@ -331,11 +331,10 @@ public class PatientServiceImpl implements PatientService {
         Patient patient = existing
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
-        // Mirror User's activation state: patients pending email verification start inactive
-        if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {
-            patient.setActive(false);
-            patientRepository.save(patient);
-        }
+        // The record's active flag is its administrative soft-delete, not the
+        // portal account's state: a patient whose account still waits for
+        // activation (or who has no e-mail or phone to activate with) is a
+        // live record the clinical pickers must find (QA D27, V188).
 
         ensurePatientRegistration(patient, hospital);
 
@@ -609,11 +608,10 @@ public class PatientServiceImpl implements PatientService {
             patientRepository.save(patient);
         }
 
-        // Mirror User's activation state: patients pending email verification start inactive
-        if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {
-            patient.setActive(false);
-            patientRepository.save(patient);
-        }
+        // The record's active flag is its administrative soft-delete, not the
+        // portal account's state: a patient whose account still waits for
+        // activation (or who has no e-mail or phone to activate with) is a
+        // live record the clinical pickers must find (QA D27, V188).
 
         ensurePatientRegistration(patient, hospital);
 

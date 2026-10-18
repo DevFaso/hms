@@ -77,6 +77,15 @@ describe('AccountSetupComponent', () => {
     expect(el.querySelector('#newPassword')).not.toBeNull();
   });
 
+  it('QA D52: offers the current username, and keeping it is valid', () => {
+    const fixture = create(profile({ forceUsernameChange: true, forcePasswordChange: false }));
+    const c = fixture.componentInstance;
+    expect(c.newUsername).toBe('invitee-tmp');
+    fill(c, { currentPassword: 'Temp-Pass-1!' });
+    expect(c.validationError()).toBeNull();
+    expect(c.canSubmit).toBeTrue();
+  });
+
   it('D17: sends the username and the password in one call, then signs out', fakeAsync(() => {
     profiles.completeSetup.and.returnValue(of({ message: 'ok' }));
     const fixture = create(profile({ forceUsernameChange: true, forcePasswordChange: true }));

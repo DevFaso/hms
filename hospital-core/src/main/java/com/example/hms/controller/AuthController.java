@@ -1248,7 +1248,7 @@ public class AuthController {
         }
 
         String newUsername = mustRename ? Objects.toString(request.newUsername(), "").trim() : null;
-        String problem = mustRename ? usernameProblem(newUsername, username) : null;
+        String problem = mustRename ? usernameProblem(newUsername) : null;
         if (problem == null && mustChangePassword) {
             problem = setupPasswordProblem(user.getId(), request);
         }
@@ -1267,7 +1267,7 @@ public class AuthController {
     }
 
     /** The bundle key for what is wrong with a chosen username, or {@code null}. */
-    private static String usernameProblem(String newUsername, String currentUsername) {
+    private static String usernameProblem(String newUsername) {
         if (newUsername.isEmpty()) {
             return "account.setup.username.required";
         }
@@ -1277,9 +1277,10 @@ public class AuthController {
         if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {
             return "account.setup.username.chars";
         }
-        if (newUsername.equalsIgnoreCase(currentUsername)) {
-            return "account.setup.username.same";
-        }
+        // Keeping the current username is a valid choice (QA D52): the forced
+        // step asks the holder to confirm a name they will sign in with, and
+        // the one they were given may already suit them. Only the format is
+        // checked; the service clears the flag either way.
         return null;
     }
 

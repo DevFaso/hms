@@ -52,5 +52,10 @@
         }
       </div>
     }
+    @if (noMatch() && !searchLoading() && query().length >= 2) {
+      <p class="picker-no-match" role="status">
+        {{ 'COMMON.PATIENT_PICKER_NO_MATCH' | translate }}
+      </p>
+    }
   </div>
 }
