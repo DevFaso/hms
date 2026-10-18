@@ -10,7 +10,7 @@ import {
   TreatmentPlanRequest,
 } from '../services/treatment-plan.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -75,7 +75,9 @@ export class TreatmentPlansComponent implements OnInit {
 
     this.load();
     this.loadAssignedHospitals();
-    this.staffService.list().subscribe((s) => this.staffList.set(s ?? []));
+    this.staffService
+      .list()
+      .subscribe((s) => this.staffList.set((s ?? []).filter(isClinicalProvider)));
     this.initPatientSearch();
   }
 

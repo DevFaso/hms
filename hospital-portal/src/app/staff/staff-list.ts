@@ -17,6 +17,11 @@ import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
+/** A user whose only role is ROLE_PATIENT (a patient portal account). */
+function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
+  return (u.roleName ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
+}
+
 @Component({
   selector: 'app-staff-list',
   standalone: true,
@@ -175,7 +180,8 @@ export class StaffListComponent implements OnInit {
     this.loadStaff();
     this.loadAssignedHospitals();
     this.userService.list(0, 500).subscribe({
-      next: (page) => this.users.set(page.content),
+      // QA D122: a patient account is never offered as a new staff member.
+      next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
     });
   }
 

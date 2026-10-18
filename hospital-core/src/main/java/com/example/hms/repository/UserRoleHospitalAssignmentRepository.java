@@ -35,7 +35,26 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /** Prefer this over Optional for multi-row relation */
     List<UserRoleHospitalAssignment> findAllByUserId(UUID userId);
 
-    Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalId(UUID userId, UUID hospitalId);
+    /**
+     * The ACTIVE, non-patient assignments a user holds at one hospital, oldest
+     * first. An inactive row (a pending invitation, a retired grant, or a
+     * ROLE_PATIENT a patient registration attached to a staff account) never
+     * counts as the user's working role there, and a user may hold several
+     * roles at one hospital, so this is a list, never a unique lookup.
+     */
+    @Query("""
+        SELECT a FROM UserRoleHospitalAssignment a
+        WHERE a.user.id = :userId AND a.hospital.id = :hospitalId
+          AND a.active = true AND UPPER(a.role.code) <> 'ROLE_PATIENT'
+        ORDER BY a.createdAt ASC
+        """)
+    List<UserRoleHospitalAssignment> findActiveStaffAssignments(@Param("userId") UUID userId,
+                                                                @Param("hospitalId") UUID hospitalId);
+
+    /** The first of {@link #findActiveStaffAssignments}: the role a staff member works under at a hospital. */
+    default Optional<UserRoleHospitalAssignment> findActiveStaffAssignment(UUID userId, UUID hospitalId) {
+        return findActiveStaffAssignments(userId, hospitalId).stream().findFirst();
+    }
 
     Optional<UserRoleHospitalAssignment> findByUserUsernameAndHospitalIdAndRoleCodeIgnoreCase(
         String username, UUID hospitalId, String roleCode);

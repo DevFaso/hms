@@ -1368,7 +1368,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
                 Appointment a = inv.getArgument(0);
@@ -1409,7 +1409,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
                 Appointment a = inv.getArgument(0);
@@ -1441,7 +1441,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
                     .thenReturn(List.of());
-            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
                     .thenReturn(Optional.of(assignment));
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
             when(appointmentMapper.toAppointmentResponseDTO(any()))

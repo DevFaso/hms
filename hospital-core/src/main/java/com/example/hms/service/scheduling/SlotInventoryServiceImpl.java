@@ -252,7 +252,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         // Same contract as AppointmentServiceImpl: the assignment is mandatory,
         // and a missing one is a refusal, not a degraded appointment.
         UserRoleHospitalAssignment assignment = assignmentRepository
-            .findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId)
+            .findActiveStaffAssignment(staff.getUser().getId(), hospitalId)
             .orElseThrow(() -> new BusinessException(
                 "The clinician has no role assignment at this hospital."));
 

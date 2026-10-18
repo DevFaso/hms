@@ -502,7 +502,12 @@ public class PatientServiceImpl implements PatientService {
         String phonePattern = buildPhoneSearchPattern(criteria.getPhone());
         String emailPattern = buildLowercaseContainsPattern(criteria.getEmail());
         UUID hospitalId = criteria.getHospitalId();
-        Boolean activeFilter = criteria.getActive() == null ? Boolean.TRUE : criteria.getActive();
+        Boolean activeFilter;
+        if (criteria.isIncludeInactive()) {
+            activeFilter = null;
+        } else {
+            activeFilter = criteria.getActive() == null ? Boolean.TRUE : criteria.getActive();
+        }
 
         Page<Patient> patientPage = patientRepository.searchPatientsExtended(
             mrn,

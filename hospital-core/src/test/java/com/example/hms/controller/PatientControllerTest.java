@@ -79,10 +79,36 @@ class PatientControllerTest {
         // E9 #55: the controller no longer resolves scope itself — one resolver.
         when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
 
-        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
+        ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, null, auth);
 
         assertEquals(expected, response.getBody());
         verify(patientService).getAllPatients(eq(hospitalId), any(Locale.class));
+    }
+
+    @Test
+    void theSearchParameterFiltersInsteadOfBeingDropped() {
+        // QA D79: the admission typeahead sends ?search=, which used to be
+        // ignored, so the first patients of the hospital were offered.
+        UUID hospitalId = UUID.randomUUID();
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+            .claim("sub", UUID.randomUUID().toString()).build();
+        JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
+            List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
+        when(authUtils.resolveHospitalScope(auth, null, true)).thenReturn(hospitalId);
+        List<PatientResponseDTO> expected = List.of(PatientResponseDTO.builder().id(UUID.randomUUID()).build());
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.PatientSearchCriteria> criteria =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.PatientSearchCriteria.class);
+        when(patientService.searchPatients(criteria.capture(), eq(0), org.mockito.ArgumentMatchers.anyInt(),
+            any(Locale.class))).thenReturn(expected);
+
+        ResponseEntity<List<PatientResponseDTO>> response =
+            controller.getAllPatients(null, null, null, " QAH5769 ", null, auth);
+
+        assertEquals(expected, response.getBody());
+        assertEquals("QAH5769", criteria.getValue().getName());
+        assertEquals(hospitalId, criteria.getValue().getHospitalId());
+        org.junit.jupiter.api.Assertions.assertTrue(criteria.getValue().isIncludeInactive());
+        verify(patientService, org.mockito.Mockito.never()).getAllPatients(any(), any());
     }
 
     @Test
@@ -99,6 +125,6 @@ class PatientControllerTest {
         when(authUtils.resolveHospitalScope(auth, null, true))
             .thenThrow(new BusinessException("Receptionist must be affiliated with a hospital."));
 
-        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, auth));
+        assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, null, auth));
     }
 }

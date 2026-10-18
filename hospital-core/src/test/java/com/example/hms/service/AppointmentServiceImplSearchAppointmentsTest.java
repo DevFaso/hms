@@ -182,6 +182,86 @@ class AppointmentServiceImplSearchAppointmentsTest {
         }
     }
 
+    @Test
+    void anInactivePatientAssignmentNeverNarrowsAStaffSearchToOwnAppointments() {
+        // QA D74: a patient registration attached an INACTIVE ROLE_PATIENT to a
+        // receptionist; user_roles still held ROLE_PATIENT, so the search was
+        // narrowed to the receptionist's own patient appointments (always []).
+        User user = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(java.util.Optional.of(user));
+
+        Hospital hospital = Hospital.builder().name("Scoped").code("SC").build();
+        hospital.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment receptionist = UserRoleHospitalAssignment.builder()
+            .hospital(hospital).active(Boolean.TRUE).user(user)
+            .role(Role.builder().code("ROLE_RECEPTIONIST").name("Receptionist").build())
+            .build();
+        receptionist.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment strayPatient = UserRoleHospitalAssignment.builder()
+            .hospital(hospital).active(Boolean.FALSE).user(user)
+            .role(Role.builder().code("ROLE_PATIENT").name("Patient").build())
+            .build();
+        strayPatient.setId(UUID.randomUUID());
+        when(assignmentRepository.findAllByUserId(user.getId())).thenReturn(List.of(receptionist, strayPatient));
+
+        Page<Appointment> appointments = new PageImpl<>(List.of(new Appointment()));
+        when(appointmentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(appointments);
+        AppointmentResponseDTO dto = AppointmentResponseDTO.builder().build();
+        when(appointmentMapper.toAppointmentResponseDTO(any(Appointment.class))).thenReturn(dto);
+
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder().build();
+
+        try (MockedStatic<AppointmentSpecification> mocked = mockStatic(AppointmentSpecification.class)) {
+            Specification<Appointment> baseSpec = (root, query, cb) -> null;
+            Specification<Appointment> hospitalSpec = (root, query, cb) -> null;
+            Set<UUID> allowedHospitals = Set.of(hospital.getId());
+            mocked.when(() -> AppointmentSpecification.withFilter(filter)).thenReturn(baseSpec);
+            mocked.when(() -> AppointmentSpecification.inHospitals(allowedHospitals)).thenReturn(hospitalSpec);
+
+            Page<AppointmentResponseDTO> result = appointmentService.searchAppointments(filter, pageable, DEFAULT_LOCALE, USERNAME);
+
+            assertThat(result.getContent()).containsExactly(dto);
+            mocked.verify(() -> AppointmentSpecification.forPatientUser(any()), never());
+            mocked.verify(() -> AppointmentSpecification.inHospitals(allowedHospitals));
+        }
+    }
+
+    @Test
+    void aBookingWithNoDepartmentIsRefusedNotFiledUnderTheFirstDepartment() {
+        // QA D99: no department in the request and a clinician without one used
+        // to land in the hospital's first department (the laboratory).
+        Hospital hospital = Hospital.builder().name("H").code("H").build();
+        hospital.setId(UUID.randomUUID());
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setId(UUID.randomUUID());
+        com.example.hms.payload.dto.AppointmentRequestDTO request = new com.example.hms.payload.dto.AppointmentRequestDTO();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils
+                .invokeMethod(appointmentService, "resolveDepartment", request, hospital, staff))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("appointment.department.required");
+        verify(departmentRepository, never()).findByHospitalId(any(UUID.class));
+    }
+
+    @Test
+    void aDepartmentOfAnotherHospitalIsNotFound() {
+        Hospital hospital = Hospital.builder().name("H").code("H").build();
+        hospital.setId(UUID.randomUUID());
+        Hospital other = Hospital.builder().name("O").code("O").build();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.Department foreign = new com.example.hms.model.Department();
+        foreign.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        when(departmentRepository.findById(foreign.getId())).thenReturn(java.util.Optional.of(foreign));
+        com.example.hms.payload.dto.AppointmentRequestDTO request = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        request.setDepartmentId(foreign.getId());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils
+                .invokeMethod(appointmentService, "resolveDepartment", request, hospital, new com.example.hms.model.Staff()))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
     private static User userWithRoles(String roleCode) {
         User user = new User();
         user.setId(UUID.randomUUID());

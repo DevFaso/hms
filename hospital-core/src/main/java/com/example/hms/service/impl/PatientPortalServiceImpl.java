@@ -536,7 +536,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
-                .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+            .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
                 .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
 
         // Create the appointment

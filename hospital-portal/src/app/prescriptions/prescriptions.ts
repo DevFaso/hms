@@ -37,6 +37,7 @@ import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+import { AuthService } from '../auth/auth.service';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -156,6 +157,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -388,8 +390,18 @@ export class PrescriptionsComponent implements OnInit {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
 
+  /** The caller's own staff row at this hospital, if they are in the prescriber list. */
+  ownPrescriberStaffId(): string {
+    const userId = this.auth.getUserProfile()?.id;
+    if (!userId) return '';
+    return this.staffMembers().find((s) => s.userId === userId)?.id ?? '';
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
+    // QA D123: a clinician prescribing opens the form with THEMSELVES as the
+    // prescriber, instead of an empty choice in a list of colleagues.
+    this.form.staffId = this.ownPrescriberStaffId();
     this.editing.set(false);
     this.editingId.set(null);
     this.editingWithdrawn.set(false);

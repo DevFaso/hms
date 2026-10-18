@@ -167,8 +167,7 @@ public class StaffServiceImpl implements StaffService {
     public StaffResponseDTO createStaff(StaffRequestDTO dto, Locale locale) {
         validateBaseStaffRequirements(dto, locale);
 
-        User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
+        User user = resolveStaffUser(dto.getUserEmail());
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));
@@ -218,8 +217,7 @@ public class StaffServiceImpl implements StaffService {
         Staff existingStaff = findStaffOrThrow(id, locale);
         validateBaseStaffRequirements(dto, locale);
 
-        User user = userRepository.findByEmail(dto.getUserEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", dto.getUserEmail()));
+        User user = resolveStaffUser(dto.getUserEmail());
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalName()));
@@ -325,6 +323,19 @@ public class StaffServiceImpl implements StaffService {
             return null;
         }
         return new StaffMinimalDTO(staff.getId(), staff.getFullName(), staff.getJobTitle());
+    }
+
+    /**
+     * The account a staff record is for. {@code userEmail} carries the
+     * account's e-mail or, for an account registered by phone only (no
+     * e-mail), its username: the "Nouveau Personnel" picker used to send the
+     * literal text "undefined" for those (QA D122).
+     */
+    private User resolveStaffUser(String identifier) {
+        String value = identifier == null ? null : identifier.trim();
+        return userRepository.findByEmail(value)
+            .or(() -> userRepository.findByUsername(value))
+            .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", value));
     }
 
     private void validateBaseStaffRequirements(StaffRequestDTO dto, Locale locale) {

@@ -1,3 +1,4 @@
+import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -26,7 +27,7 @@ import {
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
-import { StaffService } from '../services/staff.service';
+import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -119,6 +120,19 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  it('opens a new prescription with the caller as the prescriber (QA D123)', () => {
+    const auth = TestBed.inject(AuthService);
+    spyOn(auth, 'getUserProfile').and.returnValue({ id: 'u-me' } as LoginUserProfile);
+    component.staffMembers.set([
+      { id: 'st-other', userId: 'u-other', roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+      { id: 'st-me', userId: 'u-me', roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+    ]);
+
+    component.openCreate();
+
+    expect(component.form.staffId).toBe('st-me');
+  });
 
   it('does not render the dispatch modal until it is opened', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="rx-dispatch-modal"]')).toBeNull();

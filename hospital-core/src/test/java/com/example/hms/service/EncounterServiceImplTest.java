@@ -2107,7 +2107,7 @@ class EncounterServiceImplTest {
         verify(roleValidator, never()).isDoctor(any(), any());
         verify(roleValidator, never()).isNurse(any(), any());
         verify(roleValidator, never()).isHospitalAdmin(any(), any());
-        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(assignmentRepository, never()).findActiveStaffAssignment(any(), any());
         verify(encounterMapper).mergeEncounter(
             any(com.example.hms.payload.dto.EncounterRequestDTO.class),
             eq(existing), eq(patient), eq(staff), eq(hospital),
@@ -2181,7 +2181,7 @@ class EncounterServiceImplTest {
         assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, false, hospitalId))
             .isInstanceOf(BusinessException.class);
 
-        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(assignmentRepository, never()).findActiveStaffAssignment(any(), any());
         verify(encounterRepository, never()).save(any(Encounter.class));
     }
 }

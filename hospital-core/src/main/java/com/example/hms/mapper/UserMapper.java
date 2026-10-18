@@ -73,12 +73,20 @@ public class UserMapper {
             return null;
 
         // roles from assignments (distinct, ordered)
-        Set<Role> rolesFromAssignments = safeRolesFromAssignments(assignments);
+        // Only ACTIVE assignments hold a role: an inactive row (a retired
+        // grant, or a ROLE_PATIENT a registration attached to a staff account)
+        // must not show as a second role. A user with no active row at all (a
+        // patient still awaiting verification) falls back to every row, then
+        // to user_roles, as before.
+        Set<Role> rolesFromAssignments = safeRolesFromAssignments(activeOnly(assignments));
+        if (rolesFromAssignments.isEmpty()) {
+            rolesFromAssignments = safeRolesFromAssignments(assignments);
+        }
         Set<Role> roles = !rolesFromAssignments.isEmpty() ? rolesFromAssignments : safeRolesFromUserRoles(user);
         Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
         // active: any active assignment? fallback to user.isActive()
-        boolean active = (assignments != null && assignments.stream().anyMatch(UserRoleHospitalAssignment::getActive))
+        boolean active = (assignments != null && assignments.stream().anyMatch(a -> a != null && Boolean.TRUE.equals(a.getActive())))
                 || user.isActive();
 
         // profile derivation
@@ -161,6 +169,14 @@ public class UserMapper {
                 .map(UserRole::getRole)
                 .filter(Objects::nonNull)
                 // preserve insertion order for stability
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static Set<UserRoleHospitalAssignment> activeOnly(Set<UserRoleHospitalAssignment> assignments) {
+        if (assignments == null || assignments.isEmpty())
+            return Collections.emptySet();
+        return assignments.stream()
+                .filter(a -> a != null && Boolean.TRUE.equals(a.getActive()))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 

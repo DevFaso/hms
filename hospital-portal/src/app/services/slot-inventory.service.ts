@@ -1,3 +1,4 @@
+import { unwrapDepartmentList } from './department-lookup.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
@@ -202,7 +203,7 @@ export class SlotInventoryService {
 
   listDepartments(): Observable<DepartmentOption[]> {
     return this.http
-      .get<{ content: DepartmentOption[] }>('/departments')
-      .pipe(map((page) => page.content ?? []));
+      .get<DepartmentOption[]>('/departments')
+      .pipe(map((res) => unwrapDepartmentList(res)));
   }
 }

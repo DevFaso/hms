@@ -809,7 +809,7 @@ public class EncounterServiceImpl implements EncounterService {
         } else {
             validateStaffRole(userId, hospitalId, locale);
             assignment = assignmentRepository
-                .findByUserIdAndHospitalId(userId, hospitalId)
+            .findActiveStaffAssignment(userId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND));
         }
 

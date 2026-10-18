@@ -247,8 +247,8 @@
                 <select id="sUser" [(ngModel)]="form.userEmail" name="userEmail" required>
                   <option value="">{{ 'STAFF.SELECT_USER' | translate }}</option>
                   @for (u of users(); track u.id) {
-                    <option [value]="u.email">
-                      {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
+                    <option [value]="u.email || u.username">
+                      {{ u.firstName }} {{ u.lastName }} ({{ u.email || u.username }})
                     </option>
                   }
                 </select>
