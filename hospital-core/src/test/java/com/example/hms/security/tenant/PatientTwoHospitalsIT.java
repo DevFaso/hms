@@ -265,7 +265,12 @@ class PatientTwoHospitalsIT {
             "{\"amount\":25.00,\"paymentMethod\":\"MOBILE_MONEY\"}", token);
         assertThat(pay.getStatusCode().value()).as(pay.getBody()).isEqualTo(200);
         BillingInvoice paid = invoiceRepository.findById(siteB.invoice().getId()).orElseThrow();
-        assertThat(paid.getAmountPaid()).isEqualByComparingTo("25.00");
+        // QA D140: a patient's self-payment is PENDING until the cashier confirms it,
+        // so it lands on B's ledger without counting toward B's amount paid yet.
+        assertThat(paid.getAmountPaid()).isEqualByComparingTo("0.00");
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM billing.payment_transactions WHERE invoice_id = ? AND status = 'PENDING' AND amount = 25.00",
+            Integer.class, siteB.invoice().getId())).isEqualTo(1);
         assertThat(paid.getHospital().getId()).isEqualTo(siteB.hospital().getId());
     }
 
