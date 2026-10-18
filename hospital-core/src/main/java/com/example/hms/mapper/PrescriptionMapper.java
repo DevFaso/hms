@@ -169,6 +169,7 @@ public class PrescriptionMapper {
 
         e.setDosage(dto.getDosage());
         e.setFrequency(dto.getFrequency());
+        e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
 
@@ -209,6 +210,9 @@ public class PrescriptionMapper {
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
+        if (dto.getRoute() != null) {
+            target.setRoute(normalizeRoute(dto.getRoute()));
+        }
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
 
@@ -324,5 +328,13 @@ public class PrescriptionMapper {
         }
         String full = buildFullName(user.getFirstName(), user.getLastName());
         return full.isEmpty() ? user.getUsername() : full;
+    }
+
+    /** Trim and upper-case a route code; blank means "not given". */
+    private static String normalizeRoute(String route) {
+        if (route == null || route.isBlank()) {
+            return null;
+        }
+        return route.trim().toUpperCase(java.util.Locale.ROOT);
     }
 }

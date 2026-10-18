@@ -48,4 +48,14 @@ public final class VitalSignLimits {
 
     private VitalSignLimits() {
     }
+
+    /**
+     * D111: a diastolic pressure at or above the systolic one (60/150) is a
+     * swapped entry, not a reading. A missing value is not judged here
+     * (a palpated systolic alone is a real reading).
+     */
+    public static boolean bloodPressureOrdered(Integer systolic, Integer diastolic) {
+        return systolic == null || diastolic == null || diastolic < systolic;
+    }
+
 }

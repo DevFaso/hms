@@ -158,8 +158,8 @@ class NurseTaskServiceImplTest {
             .thenReturn(Optional.empty());
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
-        lenient().when(prescriptionRepository.findById(any())).thenReturn(Optional.empty());
-        lenient().when(marRepository.findByPatient_IdAndHospital_IdAndStatus(any(), any(), any()))
+        lenient().when(prescriptionRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(any()))
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
         lenient().when(announcementRepository.findByHospital_IdOrderByDateDesc(any(), any(Pageable.class)))
@@ -688,14 +688,14 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "Med Patient", "Med", "Patient")));
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         when(rx.getMedicationName()).thenReturn("Amoxicillin");
         when(rx.getDosage()).thenReturn("500");
@@ -705,8 +705,6 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -752,14 +750,14 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "Overdue Pat", "Overdue", "Pat")));
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.TRANSMITTED);
         when(rx.getMedicationName()).thenReturn("Metformin");
         when(rx.getDosage()).thenReturn("1000");
@@ -769,8 +767,6 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -780,7 +776,8 @@ class NurseTaskServiceImplTest {
             assertThat(tasks).hasSize(1);
             assertThat(tasks.get(0).getStatus()).isEqualTo("OVERDUE");
             assertThat(tasks.get(0).getDose()).isEqualTo("1000"); // dosage only, no unit
-            assertThat(tasks.get(0).getRoute()).isEqualTo("PO"); // null defaults to PO
+            // D109: an unrecorded route stays unrecorded; it is not shown as PO.
+            assertThat(tasks.get(0).getRoute()).isNull();
         }
     }
 
@@ -796,14 +793,14 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "Done Pat", "Done", "Pat")));
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         when(rx.getMedicationName()).thenReturn("Aspirin");
         when(rx.getDosage()).thenReturn(null);
@@ -812,15 +809,13 @@ class NurseTaskServiceImplTest {
         when(rx.getCreatedAt()).thenReturn(fixedNow.minusHours(1));
 
         // MAR record shows this prescription was already GIVEN
+        // (a one-off order: no frequency, so nothing more is due)
         MedicationAdministrationRecord mar = mock(MedicationAdministrationRecord.class);
-        Prescription marPrescription = mock(Prescription.class);
-        when(marPrescription.getId()).thenReturn(rxId);
-        when(mar.getPrescription()).thenReturn(marPrescription);
+        when(mar.getStatus()).thenReturn(MedicationAdministrationStatus.GIVEN);
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId,
-            MedicationAdministrationStatus.GIVEN))
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rxId))
             .thenReturn(List.of(mar));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -862,8 +857,6 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -886,22 +879,22 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("John Doe");
         Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getMedicationName()).thenReturn("Ceftriaxone");
         when(rx.getDosage()).thenReturn("2");
         when(rx.getDoseUnit()).thenReturn("g");
         when(rx.getRoute()).thenReturn("IV");
         when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
 
         Staff mockStaff = mock(Staff.class);
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId))
@@ -944,9 +937,9 @@ class NurseTaskServiceImplTest {
         Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
         Prescription rx = mock(Prescription.class);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
@@ -954,7 +947,7 @@ class NurseTaskServiceImplTest {
 
         assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("override reason");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.overrideRequired");
     }
 
     @Test
@@ -965,22 +958,22 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Held Patient");
         Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getMedicationName()).thenReturn("Warfarin");
         when(rx.getDosage()).thenReturn("5");
         when(rx.getDoseUnit()).thenReturn("mg");
         when(rx.getRoute()).thenReturn(null); // triggers PO default
         when(rx.getCreatedAt()).thenReturn(null); // triggers now+1h fallback
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
         MedicationAdministrationRecord savedRecord = MedicationAdministrationRecord.builder()
@@ -1016,11 +1009,11 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Existing Patient Name");
 
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getId()).thenReturn(marId);
@@ -1030,8 +1023,9 @@ class NurseTaskServiceImplTest {
         when(existingMar.getDose()).thenReturn("100 mg");
         when(existingMar.getRoute()).thenReturn("PO");
         when(existingMar.getScheduledTime()).thenReturn(LocalDateTime.now());
+        when(existingMar.getStatus()).thenReturn(MedicationAdministrationStatus.PENDING);
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
         when(marRepository.save(existingMar)).thenReturn(existingMar);
 
@@ -1073,8 +1067,8 @@ class NurseTaskServiceImplTest {
         when(otherHospital.getId()).thenReturn(otherHospitalId);
 
         Prescription rx = mock(Prescription.class);
-        when(rx.getHospital()).thenReturn(otherHospital);
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        lenient().when(rx.getHospital()).thenReturn(otherHospital);
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("GIVEN");
@@ -1097,7 +1091,7 @@ class NurseTaskServiceImplTest {
         MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getHospital()).thenReturn(otherHospital);
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
@@ -1135,10 +1129,10 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("Held Patient");
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         MedicationAdministrationRecord existingMar = mock(MedicationAdministrationRecord.class);
         when(existingMar.getId()).thenReturn(marId);
@@ -1148,8 +1142,9 @@ class NurseTaskServiceImplTest {
         when(existingMar.getDose()).thenReturn("5 mg");
         when(existingMar.getRoute()).thenReturn("PO");
         when(existingMar.getScheduledTime()).thenReturn(LocalDateTime.now());
+        when(existingMar.getStatus()).thenReturn(MedicationAdministrationStatus.PENDING);
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
         when(marRepository.save(existingMar)).thenReturn(existingMar);
 
@@ -1230,21 +1225,19 @@ class NurseTaskServiceImplTest {
 
         // One active prescription that's DUE
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         lenient().when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         when(rx.getCreatedAt()).thenReturn(fixedNow.minusHours(1));
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
         when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(3L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1276,21 +1269,19 @@ class NurseTaskServiceImplTest {
             .thenReturn(Optional.of(vs));
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription overdueRx = mock(Prescription.class);
         lenient().when(overdueRx.getId()).thenReturn(UUID.randomUUID());
-        when(overdueRx.getPatient()).thenReturn(mockPatient);
-        when(overdueRx.getHospital()).thenReturn(mockHospital);
+        lenient().when(overdueRx.getPatient()).thenReturn(mockPatient);
+        lenient().when(overdueRx.getHospital()).thenReturn(mockHospital);
         when(overdueRx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         when(overdueRx.getCreatedAt()).thenReturn(fixedNow.minusHours(8)); // overdue
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(overdueRx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
         when(announcementRepository.countByHospital_Id(hospitalId)).thenReturn(0L);
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1316,22 +1307,22 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("NullNurse Pat");
         Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getMedicationName()).thenReturn("Aspirin");
         when(rx.getDosage()).thenReturn("81");
         when(rx.getDoseUnit()).thenReturn("mg");
         when(rx.getRoute()).thenReturn("PO");
         when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
 
         MedicationAdministrationRecord saved = MedicationAdministrationRecord.builder()
             .prescription(rx).patient(mockPatient)
@@ -1364,14 +1355,14 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "NullDate Pat", "NullDate", "Pat")));
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         Hospital mockHospital = mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
         when(rx.getMedicationName()).thenReturn("NullCreated");
         when(rx.getDosage()).thenReturn("10");
@@ -1381,8 +1372,6 @@ class NurseTaskServiceImplTest {
 
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
@@ -1507,8 +1496,6 @@ class NurseTaskServiceImplTest {
             .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(LocalDateTime.now()).build()));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(activePending));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, MedicationAdministrationStatus.GIVEN))
-            .thenReturn(List.of()); // not given yet
 
         List<NurseWorkboardPatientDTO> result = service.getWorkboard(UUID.randomUUID(), hospitalId);
 
@@ -2443,7 +2430,7 @@ class NurseTaskServiceImplTest {
         mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
         mar.setScanVerifiedAt(LocalDateTime.now());
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
         when(marRepository.save(mar)).thenReturn(mar);
 
@@ -2472,7 +2459,7 @@ class NurseTaskServiceImplTest {
         mar.setRouteScanValue("IV");
         mar.setFiveRightsStatus(FiveRightsStatus.NOT_VERIFIED);
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
 
         NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
@@ -2481,7 +2468,8 @@ class NurseTaskServiceImplTest {
 
         assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ROUTE");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.fiveRightsFailedOverrideRequired")
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()[0].toString()).contains("ROUTE"));
     }
 
     @Test
@@ -2500,7 +2488,7 @@ class NurseTaskServiceImplTest {
         // administration time and demand an override.
         mar.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
 
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
         when(marRepository.findById(marId)).thenReturn(Optional.of(mar));
 
         NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
@@ -2508,7 +2496,8 @@ class NurseTaskServiceImplTest {
 
         assertThatThrownBy(() -> service.recordMedicationAdministration(marId, null, hospitalId, req))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("TIME");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.fiveRightsFailedOverrideRequired")
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()[0].toString()).contains("TIME"));
     }
 
     @Test
@@ -2523,15 +2512,15 @@ class NurseTaskServiceImplTest {
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(patient);
-        when(rx.getHospital()).thenReturn(hospital);
+        lenient().when(rx.getPatient()).thenReturn(patient);
+        lenient().when(rx.getHospital()).thenReturn(hospital);
         when(rx.getMedicationName()).thenReturn("Aspirin");
         when(rx.getDosage()).thenReturn("81");
         when(rx.getDoseUnit()).thenReturn("mg");
         when(rx.getRoute()).thenReturn("PO");
         when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
 
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
         when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
 
         NurseMedicationAdministrationRequestDTO req = new NurseMedicationAdministrationRequestDTO();
@@ -2557,7 +2546,7 @@ class NurseTaskServiceImplTest {
         UUID marId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         when(marRepository.findById(marId)).thenReturn(Optional.empty());
-        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(marId)).thenReturn(Optional.empty());
 
         MarVerificationRequestDTO req = new MarVerificationRequestDTO();
         req.setPatientScanValue("p");
@@ -2595,8 +2584,8 @@ class NurseTaskServiceImplTest {
         lenient().when(hospital.getId()).thenReturn(hospitalId);
         Prescription rx = mock(Prescription.class);
         lenient().when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(patient);
-        when(rx.getHospital()).thenReturn(hospital);
+        lenient().when(rx.getPatient()).thenReturn(patient);
+        lenient().when(rx.getHospital()).thenReturn(hospital);
         when(rx.getMedicationName()).thenReturn("Amoxicillin");
         when(rx.getMedicationCode()).thenReturn("AMOX-500");
         when(rx.getDosage()).thenReturn("500 mg");
@@ -2606,7 +2595,7 @@ class NurseTaskServiceImplTest {
         when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(4));
 
         when(marRepository.findById(rxId)).thenReturn(Optional.empty());
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
         when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> {
             MedicationAdministrationRecord arg = inv.getArgument(0);
             return arg;
@@ -2684,7 +2673,7 @@ class NurseTaskServiceImplTest {
     void anUnverifiedControlledSubstanceCannotBeGiven() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = highRiskRx(hospitalId, false);
-        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         UUID rxId = rx.getId();
         UUID nurseId = UUID.randomUUID();
         NurseMedicationAdministrationRequestDTO given = givenRequest();
@@ -2692,9 +2681,8 @@ class NurseTaskServiceImplTest {
         assertThatThrownBy(() ->
             service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Morphine")
-            .hasMessageContaining("verified by a pharmacist")
-            .hasMessageNotContaining("%s");
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.pharmacistVerificationRequired")
+            .satisfies(e -> assertThat(((BusinessException) e).getArgs()).containsExactly("Morphine"));
 
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
@@ -2703,7 +2691,7 @@ class NurseTaskServiceImplTest {
     void aVerifiedControlledSubstanceCanBeGiven() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = highRiskRx(hospitalId, true);
-        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         marSaveEchoes();
 
         assertThatCode(() -> service.recordMedicationAdministration(
@@ -2718,7 +2706,7 @@ class NurseTaskServiceImplTest {
         // blocking that would be perverse as well as lossy.
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = highRiskRx(hospitalId, false);
-        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         marSaveEchoes();
 
         assertThatCode(() -> service.recordMedicationAdministration(
@@ -2730,7 +2718,7 @@ class NurseTaskServiceImplTest {
     void anUnverifiedHighRiskDoseCanStillBeRecordedAsREFUSED() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = highRiskRx(hospitalId, false);
-        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         marSaveEchoes();
 
         assertThatCode(() -> service.recordMedicationAdministration(
@@ -2746,7 +2734,7 @@ class NurseTaskServiceImplTest {
         Prescription rx = highRiskRx(hospitalId, false);
         rx.setControlledSubstance(false);
         rx.setMedicationName("Paracetamol");
-        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         marSaveEchoes();
 
         assertThatCode(() -> service.recordMedicationAdministration(
@@ -2830,21 +2818,21 @@ class NurseTaskServiceImplTest {
         UUID patientId = UUID.randomUUID();
 
         Patient mockPatient = mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
+        lenient().when(mockPatient.getId()).thenReturn(patientId);
         when(mockPatient.getFullName()).thenReturn("John Doe");
         Hospital mockHospital = mock(Hospital.class);
         lenient().when(mockHospital.getId()).thenReturn(hospitalId);
 
         Prescription rx = mock(Prescription.class);
         when(rx.getId()).thenReturn(rxId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
         when(rx.getMedicationName()).thenReturn("Ceftriaxone");
         when(rx.getDosage()).thenReturn("2");
         when(rx.getDoseUnit()).thenReturn("g");
         when(rx.getRoute()).thenReturn("IV");
         when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
-        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.of(mock(Staff.class)));
 
         ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
@@ -2858,5 +2846,161 @@ class NurseTaskServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo("GIVEN");
         assertThat(captor.getValue().getFiveRightsOverrides()).startsWith("[");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       QA round 2: D76 (PENDING filter), D77 (dose schedule), D78 (verified row)
+       ════════════════════════════════════════════════════════════════════ */
+
+    private Prescription scheduledRx(UUID hospitalId, String frequency) {
+        Prescription rx = highRiskRx(hospitalId, false);
+        rx.setControlledSubstance(false);
+        rx.setMedicationName("Ceftriaxone");
+        rx.setRoute("IV");
+        rx.setFrequency(frequency);
+        rx.setMedicationCode("CEF-1G");
+        rx.setDosage("1 g");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(4));
+        return rx;
+    }
+
+    private MedicationAdministrationRecord closedDose(Prescription rx, LocalDateTime slot,
+                                                      MedicationAdministrationStatus status) {
+        MedicationAdministrationRecord r = MedicationAdministrationRecord.builder()
+            .prescription(rx).patient(rx.getPatient()).hospital(rx.getHospital())
+            .medicationName(rx.getMedicationName()).scheduledTime(slot).status(status).build();
+        r.setId(UUID.randomUUID());
+        return r;
+    }
+
+    @Test
+    void D76_pendingFilterReturnsTheDosesStillToGive() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        UUID patientId = rx.getPatient().getId();
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+
+        List<NurseMedicationTaskResponseDTO> pending = service.getMedicationTasks(nurseId, hospitalId, "PENDING");
+
+        assertThat(pending).extracting(NurseMedicationTaskResponseDTO::getMedication).containsExactly("Ceftriaxone");
+        assertThat(pending.get(0).getStatus()).isIn("DUE", "OVERDUE");
+        assertThat(pending.get(0).getRoute()).isEqualTo("IV");
+    }
+
+    @Test
+    void D77_aRepeatingOrderSchedulesItsNextDoseAfterOneIsGiven() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        UUID patientId = rx.getPatient().getId();
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime firstSlot = rx.getCreatedAt().plusHours(4);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closedDose(rx, firstSlot, MedicationAdministrationStatus.GIVEN)));
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(12));
+    }
+
+    @Test
+    void D77_theSameDoseCannotBeRecordedTwice() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "once");
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.GIVEN)));
+        UUID rxId = rx.getId();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, UUID.randomUUID(), hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.noDoseDue");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void D77_theSecondRecordFillsTheNextSlotNotTheSameOne() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "BID");
+        LocalDateTime firstSlot = rx.getCreatedAt().plusHours(4);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closedDose(rx, firstSlot, MedicationAdministrationStatus.GIVEN)));
+        marSaveEchoes();
+
+        NurseMedicationTaskResponseDTO out =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, givenRequest());
+
+        assertThat(out.getDueTime()).isEqualTo(firstSlot.plusHours(12));
+    }
+
+    @Test
+    void D77_anAlreadyRecordedMarRowCannotBeRecordedAgain() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        MedicationAdministrationRecord given = closedDose(rx, LocalDateTime.now(), MedicationAdministrationStatus.GIVEN);
+        when(marRepository.findById(given.getId())).thenReturn(Optional.of(given));
+        UUID marId = given.getId();
+        NurseMedicationAdministrationRequestDTO again = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, UUID.randomUUID(), hospitalId, again))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.alreadyRecorded");
+    }
+
+    @Test
+    void D77_reVerifyingTheSameDoseReusesItsPendingRow() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        MedicationAdministrationRecord pending =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(pending));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> i.getArgument(0));
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue("p");
+        req.setMedicationScanValue("m");
+        req.setDoseScanValue("d");
+        req.setRouteScanValue("IV");
+
+        MarVerificationResponseDTO out = service.verifyMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, req);
+
+        assertThat(out.getMarId()).isEqualTo(pending.getId());
+        verify(marRepository).save(pending);
+    }
+
+    @Test
+    void D78_administeringByPrescriptionIdFinalisesTheVerifiedRowWithoutAnOverride() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        MedicationAdministrationRecord verified =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        verified.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        verified.setPatientScanValue(rx.getPatient().getId().toString());
+        verified.setMedicationScanValue("CEF-1G");
+        verified.setDoseScanValue("1 g");
+        verified.setRouteScanValue("IV");
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(verified));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> i.getArgument(0));
+
+        NurseMedicationTaskResponseDTO out =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, statusRequest("GIVEN"));
+
+        assertThat(out.getId()).isEqualTo(verified.getId());
+        assertThat(verified.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        assertThat(verified.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
     }
 }

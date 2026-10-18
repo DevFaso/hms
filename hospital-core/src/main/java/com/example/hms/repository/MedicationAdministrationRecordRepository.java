@@ -17,6 +17,9 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     List<MedicationAdministrationRecord> findByPatient_IdAndHospital_IdAndStatus(
         UUID patientId, UUID hospitalId, MedicationAdministrationStatus status);
 
+    /** Every MAR row of one prescription, latest scheduled dose first (D77 dose schedule). */
+    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(UUID prescriptionId);
+
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m
         JOIN FETCH m.prescription
