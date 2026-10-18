@@ -553,7 +553,12 @@ class UserEndpointAuthorizationIT extends BaseIT {
         var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
         assertThat(total(doctors)).isEqualTo(1);
         assertThat(ids(doctors)).containsExactly(dualAB.getId());
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), nurse);
+        // QA D198: none of these accounts holds a staff profile, so a nurse sees their
+        // e-mails masked and cannot confirm one by searching; A's administrator can.
+        assertThat(total(page(get("/users/search").param("email", "users-gate.test"), nurse))).isZero();
+        assertThat(total(page(get("/users/search").param("name", patientA.getEmail()), nurse))).isZero();
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"),
+            hms(adminA, "ROLE_HOSPITAL_ADMIN"));
         assertThat(total(byDomain)).isEqualTo(atA.size());
         assertThat(ids(byDomain)).hasSize(2);
 
