@@ -1,5 +1,8 @@
 package com.example.hms.payload.dto.nurse;
 
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import com.example.hms.payload.dto.VitalSignLimits;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -70,4 +73,26 @@ public class NurseVitalCaptureRequestDTO {
 
     @Size(max = 1000)
     private String notes;
+
+    @AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
+
+    /** D111: a submission with no measurement at all is not a reading. */
+    @AssertTrue(message = "{vitals.empty}")
+    @JsonIgnore
+    public boolean isAnyMeasurementPresent() {
+        return temperatureCelsius != null
+            || heartRateBpm != null
+            || respiratoryRateBpm != null
+            || systolicBpMmHg != null
+            || diastolicBpMmHg != null
+            || spo2Percent != null
+            || bloodGlucoseMgDl != null
+            || weightKg != null
+            || heightCm != null
+            || headCircumferenceCm != null;
+    }
 }

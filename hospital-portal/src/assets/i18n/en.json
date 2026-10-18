@@ -3698,7 +3698,9 @@
     "ACVPU_NEW_CONFUSION": "New confusion",
     "ACVPU_VOICE": "Responds to voice",
     "ACVPU_PAIN": "Responds to pain",
-    "ACVPU_UNRESPONSIVE": "Unresponsive"
+    "ACVPU_UNRESPONSIVE": "Unresponsive",
+    "OVERRIDE_EXPLAIN": "The bedside five-rights scan is done in the eMAR. To record this dose as given from here, enter the reason for the override.",
+    "OPEN_EMAR": "Open the eMAR to scan instead"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -6036,7 +6038,19 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
-    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
+    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one.",
+    "ROUTE_NOT_RECORDED": "Not recorded",
+    "ROUTES": {
+      "PO": "Oral (PO)",
+      "IV": "Intravenous (IV)",
+      "IM": "Intramuscular (IM)",
+      "SC": "Subcutaneous (SC)",
+      "SL": "Sublingual (SL)",
+      "PR": "Rectal (PR)",
+      "TOP": "Topical (TOP)",
+      "INH": "Inhaled (INH)",
+      "NEB": "Nebulised (NEB)"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
