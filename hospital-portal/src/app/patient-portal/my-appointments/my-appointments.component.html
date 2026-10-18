@@ -336,7 +336,7 @@
               <span class="pac-detail">{{
                 appt.reason || appt.department || ('PORTAL.APPOINTMENTS.GENERAL_VISIT' | translate)
               }}</span>
-              <span class="pac-time">{{ appt.date | date: 'MMM d, yyyy' }}</span>
+              <span class="pac-time">{{ appt.date | date: 'mediumDate' }}</span>
             </div>
             <span class="pac-status" [attr.data-status]="appt.status">{{
               appt.status | enumLabel: 'appointmentStatus'

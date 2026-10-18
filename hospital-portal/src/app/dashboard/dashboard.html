@@ -54,7 +54,7 @@
           @if (specialization()) {
             <span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
-              {{ specialization() }}
+              {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
           @if (departmentName() && departmentName() !== specialization()) {
@@ -1724,7 +1724,7 @@
                     <div class="roomed-top">
                       <strong class="roomed-name">{{ pt.patientName }}</strong>
                       <span [class]="getTriageClass(pt.triageStatus)">{{
-                        pt.triageStatus | titlecase
+                        pt.triageStatus | enumLabel
                       }}</span>
                     </div>
                     <div class="roomed-meta">
@@ -3024,7 +3024,7 @@
                   <span class="bill-desc">{{
                     inv.description || inv.facility || ('DASHBOARD.MEDICAL_SERVICES' | translate)
                   }}</span>
-                  <span class="bill-date">{{ inv.date | date: 'MMM d, yyyy' }}</span>
+                  <span class="bill-date">{{ inv.date | date: 'mediumDate' }}</span>
                 </div>
                 <div class="bill-amount-wrap">
                   <span class="bill-amount" [class.bill-due]="inv.balance > 0">

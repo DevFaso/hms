@@ -42,6 +42,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'LAB_TEST_CONFIG.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [ngModel]="searchKeyword()"
       (ngModelChange)="searchKeyword.set($event)"

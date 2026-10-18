@@ -346,6 +346,7 @@
       <div class="search-box">
         <span class="material-icons">search</span>
         <input
+          [attr.aria-label]="'PLATFORM.SEARCH_CATALOG' | translate"
           type="text"
           [placeholder]="'PLATFORM.SEARCH_CATALOG' | translate"
           [ngModel]="catalogSearchTerm()"
