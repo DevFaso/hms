@@ -24,9 +24,23 @@
  *   CWE-352
  */
 
-import { HttpClient, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpInterceptorFn,
+  HttpRequest,
+} from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, switchMap, of } from 'rxjs';
+import {
+  Observable,
+  catchError,
+  finalize,
+  map,
+  of,
+  shareReplay,
+  switchMap,
+  throwError,
+} from 'rxjs';
 
 /** HTTP methods that change server state and therefore require a CSRF token. */
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -91,24 +105,20 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
     return next(req);
   }
 
+  const http = inject(HttpClient);
   const token = getCookieValue('XSRF-TOKEN');
-
   if (token) {
-    // Happy path: cookie already present — attach it and proceed immediately.
-    return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } }));
+    return sendWithRetry(req, next, token);
   }
 
   // Cookie is absent (fresh session, hard reload, cookie cleared).
   // Self-heal: GET the bootstrap endpoint to force Spring to issue the cookie,
   // then replay the original mutating request with the fresh token.
-  const http = inject(HttpClient);
-
-  return http.get<void>(CSRF_BOOTSTRAP_URL, { observe: 'response' }).pipe(
-    catchError(() => of(null)), // if bootstrap fails, proceed anyway (server will 403 → handled upstream)
+  return bootstrapOnce(http).pipe(
     switchMap(() => {
       const freshToken = getCookieValue('XSRF-TOKEN');
       if (freshToken) {
-        return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': freshToken } }));
+        return sendWithRetry(req, next, freshToken);
       }
       // Bootstrap didn't set the cookie (network error, misconfigured backend).
       // Send the request without the CSRF header — the server will reject it
@@ -117,3 +127,54 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
     }),
   );
 };
+
+/**
+ * QA D180: the first page after login fires several mutating requests at
+ * once (the billing search is a POST). Each used to start its own bootstrap
+ * GET, and every bootstrap response set a NEW cookie: a request that read
+ * the cookie before the last response landed sent a token the cookie no
+ * longer matched, and got 403 "sometimes". One bootstrap is now shared by
+ * every request waiting on it.
+ */
+let inflightBootstrap: Observable<void> | null = null;
+
+function bootstrapOnce(http: HttpClient): Observable<void> {
+  inflightBootstrap ??= http.get<void>(CSRF_BOOTSTRAP_URL, { observe: 'response' }).pipe(
+    map(() => undefined),
+    catchError(() => of(undefined)), // if bootstrap fails, proceed anyway (server will 403 → handled upstream)
+    finalize(() => {
+      inflightBootstrap = null;
+    }),
+    shareReplay({ bufferSize: 1, refCount: false }),
+  );
+  return inflightBootstrap;
+}
+
+/**
+ * Sends with the token; on a 403, when the cookie has changed since the token
+ * was read (another response rotated it), replays once with the current one.
+ * A 403 with an unchanged cookie is a real refusal and is passed on.
+ */
+function sendWithRetry(
+  req: HttpRequest<unknown>,
+  next: Parameters<HttpInterceptorFn>[1],
+  token: string,
+) {
+  return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } })).pipe(
+    catchError((err: unknown) => {
+      if (!(err instanceof HttpErrorResponse) || err.status !== 403) {
+        return throwError(() => err);
+      }
+      const current = getCookieValue('XSRF-TOKEN');
+      if (current && current !== token) {
+        return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': current } }));
+      }
+      return throwError(() => err);
+    }),
+  );
+}
+
+/** Test seam: forget a shared bootstrap between specs. */
+export function resetCsrfBootstrapForTests(): void {
+  inflightBootstrap = null;
+}

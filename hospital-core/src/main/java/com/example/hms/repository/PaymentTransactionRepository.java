@@ -17,6 +17,11 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     boolean existsByInvoice_Id(UUID invoiceId);
 
+    /** Every ledger row of an invoice, oldest first (QA D142: the reversal picker and the receipt). */
+    List<PaymentTransaction> findByInvoice_IdOrderByCreatedAtAsc(UUID invoiceId);
+
+    java.util.Optional<PaymentTransaction> findByIdAndInvoice_Id(UUID id, UUID invoiceId);
+
     /**
      * Daily collection totals for a hospital within a date range.
      * Returns Object[]{java.sql.Date paymentDate, BigDecimal dailyTotal}.
@@ -26,6 +31,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
              FROM PaymentTransaction pt
             WHERE pt.invoice.hospital.id = :hospitalId
               AND pt.paymentDate BETWEEN :from AND :to
+              AND pt.status = com.example.hms.enums.PaymentStatus.CONFIRMED
             GROUP BY pt.paymentDate
             ORDER BY pt.paymentDate
            """)
@@ -44,6 +50,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
              FROM PaymentTransaction pt
             WHERE pt.invoice.hospital.id = :hospitalId
               AND pt.paymentDate BETWEEN :from AND :to
+              AND pt.status = com.example.hms.enums.PaymentStatus.CONFIRMED
             GROUP BY pt.paymentMethod
             ORDER BY SUM(pt.amount) DESC
            """)

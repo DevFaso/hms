@@ -7,8 +7,9 @@ import { Observable, map } from 'rxjs';
  * Spring Pages, no wrapper. Search is POST body filters + query-string
  * paging; for non-super-admins the server overwrites any hospitalId filter
  * with the caller's active hospital. DELETE returns text/plain, not JSON.
- * Payment recording forwards only the amount — method/reference/notes are
- * discarded server-side. Email is synchronous and flips status to SENT.
+ * Payment recording sends the method and the reference (QA D146); patient
+ * declarations arrive PENDING and count only once a cashier confirms them
+ * (QA D140); a confirmed payment is reversed with a reason (QA D142). Email is synchronous and flips status to SENT.
  * (The old RECEPTIONIST-payment 403 is fixed: the POST matcher now includes
  * RECEPTIONIST and the per-endpoint @PreAuthorize stays the precise gate.)
  */
@@ -33,6 +34,7 @@ export interface BillingInvoiceResponse {
   hospitalName: string;
   hospitalCode: string;
   hospitalAddress: string;
+  encounterCode?: string;
   encounterDescription: string;
   encounterType: string;
   encounterStatus: string;
@@ -99,6 +101,42 @@ export interface BillingInvoiceRequest {
   notes?: string;
   /** Idempotency key, one per create form: a double submit is one invoice. */
   clientRequestId?: string;
+}
+
+/** Backend PaymentMethod values the staff modal offers. */
+export type StaffPaymentMethod =
+  'CASH' | 'MOBILE_MONEY' | 'CARD' | 'BANK_TRANSFER' | 'CHECK' | 'INSURANCE' | 'OTHER';
+export const STAFF_PAYMENT_METHODS: StaffPaymentMethod[] = [
+  'CASH',
+  'MOBILE_MONEY',
+  'CARD',
+  'BANK_TRANSFER',
+  'CHECK',
+  'INSURANCE',
+  'OTHER',
+];
+
+export interface StaffPaymentRequest {
+  amount: number;
+  method: StaffPaymentMethod;
+  reference?: string;
+  notes?: string;
+}
+
+export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'REVERSED';
+
+/** One ledger row of an invoice (PaymentTransactionResponseDTO). */
+export interface PaymentRow {
+  id: string;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: string;
+  referenceNumber?: string | null;
+  notes?: string | null;
+  status: PaymentStatus;
+  reversalReason?: string | null;
+  reversedAt?: string | null;
+  createdAt?: string | null;
 }
 
 export interface InvoiceSearchFilters {
@@ -203,12 +241,54 @@ export class BillingService {
     return this.http.delete(`/billing-invoices/${id}`, { responseType: 'text' });
   }
 
-  /** Backend rejects payments on DRAFT/CANCELLED/PAID invoices and amounts
-   *  above the balance due (400 with a message). With no method sent, the
-   *  payment row records the method as OTHER. */
-  recordPayment(invoiceId: string, amount: number): Observable<BillingInvoiceResponse> {
-    return this.http.post<BillingInvoiceResponse>(`/billing-invoices/${invoiceId}/payments`, {
-      amount,
+  /** Backend rejects payments on DRAFT/CANCELLED/PAID invoices, amounts
+   *  above the balance due and fractional francs (400 with a message). */
+  recordPayment(
+    invoiceId: string,
+    payment: StaffPaymentRequest,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments`,
+      payment,
+    );
+  }
+
+  listPayments(invoiceId: string): Observable<PaymentRow[]> {
+    return this.http.get<PaymentRow[]>(`/billing-invoices/${invoiceId}/payments`);
+  }
+
+  confirmPayment(invoiceId: string, paymentId: string): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/confirm`,
+      {},
+    );
+  }
+
+  rejectPayment(
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/reject`,
+      { reason },
+    );
+  }
+
+  reversePayment(
+    invoiceId: string,
+    paymentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/payments/${paymentId}/reverse`,
+      { reason },
+    );
+  }
+
+  getReceiptPdf(invoiceId: string, paymentId: string): Observable<Blob> {
+    return this.http.get(`/billing-invoices/${invoiceId}/payments/${paymentId}/receipt`, {
+      responseType: 'blob',
     });
   }
 

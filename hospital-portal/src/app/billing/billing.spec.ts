@@ -57,7 +57,13 @@ describe('BillingComponent', () => {
       'getInvoiceItems',
       'createInvoiceItem',
       'deleteInvoiceItem',
+      'listPayments',
+      'confirmPayment',
+      'rejectPayment',
+      'reversePayment',
+      'getReceiptPdf',
     ]);
+    billingSpy.listPayments.and.returnValue(of([]));
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
     billingSpy.getInvoiceItems.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -180,10 +186,79 @@ describe('BillingComponent', () => {
     component.openPayment(component.invoices()[0]);
     expect(component.paymentAmount()).toBe(1000); // prefilled with balance
     component.recordPayment();
-    expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', 1000);
+    expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
+      amount: 1000,
+      method: 'CASH',
+      reference: undefined,
+    });
     expect(component.invoices()[0].status).toBe('PAID');
     expect(component.showPaymentModal()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D146: recordPayment sends the chosen method and reference', () => {
+    fixture.detectChanges();
+    billingSpy.recordPayment.and.returnValue(of(mockInvoice({ status: 'PARTIALLY_PAID' })));
+    component.openPayment(component.invoices()[0]);
+    component.paymentAmount.set(500);
+    component.paymentMethod.set('MOBILE_MONEY');
+    component.paymentReference.set(' MM-778 ');
+    component.recordPayment();
+    expect(billingSpy.recordPayment).toHaveBeenCalledWith('inv-1', {
+      amount: 500,
+      method: 'MOBILE_MONEY',
+      reference: 'MM-778',
+    });
+  });
+
+  it('QA D184: recordPayment refuses a fractional franc amount', () => {
+    component.paymentInv.set(mockInvoice());
+    component.paymentAmount.set(0.5);
+    component.recordPayment();
+    expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  it('QA D150: the outstanding total counts issued invoices only, never drafts', () => {
+    billingSpy.searchInvoices.and.returnValue(
+      of(
+        mockPage([
+          mockInvoice({ id: 'a', status: 'DRAFT', balanceDue: 9000 }),
+          mockInvoice({ id: 'b', status: 'SENT', balanceDue: 1000 }),
+          mockInvoice({ id: 'c', status: 'PARTIALLY_PAID', balanceDue: 500 }),
+          mockInvoice({ id: 'd', status: 'CANCELLED', balanceDue: 700 }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+    expect(component.stats().balance).toBe(1500);
+  });
+
+  it('QA D147: a paid invoice takes no line changes', () => {
+    expect(component.canEditLines(mockInvoice({ status: 'PAID' }))).toBeFalse();
+    expect(component.canEditLines(mockInvoice({ status: 'PARTIALLY_PAID' }))).toBeTrue();
+  });
+
+  it('QA D142: a reversal needs a reason and refreshes the invoice', () => {
+    fixture.detectChanges();
+    const inv = component.invoices()[0];
+    component.viewInvoice(inv);
+    const row = {
+      id: 'p1',
+      amount: 1000,
+      paymentDate: '2026-10-18',
+      paymentMethod: 'CASH',
+      status: 'CONFIRMED' as const,
+    };
+    component.openReversal(row, 'reverse');
+    component.submitReversal();
+    expect(billingSpy.reversePayment).not.toHaveBeenCalled();
+
+    billingSpy.reversePayment.and.returnValue(of(mockInvoice({ status: 'SENT', amountPaid: 0 })));
+    component.reversalReason.set('Refunded');
+    component.submitReversal();
+    expect(billingSpy.reversePayment).toHaveBeenCalledWith('inv-1', 'p1', 'Refunded');
+    expect(component.reversingPayment()).toBeNull();
   });
 
   it('sendEmail requires at least one recipient', () => {
@@ -364,5 +439,34 @@ describe('BillingComponent', () => {
     ).map((el) => (el.textContent ?? '').trim());
     expect(badges).toContain('—');
     expect(badges).not.toContain('');
+  });
+});
+
+describe('BillingComponent as a billing specialist (QA D181)', () => {
+  it('does not offer delete, which the server refuses to BILLING', async () => {
+    const billingSpy = jasmine.createSpyObj('BillingService', ['searchInvoices', 'getOverdue']);
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([])));
+    const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
+    permissionSpy.hasAnyPermission.and.returnValue(true); // holds "Manage Billing"
+    const roleCtx = {
+      hasAnyActiveRole: (roles: string[]) => roles.includes('ROLE_BILLING_SPECIALIST'),
+    } as unknown as RoleContextService;
+    await TestBed.configureTestingModule({
+      imports: [BillingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: BillingService, useValue: billingSpy },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: PermissionService, useValue: permissionSpy },
+        { provide: RoleContextService, useValue: roleCtx },
+      ],
+    }).compileComponents();
+    const component = TestBed.createComponent(BillingComponent).componentInstance;
+    expect(component.canDelete).toBeFalse();
+    expect(component.canRecordPayment).toBeTrue();
   });
 });

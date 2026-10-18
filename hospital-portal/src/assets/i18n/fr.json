@@ -1426,7 +1426,7 @@
     "PAYMENT_EXCEEDS_BALANCE": "Le montant dépasse le solde dû",
     "PAYMENT_FAILED": "Échec du paiement",
     "PAYMENT_METHOD": "Mode de Paiement",
-    "PAYMENT_NOTE": "Les paiements s'appliquent aux factures ENVOYÉES ou PARTIELLEMENT PAYÉES, dans la limite du solde dû.",
+    "PAYMENT_NOTE": "Les paiements s’appliquent aux factures émises ou partiellement payées, dans la limite du solde dû, en francs entiers.",
     "PAYMENT_RECORDED": "Paiement enregistré",
     "PAYMENT_TITLE": "Enregistrer un paiement — {{invoice}}",
     "PDF_FAILED": "Échec du téléchargement du PDF",
@@ -1467,7 +1467,44 @@
     "ITEM_ADDED": "Ligne ajoutée",
     "ITEM_REMOVED": "Ligne supprimée",
     "ITEM_SAVE_FAILED": "La ligne n'a pas pu être enregistrée",
-    "ITEMS_LOAD_FAILED": "Les lignes de la facture n'ont pas pu être chargées"
+    "ITEMS_LOAD_FAILED": "Les lignes de la facture n'ont pas pu être chargées",
+    "PAYMENT_REFERENCE": "Référence",
+    "PAYMENT_REFERENCE_PLACEHOLDER": "N° de reçu, de transaction ou de chèque",
+    "PAYMENT_WHOLE_AMOUNT": "Les montants en francs CFA sont entiers : saisissez un montant sans décimales.",
+    "PAYMENTS": "Paiements",
+    "NO_PAYMENTS": "Aucun paiement enregistré.",
+    "PAYMENT_DATE": "Date du paiement",
+    "CONFIRM_PAYMENT": "Confirmer",
+    "REJECT_PAYMENT": "Refuser le paiement",
+    "REVERSE_PAYMENT": "Contre-passer le paiement",
+    "RECEIPT": "Reçu",
+    "REVERSAL_REASON": "Motif",
+    "REVERSAL_REASON_REQUIRED": "Un motif est obligatoire.",
+    "REVERSAL_NOTE": "Le paiement reste au journal comme contre-passé ; le montant payé et le solde sont recalculés. Remboursez le patient par le même moyen.",
+    "PAYMENT_CONFIRMED": "Paiement confirmé.",
+    "PAYMENT_REVERSED": "Paiement contre-passé.",
+    "PAYMENT_REJECTED": "Paiement refusé.",
+    "ITEM_REMOVE_CONFIRM": "Supprimer cette ligne ? Le total de la facture sera recalculé.",
+    "ENCOUNTER_REFERENCE": "Consultation / séjour (code de la rencontre)",
+    "ENCOUNTER_REFERENCE_PLACEHOLDER": "ex. ENC-…",
+    "ENCOUNTER_REFERENCE_HINT": "Rattache cette facture à la consultation ou au séjour facturé. Il doit appartenir à cet hôpital.",
+    "PAYMENT_METHODS": {
+      "CASH": "Espèces",
+      "MOBILE_MONEY": "Paiement mobile",
+      "CARD": "Carte bancaire",
+      "BANK_TRANSFER": "Virement bancaire",
+      "CHECK": "Chèque",
+      "INSURANCE": "Assurance",
+      "OTHER": "Autre",
+      "CREDIT_CARD": "Carte de crédit",
+      "DEBIT_CARD": "Carte de débit"
+    },
+    "PAYMENT_STATUSES": {
+      "PENDING": "En attente de confirmation",
+      "CONFIRMED": "Confirmé",
+      "REJECTED": "Refusé",
+      "REVERSED": "Contre-passé"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -4597,7 +4634,9 @@
       "CARD": "Carte de crédit / débit",
       "BANK_TRANSFER": "Virement bancaire",
       "MOBILE_MONEY": "Mobile Money",
-      "CASH": "Espèces"
+      "CASH": "Espèces",
+      "PAYMENT_PENDING": "Votre paiement de {{amount}} a été déclaré. Il apparaîtra sur votre facture dès que la caisse de l’hôpital l’aura confirmé.",
+      "PAYMENT_PENDING_NOTE": "Les paiements déclarés ici sont confirmés par l’hôpital avant que votre solde ne change."
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",

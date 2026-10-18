@@ -106,6 +106,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final SlotInventoryService slotInventoryService;
     private final PatientOutreachNotifier outreachNotifier;
     private final MessageSource messageSource;
+    private final com.example.hms.service.BillingInvoiceService billingInvoiceService;
 
     /** Outreach has no request locale — explicit config, French by default. */
     @Value("${hms.scheduling.outreach.locale:fr}")
@@ -869,6 +870,17 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (request.getAppointmentId() == null) {
             throw new IllegalArgumentException("appointmentId is required for check-in");
         }
+        // QA D149: a copay is money taken at the desk; it is validated before
+        // anything is written, and recorded below (it used to be dropped).
+        java.math.BigDecimal copay = request.getCopayAmount();
+        if (copay != null) {
+            if (copay.signum() < 0) {
+                throw new com.example.hms.exception.BusinessException("reception.checkin.copayNegative");
+            }
+            if (copay.stripTrailingZeros().scale() > 0) {
+                throw new com.example.hms.exception.BusinessException("billing.payment.wholeAmountOnly");
+            }
+        }
 
         Appointment appointment = appointmentRepo.findById(request.getAppointmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
@@ -940,6 +952,13 @@ public class ReceptionServiceImpl implements ReceptionService {
                 log.warn("Consent-to-treat recording failed during check-in of appointment {}: {}",
                     appointment.getId(), ex.getMessage());
             }
+        }
+
+        // 3c. QA D149: the copay collected at the desk becomes a paid invoice
+        // on this encounter, with its cash payment in the ledger.
+        if (copay != null && copay.signum() > 0) {
+            UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
+            billingInvoiceService.recordCheckInCopay(encounter, copay, actorUserId);
         }
 
         // 4. Audit trail

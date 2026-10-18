@@ -1,6 +1,10 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.enums.ItemCategory;
+import com.example.hms.enums.PaymentMethod;
+import com.example.hms.enums.PaymentStatus;
+import com.example.hms.model.PaymentTransaction;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.InvoiceItem;
@@ -114,8 +118,8 @@ class PdfInvoiceServiceTest {
                 "pdf.invoice.patient Awa Kaboré OUA-1234",
                 "pdf.invoice.hospital Hospital B",
                 "pdf.invoice.col.description", "pdf.invoice.col.qty", "pdf.invoice.col.total",
-                "Consultation", "cat:SERVICE", "1500.00",
-                "pdf.invoice.grandTotal 1500.00")
+                "Consultation", "cat:SERVICE", "1 500 F CFA",
+                "pdf.invoice.grandTotal 1 500 F CFA")
             .doesNotContain("INVOICE", "Grand Total", "2026-09-14");
         assertThat(localesAskedOfTheBundle()).containsOnly(Locale.ENGLISH);
     }
@@ -137,5 +141,67 @@ class PdfInvoiceServiceTest {
         String text = textOf(service.generateInvoicePdf(invoice, items, Locale.FRENCH));
 
         assertThat(text).contains("SERVICE").doesNotContain("pdf.invoice.category.SERVICE");
+    }
+
+    /**
+     * QA D141: a paid invoice's PDF had only its lines, raw "2500.00" amounts, and
+     * sometimes no total; a paid invoice with no lines had headers only.
+     */
+    @Test
+    void paidInvoiceShowsCurrencyTotalPaidBalanceStatusAndPayments_D141() throws Exception {
+        invoice.setAmountPaid(new BigDecimal("1500.00"));
+        invoice.setStatus(InvoiceStatus.PAID);
+        PaymentTransaction confirmed = PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.CASH).referenceNumber("REC-7").status(PaymentStatus.CONFIRMED).build();
+        PaymentTransaction reversed = PaymentTransaction.builder()
+            .amount(new BigDecimal("999.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.REVERSED).build();
+
+        String text = textOf(service.generateInvoicePdf(invoice, List.of(), List.of(confirmed, reversed), Locale.ENGLISH));
+
+        assertThat(text).contains(
+            "pdf.invoice.hospital Hospital B",
+            "pdf.invoice.status pdf.invoice.statusValue.PAID",
+            "pdf.invoice.grandTotal 1 500 F CFA",
+            "pdf.invoice.amountPaid 1 500 F CFA",
+            "pdf.invoice.balanceDue 0 F CFA",
+            "REC-7")
+            .doesNotContain("999 F CFA");
+    }
+
+    @Test
+    void longInvoiceStillPrintsItsTotals_D141() throws Exception {
+        List<InvoiceItem> many = java.util.stream.IntStream.range(0, 80)
+            .mapToObj(i -> InvoiceItem.builder().itemDescription("Line " + i).itemCategory(ItemCategory.SERVICE)
+                .quantity(1).unitPrice(BigDecimal.TEN).totalPrice(BigDecimal.TEN).build())
+            .toList();
+
+        String text = textOf(service.generateInvoicePdf(invoice, many, Locale.ENGLISH));
+
+        assertThat(text).contains("Line 79", "pdf.invoice.grandTotal 1 500 F CFA", "pdf.invoice.balanceDue");
+    }
+
+    @Test
+    void textOutsideTheFontEncodingDoesNotFailTheDocument_D141() throws Exception {
+        List<InvoiceItem> odd = List.of(InvoiceItem.builder().itemDescription("Soins ≥ 2 jours  ")
+            .itemCategory(ItemCategory.SERVICE).quantity(1).unitPrice(BigDecimal.ONE).totalPrice(BigDecimal.ONE).build());
+
+        assertThat(textOf(service.generateInvoicePdf(invoice, odd, Locale.FRENCH))).contains("Soins ? 2 jours");
+    }
+
+    @Test
+    void receiptNamesThePaymentAndTheBalance_D141() throws Exception {
+        invoice.setAmountPaid(new BigDecimal("1000.00"));
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.MOBILE_MONEY).referenceNumber("MM-42").status(PaymentStatus.CONFIRMED).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, Locale.ENGLISH));
+
+        assertThat(text).contains("pdf.receipt.title", "pdf.invoice.hospital Hospital B",
+            "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1 000 F CFA", "pdf.receipt.reference MM-42",
+            "pdf.receipt.method pdf.payment.method.MOBILE_MONEY", "pdf.invoice.balanceDue 500 F CFA");
     }
 }

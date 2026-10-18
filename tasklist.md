@@ -5150,6 +5150,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   /pharmacy/dispense/{id}`, raw patient/pharmacy/payment UUIDs on the screen
   and the receipt). The receipt's French text is still hard-coded in the
   template (pre-existing).
+- **A stay or visit does not charge itself (QA D148, round 3).** An invoice can
+  now be linked to its encounter (the edit form sends and keeps the encounter
+  code; a code of another hospital is refused), and the check-in copay becomes a
+  paid invoice on the visit's encounter (D149). Charging a whole stay
+  automatically (bed-days, administered drugs, lab orders posted as lines) is
+  deferred as a new feature: it needs the priced-service catalog above and a
+  charge-capture rule per order type. `fix/qa-r3-billing` fixed the bugs around
+  it (the link was write-only in the UI). Patient online payment also has no
+  payment provider: a patient's payment is a PENDING declaration until a cashier
+  confirms it (D140); a provider callback (mobile money / card) is a new
+  integration.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

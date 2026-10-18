@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { LabResultSummary, PatientPortalService } from './patient-portal.service';
+import {
+  LabResultSummary,
+  PatientPortalService,
+  PortalInvoice,
+  mapPortalInvoice,
+} from './patient-portal.service';
 
 /**
  * The portal used to decide whether a lab result was abnormal by parsing the
@@ -328,5 +333,58 @@ describe('PatientPortalService chat recipients', () => {
       .expectOne('/me/patient/care-team')
       .flush({}, { status: 500, statusText: 'Server Error' });
     expect(failed).toBeTrue();
+  });
+});
+
+/**
+ * QA D139: the billing page read `amount`, `balance` and `facility`, which
+ * the API never sends (it sends BillingInvoiceResponseDTO: totalAmount,
+ * balanceDue, hospitalName), so every invoice showed 0 and no Pay button.
+ */
+describe('PatientPortalService invoices', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('maps the wire invoice to the amounts, balance and hospital the page shows', () => {
+    let received: PortalInvoice[] = [];
+    service.getMyInvoices().subscribe((r) => (received = r));
+    httpMock.expectOne('/me/patient/billing/invoices').flush({
+      success: true,
+      data: {
+        content: [
+          {
+            id: 'i1',
+            invoiceNumber: 'HA-2026-000013',
+            invoiceDate: '2026-10-01',
+            dueDate: '2026-10-31',
+            totalAmount: 2500,
+            amountPaid: 1000,
+            balanceDue: 1500,
+            status: 'PARTIALLY_PAID',
+            hospitalName: 'Hôpital A',
+          },
+        ],
+      },
+    });
+    expect(received.length).toBe(1);
+    expect(received[0].amount).toBe(2500);
+    expect(received[0].paid).toBe(1000);
+    expect(received[0].balance).toBe(1500);
+    expect(received[0].facility).toBe('Hôpital A');
+    expect(received[0].date).toBe('2026-10-01');
+  });
+
+  it('derives the balance when the API leaves balanceDue out', () => {
+    expect(mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 300 }).balance).toBe(600);
   });
 });

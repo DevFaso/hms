@@ -169,6 +169,74 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request, recordedBy, locale));
     }
 
+    @GetMapping("/{invoiceId}/payments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "List the payments recorded on an invoice")
+    public ResponseEntity<List<com.example.hms.payload.dto.PaymentTransactionResponseDTO>> listPayments(
+        @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.listPayments(invoiceId));
+    }
+
+    /** QA D140: a cashier confirms a payment a patient declared; only then is it counted. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/confirm")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Confirm a pending payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> confirmPayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.confirmPayment(invoiceId, paymentId, staffId, locale));
+    }
+
+    /** QA D140: a cashier refuses a payment a patient declared, with a reason. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/reject")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Reject a pending payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> rejectPayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @Valid @RequestBody com.example.hms.payload.dto.PaymentReasonRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.rejectPayment(invoiceId, paymentId, request.reason(), staffId, locale));
+    }
+
+    /** QA D142: billing staff reverse (refund) a confirmed payment, with a reason. */
+    @PostMapping("/{invoiceId}/payments/{paymentId}/reverse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @Operation(summary = "Reverse a confirmed payment")
+    public ResponseEntity<BillingInvoiceResponseDTO> reversePayment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @Valid @RequestBody com.example.hms.payload.dto.PaymentReasonRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.reversePayment(invoiceId, paymentId, request.reason(), staffId, locale));
+    }
+
+    /** QA D141: a receipt for one confirmed payment. */
+    @GetMapping("/{invoiceId}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Download a payment receipt as PDF")
+    public ResponseEntity<byte[]> downloadReceiptPdf(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID paymentId,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        var pdf = invoiceService.getPaymentReceiptPdf(invoiceId, paymentId, locale);
+        byte[] content = pdf.content();
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .cacheControl(CacheControl.noCache())
+            .header(HttpHeaders.CONTENT_DISPOSITION,
+                ContentDisposition.attachment().filename(pdf.suggestedFilename() + ".pdf").build().toString())
+            .contentLength(content.length)
+            .body(content);
+    }
+
     @PostMapping("/{id}/email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Email Billing Invoice")

@@ -407,12 +407,49 @@ interface EncounterApiResponse {
   };
 }
 
+/**
+ * Raw shape of BillingInvoiceResponseDTO as the portal endpoints send it
+ * (QA D139: the page used to read `amount`/`balance`/`facility`, which the
+ * API never sends, so every invoice showed 0 and no Pay button).
+ */
+export interface InvoiceApiResponse {
+  id: string;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  dueDate?: string | null;
+  totalAmount?: number | null;
+  amountPaid?: number | null;
+  balanceDue?: number | null;
+  status?: string | null;
+  hospitalName?: string | null;
+  encounterDescription?: string | null;
+  notes?: string | null;
+}
+
+export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
+  const total = Number(api.totalAmount ?? 0);
+  const paid = Number(api.amountPaid ?? 0);
+  return {
+    id: api.id,
+    invoiceNumber: api.invoiceNumber ?? '',
+    date: api.invoiceDate ?? '',
+    dueDate: api.dueDate ?? '',
+    amount: total,
+    paid,
+    balance: api.balanceDue != null ? Number(api.balanceDue) : Math.max(total - paid, 0),
+    status: api.status ?? '',
+    facility: api.hospitalName ?? '',
+    description: api.encounterDescription ?? '',
+  };
+}
+
 export interface PortalInvoice {
   id: string;
   invoiceNumber: string;
   date: string;
   dueDate: string;
   amount: number;
+  paid: number;
   balance: number;
   status: string;
   facility: string;
@@ -1062,17 +1099,20 @@ export class PatientPortalService {
 
   getMyInvoices(): Observable<PortalInvoice[]> {
     return this.http
-      .get<ApiWrapper<{ content: PortalInvoice[] }>>(`${this.base}/billing/invoices`)
+      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(`${this.base}/billing/invoices`)
       .pipe(
-        map((r) => r.data?.content ?? []),
+        map((r) => (r.data?.content ?? []).map(mapPortalInvoice)),
         catchError(() => of([])),
       );
   }
 
   payInvoice(invoiceId: string, payment: PatientPaymentRequest): Observable<PortalInvoice> {
     return this.http
-      .post<ApiWrapper<PortalInvoice>>(`${this.base}/billing/invoices/${invoiceId}/pay`, payment)
-      .pipe(map((r) => r.data));
+      .post<ApiWrapper<InvoiceApiResponse>>(
+        `${this.base}/billing/invoices/${invoiceId}/pay`,
+        payment,
+      )
+      .pipe(map((r) => mapPortalInvoice(r.data)));
   }
 
   /**
@@ -1457,13 +1497,13 @@ export class PatientPortalService {
 
   getProxyBilling(patientId: string): Observable<PortalInvoice[]> {
     return this.http
-      .get<ApiWrapper<{ content: PortalInvoice[] }>>(
+      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(
         `${this.base}/proxy-access/${patientId}/billing`,
         {
           params: { page: 0, size: 20 },
         },
       )
-      .pipe(map((r) => r.data?.content ?? []));
+      .pipe(map((r) => (r.data?.content ?? []).map(mapPortalInvoice)));
   }
 
   getProxyRecords(patientId: string): Observable<HealthSummaryDTO> {

@@ -30,6 +30,7 @@
     "src/app/bed-board/bed-board.html::p.reason",
     "src/app/bed-board/bed-board.html::t.reason",
     "src/app/bed-management/bed-management.html::b.bedType",
+    "src/app/billing/billing.html::p.reversalReason",
     "src/app/break-glass-review/break-glass-review.html::s.reason",
     "src/app/chat/chat.html::att.kind",
     "src/app/chat/chat.html::user.profileType",

@@ -67,6 +67,12 @@ export class MyBillingComponent implements OnInit {
     const inv = this.payingInvoice();
     if (!inv || !this.payAmount || this.payAmount <= 0) return;
 
+    // QA D184: francs CFA have no cents.
+    if (!Number.isInteger(this.payAmount)) {
+      this.payError.set(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+      return;
+    }
+
     if (this.payAmount > inv.balance) {
       this.payError.set(this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS'));
       return;
@@ -85,8 +91,9 @@ export class MyBillingComponent implements OnInit {
       next: () => {
         this.payProcessing.set(false);
         this.paySuccess.set(
-          this.translate.instant('PORTAL.BILLING.PAYMENT_SUCCESS_AMOUNT', {
-            amount: this.payAmount.toFixed(2),
+          // QA D140: a declaration is not a settlement; staff confirm it.
+          this.translate.instant('PORTAL.BILLING.PAYMENT_PENDING', {
+            amount: this.payAmount.toFixed(0),
           }),
         );
         this.loadInvoices();
