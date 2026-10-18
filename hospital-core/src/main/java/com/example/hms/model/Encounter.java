@@ -56,6 +56,13 @@ import java.util.Set;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Encounter extends BaseEntity {
 
+    /**
+     * Marks the completed consultation a prescription creates when it has no
+     * visit to hang on (QA D41/D85). It is bookkeeping, not documentation, so
+     * the chart review and record PDF keep its notes out of "Notes".
+     */
+    public static final String PRESCRIPTION_ANCHOR_NOTE = "Auto-generated for prescription entry";
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_encounter_patient"))

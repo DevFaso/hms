@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -65,6 +65,8 @@ describe('EncountersComponent', () => {
       'getAvs',
       'signNote',
       'cosignNote',
+      'getById',
+      'startEncounter',
     ]);
     encounterSpy.list.and.returnValue(
       of([
@@ -142,6 +144,34 @@ describe('EncountersComponent', () => {
     }).compileComponents();
 
     component = TestBed.createComponent(EncountersComponent).componentInstance;
+  });
+
+  it('opens the encounter named by an /encounters/:id deep link (D96)', () => {
+    const route = TestBed.inject(ActivatedRoute) as unknown as {
+      snapshot: { paramMap?: ReturnType<typeof convertToParamMap> };
+    };
+    route.snapshot.paramMap = convertToParamMap({ id: 'e9' });
+    const enc = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    encounterSpy.getById.and.returnValue(of(enc));
+    encounterSpy.getNoteHistory.and.returnValue(of([]));
+    component.ngOnInit();
+    expect(encounterSpy.getById).toHaveBeenCalledWith('e9');
+    expect(component.selectedEncounter()?.id).toBe('e9');
+  });
+
+  it('lets a doctor start a waiting encounter (D96)', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.returnValue(true);
+    const waiting = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    expect(component.canStartEncounter(waiting)).toBeTrue();
+    encounterSpy.startEncounter.and.returnValue(
+      of({ ...waiting, status: 'IN_PROGRESS' } as EncounterResponse),
+    );
+    component.startEncounter(waiting);
+    expect(component.selectedEncounter()?.status).toBe('IN_PROGRESS');
+    expect(
+      component.canCheckOut({ ...waiting, status: 'READY_FOR_DISCHARGE' } as EncounterResponse),
+    ).toBeTrue();
   });
 
   it('should create', () => {

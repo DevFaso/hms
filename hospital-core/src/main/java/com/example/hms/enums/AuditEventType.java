@@ -127,6 +127,8 @@ public enum AuditEventType {
     PRESCRIPTION_CLARIFICATION_REQUESTED,
     /** The prescriber answered and the order returned to SIGNED (G5). */
     PRESCRIPTION_CLARIFICATION_RESOLVED,
+    /** D83: a prescriber overrode (or an edit cleared) an allergy hard stop. */
+    PRESCRIPTION_ALLERGY_OVERRIDDEN,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

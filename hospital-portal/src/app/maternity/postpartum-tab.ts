@@ -38,6 +38,7 @@ import {
   ProScreeningService,
 } from '../services/pro-screening.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
@@ -71,6 +72,7 @@ export class PostpartumTabComponent {
   private readonly laborService = inject(LaborService);
   private readonly screeningService = inject(ProScreeningService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -380,6 +382,10 @@ export class PostpartumTabComponent {
     }
   }
 
+  private actingHospitalId(): string | undefined {
+    return this.roleContext.activeHospitalId ?? this.auth.getHospitalId() ?? undefined;
+  }
+
   /* ── Observation ── */
 
   openObservation(): void {
@@ -395,6 +401,8 @@ export class PostpartumTabComponent {
     const patient = this.patient();
     if (!patient) return;
     this.observationForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
+    // QA D86: without a care plan the backend needs the acting hospital.
+    this.observationForm.hospitalId = this.actingHospitalId();
     this.observationSaving.set(true);
     this.postpartumService.createObservation(patient.id, this.observationForm).subscribe({
       next: (created) => {
@@ -444,6 +452,7 @@ export class PostpartumTabComponent {
     if (!patient) return;
     this.assessmentForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.assessmentForm.followUpActions = [...this.selectedFollowUps];
+    this.assessmentForm.hospitalId = this.actingHospitalId();
     this.assessmentSaving.set(true);
     this.postpartumService.createNewbornAssessment(patient.id, this.assessmentForm).subscribe({
       next: (created) => {

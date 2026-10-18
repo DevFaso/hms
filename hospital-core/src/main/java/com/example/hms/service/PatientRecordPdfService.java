@@ -89,17 +89,17 @@ public class PatientRecordPdfService {
         PatientStoryboardDTO storyboard = storyboardService.getStoryboard(patientId, hospitalId);
         ChartReviewDTO chart = chartReviewService.getChartReview(patientId, hospitalId, CHART_LIMIT);
 
-        byte[] pdf = write(storyboard, chart, labels);
+        byte[] pdf = write(storyboard, chart, patient.getAllergies(), labels);
         emitAudit(patient, hospitalId, chart);
         return pdf;
     }
 
     // ---------------------------------------------------------------- layout
 
-    private static byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart, PdfLabels t) {
+    static byte[] write(PatientStoryboardDTO storyboard, ChartReviewDTO chart, String allergySummary, PdfLabels t) {
         try (Pages pages = new Pages(t)) {
             writeIdentity(pages, storyboard, t);
-            writeStoryboard(pages, storyboard, t);
+            writeStoryboard(pages, storyboard, allergySummary, t);
             writeChart(pages, chart, t);
             int held = storyboard.getRestrictedRows() == null ? 0 : storyboard.getRestrictedRows().size();
             if (held > 0) {
@@ -126,18 +126,32 @@ public class PatientRecordPdfService {
         pages.field(t.get("pdf.record.field.mrn"), p.getMrn());
         pages.field(t.get("pdf.record.field.dob"), join(" ", t.fmt(p.getDateOfBirth()),
             p.getAgeYears() != null ? t.get("pdf.record.field.ageYears", String.valueOf(p.getAgeYears())) : null));
-        pages.field(t.get("pdf.record.field.sex"), p.getGender());
+        pages.field(t.get("pdf.record.field.sex"), label(t, p.getGender()));
         pages.field(t.get("pdf.record.field.bloodType"), p.getBloodType());
     }
 
-    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard, PdfLabels t) throws IOException {
+    private static void writeAllergies(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,
+                                       PdfLabels t) throws IOException {
         pages.heading(t.get("pdf.record.section.allergies"));
-        pages.rows(storyboard.getAllergies(), a -> join(SEPARATOR,
-            a.getAllergenDisplay(), a.getSeverity(), a.getReaction(), a.getVerificationStatus()));
+        boolean noStructured = storyboard.getAllergies() == null || storyboard.getAllergies().isEmpty();
+        if (noStructured && allergySummary != null && !allergySummary.isBlank()) {
+            // D85: a record whose allergies exist only as the registration
+            // summary text (not yet backfilled into rows) must not print "none".
+            pages.wrapped(t.get("pdf.record.allergies.summary", allergySummary.trim()));
+        } else {
+            pages.rows(storyboard.getAllergies(), a -> join(SEPARATOR,
+                a.getAllergenDisplay(), label(t, a.getSeverity()), a.getReaction(),
+                label(t, a.getVerificationStatus())));
+        }
+    }
+
+    private static void writeStoryboard(Pages pages, PatientStoryboardDTO storyboard, String allergySummary,
+                                        PdfLabels t) throws IOException {
+        writeAllergies(pages, storyboard, allergySummary, t);
 
         pages.heading(t.get("pdf.record.section.problems"));
         pages.rows(storyboard.getProblems(), pr -> join(SEPARATOR,
-            pr.getProblemDisplay(), code(pr.getProblemCode()), pr.getStatus(),
+            pr.getProblemDisplay(), code(pr.getProblemCode()), label(t, pr.getStatus()),
             pr.isChronic() ? t.get("pdf.record.problem.chronic") : null,
             pr.getOnsetDate() != null ? t.get("pdf.record.problem.since", t.fmt(pr.getOnsetDate())) : null));
 
@@ -146,7 +160,7 @@ public class PatientRecordPdfService {
         if (enc == null) {
             pages.text(t.get("pdf.record.encounter.none"));
         } else {
-            pages.text(join(SEPARATOR, enc.getEncounterType(), enc.getStatus(), t.fmt(enc.getEncounterDate()),
+            pages.text(join(SEPARATOR, label(t, enc.getEncounterType()), label(t, enc.getStatus()), t.fmt(enc.getEncounterDate()),
                 enc.getDepartmentName(), enc.getStaffFullName(), enc.getRoomAssignment()));
             if (enc.getChiefComplaint() != null) {
                 pages.wrapped(t.get("pdf.record.encounter.chiefComplaint", enc.getChiefComplaint()));
@@ -158,8 +172,8 @@ public class PatientRecordPdfService {
         if (code == null || code.getStatus() == null) {
             pages.text(t.get("pdf.record.codeStatus.none"));
         } else {
-            pages.text(code.getStatus());
-            pages.rows(code.getDirectives(), d -> join(SEPARATOR, d.getDirectiveType(), d.getStatus(),
+            pages.text(label(t, code.getStatus()));
+            pages.rows(code.getDirectives(), d -> join(SEPARATOR, label(t, d.getDirectiveType()), label(t, d.getStatus()),
                 d.getEffectiveDate() != null ? t.get("pdf.record.directive.from", t.fmt(d.getEffectiveDate())) : null,
                 d.getDescription()));
         }
@@ -167,8 +181,8 @@ public class PatientRecordPdfService {
 
     private static void writeChart(Pages pages, ChartReviewDTO chart, PdfLabels t) throws IOException {
         pages.heading(t.get("pdf.record.section.encounters"));
-        pages.rows(chart.getEncounters(), e -> join(SEPARATOR, t.fmt(e.getEncounterDate()), e.getEncounterType(),
-            e.getStatus(), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
+        pages.rows(chart.getEncounters(), e -> join(SEPARATOR, t.fmt(e.getEncounterDate()), label(t, e.getEncounterType()),
+            label(t, e.getStatus()), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
 
         pages.heading(t.get("pdf.record.section.notes"));
         pages.rows(chart.getNotes(), n -> join(SEPARATOR, t.fmt(n.getDocumentedAt()), n.getTemplate(),
@@ -178,21 +192,21 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.results"));
         pages.rows(chart.getResults(), r -> join(SEPARATOR, t.fmt(r.getResultDate()),
             safe(r.getTestName()) + code(r.getTestCode()),
-            join(" ", r.getResultValue(), r.getResultUnit()), r.getAbnormalFlag(), r.getOrderingStaffName()));
+            join(" ", r.getResultValue(), r.getResultUnit()), label(t, r.getAbnormalFlag()), r.getOrderingStaffName()));
 
         pages.heading(t.get("pdf.record.section.medications"));
         pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),
-            m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), m.getStatus(),
+            m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), label(t, m.getStatus()),
             m.getPrescriberName(), m.isControlledSubstance() ? t.get("pdf.record.medication.controlled") : null));
 
         pages.heading(t.get("pdf.record.section.imaging"));
         pages.rows(chart.getImaging(), i -> join(SEPARATOR, t.fmt(i.getOrderedAt()),
-            join(" ", i.getModality(), i.getStudyType(), i.getBodyRegion(), i.getLaterality()), i.getStatus(),
+            join(" ", label(t, i.getModality()), i.getStudyType(), i.getBodyRegion(), label(t, i.getLaterality())), label(t, i.getStatus()),
             i.getReportImpression() != null ? t.get("pdf.record.imaging.impression", i.getReportImpression()) : null));
 
         pages.heading(t.get("pdf.record.section.procedures"));
         pages.rows(chart.getProcedures(), pr -> join(SEPARATOR, t.fmt(pr.getOrderedAt()), pr.getProcedureName(),
-            pr.getProcedureCategory(), pr.getUrgency(), pr.getStatus(), pr.getOrderingProviderName(),
+            label(t, pr.getProcedureCategory()), label(t, pr.getUrgency()), label(t, pr.getStatus()), pr.getOrderingProviderName(),
             t.get(pr.isConsentObtained() ? "pdf.record.procedure.consentObtained"
                 : "pdf.record.procedure.consentNotRecorded")));
     }
@@ -225,6 +239,18 @@ public class PatientRecordPdfService {
 
     private static int size(List<?> list) {
         return list == null ? 0 : list.size();
+    }
+
+    /**
+     * D85: a stored code (SIGNED, WAITING_FOR_PHYSICIAN, SEVERE...) printed in
+     * the reader's language: the PDF bundle, then the shared clinical enum
+     * bundle, then the code made readable - never the raw constant.
+     */
+    static String label(PdfLabels t, String code) {
+        if (code == null || code.isBlank()) return null;
+        String readable = code.replace('_', ' ').toLowerCase(java.util.Locale.ROOT);
+        String shared = t.getOrCode("cds.enum." + code, readable);
+        return t.getOrCode("pdf.record.enum." + code, shared);
     }
 
     private static String safe(String v) {

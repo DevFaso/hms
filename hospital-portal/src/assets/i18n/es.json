@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Soporte de decisiones clínicas",
     "FORCE_OVERRIDE": "Anular alerta crítica tras revisión clínica",
+    "OVERRIDE_REASON": "Motivo de la excepción (registrado en la receta)",
     "INDICATOR": {
       "INFO": "Información",
       "WARNING": "Advertencia",
@@ -2394,7 +2395,11 @@
       "SIGNED": "Firmada",
       "COSIGNED": "Refrendada",
       "ADDENDUM": "Adenda añadida"
-    }
+    },
+    "START": "Iniciar la consulta",
+    "STARTED": "Consulta iniciada",
+    "CHECK_OUT": "Dar el alta",
+    "NOT_FOUND": "Consulta no encontrada"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -5369,6 +5374,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqueado por el plan",
         "PLATFORM_REGISTRY_UPDATED": "Registro de la plataforma actualizado",
         "PRESCRIPTION_BACKORDER": "Receta en falta de stock",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Alerta de alergia de la receta anulada",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Aclaración de receta solicitada",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Aclaración de receta resuelta",
         "PRESCRIPTION_CREATED": "Receta creada",
