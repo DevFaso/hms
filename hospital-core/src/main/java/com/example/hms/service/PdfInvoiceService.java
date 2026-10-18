@@ -341,7 +341,7 @@ public class PdfInvoiceService {
             }
         }
 
-        void text(PDFont font, int size, float x, String text) throws IOException {
+        void text(PDFont font, float size, float x, String text) throws IOException {
             cs.beginText();
             cs.setFont(font, size);
             cs.newLineAtOffset(x, y);
@@ -349,7 +349,7 @@ public class PdfInvoiceService {
             cs.endText();
         }
 
-        void right(PDFont font, int size, String text) throws IOException {
+        void right(PDFont font, float size, String text) throws IOException {
             String clean = sanitize(font, text);
             float width = font.getStringWidth(clean) / 1000f * size;
             float x = page.getMediaBox().getWidth() - MARGIN - width;
