@@ -5308,6 +5308,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqué par le forfait",
         "PLATFORM_REGISTRY_UPDATED": "Registre de la plateforme modifié",
         "PRESCRIPTION_BACKORDER": "Ordonnance en rupture de stock",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Alerte d'allergie de l'ordonnance outrepassée",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Clarification d'ordonnance demandée",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Clarification d'ordonnance résolue",
         "PRESCRIPTION_CREATED": "Ordonnance créée",
