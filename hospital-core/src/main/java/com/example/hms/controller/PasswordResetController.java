@@ -33,6 +33,12 @@ public class PasswordResetController {
         Locale locale,
         HttpServletRequest request
     ) {
+        if ((dto.getEmail() == null || dto.getEmail().isBlank())
+                && dto.getPhone() != null && !dto.getPhone().isBlank()) {
+            // QA D171: a phone-only account gets its link by SMS; same silent 204.
+            passwordResetService.requestResetByPhone(dto.getPhone(), locale, clientIp(request));
+            return ResponseEntity.noContent().build();
+        }
         return handleResetRequest(dto.getEmail(), locale, request);
     }
 
@@ -83,7 +89,7 @@ public class PasswordResetController {
             passwordResetService.requestReset(email, locale, ip);
         } catch (ResourceNotFoundException e) {
             // Deliberately do NOT leak whether the email exists
-            log.debug("Password reset requested for non-existent email: {}", email);
+            log.debug("Password reset requested for an unknown address");
         }
         return ResponseEntity.noContent().build(); // 204
     }

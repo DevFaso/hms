@@ -1,7 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.model.ChatMessage;
-import com.example.hms.model.User;
 import com.example.hms.payload.dto.ChatConversationSummaryDTO;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
@@ -13,15 +12,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.example.hms.config.KafkaProperties;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,10 +29,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
-import java.util.NoSuchElementException;
 import java.util.UUID;
 
 @RestController
@@ -56,59 +51,50 @@ public class ChatController {
 
     private final ChatMessageService chatMessageService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final KafkaTemplate<String, ChatMessage> kafkaTemplate; // may be null if Kafka disabled
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
-
-    private final KafkaProperties kafkaProperties;
 
  
     public ChatController(
             ChatMessageService chatMessageService,
             SimpMessagingTemplate messagingTemplate,
-            ObjectProvider<KafkaTemplate<String, ChatMessage>> kafkaTemplate,
             ChatMessageRepository chatMessageRepository,
-            UserRepository userRepository,
-            KafkaProperties kafkaProperties
+            UserRepository userRepository
     ) {
         this.chatMessageService = chatMessageService;
         this.messagingTemplate = messagingTemplate;
-    this.kafkaTemplate = kafkaTemplate.getIfAvailable(); // null when Kafka disabled
         this.chatMessageRepository = chatMessageRepository;
         this.userRepository = userRepository;
-        this.kafkaProperties = kafkaProperties;
     }
 
     // --- WebSocket Send ---
+    /**
+     * The sender is the authenticated STOMP principal, never the payload: this used
+     * to save whatever sender id the frame named and skipped every rule the REST
+     * send applies (patient boundary, shared hospital). It now goes through the
+     * same service call as POST /chat/send, then pushes the result to the recipient.
+     */
     @MessageMapping("/chat.sendMessage")
-    public void sendWebSocketMessage(@Payload ChatMessage chatMessage) {
-        User sender = userRepository.findById(chatMessage.getSender().getId())
-                .orElseThrow(() -> new NoSuchElementException("Sender not found"));
-        User recipient = userRepository.findById(chatMessage.getRecipient().getId())
-                .orElseThrow(() -> new NoSuchElementException("Recipient not found"));
-
-        chatMessage.setSender(sender);
-        chatMessage.setRecipient(recipient);
-        chatMessage.setTimestamp(LocalDateTime.now());
-
-        chatMessageRepository.save(chatMessage);
-
-    if (kafkaProperties.isEnabled() && kafkaTemplate != null) {
-            try {
-                String topic = kafkaProperties.getChatTopic();
-                kafkaTemplate.send(topic, chatMessage.getRecipient().getUsername(), chatMessage);
-                logger.info("Message sent to Kafka topic '{}' for user '{}'", topic, chatMessage.getRecipient().getUsername());
-            } catch (RuntimeException e) {
-                logger.error("Error sending message to Kafka: ", e);
-            }
-        } else {
-        // Fallback: directly forward over WebSocket when Kafka disabled
-        messagingTemplate.convertAndSendToUser(
-            chatMessage.getRecipient().getUsername(),
-            "/topic/messages",
-            chatMessage
-        );
-        logger.debug("Kafka disabled; delivered message directly via WebSocket");
+    public void sendWebSocketMessage(@Payload ChatMessage chatMessage, java.security.Principal principal) {
+        if (!(principal instanceof org.springframework.security.core.Authentication authentication)
+                || chatMessage == null || chatMessage.getRecipient() == null
+                || chatMessage.getRecipient().getId() == null) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied");
+        }
+        org.springframework.security.core.context.SecurityContext previous = SecurityContextHolder.getContext();
+        org.springframework.security.core.context.SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(authentication);
+        SecurityContextHolder.setContext(context);
+        try {
+            ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
+                    .recipientId(chatMessage.getRecipient().getId())
+                    .content(chatMessage.getContent())
+                    .build();
+            ChatMessageResponseDTO sent = chatMessageService.sendMessage(dto, Locale.getDefault());
+            userRepository.findById(chatMessage.getRecipient().getId()).ifPresent(recipient ->
+                    messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/topic/messages", sent));
+        } finally {
+            SecurityContextHolder.setContext(previous);
         }
     }
 

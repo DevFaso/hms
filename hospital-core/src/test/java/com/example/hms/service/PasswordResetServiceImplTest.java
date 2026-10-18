@@ -40,6 +40,8 @@ class PasswordResetServiceImplTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private SmsService smsService;
+    @Mock private org.springframework.context.MessageSource messageSource;
 
     /** Fixed instant: token validity and cleanup are computed against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -80,6 +82,43 @@ class PasswordResetServiceImplTest {
 
         verify(tokenRepository).save(any(PasswordResetToken.class));
         verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+    }
+
+    @Test
+    void qaD171_aPhoneOnlyAccountGetsItsResetLinkBySms() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+
+        service.requestResetByPhone("70 20 20 20", Locale.FRENCH, "127.0.0.1");
+
+        verify(tokenRepository).save(any(PasswordResetToken.class));
+        verify(smsService).send("+22670202020", "link");
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+    }
+
+    @Test
+    void qaD171_noTokenIsIssuedWithoutARealSmsTransport() {
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(false);
+
+        service.requestResetByPhone("70202020", Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    void qaD171_anUnknownPhoneIsSilent() {
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.empty());
+
+        service.requestResetByPhone("70202020", Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
     }
 
     @Test

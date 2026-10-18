@@ -40,6 +40,8 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final LoginAttemptService loginAttemptService;
     private final AuditEventLogService auditEventLogService;
+    private final SmsService smsService;
+    private final org.springframework.context.MessageSource messageSource;
     /**
      * The reset-token clock: it writes {@code expiration} and every validity
      * check and the expired-token cleanup read it back. {@code passwordChangedAt}
@@ -68,6 +70,43 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     @Transactional
     public void requestReset(String email, Locale locale, String requestIp) {
         handleResetRequest(email, locale, requestIp);
+    }
+
+    @Override
+    @Transactional
+    public void requestResetByPhone(String phone, Locale locale, String requestIp) {
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+            phone, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+        if (e164 == null) {
+            return;
+        }
+        User user = userRepository.findByPhoneNumber(e164).orElse(null);
+        if (user == null || user.isDeleted()) {
+            return;
+        }
+        // The link is a credential: never issue one that would only reach a log line.
+        if (!smsService.deliversRealSms()) {
+            log.warn("🔑 Password reset by SMS not sent for user {}: no SMS transport configured", user.getId());
+            return;
+        }
+        tokenRepository.deleteByUser_IdAndConsumedAtIsNull(user.getId());
+        String rawToken = generateRawToken();
+        tokenRepository.save(PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(sha256Hex(rawToken))
+            .expiration(LocalDateTime.now(clock).plusHours(2))
+            .ipAddress(requestIp)
+            .build());
+        String resetLink = frontendBaseUrl + "/reset-password?token=" + rawToken;
+        String body = messageSource.getMessage("sms.passwordReset.link", new Object[]{resetLink},
+            locale == null ? Locale.FRENCH : locale);
+        final UUID requesterId = user.getId();
+        final String to = user.getPhoneNumber();
+        TransactionCallbacks.afterCommit(() -> {
+            smsService.send(to, body);
+            audit(AuditEventType.PASSWORD_RESET_REQUEST, "Password reset link issued by SMS", requesterId);
+        });
+        log.info("🔑 Password reset link issued by SMS for user {}", requesterId);
     }
 
     private void handleResetRequest(String email, Locale locale, String requestIp) {
