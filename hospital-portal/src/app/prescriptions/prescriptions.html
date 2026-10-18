@@ -823,6 +823,17 @@
               [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
             />
           </div>
+          <div class="field">
+            <label for="rx-route">{{ 'PRESCRIPTIONS.ROUTE' | translate }}</label>
+            <select id="rx-route" [(ngModel)]="form.route">
+              @if (!form.route) {
+                <option value="">{{ 'PRESCRIPTIONS.ROUTE_NOT_RECORDED' | translate }}</option>
+              }
+              @for (r of routes; track r) {
+                <option [value]="r">{{ 'PRESCRIPTIONS.ROUTES.' + r | translate }}</option>
+              }
+            </select>
+          </div>
         </div>
         <div class="form-row">
           <div class="field">

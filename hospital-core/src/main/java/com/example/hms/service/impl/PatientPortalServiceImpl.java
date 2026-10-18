@@ -115,7 +115,6 @@ import java.util.UUID;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleNames;
 
 /**

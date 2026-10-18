@@ -975,14 +975,17 @@
       (keydown.escape)="cancelHoldRefuse()"
     >
       <h3 id="reason-dialog-title">
-        {{
-          reasonPrompt()?.action === 'HELD'
-            ? ('NURSE.HOLD' | translate)
-            : ('NURSE.REFUSE' | translate)
-        }}
+        {{ reasonActionLabelKey() | translate }}
         {{ 'NURSE.MEDICATION' | translate }}
       </h3>
-      <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
+      @if (reasonPrompt()?.action === 'GIVEN') {
+        <p>{{ 'NURSE.OVERRIDE_EXPLAIN' | translate }}</p>
+        <p>
+          <a routerLink="/emar">{{ 'NURSE.OPEN_EMAR' | translate }}</a>
+        </p>
+      } @else {
+        <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
+      }
       <textarea
         class="reason-input"
         [ngModel]="reasonText()"
@@ -1000,11 +1003,7 @@
           [disabled]="!reasonText()"
         >
           {{ 'NURSE.CONFIRM' | translate }}
-          {{
-            reasonPrompt()?.action === 'HELD'
-              ? ('NURSE.HOLD' | translate)
-              : ('NURSE.REFUSE' | translate)
-          }}
+          {{ reasonActionLabelKey() | translate }}
         </button>
       </div>
     </div>
@@ -1229,6 +1228,7 @@
     class="modal-backdrop"
     (click)="closeTaskCreate()"
     (keydown.enter)="closeTaskCreate()"
+    (keydown.escape)="closeTaskCreate()"
     tabindex="0"
     role="button"
   >
@@ -1343,6 +1343,7 @@
     class="modal-backdrop"
     (click)="closeHandoffCreate()"
     (keydown.enter)="closeHandoffCreate()"
+    (keydown.escape)="closeHandoffCreate()"
     tabindex="0"
     role="button"
   >
@@ -1453,6 +1454,7 @@
     class="modal-backdrop"
     (click)="closeCareNote()"
     (keydown.enter)="closeCareNote()"
+    (keydown.escape)="closeCareNote()"
     tabindex="0"
     role="button"
   >

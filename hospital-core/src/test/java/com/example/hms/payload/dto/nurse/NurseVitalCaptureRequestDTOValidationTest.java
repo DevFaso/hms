@@ -72,7 +72,7 @@ class NurseVitalCaptureRequestDTOValidationTest {
             .temperatureCelsius(44.0)
             .heartRateBpm(20)
             .respiratoryRateBpm(80)
-            .systolicBpMmHg(40)
+            .systolicBpMmHg(300)
             .diastolicBpMmHg(200)
             .spo2Percent(70)
             .bloodGlucoseMgDl(20)
@@ -92,5 +92,38 @@ class NurseVitalCaptureRequestDTOValidationTest {
         assertThat(invalidFields(validator.validate(
             TriageSubmissionRequestDTO.builder().temperatureCelsius(45.0).esiScore(3).build())))
             .contains("temperatureCelsius");
+    }
+
+    @Test
+    void D111_anInvertedBloodPressureIsRefusedOnEveryVitalEntryPoint() {
+        assertThat(invalidFields(validator.validate(
+            NurseVitalCaptureRequestDTO.builder().systolicBpMmHg(60).diastolicBpMmHg(150).build())))
+            .containsExactly("bloodPressureOrdered");
+        assertThat(invalidFields(validator.validate(
+            PatientVitalSignRequestDTO.builder().systolicBpMmHg(80).diastolicBpMmHg(80).build())))
+            .containsExactly("bloodPressureOrdered");
+        assertThat(invalidFields(validator.validate(
+            com.example.hms.payload.dto.portal.HomeVitalReadingDTO.builder()
+                .systolicBpMmHg(60).diastolicBpMmHg(150).build())))
+            .containsExactly("bloodPressureOrdered");
+        assertThat(invalidFields(validator.validate(
+            TriageSubmissionRequestDTO.builder().systolicBpMmHg(60).diastolicBpMmHg(150).esiScore(3).build())))
+            .contains("bloodPressureOrdered");
+    }
+
+    @Test
+    void D111_aSubmissionWithNoMeasurementIsRefused() {
+        assertThat(invalidFields(validator.validate(NurseVitalCaptureRequestDTO.builder().notes("x").build())))
+            .containsExactly("anyMeasurementPresent");
+        assertThat(invalidFields(validator.validate(PatientVitalSignRequestDTO.builder().build())))
+            .containsExactly("anyMeasurementPresent");
+        assertThat(invalidFields(validator.validate(
+            com.example.hms.payload.dto.portal.HomeVitalReadingDTO.builder().build())))
+            .containsExactly("anyMeasurementPresent");
+    }
+
+    @Test
+    void D111_aLoneSystolicIsStillAReading() {
+        assertThat(validator.validate(NurseVitalCaptureRequestDTO.builder().systolicBpMmHg(90).build())).isEmpty();
     }
 }
