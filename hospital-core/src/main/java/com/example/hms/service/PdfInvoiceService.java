@@ -254,11 +254,6 @@ public class PdfInvoiceService {
 
     private static String safe(String v) { return v == null ? "" : v; }
 
-    private static String truncate(String s, int n) {
-        if (s == null) return "";
-        return s.length() > n ? s.substring(0, n - 1) + "…" : s;
-    }
-
     /** Standard-14 fonts carry WinAnsi only; a glyph outside it becomes '?', not an exception. */
     static String sanitize(PDFont font, String text) {
         if (text == null) {
@@ -296,6 +291,11 @@ public class PdfInvoiceService {
 
     /** A cursor over pages: moves down, and opens a new page when the room runs out. */
     private static final class Writer {
+        private static String truncate(String s, int n) {
+            if (s == null) return "";
+            return s.length() > n ? s.substring(0, n - 1) + "…" : s;
+        }
+
         private final PDDocument doc;
         private PDPage page;
         private PDPageContentStream cs;
@@ -343,7 +343,7 @@ public class PdfInvoiceService {
 
         void text(PDFont font, int size, float x, String text) throws IOException {
             cs.beginText();
-            cs.setFont(font, size);
+            cs.setFont(font, (float) size);
             cs.newLineAtOffset(x, y);
             cs.showText(sanitize(font, text));
             cs.endText();

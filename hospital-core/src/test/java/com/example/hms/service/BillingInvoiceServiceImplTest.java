@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -837,7 +838,7 @@ class BillingInvoiceServiceImplTest {
     @Test
     void rejectPayment_isAuditedAsRejectedNotPosted() {
         com.example.hms.service.AuditEventLogService audit =
-            org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+            mock(com.example.hms.service.AuditEventLogService.class);
         org.springframework.test.util.ReflectionTestUtils.setField(billingInvoiceService, "auditEventLogService", audit);
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));

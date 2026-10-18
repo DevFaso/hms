@@ -47,8 +47,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(BillingInvoiceServiceImpl.class);
 
     /** Optional so the unit tests that build the service by hand keep working. */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AuditEventLogService auditEventLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAuditEventLogService(AuditEventLogService auditEventLogService) {
+        this.auditEventLogService = auditEventLogService;
+    }
 
     private final BillingInvoiceRepository invoiceRepository;
     private final PatientRepository patientRepository;
@@ -536,10 +540,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .recordedBy(recordedBy)
             .status(status)
             .confirmedBy(confirmed ? recordedBy : null)
-            .confirmedAt(confirmed ? java.time.LocalDateTime.now() : null)
+            .confirmedAt(confirmed ? java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()) : null)
             .build();
         PaymentTransaction saved = paymentTransactionRepository.save(row);
-        return saved != null ? saved : row;
+        return java.util.Objects.requireNonNullElse(saved, row);
     }
 
     /**
@@ -701,7 +705,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoice saved = settle(invoice, row.getAmount());
         row.setStatus(PaymentStatus.CONFIRMED);
         row.setConfirmedBy(staffId);
-        row.setConfirmedAt(java.time.LocalDateTime.now());
+        row.setConfirmedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, saved, row.getId(), "Pending payment confirmed");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
@@ -720,7 +724,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         claimTransition(row, invoice, PaymentStatus.PENDING, PaymentStatus.REJECTED, "billing.payment.notPending");
         row.setStatus(PaymentStatus.REJECTED);
         row.setReversedBy(staffId);
-        row.setReversedAt(java.time.LocalDateTime.now());
+        row.setReversedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         row.setReversalReason(why);
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_REJECTED, staffId, invoice, row.getId(), "Pending payment rejected");
@@ -759,7 +763,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         row.setStatus(PaymentStatus.REVERSED);
         row.setReversedBy(staffId);
-        row.setReversedAt(java.time.LocalDateTime.now());
+        row.setReversedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         row.setReversalReason(why);
         paymentTransactionRepository.save(row);
         BillingInvoice saved = invoiceRepository.save(invoice);
