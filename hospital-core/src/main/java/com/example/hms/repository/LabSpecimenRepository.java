@@ -13,6 +13,9 @@ public interface LabSpecimenRepository extends JpaRepository<LabSpecimen, UUID> 
 
     List<LabSpecimen> findByLabOrder_Id(UUID labOrderId);
 
+    /** D49: the specimens of several orders at once, for their real collection times. */
+    List<LabSpecimen> findByLabOrder_IdIn(java.util.Collection<UUID> labOrderIds);
+
     boolean existsByAccessionNumber(String accessionNumber);
 
     Optional<LabSpecimen> findByAccessionNumber(String accessionNumber);

@@ -390,7 +390,7 @@
               required
             >
               <option value="">{{ 'LAB.SELECT_TEST' | translate }}</option>
-              @for (def of labTestDefs(); track def.id) {
+              @for (def of orderableTestDefs(); track def.id) {
                 <option [value]="def.id">{{ def.testName }} ({{ def.testCode }})</option>
               }
             </select>

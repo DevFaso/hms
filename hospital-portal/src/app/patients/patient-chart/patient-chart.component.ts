@@ -905,7 +905,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * "Normal". A row the analyser flagged keeps that flag.
    */
   isUngradedResult(result: PatientLabResult): boolean {
-    return result.unitMismatch === true && (result.status ?? 'NORMAL') === 'NORMAL';
+    const status = result.status ?? 'NORMAL';
+    return result.unitMismatch === true && (status === 'NORMAL' || status === 'UNKNOWN');
   }
 
   /** Colour class for a RELEASED row only; a pending row gets none. */
@@ -921,6 +922,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'lab-badge lab-abnormal';
       case 'NORMAL':
         return 'lab-badge lab-normal';
+      case 'UNKNOWN':
+        // D31: released, but no range applied and no flag was recorded.
+        return 'lab-badge lab-ungraded';
       default:
         return 'lab-badge';
     }
@@ -942,6 +946,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
       case 'CRITICAL':
       case 'PENDING':
         return 'CHART.LAB_STATUS_' + result.status;
+      case 'UNKNOWN':
+        return 'CHART.LAB_STATUS_NOT_INTERPRETED';
       default:
         return 'CHART.LAB_STATUS_UNKNOWN';
     }

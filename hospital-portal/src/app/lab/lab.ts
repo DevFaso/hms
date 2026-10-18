@@ -220,6 +220,18 @@ export class LabComponent implements OnInit {
     return this.isIncomingExternal(o) ? 'LAB.ORDERED_BY' : 'LAB.SENT_TO';
   }
 
+  /**
+   * D48: only an ACTIVE definition may be ordered (the API refuses the rest).
+   * The test an edited order already names stays listed, so the select keeps
+   * showing it.
+   */
+  orderableTestDefs(): LabTestDefinition[] {
+    const current = this.form.labTestDefinitionId;
+    return this.labTestDefs().filter(
+      (d) => (d.isActive && d.approvalStatus === 'ACTIVE') || (!!current && d.id === current),
+    );
+  }
+
   onTestDefChange(defId: string): void {
     const def = this.labTestDefs().find((d) => d.id === defId);
     if (def) {

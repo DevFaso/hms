@@ -121,7 +121,9 @@
                   <div class="cell-primary">{{ r.hospitalName || '—' }}</div>
                 </td>
               }
-              <td class="order-code">{{ r.labOrderCode || '—' }}</td>
+              <td class="order-code" [title]="r.labOrderCode || ''">
+                {{ shortOrderCode(r.labOrderCode) }}
+              </td>
               <td>
                 <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
                 <div class="cell-secondary">{{ r.patientEmail || '' }}</div>
@@ -155,6 +157,14 @@
                   <span class="status-badge status-released">{{
                     'LAB_RESULTS.RELEASED' | translate
                   }}</span>
+                  @if (r.selfReleased) {
+                    <span
+                      class="status-badge status-self-released"
+                      [title]="'LAB_RESULTS.SELF_RELEASED_HINT' | translate"
+                      data-testid="self-released-badge"
+                      >{{ 'LAB_RESULTS.SELF_RELEASED' | translate }}</span
+                    >
+                  }
                 } @else {
                   <span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
@@ -267,7 +277,9 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>{{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ r.labOrderCode }}</h2>
+          <h2>
+            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
@@ -322,8 +334,11 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | date: 'long' }} — {{ getReleasedByDisplay(r) }}</span
-                >
+                  >{{ r.releasedAt | date: 'long' }} — {{ getReleasedByDisplay(r) }}
+                  @if (r.selfReleased) {
+                    ({{ 'LAB_RESULTS.SELF_RELEASED' | translate }})
+                  }
+                </span>
               </div>
             }
             @if (r.acknowledged) {
@@ -472,7 +487,18 @@
               >
                 <option value="">{{ 'LAB_RESULTS.SELECT_ORDER' | translate }}</option>
                 @for (o of orders(); track o.id) {
-                  <option [value]="o.id">{{ o.labOrderCode }} — {{ o.labTestName }}</option>
+                  <option [value]="o.id">
+                    {{
+                      'LAB_RESULTS.ORDER_OPTION'
+                        | translate
+                          : {
+                              patient: o.patientFullName || '—',
+                              test: o.labTestName || o.labTestCode || '—',
+                              date: o.orderDatetime ? (o.orderDatetime | date: 'short') : '—',
+                              code: shortOrderCode(o.labOrderCode),
+                            }
+                    }}
+                  </option>
                 }
               </select>
             </div>
@@ -544,6 +570,55 @@
   </div>
 }
 
+<!-- ═══ SELF-RELEASE CONFIRM (D58) ═══ -->
+@if (selfReleaseTarget(); as target) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelSelfRelease()"
+    (keydown.escape)="cancelSelfRelease()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelSelfRelease()"
+      data-testid="self-release-modal"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.SELF_RELEASE_TITLE' | translate }}</h2>
+        <button class="modal-close" (click)="cancelSelfRelease()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{
+            'LAB_RESULTS.SELF_RELEASE_BODY'
+              | translate
+                : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
+          }}
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelSelfRelease()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="confirmSelfRelease()"
+          data-testid="self-release-confirm"
+        >
+          {{ 'LAB_RESULTS.SELF_RELEASE_CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
   <div
@@ -567,7 +642,12 @@
       <div class="modal-body">
         <p class="delete-warning">
           {{ 'LAB_RESULTS.DELETE_CONFIRM' | translate }}
-          <strong>{{ deletingResult()?.labOrderCode }}</strong>
+          <strong
+            >{{ deletingResult()?.labTestName || '—' }} —
+            {{ deletingResult()?.patientFullName || '—' }} ({{
+              shortOrderCode(deletingResult()?.labOrderCode)
+            }})</strong
+          >
           {{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
@@ -593,7 +673,10 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.SIGN_TITLE' | translate }} — {{ signTarget()?.labOrderCode }}</h2>
+        <h2>
+          {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
+          {{ shortOrderCode(signTarget()?.labOrderCode) }}
+        </h2>
         <button class="modal-close" (click)="closeSign()">
           <span class="material-symbols-outlined">close</span>
         </button>

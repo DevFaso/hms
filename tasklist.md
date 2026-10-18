@@ -5055,6 +5055,44 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   use `existsUsernameOnOtherAccount`). Restore edge: a never-activated account with no
   assignment at all (a self-registered patient who never verified) comes back inactive
   with nothing to re-send; the patient e-mail verification resend is the way in. Open.
+- **Decision (2026-10-17, QA D58, `fix/qa-lab-results`): a laboratory result may be
+  released by the person who entered it — explicitly, audited and visibly; there is no
+  mandatory four-eyes rule.** Many laboratories here are one technician, so a second
+  reviewer cannot be required. What changed instead of a block: the release endpoint
+  answers 409 to the author unless the call says `selfRelease=true` (the portal asks in a
+  dialog that names it a self-release); a confirmed self-release writes its own
+  `LAB_RESULT_RELEASED` audit row ("Self-release: …", after commit, ids only); and every
+  read of the result carries `selfReleased`, shown as a badge on the results list and in
+  the detail. A hospital that wants four eyes later needs a per-hospital setting, a
+  product decision, not a code default. Decided.
+- **The portal shows the API's zone-less times as browser-local everywhere.** The API
+  stores `LocalDateTime` on the server's UTC clock and sends it without a zone; the
+  portal's `date` pipe reads it as local time. In Burkina Faso (UTC+0) that is
+  invisible; a workstation in another zone sees every time shifted. D49 converted only
+  the lab result entry form (`toServerDateTime` / `toLocalInputValue` in
+  `lab-results.ts`) and added a server-side refusal of a result timed before its order
+  or in the future. The general fix (send instants with an offset, or one portal-wide
+  conversion) touches every date the portal renders, so it is its own PR. Open.
+- **A one-person laboratory cannot activate its own test definitions.** Since D48 only
+  an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
+  SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded
+  every switched-on DRAFT/APPROVED row as ACTIVE so no existing catalog stopped being
+  orderable, but a new definition at a hospital without those roles waits on a
+  super-admin. Whether a small laboratory gets a shortened workflow (like D58's
+  explicit self-release) is a product decision. Open.
+- **The doctor results queue and the chart drawer read an acknowledged, unflagged result
+  as NORMAL** (`ResultReviewServiceImpl.toQueueItem`, `PatientSnapshotServiceImpl.labResultFlag`).
+  Same family as D31, but it is the three-value contract those screens bucket on and the
+  doctor's acknowledgement is what turns it NORMAL; changing the label is a decision for
+  the clinicians. Note: since D31 a blank or unknown analyzer OBX-8 is stored with no
+  flag, so those rows now sit in the queue's ABNORMAL bucket until acknowledged (they
+  read NORMAL before). Open.
+- **Lab test definition uniqueness is global in the entity, per hospital in practice.**
+  `LabTestDefinition` declares `uq_lab_testdef_name_global` / `uq_lab_testdef_code_global`
+  on `name` / `test_code`. No migration under `db/migration` names them, so Postgres is likely not
+  affected, but the H2 test schema (built from the entities) refuses two hospitals with
+  the same test code — which D30 makes the normal case. Drop the entity constraints or
+  make them `(hospital_id, test_code)`. Open.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

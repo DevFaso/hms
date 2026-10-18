@@ -497,7 +497,7 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
-    @DisplayName("B14 — auto-release on: a blank or unknown OBX-8 stays NORMAL but is NOT released; only an explicit N is")
+    @DisplayName("B14/D31 — auto-release on: a blank or unknown OBX-8 records NO flag and is NOT released; only an explicit N is NORMAL and released")
     void unknownObxFlagIsNeverAutoReleased() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
@@ -513,8 +513,9 @@ class MllpInboundLabServiceImplTest {
         ArgumentCaptor<LabResult> captor = ArgumentCaptor.forClass(LabResult.class);
         verify(labResultRepository, times(4)).save(captor.capture());
         List<LabResult> saved = captor.getAllValues();
-        // What the patient sees is unchanged: blank and unknown codes still read NORMAL.
-        assertThat(saved).extracting(LabResult::getAbnormalFlag).containsOnly(AbnormalFlag.NORMAL);
+        // D31: a blank or unknown code asserts nothing - no flag, so nobody reads it as NORMAL.
+        assertThat(saved).extracting(LabResult::getAbnormalFlag)
+            .containsExactly(null, null, null, AbnormalFlag.NORMAL);
         assertThat(saved.get(0).isReleased()).isFalse();
         assertThat(saved.get(1).isReleased()).isFalse();
         // Blank is an UNGRADED value (K = 7.8 from an analyzer with no ranges) — a person looks first.
@@ -645,7 +646,7 @@ class MllpInboundLabServiceImplTest {
         assertThat(captor.getAllValues()).extracting(LabResult::getAbnormalFlag).containsExactly(
             AbnormalFlag.ABNORMAL_LOW, AbnormalFlag.ABNORMAL_HIGH,
             AbnormalFlag.CRITICAL, AbnormalFlag.CRITICAL,
-            AbnormalFlag.ABNORMAL, AbnormalFlag.NORMAL, AbnormalFlag.NORMAL);
+            AbnormalFlag.ABNORMAL, AbnormalFlag.NORMAL, null);
     }
 
     @Test

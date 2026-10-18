@@ -149,6 +149,7 @@ class LabOrderServiceImplTest {
         labTestDefinition.setId(labTestDefinitionId);
         labTestDefinition.setName("CBC Panel");
         labTestDefinition.setTestCode("CBC");
+        labTestDefinition.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
     }
 
     @Test
@@ -338,6 +339,49 @@ class LabOrderServiceImplTest {
         ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
         verify(labOrderRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    /** D48: a DRAFT definition (and anything not ACTIVE) cannot be ordered. */
+    @Test
+    void createLabOrderRefusesADefinitionThatIsNotActive() {
+        mockCommonLookups();
+        for (com.example.hms.enums.LabTestDefinitionApprovalStatus status : com.example.hms.enums.LabTestDefinitionApprovalStatus.values()) {
+            if (status == com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE) {
+                continue;
+            }
+            labTestDefinition.setApprovalStatus(status);
+            labTestDefinition.setActive(true);
+            LabOrderRequestDTO request = baseRequestBuilder().build();
+
+            assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+                .as("status %s", status)
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    /** D48: an ACTIVE definition switched off is not orderable either. */
+    @Test
+    void createLabOrderRefusesAnActiveDefinitionThatIsSwitchedOff() {
+        mockCommonLookups();
+        labTestDefinition.setActive(false);
+        LabOrderRequestDTO request = baseRequestBuilder().build();
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    /** D30: another hospital's private definition is not reachable by id. */
+    @Test
+    void createLabOrderTreatsAnotherHospitalsDefinitionAsMissing() {
+        mockCommonLookups();
+        labTestDefinition.setHospital(otherHospital());
+        LabOrderRequestDTO request = baseRequestBuilder().build();
+
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
     @Test

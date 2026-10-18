@@ -116,6 +116,22 @@ describe('PatientPortalService lab results', () => {
     expect(lab.isAbnormal).toBeFalse();
   });
 
+  it('D31: maps a released UNKNOWN row (no range, no flag) as not graded, never normal', () => {
+    const [lab] = labResults([
+      {
+        id: 'u1',
+        testName: 'Glucose',
+        value: '28.5',
+        unit: 'mmol/L',
+        status: 'UNKNOWN',
+        released: true,
+      },
+    ]);
+
+    expect(lab.isUngraded).toBeTrue();
+    expect(lab.isAbnormal).toBeFalse();
+  });
+
   it('keeps an abnormal status abnormal, and a matching-unit normal graded, whatever unitMismatch says', () => {
     const mapped = labResults([
       {

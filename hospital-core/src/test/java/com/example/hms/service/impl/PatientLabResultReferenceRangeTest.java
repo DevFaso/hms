@@ -45,6 +45,7 @@ class PatientLabResultReferenceRangeTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RecordAccessPolicy recordAccessPolicy;
     @Mock private CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     private PatientLabResultServiceImpl service;
     private final UUID patientId = UUID.randomUUID();
@@ -53,7 +54,7 @@ class PatientLabResultReferenceRangeTest {
     @BeforeEach
     void setUp() {
         service = new PatientLabResultServiceImpl(labResultRepository, patientChartAccess, hospitalRepository,
-            new LabResultMapper(), recordAccessPolicy, reachRecorder);
+            new LabResultMapper(), recordAccessPolicy, reachRecorder, labSpecimenRepository);
     }
 
     private PatientLabResultResponseDTO readOnly(String value, String unit, LabTestReferenceRange... ranges) {
@@ -128,8 +129,8 @@ class PatientLabResultReferenceRangeTest {
         assertThat(row.getUnit()).isEqualTo("mmol/L");
         assertThat(row.isUnitMismatch()).as("readers label it not graded").isTrue();
         assertThat(row.getStatus())
-            .as("no range-derived grade; only a recorded flag could set one")
-            .isEqualTo("NORMAL");
+            .as("no range-derived grade and no recorded flag: not interpreted (D31), never NORMAL")
+            .isEqualTo("UNKNOWN");
     }
 
     @Test
