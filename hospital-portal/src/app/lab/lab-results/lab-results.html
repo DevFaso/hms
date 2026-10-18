@@ -347,7 +347,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
-              <span class="field-value">{{ r.resultDate | date: 'long' }}</span>
+              <span class="field-value">{{ r.resultDate | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
@@ -363,7 +363,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | date: 'long' }} — {{ getReleasedByDisplay(r) }}
+                  >{{ r.releasedAt | date: 'medium' }} — {{ getReleasedByDisplay(r) }}
                   @if (r.selfReleased) {
                     ({{ 'LAB_RESULTS.SELF_RELEASED' | translate }})
                   }
@@ -374,7 +374,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.acknowledgedAt | date: 'long' }} — {{ r.acknowledgedBy }}</span
+                  >{{ r.acknowledgedAt | date: 'medium' }} — {{ r.acknowledgedBy }}</span
                 >
               </div>
             }
@@ -382,7 +382,7 @@
               <div class="detail-field" data-testid="read-back-evidence">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
                 <span class="field-value"
-                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'long' }} —
+                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'medium' }} —
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
@@ -403,7 +403,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.SIGNED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.signedAt ? (r.signedAt | date: 'long') : '—' }} —
+                  >{{ r.signedAt ? (r.signedAt | date: 'medium') : '—' }} —
                   {{ r.signedBy || '—' }}</span
                 >
               </div>

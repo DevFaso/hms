@@ -794,7 +794,9 @@
                     <td>{{ a.departmentName || '—' }}</td>
                     <td>{{ a.admittingDoctor || '—' }}</td>
                     <td>{{ a.admissionDateTime | date: 'short' }}</td>
-                    <td>{{ a.admissionType || '—' }}</td>
+                    <td>
+                      {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
+                    </td>
                   </tr>
                 }
               </tbody>

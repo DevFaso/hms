@@ -81,9 +81,9 @@ export class CheckinDialogComponent {
     this.receptionService.checkInPatient(request).subscribe({
       next: (response) => {
         this.saving.set(false);
-        this.toast.success(
-          response.message || this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'),
-        );
+        // The server's `message` is English prose; the toast speaks the
+        // user's language instead (D121).
+        this.toast.success(this.translate.instant('RECEPTION.CHECK_IN_SUCCESS'));
         this.checkedIn.emit(response);
       },
       error: (err) => {

@@ -78,6 +78,34 @@ export const ENUM_WORDS = [
   'roleCode',
 ];
 
+/**
+ * Component methods that return a translated label for the enum they are
+ * given, so their ARGUMENT never reaches the screen. Each entry must look its
+ * argument up in the i18n bundle (referrals.ts `specialtyLabel` reads
+ * REFERRALS.SPECIALTY_OPTION.<value>). Named one by one on purpose: a
+ * `*Label` naming convention would excuse any helper that merely echoes its
+ * input. Add a name only after reading the method.
+ */
+export const RESOLVING_HELPERS = ['specialtyLabel'];
+
+const HELPER_CALL = new RegExp(String.raw`\b(?:${RESOLVING_HELPERS.join('|')})\s*\(`, 'g');
+
+/** Blank the argument list of every resolving helper call, offsets kept. */
+function blankHelperArgs(part) {
+  let out = part;
+  for (const m of part.matchAll(HELPER_CALL)) {
+    const open = m.index + m[0].length - 1;
+    let depth = 0;
+    let close = open;
+    for (; close < part.length; close++) {
+      if (part[close] === '(') depth++;
+      else if (part[close] === ')' && --depth === 0) break;
+    }
+    out = out.slice(0, open + 1) + blank(out.slice(open + 1, close)) + out.slice(close);
+  }
+  return out;
+}
+
 /** `a.b?.c.encounterType` — any number of optional-chain steps. */
 const FIELD = new RegExp(
   String.raw`\b[A-Za-z_$][\w$]*(?:\(\))?!?(?:\??\.[A-Za-z_$][\w$]*(?:\(\))?!?)*` +
@@ -168,7 +196,7 @@ export function rawEnumRenders(html) {
   // `s.roleName ?? ('…' | translate)` whose pipe covers only the fallback.
   const collectExpr = (body, index) => {
     for (const part of unresolvedParts(body)) {
-      for (const field of part.matchAll(FIELD)) {
+      for (const field of blankHelperArgs(part).matchAll(FIELD)) {
         hits.push({ expr: field[0], at: index + field.index, line: lineAt(index + field.index) });
       }
     }

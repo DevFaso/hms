@@ -335,8 +335,11 @@ describe('PrescriptionsComponent — signing', () => {
     component.openEdit(rx('d', 'DRAFT'));
     expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
     component.openEdit(rx('c', 'CANCELLED'));
-    component.openCreate();
+    component.openEdit(rx('d2', 'DRAFT'));
     expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
+    // D129: a new prescription is never offered a withdrawn status.
+    component.openCreate();
+    expect(component.statusOptions().map((s) => s.value)).toEqual(['DRAFT', 'PENDING_SIGNATURE']);
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {

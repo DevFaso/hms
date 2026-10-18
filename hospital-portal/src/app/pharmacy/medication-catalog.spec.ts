@@ -48,3 +48,18 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     expect(el.querySelector('[data-test="catalog-delete"]')).not.toBeNull();
   });
 });
+
+describe('MedicationCatalogComponent ATC format (QA D129)', () => {
+  it('accepts WHO ATC codes at levels 3, 4 and 5, and rejects malformed ones', () => {
+    const ok = ['J01', 'J01C', 'J01CA', 'J01CA04', 'n02be01'];
+    const bad = ['J', 'J0', 'J01CA0', 'J01CA045', '101CA04', 'J01C4'];
+    for (const code of ok) {
+      expect(MedicationCatalogComponent.ATC_PATTERN.test(code.toUpperCase()))
+        .withContext(code)
+        .toBeTrue();
+    }
+    for (const code of bad) {
+      expect(MedicationCatalogComponent.ATC_PATTERN.test(code)).withContext(code).toBeFalse();
+    }
+  });
+});

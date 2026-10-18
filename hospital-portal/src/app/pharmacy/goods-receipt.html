@@ -102,7 +102,7 @@
             />
           </div>
           <div class="field">
-            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (FCFA)</label>
+            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (F CFA)</label>
             <input
               id="grCost"
               type="number"
@@ -164,7 +164,9 @@
                 }}</span>
               </td>
               <td>{{ lot.supplier ?? '—' }}</td>
-              <td>{{ lot.unitCost ? (lot.unitCost | number: '1.0-0') + ' FCFA' : '—' }}</td>
+              <td>
+                {{ lot.unitCost ? (lot.unitCost | currency: 'XOF' : 'symbol' : '1.0-0') : '—' }}
+              </td>
             </tr>
           }
         </tbody>

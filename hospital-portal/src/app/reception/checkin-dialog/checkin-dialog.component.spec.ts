@@ -102,6 +102,8 @@ describe('CheckinDialogComponent', () => {
     );
     expect(component.checkedIn.emit).toHaveBeenCalledWith(sampleResponse);
     expect(mockToastService.success).toHaveBeenCalled();
+    // D121: never the server's English prose.
+    expect(mockToastService.success).not.toHaveBeenCalledWith(sampleResponse.message);
   });
 
   it('should show error toast on check-in failure', () => {

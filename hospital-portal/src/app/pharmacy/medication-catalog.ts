@@ -139,8 +139,12 @@ export class MedicationCatalogComponent implements OnInit {
     this.editing.set(null);
   }
 
-  /** WHO ATC: anatomical letter, two digits, two letters, two digits (e.g. J01CA04). */
-  static readonly ATC_PATTERN = /^[A-Z]\d{2}[A-Z]{2}\d{2}$/;
+  /**
+   * WHO ATC at level 3, 4 or 5: J01 (therapeutic group), J01C (pharmacological
+   * subgroup), J01CA (chemical subgroup) or J01CA04 (substance). A 5-character
+   * chemical subgroup is a valid ATC code and used to be rejected (D129).
+   */
+  static readonly ATC_PATTERN = /^[A-Z]\d{2}(?:[A-Z](?:[A-Z](?:\d{2})?)?)?$/;
 
   /** RxNorm RxCUI: 1–12 digits. */
   static readonly RXNORM_PATTERN = /^\d{1,12}$/;

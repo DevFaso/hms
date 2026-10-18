@@ -18,6 +18,7 @@ import { AuthService } from '../../auth/auth.service';
 import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -640,7 +641,7 @@ export class LabResultsComponent implements OnInit {
     if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
     const delta = current - previous;
     const sign = delta > 0 ? '+' : '';
-    return `${sign}${delta.toFixed(2)}`;
+    return `${sign}${new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(delta)}`;
   }
 
   /* ── Sign / acknowledge / compare ── */

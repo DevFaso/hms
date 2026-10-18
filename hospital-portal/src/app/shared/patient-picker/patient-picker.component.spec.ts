@@ -76,6 +76,17 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('looks a bare server-issued MRN up across hospitals (QA D129)', (done) => {
+    patientSpy.lookup.and.returnValue(of([mockPatient('p9', 'Dana')]));
+    component.ngOnInit();
+    component.onQueryChange('CHU0421');
+    setTimeout(() => {
+      expect(patientSpy.lookup).toHaveBeenCalled();
+      expect(component.suggestions().map((p) => p.id)).toContain('p9');
+      done();
+    }, 400);
+  });
+
   it('keeps the stream alive when one source errors', (done) => {
     patientSpy.search.and.returnValue(throwError(() => new Error('boom')));
     patientSpy.lookup.and.returnValue(of([mockPatient('p3', 'Cara')]));

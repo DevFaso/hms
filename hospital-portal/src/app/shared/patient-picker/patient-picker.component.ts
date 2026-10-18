@@ -110,10 +110,19 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.searchSub?.unsubscribe();
   }
 
-  /** Phone-like (6+ digits/symbols), email-like, or MRN-prefixed input. */
+  /**
+   * Phone-like (6+ digits/symbols), email-like, MRN-prefixed input, or a bare
+   * MRN as the server issues it — a hospital prefix then digits, e.g. CHU0421
+   * (D129: the maternity picker could not find a patient by MRN).
+   */
   private looksLikeIdentifier(q: string): boolean {
     const trimmed = q.trim();
-    return trimmed.includes('@') || /^mrn-/i.test(trimmed) || /^\+?[\d\s().-]{6,}$/.test(trimmed);
+    return (
+      trimmed.includes('@') ||
+      /^mrn-/i.test(trimmed) ||
+      /^[A-Za-z]{2,8}-?\d{3,}$/.test(trimmed) ||
+      /^\+?[\d\s().-]{6,}$/.test(trimmed)
+    );
   }
 
   onQueryChange(q: string): void {

@@ -7,6 +7,7 @@ import {
   PatientDocumentsService,
 } from '../../services/patient-documents.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { PatientDocumentResponse } from '../../services/patient-portal.service';
 
 const doc = (over: Partial<PatientDocumentResponse> = {}): PatientDocumentResponse => ({
@@ -164,7 +165,11 @@ describe('DocumentsTabComponent', () => {
   it('formats sizes for humans', () => {
     expect(component.formatSize(512)).toBe('512 B');
     expect(component.formatSize(48_211)).toBe('47 KB');
-    expect(component.formatSize(3_600_000)).toBe('3.4 MB');
+    // The decimal separator follows the cached UI locale (French by default), so derive it.
+    const decimal = new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1 }).format(
+      3.4,
+    );
+    expect(component.formatSize(3_600_000)).toBe(`${decimal} MB`);
     expect(component.formatSize(null)).toBeNull();
   });
 });

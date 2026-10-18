@@ -2102,7 +2102,10 @@
     "WORKFORCE_ABSENCE": "Workforce Absence",
     "WRITE_OFFS": "Write-Offs",
     "WRITE_RX": "Write Rx",
-    "WRITTEN_OFF": "Written Off"
+    "WRITTEN_OFF": "Written Off",
+    "FILTER_BY_DATE": "Filter by date",
+    "FILTER_BY_URGENCY": "Filter by urgency",
+    "FILTER_BY_LOCATION": "Filter by location"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "The one-time login credentials could not be sent to the patient.",
@@ -5250,12 +5253,6 @@
         "SENT": "Sent",
         "UNKNOWN": "Unknown"
       },
-      "INVOICE_ITEM_CATEGORY": {
-        "SERVICE": "Service",
-        "MEDICATION": "Medication",
-        "LAB_TEST": "Lab test",
-        "GENERAL": "General"
-      },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmed",
         "ENTERED_IN_ERROR": "Entered in Error",
@@ -5771,6 +5768,30 @@
         "ED_NOTE": "Emergency department note",
         "MEDICATION_ORDER": "Medication order",
         "CARE_PLAN": "Care plan"
+      },
+      "ADMISSION_TYPE": {
+        "EMERGENCY": "Emergency",
+        "ELECTIVE": "Elective",
+        "URGENT": "Urgent",
+        "NEWBORN": "Newborn",
+        "TRANSFER": "Transfer",
+        "OBSERVATION": "Observation",
+        "DAY_CASE": "Day case",
+        "LABOR_DELIVERY": "Labour and delivery",
+        "PSYCHIATRIC": "Psychiatric"
+      },
+      "STOCK_TRANSACTION_TYPE": {
+        "RECEIPT": "Receipt",
+        "DISPENSE": "Dispense",
+        "ADJUSTMENT": "Adjustment",
+        "TRANSFER": "Transfer",
+        "RETURN": "Return"
+      },
+      "INVOICE_ITEM_CATEGORY": {
+        "SERVICE": "Service",
+        "MEDICATION": "Medication",
+        "LAB_TEST": "Lab test",
+        "GENERAL": "General"
       }
     },
     "DOCUMENTS": {
@@ -7763,7 +7784,7 @@
     "ALL_DISPENSARIES": "All hospital dispensaries",
     "ALL_STOCKED": "All items are well stocked",
     "ATC_CODE": "ATC Code",
-    "ATC_FORMAT_HINT": "ATC code must match WHO format L##LL## (e.g. J01CA04).",
+    "ATC_FORMAT_HINT": "ATC code must match WHO format: L##, L##L, L##LL or L##LL## (e.g. J01, J01CA, J01CA04).",
     "BACK_ORDER": "Back Order",
     "BACK_ORDER_PLACED": "Prescription placed on back order",
     "BRAND_NAME": "Brand Name",
@@ -8081,6 +8102,8 @@
     },
     "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
     "SELECT_PHARMACY": "Pharmacy",
+    "QTY_ON_HAND_COLUMN": "Qty on hand",
+    "REORDER_QTY_COLUMN": "Reorder qty",
     "RECEIPT_EXPIRY_REQUIRED": "Enter the lot's expiry date.",
     "RECEIPT_LOT_EXPIRED": "This lot is past its expiry date and cannot be received into stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "This item is tracked by lot: choose the lot the movement applies to.",
@@ -9117,7 +9140,8 @@
     "DELIVERY_LINK": "Delivery",
     "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
     "DELIVERY_LINKED": "linked to delivery",
-    "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record."
+    "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record.",
+    "PHASE_UNKNOWN": "Phase not yet set"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",

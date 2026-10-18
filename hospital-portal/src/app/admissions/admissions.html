@@ -145,7 +145,7 @@
                 </div>
               </td>
               <td>{{ a.roomBed || '—' }}</td>
-              <td>{{ a.admissionType || '—' }}</td>
+              <td>{{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}</td>
               <td>
                 <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{
                   acuityLabel[a.acuityLevel] || a.acuityLevel
@@ -431,7 +431,7 @@
             <label for="adm-type">{{ 'ADMISSIONS.ADMISSION_TYPE' | translate }} *</label>
             <select id="adm-type" [(ngModel)]="form.admissionType" required>
               @for (t of admissionTypes; track t) {
-                <option [value]="t">{{ t }}</option>
+                <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
               }
             </select>
           </div>
