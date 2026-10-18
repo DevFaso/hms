@@ -244,8 +244,9 @@ class BillingInvoiceServiceImplTest {
         Patient patient = registeredPatient();
         when(registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), HOSPITAL_ID)).thenReturn(false);
 
+        BillingInvoiceRequestDTO request = requestFor(patient).build();
         assertThrows(ResourceNotFoundException.class,
-            () -> billingInvoiceService.createInvoice(requestFor(patient).build(), Locale.ENGLISH));
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
     }
 
     private BillingInvoice existingInvoice(InvoiceStatus status, String paid) {
@@ -318,9 +319,11 @@ class BillingInvoiceServiceImplTest {
         BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
-        assertThrows(ResourceNotFoundException.class, () -> billingInvoiceService.recordStaffPayment(invoice.getId(),
-            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10.00"), null, null, null),
-            null, Locale.ENGLISH));
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO payment =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10.00"), null, null, null);
+        assertThrows(ResourceNotFoundException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, payment, null, Locale.ENGLISH));
         verify(paymentTransactionRepository, never()).save(any());
     }
 

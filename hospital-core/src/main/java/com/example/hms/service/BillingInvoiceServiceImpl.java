@@ -104,14 +104,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             if (dto.getClientRequestId() == null) {
                 throw lostRace;
             }
-            BillingInvoiceResponseDTO winner = replayTx.execute(status -> invoiceRepository
+            java.util.Optional<BillingInvoiceResponseDTO> winner = replayTx.execute(status -> invoiceRepository
                 .findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId())
-                .map(invoiceMapper::toBillingInvoiceResponseDTO)
-                .orElse(null));
-            if (winner == null) {
+                .map(invoiceMapper::toBillingInvoiceResponseDTO));
+            if (winner == null || winner.isEmpty()) {
                 throw lostRace;
             }
-            return winner;
+            return winner.get();
         }
     }
 
@@ -288,15 +287,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         boolean hasPayments = paid.signum() > 0 || paymentTransactionRepository.existsByInvoice_Id(id);
 
         // The hospital never moves and the number stays the server's (D94).
-        if (dto.getPatientId() != null || (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank())) {
-            Patient patient = resolvePatient(dto, hospitalId);
-            if (invoice.getPatient() == null || !patient.getId().equals(invoice.getPatient().getId())) {
-                if (hasPayments) {
-                    throw new BusinessException("billing.invoice.patientLockedByPayments");
-                }
-                invoice.setPatient(patient);
-            }
-        }
+        applyPatientChange(invoice, dto, hospitalId, hasPayments);
 
         invoice.setEncounter(resolveEncounter(dto, hospitalId));
         invoice.setInvoiceDate(dto.getInvoiceDate());
@@ -314,6 +305,23 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    private void applyPatientChange(BillingInvoice invoice, BillingInvoiceRequestDTO dto,
+                                    UUID hospitalId, boolean hasPayments) {
+        boolean patientNamed = dto.getPatientId() != null
+            || (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank());
+        if (!patientNamed) {
+            return;
+        }
+        Patient patient = resolvePatient(dto, hospitalId);
+        if (invoice.getPatient() != null && patient.getId().equals(invoice.getPatient().getId())) {
+            return;
+        }
+        if (hasPayments) {
+            throw new BusinessException("billing.invoice.patientLockedByPayments");
+        }
+        invoice.setPatient(patient);
     }
 
     @Override

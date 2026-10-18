@@ -3,7 +3,6 @@ package com.example.hms.service;
 import com.example.hms.controller.UserController;
 import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;

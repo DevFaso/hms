@@ -94,7 +94,8 @@ class InvoiceItemServiceImplTest {
     void aLineOnAnotherHospitalsInvoiceIsNotFound() {
         when(actingScopeResolver.requirePinned()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.createInvoiceItem(line(), Locale.ENGLISH))
+        var request = line();
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(itemRepository, never()).save(any());
     }
@@ -103,7 +104,8 @@ class InvoiceItemServiceImplTest {
     void aCancelledInvoiceTakesNoLines() {
         invoice.setStatus(InvoiceStatus.CANCELLED);
 
-        assertThatThrownBy(() -> service.createInvoiceItem(line(), Locale.ENGLISH))
+        var request = line();
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -114,7 +116,8 @@ class InvoiceItemServiceImplTest {
         when(itemRepository.findById(item.getId())).thenReturn(Optional.of(item));
         when(actingScopeResolver.requirePinned()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.deleteInvoiceItem(item.getId(), Locale.ENGLISH))
+        UUID itemId = item.getId();
+        assertThatThrownBy(() -> service.deleteInvoiceItem(itemId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(itemRepository, never()).delete(any());
     }
