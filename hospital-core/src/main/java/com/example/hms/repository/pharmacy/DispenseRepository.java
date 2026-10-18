@@ -57,6 +57,18 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<DispenseStatus> NOT_A_FILL = List.of(DispenseStatus.CANCELLED, DispenseStatus.PENDING);
 
     /**
+     * D95: how many fills of this prescription handed over everything they
+     * asked for. Used when the prescription carries no quantity of its own,
+     * so the sum above has nothing to be compared with.
+     */
+    @Query("SELECT COUNT(d) FROM Dispense d "
+         + "WHERE d.prescription.id = :prescriptionId AND d.status NOT IN :excludedStatuses "
+         + "AND d.quantityRequested IS NOT NULL AND d.quantityDispensed >= d.quantityRequested")
+    long countCompleteFillsForPrescription(
+            @Param("prescriptionId") UUID prescriptionId,
+            @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
+    /**
      * Sum of dispensed quantities for a prescription, excluding the given
      * statuses (always {@link #NOT_A_FILL} in production). Returns
      * {@code BigDecimal.ZERO} when no rows match, never {@code null}, thanks

@@ -20,6 +20,7 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
@@ -60,6 +62,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 ? stockLotRepository.findById(dto.getStockLotId())
                     .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", dto.getStockLotId()))
                 : null;
+
+        requireMovementIsAccountable(dto, item, lot);
 
         User performer = resolvePerformer(dto.getPerformedBy());
 
@@ -126,19 +130,64 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
     // ── Private helpers ──────────────────────────────────────────────────
 
+    /**
+     * D82: a manual stock movement must be accountable and keep the lots and
+     * the item total in step. Morphine was "dispensed" here with no
+     * prescription, and adjusted +100 with no lot and no reason, leaving the
+     * item at 145 while its only lot held 50.
+     *
+     * <ul>
+     *   <li>DISPENSE is refused: medication leaves stock through the dispense
+     *       workflow, which is tied to a prescription, never from here.</li>
+     *   <li>Every movement other than a receipt carries a reason.</li>
+     *   <li>An item that is tracked in lots moves through a lot, and the lot
+     *       must be that item's own.</li>
+     *   <li>Quantities are positive; an adjustment is signed but not zero.</li>
+     *   <li>Nothing is received into an expired lot (D108).</li>
+     * </ul>
+     */
+    private void requireMovementIsAccountable(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        StockTransactionType type = dto.getTransactionType();
+        if (type == StockTransactionType.DISPENSE) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
+        }
+        BigDecimal quantity = dto.getQuantity();
+        boolean quantityValid = quantity != null
+                && (type == StockTransactionType.ADJUSTMENT ? quantity.signum() != 0 : quantity.signum() > 0);
+        if (!quantityValid) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
+        }
+        if (type != StockTransactionType.RECEIPT && (dto.getReason() == null || dto.getReason().isBlank())) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
+        }
+        if (lot != null) {
+            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+            }
+            if (type == StockTransactionType.RECEIPT && lot.getExpiryDate() != null
+                    && lot.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
+                throw new BusinessException(MessageUtil.resolve("stockLot.expired"));
+            }
+        } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
+        }
+    }
+
     private InventoryItem resolveInventoryItem(UUID id) {
         return inventoryItemRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("inventoryItem.notFound", id));
     }
 
     private User resolvePerformer(UUID performedBy) {
-        if (performedBy != null) {
-            return userRepository.findById(performedBy)
-                    .orElseThrow(() -> new ResourceNotFoundException("stockTransaction.performer.notFound", performedBy));
-        }
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
             throw new BusinessException("Unable to determine performing user");
+        }
+        // D82: the movement is recorded against the signed-in user. A
+        // caller-supplied performer let one user book a movement in a
+        // colleague's name.
+        if (performedBy != null && !performedBy.equals(userId)) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.performer.notSelf"));
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

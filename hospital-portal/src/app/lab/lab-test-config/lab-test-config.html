@@ -208,6 +208,28 @@
                 />
               </div>
               <div class="range-field">
+                <label [for]="'crit-low-' + i">{{
+                  'LAB_TEST_CONFIG.CRITICAL_LOW' | translate
+                }}</label>
+                <input
+                  type="number"
+                  [id]="'crit-low-' + i"
+                  [ngModel]="range.criticalLow"
+                  (ngModelChange)="range.criticalLow = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'crit-high-' + i">{{
+                  'LAB_TEST_CONFIG.CRITICAL_HIGH' | translate
+                }}</label>
+                <input
+                  type="number"
+                  [id]="'crit-high-' + i"
+                  [ngModel]="range.criticalHigh"
+                  (ngModelChange)="range.criticalHigh = $event"
+                />
+              </div>
+              <div class="range-field">
                 <label [for]="'unit-' + i">{{ 'LAB_TEST_CONFIG.RANGE_UNIT' | translate }}</label>
                 <input
                   type="text"

@@ -108,6 +108,7 @@ class CriticalValueNotificationServiceTest {
     void notifiesForComputedHighSeverity() {
         when(labResultMapper.toResponseDTO(result))
             .thenReturn(LabResultResponseDTO.builder().severityFlag("HIGH").build());
+        when(labResultMapper.raisesCriticalAlert(result, "HIGH")).thenReturn(true);
 
         service.notifyIfCritical(result);
 
@@ -143,6 +144,44 @@ class CriticalValueNotificationServiceTest {
 
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNull();
+    }
+
+    /** D107: with critical limits set, HIGH is HIGH and only a value beyond them alerts. */
+    private void gradeWithCriticalLimits(Double criticalLow, Double criticalHigh) {
+        ReflectionTestUtils.setField(service, "labResultMapper", new LabResultMapper());
+        result.getLabOrder().getLabTestDefinition().setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(3.5).maxValue(5.0).unit("mmol/L")
+                .criticalLow(criticalLow).criticalHigh(criticalHigh).build())));
+    }
+
+    @Test
+    void aHighValueInsideTheCriticalLimitsRaisesNoAlert() {
+        gradeWithCriticalLimits(2.5, 7.5);
+        result.setResultValue("7.1");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void aValueBeyondTheCriticalHighAlerts() {
+        gradeWithCriticalLimits(2.5, 6.5);
+        result.setResultValue("7.1");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
+    @Test
+    void aValueBelowTheCriticalLowAlerts() {
+        gradeWithCriticalLimits(2.5, 6.5);
+        result.setResultValue("2.0");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
     }
 
     @Test

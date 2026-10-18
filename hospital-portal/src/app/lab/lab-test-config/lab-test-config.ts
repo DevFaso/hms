@@ -184,6 +184,8 @@ export class LabTestConfigComponent implements OnInit {
         ageMax: null,
         gender: 'ALL',
         notes: null,
+        criticalLow: null,
+        criticalHigh: null,
       },
     ]);
   }

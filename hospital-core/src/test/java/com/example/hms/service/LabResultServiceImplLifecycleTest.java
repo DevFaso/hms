@@ -124,7 +124,8 @@ class LabResultServiceImplLifecycleTest {
         order.setHospital(hospital);
         order.setPatient(patient);
         order.setLabTestDefinition(testDefinition);
-        order.setStatus(LabOrderStatus.ORDERED);
+        // D107: a hand-entered result needs a specimen; the default order has one.
+        order.setStatus(LabOrderStatus.RECEIVED);
 
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
@@ -229,6 +230,140 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
+    // ── D81: a correction is linked to the released result it replaces ────
+
+    @Test
+    @DisplayName("D81 — an entered correction names its target but does not withdraw it until released")
+    void aCorrectionLinksToTheReleasedResult() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultRepository, atLeastOnce()).save(saved.capture());
+        LabResult correction = saved.getAllValues().stream()
+            .filter(r -> r != released).findFirst().orElseThrow();
+        assertThat(correction.getSupersedesResultId()).isEqualTo(released.getId());
+        assertThat(released.getSupersededByResultId()).isNull();
+        // the released row keeps its value and its release
+        assertThat(released.getResultValue()).isEqualTo("4.1");
+        assertThat(released.isReleased()).isTrue();
+    }
+
+    @Test
+    @DisplayName("D81 — an unreleased, already-superseded or other-order target is refused, nothing saved")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aCorrectionOfAnInvalidTargetIsRefused() {
+        stubEntryPath();
+        LabResult unreleased = resultOn(order, false);
+        LabResult alreadyReplaced = resultOn(order, true);
+        alreadyReplaced.setSupersededByResultId(UUID.randomUUID());
+        when(labResultRepository.existsById(alreadyReplaced.getSupersededByResultId())).thenReturn(true);
+        LabOrder otherOrder = new LabOrder();
+        otherOrder.setId(UUID.randomUUID());
+        LabResult elsewhere = resultOn(otherOrder, true);
+        for (LabResult target : List.of(unreleased, alreadyReplaced, elsewhere)) {
+            when(labResultRepository.findById(target.getId())).thenReturn(Optional.of(target));
+            LabResultRequestDTO request = entryRequest();
+            request.setSupersedesResultId(target.getId());
+            assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+                .isInstanceOf(BusinessException.class);
+        }
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    /** A pending correction of {@code target}, with the release path stubbed. */
+    private LabResult stubReleasableCorrectionOf(LabResult target) {
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult correction = resultOn(order, false);
+        correction.setSupersedesResultId(target.getId());
+        when(labResultRepository.findById(correction.getId())).thenReturn(Optional.of(correction));
+        when(labResultRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findWithLockById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        org.mockito.Mockito.lenient().when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(target, correction));
+        org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(correction)).thenReturn(LabResultResponseDTO.builder().build());
+        return correction;
+    }
+
+    @Test
+    @DisplayName("D81 — releasing the correction is what marks the original superseded")
+    void releasingTheCorrectionSupersedesTheOriginal() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
+        assertThat(released.getResultValue()).isEqualTo("4.1");
+        verify(labOrderRepository, atLeastOnce()).findWithLockById(order.getId());
+    }
+
+    @Test
+    @DisplayName("D81 — a second correction cannot be released over one already released")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aSecondCorrectionIsRefusedAtRelease() {
+        LabResult released = resultOn(order, true);
+        UUID firstCorrection = UUID.randomUUID();
+        released.setSupersededByResultId(firstCorrection);
+        when(labResultRepository.existsById(firstCorrection)).thenReturn(true);
+        LabResult second = stubReleasableCorrectionOf(released);
+        UUID secondId = second.getId();
+
+        assertThatThrownBy(() -> service.releaseLabResult(secondId, true, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        assertThat(second.isReleased()).isFalse();
+        assertThat(released.getSupersededByResultId()).isEqualTo(firstCorrection);
+    }
+
+    @Test
+    @DisplayName("D81 — deleting a correction clears its link, and the original can be corrected again")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void deletingACorrectionFreesTheOriginal() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        LabResult stale = resultOn(order, false);
+        stale.setSupersedesResultId(released.getId());
+        released.setSupersededByResultId(stale.getId()); // a link written before this fix
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        when(labResultRepository.findById(stale.getId())).thenReturn(Optional.of(stale));
+
+        service.deleteLabResult(stale.getId(), Locale.ENGLISH);
+
+        assertThat(released.getSupersededByResultId()).isNull();
+        verify(labResultRepository).deleteById(stale.getId());
+
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+        service.createLabResult(request, Locale.ENGLISH);
+    }
+
+    @Test
+    @DisplayName("D81 — a back-link to a correction that no longer exists does not block a new one")
+    void aDanglingBackLinkIsFree() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        released.setSupersededByResultId(UUID.randomUUID()); // deleted before this fix
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        LabResultRequestDTO request = entryRequest();
+        request.setSupersedesResultId(released.getId());
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository, atLeastOnce()).save(any(LabResult.class));
+    }
+
     // ── B2: results drive the order ────────────────────────────────────────
 
     @Test
@@ -241,7 +376,7 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         // written as a statement, never through the entity
         verify(labOrderRepository).updateStatusFrom(
-            order.getId(), LabOrderStatus.ORDERED, LabOrderStatus.RESULTED);
+            order.getId(), LabOrderStatus.RECEIVED, LabOrderStatus.RESULTED);
         verify(labOrderRepository, never()).save(any(LabOrder.class));
         // the order is read unlocked; the write lock is taken only for the
         // status decision, so it is never held across the permission checks
@@ -900,7 +1035,7 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
         inOrder.verify(labResultRepository).save(any(LabResult.class));
-        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.ORDERED,
+        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.RECEIVED,
             LabOrderStatus.RESULTED);
     }
 
@@ -1420,7 +1555,33 @@ class LabResultServiceImplLifecycleTest {
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    @DisplayName("D107 - a hand-entered result on an order with no specimen collected is refused")
+    void aResultWithNoSpecimenIsRefused() {
+        stubEntryPath();
+        order.setStatus(LabOrderStatus.ORDERED);
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        // the refusal comes before the entry path's later stubs are reached
+        org.mockito.Mockito.reset(labResultMapper, labResultRepository, labReflexRuleRepository);
+    }
+
+    @Test
+    @DisplayName("D107 - a point-of-care test needs no specimen workflow")
+    void aPointOfCareResultNeedsNoSpecimen() {
+        stubEntryPath();
+        order.setStatus(LabOrderStatus.ORDERED);
+        order.getLabTestDefinition().setPointOfCare(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
     }
 
     // ── B12: reflex children carry the parent's provenance ─────────────────
