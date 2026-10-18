@@ -721,7 +721,8 @@ class GlobalExceptionHandlerTest {
             ResponseEntity<Object> response = handler.handleAccessDenied(
                 new org.springframework.security.access.AccessDeniedException("internal"), request);
             assertThat(messageOf(response)).isEqualTo("Accès refusé");
-            assertThat(((Map<?, ?>) response.getBody()).get("code")).isEqualTo("ACCESS_DENIED");
+            assertThat(response.getBody()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("code", "ACCESS_DENIED");
         }
 
         @Test
