@@ -245,6 +245,22 @@
           </div>
 
           <div class="detail-section transition-actions">
+            @if (canStartEncounter(enc)) {
+              <button
+                class="btn-primary"
+                [disabled]="transitioning()"
+                (click)="startEncounter(enc)"
+              >
+                <span class="material-symbols-outlined">play_arrow</span>
+                {{ 'ENCOUNTERS.START' | translate }}
+              </button>
+            }
+            @if (canCheckOut(enc)) {
+              <button class="btn-primary" [disabled]="transitioning()" (click)="openCheckout(enc)">
+                <span class="material-symbols-outlined">logout</span>
+                {{ 'ENCOUNTERS.CHECK_OUT' | translate }}
+              </button>
+            }
             @if (canCompleteExamination(enc)) {
               <button
                 class="btn-primary"
@@ -776,4 +792,12 @@
       </div>
     </div>
   </div>
+}
+
+@if (checkoutEncounter()) {
+  <app-checkout-dialog
+    [encounter]="checkoutEncounter()"
+    (dismissed)="onCheckoutDismissed()"
+    (checkoutCompleted)="onCheckoutCompleted()"
+  />
 }

@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
+    "OVERRIDE_REASON": "Motif de la dérogation (enregistré sur la prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Avertissement",
@@ -2394,7 +2395,11 @@
       "SIGNED": "Signée",
       "COSIGNED": "Contresignée",
       "ADDENDUM": "Addendum ajouté"
-    }
+    },
+    "START": "Commencer la consultation",
+    "STARTED": "Consultation commencée",
+    "CHECK_OUT": "Sortie du patient",
+    "NOT_FOUND": "Consultation introuvable"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -5338,6 +5343,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqué par le forfait",
         "PLATFORM_REGISTRY_UPDATED": "Registre de la plateforme modifié",
         "PRESCRIPTION_BACKORDER": "Ordonnance en rupture de stock",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Alerte d'allergie de l'ordonnance outrepassée",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Clarification d'ordonnance demandée",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Clarification d'ordonnance résolue",
         "PRESCRIPTION_CREATED": "Ordonnance créée",

@@ -597,4 +597,16 @@ class MaternalHistoryServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void createMaternalHistory_refusesAPatientRecordedAsMale() {
+        // QA D103 (D46 family): a maternal history was saved for a male patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        verify(maternalHistoryRepository, never()).save(any());
+    }
 }

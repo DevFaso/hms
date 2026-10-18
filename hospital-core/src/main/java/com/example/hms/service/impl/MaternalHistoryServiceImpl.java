@@ -6,6 +6,7 @@ import com.example.hms.mapper.MaternalHistoryMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MaternalHistory;
 import com.example.hms.model.Patient;
+import com.example.hms.utility.ObstetricEligibility;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.clinical.MaternalHistoryRequestDTO;
@@ -64,6 +65,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
+        // QA D103 (D46 family): a maternal history is an obstetric record.
+        ObstetricEligibility.requireObstetricEligible(patient);
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
@@ -106,6 +109,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
+        // QA D103 (D46 family): a maternal history is an obstetric record.
+        ObstetricEligibility.requireObstetricEligible(patient);
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));

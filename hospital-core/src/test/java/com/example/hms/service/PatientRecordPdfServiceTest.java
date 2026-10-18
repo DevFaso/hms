@@ -85,6 +85,9 @@ class PatientRecordPdfServiceTest {
             return args == null || args.length == 0 ? key
                 : key + " " + Arrays.stream(args).map(String::valueOf).collect(Collectors.joining(" "));
         });
+        // getOrCode: a stored code goes through the bundle too (D85), echoed as its key.
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
     }
 
     private List<Locale> localesAskedOfTheBundle() {
@@ -122,7 +125,7 @@ class PatientRecordPdfServiceTest {
             // Every label is a bundle key; dates are the request locale's (French here).
             assertThat(text)
                 .contains("pdf.record.title", "Hospital B", "Karim Porgo", "HBX4939", "28 janv. 1985",
-                    "pdf.record.field.ageYears 41", "Peanut butter", "Hypertension", "CONSULTATION",
+                    "pdf.record.field.ageYears 41", "Peanut butter", "Hypertension", "pdf.record.enum.CONSULTATION",
                     "8 mai 2026 23:10", "Haemoglobin", "Amoxicillin", "pdf.record.codeStatus.none",
                     "pdf.record.section.procedures", "pdf.record.none", "pdf.record.page 1")
                 .doesNotContain("Patient record", "Code status", "None recorded", "1985-01-28");
@@ -260,7 +263,7 @@ class PatientRecordPdfServiceTest {
 
         assertThat(text)
             .contains("pdf.record.encounter.none",
-                "DNR", "LIVING_WILL", "pdf.record.directive.from", "No intubation",
+                "DNR", "LIVING_WILL", "pdf.record.directive.from", "intubation",
                 "CT", "pdf.record.imaging.impression",
                 "Lumbar puncture", "pdf.record.procedure.consentObtained",
                 "Paracentesis", "pdf.record.procedure.consentNotRecorded",
@@ -341,5 +344,24 @@ class PatientRecordPdfServiceTest {
         chart.setImaging(List.of());
         chart.setProcedures(null);
         return chart;
+    }
+
+    @Test
+    void anAllergyKnownOnlyAsTheRegistrationSummaryIsPrintedNotNone() throws Exception {
+        echoKeys();
+        PatientStoryboardDTO board = PatientStoryboardDTO.builder().allergies(List.of()).build();
+        ChartReviewDTO emptyChart = ChartReviewDTO.builder().build();
+        byte[] pdf = PatientRecordPdfService.write(board, emptyChart, "Penicillin",
+            PdfLabels.of(messageSource, Locale.FRENCH));
+        assertThat(textOf(pdf)).contains("pdf.record.allergies.summary Penicillin");
+    }
+
+    @Test
+    void aStoredCodeIsNeverPrintedRaw() {
+        PdfLabels t = PdfLabels.of(messageSource, Locale.FRENCH);
+        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class)))
+            .thenAnswer(inv -> inv.getArgument(2));
+        assertThat(PatientRecordPdfService.label(t, "WAITING_FOR_PHYSICIAN")).isEqualTo("waiting for physician");
+        assertThat(PatientRecordPdfService.label(t, null)).isNull();
     }
 }

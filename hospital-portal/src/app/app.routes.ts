@@ -924,6 +924,15 @@ export const routes: Routes = [
         },
         loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
       },
+      // D96: the worklist's "start" and every deep link land on one encounter.
+      {
+        path: 'encounters/:id',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
+      },
 
       // Admissions
       {
