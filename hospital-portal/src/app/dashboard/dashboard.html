@@ -1112,7 +1112,9 @@
               <div class="audit-row">
                 <span class="audit-time">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
                 <div class="audit-body">
-                  <span class="audit-actor">{{ evt.userName ?? 'System' }}</span>
+                  <span class="audit-actor">{{
+                    evt.userName ?? ('COMMON.SYSTEM' | translate)
+                  }}</span>
                   <span class="audit-summary"
                     >{{ evt.eventType | enumLabel: 'auditEventType' }}
                     @if (evt.entityType || evt.resourceName) {

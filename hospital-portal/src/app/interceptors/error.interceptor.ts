@@ -57,6 +57,16 @@ const SILENT_403_POST_PATTERNS = [
   /\/auth\/ws-ticket(\?|$)/,
 ];
 
+/**
+ * Clinical actions whose refusal the page itself reports in a toast (D54).
+ * A 403 on "sign this prescription" is a business answer — not yours to
+ * sign, co-sign outstanding — and redirecting to /error/403 threw the
+ * prescriber off the list with no word on why.
+ */
+const PAGE_HANDLED_403_ACTION_PATTERNS = [
+  /\/prescriptions\/[^/?]+\/(sign|cosign|pharmacist-verify)(\?|$)/,
+];
+
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
 
 /**
@@ -341,7 +351,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
             SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url))) ||
           (req.method === 'POST' &&
             SILENT_403_POST_PATTERNS.some((pattern) => pattern.test(req.url)));
-        if (isSilent) {
+        const isPageHandledAction =
+          req.method !== 'GET' &&
+          PAGE_HANDLED_403_ACTION_PATTERNS.some((pattern) => pattern.test(req.url));
+        if (isPageHandledAction) {
+          // The page's error handler shows the refusal; no redirect.
+        } else if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {
           // A server refusal: the portal cannot know which role it wanted.

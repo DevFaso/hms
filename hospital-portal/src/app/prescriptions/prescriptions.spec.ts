@@ -414,6 +414,41 @@ describe('PrescriptionsComponent — signing', () => {
     expect(toast.error).toHaveBeenCalledWith(message);
     expect(component.signingId()).toBeNull();
   });
+
+  it('D54: an opaque 403 still produces a translated refusal, never the HTTP status line', () => {
+    // HttpErrorResponse.message is "Http failure response for ...: 403
+    // Forbidden" — English and technical; "Access denied" is the backend's
+    // opaque default. Neither may reach the toast.
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          ({
+            status: 403,
+            message: 'Http failure response for /api/prescriptions/rx-1/sign: 403 Forbidden',
+            error: { message: 'Access denied' },
+          }) as unknown,
+      ),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+    expect(component.signingId()).toBeNull();
+  });
+
+  it('a non-403 failure without a body falls back to the generic sign failure', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(() => ({ status: 500, message: 'Http failure response', error: null }) as unknown),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.SIGN_FAILED');
+  });
 });
 
 /**

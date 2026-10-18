@@ -36,6 +36,14 @@ public class PediatricDoseRule implements CdsRule {
 
     private static final String ID = "pediatric-dose";
     private static final String SOURCE_LABEL = "HMS Pediatric Dose Check";
+
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
     private static final int PEDIATRIC_AGE_THRESHOLD_YEARS = 18;
 
     @Override
@@ -76,15 +84,14 @@ public class PediatricDoseRule implements CdsRule {
 
     private CdsCard buildExceedsCeilingCard(CdsRuleContext context, int ageYears,
                                             double mgPerKg, BigDecimal ceiling) {
-        String summary = String.format(
-            java.util.Locale.ROOT,
-            "Pediatric dose exceeds ceiling: %.2f mg/kg > %s mg/kg max for %s",
-            mgPerKg, ceiling.toPlainString(), context.proposedMedicationName());
-        String detail = "Patient is " + ageYears + " years old. Proposed dose ("
-            + format(context.proposedDoseMg()) + " mg at "
-            + format(context.patientWeightKg())
-            + " kg) exceeds the catalog pediatric ceiling. Reduce the dose or"
-            + " set forceOverride after weighing risk/benefit.";
+        String summary = text.get("cds.pediatric.ceiling.summary",
+            "Pediatric dose exceeds ceiling: {0} mg/kg > {1} mg/kg max for {2}",
+            String.format(java.util.Locale.ROOT, "%.2f", mgPerKg), ceiling.toPlainString(),
+            context.proposedMedicationName());
+        String detail = text.get("cds.pediatric.ceiling.detail",
+            "Patient is {0} years old. Proposed dose ({1} mg at {2} kg) exceeds the catalog"
+                + " pediatric ceiling. Reduce the dose or set forceOverride after weighing risk/benefit.",
+            String.valueOf(ageYears), format(context.proposedDoseMg()), format(context.patientWeightKg()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.CRITICAL,
             new Source(SOURCE_LABEL, null, null),
@@ -93,14 +100,17 @@ public class PediatricDoseRule implements CdsRule {
     }
 
     private CdsCard buildSoftAdvisoryCard(CdsRuleContext context, int ageYears) {
-        String summary = "Pediatric patient: verify weight-based dosing for "
-            + context.proposedMedicationName();
-        String detail = "Patient is " + ageYears + " years old"
-            + (context.patientWeightKg() == null
-                ? " (weight not on file). "
-                : " (weight " + format(context.patientWeightKg()) + " kg). ")
-            + "Confirm the prescribed dose against a pediatric reference"
-            + " before signing.";
+        String summary = text.get("cds.pediatric.soft.summary",
+            "Pediatric patient: verify weight-based dosing for {0}", context.proposedMedicationName());
+        String detail = context.patientWeightKg() == null
+            ? text.get("cds.pediatric.soft.detailNoWeight",
+                "Patient is {0} years old (weight not on file). Confirm the prescribed dose"
+                    + " against a pediatric reference before signing.",
+                String.valueOf(ageYears))
+            : text.get("cds.pediatric.soft.detail",
+                "Patient is {0} years old (weight {1} kg). Confirm the prescribed dose"
+                    + " against a pediatric reference before signing.",
+                String.valueOf(ageYears), format(context.patientWeightKg()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.WARNING,
             new Source(SOURCE_LABEL, null, null),

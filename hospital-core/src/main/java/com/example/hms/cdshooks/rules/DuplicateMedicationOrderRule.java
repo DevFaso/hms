@@ -35,6 +35,14 @@ public class DuplicateMedicationOrderRule implements CdsRule {
 
     private static final String ID = "duplicate-medication-order";
     private static final String SOURCE_LABEL = "HMS Duplicate-Order Check";
+
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
     private static final Duration LOOKBACK = Duration.ofDays(7);
 
     @Override
@@ -76,14 +84,13 @@ public class DuplicateMedicationOrderRule implements CdsRule {
     }
 
     private CdsCard buildCard(Prescription existing) {
-        String summary = "Possible duplicate order: "
-            + existing.getMedicationName()
-            + " was prescribed on "
-            + existing.getCreatedAt().toLocalDate();
-        String detail =
+        String summary = text.get("cds.duplicate.summary",
+            "Possible duplicate order: {0} was prescribed on {1}",
+            existing.getMedicationName(), existing.getCreatedAt().toLocalDate().toString());
+        String detail = text.get("cds.duplicate.detail",
             "An active prescription for the same medication exists within the past "
-                + LOOKBACK.toDays() + " days (status: " + existing.getStatus()
-                + "). Verify the new order is intended.";
+                + "{0} days (status: {1}). Verify the new order is intended.",
+            String.valueOf(LOOKBACK.toDays()), text.enumWord(existing.getStatus()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.WARNING,
             new Source(SOURCE_LABEL, null, null),

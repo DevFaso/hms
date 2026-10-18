@@ -459,7 +459,10 @@ export class PrescriptionsComponent implements OnInit {
           // the forceOverride checkbox for re-submission.
           this.cdsAdvisories.set(cards);
           this.cdsCriticalBlocked.set(true);
-          this.toast.error(this.extractErrorMessage(err));
+          this.toast.error(
+            this.extractErrorMessage(err) ||
+              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
+          );
         } else {
           this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'));
         }
@@ -481,12 +484,27 @@ export class PrescriptionsComponent implements OnInit {
     this.closeModal();
   }
 
+  /**
+   * The backend's own sentence for a refusal, or '' when there is none worth
+   * showing. Never HttpErrorResponse.message ("Http failure response for
+   * ...: 403 Forbidden" — English, technical; D53/D54), and never the opaque
+   * "Access denied" default, which the caller replaces with translated text.
+   */
   private extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object') {
-      const e = err as { error?: { message?: string }; message?: string };
-      return e.error?.message ?? e.message ?? '';
+      const e = err as { error?: { message?: unknown } | null };
+      const msg = e.error && typeof e.error.message === 'string' ? e.error.message.trim() : '';
+      return msg === 'Access denied' ? '' : msg;
     }
     return '';
+  }
+
+  /** Translated fallback for a refused action: a 403 says "not allowed", anything else "failed". */
+  private refusalText(err: unknown, failedKey: string): string {
+    const status = (err as { status?: number } | null)?.status;
+    return this.translate.instant(
+      status === 403 ? 'PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN' : failedKey,
+    );
   }
 
   /**
@@ -578,7 +596,7 @@ export class PrescriptionsComponent implements OnInit {
       },
       error: (err: unknown) => {
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
+        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
         this.signingId.set(null);
       },
     });
@@ -649,7 +667,7 @@ export class PrescriptionsComponent implements OnInit {
         this.verifying.set(false);
         const msg = this.extractErrorMessage(err);
         this.toast.error(
-          msg || this.translate.instant('PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
+          msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
         );
       },
     });
@@ -669,7 +687,7 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.SIGN_FAILED'));
+        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED'));
         this.signingId.set(null);
       },
     });

@@ -326,6 +326,33 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /** D64: a French sign-in screen got "Invalid username or password." in English. */
+    @Test
+    void login_withInvalidCredentials_isTranslated() throws Exception {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("nobody", "wrongpassword", null))))
+                .andExpect(status().isUnauthorized())
+                // The slice's MessageSource does not unescape '' for argument-less
+                // messages the way the production LocaleConfig does, so match the
+                // part without the apostrophe.
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.endsWith("utilisateur ou mot de passe incorrect.")));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "es")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("nobody", "wrongpassword", null))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Nombre de usuario o contraseña incorrectos."));
+    }
+
     @Test
     void bootstrapStatus_returnsAllowedFlag() throws Exception {
         when(userRepository.count()).thenReturn(0L);

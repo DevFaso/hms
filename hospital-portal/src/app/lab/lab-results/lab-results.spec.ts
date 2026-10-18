@@ -110,7 +110,8 @@ describe('LabResultsComponent', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="unit-mismatch-result-1"]')).toBeNull();
-    expect(host.querySelector('.severity-high')?.textContent).toContain('HIGH');
+    // D61: the flag is a label (enumLabel), never the raw wire token.
+    expect(host.querySelector('.severity-high')?.textContent?.trim()).toBe('High');
   });
 
   it('should load results on init', () => {

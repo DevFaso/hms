@@ -223,10 +223,7 @@ export class Login implements OnInit, AfterViewInit {
         },
         error: (err) => {
           this.bootstrapLoading = false;
-          this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.SETUP_FAILED');
+          this.error = err?.error?.message ?? this.translate.instant('LOGIN.SETUP_FAILED');
         },
       });
   }
@@ -418,9 +415,9 @@ export class Login implements OnInit, AfterViewInit {
         error: (err) => {
           this.loading = false;
           this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.LOGIN_FAILED');
+            // `error` is the HTTP reason phrase ("Unauthorized") — English and
+            // not a sentence. The backend's message is translated (D64).
+            err?.error?.message ?? this.translate.instant('LOGIN.LOGIN_FAILED');
         },
       });
   }

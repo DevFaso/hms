@@ -166,7 +166,8 @@ class PharmacyRegistryControllerTest {
                         .content(malformedBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("Malformed request body")));
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("deserialize"))))
+                .andExpect(jsonPath("$.code").value("MALFORMED_REQUEST"));
     }
 
     @Test

@@ -139,7 +139,11 @@
                 <td>{{ 'EDUCATION.CAT_' + r.category | translate }}</td>
                 <td>{{ 'EDUCATION.TYPE_' + r.resourceType | translate }}</td>
                 <td>
-                  {{ r.estimatedDuration ? r.estimatedDuration + ' min' : '—' }}
+                  {{
+                    r.estimatedDuration
+                      ? ('COMMON.MINUTES_SHORT' | translate: { count: r.estimatedDuration })
+                      : '—'
+                  }}
                 </td>
                 <td>
                   <span class="muted">

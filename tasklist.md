@@ -5094,6 +5094,20 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   the same test code — which D30 makes the normal case. Drop the entity constraints or
   make them `(hospital_id, test_code)`. Open.
 
+- **QA run 2026-10-17, ux-i18n residuals (`fix/qa-ux-i18n`).** D53, D54 and D60–D66
+  are fixed there; this is what that PR left, each a separate decision rather than a
+  missed sibling. (1) The BPA protocol cards' title and summary come from the seeded
+  `bpa_protocol` rows, in English; translating them is clinical content and needs a
+  verified French/Spanish source (same rule as the EPDS text), so the card wording that
+  lives in code is localised (`CdsCardText`, `cds.*` keys) and the seeded text is not.
+  (2) The printed pharmacy receipt (`pharmacy-checkout.html`, T-44) stays French by
+  design; only the working screens follow the UI language. (3) Other backend sentences
+  still composed in English outside the paths the QA run hit (for example
+  `IllegalStateException` business messages echoed by `GlobalExceptionHandler`, and the
+  bootstrap/refresh/logout replies in `AuthController`) want the same `MessageUtil`
+  treatment; the `/auth/me/change-password` and `/auth/me/change-username` replies noted
+  in the bullet above are now translated. Open.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

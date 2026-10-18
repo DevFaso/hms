@@ -51,10 +51,14 @@
               <td>
                 <div class="med-name">{{ item.nameFr }}</div>
                 @if (item.essentialList) {
-                  <span class="badge badge-essential">Essentiel</span>
+                  <span class="badge badge-essential">{{
+                    'PHARMACY.BADGE_ESSENTIAL' | translate
+                  }}</span>
                 }
                 @if (item.controlled) {
-                  <span class="badge badge-controlled">Contrôlé</span>
+                  <span class="badge badge-controlled">{{
+                    'PHARMACY.BADGE_CONTROLLED' | translate
+                  }}</span>
                 }
               </td>
               <td>{{ item.genericName }}</td>
@@ -211,19 +215,27 @@
               <div class="field">
                 <label for="medForm">{{ 'PHARMACY.FORM' | translate }}</label>
                 <select id="medForm" [(ngModel)]="form.form" name="form">
-                  <option value="">— Choisir —</option>
-                  <option value="TABLET">Comprimé</option>
-                  <option value="CAPSULE">Gélule</option>
-                  <option value="SYRUP">Sirop</option>
-                  <option value="INJECTION">Injection</option>
-                  <option value="CREAM">Crème</option>
-                  <option value="OINTMENT">Pommade</option>
-                  <option value="DROPS">Gouttes</option>
-                  <option value="SUSPENSION">Suspension</option>
-                  <option value="POWDER">Poudre</option>
-                  <option value="INHALER">Inhalateur</option>
-                  <option value="SUPPOSITORY">Suppositoire</option>
-                  <option value="OTHER">Autre</option>
+                  <option value="">{{ 'PHARMACY.SELECT_OPTION' | translate }}</option>
+                  <option value="TABLET">{{ 'PHARMACY.FORM_OPTION.TABLET' | translate }}</option>
+                  <option value="CAPSULE">{{ 'PHARMACY.FORM_OPTION.CAPSULE' | translate }}</option>
+                  <option value="SYRUP">{{ 'PHARMACY.FORM_OPTION.SYRUP' | translate }}</option>
+                  <option value="INJECTION">
+                    {{ 'PHARMACY.FORM_OPTION.INJECTION' | translate }}
+                  </option>
+                  <option value="CREAM">{{ 'PHARMACY.FORM_OPTION.CREAM' | translate }}</option>
+                  <option value="OINTMENT">
+                    {{ 'PHARMACY.FORM_OPTION.OINTMENT' | translate }}
+                  </option>
+                  <option value="DROPS">{{ 'PHARMACY.FORM_OPTION.DROPS' | translate }}</option>
+                  <option value="SUSPENSION">
+                    {{ 'PHARMACY.FORM_OPTION.SUSPENSION' | translate }}
+                  </option>
+                  <option value="POWDER">{{ 'PHARMACY.FORM_OPTION.POWDER' | translate }}</option>
+                  <option value="INHALER">{{ 'PHARMACY.FORM_OPTION.INHALER' | translate }}</option>
+                  <option value="SUPPOSITORY">
+                    {{ 'PHARMACY.FORM_OPTION.SUPPOSITORY' | translate }}
+                  </option>
+                  <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
                 </select>
               </div>
               <div class="field">
@@ -249,20 +261,30 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="route">{{ 'PHARMACY.ROUTE' | translate }}</label>
+                <label for="route">{{ 'PRESCRIPTIONS.ROUTE' | translate }}</label>
                 <select id="route" [(ngModel)]="form.route" name="route">
-                  <option value="">— Choisir —</option>
-                  <option value="ORAL">Orale</option>
-                  <option value="INTRAVENOUS">Intraveineuse</option>
-                  <option value="INTRAMUSCULAR">Intramusculaire</option>
-                  <option value="SUBCUTANEOUS">Sous-cutanée</option>
-                  <option value="TOPICAL">Topique</option>
-                  <option value="INHALATION">Inhalation</option>
-                  <option value="RECTAL">Rectale</option>
-                  <option value="OPHTHALMIC">Ophtalmique</option>
-                  <option value="OTIC">Auriculaire</option>
-                  <option value="NASAL">Nasale</option>
-                  <option value="OTHER">Autre</option>
+                  <option value="">{{ 'PHARMACY.SELECT_OPTION' | translate }}</option>
+                  <option value="ORAL">{{ 'PHARMACY.ROUTE_OPTION.ORAL' | translate }}</option>
+                  <option value="INTRAVENOUS">
+                    {{ 'PHARMACY.ROUTE_OPTION.INTRAVENOUS' | translate }}
+                  </option>
+                  <option value="INTRAMUSCULAR">
+                    {{ 'PHARMACY.ROUTE_OPTION.INTRAMUSCULAR' | translate }}
+                  </option>
+                  <option value="SUBCUTANEOUS">
+                    {{ 'PHARMACY.ROUTE_OPTION.SUBCUTANEOUS' | translate }}
+                  </option>
+                  <option value="TOPICAL">{{ 'PHARMACY.ROUTE_OPTION.TOPICAL' | translate }}</option>
+                  <option value="INHALATION">
+                    {{ 'PHARMACY.ROUTE_OPTION.INHALATION' | translate }}
+                  </option>
+                  <option value="RECTAL">{{ 'PHARMACY.ROUTE_OPTION.RECTAL' | translate }}</option>
+                  <option value="OPHTHALMIC">
+                    {{ 'PHARMACY.ROUTE_OPTION.OPHTHALMIC' | translate }}
+                  </option>
+                  <option value="OTIC">{{ 'PHARMACY.ROUTE_OPTION.OTIC' | translate }}</option>
+                  <option value="NASAL">{{ 'PHARMACY.ROUTE_OPTION.NASAL' | translate }}</option>
+                  <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
                 </select>
               </div>
               <div class="field">

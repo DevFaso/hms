@@ -14,6 +14,7 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
 import {
   DigitalSignatureService,
   SIGNATURE_TYPES,
@@ -37,6 +38,7 @@ export class DigitalSignaturesComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   /** GET /signatures/all is HOSPITAL_ADMIN/SUPER_ADMIN-only on the backend. */
   private readonly canListAll = this.roleContext.hasAnyActiveRole([
@@ -379,6 +381,6 @@ export class DigitalSignaturesComponent implements OnInit {
   }
 
   formatReportType(type: string): string {
-    return type ? type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : '—';
+    return type ? this.enumLabels.transform(type, 'signatureType') : '—';
   }
 }

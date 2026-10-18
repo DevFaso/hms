@@ -59,6 +59,14 @@ public class MedicationAllergyCdsService implements CdsHookService {
     private static final String ID = "hms-medication-allergy-check";
     private static final String SOURCE_LABEL = "HMS Allergy Check";
 
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
+
     private final PatientAllergyRepository allergyRepository;
     private final PatientRepository patientRepository;
     private final CdsRuleEngine ruleEngine;
@@ -194,11 +202,11 @@ public class MedicationAllergyCdsService implements CdsHookService {
     }
 
     private CdsCard buildAllergyCard(String medication, String matchedAllergen) {
-        String summary = "Allergy alert: " + medication
-            + " matches recorded allergy “" + matchedAllergen + "”";
-        String detail =
+        String summary = text.get("cds.allergy.summary",
+            "Allergy alert: {0} matches recorded allergy “{1}”", medication, matchedAllergen);
+        String detail = text.get("cds.allergy.detail",
             "The patient has an active allergy entry that matches the proposed "
-                + "medication. Review the patient's allergy list before signing.";
+                + "medication. Review the patient's allergy list before signing.");
         return new CdsCard(
             summary,
             detail,

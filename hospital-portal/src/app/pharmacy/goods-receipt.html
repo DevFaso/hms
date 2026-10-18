@@ -48,7 +48,9 @@
               <option value="">{{ 'PHARMACY.SELECT_INVENTORY_ITEM' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
-                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                  {{ getItemName(item) }} ({{
+                    'PHARMACY.QTY_ON_HAND' | translate: { qty: item.quantityOnHand }
+                  }})
                 </option>
               }
             </select>

@@ -76,6 +76,7 @@ import { LabService } from '../services/lab.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
 import {
   CredentialRenewalComponent,
@@ -152,6 +153,7 @@ interface NavTile {
 export class DashboardComponent implements OnInit, OnDestroy {
   // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly hospitalService = inject(HospitalService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
@@ -3073,6 +3075,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   formatMethodLabel(method: string): string {
-    return method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return this.enumLabels.transform(method, 'paymentMethod');
   }
 }

@@ -5,7 +5,9 @@
       {{ 'LAB_OPS.TITLE' | translate }}
     </h1>
     @if (summary()) {
-      <p class="subtitle">Hospital snapshot as of {{ summary()!.asOfDate }}</p>
+      <p class="subtitle">
+        {{ 'LAB_OPS.SNAPSHOT_AS_OF' | translate: { date: summary()!.asOfDate } }}
+      </p>
     }
   </header>
 

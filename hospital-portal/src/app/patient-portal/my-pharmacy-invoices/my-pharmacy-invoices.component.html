@@ -1,24 +1,24 @@
 <section class="patient-page">
   <header>
-    <h2>Mes factures de pharmacie</h2>
-    <p class="subtitle">Historique de vos paiements de pharmacie</p>
+    <h2>{{ 'MY_PHARMACY_INVOICES.TITLE' | translate }}</h2>
+    <p class="subtitle">{{ 'MY_PHARMACY_INVOICES.SUBTITLE' | translate }}</p>
   </header>
 
   @if (!loading()) {
     <div class="total-banner">
-      <span>Total payé</span>
+      <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_PAID' | translate }}</span>
       <strong>{{ totalPaid() | number: '1.0-0' }} XOF</strong>
-      <span>Total réclamé</span>
+      <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_CLAIMED' | translate }}</span>
       <strong>{{ totalClaimed() | number: '1.0-0' }} XOF</strong>
     </div>
   }
 
   @if (loading()) {
-    <div class="loading">Chargement…</div>
+    <div class="loading">{{ 'COMMON.LOADING' | translate }}</div>
   }
 
   @if (!loading() && payments().length === 0) {
-    <div class="empty">Aucun paiement de pharmacie pour le moment.</div>
+    <div class="empty">{{ 'MY_PHARMACY_INVOICES.NO_PAYMENTS' | translate }}</div>
   }
 
   @if (payments().length > 0) {
@@ -32,7 +32,9 @@
           <div class="row-meta">
             <span class="method">{{ methodLabel(p.paymentMethod) }}</span>
             @if (p.referenceNumber) {
-              <span class="ref">Réf: {{ p.referenceNumber }}</span>
+              <span class="ref">{{
+                'MY_PHARMACY_INVOICES.REF' | translate: { ref: p.referenceNumber }
+              }}</span>
             }
           </div>
           @if (p.notes) {
@@ -44,11 +46,11 @@
   }
 
   @if (!loading()) {
-    <h3 class="section-title">Réclamations d'assurance</h3>
+    <h3 class="section-title">{{ 'MY_PHARMACY_INVOICES.CLAIMS_TITLE' | translate }}</h3>
   }
 
   @if (!loading() && claims().length === 0) {
-    <div class="empty">Aucune réclamation de pharmacie pour le moment.</div>
+    <div class="empty">{{ 'MY_PHARMACY_INVOICES.NO_CLAIMS' | translate }}</div>
   }
 
   @if (claims().length > 0) {
@@ -62,7 +64,9 @@
           <div class="row-meta">
             <span class="method">{{ statusLabel(c.claimStatus) }}</span>
             @if (c.coverageReference) {
-              <span class="ref">Réf: {{ c.coverageReference }}</span>
+              <span class="ref">{{
+                'MY_PHARMACY_INVOICES.REF' | translate: { ref: c.coverageReference }
+              }}</span>
             }
           </div>
           @if (c.rejectionReason) {

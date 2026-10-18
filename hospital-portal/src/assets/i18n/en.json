@@ -235,7 +235,8 @@
     "THERAPIES": "Therapies",
     "TIME": "Time",
     "URINE_ML": "Urine (ml)",
-    "UTEROTONIC_GIVEN": "Uterotonic given (AMTSL)"
+    "UTEROTONIC_GIVEN": "Uterotonic given (AMTSL)",
+    "PICK_PATIENT_HINT": "Pick a patient to see her labour record."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -1220,7 +1221,9 @@
       "SAVE_FAILED": "Failed to save announcement",
       "TEXT_REQUIRED": "Announcement text is required",
       "UPDATED": "Announcement updated"
-    }
+    },
+    "CREATE_FIRST": "Create your first announcement.",
+    "NONE_YET": "No announcements yet."
   },
   "APP": {
     "TITLE": "e-Keneya"
@@ -1445,7 +1448,8 @@
     "TOTAL_INVOICES": "Total Invoices",
     "TO_DATE": "To",
     "UPDATED": "Invoice updated",
-    "VIEW_DETAILS_TITLE": "View invoice details"
+    "VIEW_DETAILS_TITLE": "View invoice details",
+    "NO_RECORDS_HINT": "No billing records available."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -1487,7 +1491,8 @@
     "VOICE_MEMO": "voice memo",
     "VOICE_MEMO_EMPTY": "Voice memo was empty — please try again.",
     "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
-    "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo."
+    "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo.",
+    "ATTACHMENT": "Chat attachment"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -1562,7 +1567,6 @@
     "SAVING": "Saving…",
     "SEARCH": "Search",
     "SEARCH_PATIENT": "Search patient...",
-    "PATIENT_PICKER_NO_MATCH": "No patient matches this search.",
     "SELECT": "Select",
     "SELECT_HOSPITAL": "Select hospital",
     "SHOW_ACTIVE": "Show Active",
@@ -1585,7 +1589,14 @@
     "LABEL": {
       "PRESCRIPTIONS": "Prescriptions",
       "USERS": "Users"
-    }
+    },
+    "SHOWING_RANGE": "Showing {{from}}–{{to}} of {{total}}",
+    "TRY_ADJUST_SEARCH": "Try adjusting your search.",
+    "UNASSIGNED": "Unassigned",
+    "SYSTEM": "System",
+    "MINUTES_SHORT": "{{count}} min",
+    "COPYRIGHT_FOOTER": "© {{year}} HMS — Hospital Management System",
+    "PATIENT_PICKER_NO_MATCH": "No patient matches this search."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1696,7 +1707,8 @@
     "TYPE_TITLE": "Consultation type",
     "URGENCY": "Urgency",
     "VIEW_DETAILS": "View Details",
-    "WILL_APPEAR": "Consultations will appear here."
+    "WILL_APPEAR": "Consultations will appear here.",
+    "CONSULTANT_FOR": "consultant for"
   },
   "DASHBOARD": {
     "ABNORMAL": "Abnormal",
@@ -2414,7 +2426,9 @@
     "SUBTITLE": "Manage feature toggles",
     "TITLE": "Feature Flags",
     "TOGGLE": "Toggle",
-    "TOGGLE_FAILED": "Failed to toggle {{key}}"
+    "TOGGLE_FAILED": "Failed to toggle {{key}}",
+    "DISABLE_FLAG": "Disable {{key}}",
+    "ENABLE_FLAG": "Enable {{key}}"
   },
   "VERIFY": {
     "VERIFYING_TITLE": "Activating your account",
@@ -2894,7 +2908,13 @@
     "TEST_NAME": "Test Name",
     "TITLE": "Test Configuration",
     "TURNAROUND_TIME": "Turnaround (min)",
-    "UNIT": "Unit"
+    "UNIT": "Unit",
+    "PLACEHOLDER_CODE": "e.g. CBC",
+    "PLACEHOLDER_NAME": "e.g. Complete Blood Count",
+    "PLACEHOLDER_CATEGORY": "e.g. Hematology",
+    "PLACEHOLDER_UNIT": "e.g. cells/mcL",
+    "PLACEHOLDER_SAMPLE": "e.g. Blood",
+    "PLACEHOLDER_MINUTES": "Minutes"
   },
   "LAB_RESULTS": {
     "TITLE": "Lab Results",
@@ -3727,7 +3747,8 @@
     "ERR_CODE_INCORRECT": "Incorrect code. Please check your email and try again.",
     "ERR_ASSIGNMENT_NOT_FOUND": "Assignment not found. Please use the original email link.",
     "ERR_GENERIC": "Something went wrong. Please try again.",
-    "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code."
+    "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code.",
+    "DIGIT_OF": "Digit {{n}} of {{total}}"
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
@@ -4112,7 +4133,9 @@
     "VITALS_TITLE": "Vital signs",
     "WEIGHT": "Weight",
     "WRISTBAND_FAILED": "Failed to generate the wristband",
-    "ZIP_CODE": "Zip Code"
+    "ZIP_CODE": "Zip Code",
+    "AGE_YEARS": "{{count}} years",
+    "AGE_YEAR": "{{count}} year"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -4973,7 +4996,11 @@
         "CARD": "Credit / Debit Card",
         "CASH": "Cash",
         "INSURANCE": "Insurance",
-        "MOBILE_MONEY": "Mobile Money"
+        "MOBILE_MONEY": "Mobile Money",
+        "CREDIT_CARD": "Credit card",
+        "DEBIT_CARD": "Debit card",
+        "CHECK": "Cheque",
+        "OTHER": "Other"
       },
       "PRESCRIPTION_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5070,7 +5097,8 @@
         "LOW": "Low",
         "NORMAL": "Normal",
         "ROUTINE": "Routine",
-        "URGENT": "Urgent"
+        "URGENT": "Urgent",
+        "STAT": "STAT (immediate)"
       },
       "LAB_ORDER_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5365,7 +5393,6 @@
         "USER_DELETE": "User Deleted",
         "USER_DISABLE": "User Disabled",
         "USER_ENABLE": "User Enabled",
-        "USER_RESTORE": "User Restored",
         "USER_UPDATE": "User Updated",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook Disabled",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook Registered",
@@ -5376,7 +5403,8 @@
         "PRESCRIPTION_QUEUE_CLAIMED": "Work-queue prescription claimed",
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
-        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired"
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
+        "USER_RESTORE": "User Restored"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5653,6 +5681,58 @@
         "PSYCHIATRY": "Psychiatry",
         "RADIOLOGY": "Radiology",
         "SURGICAL_NURSE": "Surgical Nursing"
+      },
+      "IMAGING_ORDER_PRIORITY": {
+        "ROUTINE": "Routine",
+        "URGENT": "Urgent",
+        "STAT": "STAT (immediate)"
+      },
+      "PROCEDURE_URGENCY": {
+        "ROUTINE": "Routine",
+        "URGENT": "Urgent",
+        "EMERGENT": "Emergent",
+        "ELECTIVE": "Elective"
+      },
+      "IMAGING_LATERALITY": {
+        "LEFT": "Left",
+        "RIGHT": "Right",
+        "BILATERAL": "Bilateral",
+        "MIDLINE": "Midline",
+        "NOT_APPLICABLE": "Not applicable"
+      },
+      "LAB_SEVERITY_FLAG": {
+        "NORMAL": "Normal",
+        "LOW": "Low",
+        "HIGH": "High",
+        "CRITICAL": "Critical",
+        "ABNORMAL": "Abnormal",
+        "UNSPECIFIED": "Not graded"
+      },
+      "PHARMACY_TYPE": {
+        "HOSPITAL_DISPENSARY": "Hospital dispensary",
+        "COMMUNITY_PHARMACY": "Community pharmacy",
+        "PARTNER_PHARMACY": "Partner pharmacy"
+      },
+      "FULFILLMENT_MODE": {
+        "OUTPATIENT_HOSPITAL": "Outpatient hospital",
+        "INPATIENT_DISPENSARY": "Inpatient dispensary",
+        "PARTNER_PHARMACY": "Partner pharmacy",
+        "COMMUNITY": "Community pharmacy",
+        "MAIL_ORDER": "Mail order",
+        "MOBILE_OUTREACH": "Mobile unit"
+      },
+      "SIGNATURE_TYPE": {
+        "DISCHARGE_SUMMARY": "Discharge summary",
+        "LAB_RESULT": "Lab result",
+        "IMAGING_REPORT": "Imaging report",
+        "OPERATIVE_NOTE": "Operative note",
+        "CONSULTATION_NOTE": "Consultation note",
+        "PROGRESS_NOTE": "Progress note",
+        "PROCEDURE_REPORT": "Procedure report",
+        "PATHOLOGY_REPORT": "Pathology report",
+        "ED_NOTE": "Emergency department note",
+        "MEDICATION_ORDER": "Medication order",
+        "CARE_PLAN": "Care plan"
       }
     },
     "DOCUMENTS": {
@@ -5857,7 +5937,8 @@
       "COSIGNED": "Prescription co-signed",
       "COSIGN_FAILED": "Co-signing failed",
       "PHARMACIST_VERIFIED": "Prescription verified",
-      "PHARMACIST_VERIFY_FAILED": "Verification failed"
+      "PHARMACIST_VERIFY_FAILED": "Verification failed",
+      "ACTION_FORBIDDEN": "You are not allowed to do this on this prescription."
     },
     "SIGN": "Sign",
     "COSIGN": "Co-sign",
@@ -6120,6 +6201,8 @@
     "MFA_STEPUP_REUSED": "That code was already used. Wait for the next code from your authenticator app, or use an unused backup code.",
     "MFA_STEPUP_IMPERSONATION": "A support session cannot set up or change the authenticator of this account. The account holder must do it themselves.",
     "MFA_SET_UP": "Set up an authenticator app",
+    "MFA_COUNTS": "{{enrolled}} enrolled, {{verified}} verified",
+    "SET_UP_TOTP": "Set Up TOTP",
     "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
     "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
     "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
@@ -7181,7 +7264,8 @@
     "STILL_TAKING": "Still taking",
     "SUBMIT": "Submit Intake",
     "SUBMIT_FAILED": "Failed to submit nursing intake. Please try again.",
-    "TITLE": "Nursing Intake"
+    "TITLE": "Nursing Intake",
+    "ALLERGY_SEVERITY_ROW": "Allergy severity for row {{row}}"
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Address",
@@ -7254,7 +7338,8 @@
     "COMPLETE_TRIAGE": "Complete Triage",
     "COMPLETE_EXAM": "Complete Exam",
     "READY_DISCHARGE": "Ready for D/C",
-    "NO_PATIENTS": "No patients"
+    "NO_PATIENTS": "No patients",
+    "COLUMN_PATIENTS": "{{column}} patients"
   },
   "CHECKOUT": {
     "TITLE": "Check-Out Patient",
@@ -7794,7 +7879,7 @@
     "PRODUCT_SCAN": "Pack label",
     "PRODUCT_SCAN_PLACEHOLDER": "Scan the lot label",
     "QTY_DISPENSED": "Qty Dispensed",
-    "QTY_ON_HAND": "Quantity on Hand",
+    "QTY_ON_HAND": "Qty: {{qty}}",
     "QTY_RECEIVED_LABEL": "Qty Received",
     "QTY_REQUESTED": "Qty Requested",
     "QUANTITY": "Quantity",
@@ -7820,7 +7905,7 @@
     "REJECT": "Reject",
     "REMAINING_QTY": "Remaining Qty",
     "REORDER_ALERTS": "Reorder Alerts",
-    "REORDER_QTY": "Reorder Qty",
+    "REORDER_QTY": "Reorder qty: {{qty}}",
     "REORDER_THRESHOLD": "Reorder Threshold",
     "RETURN_REFERENCE": "Return Reference Number",
     "RETURN_REFERENCE_REQUIRED": "Return reference number is required",
@@ -7915,6 +8000,35 @@
     "CANCEL_READY_SUCCESS": "Preparation cancelled.",
     "CANCEL_READY_FAILED": "Could not cancel the preparation.",
     "PREPARED_BY": "Prepared by {{name}}",
+    "STOCK_REMAINING": "{{qty}} {{unit}} remaining (threshold: {{threshold}})",
+    "UNITS": "units",
+    "BADGE_ESSENTIAL": "Essential",
+    "BADGE_CONTROLLED": "Controlled",
+    "FORM_OPTION": {
+      "TABLET": "Tablet",
+      "CAPSULE": "Capsule",
+      "SYRUP": "Syrup",
+      "INJECTION": "Injection",
+      "CREAM": "Cream",
+      "OINTMENT": "Ointment",
+      "DROPS": "Drops",
+      "SUSPENSION": "Suspension",
+      "POWDER": "Powder",
+      "INHALER": "Inhaler",
+      "SUPPOSITORY": "Suppository"
+    },
+    "ROUTE_OPTION": {
+      "ORAL": "Oral",
+      "INTRAVENOUS": "Intravenous",
+      "INTRAMUSCULAR": "Intramuscular",
+      "SUBCUTANEOUS": "Subcutaneous",
+      "TOPICAL": "Topical",
+      "INHALATION": "Inhalation",
+      "RECTAL": "Rectal",
+      "OPHTHALMIC": "Ophthalmic",
+      "OTIC": "Otic (ear)",
+      "NASAL": "Nasal"
+    },
     "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
     "SELECT_PHARMACY": "Pharmacy"
   },
@@ -7945,7 +8059,9 @@
       "LEVEL_HIGH": "High Control",
       "LEVEL_LOW": "Low Control",
       "LOADING": "Loading QC data…",
-      "NO_EVENTS": "No QC events recorded for this test."
+      "NO_EVENTS": "No QC events recorded for this test.",
+      "MEAN": "Mean:",
+      "SD": "SD:"
     },
     "STUDIES_BY_TEST": "Validation Studies by Test Definition",
     "NO_STUDIES": "No validation studies recorded yet.",
@@ -8942,7 +9058,8 @@
     "ASSESSMENTS_LOAD_ERROR": "Failed to load newborn assessments",
     "DELIVERY_LINK": "Delivery",
     "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
-    "DELIVERY_LINKED": "linked to delivery"
+    "DELIVERY_LINKED": "linked to delivery",
+    "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -10213,7 +10330,8 @@
     "PRIORITY_DISTRIBUTION": "Priority Distribution",
     "STATUS_PIPELINE": "Order Status Pipeline",
     "THROUGHPUT": "Throughput",
-    "TITLE": "Lab Operations Dashboard"
+    "TITLE": "Lab Operations Dashboard",
+    "SNAPSHOT_AS_OF": "Hospital snapshot as of {{date}}"
   },
   "PROVIDER": {
     "COMMON": {
@@ -10445,6 +10563,61 @@
       "BY_SUPPORT": "On their behalf: platform support ({{name}})",
       "RECORD_ROLE_ASSIGNED": "Role assigned: {{role}}"
     }
+  },
+  "PHARMACY_CLAIMS": {
+    "TITLE": "Reimbursement claims (UHI / Insurance)",
+    "STATUS_FILTER": "Status:",
+    "ALL": "All",
+    "REFRESH": "Refresh",
+    "EXPORT_CSV": "Export CSV",
+    "EXPORT_FHIR": "Export FHIR",
+    "EMPTY": "No claims to show.",
+    "COL_CREATED": "Created",
+    "COL_PATIENT": "Patient",
+    "COL_COVERAGE_REF": "Coverage reference",
+    "COL_AMOUNT": "Amount",
+    "COL_STATUS": "Status",
+    "SUBMIT": "Submit",
+    "ACCEPT": "Accept",
+    "REJECT": "Reject",
+    "MARK_PAID": "Mark paid",
+    "STATUS": {
+      "DRAFT": "Draft",
+      "SUBMITTED": "Submitted",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Rejected",
+      "PAID": "Paid"
+    }
+  },
+  "PHARMACY_CHECKOUT": {
+    "TITLE": "Pharmacy checkout",
+    "SUBTITLE": "Find a dispense and record the payment",
+    "STEP_LOOKUP": "1. Find a dispense",
+    "DISPENSE_ID": "Dispense ID",
+    "DISPENSE_ID_PLACEHOLDER": "Dispense UUID",
+    "LOAD": "Load",
+    "MEDICATION": "Medication",
+    "QTY_DISPENSED": "Quantity dispensed",
+    "PATIENT": "Patient",
+    "PHARMACY": "Pharmacy",
+    "STEP_PAYMENT": "2. Record the payment",
+    "AMOUNT_XOF": "Amount (XOF)",
+    "PAYMENT_METHOD": "Payment method",
+    "REFERENCE": "Reference",
+    "REFERENCE_PLACEHOLDER": "Transaction / policy",
+    "SUBMIT": "Confirm payment",
+    "PRINT": "Print",
+    "NEW_PAYMENT": "New payment"
+  },
+  "MY_PHARMACY_INVOICES": {
+    "TITLE": "My pharmacy invoices",
+    "SUBTITLE": "History of your pharmacy payments",
+    "TOTAL_PAID": "Total paid",
+    "TOTAL_CLAIMED": "Total claimed",
+    "NO_PAYMENTS": "No pharmacy payments yet.",
+    "CLAIMS_TITLE": "Insurance claims",
+    "NO_CLAIMS": "No pharmacy claims yet.",
+    "REF": "Ref: {{ref}}"
   },
   "VITAL_LIMITS": {
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",

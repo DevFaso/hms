@@ -139,7 +139,9 @@
                 </td>
               }
               <td>
-                <div class="cell-primary">{{ enc.patientName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
+                </div>
               </td>
               <td>{{ enc.staffName || '—' }}</td>
               <td>{{ enc.departmentName || '—' }}</td>

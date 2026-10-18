@@ -712,7 +712,9 @@
                       inputmode="numeric"
                     />
                     <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
-                      {{ mfaLoading() ? 'Verifying…' : 'Verify' }}
+                      {{
+                        (mfaLoading() ? 'MFA.CHALLENGE_VERIFYING' : 'PROFILE.VERIFY') | translate
+                      }}
                     </button>
                   </form>
                 </div>
@@ -801,7 +803,7 @@
                     [disabled]="mfaLoading()"
                   >
                     <span class="material-symbols-outlined">security</span>
-                    {{ mfaLoading() ? 'Setting up…' : 'Set Up TOTP' }}
+                    {{ (mfaLoading() ? 'MFA.ENROLL_STARTING' : 'PROFILE.SET_UP_TOTP') | translate }}
                   </button>
                 </div>
               }
@@ -835,7 +837,10 @@
                   </div>
                   <div class="form-row">
                     <label class="form-label" for="recovery-value">{{
-                      newRecoveryType() === 'EMAIL' ? 'Email Address' : 'Phone Number'
+                      (newRecoveryType() === 'EMAIL'
+                        ? 'PROFILE.EMAIL_ADDRESS'
+                        : 'PROFILE.PHONE_NUMBER'
+                      ) | translate
                     }}</label>
                     <input
                       id="recovery-value"
@@ -867,7 +872,7 @@
                       (click)="saveRecoveryContact()"
                       [disabled]="recoverySaving()"
                     >
-                      {{ recoverySaving() ? 'Saving…' : 'Save' }}
+                      {{ (recoverySaving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
                     </button>
                     <button class="btn-secondary" (click)="cancelAddRecovery()">
                       {{ 'COMMON.CANCEL' | translate }}
@@ -946,7 +951,12 @@
                               (click)="submitVerificationCode()"
                               [disabled]="verificationSending() || verificationCode().length < 6"
                             >
-                              {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
+                              {{
+                                (verificationSending()
+                                  ? 'MFA.CHALLENGE_VERIFYING'
+                                  : 'COMMON.CONFIRM'
+                                ) | translate
+                              }}
                             </button>
                             <button class="btn-secondary" (click)="cancelVerification()">
                               {{ 'COMMON.CANCEL' | translate }}
@@ -1023,8 +1033,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.MFA_STATUS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.mfaEnrolledCount }} enrolled,
-                        {{ credentials()!.verifiedMfaCount }} verified
+                        {{
+                          'PROFILE.MFA_COUNTS'
+                            | translate
+                              : {
+                                  enrolled: credentials()!.mfaEnrolledCount,
+                                  verified: credentials()!.verifiedMfaCount,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>

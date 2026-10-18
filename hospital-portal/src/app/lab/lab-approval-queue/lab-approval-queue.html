@@ -321,8 +321,9 @@
                 </span>
                 @if (!group.insufficient) {
                   <span class="qc-stats">
-                    Mean: {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp; SD:
-                    {{ group.sd | number: '1.3-3' }}
+                    {{ 'LAB_QC.CHART.MEAN' | translate }}
+                    {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp;
+                    {{ 'LAB_QC.CHART.SD' | translate }} {{ group.sd | number: '1.3-3' }}
                   </span>
                 }
               </div>
