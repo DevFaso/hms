@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.InBasketItemRepository;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
@@ -39,6 +40,9 @@ final class SharedClinicalRowsCleanup {
     static void deleteAll(ApplicationContext context) {
         context.getBean(AuditEventLogRepository.class).deleteAllInBatch();
         context.getBean(NotificationRepository.class).deleteAll();
+        // A released result files an in-basket RESULT row for the ordering
+        // clinician (QA D178), which pins the user through fk_inbasket_recipient.
+        context.getBean(InBasketItemRepository.class).deleteAllInBatch();
         // Releasing a result enqueues an outbound message that references the
         // order, so the outbox goes before the orders.
         context.getBean(InstrumentOutboxRepository.class).deleteAll();
