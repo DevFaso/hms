@@ -27,6 +27,7 @@
     <div class="search-bar toolbar-search">
       <span class="material-symbols-outlined search-icon">search</span>
       <input
+        [attr.aria-label]="'APPOINTMENTS.SEARCH' | translate"
         type="text"
         [placeholder]="'APPOINTMENTS.SEARCH' | translate"
         [value]="searchTerm"

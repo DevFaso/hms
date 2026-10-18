@@ -18,6 +18,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"

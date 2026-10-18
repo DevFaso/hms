@@ -9,7 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HospitalService } from '../services/hospital.service';
@@ -136,7 +136,6 @@ interface NavTile {
     CommonModule,
     RouterLink,
     DatePipe,
-    TitleCasePipe,
     TranslateModule,
     DoctorWorklistComponent,
     DoctorPatientFlowComponent,
@@ -3008,7 +3007,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       REQUESTED: 'APPOINTMENTS.REQUESTED',
     };
     const key = map[status];
-    return key ? this.t(key) : status;
+    // Any other status (CHECKED_IN, PENDING, RESCHEDULED…) used to be shown
+    // as the raw wire token (D175): the shared vocabulary covers the rest.
+    return key ? this.t(key) : this.enumLabels.transform(status, 'appointmentStatus');
   }
 
   getTrendIcon(trend: string): string {
