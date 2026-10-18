@@ -47,6 +47,7 @@ class PatientMedicationServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
 
     @InjectMocks
     private PatientMedicationServiceImpl service;
@@ -410,6 +411,32 @@ class PatientMedicationServiceImplTest {
         assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName).containsExactly("Ceftriaxone");
         // D136: discharged, the stay's antibiotic is no longer "Actif".
         assertThat(result.get(0).getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void D136_anOrderANonAttendingClinicianWroteDuringTheStay_endsWithTheDischarge() {
+        // Not filed on the stay encounter (only the attending's orders are):
+        // the MAR already hid it after discharge, the patient still saw "Actif".
+        LocalDateTime admitted = LocalDateTime.now().minusDays(3);
+        Prescription consultOrder = new Prescription(); consultOrder.setId(UUID.randomUUID());
+        consultOrder.setCreatedAt(admitted.plusDays(1)); consultOrder.setMedicationName("Paracetamol");
+        consultOrder.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        Prescription afterwards = new Prescription(); afterwards.setId(UUID.randomUUID());
+        afterwards.setCreatedAt(LocalDateTime.now()); afterwards.setMedicationName("Amlodipine");
+        afterwards.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setAdmissionDateTime(admitted);
+        stay.setActualDischargeDateTime(admitted.plusDays(2));
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(consultOrder, afterwards)));
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of(stay));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName, PatientMedicationResponseDTO::getStatus)
+            .containsExactly(org.assertj.core.groups.Tuple.tuple("Amlodipine", "ACTIVE"),
+                org.assertj.core.groups.Tuple.tuple("Paracetamol", "COMPLETED"));
     }
 
     @Test

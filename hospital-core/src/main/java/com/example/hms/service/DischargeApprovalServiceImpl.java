@@ -51,6 +51,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     private final EncounterAutoCompletionService encounterAutoCompletion;
     private final AdmissionRepository admissionRepository;
     private final BedAssignmentService bedAssignmentService;
+    private final AdmissionStayEncounterService stayEncounters;
 
     @Override
     @Transactional
@@ -122,21 +123,25 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         registration.markDischarged();
         registrationRepository.save(registration);
 
-        // The approval flow is a discharge in its own right (it marks the
-        // registration discharged), so it completes the encounters of the
-        // patient's open stays. QA D134: never every open encounter the
-        // patient has here; an outpatient visit in progress is not the stay.
-        admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+        // QA D134/D151: the approval path closes each open stay as the direct
+        // discharge does: beds freed while the stay still holds them, the
+        // admission row discharged (so the MAR's closed-stay rule sees it),
+        // the discharge carried onto the stay encounter, then that encounter,
+        // and never an outpatient visit in progress, completed.
+        java.util.List<com.example.hms.model.Admission> openStays = admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
                 registration.getPatient().getId(),
                 registration.getHospital().getId(),
-                OPEN_ADMISSION_STATUSES)
-            .forEach(a -> encounterAutoCompletion.completeAdmissionEncounters(a.getId()));
-
-        // This path works off the registration, not the Admission row — free
-        // any structured beds still held by the patient's admissions.
+                OPEN_ADMISSION_STATUSES);
         bedAssignmentService.releaseBedsForPatient(
                 registration.getPatient().getId(),
                 registration.getHospital().getId());
+        for (com.example.hms.model.Admission stay : openStays) {
+            stay.discharge(stay.getDischargeDisposition(), stay.getDischargeSummary(),
+                stay.getDischargeInstructions(), doctor);
+            admissionRepository.save(stay);
+            stayEncounters.recordDischarge(stay);
+            encounterAutoCompletion.completeAdmissionEncounters(stay.getId());
+        }
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);
         log.info("Doctor {} approved discharge request {}", doctor.getId(), approvalId);

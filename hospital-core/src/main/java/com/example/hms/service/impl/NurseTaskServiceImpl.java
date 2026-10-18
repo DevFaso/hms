@@ -306,30 +306,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return result;
     }
 
-    /**
-     * QA D136: an inpatient order stops with the discharge. It is an order of
-     * a stay when it is filed on the stay's own encounter (V193), or, for an
-     * order filed elsewhere, when it was written between the admission and
-     * the discharge of a stay that has since ended. A patient readmitted later
-     * gets new orders; the old ones are not doses still due.
-     */
+    /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */
     static boolean endedWithAStay(Prescription rx, List<Admission> closedStays) {
-        com.example.hms.model.Encounter encounter = rx.getEncounter();
-        if (encounter != null && encounter.getAdmissionId() != null
-            && (encounter.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED
-                || encounter.getStatus() == com.example.hms.enums.EncounterStatus.CANCELLED)) {
-            return true;
-        }
-        LocalDateTime written = rx.getCreatedAt();
-        if (written == null) return false;
-        for (Admission stay : closedStays) {
-            LocalDateTime from = stay.getAdmissionDateTime();
-            LocalDateTime to = stay.getActualDischargeDateTime();
-            if (from != null && to != null && !written.isBefore(from) && !written.isAfter(to)) {
-                return true;
-            }
-        }
-        return false;
+        return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
     }
 
     /** Returns true when a status filter is active and the given status does not match it. */

@@ -49,6 +49,7 @@ class DischargeApprovalServiceImplTest {
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
     @Mock private BedAssignmentService bedAssignmentService;
     @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock private AdmissionStayEncounterService stayEncounters;
 
     @InjectMocks private DischargeApprovalServiceImpl service;
 
@@ -280,6 +281,8 @@ class DischargeApprovalServiceImplTest {
         when(mapper.toResponse(approval)).thenReturn(responseDTO);
         com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
         stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(java.time.LocalDateTime.now().minusDays(2));
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
         when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
             org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(hospitalId),
             org.mockito.ArgumentMatchers.anyCollection())).thenReturn(java.util.List.of(stay));
@@ -292,6 +295,15 @@ class DischargeApprovalServiceImplTest {
         verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
         // …and free any structured beds the patient's admissions still hold (P0 #4).
         verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
+        // QA D151: the admission row is closed and the discharge reaches the
+        // stay encounter before it is completed (the after-visit summary).
+        assertThat(stay.getStatus()).isEqualTo(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        assertThat(stay.getActualDischargeDateTime()).isNotNull();
+        assertThat(stay.getDischargingProvider()).isSameAs(doctor);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(bedAssignmentService, stayEncounters, encounterAutoCompletion);
+        order.verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
+        order.verify(stayEncounters).recordDischarge(stay);
+        order.verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
     }
 
     @Test

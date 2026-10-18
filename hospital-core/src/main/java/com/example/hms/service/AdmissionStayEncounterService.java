@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
@@ -12,6 +11,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +29,7 @@ import java.util.UUID;
  * encounter itself. Every admission now opens one, tagged with the
  * admission's id (V193), which its discharge later closes (D134).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdmissionStayEncounterService {
@@ -39,27 +40,31 @@ public class AdmissionStayEncounterService {
 
     /**
      * The attending physician runs the stay; the admitting provider stands in
-     * when none is named. Both were checked as physicians at this hospital.
+     * when none is named, or when the attending has no staff row or active
+     * role at this hospital. An admission that neither can lead is still
+     * admitted, as it was before stays had encounters, just without one: the
+     * encounter must never be the reason a patient cannot be admitted.
+     *
+     * @return the stay encounter, or {@code null} when no lead resolves
      */
     @Transactional
     public Encounter openStayEncounter(Admission admission) {
         Hospital hospital = admission.getHospital();
-        Staff lead = admission.getAttendingPhysician() != null
-            ? admission.getAttendingPhysician() : admission.getAdmittingProvider();
-        UUID userId = lead != null && lead.getUser() != null ? lead.getUser().getId() : null;
-        if (hospital == null || userId == null) {
-            throw new BusinessException("admission.encounter.provider.missing");
+        if (hospital == null || hospital.getId() == null) {
+            log.warn("Admission {} opened without a stay encounter: no hospital", admission.getId());
+            return null;
         }
-        // The encounter's staff row and assignment must belong to the
-        // admission's hospital (Encounter#validate): a clinician working at
-        // several hospitals has one staff row per hospital.
-        Staff staff = lead.getHospital() != null && hospital.getId().equals(lead.getHospital().getId())
-            ? lead
-            : staffRepository.findByUserIdAndHospitalId(userId, hospital.getId())
-                .orElseThrow(() -> new BusinessException("admission.encounter.provider.missing"));
-        UserRoleHospitalAssignment assignment = assignmentRepository
-            .findActiveStaffAssignment(userId, hospital.getId())
-            .orElseThrow(() -> new BusinessException("admission.encounter.provider.missing"));
+        Lead lead = resolveLead(admission.getAttendingPhysician(), hospital);
+        if (lead == null) {
+            lead = resolveLead(admission.getAdmittingProvider(), hospital);
+        }
+        if (lead == null) {
+            log.warn("Admission {} opened without a stay encounter: no lead with an active role at hospital {}",
+                admission.getId(), hospital.getId());
+            return null;
+        }
+        Staff staff = lead.staff();
+        UserRoleHospitalAssignment assignment = lead.assignment();
 
         LocalDateTime start = admission.getAdmissionDateTime() != null
             ? admission.getAdmissionDateTime() : LocalDateTime.now();
@@ -78,6 +83,30 @@ public class AdmissionStayEncounterService {
             .build();
         encounter.setCode(newCode());
         return encounterRepository.save(encounter);
+    }
+
+    private record Lead(Staff staff, UserRoleHospitalAssignment assignment) {
+    }
+
+    /**
+     * The encounter's staff row and assignment must belong to the admission's
+     * hospital (Encounter#validate): a clinician working at several hospitals
+     * has one staff row per hospital.
+     */
+    private Lead resolveLead(Staff candidate, Hospital hospital) {
+        UUID userId = candidate != null && candidate.getUser() != null ? candidate.getUser().getId() : null;
+        if (userId == null) {
+            return null;
+        }
+        Staff staff = candidate.getHospital() != null && hospital.getId().equals(candidate.getHospital().getId())
+            ? candidate
+            : staffRepository.findByUserIdAndHospitalId(userId, hospital.getId()).orElse(null);
+        if (staff == null) {
+            return null;
+        }
+        return assignmentRepository.findActiveStaffAssignment(userId, hospital.getId())
+            .map(assignment -> new Lead(staff, assignment))
+            .orElse(null);
     }
 
     /**

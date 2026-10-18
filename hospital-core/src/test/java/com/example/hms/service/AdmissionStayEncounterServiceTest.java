@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
@@ -26,7 +25,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -88,13 +86,36 @@ class AdmissionStayEncounterServiceTest {
     }
 
     @Test
-    void aLeadWithNoRoleAtTheHospitalIsRefusedRatherThanLeavingTheStayWithoutAnEncounter() {
+    void anAttendingWithNoRoleAtTheHospital_fallsBackToTheAdmittingProvider() {
+        User attendingUser = new User();
+        attendingUser.setId(UUID.randomUUID());
+        Staff attending = new Staff();
+        attending.setId(UUID.randomUUID());
+        attending.setUser(attendingUser);
+        attending.setHospital(hospital);
+        admission.setAttendingPhysician(attending);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setHospital(hospital);
+        when(assignmentRepository.findActiveStaffAssignment(attendingUser.getId(), hospital.getId()))
+            .thenReturn(Optional.empty());
+        when(assignmentRepository.findActiveStaffAssignment(doctor.getUser().getId(), hospital.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+        Encounter stay = service.openStayEncounter(admission);
+
+        assertThat(stay.getStaff()).isSameAs(doctor);
+        assertThat(stay.getAssignment()).isSameAs(assignment);
+    }
+
+    @Test
+    void noLeadWithARoleAtTheHospital_stillAdmits_withoutAStayEncounter() {
+        // Before stays had encounters this admission succeeded; it must not
+        // be refused now (#894 self-review).
         when(assignmentRepository.findActiveStaffAssignment(doctor.getUser().getId(), hospital.getId()))
             .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.openStayEncounter(admission))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("admission.encounter.provider.missing");
+        assertThat(service.openStayEncounter(admission)).isNull();
         verify(encounterRepository, never()).save(any());
     }
 

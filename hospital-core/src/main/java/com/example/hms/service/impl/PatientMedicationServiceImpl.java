@@ -54,6 +54,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private final CrossHospitalReachRecorder reachRecorder;
     /** G15 AC-12: a fill waiting at the counter, on each row. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -135,11 +136,17 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .toList();
 
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
+        // QA D136: the same stay-end rule as the MAR, so an order a
+        // non-attending clinician wrote during the stay ends with it too.
+        List<com.example.hms.model.Admission> closedStays = visible.isEmpty() ? List.of()
+            : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId()).stream()
+                .filter(a -> a.getActualDischargeDateTime() != null)
+                .toList();
         Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(visible);
 
         return visible.stream()
-            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId())), ready.get(p.getId())))
+            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId()), closedStays), ready.get(p.getId())))
             .toList();
     }
 
@@ -162,7 +169,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return latest;
     }
 
-    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill) {
+    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill,
+                                                    List<com.example.hms.model.Admission> closedStays) {
         LocalDate startDate = Optional.ofNullable(prescription.getCreatedAt())
             .map(LocalDateTime::toLocalDate)
             .orElse(null);
@@ -174,7 +182,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .dosage(prescription.getDosage())
             .frequency(prescription.getFrequency())
             .route(prescription.getRoute())
-            .status(endedWithItsStay(prescription) && "ACTIVE".equals(resolveStatus(prescription.getStatus(), endDate))
+            .status(com.example.hms.service.InpatientOrderEnd.endedWithAStay(prescription, closedStays) && "ACTIVE".equals(resolveStatus(prescription.getStatus(), endDate))
                 ? "COMPLETED" : resolveStatus(prescription.getStatus(), endDate))
             .startDate(startDate)
             .endDate(endDate)
@@ -258,17 +266,6 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     /** Signed or beyond: an order the patient was actually given (D101/D152). */
     static boolean isIssued(PrescriptionStatus status) {
         return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
-    }
-
-    /**
-     * QA D136: an order written for a hospital stay ends with the stay. Its
-     * encounter carries the admission id and is completed on discharge.
-     */
-    static boolean endedWithItsStay(Prescription prescription) {
-        com.example.hms.model.Encounter encounter = prescription.getEncounter();
-        return encounter != null && encounter.getAdmissionId() != null
-            && (encounter.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED
-                || encounter.getStatus() == com.example.hms.enums.EncounterStatus.CANCELLED);
     }
 
     private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {
