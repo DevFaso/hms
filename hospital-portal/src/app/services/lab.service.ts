@@ -143,6 +143,9 @@ export interface LabTestReferenceRange {
   ageMax: number | null;
   gender: 'ALL' | 'MALE' | 'FEMALE';
   notes: string | null;
+  /** D107: panic limits; a value beyond them grades CRITICAL. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {

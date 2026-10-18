@@ -2914,7 +2914,9 @@
     "PLACEHOLDER_CATEGORY": "ex. Hématologie",
     "PLACEHOLDER_UNIT": "ex. cellules/µL",
     "PLACEHOLDER_SAMPLE": "ex. Sang",
-    "PLACEHOLDER_MINUTES": "Minutes"
+    "PLACEHOLDER_MINUTES": "Minutes",
+    "CRITICAL_LOW": "Seuil critique bas (inférieur à)",
+    "CRITICAL_HIGH": "Seuil critique haut (supérieur à)"
   },
   "LAB_RESULTS": {
     "TITLE": "Résultats de laboratoire",
@@ -8030,7 +8032,11 @@
       "NASAL": "Nasale"
     },
     "NO_PHARMACY_HINT": "Aucune pharmacie n’est encore enregistrée pour cet établissement. Un administrateur de l’établissement peut en enregistrer une dans le Registre des pharmacies.",
-    "SELECT_PHARMACY": "Pharmacie"
+    "SELECT_PHARMACY": "Pharmacie",
+    "RECEIPT_EXPIRY_REQUIRED": "Saisissez la date de péremption du lot.",
+    "RECEIPT_LOT_EXPIRED": "Ce lot est périmé et ne peut pas être entré en stock.",
+    "LOT_REQUIRED_FOR_MOVEMENT": "Cet article est suivi par lot : choisissez le lot concerné par le mouvement.",
+    "SELECT_LOT_OPTION": "Sélectionnez un lot"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -8084,7 +8090,8 @@
       "ALL": "Tous",
       "DRAFT": "Brouillon",
       "PENDING_QA": "En attente d'examen AQ",
-      "PENDING_DIRECTOR": "En attente d'approbation du directeur"
+      "PENDING_DIRECTOR": "En attente d'approbation du directeur",
+      "APPROVED": "Approuvés, en attente d'activation"
     },
     "SEARCH_PLACEHOLDER": "Rechercher par nom, code ou catégorie…",
     "LOADING": "Chargement de la file d'attente…",
@@ -8106,7 +8113,9 @@
       "REJECT_TITLE": "Rejeter",
       "APPROVE": "Approuver",
       "APPROVE_TITLE": "Approuver",
-      "CLOSE_TITLE": "Fermer"
+      "CLOSE_TITLE": "Fermer",
+      "ACTIVATE": "Activer",
+      "ACTIVATE_TITLE": "Activer pour la prescription"
     },
     "EMPTY": {
       "TITLE": "La file d'attente est vide",
@@ -8157,7 +8166,8 @@
       "REASON_REQUIRED": "Motif de rejet *",
       "REASON_PLACEHOLDER": "Expliquer le motif du rejet…",
       "CANCEL": "Annuler",
-      "CONFIRM": "Confirmer"
+      "CONFIRM": "Confirmer",
+      "TITLE_ACTIVATE": "Activer la définition"
     },
     "TOAST": {
       "LOAD_QUEUE_FAILED": "Échec du chargement de la file d'approbation",

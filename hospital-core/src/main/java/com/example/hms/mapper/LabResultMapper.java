@@ -28,6 +28,7 @@ import java.util.function.Predicate;
 public class LabResultMapper {
 
     public static final String FLAG_UNSPECIFIED = "UNSPECIFIED";
+    public static final String FLAG_CRITICAL = "CRITICAL";
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
@@ -156,6 +157,26 @@ public class LabResultMapper {
      * unit anywhere is still used (bare limits, no unit claimed), and so is
      * any range for a result that states no unit.
      */
+    /**
+     * D107: whether a result graded {@code severityFlag} raises the critical
+     * value alert. CRITICAL always does. HIGH does only when the range it was
+     * graded against declares no critical limits - the fail-safe for catalogs
+     * configured before limits existed, so they keep alerting as before. Once
+     * a laboratory sets limits, a value merely above the range is HIGH and is
+     * labelled and treated as HIGH, not paged as a critical.
+     */
+    public boolean raisesCriticalAlert(LabResult result, String severityFlag) {
+        if (FLAG_CRITICAL.equalsIgnoreCase(severityFlag)) {
+            return true;
+        }
+        if (!"HIGH".equalsIgnoreCase(severityFlag) || result == null) {
+            return false;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        return graded == null || (graded.getCriticalLow() == null && graded.getCriticalHigh() == null);
+    }
+
     public LabResultReferenceRangeDTO gradedReferenceRange(LabResult result) {
         if (result == null) {
             return null;
@@ -448,6 +469,8 @@ public class LabResultMapper {
             .ageMax(range.getAgeMax())
             .gender(range.getGender())
             .notes(range.getNotes())
+            .criticalLow(range.getCriticalLow())
+            .criticalHigh(range.getCriticalHigh())
             .build();
     }
 
@@ -472,6 +495,14 @@ public class LabResultMapper {
             return FLAG_UNSPECIFIED;
         }
 
+        // D107: the panic limits come first, so a value beyond them is
+        // labelled CRITICAL - the same word the alert uses.
+        if (matchingRange.getCriticalLow() != null && value < matchingRange.getCriticalLow()) {
+            return FLAG_CRITICAL;
+        }
+        if (matchingRange.getCriticalHigh() != null && value > matchingRange.getCriticalHigh()) {
+            return FLAG_CRITICAL;
+        }
         Double min = matchingRange.getMinValue();
         Double max = matchingRange.getMaxValue();
         if (min != null && value < min) {

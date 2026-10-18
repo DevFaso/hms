@@ -20,6 +20,9 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** D82: whether the item is tracked in lots at all. */
+    boolean existsByInventoryItemId(UUID inventoryItemId);
+
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId " +
            "AND s.remainingQuantity > 0 AND s.expiryDate >= CURRENT_DATE " +
            "ORDER BY s.expiryDate ASC")

@@ -62,6 +62,18 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
      * {@code BigDecimal.ZERO} when no rows match, never {@code null}, thanks
      * to the {@code COALESCE(..., 0)} in the query.
      */
+    /**
+     * D95: how many fills of this prescription handed over everything they
+     * asked for. Used when the prescription carries no quantity of its own,
+     * so the sum above has nothing to be compared with.
+     */
+    @Query("SELECT COUNT(d) FROM Dispense d "
+         + "WHERE d.prescription.id = :prescriptionId AND d.status NOT IN :excludedStatuses "
+         + "AND d.quantityRequested IS NOT NULL AND d.quantityDispensed >= d.quantityRequested")
+    long countCompleteFillsForPrescription(
+            @Param("prescriptionId") UUID prescriptionId,
+            @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
     @Query("SELECT COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
          + "WHERE d.prescription.id = :prescriptionId AND d.status NOT IN :excludedStatuses")
     BigDecimal sumQuantityDispensedForPrescription(

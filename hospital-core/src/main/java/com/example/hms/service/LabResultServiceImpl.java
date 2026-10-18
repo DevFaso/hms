@@ -248,6 +248,9 @@ public class LabResultServiceImpl implements LabResultService {
         // comes from a scalar projection, which is not served from the
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
+        if (!ingested) {
+            requireSpecimenTaken(committedStatus, lockedOrder);
+        }
 
         // A retried post records a second result, deliberately. Detecting the
         // retry meant comparing the fields a request carries, and the portal's
@@ -685,6 +688,7 @@ public class LabResultServiceImpl implements LabResultService {
         // Hospital scope enforcement
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         requireResultInActiveHospital(labResult);
+        requireNotReleased(labResult);
 
         // Amending a result is entering one. Same gate — otherwise a bedside
         // role blocked from creating a lab-performed result could simply
@@ -718,6 +722,24 @@ public class LabResultServiceImpl implements LabResultService {
         return labResultMapper.toResponseDTO(updated);
     }
 
+    /**
+     * D107: a laboratory result is the analysis of a specimen, so a hand
+     * entered one may not land on an order whose specimen was never
+     * collected (still ORDERED or PENDING). A point-of-care test is measured
+     * at the bedside with no specimen workflow and is exempt; an analyzer's
+     * message is evidence of its own sample.
+     */
+    private static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder) {
+        if (committedStatus != LabOrderStatus.ORDERED && committedStatus != LabOrderStatus.PENDING) {
+            return;
+        }
+        LabTestDefinition test = labOrder.getLabTestDefinition();
+        if (test != null && test.isPointOfCare()) {
+            return;
+        }
+        throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.specimen.required"));
+    }
+
     /** Clock skew tolerated between the entering workstation and the server. */
     private static final java.time.Duration RESULT_DATE_SKEW = java.time.Duration.ofMinutes(5);
 
@@ -748,7 +770,22 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         requireResultInActiveHospital(labResult);
+        requireNotReleased(labResult);
         labResultRepository.deleteById(id);
+    }
+
+    /**
+     * D81: a released result is a record the ordering clinician may already
+     * have acted on. Overwriting or deleting it in place left the row marked
+     * "released by" the director over a value they never released, with the
+     * critical notification still quoting the old one and no trail. A
+     * correction is entered as a NEW result on the same order: the released
+     * row stays as it was, and both are shown, which is the trail.
+     */
+    private static void requireNotReleased(LabResult labResult) {
+        if (labResult.isReleased()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.released.immutable"));
+        }
     }
 
     @Override
@@ -1802,7 +1839,7 @@ public class LabResultServiceImpl implements LabResultService {
         for (LabResult result : candidates) {
             if (queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-                if (dto != null && isCriticalSeverity(dto)) {
+                if (dto != null && labResultMapper.raisesCriticalAlert(result, dto.getSeverityFlag())) {
                     surfaced.add(result);
                     answer.add(dto);
                 }
@@ -1813,11 +1850,6 @@ public class LabResultServiceImpl implements LabResultService {
             .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate,
                 Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
-    }
-
-    private static boolean isCriticalSeverity(LabResultResponseDTO dto) {
-        return CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag())
-            || "HIGH".equalsIgnoreCase(dto.getSeverityFlag());
     }
 
     private LabResultComparisonDTO.ComparisonMetadata calculateComparison(LabResult current, LabResult previous, List<LabResultTrendPointDTO> trendHistory) {
@@ -1939,6 +1971,8 @@ public class LabResultServiceImpl implements LabResultService {
                 .ageMax(range.getAgeMax())
                 .gender(range.getGender())
                 .notes(range.getNotes())
+                .criticalLow(range.getCriticalLow())
+                .criticalHigh(range.getCriticalHigh())
                 .build())
             .toList();
     }

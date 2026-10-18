@@ -124,7 +124,8 @@ class LabResultServiceImplLifecycleTest {
         order.setHospital(hospital);
         order.setPatient(patient);
         order.setLabTestDefinition(testDefinition);
-        order.setStatus(LabOrderStatus.ORDERED);
+        // D107: a hand-entered result needs a specimen; the default order has one.
+        order.setStatus(LabOrderStatus.RECEIVED);
 
         assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
@@ -241,7 +242,7 @@ class LabResultServiceImplLifecycleTest {
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RESULTED);
         // written as a statement, never through the entity
         verify(labOrderRepository).updateStatusFrom(
-            order.getId(), LabOrderStatus.ORDERED, LabOrderStatus.RESULTED);
+            order.getId(), LabOrderStatus.RECEIVED, LabOrderStatus.RESULTED);
         verify(labOrderRepository, never()).save(any(LabOrder.class));
         // the order is read unlocked; the write lock is taken only for the
         // status decision, so it is never held across the permission checks
@@ -900,7 +901,7 @@ class LabResultServiceImplLifecycleTest {
         org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(labOrderRepository, labResultRepository);
         inOrder.verify(labOrderRepository).findWithLockById(order.getId());
         inOrder.verify(labResultRepository).save(any(LabResult.class));
-        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.ORDERED,
+        inOrder.verify(labOrderRepository).updateStatusFrom(order.getId(), LabOrderStatus.RECEIVED,
             LabOrderStatus.RESULTED);
     }
 
@@ -1420,7 +1421,33 @@ class LabResultServiceImplLifecycleTest {
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labResultRepository, never()).save(any(LabResult.class));
-        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.RECEIVED);
+    }
+
+    @Test
+    @DisplayName("D107 - a hand-entered result on an order with no specimen collected is refused")
+    void aResultWithNoSpecimenIsRefused() {
+        stubEntryPath();
+        order.setStatus(LabOrderStatus.ORDERED);
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+        // the refusal comes before the entry path's later stubs are reached
+        org.mockito.Mockito.reset(labResultMapper, labResultRepository, labReflexRuleRepository);
+    }
+
+    @Test
+    @DisplayName("D107 - a point-of-care test needs no specimen workflow")
+    void aPointOfCareResultNeedsNoSpecimen() {
+        stubEntryPath();
+        order.setStatus(LabOrderStatus.ORDERED);
+        order.getLabTestDefinition().setPointOfCare(true);
+
+        service.createLabResult(entryRequest(), Locale.ENGLISH);
+
+        verify(labResultRepository).save(any(LabResult.class));
     }
 
     // ── B12: reflex children carry the parent's provenance ─────────────────

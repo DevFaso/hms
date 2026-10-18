@@ -201,8 +201,11 @@ public class LabTestDefinition extends BaseEntity {
             loincDisplay = trimmed.isEmpty() ? null : trimmed;
         }
 
-        // Lab test definitions are nationally scoped, never tied to a single hospital
-        hospital = null;
+        // D73: hospital is NOT cleared here. This hook nulled hospital_id on
+        // every insert and update, so the service's per-hospital scoping (D30)
+        // never reached the database and every approval step re-globalised a
+        // repaired row. A null hospital is the platform catalog; a set one is
+        // that hospital's own definition.
 
         if (referenceRanges == null) {
             referenceRanges = new ArrayList<>();

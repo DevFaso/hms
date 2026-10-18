@@ -2780,4 +2780,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V192: lab test definitions - re-file the rows the entity hook kept
+         saving global after V191 (D73, regression of D30). Data-only,
+         idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V192-lab-test-definition-rescope-after-hook" author="hms-team" runOnChange="false">
+        <sqlFile path="V192__lab_test_definition_rescope_after_hook.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

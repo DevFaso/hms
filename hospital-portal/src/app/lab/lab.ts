@@ -48,9 +48,13 @@ export class LabComponent implements OnInit {
   private readonly printService = inject(PrintLabelService);
   private readonly translate = inject(TranslateService);
 
-  /** Only providers can place lab orders (matches POST /lab-orders @PreAuthorize). */
+  /**
+   * Only providers can place lab orders (matches POST /lab-orders @PreAuthorize
+   * and RoleValidator.canOrderLabTests). D106: a midwife was offered the form
+   * and then refused by the server, so the button is not shown to her.
+   */
   readonly canCreateOrder = computed(() =>
-    this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN']),
+    this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN']),
   );
 
   /**
