@@ -13,7 +13,8 @@ export interface HospitalLifecycleResponse {
   hospitalId: string;
   hospitalName: string;
   hospitalCode: string;
-  state: HospitalLifecycleState;
+  /** The API field name; `state` was never sent, which left the card blank (D89). */
+  lifecycleState: HospitalLifecycleState;
   suspendedAt: string | null;
   suspendedBy: string | null;
   suspensionReason: string | null;

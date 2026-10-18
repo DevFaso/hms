@@ -95,7 +95,7 @@ describe('ProviderDetailComponent', () => {
       'restore',
       'archive',
     ]);
-    const lifecycleDone = { state: 'SUSPENDED' } as HospitalLifecycleResponse;
+    const lifecycleDone = { lifecycleState: 'SUSPENDED' } as HospitalLifecycleResponse;
     lifecycle.suspend.and.returnValue(of(lifecycleDone));
     lifecycle.restore.and.returnValue(of(lifecycleDone));
     lifecycle.archive.and.returnValue(of(lifecycleDone));

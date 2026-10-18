@@ -437,11 +437,23 @@ export interface PrimaryCareEntry {
   current: boolean;
 }
 
-/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory }. */
+/** A clinician holding one of the patient's visits still open (QA D115). */
+export interface VisitClinicianEntry {
+  userId: string;
+  displayName: string | null;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  /** ISO local date-time of the newest open visit with this clinician. */
+  visitDate: string | null;
+}
+
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory, visitClinicians }. */
 export interface CareTeamDTO {
   primaryCare: PrimaryCareEntry | null;
   /** Newest first; includes the current link. */
   primaryCareHistory: PrimaryCareEntry[];
+  /** Newest visit first, one entry per clinician. */
+  visitClinicians?: VisitClinicianEntry[];
 }
 
 /** A clinician a patient can address a chat message to. */
@@ -1072,6 +1084,7 @@ export class PatientPortalService {
       map((r) => ({
         primaryCare: r.data?.primaryCare ?? null,
         primaryCareHistory: r.data?.primaryCareHistory ?? [],
+        visitClinicians: r.data?.visitClinicians ?? [],
       })),
     );
   }
@@ -1089,13 +1102,20 @@ export class PatientPortalService {
           ...(team?.primaryCare ? [team.primaryCare] : []),
           ...(team?.primaryCareHistory ?? []),
         ];
-        return distinctClinicians(
-          entries.map((e) => ({
+        return distinctClinicians([
+          ...entries.map((e) => ({
             userId: e.doctorUserId ?? '',
             name: e.doctorDisplay ?? '',
             hospitalName: e.hospitalName ?? null,
           })),
-        );
+          // The clinicians of open visits: without them a walk-in patient
+          // had nobody to write to (QA D115).
+          ...(team?.visitClinicians ?? []).map((v) => ({
+            userId: v.userId ?? '',
+            name: v.displayName ?? '',
+            hospitalName: v.hospitalName ?? null,
+          })),
+        ]);
       }),
     );
   }

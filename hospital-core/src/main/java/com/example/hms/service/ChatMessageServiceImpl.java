@@ -52,6 +52,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
+    private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
@@ -71,6 +72,21 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private static final Set<String> CLINICAL_CARE_ROLES = Set.of(
         ROLE_DOCTOR, "ROLE_PHYSICIAN", "ROLE_SURGEON", ROLE_NURSE, ROLE_MIDWIFE
     );
+
+    /**
+     * Whether a patient may message this user: the same role test the send
+     * path applies, shared so a picker (the portal care team, QA D115) never
+     * offers a recipient whose send would be refused.
+     */
+    public static boolean holdsClinicalCareRole(User user) {
+        return user != null && user.getUserRoles() != null && user.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
+            .map(ur -> {
+                String roleName = ur.getRole().getName();
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
+            })
+            .anyMatch(CLINICAL_CARE_ROLES::contains);
+    }
 
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
@@ -320,7 +336,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .filter(ur -> ur.getRole() != null)
             .map(ur -> {
                 String roleName = ur.getRole().getName();
-                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
             })
             .collect(java.util.stream.Collectors.toSet());
 

@@ -36,12 +36,12 @@ const fakeHospital = (): HospitalResponse => ({
 });
 
 const fakeLifecycle = (
-  state: HospitalLifecycleResponse['state'] = 'ACTIVE',
+  state: HospitalLifecycleResponse['lifecycleState'] = 'ACTIVE',
 ): HospitalLifecycleResponse => ({
   hospitalId: 'h-1',
   hospitalName: 'Korle Bu',
   hospitalCode: 'KB',
-  state,
+  lifecycleState: state,
   suspendedAt: null,
   suspendedBy: null,
   suspensionReason: null,

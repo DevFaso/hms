@@ -262,6 +262,48 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(401);
   });
 
+  for (const url of ['/api/auth/me/change-password', '/api/auth/me/change-email']) {
+    it(`a wrong current password on ${url} is retried once on a fresh token, then reaches the form without a sign-out (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+      auth.refreshTokenRequest.and.returnValue(
+        of({ accessToken: 'new-token', refreshToken: 'r2' }),
+      );
+
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne(url)
+        .flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+      const retry = httpMock.expectOne(url);
+      expect(retry.request.headers.get('Authorization')).toBe('Bearer new-token');
+      retry.flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(401);
+    });
+
+    it(`an expired access token on ${url} is refreshed and the change succeeds (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+      auth.refreshTokenRequest.and.returnValue(
+        of({ accessToken: 'new-token', refreshToken: 'r2' }),
+      );
+
+      let ok = false;
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ next: () => (ok = true), error: (e) => (error = e) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+      httpMock.expectOne(url).flush({});
+
+      expect(ok).toBeTrue();
+      expect(error).toBeUndefined();
+      expect(auth.logout).not.toHaveBeenCalled();
+    });
+  }
+
   it('never refreshes or logs out again on the 401 of the logout call itself', () => {
     // AuthService.logout() fires POST /auth/logout; an expired bearer answers
     // 401. A refresh here would mint a new session mid-logout, and a second

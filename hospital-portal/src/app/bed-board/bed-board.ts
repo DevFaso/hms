@@ -91,16 +91,29 @@ export class BedBoardComponent implements OnInit {
     'PROTECTIVE',
   ];
 
+  /**
+   * Isolation and transfers are clinical: IsolationController and
+   * TransferController keep the hospital admin off the chart, so offering the
+   * buttons to that role only produced 403s (D88).
+   */
   readonly canManagePrecautions = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 
   /** Same roles the backend allows to order and carry out a move. */
   readonly canTransfer = this.canManagePrecautions;
+
+  /** TransferController.WARD_TEAM: the clinical roles plus the front desk. */
+  readonly canReadTransfers = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   /** Transfer modal state. */
   showTransferModal = signal(false);
@@ -197,6 +210,7 @@ export class BedBoardComponent implements OnInit {
   }
 
   loadPendingTransfers(): void {
+    if (!this.canReadTransfers) return;
     this.transfers
       .getPending()
       .pipe(takeUntilDestroyed(this.destroyRef))

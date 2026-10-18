@@ -287,6 +287,39 @@ class SuperAdminAuditSearchServiceImplTest {
         assertThat(pageCaptor.getValue().getPageSize()).isEqualTo(50_000);
     }
 
+    @Test
+    @DisplayName("D119 — the userName filter also matches the actor's sign-in username, not only the display snapshot")
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    void userNameFilterMatchesTheActorUsername() {
+        when(repository.findAll(any(Specification.class), any(PageRequest.class)))
+            .thenReturn(Page.empty());
+        service.search(new AuditSearchFilter(
+            null, " A.Traore ", null, null, null, null, null, null, null, null, null, null),
+            PageRequest.of(0, 10));
+        Specification<AuditEventLog> spec = captureSpec();
+
+        Root<AuditEventLog> root = mock(Root.class);
+        CriteriaBuilder cb = mock(CriteriaBuilder.class);
+        Path snapshot = mock(Path.class);
+        Path username = mock(Path.class);
+        Join actor = mock(Join.class);
+        when(root.get("userName")).thenReturn(snapshot);
+        when(root.join(org.mockito.ArgumentMatchers.eq("user"), any())).thenReturn(actor);
+        when(actor.get("username")).thenReturn(username);
+        Expression lowSnapshot = mock(Expression.class);
+        Expression lowUsername = mock(Expression.class);
+        when(cb.lower(snapshot)).thenReturn(lowSnapshot);
+        when(cb.lower(username)).thenReturn(lowUsername);
+        Predicate p1 = mock(Predicate.class);
+        Predicate p2 = mock(Predicate.class);
+        when(cb.like(lowSnapshot, "%a.traore%")).thenReturn(p1);
+        when(cb.like(lowUsername, "%a.traore%")).thenReturn(p2);
+
+        spec.toPredicate(root, mock(CriteriaQuery.class), cb);
+
+        verify(cb).or(p1, p2);
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void invokeSpec(Specification<AuditEventLog> spec, boolean expectJoins) {
         Root<AuditEventLog> root = mock(Root.class);

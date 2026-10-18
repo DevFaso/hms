@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.superadmin.AuditSearchFilter;
 import com.example.hms.payload.dto.superadmin.AuditSearchPageDTO;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -157,9 +159,14 @@ public class SuperAdminAuditSearchServiceImpl implements SuperAdminAuditSearchSe
             predicates.add(cb.equal(root.get("user").get("id"), f.userId()));
         }
         if (f.userNameLike() != null && !f.userNameLike().isBlank()) {
-            predicates.add(cb.like(
-                cb.lower(root.get("userName")),
-                "%" + f.userNameLike().toLowerCase() + "%"));
+            // The row's userName is a display snapshot ("Awa Traoré"), so a
+            // search for the sign-in name found nothing (D119): match the
+            // actor's username too, through the (nullable) user link.
+            String pattern = "%" + f.userNameLike().trim().toLowerCase(Locale.ROOT) + "%";
+            Join<AuditEventLog, User> actor = root.join("user", JoinType.LEFT);
+            predicates.add(cb.or(
+                cb.like(cb.lower(root.get("userName")), pattern),
+                cb.like(cb.lower(actor.get("username")), pattern)));
         }
         if (f.impersonatorUserId() != null) {
             predicates.add(cb.equal(root.get("impersonatorUserId"), f.impersonatorUserId()));

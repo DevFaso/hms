@@ -892,7 +892,8 @@ export const routes: Routes = [
       {
         path: 'users',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // The hospital admin onboards their own staff (QA D117).
+        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN'] },
         loadComponent: () => import('./users/user-list').then((m) => m.UserListComponent),
       },
 

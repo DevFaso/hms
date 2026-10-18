@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.JobTitle;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
@@ -11,6 +12,7 @@ import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.OnCallScheduleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.OnCallScheduleService;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -129,8 +133,25 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Cannot roster a staff member from another hospital.");
         }
+        // The rota is who answers a clinical page: a departed or deactivated
+        // member, or a desk / back-office role, is not cover (QA D117).
+        if (!staff.isActive() || staff.getUser() == null || !staff.getUser().isActive()
+            || staff.getUser().isDeleted()) {
+            throw new BusinessException(MessageUtil.resolve("onCall.staff.inactive"));
+        }
+        if (!ON_CALL_JOB_TITLES.contains(staff.getJobTitle())) {
+            throw new BusinessException(MessageUtil.resolve("onCall.staff.notClinical"));
+        }
         return staff;
     }
+
+    /** Clinical titles that can carry an on-call page. */
+    private static final Set<JobTitle> ON_CALL_JOB_TITLES = EnumSet.of(
+        JobTitle.DOCTOR, JobTitle.PHYSICIAN, JobTitle.SURGEON, JobTitle.ANESTHESIOLOGIST,
+        JobTitle.RADIOLOGIST, JobTitle.NURSE, JobTitle.NURSE_PRACTITIONER, JobTitle.MIDWIFE,
+        JobTitle.PHARMACIST, JobTitle.LAB_TECHNICIAN, JobTitle.LAB_SCIENTIST,
+        JobTitle.LABORATORY_SCIENTIST, JobTitle.LAB_DIRECTOR, JobTitle.TECHNICIAN,
+        JobTitle.PHYSIOTHERAPIST, JobTitle.PSYCHOLOGIST);
 
     private Department resolveDepartment(UUID departmentId) {
         if (departmentId == null) {
