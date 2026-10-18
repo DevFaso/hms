@@ -452,15 +452,11 @@ public class AuthController {
             // emailed code — and that dead end is what gets reported as "I
             // never received an activation email". The wording below covers
             // both routes without asserting either, and is identical for every
-            // inactive account: DaoAuthenticationProvider checks isEnabled
-            // BEFORE the password, so this arm also answers junk-password
-            // probes, and it must neither vary by activation state nor spend
-            // queries discovering it.
-            //
-            // That this arm differs from bad credentials at all still tells a
-            // prober the username exists and is inactive — inherent to giving
-            // the real holder usable guidance, and unchanged from the previous
-            // wording. It IS counted toward the lockout, so the probe is
+            // inactive account. QA D168: the provider now checks the account
+            // status only AFTER the password matched
+            // (SecurityConfig#checkPasswordBeforeAccountStatus), so a wrong
+            // password gets the bad-credentials answer above and this arm is
+            // reached only by someone who knows the password. It IS counted toward the lockout, so the probe is
             // throttled like any other failed login. That is only safe because
             // every activation path clears the counter —
             // UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
@@ -1308,7 +1304,7 @@ public class AuthController {
         try {
             authNotification.passwordReset().requestReset(email, locale, ip);
         } catch (ResourceNotFoundException e) {
-            log.debug("Password reset requested for non-existent email: {}", email);
+            log.debug("Password reset requested for an unknown address");
         }
         return ResponseEntity.noContent().build();
     }

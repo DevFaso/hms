@@ -214,6 +214,7 @@ class DepartmentServiceImplTest {
 
     @Test
     void getActiveDepartmentsMinimal_returnsMinimalList() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
         when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
 
         List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
@@ -235,6 +236,7 @@ class DepartmentServiceImplTest {
 
     @Test
     void getActiveDepartmentsMinimal_otherHospital_omitsContacts() {
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
         when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
         when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
 
@@ -1442,7 +1444,10 @@ class DepartmentServiceImplTest {
         // QA D118: a referral picks the RECEIVING hospital's department. This
         // used to throw AccessDenied (a silent 403 in the referral form).
         UUID otherHospitalId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
         when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorId);
+        when(roleValidator.isDoctor(doctorId, hospitalId)).thenReturn(true);
         Department open = Department.builder().name("Pediatrie").email("ped@example.test")
             .phoneNumber("+22600000000").build();
         open.setId(UUID.randomUUID());
@@ -1457,6 +1462,19 @@ class DepartmentServiceImplTest {
         assertThat(result).extracting(DepartmentMinimalDTO::getName).containsExactly("Pediatrie");
         assertThat(result.get(0).getEmail()).isNull();
         assertThat(result.get(0).getPhoneNumber()).isNull();
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_crossHospital_refusedToAHospitalAdmin() {
+        // QA D145: admin A listed hospital B's departments through this endpoint.
+        UUID otherHospitalId = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
+
+        assertThatThrownBy(() -> departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(departmentRepository, never()).findByHospitalId(otherHospitalId);
     }
 
     @Test

@@ -312,7 +312,20 @@ public class SecurityConfig {
         var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         provider.setAuthoritiesMapper(authoritiesMapper());
+        checkPasswordBeforeAccountStatus(provider);
         return provider;
+    }
+
+    /**
+     * QA D168: by default the provider checks enabled/locked BEFORE the password, so
+     * "account inactive" answered a wrong password too and told anyone that the
+     * username exists and is inactive. The status is checked only once the password
+     * matched; a wrong password is a plain bad-credentials answer for every account.
+     */
+    static void checkPasswordBeforeAccountStatus(DaoAuthenticationProvider provider) {
+        provider.setPreAuthenticationChecks(user -> { });
+        provider.setPostAuthenticationChecks(
+            new org.springframework.security.authentication.AccountStatusUserDetailsChecker());
     }
 
     /**
