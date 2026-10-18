@@ -213,6 +213,16 @@
   }
 }
 
+.rp-row-select {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
 .rp-row-info {
   display: flex;
   flex-direction: column;

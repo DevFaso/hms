@@ -7,9 +7,9 @@
   @if (!loading()) {
     <div class="total-banner">
       <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_PAID' | translate }}</span>
-      <strong>{{ totalPaid() | number: '1.0-0' }} XOF</strong>
+      <strong>{{ totalPaid() | currency: 'XOF' : 'symbol' : '1.0-0' }}</strong>
       <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_CLAIMED' | translate }}</span>
-      <strong>{{ totalClaimed() | number: '1.0-0' }} XOF</strong>
+      <strong>{{ totalClaimed() | currency: 'XOF' : 'symbol' : '1.0-0' }}</strong>
     </div>
   }
 

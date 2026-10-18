@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { MAX_PATIENT_DOCUMENT_BYTES, MyDocumentsComponent } from './my-documents.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 const mockDoc = {
   id: 'doc-1',
@@ -129,7 +130,11 @@ describe('MyDocumentsComponent', () => {
   });
 
   it('fileSizeKb should format correctly', () => {
-    expect(component.fileSizeKb(51200)).toBe('50.0');
+    // The decimal separator follows the cached UI locale (French by default), so derive it.
+    const expected = new Intl.NumberFormat(currentLocale(), { minimumFractionDigits: 1 }).format(
+      50,
+    );
+    expect(component.fileSizeKb(51200)).toBe(expected);
   });
 });
 

@@ -1715,7 +1715,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const d = this.qualityManagerDashboard();
     if (!d) return [];
     const passRateDisplay: string =
-      d.qualityPassRate != null ? d.qualityPassRate.toFixed(1) + '%' : 'N/A';
+      d.qualityPassRate != null
+        ? new Intl.NumberFormat(currentLocale(), {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }).format(d.qualityPassRate) + '\u00a0%'
+        : '—';
     return [
       {
         key: 'pending_qa',

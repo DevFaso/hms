@@ -86,6 +86,30 @@ describe('DoctorWorklistComponent', () => {
       expect(component.filteredItems()[0].encounterStatus).toBe('COMPLETED');
     });
 
+    it('names every filter control and nests no control inside another (D120)', () => {
+      const el: HTMLElement = fixture.nativeElement;
+      for (const ctl of Array.from(el.querySelectorAll('.wl-filters input, .wl-filters select'))) {
+        expect(ctl.getAttribute('aria-label')).withContext(ctl.outerHTML).toBeTruthy();
+      }
+      expect(el.querySelectorAll('[role="button"]').length).toBe(0);
+      for (const row of Array.from(el.querySelectorAll('.wl-row'))) {
+        expect(row.hasAttribute('tabindex')).toBeFalse();
+        for (const ctl of Array.from(row.querySelectorAll('a, button'))) {
+          expect(ctl.querySelector('a, button')).toBeNull();
+          if (!ctl.classList.contains('wl-select')) {
+            expect(ctl.getAttribute('aria-label')).withContext(ctl.outerHTML).toBeTruthy();
+          }
+        }
+      }
+    });
+
+    it('selects the patient from the row button', () => {
+      const spy = spyOn(component, 'selectPatient');
+      const el: HTMLElement = fixture.nativeElement;
+      (el.querySelector('.wl-select') as HTMLButtonElement).click();
+      expect(spy).toHaveBeenCalledWith('p1');
+    });
+
     it('tab counts should be correct', () => {
       const counts = component.tabCounts();
       expect(counts['ALL']).toBe(7);

@@ -29,11 +29,13 @@
     <input
       type="date"
       class="wl-filter-date"
+      [attr.aria-label]="'DASHBOARD.FILTER_BY_DATE' | translate"
       [value]="dateFilter()"
       (change)="setDateFilter($any($event.target).value)"
     />
     <select
       class="wl-filter-select"
+      [attr.aria-label]="'DASHBOARD.FILTER_BY_URGENCY' | translate"
       [value]="urgencyFilter()"
       (change)="setUrgencyFilter($any($event.target).value)"
     >
@@ -46,6 +48,7 @@
     @if (uniqueLocations().length > 0) {
       <select
         class="wl-filter-select"
+        [attr.aria-label]="'DASHBOARD.FILTER_BY_LOCATION' | translate"
         [value]="locationFilter()"
         (change)="setLocationFilter($any($event.target).value)"
       >
@@ -59,9 +62,10 @@
       <button
         class="wl-filter-clear"
         [title]="'COMMON.CLEAR_ALL_FILTERS' | translate"
+        [attr.aria-label]="'COMMON.CLEAR_ALL_FILTERS' | translate"
         (click)="clearFilters()"
       >
-        <span class="material-symbols-outlined">close</span>
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
     }
   </div>
@@ -73,26 +77,28 @@
   } @else {
     <div class="wl-table">
       @for (item of filteredItems(); track item.encounterId || item.patientId) {
-        <div
-          class="wl-row"
-          [ngClass]="getUrgencyClass(item.urgency)"
-          role="button"
-          tabindex="0"
-          (click)="selectPatient(item.patientId)"
-          (keydown.enter)="selectPatient(item.patientId)"
-        >
-          <div class="wl-avatar" [style.background]="getAvatarColor(item.patientName)">
-            {{ getInitials(item.patientName) }}
-          </div>
-          <div class="wl-patient-info">
-            <span class="wl-name">{{ item.patientName }}</span>
-            <span class="wl-meta">
-              {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}
-              @if (item.mrn) {
-                <span class="wl-mrn">{{ item.mrn }}</span>
-              }
+        <div class="wl-row" [ngClass]="getUrgencyClass(item.urgency)">
+          <!-- The patient is selected by its own button: a role=button row
+               holding links and buttons is a nested-interactive axe
+               violation (D120). -->
+          <button type="button" class="wl-select" (click)="selectPatient(item.patientId)">
+            <span
+              class="wl-avatar"
+              aria-hidden="true"
+              [style.background]="getAvatarColor(item.patientName)"
+            >
+              {{ getInitials(item.patientName) }}
             </span>
-          </div>
+            <span class="wl-patient-info">
+              <span class="wl-name">{{ item.patientName }}</span>
+              <span class="wl-meta">
+                {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}
+                @if (item.mrn) {
+                  <span class="wl-mrn">{{ item.mrn }}</span>
+                }
+              </span>
+            </span>
+          </button>
           @if (item.room) {
             <div class="wl-room">
               <span class="material-symbols-outlined">meeting_room</span>
@@ -123,7 +129,7 @@
                 class="wl-action-btn wl-start-btn"
                 [attr.aria-label]="'DASHBOARD.START_ENCOUNTER' | translate"
                 [title]="'DASHBOARD.START_ENCOUNTER' | translate"
-                (click)="$event.stopPropagation(); requestStartEncounter(item.encounterId)"
+                (click)="requestStartEncounter(item.encounterId)"
               >
                 <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
               </button>
@@ -132,18 +138,18 @@
               [routerLink]="['/patients', item.patientId]"
               class="wl-action-btn"
               [title]="'DASHBOARD.OPEN_CHART' | translate"
-              (click)="$event.stopPropagation()"
+              [attr.aria-label]="'DASHBOARD.OPEN_CHART' | translate"
             >
-              <span class="material-symbols-outlined">open_in_new</span>
+              <span class="material-symbols-outlined" aria-hidden="true">open_in_new</span>
             </a>
             @if (item.encounterId) {
               <a
                 [routerLink]="['/encounters', item.encounterId]"
                 class="wl-action-btn"
                 [title]="'DASHBOARD.OPEN_ENCOUNTER' | translate"
-                (click)="$event.stopPropagation()"
+                [attr.aria-label]="'DASHBOARD.OPEN_ENCOUNTER' | translate"
               >
-                <span class="material-symbols-outlined">stethoscope</span>
+                <span class="material-symbols-outlined" aria-hidden="true">stethoscope</span>
               </a>
             }
             <a
@@ -151,18 +157,18 @@
               [queryParams]="{ patientId: item.patientId }"
               class="wl-action-btn"
               [title]="'DASHBOARD.ORDER_LABS' | translate"
-              (click)="$event.stopPropagation()"
+              [attr.aria-label]="'DASHBOARD.ORDER_LABS' | translate"
             >
-              <span class="material-symbols-outlined">science</span>
+              <span class="material-symbols-outlined" aria-hidden="true">science</span>
             </a>
             <a
               [routerLink]="['/prescriptions']"
               [queryParams]="{ new: '1', patientId: item.patientId }"
               class="wl-action-btn"
               [title]="'DASHBOARD.WRITE_RX' | translate"
-              (click)="$event.stopPropagation()"
+              [attr.aria-label]="'DASHBOARD.WRITE_RX' | translate"
             >
-              <span class="material-symbols-outlined">medication</span>
+              <span class="material-symbols-outlined" aria-hidden="true">medication</span>
             </a>
           </div>
         </div>

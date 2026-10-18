@@ -2102,7 +2102,10 @@
     "WORKFORCE_ABSENCE": "Ausencias del personal",
     "WRITE_OFFS": "Cancelaciones de deuda",
     "WRITE_RX": "Escribir receta",
-    "WRITTEN_OFF": "Cancelada como incobrable"
+    "WRITTEN_OFF": "Cancelada como incobrable",
+    "FILTER_BY_DATE": "Filtrar por fecha",
+    "FILTER_BY_URGENCY": "Filtrar por urgencia",
+    "FILTER_BY_LOCATION": "Filtrar por ubicación"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "Las credenciales de acceso de un solo uso no pudieron enviarse al paciente.",
@@ -5250,12 +5253,6 @@
         "SENT": "Enviada",
         "UNKNOWN": "Desconocido"
       },
-      "INVOICE_ITEM_CATEGORY": {
-        "SERVICE": "Servicio",
-        "MEDICATION": "Medicamento",
-        "LAB_TEST": "Análisis de laboratorio",
-        "GENERAL": "General"
-      },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmada",
         "ENTERED_IN_ERROR": "Registrada por error",
@@ -5771,6 +5768,30 @@
         "ED_NOTE": "Nota de urgencias",
         "MEDICATION_ORDER": "Orden de medicación",
         "CARE_PLAN": "Plan de cuidados"
+      },
+      "ADMISSION_TYPE": {
+        "EMERGENCY": "Urgencia",
+        "ELECTIVE": "Programada",
+        "URGENT": "Urgente",
+        "NEWBORN": "Recién nacido",
+        "TRANSFER": "Traslado",
+        "OBSERVATION": "Observación",
+        "DAY_CASE": "Ambulatoria",
+        "LABOR_DELIVERY": "Trabajo de parto y parto",
+        "PSYCHIATRIC": "Psiquiátrica"
+      },
+      "STOCK_TRANSACTION_TYPE": {
+        "RECEIPT": "Recepción",
+        "DISPENSE": "Dispensación",
+        "ADJUSTMENT": "Ajuste",
+        "TRANSFER": "Traslado",
+        "RETURN": "Devolución"
+      },
+      "INVOICE_ITEM_CATEGORY": {
+        "SERVICE": "Servicio",
+        "MEDICATION": "Medicamento",
+        "LAB_TEST": "Análisis de laboratorio",
+        "GENERAL": "General"
       }
     },
     "DOCUMENTS": {
@@ -7763,7 +7784,7 @@
     "ALL_DISPENSARIES": "Todas las farmacias hospitalarias",
     "ALL_STOCKED": "Todos los artículos están bien abastecidos",
     "ATC_CODE": "Código ATC",
-    "ATC_FORMAT_HINT": "El código ATC debe seguir el formato OMS L##LL## (p. ej. J01CA04).",
+    "ATC_FORMAT_HINT": "El código ATC debe seguir el formato OMS L##, L##L, L##LL o L##LL## (p. ej. J01, J01CA, J01CA04).",
     "BACK_ORDER": "Pedido pendiente",
     "BACK_ORDER_PLACED": "Receta registrada como pedido pendiente",
     "BRAND_NAME": "Nombre comercial",
@@ -8081,6 +8102,8 @@
     },
     "NO_PHARMACY_HINT": "Todavía no hay ninguna farmacia registrada para este hospital. Un administrador del hospital puede registrar una en el Registro de farmacias.",
     "SELECT_PHARMACY": "Farmacia",
+    "QTY_ON_HAND_COLUMN": "Cant. en existencia",
+    "REORDER_QTY_COLUMN": "Cant. a pedir",
     "RECEIPT_EXPIRY_REQUIRED": "Introduzca la fecha de caducidad del lote.",
     "RECEIPT_LOT_EXPIRED": "Este lote está caducado y no puede ingresarse en el stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "Este artículo se controla por lote: elija el lote al que se aplica el movimiento.",
@@ -9117,7 +9140,8 @@
     "DELIVERY_LINK": "Parto",
     "DELIVERY_LINK_NONE": "Sin vincular (nacido en otro lugar)",
     "DELIVERY_LINKED": "vinculado al parto",
-    "PICK_PATIENT_HINT": "Elija una paciente para ver su seguimiento posparto."
+    "PICK_PATIENT_HINT": "Elija una paciente para ver su seguimiento posparto.",
+    "PHASE_UNKNOWN": "Fase aún no definida"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",
