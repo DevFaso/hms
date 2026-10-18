@@ -3703,7 +3703,9 @@
     "ACVPU_NEW_CONFUSION": "Confusión nueva",
     "ACVPU_VOICE": "Responde a la voz",
     "ACVPU_PAIN": "Responde al dolor",
-    "ACVPU_UNRESPONSIVE": "Sin respuesta"
+    "ACVPU_UNRESPONSIVE": "Sin respuesta",
+    "OVERRIDE_EXPLAIN": "El escaneo de los cinco correctos a pie de cama se hace en el eMAR. Para registrar esta dosis como administrada desde aquí, indique el motivo de la excepción.",
+    "OPEN_EMAR": "Abrir el eMAR para escanear"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -6042,7 +6044,19 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
-    "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua."
+    "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua.",
+    "ROUTE_NOT_RECORDED": "No registrada",
+    "ROUTES": {
+      "PO": "Oral (PO)",
+      "IV": "Intravenosa (IV)",
+      "IM": "Intramuscular (IM)",
+      "SC": "Subcutánea (SC)",
+      "SL": "Sublingual (SL)",
+      "PR": "Rectal (PR)",
+      "TOP": "Tópica (TOP)",
+      "INH": "Inhalada (INH)",
+      "NEB": "Nebulizada (NEB)"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",

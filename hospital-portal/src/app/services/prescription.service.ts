@@ -23,6 +23,8 @@ export interface PrescriptionResponse {
   medicationDisplayName: string;
   dosage: string;
   frequency: string;
+  /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
+  route?: string | null;
   duration: string;
   notes: string;
   /**
@@ -170,6 +172,8 @@ export interface PrescriptionRequest {
   medicationName: string;
   dosage?: string;
   frequency?: string;
+  /** D109: the route the MAR five-rights check compares the bedside entry with. */
+  route?: string;
   duration?: string;
   notes?: string;
   status?: PrescriptionStatusType;

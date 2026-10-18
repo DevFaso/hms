@@ -328,12 +328,16 @@ export class PrescriptionsComponent implements OnInit {
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
   }
 
+  /** D109: administration routes the prescriber picks from (codes the MAR compares). */
+  readonly routes: readonly string[] = ['PO', 'IV', 'IM', 'SC', 'SL', 'PR', 'TOP', 'INH', 'NEB'];
+
   emptyForm(): PrescriptionRequest {
     return {
       patientId: '',
       medicationName: '',
       dosage: '',
       frequency: '',
+      route: 'PO',
       duration: '',
       notes: '',
       status: 'DRAFT',
@@ -406,6 +410,7 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
+      route: p.route ?? '',
       duration: p.duration ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',

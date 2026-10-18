@@ -51,6 +51,14 @@ public class PrescriptionRequestDTO {
     @Size(max = 100)
     private String frequency;
 
+    /**
+     * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route
+     * check compares the bedside scan with this value; without it every
+     * order looked oral and an IV dose always failed the route right.
+     */
+    @Size(max = 80)
+    private String route;
+
     @Size(max = 100)
     private String duration;
 

@@ -17,6 +17,9 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     List<MedicationAdministrationRecord> findByPatient_IdAndHospital_IdAndStatus(
         UUID patientId, UUID hospitalId, MedicationAdministrationStatus status);
 
+    /** Every MAR row of one prescription, latest scheduled dose first (D77 dose schedule). */
+    List<MedicationAdministrationRecord> findByPrescription_IdOrderByScheduledTimeDesc(UUID prescriptionId);
+
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m
         JOIN FETCH m.prescription
@@ -48,6 +51,10 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
         @Param("status") MedicationAdministrationStatus status,
         @Param("from") LocalDateTime from,
         @Param("to") LocalDateTime to);
+
+    /** Current status straight from the database (bypasses a stale managed entity). */
+    @Query("SELECT m.status FROM MedicationAdministrationRecord m WHERE m.id = :id")
+    java.util.Optional<MedicationAdministrationStatus> findStatusById(@Param("id") UUID id);
 
     long countByHospital_IdAndStatusAndScheduledTimeBefore(
         UUID hospitalId, MedicationAdministrationStatus status, LocalDateTime before);
