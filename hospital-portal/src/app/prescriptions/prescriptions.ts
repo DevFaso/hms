@@ -524,11 +524,15 @@ export class PrescriptionsComponent implements OnInit {
    * The backend's own sentence for a refusal, or '' when there is none worth
    * showing. Never HttpErrorResponse.message ("Http failure response for
    * ...: 403 Forbidden" — English, technical; D53/D54), and never the opaque
-   * "Access denied" default, which the caller replaces with translated text.
+   * "Access denied" default (now localized, so recognised by its ACCESS_DENIED
+   * code), which the caller replaces with translated text.
    */
   private extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object') {
-      const e = err as { error?: { message?: unknown } | null };
+      const e = err as { error?: { message?: unknown; code?: unknown } | null };
+      if (e.error?.code === 'ACCESS_DENIED') {
+        return '';
+      }
       const msg = e.error && typeof e.error.message === 'string' ? e.error.message.trim() : '';
       return msg === 'Access denied' ? '' : msg;
     }

@@ -15,6 +15,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'DEPARTMENTS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'DEPARTMENTS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"

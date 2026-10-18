@@ -23,6 +23,7 @@
     <div class="search-bar toolbar-search">
       <span class="material-symbols-outlined search-icon">search</span>
       <input
+        [attr.aria-label]="'STAFF.SEARCH_PLACEHOLDER' | translate"
         type="text"
         [placeholder]="'STAFF.SEARCH_PLACEHOLDER' | translate"
         [value]="searchTerm"

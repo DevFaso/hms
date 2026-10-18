@@ -58,7 +58,7 @@
               <span class="material-symbols-outlined">history_edu</span>
               <span>
                 {{ 'MICRO.CORRECTED_AT' | translate }}
-                {{ culture.correctedAt | date: 'MMM d, y HH:mm' }} —
+                {{ culture.correctedAt | date: 'short' }} —
                 {{ culture.correctionReason }}
               </span>
             </div>
@@ -68,7 +68,7 @@
             @if (culture.collectedAt) {
               <span>
                 {{ 'MICRO.COLLECTED_AT' | translate }}:
-                {{ culture.collectedAt | date: 'MMM d, y HH:mm' }}
+                {{ culture.collectedAt | date: 'short' }}
               </span>
             }
             @if (culture.specimenAccessionNumber) {
@@ -82,7 +82,7 @@
             @if (culture.finalizedAt) {
               <span>
                 {{ 'MICRO.FINALIZED_AT' | translate }}:
-                {{ culture.finalizedAt | date: 'MMM d, y HH:mm' }}
+                {{ culture.finalizedAt | date: 'short' }}
                 @if (culture.finalizedByName) {
                   ({{ culture.finalizedByName }})
                 }

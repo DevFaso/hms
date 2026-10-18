@@ -6,6 +6,10 @@ $primary-dark: #0a5f52;
 $sidebar-bg: #0f172a;
 $sidebar-text: #94a3b8;
 $sidebar-active: #0e7c6b;
+// D200: text on the dark sidebar must reach WCAG AA (4.5:1). #64748b was
+// 3.75:1 and the teal --primary only 3.06:1 on the active row's tint.
+$sidebar-text-dim: #8a9bb3; // 6.31:1 on $sidebar-bg
+$sidebar-active-text: #23b79c; // 6.2:1 on the active row
 
 .shell {
   display: flex;
@@ -179,7 +183,7 @@ $sidebar-active: #0e7c6b;
   // Dimmer than the items themselves: the heading orients, the items are what
   // you act on, and a heading competing with its own contents is the usual way
   // a grouped nav ends up harder to scan than the flat one it replaced.
-  color: #64748b;
+  color: $sidebar-text-dim;
   white-space: nowrap;
 }
 
@@ -214,10 +218,10 @@ $sidebar-active: #0e7c6b;
 
   &.active {
     background: rgba($primary, 0.15);
-    color: var(--primary);
+    color: $sidebar-active-text;
 
     .nav-icon {
-      color: $primary;
+      color: $sidebar-active-text;
     }
   }
 
@@ -309,7 +313,7 @@ $sidebar-active: #0e7c6b;
 
 .user-role-mini {
   font-size: 0.6875rem;
-  color: #64748b;
+  color: $sidebar-text-dim;
   text-transform: capitalize;
 }
 
