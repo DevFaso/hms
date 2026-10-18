@@ -29,7 +29,8 @@ class SecurityConfigPasswordFirstTest {
     @DisplayName("an inactive account with a wrong password is plain bad credentials")
     void wrongPasswordOnInactiveAccountIsBadCredentials() {
         DaoAuthenticationProvider provider = provider();
-        assertThatThrownBy(() -> provider.authenticate(new UsernamePasswordAuthenticationToken("nurse", "wrong")))
+        UsernamePasswordAuthenticationToken attempt = new UsernamePasswordAuthenticationToken("nurse", "wrong");
+        assertThatThrownBy(() -> provider.authenticate(attempt))
             .isInstanceOf(BadCredentialsException.class);
     }
 
@@ -37,7 +38,8 @@ class SecurityConfigPasswordFirstTest {
     @DisplayName("an inactive account with the right password is still told it is inactive")
     void rightPasswordOnInactiveAccountIsDisabled() {
         DaoAuthenticationProvider provider = provider();
-        assertThatThrownBy(() -> provider.authenticate(new UsernamePasswordAuthenticationToken("nurse", "right")))
+        UsernamePasswordAuthenticationToken attempt = new UsernamePasswordAuthenticationToken("nurse", "right");
+        assertThatThrownBy(() -> provider.authenticate(attempt))
             .isInstanceOf(DisabledException.class);
     }
 }
