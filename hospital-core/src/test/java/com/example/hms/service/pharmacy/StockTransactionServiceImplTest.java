@@ -475,7 +475,7 @@ class StockTransactionServiceImplTest {
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-1.00"));
             dto.setWitnessedBy(witnessId);
             stubUpToTheWitness();
-            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            when(assignmentRepository.existsActiveWitness(
                     witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(false);
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
@@ -493,7 +493,7 @@ class StockTransactionServiceImplTest {
             User witness = new User();
             witness.setId(witnessId);
             stubCommonMocks(dto, true);
-            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            when(assignmentRepository.existsActiveWitness(
                     witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(true);
             when(userRepository.findById(witnessId)).thenReturn(Optional.of(witness));
             org.mockito.ArgumentCaptor<StockTransaction> saved = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
@@ -523,11 +523,15 @@ class StockTransactionServiceImplTest {
             nurseUser.setId(UUID.randomUUID());
             User retired = new User();
             retired.setId(UUID.randomUUID());
+            User deactivated = new User();
+            deactivated.setId(UUID.randomUUID());
+            deactivated.setActive(false);
             when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
                     assignment(user, pharmacist, true),
                     assignment(colleague, pharmacist, true),
                     assignment(nurseUser, nurse, true),
-                    assignment(retired, pharmacist, false)));
+                    assignment(retired, pharmacist, false),
+                    assignment(deactivated, pharmacist, true)));
 
             var candidates = service.listWitnessCandidates();
 

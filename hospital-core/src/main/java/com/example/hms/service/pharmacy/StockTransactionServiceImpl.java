@@ -158,7 +158,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         Map<UUID, StockWitnessCandidateDTO> byUser = new LinkedHashMap<>();
         for (UserRoleHospitalAssignment a : assignmentRepository.findStaffRowsByHospitalId(hospitalId)) {
             User user = a.getUser();
-            if (!Boolean.TRUE.equals(a.getActive()) || user == null || a.getRole() == null
+            if (!Boolean.TRUE.equals(a.getActive()) || user == null || !user.isActive() || user.isDeleted()
+                    || a.getRole() == null
                     || user.getId() == null || user.getId().equals(self)
                     || !WITNESS_ROLE_CODES.contains(upper(a.getRole().getCode()))) {
                 continue;
@@ -236,7 +237,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         UUID hospitalId = item.getPharmacy() != null && item.getPharmacy().getHospital() != null
                 ? item.getPharmacy().getHospital().getId() : null;
-        if (hospitalId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+        if (hospitalId == null || !assignmentRepository.existsActiveWitness(
                 witnessId, hospitalId, WITNESS_ROLE_CODES)) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid"));
         }
