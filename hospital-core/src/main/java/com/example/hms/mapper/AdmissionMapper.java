@@ -93,7 +93,18 @@ public class AdmissionMapper {
         // Single query per admission — same shape as the registration lookup above.
         // Returns null when no open encounter exists, which the picker handles
         // gracefully (medication + lab fan-out tolerate null encounter).
-        dto.setCurrentEncounterId(resolveCurrentEncounterId(patient, hospital));
+        // QA D135: the stay's own INPATIENT encounter (V193) comes first, open
+        // or closed: a discharged admission still has its encounter, which is
+        // where the discharge summary and the after-visit summary live.
+        Encounter stay = admission.getId() == null ? null
+            : encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).orElse(null);
+        dto.setEncounterId(stay != null ? stay.getId() : null);
+        if (stay != null) {
+            dto.setCurrentEncounterId(TERMINAL_ENCOUNTER_STATUSES.contains(stay.getStatus()) ? null : stay.getId());
+        } else {
+            // An admission from before V193 has no encounter of its own.
+            dto.setCurrentEncounterId(resolveCurrentEncounterId(patient, hospital));
+        }
 
         // Department
         if (department != null) {

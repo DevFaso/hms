@@ -307,8 +307,10 @@ class PatientMedicationServiceImplTest {
         Hospital other = Hospital.builder().name("Hôpital B").build(); other.setId(otherHospitalId);
         Prescription local = new Prescription(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
         local.setCreatedAt(LocalDateTime.now()); local.setMedicationName("Amlodipine");
+        local.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
         foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
+        foreign.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
@@ -348,8 +350,10 @@ class PatientMedicationServiceImplTest {
         // G15 AC-12
         Prescription waiting = new Prescription(); waiting.setId(UUID.randomUUID());
         waiting.setCreatedAt(LocalDateTime.now()); waiting.setMedicationName("Amlodipine");
+        waiting.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         Prescription other = new Prescription(); other.setId(UUID.randomUUID());
         other.setCreatedAt(LocalDateTime.now().minusDays(1)); other.setMedicationName("Metformin");
+        other.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         LocalDateTime readyAt = LocalDateTime.of(2026, 10, 6, 15, 30);
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
@@ -371,6 +375,7 @@ class PatientMedicationServiceImplTest {
         // G15 AC-12: the staff medication list shows the same fact.
         Prescription waiting = new Prescription(); waiting.setId(UUID.randomUUID());
         waiting.setCreatedAt(LocalDateTime.now()); waiting.setMedicationName("Amlodipine");
+        waiting.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId)))
@@ -385,9 +390,33 @@ class PatientMedicationServiceImplTest {
     }
 
     @Test
+    void D152_portalRead_leavesOutADraft_andEndsAStayOrderWithTheStay() {
+        Prescription draft = new Prescription(); draft.setId(UUID.randomUUID());
+        draft.setCreatedAt(LocalDateTime.now()); draft.setMedicationName("Brouillon");
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        Prescription stayOrder = new Prescription(); stayOrder.setId(UUID.randomUUID());
+        stayOrder.setCreatedAt(LocalDateTime.now().minusDays(1)); stayOrder.setMedicationName("Ceftriaxone");
+        stayOrder.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        com.example.hms.model.Encounter closedStay = new com.example.hms.model.Encounter();
+        closedStay.setAdmissionId(UUID.randomUUID());
+        closedStay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        stayOrder.setEncounter(closedStay);
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft, stayOrder)));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getMedicationName).containsExactly("Ceftriaxone");
+        // D136: discharged, the stay's antibiotic is no longer "Actif".
+        assertThat(result.get(0).getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
     void portalRead_withNoHospitalScope_returnsThePatientsOwnRows_withoutTheStaffGate() {
         Prescription own = new Prescription(); own.setId(UUID.randomUUID());
         own.setCreatedAt(LocalDateTime.now()); own.setMedicationName("Amlodipine");
+        own.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(own)));
@@ -409,8 +438,10 @@ class PatientMedicationServiceImplTest {
         Hospital other = Hospital.builder().name("Hôpital B").build(); other.setId(otherHospitalId);
         Prescription local = new Prescription(); local.setId(UUID.randomUUID()); local.setHospital(hospital);
         local.setCreatedAt(LocalDateTime.now()); local.setMedicationName("Amlodipine");
+        local.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         Prescription foreign = new Prescription(); foreign.setId(UUID.randomUUID()); foreign.setHospital(other);
         foreign.setCreatedAt(LocalDateTime.now().minusDays(1)); foreign.setMedicationName("Metformin");
+        foreign.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(local, foreign)));

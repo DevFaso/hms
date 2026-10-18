@@ -360,6 +360,29 @@ describe('BedBoardComponent', () => {
     expect(admin.canManagePrecautions).toBeFalse();
   });
 
+  it('a refused worklist read is not reported as a load failure (D188)', () => {
+    transferSpy.getPending.and.returnValue(throwError(() => ({ status: 403 })));
+    component.ngOnInit();
+    expect(component.pendingTransfers()).toEqual([]);
+    expect(toastSpy.error).not.toHaveBeenCalled();
+  });
+
+  it('stacks the transfer dialog above its backdrop so its buttons take clicks (D133)', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    document.body.appendChild(fixture.nativeElement);
+    fixture.detectChanges();
+    fixture.componentInstance.showTransferModal.set(true);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const backdrop = el.querySelector('.modal-backdrop') as HTMLElement;
+    const dialog = el.querySelector('.modal') as HTMLElement;
+    expect(getComputedStyle(dialog).position).toBe('fixed');
+    expect(Number(getComputedStyle(dialog).zIndex)).toBeGreaterThan(
+      Number(getComputedStyle(backdrop).zIndex),
+    );
+    fixture.nativeElement.remove();
+  });
+
   it('offers only free beds as destinations', () => {
     boardSpy.getBoard.and.returnValue(
       of(

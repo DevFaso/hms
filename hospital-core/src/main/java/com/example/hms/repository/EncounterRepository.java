@@ -170,6 +170,19 @@ public interface EncounterRepository
     List<Encounter> findByPatient_IdAndHospital_IdAndStatusNotIn(
             UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
 
+    /** An admission's own open encounters (QA D134): what its discharge closes. */
+    List<Encounter> findByAdmissionIdAndStatusNotIn(UUID admissionId, Collection<EncounterStatus> statuses);
+
+    /**
+     * The patient's open hospital stay at this hospital led by this clinician
+     * (QA D136): a prescription's encounter must carry its prescriber.
+     */
+    Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+            UUID patientId, UUID staffId, UUID hospitalId, Collection<EncounterStatus> statuses);
+
+    /** An admission's own encounter, most recent first (QA D135). */
+    Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);
+
     /**
      * Unpaged list of encounters for a patient at a specific hospital, eagerly fetching
      * associations to avoid N+1 (used by record sharing).

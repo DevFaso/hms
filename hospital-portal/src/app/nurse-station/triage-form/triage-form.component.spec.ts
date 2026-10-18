@@ -61,6 +61,12 @@ describe('TriageFormComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('carries the check-in chief complaint into the form (D179)', () => {
+    const fresh = TestBed.createComponent(TriageFormComponent).componentInstance;
+    fresh.encounter = { id: 'e9', chiefComplaint: 'Fièvre depuis 3 jours' } as EncounterResponse;
+    expect(fresh.chiefComplaint()).toBe('Fièvre depuis 3 jours');
+  });
+
   it('should allow submit when ESI score is valid and encounter is set', () => {
     component.esiScore.set(3);
     expect(component.canSubmit).toBeTrue();

@@ -91,7 +91,12 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // dropped by consent/restriction) and logged their own read as a
             // cross-hospital disclosure. No reach is recorded: nothing is
             // disclosed to anyone but the owner.
-            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
+            // QA D152 (D101 on a second endpoint): the D101 fix filtered
+            // unsigned work in progress out of /me/patient/prescriptions only;
+            // /medications and the dashboard card read here and still listed a
+            // DRAFT as the patient's medication.
+            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+                .stream().filter(p -> isIssued(p.getStatus())).toList();
         } else if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -169,7 +174,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .dosage(prescription.getDosage())
             .frequency(prescription.getFrequency())
             .route(prescription.getRoute())
-            .status(resolveStatus(prescription.getStatus(), endDate))
+            .status(endedWithItsStay(prescription) && "ACTIVE".equals(resolveStatus(prescription.getStatus(), endDate))
+                ? "COMPLETED" : resolveStatus(prescription.getStatus(), endDate))
             .startDate(startDate)
             .endDate(endDate)
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
@@ -247,6 +253,22 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         } catch (NumberFormatException ex) {
             return 0;
         }
+    }
+
+    /** Signed or beyond: an order the patient was actually given (D101/D152). */
+    static boolean isIssued(PrescriptionStatus status) {
+        return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
+    }
+
+    /**
+     * QA D136: an order written for a hospital stay ends with the stay. Its
+     * encounter carries the admission id and is completed on discharge.
+     */
+    static boolean endedWithItsStay(Prescription prescription) {
+        com.example.hms.model.Encounter encounter = prescription.getEncounter();
+        return encounter != null && encounter.getAdmissionId() != null
+            && (encounter.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED
+                || encounter.getStatus() == com.example.hms.enums.EncounterStatus.CANCELLED);
     }
 
     private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {

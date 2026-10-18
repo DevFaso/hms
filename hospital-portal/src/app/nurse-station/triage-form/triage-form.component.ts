@@ -33,7 +33,20 @@ type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRES
   styleUrl: './triage-form.component.scss',
 })
 export class TriageFormComponent {
-  @Input() encounter: EncounterResponse | null = null;
+  /**
+   * QA D179: the chief complaint given at check-in is carried into the form,
+   * so the nurse confirms or refines it instead of retyping it.
+   */
+  @Input() set encounter(value: EncounterResponse | null) {
+    this._encounter = value;
+    if (value?.chiefComplaint && !this.chiefComplaint()) {
+      this.chiefComplaint.set(value.chiefComplaint);
+    }
+  }
+  get encounter(): EncounterResponse | null {
+    return this._encounter;
+  }
+  private _encounter: EncounterResponse | null = null;
   @Output() dismissed = new EventEmitter<void>();
   @Output() triageCompleted = new EventEmitter<TriageSubmissionResponse>();
 

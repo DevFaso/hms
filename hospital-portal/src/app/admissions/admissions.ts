@@ -231,6 +231,8 @@ export class AdmissionsComponent implements OnInit {
         next: (h) => {
           this.hospitals.set([h]);
           this.form.hospitalId = h.id;
+          // The modal may already be open when the hospital arrives (D153).
+          if (this.showModal() && !this.editing()) this.loadDepartmentsFor(h.id);
         },
       });
     }
@@ -343,6 +345,10 @@ export class AdmissionsComponent implements OnInit {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
+    // QA D153: a single-hospital user never picks a hospital, so the
+    // (change) that loads the departments never fired and the list stayed
+    // empty. Load them for whatever hospital the form already carries.
+    this.loadDepartmentsFor(this.form.hospitalId);
     this.showModal.set(true);
   }
 

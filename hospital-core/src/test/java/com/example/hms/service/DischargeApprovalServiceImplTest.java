@@ -48,6 +48,7 @@ class DischargeApprovalServiceImplTest {
     @Mock private DischargeApprovalMapper mapper;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
     @Mock private BedAssignmentService bedAssignmentService;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
 
     @InjectMocks private DischargeApprovalServiceImpl service;
 
@@ -277,13 +278,18 @@ class DischargeApprovalServiceImplTest {
         when(registrationRepository.save(registration)).thenReturn(registration);
         when(dischargeApprovalRepository.save(approval)).thenReturn(approval);
         when(mapper.toResponse(approval)).thenReturn(responseDTO);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setId(UUID.randomUUID());
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(hospitalId),
+            org.mockito.ArgumentMatchers.anyCollection())).thenReturn(java.util.List.of(stay));
 
         DischargeApprovalResponseDTO result = service.approve(approvalId, buildDecision());
         assertThat(result).isEqualTo(responseDTO);
         assertThat(approval.getStatus()).isEqualTo(DischargeStatus.APPROVED);
-        // The approval flow is a discharge in its own right — it must also
-        // complete the patient's active encounters.
-        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+        // The approval flow is a discharge in its own right: it completes the
+        // encounters of the patient's open stays, and only those (QA D134).
+        verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
         // …and free any structured beds the patient's admissions still hold (P0 #4).
         verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
     }

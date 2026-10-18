@@ -1842,6 +1842,15 @@ class EncounterServiceImplTest {
             Encounter e = new Encounter();
             e.setId(UUID.randomUUID());
             e.setStatus(EncounterStatus.ARRIVED);
+            e.setEsiScore(3);
+            com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+            p.setId(UUID.randomUUID());
+            e.setPatient(p);
+            PatientVitalSign v = new PatientVitalSign();
+            v.setRecordedAt(LocalDateTime.now());
+            org.mockito.Mockito.lenient().when(patientVitalSignRepository
+                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(p.getId()), any()))
+                .thenReturn(Optional.of(v));
             if (hospitalId != null) {
                 Hospital h = new Hospital();
                 h.setId(hospitalId);
@@ -1970,6 +1979,31 @@ class EncounterServiceImplTest {
 
             assertThat(mine.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
             verify(encounterRepository).save(mine);
+        }
+
+        @Test
+        @DisplayName("QA D155: triage cannot be completed with no ESI and no vitals")
+        void completeTriageRefusesAnUnrecordedTriage() {
+            Encounter mine = encounterAt(CALLER_HOSPITAL);
+            mine.setEsiScore(null);
+            encounterExists(mine);
+
+            assertThatThrownBy(() -> service.completeTriage(mine.getId(), false, CALLER_HOSPITAL))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("encounter.triage.incomplete");
+            assertThat(mine.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+        }
+
+        @Test
+        @DisplayName("QA D155: an ESI alone is not a triage: vitals since arrival are needed")
+        void completeTriageRefusesWithoutVitalsSinceArrival() {
+            Encounter mine = encounterAt(CALLER_HOSPITAL);
+            mine.setArrivalTimestamp(LocalDateTime.now().plusMinutes(5));
+            encounterExists(mine);
+
+            assertThatThrownBy(() -> service.completeTriage(mine.getId(), false, CALLER_HOSPITAL))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("encounter.triage.incomplete");
         }
 
         @Test
