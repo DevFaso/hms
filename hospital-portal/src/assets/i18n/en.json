@@ -2931,7 +2931,9 @@
     "PLACEHOLDER_CATEGORY": "e.g. Hematology",
     "PLACEHOLDER_UNIT": "e.g. cells/mcL",
     "PLACEHOLDER_SAMPLE": "e.g. Blood",
-    "PLACEHOLDER_MINUTES": "Minutes"
+    "PLACEHOLDER_MINUTES": "Minutes",
+    "CRITICAL_LOW": "Critical low (below)",
+    "CRITICAL_HIGH": "Critical high (above)"
   },
   "LAB_RESULTS": {
     "TITLE": "Lab Results",
@@ -3008,7 +3010,12 @@
     "SELF_RELEASED_HINT": "Released by the person who entered it, without a second reviewer",
     "SELF_RELEASE_TITLE": "Release your own result?",
     "SELF_RELEASE_BODY": "You entered this result ({{test}} for {{patient}}). Releasing it yourself, without a second reviewer, is allowed; it will be recorded and shown as a self-release.",
-    "SELF_RELEASE_CONFIRM": "Release it myself"
+    "SELF_RELEASE_CONFIRM": "Release it myself",
+    "ENTER_CORRECTION": "Enter correction",
+    "CORRECTION": "Correction",
+    "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
+    "SUPERSEDED": "Superseded",
+    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value."
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",
@@ -8067,7 +8074,11 @@
       "NASAL": "Nasal"
     },
     "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
-    "SELECT_PHARMACY": "Pharmacy"
+    "SELECT_PHARMACY": "Pharmacy",
+    "RECEIPT_EXPIRY_REQUIRED": "Enter the lot's expiry date.",
+    "RECEIPT_LOT_EXPIRED": "This lot is past its expiry date and cannot be received into stock.",
+    "LOT_REQUIRED_FOR_MOVEMENT": "This item is tracked by lot: choose the lot the movement applies to.",
+    "SELECT_LOT_OPTION": "Select a lot"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -8121,7 +8132,8 @@
       "ALL": "All",
       "DRAFT": "Draft",
       "PENDING_QA": "Pending QA Review",
-      "PENDING_DIRECTOR": "Pending Director Approval"
+      "PENDING_DIRECTOR": "Pending Director Approval",
+      "APPROVED": "Approved, awaiting activation"
     },
     "SEARCH_PLACEHOLDER": "Search by name, code or category…",
     "LOADING": "Loading queue…",
@@ -8143,7 +8155,9 @@
       "REJECT_TITLE": "Reject",
       "APPROVE": "Approve",
       "APPROVE_TITLE": "Approve",
-      "CLOSE_TITLE": "Close"
+      "CLOSE_TITLE": "Close",
+      "ACTIVATE": "Activate",
+      "ACTIVATE_TITLE": "Activate for ordering"
     },
     "EMPTY": {
       "TITLE": "Queue is clear",
@@ -8194,7 +8208,8 @@
       "REASON_REQUIRED": "Rejection Reason *",
       "REASON_PLACEHOLDER": "Explain the reason for rejection…",
       "CANCEL": "Cancel",
-      "CONFIRM": "Confirm"
+      "CONFIRM": "Confirm",
+      "TITLE_ACTIVATE": "Activate Definition"
     },
     "TOAST": {
       "LOAD_QUEUE_FAILED": "Failed to load approval queue",

@@ -134,6 +134,13 @@ describe('LabComponent — performing laboratory', () => {
     fixture.detectChanges();
   }
 
+  it('does not offer a midwife the order form the server refuses her (D106)', async () => {
+    await setup(['ROLE_MIDWIFE'], []);
+
+    expect(component.canCreateOrder()).toBeFalse();
+    expect(labService.listPerformingLabs).not.toHaveBeenCalled();
+  });
+
   it('offers a provider the performing laboratories, defaulting to this hospital', async () => {
     await setup(['ROLE_DOCTOR'], []);
 
