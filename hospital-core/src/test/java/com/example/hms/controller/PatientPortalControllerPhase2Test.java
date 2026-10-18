@@ -662,7 +662,7 @@ class PatientPortalControllerPhase2Test {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
             Map<String, Object> dept = Map.of("id", deptId, "name", "Cardiology");
-            when(portalService.getDepartmentsForHospital(hospitalId))
+            when(portalService.getDepartmentsForHospital(any(), eq(hospitalId)))
                     .thenReturn(List.of(dept));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId + "/departments")
@@ -693,7 +693,7 @@ class PatientPortalControllerPhase2Test {
                     "fullName", "Jane Doe",
                     "role", "Doctor"
             );
-            when(portalService.getProvidersForDepartment(hospitalId, deptId))
+            when(portalService.getProvidersForDepartment(any(), eq(hospitalId), eq(deptId)))
                     .thenReturn(List.of(provider));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
@@ -710,7 +710,7 @@ class PatientPortalControllerPhase2Test {
         void getProviders_empty() throws Exception {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
-            when(portalService.getProvidersForDepartment(hospitalId, deptId))
+            when(portalService.getProvidersForDepartment(any(), eq(hospitalId), eq(deptId)))
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
@@ -788,6 +788,41 @@ class PatientPortalControllerPhase2Test {
                             .content("{\"instrumentCode\":\"EPDS\"}")
                             .principal(auth))
                     .andExpect(status().isBadRequest());
+        }
+    }
+
+    // QA D128: a bad document date or type is a 400 that never names a Java class.
+    @Nested
+    @DisplayName("POST /me/patient/documents — bad input")
+    class DocumentUploadValidation {
+
+        private org.springframework.mock.web.MockMultipartFile file() {
+            return new org.springframework.mock.web.MockMultipartFile("file", "scan.pdf", "application/pdf", new byte[] {1});
+        }
+
+        @Test
+        void badCollectionDateIs400() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .multipart("/me/patient/documents")
+                            .file(file())
+                            .file(new org.springframework.mock.web.MockMultipartFile("documentType", "", "text/plain",
+                                    "LAB_RESULT".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .param("collectionDate", "31/02/2026")
+                            .principal(auth))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void unknownDocumentTypeIs400WithoutTheEnumClass() throws Exception {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                            .multipart("/me/patient/documents")
+                            .file(file())
+                            .file(new org.springframework.mock.web.MockMultipartFile("documentType", "", "text/plain",
+                                    "NOPE".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .principal(auth))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.not(
+                            org.hamcrest.Matchers.containsString("com.example"))));
         }
     }
 }

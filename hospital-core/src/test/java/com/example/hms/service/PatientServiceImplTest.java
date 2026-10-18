@@ -268,6 +268,44 @@ class PatientServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // QA D110: an opted-out patient's allergy summary shows only this hospital's rows.
+    @Test
+    void getPatientByIdNarrowsTheAllergySummaryAfterAnOptOut() {
+        PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).allergies("Peanuts, Penicillin").build();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(responseDTO);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        PatientAllergy local = PatientAllergy.builder().allergenDisplay("Peanuts").active(true).build();
+        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(local));
+
+        assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getAllergies())
+            .isEqualTo("Peanuts");
+    }
+
+    // QA D69: an MRN lookup must not return a patient registered only at another hospital.
+    @Test
+    void lookupPatientsDropsPatientsNotRegisteredAtCallerHospital() {
+        when(patientRepository.findByMrn("MRN-A1")).thenReturn(List.of(patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThat(patientService.lookupPatients(null, null, null, null, "MRN-A1", hospitalId, Locale.ENGLISH))
+            .isEmpty();
+        verify(patientMapper, never()).toPatientDTO(patient, hospitalId);
+    }
+
+    @Test
+    void lookupPatientsWithoutHospitalScopeIsRefusedForStaff() {
+        when(patientRepository.findByMrn("MRN-A1")).thenReturn(List.of(patient));
+        when(roleValidator.requireActiveHospitalId())
+            .thenThrow(new com.example.hms.exception.BusinessException("Hospital context required"));
+
+        assertThatThrownBy(() -> patientService.lookupPatients(null, null, null, null, "MRN-A1", null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(patientMapper, never()).toPatientDTO(patient, null);
+    }
+
     // ═══════════════ getPatientByIdUnscoped ═══════════════
 
     @Test
@@ -812,7 +850,7 @@ class PatientServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
             Pageable.unpaged())).thenReturn(List.of(labResult));
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(auditEventLogService.logEvent(any())).thenReturn(null);
 
         PatientTimelineAccessRequestDTO request = PatientTimelineAccessRequestDTO.builder()
@@ -1248,7 +1286,7 @@ class PatientServiceImplTest {
         when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(patientDto);
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
         when(patientRepository.findMrnForHospital(patientId, hospitalId)).thenReturn(Optional.of("MRN001"));
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(patientAllergyMapper.toResponseDto(allergy)).thenReturn(allergyResponse);
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(prescriptionResponse);
@@ -1455,7 +1493,7 @@ class PatientServiceImplTest {
         away.setActive(true);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(here, away));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(here, away));
         when(patientAllergyMapper.toResponseDto(here)).thenReturn(PatientAllergyResponseDTO.builder()
             .id(here.getId()).hospitalId(hospitalId).allergenDisplay("Peanuts").build());
         when(patientAllergyMapper.toResponseDto(away)).thenReturn(PatientAllergyResponseDTO.builder()
@@ -1479,7 +1517,7 @@ class PatientServiceImplTest {
         here.setActive(true);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(here));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(here));
         when(patientAllergyMapper.toResponseDto(here)).thenReturn(PatientAllergyResponseDTO.builder()
             .id(here.getId()).hospitalId(hospitalId).allergenDisplay("Peanuts").build());
 

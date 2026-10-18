@@ -1449,7 +1449,24 @@
     "TO_DATE": "To",
     "UPDATED": "Invoice updated",
     "VIEW_DETAILS_TITLE": "View invoice details",
-    "NO_RECORDS_HINT": "No billing records available."
+    "NO_RECORDS_HINT": "No billing records available.",
+    "NUMBER_ASSIGNED_ON_SAVE": "Assigned automatically when the invoice is saved",
+    "STATUS_FOLLOWS_PAYMENTS": "This status follows the recorded payments. Record a payment to change it.",
+    "TOTAL_HINT": "For an invoice without lines. Once lines are added, the total is their sum.",
+    "TOTAL_FROM_LINES": "The total is the sum of the invoice lines.",
+    "LINES": "Invoice lines",
+    "NO_LINES": "No lines yet.",
+    "LINE_DESCRIPTION": "Description",
+    "LINE_CATEGORY": "Category",
+    "LINE_QUANTITY": "Quantity",
+    "LINE_UNIT_PRICE": "Unit price",
+    "LINE_TOTAL": "Line total",
+    "ADD_LINE": "Add line",
+    "REMOVE_LINE": "Remove line",
+    "ITEM_ADDED": "Line added",
+    "ITEM_REMOVED": "Line removed",
+    "ITEM_SAVE_FAILED": "The line could not be saved",
+    "ITEMS_LOAD_FAILED": "The invoice lines could not be loaded"
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5219,6 +5236,12 @@
         "SENT": "Sent",
         "UNKNOWN": "Unknown"
       },
+      "INVOICE_ITEM_CATEGORY": {
+        "SERVICE": "Service",
+        "MEDICATION": "Medication",
+        "LAB_TEST": "Lab test",
+        "GENERAL": "General"
+      },
       "ALLERGY_VERIFICATION_STATUS": {
         "CONFIRMED": "Confirmed",
         "ENTERED_IN_ERROR": "Entered in Error",
@@ -6206,7 +6229,7 @@
     "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
     "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
     "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
-    "PASSWORD_CHANGED": "Your password has been changed.",
+    "PASSWORD_CHANGED": "Your password has been changed. Sign in again with your new password.",
     "PASSWORD_CURRENT_WRONG": "The current password is incorrect.",
     "PASSWORD_CHANGE_REFUSED": "The new password was refused. It may match one of your last 5 passwords.",
     "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
@@ -10607,7 +10630,8 @@
     "REFERENCE_PLACEHOLDER": "Transaction / policy",
     "SUBMIT": "Confirm payment",
     "PRINT": "Print",
-    "NEW_PAYMENT": "New payment"
+    "NEW_PAYMENT": "New payment",
+    "RECEIPT_NO_PATIENT": "Not on file"
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

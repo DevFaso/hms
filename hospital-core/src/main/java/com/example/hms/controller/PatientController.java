@@ -116,7 +116,9 @@ public class PatientController {
      */
     private static final String PATIENT_PICKER_ROLES = "hasAnyAuthority("
         + "'ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
-        + "'ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN')";
+        + "'ROLE_LAB_SCIENTIST','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_PHYSIOTHERAPIST','ROLE_SUPER_ADMIN',"
+        // QA D92: the invoice form's patient picker.
+        + "'ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')";
 
     /**
      * E9 #69 — allergies are readable by every clinical role. A radiologist

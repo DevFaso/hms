@@ -2781,6 +2781,18 @@
     </changeSet>
 
     <!-- =================================================================
+         V190: billing invoices - unique per-hospital invoice numbers, the
+         idempotent-create key and the per-hospital numbering counter (D94).
+         No DO block.
+         ================================================================= -->
+    <changeSet id="V190-billing-invoice-numbering-and-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V190__billing_invoice_numbering_and_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V194: hospital.departments.email becomes optional (QA D93), as the
          form and the request DTO already treat it. Single ALTER, no DO block.
          ================================================================= -->

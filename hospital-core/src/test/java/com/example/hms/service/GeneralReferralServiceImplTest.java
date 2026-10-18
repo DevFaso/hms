@@ -89,6 +89,7 @@ class GeneralReferralServiceImplTest {
 
         receivingProvider = new Staff();
         receivingProvider.setId(receivingProviderId);
+        receivingProvider.setHospital(hospital);
 
         department = new Department();
         department.setId(departmentId);

@@ -72,7 +72,8 @@ public class InvoiceItemController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    // QA D72: the billing specialist who adds a line can take a wrong one off.
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Delete Invoice Item")
     public ResponseEntity<Object> deleteInvoiceItem(
         @PathVariable UUID id,

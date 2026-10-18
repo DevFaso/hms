@@ -679,7 +679,7 @@ public class PatientServiceImpl implements PatientService {
 
         List<Patient> results;
         if (normEmail != null && !normEmail.isBlank()) {
-            // Exact match only: this endpoint is cross-hospital by design, so a
+            // Exact match only: candidates are searched across hospitals (then filtered to the caller's), so a
             // substring email match would let any staff role enumerate other
             // hospitals' patients two characters at a time.
             results = patientRepository.findAllByEmailIgnoreCase(normEmail);
@@ -714,7 +714,18 @@ public class PatientServiceImpl implements PatientService {
             results = List.of();
         }
 
+        // SECURITY (QA D69): the lookup finds candidates across every hospital, but only a
+        // patient registered at the caller's hospital may be returned — the full record
+        // (contact, allergies, emergency contact) is never shown to another tenant. The
+        // privacy-minimal cross-hospital match lives at /patients/registration-match.
+        // A null hospital is the super-admin's global view only: the resolver refuses
+        // (requireActiveHospitalId throws) for a caller with no hospital at all.
+        UUID scopeHospitalId = hospitalId != null ? hospitalId : roleValidator.requireActiveHospitalId();
+        if (scopeHospitalId == null) {
+            return results.stream().map(p -> buildPatientDto(p, null)).toList();
+        }
         return results.stream()
+            .filter(p -> registrationRepository.existsByPatientIdAndHospitalId(p.getId(), scopeHospitalId))
             .map(p -> buildPatientDto(p, hospitalId))
             .toList();
     }
@@ -950,6 +961,7 @@ public class PatientServiceImpl implements PatientService {
 
         List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patientId,
+            resolvedHospitalId,
             includeSensitive,
             maxItems,
             sensitiveSections
@@ -1089,6 +1101,7 @@ public class PatientServiceImpl implements PatientService {
         LinkedHashSet<String> sensitiveSections = new LinkedHashSet<>();
         List<PatientAllergyResponseDTO> allergies = collectDoctorRecordAllergies(
             patient.getId(),
+            hospitalId,
             true,
             Integer.MAX_VALUE,
             sensitiveSections
@@ -1961,11 +1974,18 @@ public class PatientServiceImpl implements PatientService {
             .toList();
     }
 
+    /** QA D110 — allergy rows a reader at this hospital may see; every row for a global (null) scope. */
+    private List<PatientAllergy> allergiesVisibleAt(UUID patientId, UUID hospitalId) {
+        return hospitalId == null
+            ? patientAllergyRepository.findByPatient_Id(patientId)
+            : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+    }
+
     private List<PatientTimelineEntryDTO> collectAllergyEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)) {
             return List.of();
         }
-        return patientAllergyRepository.findByPatient_Id(patientId).stream()
+        return allergiesVisibleAt(patientId, hospitalId).stream()
             .map(allergy -> {
                 Map<String, Object> metadata = new HashMap<>();
                 putIfNotNull(metadata, "severity", allergy.getSeverity());
@@ -2104,11 +2124,12 @@ public class PatientServiceImpl implements PatientService {
      */
     private List<PatientAllergyResponseDTO> collectDoctorRecordAllergies(
         UUID patientId,
+        UUID hospitalId,
         boolean includeSensitive,
         int limit,
         Set<String> sensitiveSections
     ) {
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patientId);
+        List<PatientAllergy> allergies = allergiesVisibleAt(patientId, hospitalId);
         Comparator<PatientAllergy> comparator = Comparator
             .comparing((PatientAllergy allergy) -> severityOrder(allergy.getSeverity()))
             .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
@@ -2712,6 +2733,14 @@ public class PatientServiceImpl implements PatientService {
         PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
         if (patient == null || dto == null || patient.getId() == null) {
             return dto;
+        }
+
+        // QA D110: the allergy summary column covers every hospital's rows. For a patient
+        // who opted out of record sharing, a reader elsewhere sees only this hospital's.
+        if (hospitalId != null && dto.getAllergies() != null
+                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+            dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
+                patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }
 
         patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)

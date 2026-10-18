@@ -5118,6 +5118,21 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   resolution, assignment lookup and the profile all ignore inactive rows), but they
   still exist; deleting them is a dev-data cleanup for a super-admin, and the
   edit-user modal still has no way to list or remove an inactive assignment. Open.
+- **Billing has no tariff / price-list screen (QA D72, round 2, 2026-10-18).**
+  An invoice line is typed by hand (description, category, quantity, unit
+  price); nothing offers a hospital's priced services to pick from, although
+  `InvoiceItem.relatedService` and `Treatment.price` exist. Deferred as a new
+  feature (a whole catalog module: per-hospital tariffs, effective dates,
+  insurer schedules), not a bug: `fix/qa-r2-billing` made invoices work end to
+  end with typed lines (server-computed totals, payments only through payment
+  records, server numbering, idempotent create).
+- **Pharmacy checkout finds a dispense by its UUID only (QA D102, round 2).**
+  The cashier types or pastes a dispense id; there is no worklist of dispenses
+  awaiting payment to pick from. Deferred as a new screen; `fix/qa-r2-billing`
+  fixed the bugs around it (BILLING_SPECIALIST's 403 on `GET
+  /pharmacy/dispense/{id}`, raw patient/pharmacy/payment UUIDs on the screen
+  and the receipt). The receipt's French text is still hard-coded in the
+  template (pre-existing).
 
 ## Open clinical questions — kept open on purpose, not forgotten
 

@@ -164,7 +164,7 @@ class PatientSnapshotServiceImplTest {
         PatientAllergy allergy = mock(PatientAllergy.class);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
 
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
@@ -188,7 +188,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         PatientAllergy allergy = mock(PatientAllergy.class);
         when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
-        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(patientAllergyRepository.findVisibleAt(eq(patientId), any())).thenReturn(List.of(allergy));
         when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
                 .thenReturn(Collections.emptyList());
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))

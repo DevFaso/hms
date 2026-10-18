@@ -54,9 +54,13 @@ import java.util.UUID;
 @SecurityRequirement(name = "bearerAuth")
 public class PatientDocumentStaffController {
 
-    /** Clinical and front-desk roles that read a chart; mirrors the portal tab gate. */
+    /**
+     * Clinical roles that read a chart; mirrors the portal tab gate. The front desk and
+     * the pharmacy are deliberately absent (QA D112): these are the patient's clinical
+     * documents (lab results, imaging, discharge summaries), not registration paperwork.
+     */
     static final String READ_ROLES = "hasAnyAuthority("
-        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST','ROLE_RECEPTIONIST',"
+        + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE',"
         + "'ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')";
 
     private final PatientDocumentService documentService;

@@ -28,9 +28,9 @@
             <dt>{{ 'PHARMACY_CHECKOUT.QTY_DISPENSED' | translate }}</dt>
             <dd>{{ d.quantityDispensed }} {{ d.unit }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
-            <dd>{{ d.patientId }}</dd>
+            <dd>{{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}</dd>
             <dt>{{ 'PHARMACY_CHECKOUT.PHARMACY' | translate }}</dt>
-            <dd>{{ d.pharmacyId }}</dd>
+            <dd>{{ d.pharmacyName || '—' }}</dd>
           </dl>
         </div>
       }
@@ -85,18 +85,18 @@
       <header class="receipt-header">
         <h1>Reçu de pharmacie</h1>
         <p class="receipt-meta">
-          Nº {{ r.id }}<br />
+          Nº {{ receiptNumber(r.id) }}<br />
           Émis le : {{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}
         </p>
       </header>
       <div class="receipt-body">
         <dl>
-          <dt>Dispense</dt>
-          <dd>{{ r.dispenseId }}</dd>
           <dt>Médicament</dt>
           <dd>{{ dispense()?.medicationName }}</dd>
           <dt>Patient</dt>
-          <dd>{{ r.patientId }}</dd>
+          <dd>
+            {{ dispense()?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
+          </dd>
           <dt>Mode de paiement</dt>
           <dd>{{ methodLabel(r.paymentMethod) }}</dd>
           @if (r.referenceNumber) {
