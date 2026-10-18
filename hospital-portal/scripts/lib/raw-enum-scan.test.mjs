@@ -282,3 +282,15 @@ test('a field read off a signal or a non-null assertion is still a field', () =>
   // A method taking an argument is not a field read; its return is unknown.
   assert.deepEqual(exprs('<i>{{ label(x).status }}</i>'), []);
 });
+
+test('a resolving helper argument is not on screen; a plain helper argument still is', () => {
+  assert.deepEqual(exprs("<i>{{ specialtyLabel(r.targetSpecialty) || '—' }}</i>"), []);
+  assert.deepEqual(
+    exprs(
+      "<p>{{ 'K' | translate: { s: specialtyLabel(ref()?.targetSpecialty), t: ref()?.targetSpecialty } }}</p>",
+    ),
+    ['ref()?.targetSpecialty'],
+  );
+  // Only the named helpers resolve: an arbitrary method echoing its input does not.
+  assert.deepEqual(exprs('<i>{{ fmt(r.targetSpecialty) }}</i>'), ['r.targetSpecialty']);
+});
