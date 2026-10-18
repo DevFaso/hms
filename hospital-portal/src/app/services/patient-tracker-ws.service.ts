@@ -4,6 +4,12 @@ import { Observable, Subject } from 'rxjs';
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 
 import { AuthService } from '../auth/auth.service';
+import {
+  SockJsConstructor,
+  WS_TICKET_URL,
+  backgroundRequestOptions,
+  openSockJs,
+} from './ws-transport';
 
 export interface PatientTrackerEvent {
   hospitalId: string;
@@ -81,7 +87,7 @@ export class PatientTrackerWsService {
     this.currentHospitalId = hospitalId;
     const generation = ++this.connectGeneration;
 
-    this.http.post<{ ticket: string }>('/auth/ws-ticket', {}).subscribe({
+    this.http.post<{ ticket: string }>(WS_TICKET_URL, {}, backgroundRequestOptions()).subscribe({
       next: (res) => {
         if (generation !== this.connectGeneration) return;
         const ticket = res?.ticket;
@@ -125,10 +131,10 @@ export class PatientTrackerWsService {
     void import('sockjs-client')
       .then((mod) => {
         if (generation !== this.connectGeneration) return;
-        const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
+        const SockJSCtor = (mod.default ?? mod) as SockJsConstructor;
 
         this.stompClient = new Client({
-          webSocketFactory: () => new SockJSCtor(sockUrl),
+          webSocketFactory: () => openSockJs(SockJSCtor, sockUrl),
           reconnectDelay: 0,
 
           beforeConnect: () => {

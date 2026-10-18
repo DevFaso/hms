@@ -5351,6 +5351,7 @@
         "USER_DELETE": "Usuario eliminado",
         "USER_DISABLE": "Usuario desactivado",
         "USER_ENABLE": "Usuario activado",
+        "USER_RESTORE": "Usuario restaurado",
         "USER_UPDATE": "Usuario actualizado",
         "WEBHOOK_ENDPOINT_DISABLED": "Webhook desactivado",
         "WEBHOOK_ENDPOINT_REGISTERED": "Webhook registrado",

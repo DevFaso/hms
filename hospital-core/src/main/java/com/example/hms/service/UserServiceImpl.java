@@ -1103,6 +1103,38 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /**
+     * QA D51: a restore is its own event (USER_RESTORE), not the generic
+     * DATA_UPDATE the write interceptor would record. Ids and flags only in
+     * the details: no name, email or phone of the restored account.
+     */
+    private void recordUserRestoreAudit(User restoredUser, boolean reactivated) {
+        try {
+            Optional<User> actorOpt = resolveCurrentActor();
+            User actor = actorOpt.orElse(restoredUser);
+            UUID assignmentId = actorOpt.map(this::resolveActorAssignmentId).orElse(null);
+
+            Map<String, Object> details = new HashMap<>();
+            details.put("targetUserId", restoredUser.getId());
+            details.put("reactivated", reactivated);
+
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actor.getId())
+                .assignmentId(assignmentId)
+                .userName(resolveUserDisplayName(actor))
+                .eventType(AuditEventType.USER_RESTORE)
+                .eventDescription("User account restored")
+                .resourceId(restoredUser.getId().toString())
+                .resourceName(resolveUserDisplayName(restoredUser))
+                .entityType("USER")
+                .status(AuditStatus.SUCCESS)
+                .details(details)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to record user restore audit for '{}': {}", restoredUser.getId(), ex.getMessage());
+        }
+    }
+
     private Optional<User> resolveCurrentActor() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -1332,7 +1364,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_ENABLE, "restore", id);
+            throw refused(AuditEventType.USER_RESTORE, "restore", id);
         }
 
         // Restore the state before the delete, not "active". A pending invitee
@@ -1370,6 +1402,7 @@ public class UserServiceImpl implements UserService {
         }
 
         log.info("♻️ User restored with ID: {}", id);
+        recordUserRestoreAudit(user, previouslyActivated);
 
         // After commit, like the reset above: a failure in the staff loop or at
         // commit would otherwise deliver "your account has been restored" for a

@@ -73,4 +73,11 @@ class LogoutSecurityIT extends BaseIT {
                         .content("{\"token\":\"t\",\"platform\":\"IOS\"}"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    @DisplayName("the ws-ticket exchange without an XSRF header is refused for authentication (401), not CSRF (403)")
+    void wsTicketIsNotBlockedByCsrf() throws Exception {
+        mockMvc.perform(post("/auth/ws-ticket"))
+                .andExpect(status().isUnauthorized());
+    }
 }
