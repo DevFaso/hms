@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.model.Admission;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -134,5 +135,106 @@ class AdmissionStayEncounterServiceTest {
         verify(encounterRepository).save(saved.capture());
         assertThat(saved.getValue().getFollowUpInstructions()).isEqualTo("Revoir dans 7 jours");
         assertThat(saved.getValue().getDischargeDiagnoses()).isEqualTo("[\"Paludisme \\\"grave\\\"\"]");
+    }
+
+    @Test
+    void noHospital_noStayEncounter() {
+        admission.setHospital(null);
+
+        assertThat(service.openStayEncounter(admission)).isNull();
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void aLeadFromAnotherHospital_usesTheirStaffRowHere_andAForeignDepartmentIsDropped() {
+        Hospital other = Hospital.builder().build();
+        other.setId(UUID.randomUUID());
+        doctor.setHospital(other);
+        Staff here = new Staff();
+        here.setId(UUID.randomUUID());
+        here.setUser(doctor.getUser());
+        here.setHospital(hospital);
+        Department foreign = new Department();
+        foreign.setHospital(other);
+        admission.setDepartment(foreign);
+        admission.setAdmissionDateTime(null);
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getUser().getId(), hospital.getId()))
+            .thenReturn(Optional.of(here));
+        when(assignmentRepository.findActiveStaffAssignment(doctor.getUser().getId(), hospital.getId()))
+            .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+        Encounter stay = service.openStayEncounter(admission);
+
+        assertThat(stay.getStaff()).isSameAs(here);
+        assertThat(stay.getDepartment()).isNull();
+        assertThat(stay.getEncounterDate()).isNotNull();
+    }
+
+    @Test
+    void aDepartmentOfTheSameHospitalIsKept() {
+        Department ward = new Department();
+        ward.setHospital(hospital);
+        admission.setDepartment(ward);
+        when(assignmentRepository.findActiveStaffAssignment(doctor.getUser().getId(), hospital.getId()))
+            .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service.openStayEncounter(admission).getDepartment()).isSameAs(ward);
+    }
+
+    @Test
+    void anAttendingWithNoUser_andAProviderWithNoStaffRowHere_isNoLead() {
+        Hospital other = Hospital.builder().build();
+        other.setId(UUID.randomUUID());
+        doctor.setHospital(other);
+        admission.setAttendingPhysician(new Staff());
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getUser().getId(), hospital.getId()))
+            .thenReturn(Optional.empty());
+
+        assertThat(service.openStayEncounter(admission)).isNull();
+    }
+
+    @Test
+    void theDischargeNeverOverwritesWhatTheEncounterAlreadySays() {
+        Encounter stay = new Encounter();
+        stay.setFollowUpInstructions("deja");
+        stay.setNotes("deja");
+        stay.setDischargeDiagnoses("[\"x\"]");
+        admission.setDischargeInstructions("autre");
+        admission.setDischargeSummary("autre");
+        admission.setPrimaryDiagnosisDescription("autre");
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        service.recordDischarge(admission);
+
+        assertThat(stay.getFollowUpInstructions()).isEqualTo("deja");
+        assertThat(stay.getNotes()).isEqualTo("deja");
+        assertThat(stay.getDischargeDiagnoses()).isEqualTo("[\"x\"]");
+    }
+
+    @Test
+    void aLongDischargeSummaryIsTruncatedIntoTheNotes_andBlankSourcesFillNothing() {
+        Encounter stay = new Encounter();
+        admission.setDischargeSummary("a".repeat(3000));
+        admission.setDischargeInstructions(" ");
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        service.recordDischarge(admission);
+
+        assertThat(stay.getNotes()).hasSize(2048);
+        assertThat(stay.getFollowUpInstructions()).isNull();
+        assertThat(stay.getDischargeDiagnoses()).isNull();
+    }
+
+    @Test
+    void anUnsavedAdmissionHasNoStayToDischarge() {
+        admission.setId(null);
+
+        service.recordDischarge(admission);
+
+        verify(encounterRepository, never()).findFirstByAdmissionIdOrderByEncounterDateDesc(any());
     }
 }
