@@ -222,11 +222,17 @@ function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<u
   return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
 
+/** Wraps the retried credential-check error so it bypasses the refresh-failure sign-out. */
+class CredentialRetryError {
+  constructor(readonly error: unknown) {}
+}
+
 function tryRefreshAndRetry(
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
   auth: AuthService,
   router: Router,
+  credentialCheck = false,
 ): Observable<HttpEvent<unknown>> {
   const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
 
@@ -244,9 +250,19 @@ function tryRefreshAndRetry(
         // Unblock all queued requests with the new token.
         refreshDone$.next(tokens.accessToken);
 
-        return next(cloneWithToken(req, tokens.accessToken));
+        const retried = next(cloneWithToken(req, tokens.accessToken));
+        // A credential check retried on a fresh token that still answers 401
+        // means the typed password is wrong: hand it to the form, never sign
+        // out (D87). The marker lets the catchError below tell it apart from
+        // a refresh failure.
+        return credentialCheck
+          ? retried.pipe(catchError((e) => throwError(() => new CredentialRetryError(e))))
+          : retried;
       }),
       catchError((refreshError) => {
+        if (refreshError instanceof CredentialRetryError) {
+          return throwError(() => refreshError.error);
+        }
         isRefreshing = false;
         refreshDone$.next('__REFRESH_FAILED__');
         // Reset to null so refreshDone$ is ready for the next login session.
@@ -323,14 +339,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
 
-        if (
-          !isRefreshCall &&
-          !isVerifyPassword &&
-          (auth.getRefreshToken() || auth.getUserProfile())
-        ) {
+        if (!isRefreshCall && (auth.getRefreshToken() || auth.getUserProfile())) {
           // We either have a legacy refresh token in storage OR a recorded
           // session profile (S-01 cookie-based refresh). Attempt silent renewal.
-          return tryRefreshAndRetry(req, next, auth, router);
+          // A credential check is refreshed and retried once too (the access
+          // token may have expired while the form was open); a 401 on the
+          // retry is the wrong-password answer and reaches the form (D87).
+          return tryRefreshAndRetry(req, next, auth, router, isVerifyPassword);
         }
 
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));

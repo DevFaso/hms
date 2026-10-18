@@ -72,6 +72,21 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         ROLE_DOCTOR, "ROLE_PHYSICIAN", "ROLE_SURGEON", ROLE_NURSE, ROLE_MIDWIFE
     );
 
+    /**
+     * Whether a patient may message this user: the same role test the send
+     * path applies, shared so a picker (the portal care team, QA D115) never
+     * offers a recipient whose send would be refused.
+     */
+    public static boolean holdsClinicalCareRole(User user) {
+        return user != null && user.getUserRoles() != null && user.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
+            .map(ur -> {
+                String roleName = ur.getRole().getName();
+                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+            })
+            .anyMatch(CLINICAL_CARE_ROLES::contains);
+    }
+
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
     private static final int MIN_AUDIO_DURATION_SECONDS = 1;

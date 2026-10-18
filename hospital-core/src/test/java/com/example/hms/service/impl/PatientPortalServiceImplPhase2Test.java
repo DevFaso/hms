@@ -1136,6 +1136,7 @@ class PatientPortalServiceImplPhase2Test {
             doctorUser.setId(UUID.randomUUID());
             doctorUser.setFirstName("Awa");
             doctorUser.setLastName("Kaboré");
+            doctorUser.addRole(role("ROLE_DOCTOR"));
             com.example.hms.model.Staff doctor = new com.example.hms.model.Staff();
             doctor.setUser(doctorUser);
             com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
@@ -1160,6 +1161,49 @@ class PatientPortalServiceImplPhase2Test {
                 assertThat(entry.getDisplayName()).isEqualTo("Awa Kaboré");
                 assertThat(entry.getHospitalName()).isEqualTo("CHU Nord");
             });
+        }
+
+        @Test
+        @DisplayName("D115 — a deactivated account or a non-clinical role never reaches the care team (the send would be refused)")
+        void getCareTeam_skipsUnreachableClinicians() {
+            stubPatientResolution();
+            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.empty());
+            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of());
+
+            com.example.hms.model.User inactive = visitUser("ROLE_DOCTOR");
+            inactive.setActive(false);
+            com.example.hms.model.User receptionist = visitUser("ROLE_RECEPTIONIST");
+            com.example.hms.model.User nurse = visitUser("NURSE");
+            when(encounterRepository.findOpenWithClinicianByPatientId(org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(List.of(visit(inactive), visit(receptionist), visit(nurse)));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getVisitClinicians()).singleElement()
+                    .satisfies(entry -> assertThat(entry.getUserId()).isEqualTo(nurse.getId()));
+        }
+
+        private com.example.hms.model.Role role(String name) {
+            com.example.hms.model.Role role = new com.example.hms.model.Role();
+            role.setId(UUID.randomUUID());
+            role.setName(name);
+            return role;
+        }
+
+        private com.example.hms.model.User visitUser(String roleName) {
+            com.example.hms.model.User user = new com.example.hms.model.User();
+            user.setId(UUID.randomUUID());
+            user.addRole(role(roleName));
+            return user;
+        }
+
+        private com.example.hms.model.Encounter visit(com.example.hms.model.User user) {
+            com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+            staff.setUser(user);
+            com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+            encounter.setStaff(staff);
+            return encounter;
         }
 
         @Test

@@ -1291,7 +1291,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Map<UUID, CareTeamDTO.VisitClinicianEntry> byUser = new java.util.LinkedHashMap<>();
         for (com.example.hms.model.Encounter encounter : open) {
             com.example.hms.model.User clinician = encounter.getStaff().getUser();
-            if (clinician == null || clinician.isDeleted() || !encounter.getStaff().isActive()
+            // Only someone the patient can actually write to: a live account
+            // holding a clinical-care role, the same test the send applies.
+            if (clinician == null || clinician.isDeleted() || !clinician.isActive()
+                    || !encounter.getStaff().isActive()
+                    || !com.example.hms.service.ChatMessageServiceImpl.holdsClinicalCareRole(clinician)
                     || byUser.containsKey(clinician.getId())) {
                 continue;
             }
