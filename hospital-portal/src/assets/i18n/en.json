@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
     "FORCE_OVERRIDE": "Override critical advisory after clinical review",
+    "OVERRIDE_REASON": "Reason for the override (recorded on the prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Warning",
@@ -2394,7 +2395,11 @@
       "SIGNED": "Signed",
       "COSIGNED": "Co-signed",
       "ADDENDUM": "Addendum added"
-    }
+    },
+    "START": "Start visit",
+    "STARTED": "Visit started",
+    "CHECK_OUT": "Check out",
+    "NOT_FOUND": "Encounter not found"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -5369,6 +5374,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Blocked by Plan",
         "PLATFORM_REGISTRY_UPDATED": "Platform Registry Updated",
         "PRESCRIPTION_BACKORDER": "Prescription on Backorder",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Prescription Allergy Warning Overridden",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Prescription Clarification Requested",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Prescription Clarification Resolved",
         "PRESCRIPTION_CREATED": "Prescription Created",
