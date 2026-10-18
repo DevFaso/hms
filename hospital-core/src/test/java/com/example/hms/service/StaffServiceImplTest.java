@@ -528,6 +528,23 @@ class StaffServiceImplTest {
     }
 
     @Test
+    void updateStaff_unknownAccount_triesUsernameThenThrows() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail(" phone-user ")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .build();
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("phone-user")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("phone-user")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(userRepository).findByUsername("phone-user");
+    }
+
+    @Test
     void createStaff_hospitalNotFound_throws() {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")

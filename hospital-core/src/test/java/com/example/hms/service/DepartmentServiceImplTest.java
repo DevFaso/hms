@@ -223,6 +223,28 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void getActiveDepartmentsMinimal_ownHospital_includesContacts() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isEqualTo("cardio@test.com");
+        assertThat(result.get(0).getPhoneNumber()).isEqualTo("555-1234");
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_otherHospital_omitsContacts() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isNull();
+        assertThat(result.get(0).getPhoneNumber()).isNull();
+    }
+
+    @Test
     void isHeadOfDepartment_returnsTrue() {
         when(departmentRepository.existsByHeadOfDepartment_Id(staffId)).thenReturn(true);
         assertThat(departmentService.isHeadOfDepartment(staffId, locale)).isTrue();
