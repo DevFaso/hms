@@ -2824,6 +2824,17 @@
     </changeSet>
 
     <!-- =================================================================
+         V197: default now() on the postpartum and newborn alert created_at
+         columns (QA D131). Two ALTERs, no DO block.
+         ================================================================= -->
+    <changeSet id="V197-maternity-alert-created-at-default" author="hms-team" runOnChange="false">
+        <sqlFile path="V197__maternity_alert_created_at_default.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V189: payment ledger status (PENDING/CONFIRMED/REJECTED/REVERSED)
          and the reversal audit columns (QA D140, D142). No DO block.
          ================================================================= -->

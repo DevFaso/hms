@@ -199,9 +199,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             schedule = response.getSchedule();
         } else {
             boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
-            Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
-                ? null
-                : plan.getShiftFrequencyMinutes();
+            Integer frequency = plan.currentCheckFrequencyMinutes();
             schedule = PostpartumScheduleDTO.builder()
                 .carePlanId(plan.getId())
                 .phase(plan.getActivePhase())
