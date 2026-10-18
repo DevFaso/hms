@@ -107,7 +107,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             java.util.Optional<BillingInvoiceResponseDTO> winner = replayTx.execute(status -> invoiceRepository
                 .findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId())
                 .map(invoiceMapper::toBillingInvoiceResponseDTO));
-            if (winner == null || winner.isEmpty()) {
+            if (winner.isEmpty()) {
                 throw lostRace;
             }
             return winner.get();
