@@ -282,6 +282,27 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("canView edges: no target, a super-admin's account, an inactive row nowhere administered")
+        void canViewEdges() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            assertThat(access.canView(null)).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_SUPER_ADMIN", hospitalA, true)))).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_NURSE", hospitalB, false)))).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_NURSE", hospitalA, false),
+                assignment("ROLE_NURSE", null, true)))).isFalse();
+        }
+
+        @Test
+        @DisplayName("canView: a caller who administers no hospital views nobody else")
+        void nonAdministratorViewsNobody() {
+            signIn(false, "ROLE_NURSE");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true));
+            assertThat(access.canView(account(UUID.randomUUID()))).isFalse();
+        }
+
+        @Test
         @DisplayName("an unauthenticated context is nobody")
         void noAuthenticationIsNobody() {
             assertThat(access.currentUserId()).isEmpty();

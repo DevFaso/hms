@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -136,7 +137,7 @@ class UserRoleHospitalAssignmentSpecificationTest {
         verify(root, atLeastOnce()).join(USER, JoinType.LEFT);
         // QA D193: the registrar is not searched, or a username lists every
         // row that user registered for someone else.
-        verify(root, org.mockito.Mockito.never()).join(REGISTERED_BY, JoinType.LEFT);
+        verify(root, never()).join(REGISTERED_BY, JoinType.LEFT);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(criteriaBuilder, atLeastOnce()).like(any(Expression.class), captor.capture());
