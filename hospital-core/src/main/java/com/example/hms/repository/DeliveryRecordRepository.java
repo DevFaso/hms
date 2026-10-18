@@ -11,4 +11,7 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
     Optional<DeliveryRecord> findByEpisode_Id(UUID episodeId);
 
     boolean existsByEpisode_Id(UUID episodeId);
+
+    /** A birth on or after {@code since} for this mother (QA D164: no antenatal plan after delivery). */
+    boolean existsByPatient_IdAndBirthDateTimeGreaterThanEqual(UUID patientId, java.time.LocalDateTime since);
 }

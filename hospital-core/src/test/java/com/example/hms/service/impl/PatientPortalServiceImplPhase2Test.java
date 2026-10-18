@@ -1781,6 +1781,8 @@ class PatientPortalServiceImplPhase2Test {
             when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
                     .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
             when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(d1, d2));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
+                    .thenReturn(java.util.Set.of(d1.getId(), d2.getId()));
 
             List<java.util.Map<String, Object>> result =
                     service.getDepartmentsForHospital(auth, hospId);
@@ -1788,6 +1790,30 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).hasSize(2);
             assertThat(result.get(0)).containsEntry("name", "Cardiology");
             assertThat(result.get(1)).containsEntry("name", "Radiology");
+        }
+
+        @Test
+        @DisplayName("getDepartmentsForHospital — QA D169: a department with no bookable provider is not offered")
+        void getDepartments_hidesDepartmentsWithNoProvider() {
+            UUID hospId = UUID.randomUUID();
+            Department maternity = new Department();
+            maternity.setId(UUID.randomUUID());
+            maternity.setName("Maternite");
+            Department empty = new Department();
+            empty.setId(UUID.randomUUID());
+            empty.setName("Empty");
+
+            stubPatientResolution();
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospId))
+                    .thenReturn(java.util.Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+            when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(maternity, empty));
+            when(staffRepository.findDepartmentIdsWithActiveProviders(hospId))
+                    .thenReturn(java.util.Set.of(maternity.getId()));
+
+            List<java.util.Map<String, Object>> result =
+                    service.getDepartmentsForHospital(auth, hospId);
+
+            assertThat(result).extracting(m -> m.get("name")).containsExactly("Maternite");
         }
 
         @Test

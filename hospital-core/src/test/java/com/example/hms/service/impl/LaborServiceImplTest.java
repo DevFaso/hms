@@ -271,7 +271,12 @@ class LaborServiceImplTest {
 
         assertThat(response.getAlerts())
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
-        verify(notificationService).createNotification(contains("FETAL_HEART_RATE"), eq("midwife.nina"));
+        // QA D172: a translated type label and French text, never the raw enum or English.
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(text.capture(), eq("midwife.nina"));
+        assertThat(text.getValue())
+            .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
+            .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
     }
 
     @Test
@@ -371,7 +376,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("HEMORRHAGE"), eq("midwife.nina"));
+        verify(notificationService).createNotification(contains("hémorragie"), eq("midwife.nina"));
     }
 
     @Test
@@ -473,5 +478,97 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class);
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    /* ── QA D172: every alert text comes from the French staff bundle ── */
+
+    @Test
+    void maternalFeverAndTachycardiaAreFrenchCautions() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setTemperatureCelsius(38.6);
+        request.setPulseBpm(128);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-fever");
+                assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+                assertThat(alert.getMessage()).contains("Température maternelle", "38,6").doesNotContain("temperature");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-maternal-tachycardia");
+                assertThat(alert.getMessage()).contains("Pouls maternel 128 bpm").doesNotContain("pulse");
+            });
+    }
+
+    @Test
+    void elevatedBloodPressureIsAFrenchCaution() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setSystolicBpMmHg(145);
+        request.setDiastolicBpMmHg(92);
+
+        PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-hypertension");
+                assertThat(alert.getMessage()).contains("Tension artérielle élevée 145/92 mmHg");
+            })
+            .noneSatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-severe-hypertension"));
+    }
+
+    @Test
+    void incompletePlacentaAndLowApgarAreFrenchAlerts() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setPlacentaComplete(false);
+        request.setApgarFiveMinute(5);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts())
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-retained-placenta");
+                assertThat(alert.getMessage()).contains("Placenta incomplet").doesNotContain("retained");
+            })
+            .anySatisfy(alert -> {
+                assertThat(alert.getCode()).isEqualTo("labor-apgar-low");
+                assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.CAUTION.name());
+                assertThat(alert.getMessage()).contains("Apgar à 5 minutes 5");
+            });
+    }
+
+    /* ── QA D162: gestational age from the LMP when no EDD was recorded ── */
+
+    @Test
+    void startEpisodeDerivesGestationalAgeFromTheLmpWhenNoEddIsRecorded() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        MaternalHistory history = new MaternalHistory();
+        history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(38));
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+
+        assertThat(created.getGestationalAgeWeeks()).isEqualTo(38);
+    }
+
+    @Test
+    void startEpisodeLeavesGestationalAgeEmptyForAnImplausibleLmp() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        MaternalHistory history = new MaternalHistory();
+        history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(93));
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+
+        assertThat(created.getGestationalAgeWeeks()).isNull();
     }
 }

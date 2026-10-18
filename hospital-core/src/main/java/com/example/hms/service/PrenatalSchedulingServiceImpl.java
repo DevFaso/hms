@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.prenatal.PrenatalScheduleRequestDTO;
 import com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO;
 import com.example.hms.payload.dto.prenatal.PrenatalVisitRecommendationDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.DeliveryRecordRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
@@ -52,6 +53,7 @@ import java.util.stream.Collectors;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.utility.GestationalDating;
 import com.example.hms.utility.ObstetricEligibility;
 
 @Service
@@ -75,6 +77,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private final Clock clock;
     private final MessageSource messageSource;
     private final PatientLocaleResolver patientLocaleResolver;
+    private final DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
     public PrenatalScheduleResponseDTO generateSchedule(PrenatalScheduleRequestDTO request, Locale locale, String username) {
@@ -91,8 +94,17 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         ensurePatientBelongsToHospital(patient, hospital.getId());
 
         LocalDate lmp = request.getLastMenstrualPeriodDate();
-        LocalDate dueDate = resolveDueDate(request, lmp);
         LocalDate today = LocalDate.now(clock);
+        // QA D164: an LMP 93 weeks ago (or in the future) cannot date a current
+        // pregnancy, and a pregnancy already delivered needs no antenatal visits.
+        if (!GestationalDating.isPlausibleCurrentLmp(lmp, today)) {
+            throw new BusinessException("prenatal.lmp.implausible");
+        }
+        if (deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+                patient.getId(), lmp.atStartOfDay())) {
+            throw new BusinessException("prenatal.pregnancy.delivered");
+        }
+        LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
 
         List<Appointment> futureAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId()).stream()

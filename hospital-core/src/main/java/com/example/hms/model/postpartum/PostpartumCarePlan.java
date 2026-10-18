@@ -233,6 +233,22 @@ public class PostpartumCarePlan extends BaseEntity {
         this.escalationReason = reason;
     }
 
+    /**
+     * The check cadence the schedule shows for the active phase. During
+     * immediate recovery the checks run every {@value #IMMEDIATE_INTERVAL_MINUTES}
+     * minutes, not at the 8-hour shift baseline (QA D162); discharge planning
+     * has no recurring cadence.
+     */
+    public Integer currentCheckFrequencyMinutes() {
+        if (activePhase == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
+            return null;
+        }
+        if (isImmediatePhase() && !immediateWindowCompleted) {
+            return IMMEDIATE_INTERVAL_MINUTES;
+        }
+        return shiftFrequencyMinutes;
+    }
+
     public boolean isImmediatePhase() {
         return activePhase == PostpartumSchedulePhase.IMMEDIATE_RECOVERY;
     }
