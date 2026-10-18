@@ -54,6 +54,7 @@ import java.util.UUID;
 @Slf4j
 public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
+    private static final String DATE_RANGE_INVALID_KEY = "schedule.dateRange.invalid";
     private static final Set<StaffLeaveStatus> ACTIVE_LEAVE_STATUSES =
         EnumSet.of(StaffLeaveStatus.PENDING, StaffLeaveStatus.APPROVED);
 
@@ -105,7 +106,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
         // ── Resolve & validate shared context ────────────────────────────────
         if (dto.endDate().isBefore(dto.startDate())) {
-            throw new BusinessRuleException(message("schedule.dateRange.invalid", effectiveLocale));
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, effectiveLocale));
         }
         if (dto.daysOfWeek() == null || dto.daysOfWeek().isEmpty()) {
             throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
@@ -166,7 +167,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         try {
             validateShiftWindow(perDayDto, ctx.staff(), ctx.locale(), null);
         } catch (BusinessRuleException | IllegalStateException ex) {
-            if (dto.skipConflicts()) {
+            if (Boolean.TRUE.equals(dto.skipConflicts())) {
                 skipped.add(new BulkShiftSkipDTO(date, ex.getMessage()));
                 log.debug("[bulk-schedule] skipped date={} reason={}", date, ex.getMessage());
                 return;
@@ -700,7 +701,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         LocalDate effectiveStart = start != null ? start : LocalDate.now(clock);
         LocalDate effectiveEnd = end != null ? end : effectiveStart.plusDays(14);
         if (effectiveEnd.isBefore(effectiveStart)) {
-            throw new BusinessRuleException(message("schedule.dateRange.invalid", locale));
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, locale));
         }
         return new DateRange(effectiveStart, effectiveEnd);
     }
@@ -716,7 +717,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         LocalDate effectiveStart = start != null ? start : today.minusDays(LEAVE_LOOKBACK_DAYS);
         LocalDate effectiveEnd = end != null ? end : today.plusDays(LEAVE_LOOKAHEAD_DAYS);
         if (effectiveEnd.isBefore(effectiveStart)) {
-            throw new BusinessRuleException(message("schedule.dateRange.invalid", locale));
+            throw new BusinessRuleException(message(DATE_RANGE_INVALID_KEY, locale));
         }
         return new DateRange(effectiveStart, effectiveEnd);
     }

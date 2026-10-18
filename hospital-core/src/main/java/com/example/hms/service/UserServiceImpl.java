@@ -1456,6 +1456,27 @@ public class UserServiceImpl implements UserService {
         });
     }
 
+    /** Merge-preserve of the identity fields: only a provided value overwrites. */
+    private static void applyNameAndEmail(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername())) {
+            // An administrator choosing the name settles the forced rename:
+            // the holder is no longer asked to pick one at next sign-in (D127).
+            if (!dto.getUsername().equals(user.getUsername())) {
+                user.setForceUsernameChange(false);
+            }
+            user.setUsername(dto.getUsername());
+        }
+        if (hasText(dto.getEmail())) {
+            user.setEmail(dto.getEmail());
+        }
+        if (hasText(dto.getFirstName())) {
+            user.setFirstName(dto.getFirstName());
+        }
+        if (hasText(dto.getLastName())) {
+            user.setLastName(dto.getLastName());
+        }
+    }
+
     @Override
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
@@ -1481,23 +1502,7 @@ public class UserServiceImpl implements UserService {
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
         boolean reactivated = false;
-        if (hasText(dto.getUsername())) {
-            // An administrator choosing the name settles the forced rename:
-            // the holder is no longer asked to pick one at next sign-in (D127).
-            if (!dto.getUsername().equals(user.getUsername())) {
-                user.setForceUsernameChange(false);
-            }
-            user.setUsername(dto.getUsername());
-        }
-        if (hasText(dto.getEmail())) {
-            user.setEmail(dto.getEmail());
-        }
-        if (hasText(dto.getFirstName())) {
-            user.setFirstName(dto.getFirstName());
-        }
-        if (hasText(dto.getLastName())) {
-            user.setLastName(dto.getLastName());
-        }
+        applyNameAndEmail(user, dto);
         // Normalised only when it changed: the edit dialog sends the stored
         // phone back, and a legacy value toE164 refuses must not block an edit.
         if (hasText(dto.getPhoneNumber()) && !dto.getPhoneNumber().trim().equals(user.getPhoneNumber())) {

@@ -246,24 +246,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // e-mail are identifiers: normalised, checked and refused with a
         // message, never stored as typed (QA D113: free text, another
         // patient's address, a blank phone failing as a 500).
-        if (dto.getPhoneNumberPrimary() != null) {
-            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
-            if (primary == null) {
-                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
-            }
-            UUID selfId = patient.getId();
-            if (patientRepository.findByPhoneNumberPrimary(primary)
-                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
-                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
-            }
-            patient.setPhoneNumberPrimary(primary);
-        }
-        if (dto.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
-        }
-        if (dto.getEmail() != null) {
-            patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
-        }
+        applySelfServiceIdentifiers(patient, dto);
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -283,6 +266,28 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
+    }
+
+    /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
+    private void applySelfServiceIdentifiers(Patient patient, PatientProfileUpdateDTO dto) {
+        if (dto.getPhoneNumberPrimary() != null) {
+            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
+            if (primary == null) {
+                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+            }
+            UUID selfId = patient.getId();
+            if (patientRepository.findByPhoneNumberPrimary(primary)
+                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
+                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
+            }
+            patient.setPhoneNumberPrimary(primary);
+        }
+        if (dto.getPhoneNumberSecondary() != null) {
+            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
+        }
+        if (dto.getEmail() != null) {
+            patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
+        }
     }
 
     /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
@@ -1278,7 +1283,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
     }
 
-    /** Map a PrimaryCareResponseDTO to a CareTeam entry. */
     /**
      * The clinicians holding the patient's open visits, newest visit first,
      * one entry each. Without them a patient seen on a walk-in had an empty
@@ -1311,6 +1315,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return List.copyOf(byUser.values());
     }
 
+    /** Map a PrimaryCareResponseDTO to a CareTeam entry. */
     private static CareTeamDTO.PrimaryCareEntry toCareTeamEntry(PatientPrimaryCareResponseDTO pcp,
                                                                 Map<UUID, String> hospitalNames) {
         return CareTeamDTO.PrimaryCareEntry.builder()

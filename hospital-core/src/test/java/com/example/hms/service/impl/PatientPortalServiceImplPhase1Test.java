@@ -70,6 +70,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -329,7 +330,7 @@ class PatientPortalServiceImplPhase1Test {
             PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("  ").build();
             assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(patientRepository, org.mockito.Mockito.never()).save(any(Patient.class));
+            verify(patientRepository, never()).save(any(Patient.class));
         }
 
         @Test
@@ -354,7 +355,7 @@ class PatientPortalServiceImplPhase1Test {
             PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().email(" other@example.com ").build();
             assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(patientRepository, org.mockito.Mockito.never()).save(any(Patient.class));
+            verify(patientRepository, never()).save(any(Patient.class));
         }
 
         @Test

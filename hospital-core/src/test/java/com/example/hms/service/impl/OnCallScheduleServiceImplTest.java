@@ -85,7 +85,8 @@ class OnCallScheduleServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
 
-        assertThatThrownBy(() -> service.create(request(start, start.plusHours(8))))
+        OnCallScheduleRequestDTO dto = request(start, start.plusHours(8));
+        assertThatThrownBy(() -> service.create(dto))
             .isInstanceOf(BusinessException.class);
         verify(onCallRepository, never()).save(any());
     }
@@ -98,7 +99,8 @@ class OnCallScheduleServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
 
-        assertThatThrownBy(() -> service.create(request(start, start.plusHours(8))))
+        OnCallScheduleRequestDTO dto = request(start, start.plusHours(8));
+        assertThatThrownBy(() -> service.create(dto))
             .isInstanceOf(BusinessException.class);
         verify(onCallRepository, never()).save(any());
     }

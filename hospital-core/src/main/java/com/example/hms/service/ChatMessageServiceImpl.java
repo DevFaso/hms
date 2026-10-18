@@ -52,6 +52,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
+    private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
@@ -82,7 +83,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
             .map(ur -> {
                 String roleName = ur.getRole().getName();
-                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
             })
             .anyMatch(CLINICAL_CARE_ROLES::contains);
     }
@@ -335,7 +336,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .filter(ur -> ur.getRole() != null)
             .map(ur -> {
                 String roleName = ur.getRole().getName();
-                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
             })
             .collect(java.util.stream.Collectors.toSet());
 

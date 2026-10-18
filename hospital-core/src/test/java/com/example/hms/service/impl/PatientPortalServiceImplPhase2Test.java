@@ -1192,10 +1192,10 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         private com.example.hms.model.User visitUser(String roleName) {
-            com.example.hms.model.User user = new com.example.hms.model.User();
-            user.setId(UUID.randomUUID());
-            user.addRole(role(roleName));
-            return user;
+            com.example.hms.model.User visitor = new com.example.hms.model.User();
+            visitor.setId(UUID.randomUUID());
+            visitor.addRole(role(roleName));
+            return visitor;
         }
 
         private com.example.hms.model.Encounter visit(com.example.hms.model.User user) {
