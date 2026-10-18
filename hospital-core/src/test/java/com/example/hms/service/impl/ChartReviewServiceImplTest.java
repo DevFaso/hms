@@ -306,6 +306,26 @@ class ChartReviewServiceImplTest {
     }
 
     @Test
+    void thePrescriptionAnchorConsultationNeverPrintsUnderNotes() {
+        // QA D85: the consultation a prescription creates is bookkeeping; any
+        // note on it stays out of "Notes" in the chart and the record PDF.
+        LocalDateTime now = LocalDateTime.now();
+        Encounter anchor = encounter(EncounterStatus.COMPLETED, now);
+        anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        Encounter visit = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(1));
+        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+            any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(anchor, visit)));
+        EncounterNote visitNote = note(visit, now.minusHours(1));
+        when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of(note(anchor, now), visitNote));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getNotes()).singleElement()
+            .satisfies(n -> assertThat(n.getEncounterId()).isEqualTo(visit.getId()));
+    }
+
+    @Test
     void notePreviewPicksAssessmentAndTruncatesLongBodies() {
         LocalDateTime now = LocalDateTime.now();
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, now);

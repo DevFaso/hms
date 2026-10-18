@@ -413,6 +413,59 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void createPrescriptionAnchorsAtTheActingHospitalNotTheFirstStaffRow() {
+        // QA D85: a doctor with staff rows in two hospitals. The FIRST row is at
+        // the home hospital; the caller acts in the other one. The order must be
+        // written where the caller acts, or the acting hospital's chart and
+        // record PDF never show it.
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .build();
+        UUID currentUser = staff.getUser().getId();
+
+        UUID actingId = UUID.randomUUID();
+        Hospital acting = new Hospital();
+        acting.setId(actingId);
+        Staff actingStaff = new Staff();
+        actingStaff.setId(UUID.randomUUID());
+        actingStaff.setHospital(acting);
+        actingStaff.setUser(staff.getUser());
+        UserRoleHospitalAssignment actingAssignment = new UserRoleHospitalAssignment();
+        actingAssignment.setId(UUID.randomUUID());
+        actingAssignment.setHospital(acting);
+        actingStaff.setAssignment(actingAssignment);
+
+        Prescription mappedEntity = new Prescription();
+        PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(actingId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        lenient().when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
+        when(staffRepository.findByUserIdAndHospitalId(currentUser, actingId)).thenReturn(Optional.of(actingStaff));
+        when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
+            patientId, actingStaff.getId(), actingId)).thenReturn(Optional.empty());
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(roleValidator.canCreatePrescription(currentUser, actingId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        ArgumentCaptor<Encounter> encounterCaptor = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(encounterCaptor.capture());
+        Encounter anchor = encounterCaptor.getValue();
+        assertThat(anchor.getHospital().getId()).isEqualTo(actingId);
+        assertThat(anchor.getStaff()).isEqualTo(actingStaff);
+        assertThat(anchor.getNotes()).isEqualTo(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        verify(prescriptionMapper).toEntity(request, patient, actingStaff, anchor);
+    }
+
+    @Test
     void createPrescriptionWithPatientIdentifierResolvesPatientByUsernameOrEmail() {
         String patientIdentifier = "dev_patient_0014@seed.dev";
         PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()

@@ -12,6 +12,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
@@ -102,16 +103,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale) {
         rejectClientAssertedWorkflowStatus(request);
         UUID currentUserId = authService.getCurrentUserId();
+        // QA D85: the new order belongs to the hospital the caller acts in. It
+        // used to land at the home hospital of the caller's FIRST staff row, so
+        // a doctor working in two hospitals wrote prescriptions the acting
+        // hospital's chart and record PDF never showed.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
 
         ensureContextConsistency(patient, staff, encounter);
 
         UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
+        }
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
         }
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
@@ -882,8 +891,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -1097,7 +1106,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
     }
 
-    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
+    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId, UUID actingHospitalId) {
         if (request.getStaffId() != null) {
             Staff named = staffRepository.findById(request.getStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
@@ -1112,19 +1121,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (currentUserId == null) {
             throw new BusinessException("prescription.staff.context.missing");
         }
+        if (actingHospitalId != null) {
+            Optional<Staff> here = staffRepository.findByUserIdAndHospitalId(currentUserId, actingHospitalId);
+            if (here.isPresent()) {
+                return here.get();
+            }
+        }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new BusinessException("prescription.staff.context.missing"));
     }
 
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
-                                              Staff staff) {
+                                              Staff staff,
+                                              UUID actingHospitalId) {
         if (request.getEncounterId() != null) {
             return encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
-        UUID hospitalId = determineHospitalId(staff, patient);
+        UUID hospitalId = actingHospitalId != null ? actingHospitalId : determineHospitalId(staff, patient);
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
         }
@@ -1153,7 +1169,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter createEncounterSnapshot(Patient patient,
                                               Staff staff,
                                               UserRoleHospitalAssignment assignment) {
-        if (staff.getHospital() == null) {
+        // The anchor sits at the hospital the assignment was resolved for (the
+        // acting hospital when one is pinned), not the staff row's home.
+        Hospital hospital = assignment != null && assignment.getHospital() != null
+            ? assignment.getHospital() : staff.getHospital();
+        if (staff.getHospital() == null || hospital == null) {
             throw new BusinessException("prescription.staff.hospital.missing");
         }
         // The anchor exists only because a prescription row needs an encounter:
@@ -1164,23 +1184,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Encounter encounter = Encounter.builder()
             .patient(patient)
             .staff(staff)
-            .hospital(staff.getHospital())
-            .department(departmentAtHospital(staff))
+            .hospital(hospital)
+            .department(departmentAtHospital(staff, hospital))
             .assignment(assignment)
             .encounterType(EncounterType.CONSULTATION)
             .encounterDate(now)
             .checkoutTimestamp(now)
             .status(EncounterStatus.COMPLETED)
-            .notes("Auto-generated for prescription entry")
+            .notes(Encounter.PRESCRIPTION_ANCHOR_NOTE)
             .build();
         encounter.setCode(generateEncounterCode());
         return encounterRepository.save(encounter);
     }
 
-    private static Department departmentAtHospital(Staff staff) {
+    private static Department departmentAtHospital(Staff staff, Hospital hospital) {
         Department department = staff.getDepartment();
         if (department == null || department.getHospital() == null
-            || !department.getHospital().getId().equals(staff.getHospital().getId())) {
+            || !department.getHospital().getId().equals(hospital.getId())) {
             return null;
         }
         return department;
