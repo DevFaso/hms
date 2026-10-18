@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -82,7 +83,7 @@ class DigitalSignatureServiceImplTenantTest {
     }
 
     private com.example.hms.model.Staff me(UUID id) {
-        com.example.hms.model.Staff staff = org.mockito.Mockito.mock(com.example.hms.model.Staff.class);
+        com.example.hms.model.Staff staff = mock(com.example.hms.model.Staff.class);
         org.mockito.Mockito.lenient().when(staff.getId()).thenReturn(id);
         org.mockito.Mockito.lenient().when(staff.getFullName()).thenReturn("Ada Lovelace");
         return staff;

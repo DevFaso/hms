@@ -1091,25 +1091,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    /**
-     * Verify that the patient has an active registration at the given hospital,
-     * so a patient cannot act on behalf of a hospital they have never attended
-     * (IDOR / privilege escalation). Its consent callers went with E9 #65; the
-     * self-service write paths that remain still need it.
-     *
-     * @throws BusinessException (HTTP 400) when no active registration is found.
-     */
     /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
     private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
             throw new BusinessException(MessageUtil.resolve("portal.booking.notRegistered"));
-        }
-    }
-
-    private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
-        if (!isRegisteredAt(patientId, hospitalId)) {
-            throw new BusinessException(
-                    "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
     }
 

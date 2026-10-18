@@ -261,7 +261,7 @@ class GeneralReferralServiceImplTest {
 
         assertThrows(org.springframework.security.access.AccessDeniedException.class, () ->
             generalReferralService.acknowledgeReferral(referralId, "Ready", UUID.randomUUID()));
-        verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     // QA D90: the named receiver must work at the receiving hospital.
@@ -280,7 +280,7 @@ class GeneralReferralServiceImplTest {
 
         assertThrows(ResourceNotFoundException.class, () ->
             generalReferralService.acknowledgeReferral(referralId, "Ready", providerId));
-        verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     @Test
@@ -1061,7 +1061,7 @@ class GeneralReferralServiceImplTest {
         assertEquals(ReferralStatus.SCHEDULED, response.getStatus());
         assertEquals("St Mary's, external", referral.getAppointmentLocation());
         assertNull(response.getAppointmentId());
-        verify(appointmentRepository, org.mockito.Mockito.never())
+        verify(appointmentRepository, never())
             .save(any(com.example.hms.model.Appointment.class));
     }
 

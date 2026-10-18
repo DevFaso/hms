@@ -418,7 +418,7 @@ public class UserAccountAccess {
     public DirectoryScope requireDirectoryAccess() {
         Caller caller = caller();
         if (caller.superAdmin()) {
-            return DirectoryScope.EVERYONE;
+            return DirectoryScope.ALL_ACCOUNTS;
         }
         List<UserRoleHospitalAssignment> staffAssignments = caller.activeAssignments().stream()
             .filter(a -> {
@@ -451,7 +451,7 @@ public class UserAccountAccess {
      */
     public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds, boolean seesPatientContacts) {
 
-        static final DirectoryScope EVERYONE = new DirectoryScope(true, Set.of(), true);
+        static final DirectoryScope ALL_ACCOUNTS = new DirectoryScope(true, Set.of(), true);
 
         public DirectoryScope {
             hospitalIds = Set.copyOf(hospitalIds);

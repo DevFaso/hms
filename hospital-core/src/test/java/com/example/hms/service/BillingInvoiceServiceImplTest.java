@@ -268,7 +268,7 @@ class BillingInvoiceServiceImplTest {
         billingInvoiceService.getInvoicesForPortalPatient(patientId, PageRequest.of(0, 20), Locale.ENGLISH);
 
         verify(invoiceRepository).findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any(Pageable.class));
-        verify(invoiceRepository, org.mockito.Mockito.never()).findByPatient_Id(any(), any());
+        verify(invoiceRepository, never()).findByPatient_Id(any(), any());
     }
 
     // ---- QA D70: a typed hospital name is a claim, not a scope ----
@@ -291,7 +291,7 @@ class BillingInvoiceServiceImplTest {
 
         assertThrows(org.springframework.security.access.AccessDeniedException.class,
             () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
-        verify(invoiceRepository, org.mockito.Mockito.never()).saveAndFlush(any(BillingInvoice.class));
+        verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
     }
 
     @org.junit.jupiter.api.Test
