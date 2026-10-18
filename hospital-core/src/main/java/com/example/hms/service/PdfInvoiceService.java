@@ -343,7 +343,7 @@ public class PdfInvoiceService {
 
         void text(PDFont font, int size, float x, String text) throws IOException {
             cs.beginText();
-            cs.setFont(font, (float) size);
+            cs.setFont(font, size);
             cs.newLineAtOffset(x, y);
             cs.showText(sanitize(font, text));
             cs.endText();
