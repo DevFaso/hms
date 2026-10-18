@@ -64,9 +64,9 @@ class SignableReportLocatorTest {
 
     @Test
     void dischargeSummaryResolvesItsHospital() {
-        DischargeSummary record = mock(DischargeSummary.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(dischargeSummaries.findById(reportId)).thenReturn(Optional.of(record));
+        DischargeSummary entity = mock(DischargeSummary.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(dischargeSummaries.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.DISCHARGE_SUMMARY, reportId)).contains(hospitalId);
     }
 
@@ -74,57 +74,57 @@ class SignableReportLocatorTest {
     void labResultResolvesThroughItsOrder() {
         LabOrder order = mock(LabOrder.class);
         when(order.getHospital()).thenReturn(hospital);
-        LabResult record = mock(LabResult.class);
-        when(record.getLabOrder()).thenReturn(order);
-        when(labResults.findById(reportId)).thenReturn(Optional.of(record));
+        LabResult entity = mock(LabResult.class);
+        when(entity.getLabOrder()).thenReturn(order);
+        when(labResults.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.LAB_RESULT, reportId)).contains(hospitalId);
     }
 
     @Test
     void labResultWithoutAnOrderHasNoHospital() {
-        LabResult record = mock(LabResult.class);
-        when(labResults.findById(reportId)).thenReturn(Optional.of(record));
+        LabResult entity = mock(LabResult.class);
+        when(labResults.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.LAB_RESULT, reportId)).isEmpty();
     }
 
     @Test
     void imagingReportResolvesItsHospital() {
-        ImagingReport record = mock(ImagingReport.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(imagingReports.findById(reportId)).thenReturn(Optional.of(record));
+        ImagingReport entity = mock(ImagingReport.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(imagingReports.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.IMAGING_REPORT, reportId)).contains(hospitalId);
     }
 
     @Test
     void consultationResolvesItsHospital() {
-        Consultation record = mock(Consultation.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(consultations.findById(reportId)).thenReturn(Optional.of(record));
+        Consultation entity = mock(Consultation.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(consultations.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.CONSULTATION_NOTE, reportId)).contains(hospitalId);
     }
 
     @ParameterizedTest
     @EnumSource(value = SignatureType.class, names = {"PROGRESS_NOTE", "ED_NOTE"})
     void encounterNotesResolveTheirHospital(SignatureType type) {
-        EncounterNote record = mock(EncounterNote.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(encounterNotes.findById(reportId)).thenReturn(Optional.of(record));
+        EncounterNote entity = mock(EncounterNote.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(encounterNotes.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(type, reportId)).contains(hospitalId);
     }
 
     @Test
     void medicationOrderResolvesItsHospital() {
-        Prescription record = mock(Prescription.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(prescriptions.findById(reportId)).thenReturn(Optional.of(record));
+        Prescription entity = mock(Prescription.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(prescriptions.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.MEDICATION_ORDER, reportId)).contains(hospitalId);
     }
 
     @Test
     void procedureReportResolvesItsHospital() {
-        ProcedureOrder record = mock(ProcedureOrder.class);
-        when(record.getHospital()).thenReturn(hospital);
-        when(procedureOrders.findById(reportId)).thenReturn(Optional.of(record));
+        ProcedureOrder entity = mock(ProcedureOrder.class);
+        when(entity.getHospital()).thenReturn(hospital);
+        when(procedureOrders.findById(reportId)).thenReturn(Optional.of(entity));
         assertThat(locator.owningHospitalId(SignatureType.PROCEDURE_REPORT, reportId)).contains(hospitalId);
     }
 
