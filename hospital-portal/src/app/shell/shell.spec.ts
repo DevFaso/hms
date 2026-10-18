@@ -745,6 +745,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     const guards = guardedRoutes();
     const portalRoles = [...new Set([...guards.values()].flatMap((r) => r ?? []))].sort();
 
+    it('a hospital admin can reach the pharmacy registry it administers (QA D39)', () => {
+      expect(guards.get('pharmacy-registry')).toContain('ROLE_HOSPITAL_ADMIN');
+      const { items } = createComponent({
+        activeRole: 'ROLE_HOSPITAL_ADMIN',
+        roles: ['ROLE_HOSPITAL_ADMIN'],
+        wildcardPermission: true,
+      });
+      expect(items.map((i) => i.route)).toContain('/pharmacy-registry');
+    });
+
     it('derives the role set from the route guards', () => {
       expect(portalRoles).toContain('ROLE_DOCTOR');
       expect(portalRoles).toContain('ROLE_PATIENT');

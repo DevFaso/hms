@@ -46,6 +46,8 @@ export interface UserDetail {
    */
   temporaryUsername?: string;
   temporaryPassword?: string;
+  /** Registration responses only: true when this call created the account. */
+  newAccount?: boolean;
 }
 
 export interface AdminRegisterRequest {

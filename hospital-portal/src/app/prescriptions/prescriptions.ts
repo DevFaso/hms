@@ -25,7 +25,7 @@ import {
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -226,7 +226,7 @@ export class PrescriptionsComponent implements OnInit {
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (s) => this.staffMembers.set(s ?? []),
+        next: (s) => this.staffMembers.set((s ?? []).filter(isClinicalProvider)),
         // Said out loud rather than rendered as an empty dropdown: a
         // prescriber who cannot find their own name would otherwise assume
         // the list is simply short.

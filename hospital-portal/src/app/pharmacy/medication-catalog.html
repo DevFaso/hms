@@ -4,10 +4,12 @@
       <h1 class="page-title">{{ 'PHARMACY.CATALOG_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.CATALOG_SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'PHARMACY.NEW_MEDICATION' | translate }}
-    </button>
+    @if (canManage()) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'PHARMACY.NEW_MEDICATION' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-bar">
@@ -75,20 +77,24 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button
-                    class="action-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(item)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="action-link danger"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(item)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (canManage()) {
+                    <button
+                      class="action-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      data-test="catalog-edit"
+                      (click)="openEdit(item)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="action-link danger"
+                      [title]="'COMMON.DELETE' | translate"
+                      data-test="catalog-delete"
+                      (click)="confirmDelete(item)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

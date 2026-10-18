@@ -54,6 +54,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -371,6 +372,13 @@ class UserServiceImplTest {
             assertThat(userCaptor.getValue().isActive())
                 .as("staff must start inactive until the emailed code is verified")
                 .isFalse();
+            // D38: the registrar typed this password, so the holder must replace it.
+            assertThat(userCaptor.getValue().isForcePasswordChange())
+                .as("an admin-chosen password must be replaced at first sign-in")
+                .isTrue();
+            assertThat(userCaptor.getValue().isForceUsernameChange())
+                .as("the username the admin chose is kept")
+                .isFalse();
 
             org.mockito.ArgumentCaptor<com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO>
                 assignCaptor = org.mockito.ArgumentCaptor.forClass(
@@ -505,8 +513,7 @@ class UserServiceImplTest {
             hospital.setName("Hospital B");
 
             // Existing user found by email — but NOT yet assigned as PATIENT at target hospital
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "patient.doe", "existing@test.com", "+1111111111"))
+            when(userRepository.findByEmail("existing@test.com"))
                 .thenReturn(Optional.of(user));
 
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -538,8 +545,7 @@ class UserServiceImplTest {
             hospital.setId(hospitalId);
             hospital.setName("Hospital A");
 
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "patient.doe", "existing@test.com", "+1111111111"))
+            when(userRepository.findByEmail("existing@test.com"))
                 .thenReturn(Optional.of(user));
 
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -570,7 +576,7 @@ class UserServiceImplTest {
             hospital.setId(hospitalId);
             hospital.setName("Hospital P");
 
-            when(userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber("patient.awa", "+22670707070"))
+            when(userRepository.findByPhoneNumber("+22670707070"))
                 .thenReturn(Optional.of(user));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
@@ -607,12 +613,11 @@ class UserServiceImplTest {
             user.setDeleted(true);
             // V184: the clean-up delete recorded a disable too.
             user.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "patient.doe", "existing@test.com", "+1111111111"))
+            when(userRepository.findByEmail("existing@test.com"))
                 .thenReturn(Optional.of(user));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
-            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+            lenient().when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
                 .thenReturn(false);
             when(staffRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
 
@@ -637,15 +642,135 @@ class UserServiceImplTest {
             // Registering the person again undoes the delete's disable too, or
             // their code and activation link would refuse them forever.
             assertThat(user.getDeactivatedByAdminAt()).isNull();
-            verify(userRepository).save(user);
+            verify(userRepository, atLeastOnce()).save(user);
+        }
+
+        private AdminSignupRequest patientRequest(String username, String email, String phone, UUID hospitalId) {
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername(username);
+            req.setEmail(email);
+            req.setPhoneNumber(phone);
+            req.setFirstName("Jane");
+            req.setLastName("Doe");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(hospitalId);
+            return req;
+        }
+
+        private UUID stubHospital(String id) {
+            UUID hospitalId = UUID.fromString(id);
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital QA");
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            lenient().when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
+            return hospitalId;
+        }
+
+        @Test
+        @DisplayName("QA D24: a patient registration whose email is a staff account's is refused, the account untouched")
+        void patientEmailOfAStaffAccountIsRefused() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000011");
+            when(userRepository.findByEmail("qa.reception@test.com")).thenReturn(Optional.of(user));
+            when(staffRepository.existsByUserId(user.getId())).thenReturn(false);
+            when(assignmentRepository.existsByUserIdAndRole_CodeNot(user.getId(), "ROLE_PATIENT")).thenReturn(true);
+
+            AdminSignupRequest req1 = patientRequest(null, "qa.reception@test.com", null, hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req1))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("staff account");
+
+            assertThat(user.isForcePasswordChange()).isFalse();
+            verify(userRepository, never()).save(any());
+            verify(assignmentService, never()).assignRoleOnAccountCreation(any());
+        }
+
+        @Test
+        @DisplayName("QA D24: a staff record alone also marks the account as staff (phone match)")
+        void patientPhoneOfAStaffRecordIsRefused() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000012");
+            when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(Optional.of(user));
+            when(staffRepository.existsByUserId(user.getId())).thenReturn(true);
+
+            AdminSignupRequest req2 = patientRequest(null, null, "+22670000001", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req2))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("phone:");
+            verify(userRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D24: an email-only patient never runs a phone lookup, so no phone-less account can match")
+        void emailOnlyPatientNeverMatchesByMissingPhone() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000013");
+            when(userRepository.findByEmail("brand.new@test.com")).thenReturn(Optional.empty());
+
+            AdminSignupRequest req3 = patientRequest(null, "brand.new@test.com", null, hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req3))
+                .isNotInstanceOf(ConflictException.class);
+
+            verify(userRepository, never()).findByPhoneNumber(any());
+            verify(userRepository, never())
+                .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(any(), any(), any());
+            verify(userRepository, never()).findFirstByUsernameIgnoreCaseOrPhoneNumber(any(), any());
+            verify(assignmentService, never()).isRoleAlreadyAssigned(eq(userId), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D24: a requested username someone else holds is dropped, never merged into that account")
+        void takenUsernameIsDroppedForANewPatient() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000014");
+            when(userRepository.findByEmail("other.person@test.com")).thenReturn(Optional.empty());
+            when(userRepository.findByUsernameIgnoreCase("qze6030")).thenReturn(Optional.of(user));
+            AdminSignupRequest req = patientRequest("qze6030", "other.person@test.com", null, hospitalId);
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isNotInstanceOf(ConflictException.class);
+
+            assertThat(req.getUsername()).isNull();
+            verify(assignmentService, never()).isRoleAlreadyAssigned(eq(userId), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D40: retrying after the registrar's own discarded attempt reclaims it instead of a 409")
+        void retryAfterDiscardedRegistrationIsNot409() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000015");
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findByPhoneNumber("+22670000002")).thenReturn(Optional.of(user));
+            when(patientRepository.existsByUserId(user.getId())).thenReturn(false);
+            lenient().when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(true);
+            lenient().when(staffRepository.findByUserId(user.getId())).thenReturn(Collections.emptyList());
+
+            AdminSignupRequest req4 = patientRequest(null, null, "+22670000002", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req4))
+                .isNotInstanceOf(ConflictException.class);
+
+            assertThat(user.isDeleted()).isFalse();
+            assertThat(user.isForcePasswordChange()).isTrue();
+        }
+
+        @Test
+        @DisplayName("QA D40: a deleted account that had been activated is not a discarded attempt: still 409")
+        void deletedActivatedAccountStillConflicts() {
+            UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000016");
+            user.setDeleted(true);
+            user.setActivatedBeforeDelete(true);
+            when(userRepository.findByPhoneNumber("+22670000003")).thenReturn(Optional.of(user));
+            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(true);
+
+            AdminSignupRequest req5 = patientRequest(null, null, "+22670000003", hospitalId);
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req5))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("already registered at this hospital");
         }
 
         @Test
         @DisplayName("brand-new patient (no existing user) passes duplicate check")
         void brandNewPatientPassesDuplicateCheck() {
-            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                    "new.patient", "new@test.com", "+2222222222"))
-                .thenReturn(Optional.empty());
+            when(userRepository.findByEmail("new@test.com")).thenReturn(Optional.empty());
 
             AdminSignupRequest req = new AdminSignupRequest();
             req.setUsername("new.patient");
@@ -916,6 +1041,23 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("keeping the current username clears the flag and is audited as no rename (QA D52)")
+        void keepingTheCurrentUsername() {
+            user.setUsername("invitee.tmp");
+            user.setForceUsernameChange(true);
+            user.setForcePasswordChange(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            userService.completeAccountSetup(userId, "invitee.tmp", null);
+
+            assertThat(user.getUsername()).isEqualTo("invitee.tmp");
+            assertThat(user.isForceUsernameChange()).isFalse();
+            org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit = org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat((Boolean) ((java.util.Map<?, ?>) audit.getValue().getDetails()).get("usernameChanged")).isFalse();
+        }
+
+        @Test
         @DisplayName("only the username: no password is recorded and the password flag stays as it was")
         void usernameOnly() {
             user.setUsername("invitee.tmp");
@@ -955,6 +1097,27 @@ class UserServiceImplTest {
             assertThat(user.isDeleted()).isFalse();
             assertThat(user.isActive()).isTrue();
             verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("QA D51: a restore is audited as USER_RESTORE on the restored account, not a generic update")
+        void restoreIsAuditedAsUserRestore() {
+            user.setDeleted(true);
+            user.setActive(false);
+            user.setLastLoginAt(java.time.LocalDateTime.now().minusDays(3));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+
+            userService.restoreUser(userId);
+
+            ArgumentCaptor<AuditEventRequestDTO> captor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(captor.capture());
+            AuditEventRequestDTO event = captor.getValue();
+            assertThat(event.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.USER_RESTORE);
+            assertThat(event.getResourceId()).isEqualTo(userId.toString());
+            assertThat(event.getEntityType()).isEqualTo("USER");
+            assertThat((Boolean) ((java.util.Map<?, ?>) event.getDetails()).get("reactivated")).isTrue();
         }
 
         @Test
@@ -1265,7 +1428,7 @@ class UserServiceImplTest {
 
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$newHash");
             assertThat(saved.getPasswordChangedAt()).isNotNull();
-            assertThat(saved.isForcePasswordChange()).isFalse();
+            assertThat(saved.isForcePasswordChange()).as("D38: an admin-chosen password must be replaced at next sign-in").isTrue();
         }
 
         @Test

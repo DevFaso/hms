@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject, Subscription } from 'rxjs';
+import { of, Subject, Subscription, throwError } from 'rxjs';
 import { NurseStationComponent } from './nurse-station';
 import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
 import { PatientResponse } from '../services/patient.service';
@@ -41,6 +41,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getWorkboard',
       'getPatientFlow',
       'getPendingAdmissions',
+      'captureVitals',
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -430,5 +431,41 @@ describe('NurseStationComponent — two-tier polling', () => {
     // this spec sets the signal directly, so that string is not in its
     // universe and the check could never fail. NurseTaskServiceImplTest
     // pins the wire value instead.
+  });
+
+  it('refuses an impossible vital reading before it reaches the server (QA D29)', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('temperatureCelsius', '45');
+    component.updateVitalsField('heartRateBpm', '80');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('VITAL_LIMITS.TEMPERATURE');
+  });
+
+  it('sends plausible vitals and shows the server field message on a 400', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(
+      throwError(() => ({ error: { fieldErrors: { spo2Percent: 'SpO2 out of range' } } })),
+    );
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('spo2Percent', '97');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { spo2Percent: 97 });
+    expect(toastSpy.error).toHaveBeenCalledWith('SpO2 out of range');
+  });
+
+  it('picks the task patient by name instead of a raw UUID (QA D45)', () => {
+    component.openTaskCreate();
+    expect(component.taskForm().patientId).toBeUndefined();
+    component.onTaskPatientChange({
+      id: 'pat-7',
+      firstName: 'Awa',
+      lastName: 'K',
+    } as PatientResponse);
+    expect(component.taskPatient()?.id).toBe('pat-7');
+    expect(component.taskForm().patientId).toBe('pat-7');
+    component.onTaskPatientChange(null);
+    expect(component.taskForm().patientId).toBeUndefined();
+    component.closeTaskCreate();
+    expect(component.taskPatient()).toBeNull();
   });
 });

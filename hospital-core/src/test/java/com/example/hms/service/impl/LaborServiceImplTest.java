@@ -139,6 +139,19 @@ class LaborServiceImplTest {
     /* ── Episodes ─────────────────────────────────────────────────────── */
 
     @Test
+    void startEpisodeRefusesAPatientRecordedAsMale() {
+        // QA D46: a labour episode was accepted for a MALE patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        verify(episodeRepository, never())
+            .save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void startEpisodeRejectsSecondActiveEpisode() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));

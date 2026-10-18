@@ -8,6 +8,11 @@ import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -24,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +47,7 @@ class AuditEventLogControllerTest {
     @Mock private AuditEventLogMapper auditMapper;
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private org.springframework.security.core.Authentication auth;
+    @Mock private ActingScopeResolver scopeResolver;
 
     @InjectMocks private AuditEventLogController controller;
 
@@ -54,6 +61,96 @@ class AuditEventLogControllerTest {
         responseDTO = AuditEventLogResponseDTO.builder().build();
         entity = new AuditEventLog();
         entity.setId(UUID.randomUUID());
+        // The pre-D25 tests read as a super-admin in global view: the platform log.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        org.mockito.Mockito.lenient().when(scopeResolver.current()).thenReturn(new ActingScope.Global(UUID.randomUUID()));
+    }
+
+    @AfterEach
+    void clearContext() {
+        HospitalContextHolder.clear();
+    }
+
+    // ─── D25: a hospital-scoped reader never reads the platform log ─────
+
+    @Nested
+    class HospitalScopedReader {
+
+        private final UUID hospitalA = UUID.randomUUID();
+
+        @BeforeEach
+        void hospitalAdminOfA() {
+            HospitalContextHolder.clear();
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .hospitalAdmin(true)
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(Set.of(hospitalA))
+                .staffHospitalIds(Set.of(hospitalA))
+                .build());
+            org.mockito.Mockito.lenient().when(scopeResolver.current())
+                .thenReturn(new ActingScope.Pinned(hospitalA, ActingScope.Source.SOLE_ASSIGNMENT));
+        }
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void listIsAnchoredAtTheCallersHospitalsNotThePlatformLog() {
+            when(auditRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity)));
+            when(auditMapper.toDto(entity)).thenReturn(responseDTO);
+
+            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+
+            assertThat(result.getBody().getContent()).containsExactly(responseDTO);
+            verify(auditRepository, never()).findAll(any(Pageable.class));
+            verify(auditService, never()).getAuditLogsByDateRange(any(), any(), any());
+        }
+
+        @Test
+        void anotherHospitalsLogIsRefused() {
+            UUID hospitalB = UUID.randomUUID();
+            assertThatThrownBy(() -> controller.getLogsByHospital(hospitalB, pageable))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.mockito.Mockito.verifyNoInteractions(auditService);
+        }
+
+        @Test
+        void ownHospitalsLogIsServed() {
+            when(auditService.getAuditLogsByHospital(hospitalA, pageable)).thenReturn(new PageImpl<>(List.of(responseDTO)));
+            assertThat(controller.getLogsByHospital(hospitalA, pageable).getBody().getContent()).hasSize(1);
+        }
+
+        @Test
+        void eventTypeSummaryCountsOnlyTheCallersHospitals() {
+            List<Object[]> rows = new java.util.ArrayList<>();
+            rows.add(new Object[] {AuditEventType.LOGIN, 3L});
+            when(auditRepository.countByEventTypeForHospitals(Set.of(hospitalA))).thenReturn(rows);
+
+            assertThat(controller.getEventTypesSummary().getBody()).hasSize(1);
+            verify(auditRepository, never()).countByEventType();
+        }
+
+        @Test
+        void aMultiHospitalReaderWhoNamedNoneReadsEveryHospitalTheyWorkAt() {
+            UUID hospitalA2 = UUID.randomUUID();
+            HospitalContextHolder.clear();
+            HospitalContextHolder.setContext(HospitalContext.builder()
+                .hospitalAdmin(true).staffHospitalIds(Set.of(hospitalA, hospitalA2)).build());
+            when(scopeResolver.current()).thenReturn(new ActingScope.Refused(ActingScope.Reason.AMBIGUOUS));
+            when(auditRepository.countByEventTypeForHospitals(Set.of(hospitalA, hospitalA2))).thenReturn(List.of());
+
+            assertThat(controller.getEventTypesSummary().getBody()).isEmpty();
+            verify(auditRepository).countByEventTypeForHospitals(Set.of(hospitalA, hospitalA2));
+        }
+
+        @Test
+        void aCallerWithNoStaffHospitalReadsNothing() {
+            HospitalContextHolder.clear();
+            HospitalContextHolder.setContext(HospitalContext.builder().hospitalAdmin(true).build());
+            when(scopeResolver.current()).thenReturn(new ActingScope.Refused(ActingScope.Reason.NO_HOSPITAL));
+
+            assertThat(controller.getEventTypesSummary().getBody()).isEmpty();
+            verify(auditRepository, never()).countByEventType();
+        }
     }
 
     // ─── logEvent ────────────────────────────────────────────────

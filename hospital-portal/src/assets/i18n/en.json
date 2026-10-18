@@ -1595,7 +1595,8 @@
     "UNASSIGNED": "Unassigned",
     "SYSTEM": "System",
     "MINUTES_SHORT": "{{count}} min",
-    "COPYRIGHT_FOOTER": "© {{year}} HMS — Hospital Management System"
+    "COPYRIGHT_FOOTER": "© {{year}} HMS — Hospital Management System",
+    "PATIENT_PICKER_NO_MATCH": "No patient matches this search."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -2369,7 +2370,14 @@
     "VIEW_AVS": "After-visit summary",
     "VIEW_DETAILS": "View details",
     "VITALS": "Vitals",
-    "WAITING_FOR_MD": "Waiting for MD"
+    "WAITING_FOR_MD": "Waiting for MD",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Created",
+      "UPDATED": "Updated",
+      "SIGNED": "Signed",
+      "COSIGNED": "Co-signed",
+      "ADDENDUM": "Addendum added"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3540,7 +3548,6 @@
     "PAIN_REASSESSMENT": "Pain Reassessment",
     "PATIENTS_ASSIGNED": "Patients Assigned",
     "PATIENT_DETAILS": "Patient Details",
-    "PATIENT_ID": "Patient ID",
     "PATIENT_LIST": "Patient List",
     "PENDING": "Pending",
     "PENDING_ORDERS": "Pending Orders",
@@ -3602,7 +3609,6 @@
     "OVERDUE_BADGE": "OVERDUE",
     "COMPLETED_PREFIX": "Completed",
     "BY_PREFIX": "by",
-    "PATIENT_UUID_PLACEHOLDER": "Patient UUID",
     "VITALS_PLACEHOLDER": {
       "TEMP": "e.g. 37.2",
       "HEART_RATE": "e.g. 72",
@@ -5388,7 +5394,8 @@
         "PRESCRIPTION_QUEUE_CLAIMED": "Work-queue prescription claimed",
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
-        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired"
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
+        "USER_RESTORE": "User Restored"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6186,7 +6193,17 @@
     "MFA_STEPUP_IMPERSONATION": "A support session cannot set up or change the authenticator of this account. The account holder must do it themselves.",
     "MFA_SET_UP": "Set up an authenticator app",
     "MFA_COUNTS": "{{enrolled}} enrolled, {{verified}} verified",
-    "SET_UP_TOTP": "Set Up TOTP"
+    "SET_UP_TOTP": "Set Up TOTP",
+    "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
+    "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
+    "PASSWORD_SAME_AS_CURRENT": "The new password must differ from the current one.",
+    "PASSWORD_CHANGED": "Your password has been changed.",
+    "PASSWORD_CURRENT_WRONG": "The current password is incorrect.",
+    "PASSWORD_CHANGE_REFUSED": "The new password was refused. It may match one of your last 5 passwords.",
+    "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
+    "PASSWORD_MANAGED_BY_SSO": "Your password is managed by your single sign-on provider.",
+    "SAVE_NEW_PASSWORD": "Save new password",
+    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",
@@ -8001,7 +8018,9 @@
       "OPHTHALMIC": "Ophthalmic",
       "OTIC": "Otic (ear)",
       "NASAL": "Nasal"
-    }
+    },
+    "NO_PHARMACY_HINT": "No pharmacy is registered for this hospital yet. A hospital administrator can register one in the Pharmacy Registry.",
+    "SELECT_PHARMACY": "Pharmacy"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -10589,5 +10608,17 @@
     "CLAIMS_TITLE": "Insurance claims",
     "NO_CLAIMS": "No pharmacy claims yet.",
     "REF": "Ref: {{ref}}"
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",
+    "HEART_RATE": "Heart rate must be between {{min}} and {{max}} bpm.",
+    "RESPIRATORY_RATE": "Respiratory rate must be between {{min}} and {{max}} breaths per minute.",
+    "SYSTOLIC": "Systolic pressure must be between {{min}} and {{max}} mmHg.",
+    "DIASTOLIC": "Diastolic pressure must be between {{min}} and {{max}} mmHg.",
+    "SPO2": "SpO2 must be between {{min}} and {{max}} %.",
+    "GLUCOSE": "Blood glucose must be between {{min}} and {{max}} mg/dL.",
+    "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
+    "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
   }
 }

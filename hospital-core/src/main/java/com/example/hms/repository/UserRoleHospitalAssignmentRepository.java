@@ -78,6 +78,9 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     boolean existsByUserIdAndActiveTrue(UUID userId);
 
+    /** Any assignment, active or not, whose role is not the given one (QA D24: is this a staff account?). */
+    boolean existsByUserIdAndRole_CodeNot(UUID userId, String roleCode);
+
     boolean existsByUserIdAndHospitalIdAndRoleId(UUID userId, UUID hospitalId, UUID roleId);
 
     boolean existsByUserIdAndHospitalIdAndRoleIdAndActiveTrue(UUID userId, UUID hospitalId, UUID roleId);

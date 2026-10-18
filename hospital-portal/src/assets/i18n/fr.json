@@ -1595,7 +1595,8 @@
     "UNASSIGNED": "Non attribué",
     "SYSTEM": "Système",
     "MINUTES_SHORT": "{{count}} min",
-    "COPYRIGHT_FOOTER": "© {{year}} HMS — Système de gestion hospitalière"
+    "COPYRIGHT_FOOTER": "© {{year}} HMS — Système de gestion hospitalière",
+    "PATIENT_PICKER_NO_MATCH": "Aucun patient ne correspond à cette recherche."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
@@ -2369,7 +2370,14 @@
     "VIEW_AVS": "Résumé de visite",
     "VIEW_DETAILS": "Voir les détails",
     "VITALS": "Signes Vitaux",
-    "WAITING_FOR_MD": "En attente du médecin"
+    "WAITING_FOR_MD": "En attente du médecin",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Créée",
+      "UPDATED": "Modifiée",
+      "SIGNED": "Signée",
+      "COSIGNED": "Contresignée",
+      "ADDENDUM": "Addendum ajouté"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -3540,7 +3548,6 @@
     "PAIN_REASSESSMENT": "Réévaluation de la douleur",
     "PATIENTS_ASSIGNED": "Patients assignés",
     "PATIENT_DETAILS": "Détails du patient",
-    "PATIENT_ID": "ID du patient",
     "PATIENT_LIST": "Liste des patients",
     "PENDING": "En attente",
     "PENDING_ORDERS": "Demandes en attente",
@@ -3602,7 +3609,6 @@
     "OVERDUE_BADGE": "EN RETARD",
     "COMPLETED_PREFIX": "Terminé",
     "BY_PREFIX": "par",
-    "PATIENT_UUID_PLACEHOLDER": "UUID du patient",
     "VITALS_PLACEHOLDER": {
       "TEMP": "ex. 37,2",
       "HEART_RATE": "ex. 72",
@@ -5354,7 +5360,8 @@
         "PRESCRIPTION_QUEUE_CLAIMED": "Ordonnance prise en charge",
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Prise en charge libérée",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Prise en charge reprise",
-        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Prise en charge expirée"
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Prise en charge expirée",
+        "USER_RESTORE": "Utilisateur restauré"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -6186,7 +6193,17 @@
     "MFA_STEPUP_IMPERSONATION": "Une session de support ne peut pas configurer ni modifier l'authentificateur de ce compte. Le titulaire du compte doit le faire lui-même.",
     "MFA_SET_UP": "Configurer une application d'authentification",
     "MFA_COUNTS": "{{enrolled}} inscrit(s), {{verified}} vérifié(s)",
-    "SET_UP_TOTP": "Configurer TOTP"
+    "SET_UP_TOTP": "Configurer TOTP",
+    "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
+    "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
+    "PASSWORD_SAME_AS_CURRENT": "Le nouveau mot de passe doit être différent de l’actuel.",
+    "PASSWORD_CHANGED": "Votre mot de passe a été modifié.",
+    "PASSWORD_CURRENT_WRONG": "Le mot de passe actuel est incorrect.",
+    "PASSWORD_CHANGE_REFUSED": "Le nouveau mot de passe a été refusé. Il correspond peut-être à l’un de vos 5 derniers mots de passe.",
+    "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",
+    "PASSWORD_MANAGED_BY_SSO": "Votre mot de passe est géré par votre fournisseur d’authentification unique.",
+    "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
+    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accepter",
@@ -8001,7 +8018,9 @@
       "OPHTHALMIC": "Ophtalmique",
       "OTIC": "Auriculaire",
       "NASAL": "Nasale"
-    }
+    },
+    "NO_PHARMACY_HINT": "Aucune pharmacie n’est encore enregistrée pour cet établissement. Un administrateur de l’établissement peut en enregistrer une dans le Registre des pharmacies.",
+    "SELECT_PHARMACY": "Pharmacie"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -10589,5 +10608,17 @@
     "CLAIMS_TITLE": "Réclamations d’assurance",
     "NO_CLAIMS": "Aucune réclamation de pharmacie pour le moment.",
     "REF": "Réf : {{ref}}"
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",
+    "HEART_RATE": "La fréquence cardiaque doit être comprise entre {{min}} et {{max}} bpm.",
+    "RESPIRATORY_RATE": "La fréquence respiratoire doit être comprise entre {{min}} et {{max}} cycles par minute.",
+    "SYSTOLIC": "La pression systolique doit être comprise entre {{min}} et {{max}} mmHg.",
+    "DIASTOLIC": "La pression diastolique doit être comprise entre {{min}} et {{max}} mmHg.",
+    "SPO2": "La SpO2 doit être comprise entre {{min}} et {{max}} %.",
+    "GLUCOSE": "La glycémie doit être comprise entre {{min}} et {{max}} mg/dL.",
+    "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
+    "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
   }
 }

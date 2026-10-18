@@ -1566,7 +1566,7 @@
     "SAVE_CHANGES": "Guardar Cambios",
     "SAVING": "Guardando…",
     "SEARCH": "Buscar",
-    "SEARCH_PATIENT": "Buscar paciente...",
+    "SEARCH_PATIENT": "Buscar paciente…",
     "SELECT": "Seleccionar",
     "SELECT_HOSPITAL": "Seleccionar hospital",
     "SHOW_ACTIVE": "Mostrar activos",
@@ -1595,7 +1595,8 @@
     "UNASSIGNED": "Sin asignar",
     "SYSTEM": "Sistema",
     "MINUTES_SHORT": "{{count}} min",
-    "COPYRIGHT_FOOTER": "© {{year}} HMS — Sistema de gestión hospitalaria"
+    "COPYRIGHT_FOOTER": "© {{year}} HMS — Sistema de gestión hospitalaria",
+    "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -2369,7 +2370,14 @@
     "VIEW_AVS": "Resumen de visita",
     "VIEW_DETAILS": "Ver detalles",
     "VITALS": "Signos Vitales",
-    "WAITING_FOR_MD": "Esperando al médico"
+    "WAITING_FOR_MD": "Esperando al médico",
+    "NOTE_HISTORY_CHANGE": {
+      "CREATED": "Creada",
+      "UPDATED": "Modificada",
+      "SIGNED": "Firmada",
+      "COSIGNED": "Refrendada",
+      "ADDENDUM": "Adenda añadida"
+    }
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -3540,7 +3548,6 @@
     "PAIN_REASSESSMENT": "Reevaluación del dolor",
     "PATIENTS_ASSIGNED": "Pacientes asignados",
     "PATIENT_DETAILS": "Datos del paciente",
-    "PATIENT_ID": "ID del paciente",
     "PATIENT_LIST": "Lista de pacientes",
     "PENDING": "Pendiente",
     "PENDING_ORDERS": "Órdenes pendientes",
@@ -3602,7 +3609,6 @@
     "OVERDUE_BADGE": "VENCIDO",
     "COMPLETED_PREFIX": "Completado",
     "BY_PREFIX": "por",
-    "PATIENT_UUID_PLACEHOLDER": "UUID del paciente",
     "VITALS_PLACEHOLDER": {
       "TEMP": "p. ej. 37,2",
       "HEART_RATE": "p. ej. 72",
@@ -5388,7 +5394,8 @@
         "PRESCRIPTION_QUEUE_CLAIMED": "Receta asignada",
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Asignación liberada",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Asignación relevada",
-        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada"
+        "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada",
+        "USER_RESTORE": "Usuario restaurado"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -6015,10 +6022,10 @@
     "BACKUP_CODES": "Códigos de respaldo",
     "BACKUP_CODES_COPIED": "Códigos de respaldo copiados al portapapeles.",
     "BACKUP_CODES_HINT": "Guarde estos códigos en un lugar seguro. Cada uno solo puede usarse una vez.",
-    "CHANGE_PASSWORD": "Cambiar contraseña",
+    "CHANGE_PASSWORD": "Cambiar la contraseña",
     "CHANGE_PHOTO": "Cambiar foto",
     "CHANGE_REQUIRED": "Cambio requerido",
-    "CONFIRM_PASSWORD": "Confirmar contraseña",
+    "CONFIRM_PASSWORD": "Confirmar la contraseña",
     "CONNECTED_DEVICES": "Dispositivos conectados",
     "COPY_CODES": "Copiar los códigos",
     "CREDENTIAL_HEALTH": "Estado de credenciales",
@@ -6186,7 +6193,17 @@
     "MFA_STEPUP_IMPERSONATION": "Una sesión de soporte no puede configurar ni cambiar el autenticador de esta cuenta. El titular de la cuenta debe hacerlo personalmente.",
     "MFA_SET_UP": "Configurar una aplicación de autenticación",
     "MFA_COUNTS": "{{enrolled}} registrado(s), {{verified}} verificado(s)",
-    "SET_UP_TOTP": "Configurar TOTP"
+    "SET_UP_TOTP": "Configurar TOTP",
+    "CHANGE_PASSWORD_DESC": "Introduzca su contraseña actual y elija una nueva de al menos 8 caracteres.",
+    "PASSWORD_TOO_SHORT": "La nueva contraseña debe tener al menos 8 caracteres.",
+    "PASSWORD_SAME_AS_CURRENT": "La nueva contraseña debe ser distinta de la actual.",
+    "PASSWORD_CHANGED": "Su contraseña se ha cambiado.",
+    "PASSWORD_CURRENT_WRONG": "La contraseña actual es incorrecta.",
+    "PASSWORD_CHANGE_REFUSED": "La nueva contraseña fue rechazada. Puede coincidir con una de sus 5 últimas contraseñas.",
+    "PASSWORD_CHANGE_FAILED": "No se pudo cambiar la contraseña. Inténtelo de nuevo.",
+    "PASSWORD_MANAGED_BY_SSO": "Su contraseña la gestiona su proveedor de inicio de sesión único.",
+    "SAVE_NEW_PASSWORD": "Guardar la nueva contraseña",
+    "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Aceptar",
@@ -8001,7 +8018,9 @@
       "OPHTHALMIC": "Oftálmica",
       "OTIC": "Ótica",
       "NASAL": "Nasal"
-    }
+    },
+    "NO_PHARMACY_HINT": "Todavía no hay ninguna farmacia registrada para este hospital. Un administrador del hospital puede registrar una en el Registro de farmacias.",
+    "SELECT_PHARMACY": "Farmacia"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -10589,5 +10608,17 @@
     "CLAIMS_TITLE": "Reclamaciones al seguro",
     "NO_CLAIMS": "Aún no hay reclamaciones de farmacia.",
     "REF": "Ref.: {{ref}}"
+  },
+  "VITAL_LIMITS": {
+    "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",
+    "HEART_RATE": "La frecuencia cardíaca debe estar entre {{min}} y {{max}} lpm.",
+    "RESPIRATORY_RATE": "La frecuencia respiratoria debe estar entre {{min}} y {{max}} respiraciones por minuto.",
+    "SYSTOLIC": "La presión sistólica debe estar entre {{min}} y {{max}} mmHg.",
+    "DIASTOLIC": "La presión diastólica debe estar entre {{min}} y {{max}} mmHg.",
+    "SPO2": "La SpO2 debe estar entre {{min}} y {{max}} %.",
+    "GLUCOSE": "La glucemia debe estar entre {{min}} y {{max}} mg/dL.",
+    "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
+    "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
+    "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
   }
 }

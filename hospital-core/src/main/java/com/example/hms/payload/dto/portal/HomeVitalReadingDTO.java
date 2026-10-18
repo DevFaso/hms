@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.portal;
 
+import com.example.hms.payload.dto.VitalSignLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -21,6 +22,8 @@ import java.time.LocalDateTime;
 @Schema(description = "Patient-reported vital reading from home (e.g. blood pressure cuff, thermometer, glucometer)")
 public class HomeVitalReadingDTO {
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     @Schema(description = "Body temperature in Celsius", example = "36.8")
     private Double temperatureCelsius;
 

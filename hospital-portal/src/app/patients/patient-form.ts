@@ -346,6 +346,7 @@ export class PatientFormComponent implements OnInit {
     // rides along so the backend can stamp phoneVerifiedAt.
     const email = this.form.email?.trim() || undefined;
     let createdUserId: string | null = null;
+    let createdNewAccount = false;
     let deliveryWarnings: string[] = [];
     let deliveryReport: NotificationDeliveryStatus[] = [];
     this.userService
@@ -362,6 +363,7 @@ export class PatientFormComponent implements OnInit {
       .pipe(
         switchMap((user) => {
           createdUserId = user.id;
+          createdNewAccount = user.newAccount === true;
           this.form.userId = user.id;
           deliveryReport = user.activationDelivery ?? [];
           deliveryWarnings = deliveryWarningKeys(deliveryReport);
@@ -373,8 +375,12 @@ export class PatientFormComponent implements OnInit {
           };
           return this.patientService.create(payload).pipe(
             catchError((patientErr) => {
-              // Compensate: remove the orphaned user account
-              this.userService.delete(createdUserId!).subscribe();
+              // Compensate: remove the orphaned user account - but only one
+              // THIS registration created. A linked existing account (a
+              // returning patient) is never deleted by a failed second step.
+              if (createdUserId && createdNewAccount) {
+                this.userService.delete(createdUserId).subscribe();
+              }
               this.toast.error(
                 patientErr?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
               );

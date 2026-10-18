@@ -70,6 +70,21 @@ class GlobalExceptionHandlerTest {
     // handleNotificationTransportUnavailable
     // =========================================================================
 
+    @Test
+    @DisplayName("an unhandled runtime exception never echoes its text to the client (D32)")
+    void runtimeExceptionTextIsNotReturned() {
+        ResponseEntity<Object> response = handler.handleRuntimeException(
+            new NullPointerException("Cannot invoke java.util.Collection.size() because <parameter1> is null"), request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        // D53 replaced the bare D32 text with the translated error.unexpected message.
+        assertThat(String.valueOf(body.get("message")))
+            .isEqualTo("An unexpected error occurred. Please try again or contact support.")
+            .doesNotContain("Cannot invoke", "parameter1");
+    }
+
     @Nested
     @DisplayName("handleNotificationTransportUnavailable")
     class HandleNotificationTransportUnavailable {

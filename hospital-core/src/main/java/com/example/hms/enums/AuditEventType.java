@@ -26,6 +26,8 @@ public enum AuditEventType {
     USER_DELETE,
     USER_DISABLE,
     USER_ENABLE,
+    /** A soft-deleted account put back (QA D51): its own event, not a generic DATA_UPDATE. */
+    USER_RESTORE,
     USER_BOOTSTRAP,
     ROLE_ASSIGNED,
     ROLE_REVOKED,

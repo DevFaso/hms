@@ -46,6 +46,7 @@ describe('ProfileComponent — editing the profile', () => {
       'updateProfile',
       'changeOwnEmail',
       'confirmOwnEmailChange',
+      'changePassword',
     ]);
     profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
     profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
@@ -377,5 +378,66 @@ describe('ProfileComponent — editing the profile', () => {
 
     expect(component.emailChangePassword()).toBe('');
     expect(component.emailChanged()).toBeFalse();
+  });
+
+  describe('self-service password change (D38)', () => {
+    beforeEach(() => {
+      component.switchTab('security');
+      fixture.detectChanges();
+    });
+
+    const fill = (current: string, next: string, confirm: string): void => {
+      component.pwdCurrent.set(current);
+      component.pwdNew.set(next);
+      component.pwdConfirm.set(confirm);
+    };
+
+    it('the security tab offers a change-password form', () => {
+      expect(byId('pwdCurrent')).not.toBeNull();
+      expect(byId('pwdNew')).not.toBeNull();
+      expect(byId('pwdConfirm')).not.toBeNull();
+    });
+
+    it('sends the current and new password, then clears the form', () => {
+      profiles.changePassword.and.returnValue(of({ message: 'ok' }));
+      fill('Old-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(profiles.changePassword).toHaveBeenCalledWith('Old-Pass-1', 'New-Pass-12');
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.PASSWORD_CHANGED');
+      expect(component.pwdCurrent()).toBe('');
+      expect(component.changingPassword()).toBeFalse();
+    });
+
+    it('refuses a mismatch, a short or an unchanged password without calling the server', () => {
+      fill('Old-Pass-1', 'New-Pass-12', 'Other-Pass-12');
+      component.changePassword();
+      fill('Old-Pass-1', 'short', 'short');
+      component.changePassword();
+      fill('Same-Pass-1', 'Same-Pass-1', 'Same-Pass-1');
+      component.changePassword();
+
+      expect(profiles.changePassword).not.toHaveBeenCalled();
+      expect(toast.error.calls.allArgs().map((a) => a[0])).toEqual([
+        'PROFILE.PASSWORD_MISMATCH',
+        'PROFILE.PASSWORD_TOO_SHORT',
+        'PROFILE.PASSWORD_SAME_AS_CURRENT',
+      ]);
+    });
+
+    it('a 401 says the current password is wrong', () => {
+      profiles.changePassword.and.returnValue(throwError(() => ({ status: 401 })));
+      fill('Bad-Pass-1', 'New-Pass-12', 'New-Pass-12');
+      component.changePassword();
+
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.PASSWORD_CURRENT_WRONG');
+      expect(component.changingPassword()).toBeFalse();
+    });
+
+    it('a single sign-on session gets a hint instead of the form', () => {
+      ssoAuthenticated.set(true);
+      fixture.detectChanges();
+      expect(byId('pwdCurrent')).toBeNull();
+    });
   });
 });

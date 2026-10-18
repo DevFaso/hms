@@ -628,11 +628,22 @@ describe('Dashboard navigation & RBAC', () => {
     (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute.call(c, r);
 
   it('canAccessRoute grants a nested child route the parent guard admits', () => {
-    // /patients/new declares no roles of its own; Angular still runs the
-    // /patients guard before activating it, so the child inherits it.
+    // ':id' declares no roles of its own; Angular still runs the /patients
+    // guard before activating it, so the child inherits it.
     const doctor = createComponent(['ROLE_DOCTOR'], []);
-    expect(gate(doctor, '/patients/new')).toBeTrue();
     expect(gate(doctor, '/patients/abc-123')).toBeTrue(); // ':id' segment
+  });
+
+  it('canAccessRoute applies a child route own roles on top of the parent (QA D55)', () => {
+    // /patients/new admits only the POST /patients registrars: the doctor
+    // passes the /patients guard but not the child's.
+    const doctor = createComponent(['ROLE_DOCTOR'], []);
+    expect(gate(doctor, '/patients/new')).toBeFalse();
+  });
+
+  it('canAccessRoute grants /patients/new to a patient registrar', () => {
+    const nurse = createComponent(['ROLE_NURSE'], []);
+    expect(gate(nurse, '/patients/new')).toBeTrue();
   });
 
   it('canAccessRoute denies a nested child route the parent guard rejects', () => {

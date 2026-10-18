@@ -441,6 +441,18 @@ class AuthControllerTest {
     }
 
     @Test
+    void completeSetup_keepingTheCurrentUsernameIsAccepted() throws Exception {
+        // QA D52: the forced step refused the name the account already had.
+        var u = forcedInvitee(true, true);
+        currentPasswordAccepted();
+
+        completeSetup("{\"newUsername\":\"invitee.tmp\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isOk());
+
+        verify(userService).completeAccountSetup(u.getId(), "invitee.tmp", "New#Pass2026");
+    }
+
+    @Test
     void completeSetup_onlyThePasswordWhenOnlyItIsForced() throws Exception {
         var u = forcedInvitee(false, true);
         currentPasswordAccepted();
@@ -473,7 +485,6 @@ class AuthControllerTest {
         for (String json : java.util.List.of(
                 "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"short\"}",
                 "{\"newUsername\":\"bad name\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}",
-                "{\"newUsername\":\"invitee.TMP\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}",
                 "{\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}",
                 "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\"}",
                 "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"Temp#Pass1\"}",

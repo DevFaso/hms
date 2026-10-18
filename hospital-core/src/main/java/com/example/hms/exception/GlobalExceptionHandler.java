@@ -431,6 +431,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
     log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
+    // Never echo the exception text: it can carry SQL, class names or row data (D32).
     // The exception text stays in the log (D53): it is an internal Java
     // message ("Cannot invoke ... because ... is null") no user can act on,
     // and it can carry identifiers.

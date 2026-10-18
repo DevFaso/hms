@@ -1699,6 +1699,34 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void captureVitalsStampsTheNursesAssignmentAtThatHospital() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setHospital(hosp);
+        com.example.hms.model.Staff nurse = new com.example.hms.model.Staff();
+        nurse.setAssignment(assignment);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.of(nurse));
+
+        service.captureVitals(patientId, nurseId, hospitalId,
+            NurseVitalCaptureRequestDTO.builder().heartRateBpm(72).build());
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().getRecordedByStaff()).isSameAs(nurse);
+        assertThat(captor.getValue().getRecordedByAssignment()).isSameAs(assignment);
+    }
+
+    @Test
     void captureVitalsFlagsClinicallySignificantWhenHeartRateHigh() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
