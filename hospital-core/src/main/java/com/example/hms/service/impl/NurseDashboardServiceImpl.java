@@ -27,6 +27,7 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final PatientMapper patientMapper;
     private final PatientVitalSignService patientVitalSignService;
+    private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
     @Override
     public List<PatientResponseDTO> getPatientsForNurse(UUID nurseUserId,
@@ -73,6 +74,12 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         Patient patient = registration.getPatient();
     UUID hospitalId = registration.getHospital() != null ? registration.getHospital().getId() : null;
     PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
+        // QA D110: an opted-out patient's allergy summary narrows to this hospital's rows.
+        if (patient != null && patient.getId() != null && hospitalId != null && dto.getAllergies() != null
+                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+            dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
+                patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
+        }
 
         String patientFullName = Optional.ofNullable(patient)
             .map(Patient::getFullName)
@@ -100,7 +107,7 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             dto.setSpo2(vitals.getSpo2());
         }
 
-        dto.setFlags(buildFlags(registration, patient));
+        dto.setFlags(buildFlags(registration, dto.getAllergies()));
         dto.setRisks(buildRisks(registration, patient));
         return dto;
     }
@@ -118,12 +125,12 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
             : PatientResponseDTO.VitalSnapshot.builder().build());
     }
 
-    private List<String> buildFlags(PatientHospitalRegistration registration, Patient patient) {
+    private List<String> buildFlags(PatientHospitalRegistration registration, String visibleAllergies) {
         List<String> flags = new ArrayList<>();
         if (registration.getStayStatus() == PatientStayStatus.READY_FOR_DISCHARGE) {
             flags.add("Ready for discharge");
         }
-        if (patient != null && patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
+        if (visibleAllergies != null && !visibleAllergies.isBlank()) {
             flags.add("Allergies noted");
         }
         if (!registration.isActive()) {

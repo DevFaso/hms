@@ -23,7 +23,11 @@ public class DispenseResponseDTO {
     private UUID id;
     private UUID prescriptionId;
     private UUID patientId;
+    /** The patient as a person reads them (QA D102: the receipt showed the raw id). */
+    private String patientName;
     private UUID pharmacyId;
+    /** The pharmacy's name (QA D102). */
+    private String pharmacyName;
     private UUID stockLotId;
     private UUID dispensedBy;
     /**

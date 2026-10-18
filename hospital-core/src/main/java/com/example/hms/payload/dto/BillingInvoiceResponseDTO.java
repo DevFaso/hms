@@ -19,6 +19,7 @@ public class BillingInvoiceResponseDTO {
     private String id;
 
     // Patient
+    private String patientId;
     private String patientFullName;
     private String patientEmail;
     private String patientPhone;

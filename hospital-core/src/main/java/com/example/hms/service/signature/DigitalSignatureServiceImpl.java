@@ -21,6 +21,7 @@ import com.example.hms.service.AuthService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,19 +57,52 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final AuthService authService;
     private final RoleValidator roleValidator;
     private final MessageSource messageSource;
+    private final SignableReportLocator reportLocator;
+
+    private static String normaliseName(String value) {
+        return value == null ? "" : value.trim().replaceAll("\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private static boolean namesMatch(String typed, String fullName) {
+        String expected = normaliseName(fullName);
+        return !expected.isEmpty() && expected.equals(normaliseName(typed));
+    }
 
     @Override
     public SignatureResponseDTO signReport(SignatureRequestDTO request) {
         log.debug("Creating digital signature for report type: {}, ID: {}", 
             request.getReportType(), request.getReportId());
 
-        // Validate staff exists
-        Staff staff = staffRepository.findById(request.getSignedByStaffId())
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getSignedByStaffId()));
+        // QA D71: the signer, the hospital and the report on the request are claims.
+        // The signer is the caller's own staff record in the hospital they act in;
+        // the report must exist and belong to that hospital; the signature value
+        // must be the signer's name.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId == null) {
+            throw new AccessDeniedException("A signature must be made in a hospital context.");
+        }
+        if (!activeHospitalId.equals(request.getHospitalId())) {
+            throw new AccessDeniedException("You can only sign in the hospital you are acting in.");
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        Staff staff = (currentUserId == null ? java.util.Optional.<Staff>empty()
+                : staffRepository.findByUserIdAndHospitalId(currentUserId, activeHospitalId))
+            .orElseThrow(() -> new AccessDeniedException("No staff record for you in this hospital."));
+        if (!staff.getId().equals(request.getSignedByStaffId())) {
+            throw new AccessDeniedException("You can only sign in your own name.");
+        }
+        UUID reportHospitalId = reportLocator.owningHospitalId(request.getReportType(), request.getReportId())
+            .orElseThrow(() -> new ResourceNotFoundException("signature.report.notFound", request.getReportId()));
+        if (!activeHospitalId.equals(reportHospitalId)) {
+            // 404, not 403: do not confirm that another hospital's record exists.
+            throw new ResourceNotFoundException("signature.report.notFound", request.getReportId());
+        }
+        if (!namesMatch(request.getSignatureValue(), staff.getFullName())) {
+            throw new BusinessException(text("signature.value.mustMatchSigner", LocaleContextHolder.getLocale()));
+        }
 
-        // Validate hospital exists
-        Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        Hospital hospital = hospitalRepository.findClinicalById(activeHospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", activeHospitalId));
 
         // Compute signature hash
         String signatureHash = computeSignatureHash(request.getSignatureValue());
