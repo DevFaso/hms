@@ -5106,7 +5106,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `IllegalStateException` business messages echoed by `GlobalExceptionHandler`, and the
   bootstrap/refresh/logout replies in `AuthController`) want the same `MessageUtil`
   treatment; the `/auth/me/change-password` and `/auth/me/change-username` replies noted
-  in the bullet above are now translated. Open.
+  in the bullet above are now translated. Open.
 - **QA run 2026-10-18 round 2, lab/pharmacy residuals (`fix/qa-r2-lab-pharmacy`).** D73,
   D81, D82, D95, D106, D107, D108 and D124 are fixed there; this is what that PR left. (1)
   D82 witness for controlled substances: nothing in the catalogue says which inventory

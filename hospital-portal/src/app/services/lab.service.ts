@@ -41,6 +41,7 @@ export interface LabResultResponse {
    * so the release control reads this to know whether it is ours to offer.
    */
   performingHospitalId?: string | null;
+  labTestCode?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;
