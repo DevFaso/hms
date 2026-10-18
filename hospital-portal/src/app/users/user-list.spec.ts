@@ -67,6 +67,12 @@ describe('UserListComponent registration', () => {
     fixture.detectChanges();
   }
 
+  it('never opens the edit dialog on a deleted account (D126)', () => {
+    component.openEdit({ id: 'u9', username: 'gone', deleted: true } as never);
+    expect(component.editing()).toBeNull();
+    expect(users.getById).not.toHaveBeenCalled();
+  });
+
   it('asks for neither username nor password on create', () => {
     openCreateWith(['ROLE_DOCTOR']);
     expect(fixture.debugElement.query(By.css('#username'))).toBeNull();

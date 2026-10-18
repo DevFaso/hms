@@ -169,13 +169,15 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button
-                    class="action-link edit"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(user)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!user.deleted) {
+                    <button
+                      class="action-link edit"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(user)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                   @if (user.deleted) {
                     <button
                       class="action-link restore"

@@ -350,6 +350,16 @@ describe('BedBoardComponent', () => {
     expect(transferSpy.getPending).toHaveBeenCalled();
   });
 
+  it('a hospital admin sees the board but neither the worklist nor the clinical actions (D88)', () => {
+    roleCtx.set({ roles: ['ROLE_HOSPITAL_ADMIN'] });
+    const admin = TestBed.createComponent(BedBoardComponent).componentInstance;
+    admin.ngOnInit();
+    expect(boardSpy.getBoard).toHaveBeenCalled();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(admin.canTransfer).toBeFalse();
+    expect(admin.canManagePrecautions).toBeFalse();
+  });
+
   it('offers only free beds as destinations', () => {
     boardSpy.getBoard.and.returnValue(
       of(

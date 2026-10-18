@@ -120,6 +120,14 @@ export class FeatureFlagsComponent implements OnInit {
   }
 
   removeOverride(flag: FeatureFlag): void {
+    // A one-click delete on a platform-wide switch (D126): ask first.
+    if (
+      !globalThis.confirm(
+        this.translate.instant('FLAGS.REMOVE_OVERRIDE_CONFIRM', { key: flag.key }),
+      )
+    ) {
+      return;
+    }
     this.http
       .delete<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(flag.key)}`)
       .subscribe({

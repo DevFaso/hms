@@ -59,6 +59,13 @@ interface NavItem {
   roles?: string[];
 }
 
+/** The breakpoint where the sidebar becomes a drawer (shell.scss "Mobile"). */
+export const MOBILE_SIDEBAR_QUERY = '(max-width: 768px)';
+
+function isMobileViewport(): boolean {
+  return globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY).matches ?? false;
+}
+
 @Component({
   selector: 'app-shell',
   standalone: true,
@@ -113,7 +120,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   currentLang = signal<string>(storedLang());
 
-  sidebarCollapsed = signal(false);
+  /**
+   * On a phone the sidebar is a drawer over the page: it starts closed and
+   * closes after each navigation. Open by default, it covered the topbar —
+   * including the FR/EN/ES switch, whose taps then landed on the drawer and
+   * "did nothing" (QA D116).
+   */
+  sidebarCollapsed = signal(isMobileViewport());
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -841,6 +854,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doesn't see entries that the corresponding RoleGuard would 403 on.
     // (`permissions.hasPermission('*')` reads JWT roles, not the active role,
     // and the route gates already require ROLE_ADMIN / ROLE_SUPER_ADMIN.)
+    // A hospital admin onboards their own staff (QA D117): POST
+    // /users/admin-register admits the role and the page locks the hospital.
+    if (
+      this.hasAnyRole(['ROLE_HOSPITAL_ADMIN']) &&
+      !this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])
+    ) {
+      items.push({
+        icon: 'manage_accounts',
+        label: 'Users',
+        translationKey: 'NAV.USERS',
+        route: '/users',
+      });
+    }
     if (this.hasAnyRole(['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'])) {
       // Role audit decision C1: an ADMIN is a back-office operations role,
       // not platform IT — Organizations / Roles / Platform / Analytics /
@@ -1645,6 +1671,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // A successful navigation proves the chunk graph is healthy — re-arm
         // the one-shot stale-chunk reload guard (see app.config.ts).
         sessionStorage.removeItem('hms-chunk-reload');
+        if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
@@ -1821,6 +1848,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   toggleSidebar(): void {
     this.sidebarCollapsed.update((v) => !v);
+  }
+
+  /** The mobile drawer's backdrop: a tap outside the drawer closes it. */
+  closeSidebar(): void {
+    this.sidebarCollapsed.set(true);
   }
 
   toggleProfileMenu(): void {

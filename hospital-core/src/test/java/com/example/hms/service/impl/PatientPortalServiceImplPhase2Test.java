@@ -127,6 +127,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
@@ -1122,6 +1123,87 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result.getPrimaryCare().getDoctorDisplay()).isEqualTo("Dr. Smith");
             assertThat(result.getPrimaryCare().isCurrent()).isTrue();
             assertThat(result.getPrimaryCareHistory()).hasSize(2);
+        }
+
+        @Test
+        @DisplayName("D115 — the clinicians of open visits are on the care team, once each, newest visit first")
+        void getCareTeam_openVisitClinicians() {
+            stubPatientResolution();
+            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.empty());
+            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of());
+
+            com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+            doctorUser.setId(UUID.randomUUID());
+            doctorUser.setFirstName("Awa");
+            doctorUser.setLastName("Kaboré");
+            doctorUser.addRole(role("ROLE_DOCTOR"));
+            com.example.hms.model.Staff doctor = new com.example.hms.model.Staff();
+            doctor.setUser(doctorUser);
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            hospital.setName("CHU Nord");
+            com.example.hms.model.Encounter newer = new com.example.hms.model.Encounter();
+            newer.setStaff(doctor);
+            newer.setHospital(hospital);
+            com.example.hms.model.Encounter older = new com.example.hms.model.Encounter();
+            older.setStaff(doctor);
+            older.setHospital(hospital);
+            when(encounterRepository.findOpenWithClinicianByPatientId(org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.argThat(closed ->
+                            closed.contains(com.example.hms.enums.EncounterStatus.COMPLETED)
+                                    && closed.contains(com.example.hms.enums.EncounterStatus.CANCELLED))))
+                    .thenReturn(List.of(newer, older));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getVisitClinicians()).singleElement().satisfies(entry -> {
+                assertThat(entry.getUserId()).isEqualTo(doctorUser.getId());
+                assertThat(entry.getDisplayName()).isEqualTo("Awa Kaboré");
+                assertThat(entry.getHospitalName()).isEqualTo("CHU Nord");
+            });
+        }
+
+        @Test
+        @DisplayName("D115 — a deactivated account or a non-clinical role never reaches the care team (the send would be refused)")
+        void getCareTeam_skipsUnreachableClinicians() {
+            stubPatientResolution();
+            when(primaryCareService.getCurrentPrimaryCare(patientId)).thenReturn(Optional.empty());
+            when(primaryCareService.getPrimaryCareHistory(patientId)).thenReturn(List.of());
+
+            com.example.hms.model.User inactive = visitUser("ROLE_DOCTOR");
+            inactive.setActive(false);
+            com.example.hms.model.User receptionist = visitUser("ROLE_RECEPTIONIST");
+            com.example.hms.model.User nurse = visitUser("NURSE");
+            when(encounterRepository.findOpenWithClinicianByPatientId(org.mockito.ArgumentMatchers.eq(patientId),
+                    org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(List.of(visit(inactive), visit(receptionist), visit(nurse)));
+
+            CareTeamDTO result = service.getMyCareTeam(auth);
+
+            assertThat(result.getVisitClinicians()).singleElement()
+                    .satisfies(entry -> assertThat(entry.getUserId()).isEqualTo(nurse.getId()));
+        }
+
+        private com.example.hms.model.Role role(String name) {
+            com.example.hms.model.Role role = new com.example.hms.model.Role();
+            role.setId(UUID.randomUUID());
+            role.setName(name);
+            return role;
+        }
+
+        private com.example.hms.model.User visitUser(String roleName) {
+            com.example.hms.model.User visitor = new com.example.hms.model.User();
+            visitor.setId(UUID.randomUUID());
+            visitor.addRole(role(roleName));
+            return visitor;
+        }
+
+        private com.example.hms.model.Encounter visit(com.example.hms.model.User user) {
+            com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+            staff.setUser(user);
+            com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+            encounter.setStaff(staff);
+            return encounter;
         }
 
         @Test

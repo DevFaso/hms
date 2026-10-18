@@ -54,7 +54,9 @@ export class HospitalDetailComponent implements OnInit {
   readonly errored = signal(false);
   readonly dialog = signal<ActionDialog | null>(null);
 
-  readonly state = computed<HospitalLifecycleState | null>(() => this.lifecycle()?.state ?? null);
+  readonly state = computed<HospitalLifecycleState | null>(
+    () => this.lifecycle()?.lifecycleState ?? null,
+  );
 
   readonly canSuspend = computed(() => this.state() === 'ACTIVE');
   readonly canRestore = computed(() => this.state() === 'SUSPENDED' || this.state() === 'ARCHIVED');

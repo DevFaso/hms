@@ -1303,7 +1303,9 @@ public class UserServiceImpl implements UserService {
             return Page.empty(pageable);
         }
         boolean scoped = !scope.everyone();
-        Page<User> users = userRepository.searchUsers(name, role, email,
+        // The free-text box also finds an account by e-mail or phone (D119);
+        // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
+        Page<User> users = userRepository.searchUsers(name, phoneDigits(name), role, email,
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(u -> directoryRow(u, scope));
     }
@@ -1320,6 +1322,16 @@ public class UserServiceImpl implements UserService {
             dto.setUsername(null);
         }
         return dto;
+    }
+
+    /** The digits of a search term that looks like a phone number, else null. */
+    static String phoneDigits(String term) {
+        if (term == null) {
+            return null;
+        }
+        String digits = term.replaceAll("\\D", "");
+        boolean phoneShaped = term.strip().matches("[+\\d][\\d\\s().-]*");
+        return phoneShaped && digits.length() >= 4 ? digits : null;
     }
 
     /** The caller's hospitals, or the repository's sentinel when the directory is unscoped. */
@@ -1458,6 +1470,27 @@ public class UserServiceImpl implements UserService {
         });
     }
 
+    /** Merge-preserve of the identity fields: only a provided value overwrites. */
+    private static void applyNameAndEmail(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername())) {
+            // An administrator choosing the name settles the forced rename:
+            // the holder is no longer asked to pick one at next sign-in (D127).
+            if (!dto.getUsername().equals(user.getUsername())) {
+                user.setForceUsernameChange(false);
+            }
+            user.setUsername(dto.getUsername());
+        }
+        if (hasText(dto.getEmail())) {
+            user.setEmail(dto.getEmail());
+        }
+        if (hasText(dto.getFirstName())) {
+            user.setFirstName(dto.getFirstName());
+        }
+        if (hasText(dto.getLastName())) {
+            user.setLastName(dto.getLastName());
+        }
+    }
+
     @Override
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
@@ -1473,23 +1506,17 @@ public class UserServiceImpl implements UserService {
         } else if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_UPDATE, "update", id);
         }
+        // A deleted account is restored first, then edited: an edit would
+        // otherwise rewrite a tombstone nobody can see (D126).
+        if (user.isDeleted()) {
+            throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
+        }
         requireIdentifiersFree(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
         boolean reactivated = false;
-        if (hasText(dto.getUsername())) {
-            user.setUsername(dto.getUsername());
-        }
-        if (hasText(dto.getEmail())) {
-            user.setEmail(dto.getEmail());
-        }
-        if (hasText(dto.getFirstName())) {
-            user.setFirstName(dto.getFirstName());
-        }
-        if (hasText(dto.getLastName())) {
-            user.setLastName(dto.getLastName());
-        }
+        applyNameAndEmail(user, dto);
         // Normalised only when it changed: the edit dialog sends the stored
         // phone back, and a legacy value toE164 refuses must not block an edit.
         if (hasText(dto.getPhoneNumber()) && !dto.getPhoneNumber().trim().equals(user.getPhoneNumber())) {

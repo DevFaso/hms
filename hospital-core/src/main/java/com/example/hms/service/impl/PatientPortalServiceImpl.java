@@ -175,6 +175,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final HospitalRepository hospitalRepository;
     private final DepartmentRepository departmentRepository;
     private final StaffRepository staffRepository;
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final StaffAvailabilityService staffAvailabilityService;
     private final com.example.hms.repository.UserRepository userRepository;
@@ -241,10 +242,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // silently bypassed it).
         var before = addressHistoryRecorder.snapshot(patient);
 
-        // Only update fields the patient is allowed to change
-        if (dto.getPhoneNumberPrimary() != null)       patient.setPhoneNumberPrimary(dto.getPhoneNumberPrimary());
-        if (dto.getPhoneNumberSecondary() != null)     patient.setPhoneNumberSecondary(dto.getPhoneNumberSecondary());
-        if (dto.getEmail() != null)                    patient.setEmail(dto.getEmail());
+        // Only update fields the patient is allowed to change. Phones and the
+        // e-mail are identifiers: normalised, checked and refused with a
+        // message, never stored as typed (QA D113: free text, another
+        // patient's address, a blank phone failing as a 500).
+        applySelfServiceIdentifiers(patient, dto);
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -252,7 +254,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getZipCode() != null)                  patient.setZipCode(dto.getZipCode());
         if (dto.getCountry() != null)                  patient.setCountry(dto.getCountry());
         if (dto.getEmergencyContactName() != null)     patient.setEmergencyContactName(dto.getEmergencyContactName());
-        if (dto.getEmergencyContactPhone() != null)    patient.setEmergencyContactPhone(dto.getEmergencyContactPhone());
+        if (dto.getEmergencyContactPhone() != null) {
+            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone()));
+        }
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
         if (dto.getPreferredPharmacy() != null)        patient.setPreferredPharmacy(dto.getPreferredPharmacy());
@@ -262,6 +266,56 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
+    }
+
+    /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
+    private void applySelfServiceIdentifiers(Patient patient, PatientProfileUpdateDTO dto) {
+        if (dto.getPhoneNumberPrimary() != null) {
+            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
+            if (primary == null) {
+                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+            }
+            UUID selfId = patient.getId();
+            if (patientRepository.findByPhoneNumberPrimary(primary)
+                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
+                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
+            }
+            patient.setPhoneNumberPrimary(primary);
+        }
+        if (dto.getPhoneNumberSecondary() != null) {
+            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
+        }
+        if (dto.getEmail() != null) {
+            patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
+        }
+    }
+
+    /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
+    private static String selfServicePhone(Patient patient, String raw) {
+        if (raw.isBlank()) {
+            return null;
+        }
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(patient.getCountry()));
+        if (e164 == null) {
+            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+        }
+        return e164;
+    }
+
+    /** Blank clears the address; one held by another patient or account is refused. */
+    private String selfServiceEmail(Patient patient, String raw) {
+        String email = raw.trim();
+        if (email.isEmpty()) {
+            return null;
+        }
+        // The signed-in patient always has an account (findPatient resolves it).
+        boolean takenByAccount = patient.getUser() != null
+                && userRepository.existsEmailOnOtherAccount(email, patient.getUser().getId());
+        if (patientRepository.existsEmailOnOtherPatient(email, patient.getId()) || takenByAccount) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+        return email;
     }
 
     // ── Release of information (Tier 2 item 39b) ────────────────────────
@@ -888,6 +942,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return CareTeamDTO.builder()
                 .primaryCare(currentPcp)
                 .primaryCareHistory(history)
+                .visitClinicians(visitClinicians(patientId))
                 .build();
     }
 
@@ -1233,6 +1288,38 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .requestedAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * The clinicians holding the patient's open visits, newest visit first,
+     * one entry each. Without them a patient seen on a walk-in had an empty
+     * care team and nobody to write to (QA D115).
+     */
+    private List<CareTeamDTO.VisitClinicianEntry> visitClinicians(UUID patientId) {
+        List<com.example.hms.model.Encounter> open = encounterRepository.findOpenWithClinicianByPatientId(
+                patientId, java.util.EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
+                        com.example.hms.enums.EncounterStatus.CANCELLED));
+        Map<UUID, CareTeamDTO.VisitClinicianEntry> byUser = new java.util.LinkedHashMap<>();
+        for (com.example.hms.model.Encounter encounter : open) {
+            com.example.hms.model.User clinician = encounter.getStaff().getUser();
+            // Only someone the patient can actually write to: a live account
+            // holding a clinical-care role, the same test the send applies.
+            if (clinician == null || clinician.isDeleted() || !clinician.isActive()
+                    || !encounter.getStaff().isActive()
+                    || !com.example.hms.service.ChatMessageServiceImpl.holdsClinicalCareRole(clinician)
+                    || byUser.containsKey(clinician.getId())) {
+                continue;
+            }
+            Hospital hospital = encounter.getHospital();
+            byUser.put(clinician.getId(), CareTeamDTO.VisitClinicianEntry.builder()
+                    .userId(clinician.getId())
+                    .displayName(encounter.getStaff().getFullName())
+                    .hospitalId(hospital == null ? null : hospital.getId())
+                    .hospitalName(hospital == null ? null : hospital.getName())
+                    .visitDate(encounter.getEncounterDate())
+                    .build());
+        }
+        return List.copyOf(byUser.values());
     }
 
     /** Map a PrimaryCareResponseDTO to a CareTeam entry. */

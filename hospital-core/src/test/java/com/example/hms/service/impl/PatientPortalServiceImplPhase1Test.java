@@ -70,6 +70,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -111,6 +112,7 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private com.example.hms.repository.DepartmentRepository departmentRepository;
     @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.service.StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
@@ -319,6 +321,54 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getEmergencyContactPhone()).isEqualTo("+3333333333");
             assertThat(result.getEmergencyContactRelationship()).isEqualTo("Sister");
             assertThat(result.getPreferredPharmacy()).isEqualTo("Pharmacie Centrale");
+        }
+
+        @Test
+        @DisplayName("D113 — a blank primary phone is a message, not a 500")
+        void updateMyProfile_blankPrimaryPhoneRefused() {
+            stubPatientResolution();
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("  ").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("D113 — a phone that is not a number is refused; a local one is stored in E.164")
+        void updateMyProfile_phoneIsNormalised() {
+            stubPatientResolution();
+            assertThatThrownBy(() -> service.updateMyProfile(auth,
+                    PatientProfileUpdateDTO.builder().phoneNumberSecondary("call me maybe").build()))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+            when(patientRepository.save(any(Patient.class))).thenAnswer(inv -> inv.getArgument(0));
+            PatientProfileDTO result = service.updateMyProfile(auth,
+                    PatientProfileUpdateDTO.builder().phoneNumberSecondary("70 20 20 20").build());
+            assertThat(result.getPhoneNumberSecondary()).isEqualTo("+22670202020");
+        }
+
+        @Test
+        @DisplayName("D113 — another patient's e-mail is refused")
+        void updateMyProfile_emailOfAnotherPatientRefused() {
+            stubPatientResolution();
+            when(patientRepository.existsEmailOnOtherPatient("other@example.com", patientId)).thenReturn(true);
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().email(" other@example.com ").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(patientRepository, never()).save(any(Patient.class));
+        }
+
+        @Test
+        @DisplayName("D113 — another patient's primary phone is refused")
+        void updateMyProfile_phoneOfAnotherPatientRefused() {
+            stubPatientResolution();
+            Patient other = new Patient();
+            other.setId(java.util.UUID.randomUUID());
+            when(patientRepository.findByPhoneNumberPrimary("+22670202020"))
+                    .thenReturn(java.util.Optional.of(other));
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("70202020").build();
+            assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
         }
     }
 

@@ -219,14 +219,14 @@ describe('PatientPortalService care team', () => {
     httpMock
       .expectOne('/me/patient/care-team')
       .flush({ data: { primaryCare: pcp, primaryCareHistory: [pcp] } });
-    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp] });
+    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp], visitClinicians: [] });
   });
 
   it('normalises an absent current provider and history', () => {
     let received: unknown;
     service.getMyCareTeam().subscribe((t) => (received = t));
     httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
-    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [] });
+    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [], visitClinicians: [] });
   });
 
   it('lets a failure through instead of reporting an empty team', () => {
@@ -275,6 +275,22 @@ describe('PatientPortalService chat recipients', () => {
       },
     });
     expect(ids).toEqual(['u2', 'u1']);
+  });
+
+  it('adds the clinicians of open visits after the primary-care doctors, deduped (D115)', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'p1', doctorUserId: 'u1', doctorDisplay: 'A', current: true },
+        primaryCareHistory: [],
+        visitClinicians: [
+          { userId: 'u3', displayName: 'C', hospitalName: 'H' },
+          { userId: 'u1', displayName: 'A', hospitalName: 'H' },
+        ],
+      },
+    });
+    expect(ids).toEqual(['u1', 'u3']);
   });
 
   it('reads an empty care team as no one', () => {

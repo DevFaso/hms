@@ -68,8 +68,41 @@ class OnCallScheduleServiceImplTest {
         Hospital hospital = Hospital.builder().name("CHU").code("CHU").build();
         hospital.setId(hospitalId);
 
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setActive(true);
         staff = Staff.builder().hospital(hospital).name("Dr Kabore").build();
         staff.setId(staffId);
+        staff.setUser(user);
+        staff.setActive(true);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.DOCTOR);
+    }
+
+    @Test
+    void createRefusesAnInactiveStaffMember() {
+        // D117: a departed clinician is not cover.
+        OffsetDateTime start = NOW.plusHours(1);
+        staff.setActive(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        OnCallScheduleRequestDTO dto = request(start, start.plusHours(8));
+        assertThatThrownBy(() -> service.create(dto))
+            .isInstanceOf(BusinessException.class);
+        verify(onCallRepository, never()).save(any());
+    }
+
+    @Test
+    void createRefusesANonClinicalStaffMember() {
+        // D117: the desk does not answer a clinical page.
+        OffsetDateTime start = NOW.plusHours(1);
+        staff.setJobTitle(com.example.hms.enums.JobTitle.RECEPTIONIST);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        OnCallScheduleRequestDTO dto = request(start, start.plusHours(8));
+        assertThatThrownBy(() -> service.create(dto))
+            .isInstanceOf(BusinessException.class);
+        verify(onCallRepository, never()).save(any());
     }
 
     private OnCallScheduleRequestDTO request(OffsetDateTime start, OffsetDateTime end) {

@@ -100,6 +100,20 @@ class StaffSchedulingServiceImplTest {
     }
 
     @Test
+    void findLeaves_withoutDatesReachesAYearAheadAndAMonthBack() {
+        // D117: a leave request starting in a month sat outside the 14-day
+        // shift window, so the admin never saw it to decide on it.
+        UUID hospitalId = UUID.randomUUID();
+        when(leaveRepository.findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(any(), any(), any()))
+            .thenReturn(Collections.emptyList());
+
+        service.findLeaves(hospitalId, null, null, null, null, Locale.ENGLISH);
+
+        verify(leaveRepository).findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(
+            hospitalId, TODAY.minusDays(31), TODAY.plusDays(366));
+    }
+
+    @Test
     void scheduleShift_rejectsYesterdayOnTheInjectedClock() {
         UUID staffId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();

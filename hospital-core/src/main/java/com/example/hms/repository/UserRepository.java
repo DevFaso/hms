@@ -156,6 +156,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR LOWER(COALESCE(u.email, ''))    LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR ( :phoneDigits IS NOT NULL
+                     AND u.phoneNumber LIKE CONCAT('%', cast(:phoneDigits AS string), '%') )
               )
           AND ( :email IS NULL
                 OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
@@ -185,6 +188,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS)
     Page<User> searchUsers(@Param("name") String name,
+                           @Param("phoneDigits") String phoneDigits,
                            @Param("role") String role,
                            @Param("email") String email,
                            @Param("includeDeleted") boolean includeDeleted,
