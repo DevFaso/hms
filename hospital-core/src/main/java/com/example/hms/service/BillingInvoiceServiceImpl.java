@@ -299,7 +299,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale) {
-        BillingInvoice invoice = invoiceRepository.findById(id)
+        // Locked like a payment declaration, so a declaration cannot slip in
+        // between the patient-lock check and the reassignment.
+        BillingInvoice invoice = invoiceRepository.findLockedById(id)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id));
 
         // ── Tenant isolation ──
@@ -325,7 +327,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !dto.getInvoiceNumber().trim().equals(invoice.getInvoiceNumber())) {
             throw new BusinessException("billing.invoice.numberAssignedByServer");
         }
-        applyPatientChange(invoice, dto, hospitalId, hasPayments);
+        // A pending or confirmed declaration belongs to the patient who made
+        // it: the invoice cannot move to another patient while one is open,
+        // or confirming it would settle the new patient's bill with it.
+        boolean patientLocked = hasPayments || paymentTransactionRepository.existsByInvoice_IdAndStatusIn(id,
+            java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED));
+        applyPatientChange(invoice, dto, hospitalId, patientLocked);
 
         invoice.setEncounter(resolveEncounter(dto, hospitalId));
         invoice.setInvoiceDate(dto.getInvoiceDate());
@@ -716,7 +723,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setReversedAt(java.time.LocalDateTime.now());
         row.setReversalReason(why);
         paymentTransactionRepository.save(row);
-        auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, invoice, row.getId(), "Pending payment rejected");
+        auditPaymentAfterCommit(AuditEventType.PAYMENT_REJECTED, staffId, invoice, row.getId(), "Pending payment rejected");
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
     }
 

@@ -18,6 +18,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     boolean existsByInvoice_Id(UUID invoiceId);
 
+    boolean existsByInvoice_IdAndStatusIn(UUID invoiceId, java.util.Collection<com.example.hms.enums.PaymentStatus> statuses);
+
     /** Every ledger row of an invoice, oldest first (QA D142: the reversal picker and the receipt). */
     List<PaymentTransaction> findByInvoice_IdOrderByCreatedAtAsc(UUID invoiceId);
 

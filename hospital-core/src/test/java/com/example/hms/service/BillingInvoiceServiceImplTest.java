@@ -835,6 +835,42 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void rejectPayment_isAuditedAsRejectedNotPosted() {
+        com.example.hms.service.AuditEventLogService audit =
+            org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(billingInvoiceService, "auditEventLogService", audit);
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var row = ledgerRow(invoice, "40.00", com.example.hms.enums.PaymentStatus.PENDING);
+
+        billingInvoiceService.rejectPayment(invoice.getId(), row.getId(), "No such transfer", UUID.randomUUID(),
+            Locale.ENGLISH);
+
+        var captor = org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(captor.capture());
+        assertEquals(com.example.hms.enums.AuditEventType.PAYMENT_REJECTED, captor.getValue().getEventType());
+    }
+
+    @Test
+    void updateInvoice_aPendingDeclarationLocksThePatient() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        when(paymentTransactionRepository.existsByInvoice_IdAndStatusIn(any(), any())).thenReturn(true);
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID)).thenReturn(true);
+        UUID originalPatient = invoice.getPatient().getId();
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().patientId(other.getId()).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+        assertEquals("billing.invoice.patientLockedByPayments", refused.getMessageKey());
+        assertEquals(originalPatient, invoice.getPatient().getId());
+    }
+
+    @Test
     void reversePayment_reopensThePaidInvoiceAndKeepsTotalsConsistent_D142() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
         invoice.setAmountPaid(new BigDecimal("100.00"));

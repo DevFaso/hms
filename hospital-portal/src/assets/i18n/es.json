@@ -5407,6 +5407,7 @@
         "PATIENT_MERGE": "Historias de paciente fusionadas",
         "PATIENT_UPDATE": "Paciente actualizado",
         "PAYMENT_POSTED": "Pago registrado",
+        "PAYMENT_REJECTED": "Pago rechazado",
         "PERMISSION_GRANTED": "Permiso concedido",
         "PERMISSION_REVOKED": "Permiso revocado",
         "PHARMACY_DEACTIVATED": "Farmacia desactivada",

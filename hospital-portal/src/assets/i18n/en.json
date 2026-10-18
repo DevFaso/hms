@@ -5407,6 +5407,7 @@
         "PATIENT_MERGE": "Patient Records Merged",
         "PATIENT_UPDATE": "Patient Updated",
         "PAYMENT_POSTED": "Payment Posted",
+        "PAYMENT_REJECTED": "Payment Rejected",
         "PERMISSION_GRANTED": "Permission Granted",
         "PERMISSION_REVOKED": "Permission Revoked",
         "PHARMACY_DEACTIVATED": "Pharmacy Deactivated",

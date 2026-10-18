@@ -5373,6 +5373,7 @@
         "PATIENT_MERGE": "Dossiers patients fusionnés",
         "PATIENT_UPDATE": "Patient modifié",
         "PAYMENT_POSTED": "Paiement enregistré",
+        "PAYMENT_REJECTED": "Paiement refusé",
         "PERMISSION_GRANTED": "Autorisation accordée",
         "PERMISSION_REVOKED": "Autorisation révoquée",
         "PHARMACY_DEACTIVATED": "Pharmacie désactivée",
