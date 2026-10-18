@@ -274,6 +274,20 @@ class HospitalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D36: the directory skips null rows and answers empty when the repository returns null")
+    void getHospitalDirectory_toleratesNulls() {
+        Hospital open = buildHospital(UUID.randomUUID(), "Open", "O-01");
+        java.util.List<Hospital> withNull = new java.util.ArrayList<>();
+        withNull.add(null);
+        withNull.add(open);
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(withNull);
+        assertEquals(1, hospitalService.getHospitalDirectory().size());
+
+        when(hospitalRepository.findAllForFilters(null, null, null, null)).thenReturn(null);
+        assertEquals(0, hospitalService.getHospitalDirectory().size());
+    }
+
+    @Test
     @DisplayName("getAllHospitals returns all for superAdmin context")
     void getAllHospitals_superAdminReturnsAll() {
         setSuperAdminContext();
