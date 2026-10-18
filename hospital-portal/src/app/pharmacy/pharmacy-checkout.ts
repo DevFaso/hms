@@ -128,6 +128,11 @@ export class PharmacyCheckoutComponent {
     this.receipt.set(null);
   }
 
+  /** A short receipt reference instead of the raw payment UUID (QA D102). */
+  receiptNumber(id: string | null | undefined): string {
+    return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
+  }
+
   methodLabel(m: PharmacyPaymentMethod): string {
     const key = this.methods.find((x) => x.value === m)?.labelKey;
     return key ? this.translate.instant(key) : m;

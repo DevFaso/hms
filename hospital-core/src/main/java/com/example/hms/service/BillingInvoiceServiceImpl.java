@@ -13,7 +13,6 @@ import com.example.hms.payload.dto.BillingInvoiceRequestDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceSearchRequest;
 import com.example.hms.payload.dto.InvoicePdfResponseDTO;
-import org.springframework.security.access.AccessDeniedException;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -24,6 +23,8 @@ import com.example.hms.enums.PaymentMethod;
 import com.example.hms.model.PaymentTransaction;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -50,6 +51,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
     private final PaymentTransactionRepository paymentTransactionRepository;
+    private final ActingScopeResolver actingScopeResolver;
+    private final PatientHospitalRegistrationRepository registrationRepository;
+    private final InvoiceNumberAllocator invoiceNumberAllocator;
 
     public BillingInvoiceServiceImpl(
             BillingInvoiceRepository invoiceRepository,
@@ -60,7 +64,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PdfInvoiceService pdfInvoiceService,
             BillingInvoiceMapper invoiceMapper,
             RoleValidator roleValidator,
-            PaymentTransactionRepository paymentTransactionRepository) {
+            PaymentTransactionRepository paymentTransactionRepository,
+            ActingScopeResolver actingScopeResolver,
+            PatientHospitalRegistrationRepository registrationRepository,
+            InvoiceNumberAllocator invoiceNumberAllocator,
+            org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -70,51 +78,129 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.invoiceMapper = invoiceMapper;
         this.roleValidator = roleValidator;
         this.paymentTransactionRepository = paymentTransactionRepository;
+        this.actingScopeResolver = actingScopeResolver;
+        this.registrationRepository = registrationRepository;
+        this.invoiceNumberAllocator = invoiceNumberAllocator;
+        this.createTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.replayTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.replayTx.setReadOnly(true);
     }
 
+    /** The create runs in its own transaction so a lost race on the key can be answered after it rolls back. */
+    private final org.springframework.transaction.support.TransactionTemplate createTx;
+    private final org.springframework.transaction.support.TransactionTemplate replayTx;
+
     @Override
-    @Transactional
     public BillingInvoiceResponseDTO createInvoice(BillingInvoiceRequestDTO dto, Locale locale) {
-        Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
+        // The invoice is written at the caller's acting hospital: a hospital
+        // named in the body is a claim, not a scope. Global view must pick one.
+        UUID hospitalId = actingScopeResolver.requirePinned();
+        try {
+            return createTx.execute(status -> createAt(hospitalId, dto));
+        } catch (org.springframework.dao.DataIntegrityViolationException lostRace) {
+            // QA D94: two submits with the same key both missed the lookup and the
+            // second hit uk_bi_hospital_client_request. Its transaction is rolled
+            // back; answer with the invoice the first one committed.
+            if (dto.getClientRequestId() == null) {
+                throw lostRace;
+            }
+            java.util.Optional<BillingInvoiceResponseDTO> winner = replayTx.execute(status -> invoiceRepository
+                .findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId())
+                .map(invoiceMapper::toBillingInvoiceResponseDTO));
+            if (winner.isEmpty()) {
+                throw lostRace;
+            }
+            return winner.get();
+        }
+    }
 
-        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
+    private BillingInvoiceResponseDTO createAt(UUID hospitalId, BillingInvoiceRequestDTO dto) {
+        Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", hospitalId));
 
-        Encounter encounter = (dto.getEncounterReference() != null)
-            ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
-            : null;
-        requireWritableTarget(hospital, patient, encounter);
+        // QA D94: a retry or a double submit with the same key is the same invoice.
+        if (dto.getClientRequestId() != null) {
+            var existing = invoiceRepository.findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId());
+            if (existing.isPresent()) {
+                return invoiceMapper.toBillingInvoiceResponseDTO(existing.get());
+            }
+        }
+
+        Patient patient = resolvePatient(dto, hospitalId);
+        Encounter encounter = resolveEncounter(dto, hospitalId);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
-
-        // Ensure sane defaults
-        if (invoice.getAmountPaid() == null) invoice.setAmountPaid(BigDecimal.ZERO);
-        if (invoice.getTotalAmount() == null) invoice.setTotalAmount(BigDecimal.ZERO);
-        if (invoice.getStatus() == null) invoice.setStatus(InvoiceStatus.DRAFT);
+        // QA D91: nothing is paid until a payment is recorded.
+        invoice.setAmountPaid(BigDecimal.ZERO);
+        invoice.setTotalAmount(dto.getTotalAmount() != null ? dto.getTotalAmount() : BigDecimal.ZERO);
+        invoice.setStatus(requestedStatusOnCreate(dto.getStatus()));
+        invoice.setClientRequestId(dto.getClientRequestId());
+        // QA D94: the server numbers the invoice; a typed number is ignored.
+        invoice.setInvoiceNumber(allocateNumber(hospital));
 
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
+    private String allocateNumber(Hospital hospital) {
+        LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
+        try {
+            return invoiceNumberAllocator.next(hospital, today);
+        } catch (org.springframework.dao.DataIntegrityViolationException firstOfYearRace) {
+            // Another create inserted this year's counter row first; it exists now.
+            return invoiceNumberAllocator.next(hospital, today);
+        }
+    }
+
     /**
-     * QA D70: the hospital name, patient e-mail and encounter code on the request are claims.
-     * A pinned caller may only bill in the hospital they act in, for a patient registered
-     * there, against an encounter of that hospital. Only an unscoped super-admin (Global)
-     * may target another hospital.
+     * QA D92: the patient by id (picked in the portal, phone-only patients
+     * included), else by the legacy e-mail/username key; either way they must
+     * be registered at the invoicing hospital.
      */
-    private void requireWritableTarget(Hospital hospital, Patient patient, Encounter encounter) {
-        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && !activeHospitalId.equals(hospital.getId())) {
-            throw new AccessDeniedException("Invoices can only be created in the hospital you are acting in.");
+    private Patient resolvePatient(BillingInvoiceRequestDTO dto, UUID hospitalId) {
+        Object key;
+        Patient patient;
+        if (dto.getPatientId() != null) {
+            key = dto.getPatientId();
+            patient = patientRepository.findById(dto.getPatientId()).orElse(null);
+        } else if (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank()) {
+            key = dto.getPatientEmail();
+            patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail()).orElse(null);
+        } else {
+            throw new BusinessException("billing.invoice.patientRequired");
         }
-        if (!patient.isRegisteredInHospital(hospital.getId())) {
-            throw new BusinessException("The patient is not registered at this hospital.");
+        // A patient of another hospital gets the answer of an unknown one.
+        if (patient == null || !registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
+            throw new ResourceNotFoundException("patient.notFoundByIdentifier", key);
         }
-        if (encounter != null && encounter.getHospital() != null
-                && !hospital.getId().equals(encounter.getHospital().getId())) {
+        return patient;
+    }
+
+    /** The encounter named by code, only when it belongs to the invoicing hospital. */
+    private Encounter resolveEncounter(BillingInvoiceRequestDTO dto, UUID hospitalId) {
+        if (dto.getEncounterReference() == null || dto.getEncounterReference().isBlank()) {
+            return null;
+        }
+        Encounter encounter = encounterRepository.findByCode(dto.getEncounterReference()).orElse(null);
+        if (encounter == null || encounter.getHospital() == null) {
+            return null;
+        }
+        // QA D70: an encounter code is a claim; one of another hospital is refused, not dropped.
+        if (!hospitalId.equals(encounter.getHospital().getId())) {
             throw new BusinessException("The encounter does not belong to this hospital.");
         }
+        return encounter;
+    }
+
+    /** QA D91: a new invoice is DRAFT or SENT; a paid status follows payments. */
+    private static InvoiceStatus requestedStatusOnCreate(InvoiceStatus requested) {
+        if (requested == null || requested == InvoiceStatus.DRAFT) {
+            return InvoiceStatus.DRAFT;
+        }
+        if (requested == InvoiceStatus.SENT) {
+            return InvoiceStatus.SENT;
+        }
+        throw new BusinessException("billing.invoice.statusFollowsPayments");
     }
 
     @Override
@@ -197,31 +283,49 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, id);
         }
 
-        Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", dto.getPatientEmail()));
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BusinessException("billing.invoice.cancelledLocked");
+        }
+        UUID hospitalId = invoice.getHospital().getId();
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        boolean hasPayments = paid.signum() > 0 || paymentTransactionRepository.existsByInvoice_Id(id);
 
-        Hospital hospital = hospitalRepository.findClinicalByNameIgnoreCase(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()));
+        // The hospital never moves and the number stays the server's (D94).
+        applyPatientChange(invoice, dto, hospitalId, hasPayments);
 
-        Encounter encounter = (dto.getEncounterReference() != null)
-            ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
-            : null;
-        requireWritableTarget(hospital, patient, encounter);
-
-        invoice.setPatient(patient);
-        invoice.setHospital(hospital);
-        invoice.setEncounter(encounter);
-        invoice.setInvoiceNumber(dto.getInvoiceNumber());
+        invoice.setEncounter(resolveEncounter(dto, hospitalId));
         invoice.setInvoiceDate(dto.getInvoiceDate());
         invoice.setDueDate(dto.getDueDate());
-        invoice.setTotalAmount(dto.getTotalAmount());
-        invoice.setAmountPaid(dto.getAmountPaid());
-        // IMPORTANT: Make sure your DTO uses the enum too
-        invoice.setStatus(dto.getStatus());
+        // QA D72: with lines the total is their sum; without, the typed amount.
+        if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
+            if (dto.getTotalAmount().compareTo(paid) < 0) {
+                throw new BusinessException("billing.invoice.totalBelowPaid");
+            }
+            invoice.setTotalAmount(dto.getTotalAmount());
+        }
+        // QA D91: amountPaid is never taken from the form.
+        invoice.setStatus(requestedStatusOnUpdate(invoice.getStatus(), dto.getStatus(), hasPayments));
         invoice.setNotes(dto.getNotes());
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    private void applyPatientChange(BillingInvoice invoice, BillingInvoiceRequestDTO dto,
+                                    UUID hospitalId, boolean hasPayments) {
+        boolean patientNamed = dto.getPatientId() != null
+            || (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank());
+        if (!patientNamed) {
+            return;
+        }
+        Patient patient = resolvePatient(dto, hospitalId);
+        if (invoice.getPatient() != null && patient.getId().equals(invoice.getPatient().getId())) {
+            return;
+        }
+        if (hasPayments) {
+            throw new BusinessException("billing.invoice.patientLockedByPayments");
+        }
+        invoice.setPatient(patient);
     }
 
     @Override
@@ -244,13 +348,43 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoiceRepository.deleteById(id);
     }
 
+    /**
+     * QA D91: staff move an invoice between DRAFT, SENT and CANCELLED; PAID
+     * and PARTIALLY_PAID follow the recorded payments, so they are accepted
+     * only unchanged (the edit form echoes the current status). Once money
+     * is recorded the invoice cannot go back to draft or be cancelled.
+     */
+    private static InvoiceStatus requestedStatusOnUpdate(InvoiceStatus current, InvoiceStatus requested,
+            boolean hasPayments) {
+        if (requested == null || requested == current) {
+            return current;
+        }
+        if (requested == InvoiceStatus.PAID || requested == InvoiceStatus.PARTIALLY_PAID
+                || current == InvoiceStatus.PAID || current == InvoiceStatus.PARTIALLY_PAID) {
+            throw new BusinessException("billing.invoice.statusFollowsPayments");
+        }
+        if (hasPayments) {
+            throw new BusinessException("billing.invoice.statusLockedByPayments");
+        }
+        return requested;
+    }
+
     @Override
     @Transactional
     public void recomputeAndPersistTotals(UUID invoiceId) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
-        invoice.setTotalAmount(sum != null ? sum : BigDecimal.ZERO);
+        BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        if (total.compareTo(paid) < 0) {
+            throw new BusinessException("billing.invoice.totalBelowPaid");
+        }
+        invoice.setTotalAmount(total);
+        // A line added after a payment re-opens the balance; one removed may settle it.
+        if (paid.signum() > 0) {
+            invoice.setStatus(paid.compareTo(total) >= 0 ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
+        }
         invoiceRepository.save(invoice);
     }
 
@@ -395,6 +529,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        // ── Tenant isolation: staff record payments on their own hospital's invoices only ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
+        }
         // The staff form may omit the method (the portal sends the amount
         // only): OTHER says "not stated" rather than guessing cash.
         PaymentMethod method = payment.getMethod() == null || payment.getMethod().isBlank()

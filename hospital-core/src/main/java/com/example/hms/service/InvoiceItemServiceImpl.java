@@ -14,6 +14,8 @@ import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
@@ -42,27 +44,17 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private final BillingInvoiceService billingInvoiceService;
     private final MessageSource messageSource;
     private final RoleValidator roleValidator;
+    private final ActingScopeResolver actingScopeResolver;
 
     @Override
     @Transactional
     public InvoiceItemResponseDTO createInvoiceItem(InvoiceItemRequestDTO dto, Locale locale) {
-        BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
-
-        // Ensure assignment hospital matches invoice hospital
-        if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch",
-                assignment.getHospital().getId(), invoice.getHospital().getId());
+        if (dto.getBillingInvoiceId() == null) {
+            throw new BusinessException("invoiceitem.invoiceRequired");
         }
-
-        Treatment related = null;
-        if (dto.getRelatedServiceId() != null) {
-            related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getRelatedServiceId()));
-        }
+        BillingInvoice invoice = writableInvoice(dto.getBillingInvoiceId());
+        UserRoleHospitalAssignment assignment = resolveAssignment(dto.getAssignmentId(), invoice);
+        Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         InvoiceItem item = invoiceItemMapper.toInvoiceItem(dto, invoice, assignment, related);
 
@@ -110,23 +102,16 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
-
-        BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND_KEY, dto.getBillingInvoiceId()));
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
-
-        if (!assignment.getHospital().getId().equals(invoice.getHospital().getId())) {
-            throw new BusinessException("assignment.hospital.mismatch",
-                assignment.getHospital().getId(), invoice.getHospital().getId());
+        // A line stays on its invoice: moving it would leave the old total stale.
+        UUID invoiceId = item.getBillingInvoice().getId();
+        if (dto.getBillingInvoiceId() != null && !dto.getBillingInvoiceId().equals(invoiceId)) {
+            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id);
         }
-
-        Treatment related = null;
-        if (dto.getRelatedServiceId() != null) {
-            related = treatmentRepository.findById(dto.getRelatedServiceId())
-                .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getRelatedServiceId()));
-        }
+        BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
+        UserRoleHospitalAssignment assignment = dto.getAssignmentId() == null && item.getAssignment() != null
+            ? item.getAssignment()
+            : resolveAssignment(dto.getAssignmentId(), invoice);
+        Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         // apply updates
         item.setBillingInvoice(invoice);
@@ -152,9 +137,67 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         InvoiceItem item = invoiceItemRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         UUID invoiceId = item.getBillingInvoice().getId();
+        BillingInvoice invoice = writableInvoice(invoiceId, INVOICE_ITEM_NOT_FOUND_KEY, id);
+        invoice.getInvoiceItems().remove(item);
         invoiceItemRepository.delete(item);
 
         // recompute after deletion
         billingInvoiceService.recomputeAndPersistTotals(invoiceId);
+    }
+
+    private BillingInvoice writableInvoice(UUID invoiceId) {
+        return writableInvoice(invoiceId, BILLING_INVOICE_NOT_FOUND_KEY, invoiceId);
+    }
+
+    /**
+     * The invoice a line write targets, at the caller's acting hospital: an
+     * invoice of another hospital is answered as not found (no probe), and a
+     * cancelled invoice takes no line changes.
+     */
+    private BillingInvoice writableInvoice(UUID invoiceId, String missKey, Object missArg) {
+        UUID hospitalId = actingScopeResolver.requirePinned();
+        BillingInvoice invoice = billingInvoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(missKey, missArg));
+        if (invoice.getHospital() == null || !hospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(missKey, missArg);
+        }
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BusinessException("billing.invoice.cancelledLocked");
+        }
+        return invoice;
+    }
+
+    /**
+     * The staff member the line is attributed to: the one named, who must hold
+     * an assignment at the invoice's hospital, or else the caller themself.
+     */
+    private UserRoleHospitalAssignment resolveAssignment(UUID assignmentId, BillingInvoice invoice) {
+        UUID hospitalId = invoice.getHospital().getId();
+        if (assignmentId == null) {
+            UUID userId = roleValidator.getCurrentUserId();
+            if (userId == null) {
+                throw new BusinessException("invoiceitem.noAssignment");
+            }
+            return assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId)
+                .orElseThrow(() -> new BusinessException("invoiceitem.noAssignment"));
+        }
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
+        if (assignment.getHospital() == null || !hospitalId.equals(assignment.getHospital().getId())) {
+            throw new ResourceNotFoundException("assignment.notfound");
+        }
+        return assignment;
+    }
+
+    private Treatment resolveRelatedService(UUID relatedServiceId, BillingInvoice invoice) {
+        if (relatedServiceId == null) {
+            return null;
+        }
+        Treatment related = treatmentRepository.findById(relatedServiceId)
+            .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", relatedServiceId));
+        if (related.getHospital() != null && !invoice.getHospital().getId().equals(related.getHospital().getId())) {
+            throw new ResourceNotFoundException("treatment.notfound", relatedServiceId);
+        }
+        return related;
     }
 }

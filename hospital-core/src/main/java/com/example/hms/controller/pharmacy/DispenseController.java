@@ -158,7 +158,9 @@ public class DispenseController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    // QA D102 - billing specialists run the pharmacy checkout and so load the
+    // dispense they take payment for; the service scopes it to the hospital.
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get dispense record", description = "Retrieve a dispense record by ID")
     @ApiResponse(responseCode = "200", description = "Dispense record found")
     @ApiResponse(responseCode = "404", description = "Dispense record not found")
