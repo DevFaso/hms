@@ -3226,8 +3226,10 @@
     "SSO_OR_USERNAME": "ou se connecter avec un nom d'utilisateur",
     "SSO_UNAVAILABLE": "L'authentification unique est temporairement indisponible. Veuillez utiliser votre nom d'utilisateur et votre mot de passe pour continuer.",
     "RESET_PASSWORD_TITLE": "Réinitialiser le mot de passe",
-    "FP_INSTRUCTION": "Saisissez l'adresse e-mail associée à votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+    "FP_INSTRUCTION": "Saisissez l'adresse e-mail ou le numéro de téléphone de votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
     "EMAIL_ADDRESS": "Adresse e-mail",
+    "EMAIL_OR_PHONE": "E-mail ou numéro de téléphone",
+    "ENTER_EMAIL_OR_PHONE": "Veuillez saisir votre adresse e-mail ou votre numéro de téléphone.",
     "SENDING": "Envoi en cours…",
     "SEND_RESET_LINK": "Envoyer le lien de réinitialisation",
     "FORGOT_USERNAME_TITLE": "Nom d'utilisateur oublié",
@@ -3251,7 +3253,7 @@
     "RA_INSTRUCTION": "Saisissez l'adresse e-mail de votre compte et nous enverrons un nouveau lien d'activation, valable 24 heures.",
     "SEND_ACTIVATION_LINK": "Envoyer le lien d'activation",
     "ACTIVATION_LINK_SENT": "Si cette adresse correspond à un compte non encore activé, un nouveau lien d'activation est en route. Il est valable 24 heures.",
-    "RESET_LINK_SENT": "Si cette adresse e-mail est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception."
+    "RESET_LINK_SENT": "Si cette adresse e-mail ou ce numéro est enregistré, un lien de réinitialisation a été envoyé. Vérifiez votre boîte de réception ou vos SMS."
   },
   "NAV": {
     "ADMINISTRATION": "Administration",

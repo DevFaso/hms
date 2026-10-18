@@ -222,11 +222,9 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
-        @DisplayName("clamps caller-supplied TTL above 240 min to the 240-min ceiling")
-        void declareClampsTtl() {
+        @DisplayName("QA D186: rejects a TTL above the 240-min ceiling instead of silently capping it")
+        void declareRejectsHighTtl() {
             stubAuthenticatedDoctor();
-            when(sessionRepository.save(any(BreakGlassSession.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
                 .patientId(patientId)
@@ -235,12 +233,10 @@ class BreakGlassServiceImplTest {
                 .ttlMinutes(9999)
                 .build();
 
-            service.declare(req);
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(BusinessException.class);
 
-            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
-            verify(sessionRepository).save(captor.capture());
-            assertThat(captor.getValue().getExpiresAt())
-                .isBefore(LocalDateTime.now().plusMinutes(241));
+            verify(sessionRepository, never()).save(any());
         }
 
         @Test

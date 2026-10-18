@@ -11,4 +11,6 @@ import lombok.NoArgsConstructor;
 @Builder
 public class PasswordResetRequestDTO {
     private String email;
+    /** QA D171: a phone-only account identifies itself by its phone number instead. */
+    private String phone;
 }

@@ -67,6 +67,16 @@ describe('UserListComponent registration', () => {
     fixture.detectChanges();
   }
 
+  it('ends the delete confirmation with no doubled question mark (D192)', () => {
+    component.confirmDelete({ id: 'u7', firstName: 'Awa', lastName: 'Traoré' } as never);
+    fixture.detectChanges();
+    const strong = fixture.debugElement.query(By.css('.warning-icon + p strong'));
+    expect(strong).not.toBeNull();
+    const paragraph = (strong.nativeElement as HTMLElement).parentElement as HTMLElement;
+    expect(paragraph.textContent?.trim().endsWith('Traoré')).toBeTrue();
+    expect(paragraph.textContent).not.toContain('?');
+  });
+
   it('never opens the edit dialog on a deleted account (D126)', () => {
     component.openEdit({ id: 'u9', username: 'gone', deleted: true } as never);
     expect(component.editing()).toBeNull();

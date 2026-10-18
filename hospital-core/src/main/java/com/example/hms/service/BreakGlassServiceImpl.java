@@ -105,7 +105,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
 
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
 
-        int ttl = clampTtl(request.getTtlMinutes());
+        int ttl = validTtl(request.getTtlMinutes());
         LocalDateTime now = LocalDateTime.now(clock);
         BreakGlassSession session = BreakGlassSession.builder()
             .user(caller)
@@ -122,8 +122,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             "Break-the-glass session declared (TTL " + ttl + " min): " + request.getReason(),
             saved.getId(), AuditStatus.SUCCESS);
 
-        log.warn("[BREAK_GLASS] Declared session={} user={} patient={} hospital={} ttl={}min reason='{}'",
-            saved.getId(), caller.getId(), patient.getId(), hospital.getId(), ttl, request.getReason());
+        log.warn("[BREAK_GLASS] Declared session={} user={} patient={} hospital={} ttl={}min (reason in the audit row, not the log: free text can carry PHI)",
+            saved.getId(), caller.getId(), patient.getId(), hospital.getId(), ttl);
 
         return toDto(saved);
     }
@@ -305,14 +305,19 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     // Helpers
     // ---------------------------------------------------------------------
 
-    private int clampTtl(Integer requested) {
+    private int validTtl(Integer requested) {
         if (requested == null) {
             return DEFAULT_TTL_MINUTES;
         }
         if (requested < 15) {
             throw new BusinessException("ttlMinutes must be at least 15.");
         }
-        return Math.min(requested, MAX_TTL_MINUTES);
+        // QA D186: an out-of-range value is the caller's mistake, said as a 400,
+        // never silently capped (the session would end earlier than they were told).
+        if (requested > MAX_TTL_MINUTES) {
+            throw new BusinessException("ttlMinutes must be at most " + MAX_TTL_MINUTES + ".");
+        }
+        return requested;
     }
 
     private User currentUserOrThrow() {

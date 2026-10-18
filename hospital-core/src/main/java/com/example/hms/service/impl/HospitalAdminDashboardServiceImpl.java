@@ -285,7 +285,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         LocalDateTime sevenDaysAgo = LocalDate.now().minusDays(7).atStartOfDay();
         List<Object[]> rows = auditEventLogRepository.countDailyByHospital(hospitalId, sevenDaysAgo);
         return rows.stream().map(r -> HospitalAdminSummaryDTO.AuditDayCount.builder()
-            .date(((java.sql.Date) r[0]).toLocalDate())
+            .date(asLocalDate(r[0]))
             .count((Long) r[1])
             .build()
         ).toList();
@@ -383,7 +383,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         LocalDate from = asOfDate.minusDays(29);
         List<Object[]> rows = paymentTransactionRepository.dailyCollectionsByHospital(hospitalId, from, asOfDate);
         return rows.stream().map(r -> HospitalAdminSummaryDTO.PaymentTrendPoint.builder()
-            .date(((java.sql.Date) r[0]).toLocalDate())
+            .date(asLocalDate(r[0]))
             .amount((BigDecimal) r[1])
             .build()
         ).toList();
@@ -525,4 +525,32 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
         }
         return result;
     }
+
+    /**
+     * QA D144: a grouped date column comes back as java.sql.Date from one query and
+     * as LocalDate from another (Hibernate 7 maps CAST(... AS date) to LocalDate), so
+     * a hard cast answered 500 for any hospital that had rows. Accept every shape.
+     */
+    static LocalDate asLocalDate(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDate localDate) {
+            return localDate;
+        }
+        if (value instanceof LocalDateTime localDateTime) {
+            return localDateTime.toLocalDate();
+        }
+        if (value instanceof java.sql.Date sqlDate) {
+            return sqlDate.toLocalDate();
+        }
+        if (value instanceof java.sql.Timestamp timestamp) {
+            return timestamp.toLocalDateTime().toLocalDate();
+        }
+        if (value instanceof java.util.Date date) {
+            return date.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
+        }
+        return LocalDate.parse(value.toString());
+    }
+
 }

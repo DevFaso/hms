@@ -1324,19 +1324,23 @@ public class UserServiceImpl implements UserService {
         boolean scoped = !scope.everyone();
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
+        // QA D198: a caller who cannot read contact details cannot search on them either.
         Page<User> users = userRepository.searchUsers(name, phoneDigits(name), role, email,
+            scope.seesPatientContacts(),
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(u -> directoryRow(u, scope));
     }
 
     /**
-     * QA D125: a non-administrator sees a patient account in the directory (chat still
-     * needs its id, name and role) but never its e-mail or its username, which for a
-     * patient is commonly the e-mail address too.
+     * QA D125/D198: a non-administrator sees a patient account in the directory (chat
+     * still needs its id, name and role) but never its e-mail or its username, which for
+     * a patient is commonly the e-mail address too. An account holding a patient profile
+     * is a patient's even when it also holds a staff record, so it is masked too.
      */
     private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
-        if (dto != null && !scope.seesPatientContacts() && user.getStaffProfile() == null) {
+        if (dto != null && !scope.seesPatientContacts()
+                && (user.getStaffProfile() == null || user.getPatientProfile() != null)) {
             dto.setEmail(null);
             dto.setUsername(null);
         }
