@@ -6229,7 +6229,7 @@
     "CHANGE_PASSWORD_DESC": "Introduzca su contraseña actual y elija una nueva de al menos 8 caracteres.",
     "PASSWORD_TOO_SHORT": "La nueva contraseña debe tener al menos 8 caracteres.",
     "PASSWORD_SAME_AS_CURRENT": "La nueva contraseña debe ser distinta de la actual.",
-    "PASSWORD_CHANGED": "Su contraseña se ha cambiado.",
+    "PASSWORD_CHANGED": "Su contraseña se ha cambiado. Inicie sesión de nuevo con su nueva contraseña.",
     "PASSWORD_CURRENT_WRONG": "La contraseña actual es incorrecta.",
     "PASSWORD_CHANGE_REFUSED": "La nueva contraseña fue rechazada. Puede coincidir con una de sus 5 últimas contraseñas.",
     "PASSWORD_CHANGE_FAILED": "No se pudo cambiar la contraseña. Inténtelo de nuevo.",

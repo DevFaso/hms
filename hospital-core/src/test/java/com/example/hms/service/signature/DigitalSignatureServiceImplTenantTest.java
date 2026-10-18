@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,6 +38,7 @@ class DigitalSignatureServiceImplTenantTest {
     @Mock private DigitalSignatureMapper signatureMapper;
     @Mock private AuthService authService;
     @Mock private RoleValidator roleValidator;
+    @Mock private SignableReportLocator reportLocator;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
@@ -69,5 +71,84 @@ class DigitalSignatureServiceImplTenantTest {
         assertThat(service.getAllSignatures()).isEmpty();
         verify(signatureRepository).findAll();
         verify(signatureRepository, never()).findByHospital_IdOrderBySignatureDateTimeDesc(null);
+    }
+
+    // ── QA D71: signer, hospital and report are claims ──
+
+    private com.example.hms.payload.dto.signature.SignatureRequestDTO request(UUID staffId, UUID hospitalId, UUID reportId) {
+        return com.example.hms.payload.dto.signature.SignatureRequestDTO.builder()
+            .reportType(com.example.hms.enums.SignatureType.DISCHARGE_SUMMARY)
+            .reportId(reportId).signedByStaffId(staffId).hospitalId(hospitalId)
+            .signatureValue("Ada Lovelace").build();
+    }
+
+    private com.example.hms.model.Staff me(UUID id) {
+        com.example.hms.model.Staff staff = mock(com.example.hms.model.Staff.class);
+        org.mockito.Mockito.lenient().when(staff.getId()).thenReturn(id);
+        org.mockito.Mockito.lenient().when(staff.getFullName()).thenReturn("Ada Lovelace");
+        return staff;
+    }
+
+    @Test
+    void signingInAnotherClinicianNameIsRefused() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(UUID.randomUUID());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.signReport(request(UUID.randomUUID(), hospital, UUID.randomUUID())))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void signingAtAnotherHospitalIsRefused() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> service.signReport(request(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void signingANonExistentReportIsRefused() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        when(reportLocator.owningHospitalId(com.example.hms.enums.SignatureType.DISCHARGE_SUMMARY, reportId))
+            .thenReturn(java.util.Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(request(staffId, hospital, reportId)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void signatureValueMustBeTheSignerName() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        when(reportLocator.owningHospitalId(com.example.hms.enums.SignatureType.DISCHARGE_SUMMARY, reportId))
+            .thenReturn(java.util.Optional.of(hospital));
+        var req = request(staffId, hospital, reportId);
+        req.setSignatureValue("Someone Else");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(req))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 }

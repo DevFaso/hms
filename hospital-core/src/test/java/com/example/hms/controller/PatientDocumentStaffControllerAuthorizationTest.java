@@ -31,15 +31,16 @@ class PatientDocumentStaffControllerAuthorizationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_PHARMACIST",
-        "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"})
+    @ValueSource(strings = {"ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+        "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"})
     void chartRolesMayRead(String role) {
         Set<String> granted = grantedRoles();
         assertThat(granted).contains(role);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT"})
+    @ValueSource(strings = {"ROLE_PATIENT", "ROLE_LAB_SCIENTIST", "ROLE_LAB_TECHNICIAN", "ROLE_ACCOUNTANT",
+        "ROLE_RECEPTIONIST", "ROLE_PHARMACIST"}) // QA D112
     void otherRolesMayNot(String role) {
         Set<String> granted = grantedRoles();
         assertThat(granted).isNotEmpty().doesNotContain(role);

@@ -457,6 +457,51 @@ class BillingInvoiceServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
     }
 
+    // ---- QA D101: a draft invoice is never listed to the patient ----
+
+    @org.junit.jupiter.api.Test
+    void portalInvoicesLeaveOutDrafts() {
+        UUID patientId = UUID.randomUUID();
+        when(invoiceRepository.findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+        billingInvoiceService.getInvoicesForPortalPatient(patientId, PageRequest.of(0, 20), Locale.ENGLISH);
+
+        verify(invoiceRepository).findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any(Pageable.class));
+        verify(invoiceRepository, never()).findByPatient_Id(any(), any());
+    }
+
+    // ---- QA D70: a typed hospital name is a claim, not a scope ----
+
+    @Test
+    void createInvoice_typedHospitalNameIsIgnoredForTheActingHospital_D70() {
+        Hospital acting = pinnedHospital();
+        Patient patient = registeredPatient();
+
+        billingInvoiceService.createInvoice(requestFor(patient).hospitalName("Other Hospital").build(), Locale.ENGLISH);
+
+        ArgumentCaptor<BillingInvoice> captor = ArgumentCaptor.forClass(BillingInvoice.class);
+        verify(invoiceRepository).saveAndFlush(captor.capture());
+        assertEquals(acting.getId(), captor.getValue().getHospital().getId());
+        verify(hospitalRepository, never()).findClinicalByNameIgnoreCase(any());
+    }
+
+    @Test
+    void createInvoice_refusesAnEncounterOfAnotherHospital_D70() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        Hospital foreign = new Hospital();
+        foreign.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setHospital(foreign);
+        when(encounterRepository.findByCode("ENC-X")).thenReturn(Optional.of(encounter));
+        BillingInvoiceRequestDTO request = requestFor(patient).encounterReference("ENC-X").build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
+    }
+
     // ---- Tenant isolation: GET /billing-invoices/hospital/{hospitalId} ----
 
     @org.junit.jupiter.api.Test

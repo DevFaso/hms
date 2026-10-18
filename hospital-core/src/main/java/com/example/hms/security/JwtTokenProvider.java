@@ -810,6 +810,13 @@ public class JwtTokenProvider {
             throw new DisabledException("Account is disabled or unverified.");
         }
 
+        // QA D114: a token minted before the last password change is no session.
+        if (PasswordChangeCutoff.predates(claims.getIssuedAt(), userDetails.getPasswordChangedAt())) {
+            log.warn("JWT predates the account's last password change — rejecting authentication.");
+            throw new org.springframework.security.authentication.CredentialsExpiredException(
+                "Session predates the last password change.");
+        }
+
         log.debug("JWT token for user {} contains authorities: {}", username, authorities);
 
         return new UsernamePasswordAuthenticationToken(userDetails, token, authorities);

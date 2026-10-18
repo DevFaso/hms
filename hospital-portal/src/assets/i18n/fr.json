@@ -6229,7 +6229,7 @@
     "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
     "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
     "PASSWORD_SAME_AS_CURRENT": "Le nouveau mot de passe doit être différent de l’actuel.",
-    "PASSWORD_CHANGED": "Votre mot de passe a été modifié.",
+    "PASSWORD_CHANGED": "Votre mot de passe a été modifié. Reconnectez-vous avec votre nouveau mot de passe.",
     "PASSWORD_CURRENT_WRONG": "Le mot de passe actuel est incorrect.",
     "PASSWORD_CHANGE_REFUSED": "Le nouveau mot de passe a été refusé. Il correspond peut-être à l’un de vos 5 derniers mots de passe.",
     "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",

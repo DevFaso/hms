@@ -182,9 +182,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return null;
         }
         Encounter encounter = encounterRepository.findByCode(dto.getEncounterReference()).orElse(null);
-        if (encounter == null || encounter.getHospital() == null
-                || !hospitalId.equals(encounter.getHospital().getId())) {
+        if (encounter == null || encounter.getHospital() == null) {
             return null;
+        }
+        // QA D70: an encounter code is a claim; one of another hospital is refused, not dropped.
+        if (!hospitalId.equals(encounter.getHospital().getId())) {
+            throw new BusinessException("The encounter does not belong to this hospital.");
         }
         return encounter;
     }
@@ -232,7 +235,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale) {
-        return invoiceRepository.findByPatient_Id(patientId, pageable)
+        // QA D101: a DRAFT invoice is not yet issued to the patient.
+        return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
             .map(invoiceMapper::toBillingInvoiceResponseDTO);
     }
 

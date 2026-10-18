@@ -3427,12 +3427,37 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void portalPrescriptionsLeaveOutUnsignedDrafts() {
+        // QA D101: the prescriber's work in progress is not shown to the patient.
+        Prescription draft = new Prescription();
+        draft.setId(UUID.randomUUID());
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        Prescription pending = new Prescription();
+        pending.setId(UUID.randomUUID());
+        pending.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE);
+        Prescription signed = new Prescription();
+        signed.setId(UUID.randomUUID());
+        signed.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft, pending, signed)));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+        when(readyForCollection.openPreparations(List.of(signed))).thenReturn(java.util.Map.of());
+
+        assertThat(prescriptionService.getPrescriptionsForPortalPatient(patientId, Locale.FRENCH))
+            .extracting(PrescriptionResponseDTO::getId)
+            .containsExactly(signed.getId());
+    }
+
+    @Test
     void portalPrescriptionsCarryReadinessOnTheRowWithAFillWaiting() {
         // G15 AC-12
         Prescription waiting = new Prescription();
         waiting.setId(UUID.randomUUID());
+        waiting.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         Prescription other = new Prescription();
         other.setId(UUID.randomUUID());
+        other.setStatus(com.example.hms.enums.PrescriptionStatus.DISPENSED);
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(waiting, other)));
         when(prescriptionMapper.toResponseDTO(any(Prescription.class)))

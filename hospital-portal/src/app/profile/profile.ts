@@ -891,6 +891,10 @@ export class ProfileComponent implements OnInit {
           this.pwdConfirm.set('');
           this.credentials.update((c) => (c ? { ...c, forcePasswordChange: false } : c));
           this.toast.success(this.translate.instant('PROFILE.PASSWORD_CHANGED'));
+          // QA D114: the server now refuses every token issued before the change,
+          // this session's included, so sign in again with the new password.
+          this.auth.logout();
+          void this.router.navigateByUrl('/login');
         },
         error: (err: { status?: number }) => {
           let key = 'PROFILE.PASSWORD_CHANGE_FAILED';

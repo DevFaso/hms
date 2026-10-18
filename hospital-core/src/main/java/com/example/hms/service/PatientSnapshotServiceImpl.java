@@ -279,9 +279,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
 
     private List<String> buildAllergies(UUID patientId, Patient patient, UUID hospitalId, Map<String, Long> reach) {
         List<String> allergies = new ArrayList<>();
+        boolean hasStructuredRows = false;
         try {
-            List<PatientAllergy> rows = patientAllergyRepository.findByPatient_Id(patientId);
+            // QA D110: an opted-out patient's other-hospital rows stay there.
+            List<PatientAllergy> rows = hospitalId == null
+                ? patientAllergyRepository.findByPatient_Id(patientId)
+                : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
             rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
+            hasStructuredRows = !rows.isEmpty()
+                || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());
             account(reach, hospitalId, rows.stream().map(a -> CrossHospitalReachRecorder.hospitalIdOf(a.getHospital())).toList());
         } catch (Exception e) {
             log.debug("Allergy query error", e);
@@ -289,7 +295,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         // E9 #56 — the free-text column is a derived summary of the rows above;
         // it is read only when there is no structured row at all (a patient the
         // startup backfill could not place at a hospital), never in addition.
-        if (allergies.isEmpty() && patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
+        // QA D110: the summary text covers every hospital's rows, so it is never shown in
+        // place of rows the opt-out filtered away.
+        if (!hasStructuredRows && patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
             allergies.add(patient.getAllergies());
         }
         return allergies;

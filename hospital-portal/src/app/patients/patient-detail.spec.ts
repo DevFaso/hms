@@ -296,6 +296,17 @@ describe('PatientDetailComponent', () => {
     expect(component.canViewAppointments()).toBeTrue();
   });
 
+  it('hides the Documents tab from the front desk and the pharmacy (QA D112)', () => {
+    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_PHARMACIST']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
+      expect(component.canViewDocuments()).withContext(role).toBeFalse();
+    }
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    expect(component.canViewDocuments()).toBeTrue();
+  });
+
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {
     // The D5/D6 resolution: they read results and imaging from the patient's
     // record, not from /lab and /imaging, which are order-entry workbenches.

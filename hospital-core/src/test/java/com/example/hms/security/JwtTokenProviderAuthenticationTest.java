@@ -87,6 +87,47 @@ class JwtTokenProviderAuthenticationTest {
             .hasMessage("Account is disabled or unverified.");
     }
 
+    private static com.example.hms.model.User user(UUID id, String username, java.time.LocalDateTime changedAt) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(id);
+        user.setUsername(username);
+        user.setPasswordHash("x");
+        user.setActive(true);
+        user.setPasswordChangedAt(changedAt);
+        return user;
+    }
+
+    @Test
+    @DisplayName("QA D114: a token issued before the last password change is refused")
+    void rejectsTokenIssuedBeforePasswordChange() {
+        UUID userId = UUID.randomUUID();
+        String username = "changed.password";
+        String token = provider.generateAccessToken(new TokenUserDescriptor(userId, username, List.of("ROLE_PATIENT")));
+        java.time.LocalDateTime changedLater = java.time.LocalDateTime.now().plusSeconds(5);
+        CustomUserDetails details = new CustomUserDetails(
+            user(userId, username, changedLater),
+            List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(details);
+
+        assertThatThrownBy(() -> provider.getAuthenticationFromJwt(token))
+            .isInstanceOf(org.springframework.security.authentication.CredentialsExpiredException.class);
+    }
+
+    @Test
+    @DisplayName("QA D114: a token issued after the last password change still works")
+    void acceptsTokenIssuedAfterPasswordChange() {
+        UUID userId = UUID.randomUUID();
+        String username = "changed.earlier";
+        String token = provider.generateAccessToken(new TokenUserDescriptor(userId, username, List.of("ROLE_PATIENT")));
+        CustomUserDetails details = new CustomUserDetails(
+            user(userId, username, java.time.LocalDateTime.now().minusMinutes(5)),
+            List.of(new SimpleGrantedAuthority("ROLE_PATIENT")));
+        when(userDetailsService.loadUserByUsername(username)).thenReturn(details);
+        lenient().when(tenantRoleAssignmentAccessor.findAssignmentsForUser(userId)).thenReturn(List.of());
+
+        assertThat(provider.getAuthenticationFromJwt(token)).isNotNull();
+    }
+
     @Test
     @DisplayName("getAuthenticationFromJwt returns Authentication for an enabled user")
     void enabledUserAuthenticatesNormally() {
