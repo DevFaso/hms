@@ -547,13 +547,22 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(ids(last)).hasSize(atA.size() - 4);
 
         // Search: B's doctor is not found by name, email or role; A's accounts are.
-        assertThat(total(page(get("/users/search").param("name", doctorB.getUsername()), nurse))).isZero();
-        assertThat(total(page(get("/users/search").param("email", doctorB.getEmail()), nurse))).isZero();
-        assertThat(total(page(get("/users/search").param("name", "sa"), nurse))).isZero();
+        assertThat(List.of(
+                total(page(get("/users/search").param("name", doctorB.getUsername()), nurse)),
+                total(page(get("/users/search").param("email", doctorB.getEmail()), nurse)),
+                total(page(get("/users/search").param("name", "sa"), nurse))))
+            .containsOnly(0L);
         var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
         assertThat(total(doctors)).isEqualTo(1);
         assertThat(ids(doctors)).containsExactly(dualAB.getId());
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), nurse);
+        // QA D198: none of these accounts holds a staff profile, so a nurse sees their
+        // e-mails masked and cannot confirm one by searching; A's administrator can.
+        assertThat(List.of(
+                total(page(get("/users/search").param("email", "users-gate.test"), nurse)),
+                total(page(get("/users/search").param("name", patientA.getEmail()), nurse))))
+            .containsOnly(0L);
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"),
+            hms(adminA, "ROLE_HOSPITAL_ADMIN"));
         assertThat(total(byDomain)).isEqualTo(atA.size());
         assertThat(ids(byDomain)).hasSize(2);
 

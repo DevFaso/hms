@@ -20,7 +20,7 @@ import com.example.hms.enums.FacilityType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
-import org.apache.kafka.common.errors.DuplicateResourceException;
+import com.example.hms.exception.ConflictException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -456,7 +456,7 @@ class HospitalServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws DuplicateResourceException when hospital already exists")
+        @DisplayName("QA D167: a duplicate hospital is a ConflictException (409), not a 500")
         void duplicate() {
             setSuperAdmin();
             HospitalRequestDTO dto = buildUSRequest("Existing Hospital");
@@ -464,7 +464,7 @@ class HospitalServiceImplTest {
 
             when(hospitalRepository.existsByNameIgnoreCaseAndZipCode("Existing Hospital", "10001")).thenReturn(true);
 
-            assertThrows(DuplicateResourceException.class,
+            assertThrows(ConflictException.class,
                     () -> hospitalService.createHospital(dto, Locale.ENGLISH));
         }
 

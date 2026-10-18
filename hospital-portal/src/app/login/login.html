@@ -474,7 +474,7 @@
         }
         <form (ngSubmit)="submitForgotPassword()" class="login-form">
           <div class="form-group">
-            <label for="fp-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }}</label>
+            <label for="fp-email">{{ 'LOGIN.EMAIL_OR_PHONE' | translate }}</label>
             <div class="input-wrapper">
               <svg
                 class="input-icon"
@@ -489,10 +489,10 @@
               </svg>
               <input
                 id="fp-email"
-                type="email"
+                type="text"
                 [(ngModel)]="forgotPasswordEmail"
                 name="fpEmail"
-                autocomplete="email"
+                autocomplete="username"
                 placeholder="you@example.com"
                 [disabled]="forgotPasswordLoading"
                 required
