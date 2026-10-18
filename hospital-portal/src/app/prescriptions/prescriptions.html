@@ -90,6 +90,7 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'PRESCRIPTIONS.SEARCH' | translate"
         type="text"
         [placeholder]="'PRESCRIPTIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"

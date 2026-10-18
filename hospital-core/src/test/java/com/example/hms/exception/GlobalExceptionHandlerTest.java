@@ -527,7 +527,7 @@ class GlobalExceptionHandlerTest {
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
             @SuppressWarnings("unchecked")
             Map<String, Object> body = (Map<String, Object>) response.getBody();
-            assertThat(body).isNotNull().containsEntry("message", "An unexpected error occurred.");
+            assertThat(body).isNotNull().containsEntry("message", "An unexpected error occurred. Please try again or contact support.");
             assertThat(body.get("message").toString()).doesNotContain("internal-host");
         }
 
@@ -662,6 +662,93 @@ class GlobalExceptionHandlerTest {
             assertThat(mapping.value()).containsExactlyInAnyOrder(
                 org.springframework.dao.PessimisticLockingFailureException.class,
                 org.springframework.dao.OptimisticLockingFailureException.class);
+        }
+    }
+
+    // =========================================================================
+    // D174: every handler-authored or key-carrying message follows Accept-Language
+    // =========================================================================
+
+    @Nested
+    @DisplayName("D174 French request locale")
+    class FrenchLocale {
+
+        private org.springframework.context.support.ReloadableResourceBundleMessageSource source;
+
+        @BeforeEach
+        void french() {
+            source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
+            source.setBasenames("classpath:messages");
+            source.setDefaultEncoding("UTF-8");
+            source.setFallbackToSystemLocale(false);
+            source.setAlwaysUseMessageFormat(true);
+            handler.setMessageSource(source);
+            com.example.hms.utility.MessageUtil.setMessageSource(source);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void reset() {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+
+        @SuppressWarnings("unchecked")
+        private String messageOf(ResponseEntity<Object> response) {
+            return (String) ((Map<String, Object>) response.getBody()).get("message");
+        }
+
+        @Test
+        @DisplayName("the D131 not-null violation is answered in French")
+        void notNullViolationInFrench() {
+            var ex = new org.springframework.dao.DataIntegrityViolationException("x",
+                new RuntimeException("null value in column \"created_at\" violates not-null constraint"));
+            assertThat(messageOf(handler.handleDataIntegrityViolation(ex, request)))
+                .isEqualTo("Une valeur obligatoire est manquante. Contactez le support si le problème persiste.");
+        }
+
+        @Test
+        @DisplayName("a duplicate key is answered in French")
+        void duplicateInFrench() {
+            var ex = new org.springframework.dao.DataIntegrityViolationException("x",
+                new RuntimeException("duplicate key value violates unique constraint"));
+            assertThat(messageOf(handler.handleDataIntegrityViolation(ex, request)))
+                .isEqualTo("Cet enregistrement existe déjà.");
+        }
+
+        @Test
+        @DisplayName("access denied is answered in French")
+        void accessDeniedInFrench() {
+            ResponseEntity<Object> response = handler.handleAccessDenied(
+                new org.springframework.security.access.AccessDeniedException("internal"), request);
+            assertThat(messageOf(response)).isEqualTo("Accès refusé");
+            assertThat(response.getBody()).asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+                .containsEntry("code", "ACCESS_DENIED");
+        }
+
+        @Test
+        @DisplayName("an IllegalArgumentException thrown with a bundle key is resolved, not echoed")
+        void illegalArgumentKeyResolved() {
+            assertThat(messageOf(handler.handleIllegalArgumentException(
+                new IllegalArgumentException("error.session.expired"), request)))
+                .isEqualTo("Session expirée. Veuillez vous reconnecter.");
+        }
+
+        @Test
+        @DisplayName("an IllegalStateException with free text passes through unchanged")
+        void freeTextUnchanged() {
+            assertThat(messageOf(handler.handleIllegalStateException(
+                new IllegalStateException("Texte libre déjà rédigé."), request)))
+                .isEqualTo("Texte libre déjà rédigé.");
+        }
+
+        @Test
+        @DisplayName("a ResponseStatusException keeps its 400 and is no longer a 500")
+        void responseStatusKeepsStatus() {
+            var response = handler.handleResponseStatus(
+                new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "error.access.denied"),
+                request);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+            assertThat(messageOf(response)).isEqualTo("Accès refusé");
         }
     }
 }

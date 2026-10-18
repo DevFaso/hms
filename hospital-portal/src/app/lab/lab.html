@@ -74,6 +74,7 @@
   <div class="search-box">
     <span class="material-symbols-outlined">search</span
     ><input
+      [attr.aria-label]="'LAB.SEARCH' | translate"
       type="text"
       [placeholder]="'LAB.SEARCH' | translate"
       [(ngModel)]="searchTerm"

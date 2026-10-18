@@ -4567,7 +4567,8 @@
       "DIAGNOSIS": "Diagnosis",
       "STATUS": "Status",
       "NOT_ASSIGNED": "Not assigned",
-      "GENERAL": "General"
+      "GENERAL": "General",
+      "HOSPITAL_NAME_LABEL": "Hospital"
     },
     "BILLING": {
       "TITLE": "Billing & Payments",

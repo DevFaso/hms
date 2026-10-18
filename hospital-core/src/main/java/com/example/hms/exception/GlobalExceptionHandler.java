@@ -48,6 +48,7 @@ public class GlobalExceptionHandler {
     static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
     static final String CODE_INVALID_PARAMETER = "INVALID_PARAMETER";
     static final String CODE_UNEXPECTED_ERROR  = "UNEXPECTED_ERROR";
+    static final String CODE_ACCESS_DENIED     = "ACCESS_DENIED";
 
     /**
      * Optional so the many tests that build the advice with {@code new} keep
@@ -66,6 +67,34 @@ public class GlobalExceptionHandler {
             return java.text.MessageFormat.format(defaultText.replace("'", "''"), args);
         }
         return messageSource.getMessage(key, args, defaultText.replace("'", "''"), LocaleContextHolder.getLocale());
+    }
+
+    /**
+     * A message a thrower authored. Many services throw IllegalArgument/
+     * IllegalState/Conflict with a bundle KEY rather than a sentence; those
+     * exceptions, unlike {@link BusinessException}, never resolve it, so the
+     * key (or its English default) reached a French user (D174). A key is
+     * resolved in the request locale here; free text passes unchanged.
+     */
+    private static String passThrough(String message) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(message);
+    }
+
+    /**
+     * {@code ResponseStatusException} carries its own status and a reason the
+     * controller wrote. It extends RuntimeException, so without this handler
+     * the catch-all below turned every intended 400/403/409 into a 500.
+     */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Object> handleResponseStatus(
+            org.springframework.web.server.ResponseStatusException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null || status.is5xxServerError()) {
+            return handleRuntimeException(ex, request);
+        }
+        String reason = ex.getReason();
+        return buildErrorResponse(status,
+            reason == null ? status.getReasonPhrase() : passThrough(reason), request);
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -89,7 +118,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
-        body.put(FIELD_MESSAGE, message);
+        body.put(FIELD_MESSAGE, passThrough(message));
         if (field != null) body.put("field", field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
@@ -150,7 +179,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, passThrough(ex.getMessage()), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -160,15 +189,16 @@ public class GlobalExceptionHandler {
         if (ex.getMessage() != null && ex.getMessage().contains("audit")) {
             log.error("Unexpected audit exception leaked to controller layer: {}", ex.getMessage(), ex);
             return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "An internal error occurred. The operation may have succeeded.", request);
+                    localized("error.internal.mayHaveSucceeded",
+                        "An internal error occurred. The operation may have succeeded."), request);
         }
         log.warn("Illegal state (business rule violation): {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, passThrough(ex.getMessage()), request);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Object> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
     /**
@@ -180,7 +210,7 @@ public class GlobalExceptionHandler {
         if (log.isWarnEnabled()) {
             log.warn("Token no longer valid at path {}", request.getDescription(false));
         }
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Session expired. Please log in again.", request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, localized("error.session.expired", "Session expired. Please log in again."), request);
     }
 
     /**
@@ -197,7 +227,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
         log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
     /**
@@ -230,15 +260,17 @@ public class GlobalExceptionHandler {
     private String describeIntegrityViolation(String detail) {
         String lower = detail == null ? "" : detail.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("unique") || lower.contains("duplicate key")) {
-            return "That record already exists.";
+            return localized("error.integrity.duplicate", "That record already exists.");
         }
         if (lower.contains("foreign key")) {
-            return "A referenced record does not exist or is still in use.";
+            return localized("error.integrity.reference", "A referenced record does not exist or is still in use.");
         }
         if (lower.contains("not-null") || lower.contains("not null")) {
-            return "A required value is missing. Please contact support if this persists.";
+            return localized("error.integrity.required",
+                "A required value is missing. Please contact support if this persists.");
         }
-        return "The request could not be saved because it violates a data constraint.";
+        return localized("error.integrity.constraint",
+            "The request could not be saved because it violates a data constraint.");
     }
 
     /**
@@ -307,7 +339,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, "Validation errors in request");
+        body.put(FIELD_MESSAGE, localized("error.validation.request", "Validation errors in request"));
         body.put("fieldErrors", fieldErrors);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
@@ -327,7 +359,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, "Constraint violation in request parameters");
+        body.put(FIELD_MESSAGE, localized("error.validation.parameters", "Constraint violation in request parameters"));
         body.put("fieldErrors", violations);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
@@ -342,8 +374,9 @@ public class GlobalExceptionHandler {
             request.getDescription(false), ex.getMessage(), ex);
         return buildErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR,
-            "A referenced record could not be found. This may indicate a data integrity issue. " +
-            "Please contact support if this persists.",
+            localized("error.reference.missing",
+                "A referenced record could not be found. This may indicate a data integrity issue. "
+                + "Please contact support if this persists."),
             request);
     }
 
@@ -420,10 +453,11 @@ public class GlobalExceptionHandler {
         if (status.is4xxClientError()) {
             log.warn("FHIR operation refused at path {} with {}: {}",
                 request.getDescription(false), status.value(), ex.getMessage());
-            return buildErrorResponse(status, ex.getMessage(), request);
+            return buildErrorResponse(status, passThrough(ex.getMessage()), request);
         }
         log.error("FHIR operation failed at path {}", request.getDescription(false), ex);
-        return buildErrorResponse(status, "An unexpected error occurred.", request);
+        return buildErrorResponse(status,
+            localized("error.unexpected", "An unexpected error occurred. Please try again or contact support."), request);
     }
 
     @ExceptionHandler(RuntimeException.class)
@@ -530,17 +564,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
-        String message = ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null
-            ? ex.getMessage()
-            : "Access denied";
-        return buildErrorResponse(HttpStatus.FORBIDDEN, message, req);
+        if (ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null) {
+            return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+        }
+        // The opaque default is localized now (D174), so clients that hid it by
+        // comparing the English literal key on this code instead.
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            localized("error.access.denied", "Access denied"), req);
+        body.put(FIELD_CODE, CODE_ACCESS_DENIED);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> handleMaxUploadSize(MaxUploadSizeExceededException ex, WebRequest request) {
         log.warn("File upload too large: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of "
-                + com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL, request);
+        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE,
+            localized("error.upload.tooLarge", "File size exceeds the maximum allowed limit of {0}",
+                com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL), request);
     }
 
 

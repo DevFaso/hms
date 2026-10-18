@@ -90,6 +90,7 @@
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">person_search</span>
               <input
+                [attr.aria-label]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"
                 [placeholder]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
@@ -151,6 +152,7 @@
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">badge</span>
               <input
+                [attr.aria-label]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"
                 [placeholder]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
