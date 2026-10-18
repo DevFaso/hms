@@ -130,6 +130,9 @@ class PrescriptionServiceImplTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** D83: allergy overrides are audited. */
+    @Mock private AuditEventLogService auditEventLogService;
+
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
 
@@ -182,7 +185,7 @@ class PrescriptionServiceImplTest {
         encounter.setPatient(patient);
         encounter.setStaff(staff);
 
-        lenient().when(patientAllergyRepository.findByPatient_IdAndHospital_Id(any(), any()))
+        lenient().when(patientAllergyRepository.findByPatient_Id(any()))
             .thenReturn(List.of());
         lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any()))
             .thenReturn(List.of());
@@ -911,7 +914,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -952,7 +955,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
@@ -962,6 +965,47 @@ class PrescriptionServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
         assertThat(mappedEntity.getOverrideReason()).isEqualTo("Benefit outweighs risk, monitored");
         assertThat(mappedEntity.isAllergiesReviewed()).isTrue();
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType())
+            .isEqualTo(com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN);
+        assertThat(audit.getValue().getUserId()).isEqualTo(currentUser);
+        // the free-text reason never lands in the unencrypted audit row
+        assertThat(String.valueOf(audit.getValue().getDetails())).doesNotContain("Benefit");
+        assertThat(audit.getValue().getEventDescription()).doesNotContain("Benefit");
+    }
+
+    @Test
+    void updateThatNoLongerConflictsClearsTheStaleAllergyOverrideAndAuditsIt() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setOverrideReason("old reason");
+        existing.setAllergiesReviewed(true);
+
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().id(prescriptionId).build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(existing.getOverrideReason()).isNull();
+        assertThat(existing.isAllergiesReviewed()).isFalse();
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN));
     }
 
     @Test
@@ -985,7 +1029,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -1016,7 +1060,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
         // QA D83: any documented allergy that matches needs an explicit override.
@@ -1050,7 +1094,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
         // QA D83: any documented allergy that matches needs an explicit override.
@@ -1083,7 +1127,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
@@ -1115,7 +1159,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
@@ -1147,7 +1191,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
@@ -1189,7 +1233,7 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
         assertThat(result).isSameAs(responseDTO);
         // null medication → checkAllergyConflicts returns early, no allergy repo call
-        verify(patientAllergyRepository, never()).findByPatient_IdAndHospital_Id(any(), any());
+        verify(patientAllergyRepository, never()).findByPatient_Id(any());
     }
 
     @Test
@@ -1223,7 +1267,7 @@ class PrescriptionServiceImplTest {
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
         assertThat(result).isSameAs(responseDTO);
-        verify(patientAllergyRepository, never()).findByPatient_IdAndHospital_Id(any(), any());
+        verify(patientAllergyRepository, never()).findByPatient_Id(any());
     }
 
     // ═══════════════ resolveAssignmentForStaff edge cases ═══════════════
@@ -2154,7 +2198,7 @@ class PrescriptionServiceImplTest {
             .reaction("Rash")
             .active(true)
             .build();
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
 
         when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
@@ -3684,7 +3728,7 @@ class PrescriptionServiceImplTest {
             .severity(com.example.hms.enums.AllergySeverity.MODERATE)
             .active(true)
             .build();
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+        when(patientAllergyRepository.findByPatient_Id(patientId))
             .thenReturn(List.of(allergy));
         PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
             .patientId(patientId)

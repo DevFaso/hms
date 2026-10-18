@@ -2378,7 +2378,11 @@
       "SIGNED": "Signed",
       "COSIGNED": "Co-signed",
       "ADDENDUM": "Addendum added"
-    }
+    },
+    "START": "Start visit",
+    "STARTED": "Visit started",
+    "CHECK_OUT": "Check out",
+    "NOT_FOUND": "Encounter not found"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",

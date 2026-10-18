@@ -2378,7 +2378,11 @@
       "SIGNED": "Signée",
       "COSIGNED": "Contresignée",
       "ADDENDUM": "Addendum ajouté"
-    }
+    },
+    "START": "Commencer la consultation",
+    "STARTED": "Consultation commencée",
+    "CHECK_OUT": "Sortie du patient",
+    "NOT_FOUND": "Consultation introuvable"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",

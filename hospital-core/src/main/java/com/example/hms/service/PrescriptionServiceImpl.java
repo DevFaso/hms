@@ -94,6 +94,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaims;
     /** G15 AC-12: readiness on the patient-portal prescriptions read. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    /** D83: an allergy override is audited (who, when, which reason digest). */
+    private final AuditEventLogService auditEventLogService;
 
     @Override
     @Transactional
@@ -132,6 +134,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
+        if (allergyOverride != null) {
+            auditAllergyOverrideAfterCommit(saved, currentUserId, allergyOverride, "Allergy override recorded at creation");
+        }
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
@@ -910,9 +915,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         PrescriptionStatus statusBefore = existing.getStatus();
+        String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
-        recordAllergyOverride(existing, allergyOverride);
+        applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -1229,7 +1235,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return null; // Cannot check without medication name
         }
 
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
+        // A hard safety stop: an allergy recorded at ANY hospital counts.
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
         String med = normalizeDrugText(medicationName);
         String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
         boolean conflict = false;
@@ -1247,6 +1254,59 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             prescription.setOverrideReason(overrideReason);
             prescription.setAllergiesReviewed(true);
         }
+    }
+
+    /**
+     * An edit either still conflicts (the new reason is recorded and audited,
+     * so a replaced reason leaves a trail) or no longer does (the stale
+     * override is cleared - it vouched for a drug that is no longer ordered -
+     * and the clearing is audited too).
+     */
+    private void applyAllergyOverrideOnUpdate(Prescription existing, String allergyOverride,
+                                              String overrideBefore, UUID actorId) {
+        if (allergyOverride != null) {
+            recordAllergyOverride(existing, allergyOverride);
+            if (!allergyOverride.equals(overrideBefore)) {
+                auditAllergyOverrideAfterCommit(existing, actorId, allergyOverride,
+                    overrideBefore != null ? "Allergy override reason replaced on edit" : "Allergy override recorded on edit");
+            }
+        } else if (overrideBefore != null || existing.isAllergiesReviewed()) {
+            existing.setOverrideReason(null);
+            existing.setAllergiesReviewed(false);
+            auditAllergyOverrideAfterCommit(existing, actorId, null,
+                "Allergy override cleared: the edited order no longer conflicts");
+        }
+    }
+
+    /**
+     * After commit, outside the clinical write. Ids and a digest of the
+     * reason only: the reason is free text and the audit row is not
+     * encrypted, so the digest proves which reason stood without copying it.
+     */
+    private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
+                                                 String reason, String description) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details = reason == null ? "{\"overrideCleared\":true}"
+            : "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType("Prescription")
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Allergy override audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */

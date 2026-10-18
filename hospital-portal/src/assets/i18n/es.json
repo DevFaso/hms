@@ -2378,7 +2378,11 @@
       "SIGNED": "Firmada",
       "COSIGNED": "Refrendada",
       "ADDENDUM": "Adenda añadida"
-    }
+    },
+    "START": "Iniciar la consulta",
+    "STARTED": "Consulta iniciada",
+    "CHECK_OUT": "Dar el alta",
+    "NOT_FOUND": "Consulta no encontrada"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
