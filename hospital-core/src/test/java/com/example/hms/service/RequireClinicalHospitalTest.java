@@ -332,6 +332,7 @@ class RequireClinicalHospitalTest {
         @Mock private BillingInvoiceRepository invoiceRepository;
         @Mock private RoleValidator roleValidator;
         @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+        @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
         @InjectMocks private BillingInvoiceServiceImpl service;
 
         private BillingInvoiceRequestDTO request() {

@@ -71,6 +71,8 @@ class BillingInvoiceServiceImplTest {
     private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock
     private InvoiceNumberAllocator invoiceNumberAllocator;
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
 
@@ -94,7 +96,8 @@ class BillingInvoiceServiceImplTest {
             paymentTransactionRepository,
             actingScopeResolver,
             registrationRepository,
-            invoiceNumberAllocator
+            invoiceNumberAllocator,
+            transactionManager
         );
     }
 
@@ -202,6 +205,37 @@ class BillingInvoiceServiceImplTest {
         assertEquals("GH-2026-000007", response.getInvoiceNumber());
         verify(invoiceRepository, never()).saveAndFlush(any());
         verify(invoiceNumberAllocator, never()).next(any(), any());
+    }
+
+    @Test
+    void createInvoice_lostRaceOnClientRequestIdReturnsTheWinner_D94() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        UUID key = UUID.randomUUID();
+        BillingInvoice winner = payableInvoice(patient.getId());
+        winner.setInvoiceNumber("GH-2026-000008");
+        // Both submits miss the pre-check; the loser's insert hits the unique index.
+        when(invoiceRepository.findByHospital_IdAndClientRequestId(HOSPITAL_ID, key))
+            .thenReturn(Optional.empty(), Optional.of(winner));
+        when(invoiceRepository.saveAndFlush(any(BillingInvoice.class)))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uk_bi_hospital_client_request"));
+
+        BillingInvoiceResponseDTO response = billingInvoiceService.createInvoice(
+            requestFor(patient).clientRequestId(key).build(), Locale.ENGLISH);
+
+        assertEquals("GH-2026-000008", response.getInvoiceNumber());
+        verify(transactionManager).rollback(any());
+    }
+
+    @Test
+    void createInvoice_integrityViolationWithoutKeyStillFails() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        when(invoiceRepository.saveAndFlush(any(BillingInvoice.class)))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("other"));
+
+        assertThrows(org.springframework.dao.DataIntegrityViolationException.class,
+            () -> billingInvoiceService.createInvoice(requestFor(patient).build(), Locale.ENGLISH));
     }
 
     @Test

@@ -67,7 +67,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PaymentTransactionRepository paymentTransactionRepository,
             ActingScopeResolver actingScopeResolver,
             PatientHospitalRegistrationRepository registrationRepository,
-            InvoiceNumberAllocator invoiceNumberAllocator) {
+            InvoiceNumberAllocator invoiceNumberAllocator,
+            org.springframework.transaction.PlatformTransactionManager transactionManager) {
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -80,14 +81,41 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.actingScopeResolver = actingScopeResolver;
         this.registrationRepository = registrationRepository;
         this.invoiceNumberAllocator = invoiceNumberAllocator;
+        this.createTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.replayTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.replayTx.setReadOnly(true);
     }
 
+    /** The create runs in its own transaction so a lost race on the key can be answered after it rolls back. */
+    private final org.springframework.transaction.support.TransactionTemplate createTx;
+    private final org.springframework.transaction.support.TransactionTemplate replayTx;
+
     @Override
-    @Transactional
     public BillingInvoiceResponseDTO createInvoice(BillingInvoiceRequestDTO dto, Locale locale) {
         // The invoice is written at the caller's acting hospital: a hospital
         // named in the body is a claim, not a scope. Global view must pick one.
         UUID hospitalId = actingScopeResolver.requirePinned();
+        try {
+            return createTx.execute(status -> createAt(hospitalId, dto));
+        } catch (org.springframework.dao.DataIntegrityViolationException lostRace) {
+            // QA D94: two submits with the same key both missed the lookup and the
+            // second hit uk_bi_hospital_client_request. Its transaction is rolled
+            // back; answer with the invoice the first one committed.
+            if (dto.getClientRequestId() == null) {
+                throw lostRace;
+            }
+            BillingInvoiceResponseDTO winner = replayTx.execute(status -> invoiceRepository
+                .findByHospital_IdAndClientRequestId(hospitalId, dto.getClientRequestId())
+                .map(invoiceMapper::toBillingInvoiceResponseDTO)
+                .orElse(null));
+            if (winner == null) {
+                throw lostRace;
+            }
+            return winner;
+        }
+    }
+
+    private BillingInvoiceResponseDTO createAt(UUID hospitalId, BillingInvoiceRequestDTO dto) {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", hospitalId));
 
