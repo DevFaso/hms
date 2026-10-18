@@ -268,6 +268,20 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("QA D190: an inactive row at A does not open a user now working at B")
+        void aStaleInactiveRowDoesNotOpenAnotherHospitalsUser() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            User movedToB = targetWith(assignment("ROLE_NURSE", hospitalA, false), assignment("ROLE_NURSE", hospitalB, true));
+            assertThat(access.canView(movedToB)).isFalse();
+
+            // A pending invitation (or a former employee) active nowhere stays visible to A.
+            User pending = targetWith(assignment("ROLE_NURSE", hospitalA, false));
+            assertThat(access.canView(pending)).isTrue();
+        }
+
+        @Test
         @DisplayName("an unauthenticated context is nobody")
         void noAuthenticationIsNobody() {
             assertThat(access.currentUserId()).isEmpty();

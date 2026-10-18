@@ -106,6 +106,44 @@ class PatientAccessAuditInterceptorTest {
     // ── What must be recorded ────────────────────────────────────────────
 
     @Test
+    @DisplayName("QA D187: a read at a pinned hospital carries the actor's assignment there and the bare role code")
+    void recordsTheHospitalOfTheRead() throws Exception {
+        UUID hospitalId = UUID.randomUUID();
+        com.example.hms.repository.UserRoleHospitalAssignmentRepository repository =
+            mock(com.example.hms.repository.UserRoleHospitalAssignmentRepository.class);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode("ROLE_DOCTOR");
+        role.setName("Médecin");
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setRole(role);
+        when(repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(DOCTOR, hospitalId))
+            .thenReturn(java.util.Optional.of(assignment));
+        @SuppressWarnings("unchecked")
+        ObjectProvider<AuditEventLogService> provider = mock(ObjectProvider.class);
+        when(provider.getIfAvailable()).thenReturn(auditService);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<com.example.hms.repository.UserRoleHospitalAssignmentRepository> repoProvider = mock(ObjectProvider.class);
+        when(repoProvider.getIfAvailable()).thenReturn(repository);
+        PatientAccessAuditInterceptor scoped = new PatientAccessAuditInterceptor(provider, repoProvider, 30, 1000);
+        ReflectionTestUtils.setField(scoped, "enabled", true);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(DOCTOR).activeHospitalId(hospitalId).headerOverridden(true).build());
+        try {
+            scoped.afterCompletion(
+                get("/encounters/patient/{patientId}", Map.of("patientId", PATIENT.toString())),
+                ok(), handler("byConvention"), null);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+
+        AuditEventRequestDTO emitted = captureEmitted();
+        assertThat(emitted.getAssignmentId()).isEqualTo(assignment.getId());
+        assertThat(emitted.getRoleName()).isEqualTo("DOCTOR");
+    }
+
+    @Test
     @DisplayName("records a chart read, attributed to the right patient and clinician")
     void recordsAPatientScopedRead() throws Exception {
         interceptor.afterCompletion(

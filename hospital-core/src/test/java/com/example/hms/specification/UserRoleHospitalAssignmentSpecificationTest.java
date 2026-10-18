@@ -103,19 +103,16 @@ class UserRoleHospitalAssignmentSpecificationTest {
     Join<Object, Object> userJoin = mock(Join.class);
     Join<Object, Object> hospitalJoin = mock(Join.class);
     Join<Object, Object> roleJoin = mock(Join.class);
-    Join<Object, Object> registrarJoin = mock(Join.class);
         Predicate orPredicate = mock(Predicate.class);
 
     when(root.join(USER, JoinType.LEFT)).thenReturn((Join) userJoin);
     when(root.join(HOSPITAL, JoinType.LEFT)).thenReturn((Join) hospitalJoin);
     when(root.join(ROLE, JoinType.LEFT)).thenReturn((Join) roleJoin);
-    when(root.join(REGISTERED_BY, JoinType.LEFT)).thenReturn((Join) registrarJoin);
         when(query.distinct(true)).thenReturn(query);
 
     Path<Object> userPath = mock(Path.class);
     Path<Object> hospitalPath = mock(Path.class);
     Path<Object> rolePath = mock(Path.class);
-    Path<Object> registrarPath = mock(Path.class);
     Path<Object> assignmentCodePath = mock(Path.class);
 
     when(userJoin.get("username")).thenReturn((Path) userPath);
@@ -127,10 +124,6 @@ class UserRoleHospitalAssignmentSpecificationTest {
     when(root.get(ASSIGNMENT_CODE)).thenReturn((Path) assignmentCodePath);
     when(hospitalJoin.get("name")).thenReturn((Path) hospitalPath);
     when(hospitalJoin.get("code")).thenReturn((Path) mock(Path.class));
-    when(registrarJoin.get("username")).thenReturn((Path) registrarPath);
-    when(registrarJoin.get("email")).thenReturn((Path) mock(Path.class));
-    when(registrarJoin.get("firstName")).thenReturn((Path) mock(Path.class));
-    when(registrarJoin.get("lastName")).thenReturn((Path) mock(Path.class));
 
     when(criteriaBuilder.lower(any(Expression.class))).thenAnswer(inv -> mock(Expression.class));
     when(criteriaBuilder.like(any(Expression.class), any(String.class))).thenAnswer(inv -> mock(Predicate.class));
@@ -141,6 +134,9 @@ class UserRoleHospitalAssignmentSpecificationTest {
         assertThat(result).isSameAs(orPredicate);
         verify(query).distinct(true);
         verify(root, atLeastOnce()).join(USER, JoinType.LEFT);
+        // QA D193: the registrar is not searched, or a username lists every
+        // row that user registered for someone else.
+        verify(root, org.mockito.Mockito.never()).join(REGISTERED_BY, JoinType.LEFT);
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(criteriaBuilder, atLeastOnce()).like(any(Expression.class), captor.capture());

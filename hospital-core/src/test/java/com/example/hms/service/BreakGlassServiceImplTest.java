@@ -192,6 +192,36 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D165: the audit row carries the actor's ACTIVE assignment at the session hospital")
+        void declareLinksTheActingAssignment() {
+            // Without it the audit service took the first user_roles link: a
+            // doctor's break-glass at B was filed as ROLE_NURSE from an
+            // inactive assignment at another hospital.
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+            com.example.hms.model.UserRoleHospitalAssignment doctorHere = new com.example.hms.model.UserRoleHospitalAssignment();
+            doctorHere.setId(UUID.randomUUID());
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+                .thenReturn(java.util.Optional.of(doctorHere));
+
+            service.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build());
+
+            ArgumentCaptor<AuditEventRequestDTO> audit =
+                ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditService).logEvent(audit.capture());
+            assertThat(audit.getValue().getAssignmentId()).isEqualTo(doctorHere.getId());
+        }
+
+        @Test
         @DisplayName("clamps caller-supplied TTL above 240 min to the 240-min ceiling")
         void declareClampsTtl() {
             stubAuthenticatedDoctor();

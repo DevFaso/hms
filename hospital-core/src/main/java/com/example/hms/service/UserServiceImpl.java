@@ -1256,6 +1256,25 @@ public class UserServiceImpl implements UserService {
                 return JobTitle.LAB_TECHNICIAN;
             case ROLE_PHARMACIST:
                 return JobTitle.PHARMACIST;
+            // QA D137: every role that gets a staff row needs a title -
+            // staff.job_title is NOT NULL, and a receptionist registered with
+            // no title used to fail the whole onboarding with a 400.
+            case "ROLE_RECEPTIONIST":
+                return JobTitle.RECEPTIONIST;
+            case "ROLE_MIDWIFE":
+                return JobTitle.MIDWIFE;
+            case "ROLE_RADIOLOGIST":
+                return JobTitle.RADIOLOGIST;
+            case "ROLE_SURGEON":
+                return JobTitle.SURGEON;
+            case "ROLE_PHYSICIAN":
+                return JobTitle.PHYSICIAN;
+            case "ROLE_LAB_TECHNICIAN":
+                return JobTitle.LAB_TECHNICIAN;
+            case "ROLE_LAB_DIRECTOR":
+                return JobTitle.LAB_DIRECTOR;
+            case "ROLE_BILLING_SPECIALIST":
+                return JobTitle.BILLING_SPECIALIST;
             default:
                 return null;
         }
@@ -1868,7 +1887,8 @@ public class UserServiceImpl implements UserService {
                 return jt;
             }
         }
-        return null;
+        // A staff row always carries a title (NOT NULL column, QA D137).
+        return JobTitle.ADMINISTRATIVE_STAFF;
     }
 
     /*

@@ -2396,4 +2396,24 @@ class UserServiceImplTest {
             assertThat(savedUser().getUsername()).isNotBlank();
         }
     }
+
+    @Test
+    void aReceptionistOnboardedWithNoJobTitleGetsOneDerivedFromTheRole() {
+        // QA D137: staff.job_title is NOT NULL and ROLE_RECEPTIONIST mapped to
+        // no title, so admin-register failed with 400 "A required value is missing".
+        Role receptionist = new Role();
+        receptionist.setCode("ROLE_RECEPTIONIST");
+        Object title = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            userService, "coerceJobTitle", null, java.util.Set.of(receptionist));
+        assertThat(title).isEqualTo(com.example.hms.enums.JobTitle.RECEPTIONIST);
+    }
+
+    @Test
+    void aStaffRoleWithNoKnownTitleStillGetsATitle() {
+        Role other = new Role();
+        other.setCode("ROLE_QUALITY_OFFICER");
+        Object title = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            userService, "coerceJobTitle", null, java.util.Set.of(other));
+        assertThat(title).isEqualTo(com.example.hms.enums.JobTitle.ADMINISTRATIVE_STAFF);
+    }
 }

@@ -228,7 +228,15 @@ export class PrescriptionsComponent implements OnInit {
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (s) => this.staffMembers.set((s ?? []).filter(isClinicalProvider)),
+        // The prescriber of record is the signed-in prescriber: the server
+        // refuses an order written under a colleague's name, nurse or not
+        // (QA D84, D176). Offering the whole team only led to that refusal.
+        next: (s) => {
+          const me = this.auth.getUserProfile()?.id;
+          this.staffMembers.set(
+            (s ?? []).filter((m) => isClinicalProvider(m) && !!me && m.userId === me),
+          );
+        },
         // Said out loud rather than rendered as an empty dropdown: a
         // prescriber who cannot find their own name would otherwise assume
         // the list is simply short.
@@ -486,7 +494,12 @@ export class PrescriptionsComponent implements OnInit {
               this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
           );
         } else {
-          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'));
+          // The server's reason (e.g. "the prescriber must be you", QA D176)
+          // in the caller's language; the generic text only as a fallback.
+          this.toast.error(
+            this.extractErrorMessage(err) ||
+              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
+          );
         }
         this.saving.set(false);
       },

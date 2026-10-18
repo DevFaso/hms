@@ -3,7 +3,11 @@ package com.example.hms.security.audit;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
+import com.example.hms.security.tenant.ActingScopeResolver;
+import com.example.hms.utility.RoleNames;
 import com.example.hms.service.AuditEventLogService;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,6 +18,7 @@ import java.util.UUID;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -96,16 +101,26 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
      * way for the audit hook to be quietly absent.
      */
     private final PatientAccessDedupe dedupe;
+    private final ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider;
 
     @Value("${hms.audit.patient-access.enabled:true}")
     private boolean enabled;
 
+    @Autowired
     public PatientAccessAuditInterceptor(
             ObjectProvider<AuditEventLogService> auditServiceProvider,
+            ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider,
             @Value("${hms.audit.patient-access.window-minutes:30}") long windowMinutes,
             @Value("${hms.audit.patient-access.max-tracked:50000}") int maxTracked) {
         this.auditServiceProvider = auditServiceProvider;
+        this.assignmentRepositoryProvider = assignmentRepositoryProvider;
         this.dedupe = new PatientAccessDedupe(windowMinutes, maxTracked);
+    }
+
+    /** No assignment lookup: rows are global. Kept for slices that wire the audit service only. */
+    public PatientAccessAuditInterceptor(
+            ObjectProvider<AuditEventLogService> auditServiceProvider, long windowMinutes, int maxTracked) {
+        this(auditServiceProvider, null, windowMinutes, maxTracked);
     }
 
     @Override
@@ -160,7 +175,13 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         if (auditService == null) {
             return;
         }
+        // The hospital the read was made at (QA D187): the actor's active
+        // assignment at the pinned hospital, as the write-side interceptor
+        // does. Only its id crosses into the audit service, which derives the
+        // hospital name in its own transaction (no session here).
+        UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
         auditService.logEvent(AuditEventRequestDTO.builder()
+            .assignmentId(assignment != null ? assignment.getId() : null)
             .eventType(AuditEventType.PATIENT_ACCESS)
             .status(AuditStatus.SUCCESS)
             // "PATIENT" is what DisclosureCategory.classify folds into
@@ -172,7 +193,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             .resourceId(patientId.toString())
             .userId(actorId)
             .userName(principal.getUsername())
-            .roleName(primaryRole(auth))
+            .roleName(roleNameOf(assignment, auth))
             .ipAddress(request.getRemoteAddr())
             .eventDescription("Patient record viewed")
             .build());
@@ -240,6 +261,24 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             && auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .anyMatch(authority::equals);
+    }
+
+    private UserRoleHospitalAssignment resolveAssignment(UUID actorId) {
+        UserRoleHospitalAssignmentRepository repository =
+            assignmentRepositoryProvider == null ? null : assignmentRepositoryProvider.getIfAvailable();
+        UUID hospitalId = ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (repository == null || hospitalId == null || actorId == null) {
+            return null;
+        }
+        return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
+    }
+
+    /** The bare role CODE ({@code DOCTOR}), the one format every audit writer uses (QA D187). */
+    private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
+        if (assignment != null && assignment.getRole() != null && assignment.getRole().getCode() != null) {
+            return RoleNames.bareRole(assignment.getRole().getCode());
+        }
+        return primaryRole(auth);
     }
 
     private static String primaryRole(Authentication auth) {

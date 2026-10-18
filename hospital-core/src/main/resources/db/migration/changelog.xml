@@ -2823,4 +2823,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V198: drop the leftover user-level ROLE_PATIENT link on staff
+         accounts that hold no patient assignment (QA D74, D132). Single
+         DELETE, no DO block.
+         ================================================================= -->
+    <changeSet id="V198-drop-leftover-user-level-patient-role" author="hms-team" runOnChange="false">
+        <sqlFile path="V198__drop_leftover_user_level_patient_role.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
