@@ -48,14 +48,20 @@
               required
             >
               <option value="">{{ 'PHARMACY.SELECT_TYPE_OPTION' | translate }}</option>
-              @for (t of transactionTypes; track t) {
+              @for (t of formTransactionTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
           </div>
           <div class="field">
             <label for="txItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
-            <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
+            <select
+              id="txItem"
+              [ngModel]="form.inventoryItemId"
+              (ngModelChange)="onItemChange($event)"
+              name="inventoryItemId"
+              required
+            >
               <option value="">{{ 'PHARMACY.SELECT_ITEM_OPTION' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
@@ -80,6 +86,25 @@
             />
           </div>
         </div>
+
+        <!-- D82: a lot-tracked item moves through one of its lots -->
+        @if (!isReceipt() && txType() && itemLots().length > 0) {
+          <div class="form-row">
+            <div class="field">
+              <label for="txLot">{{ 'PHARMACY.STOCK_LOT' | translate }} *</label>
+              <select id="txLot" [(ngModel)]="form.stockLotId" name="stockLotId" required>
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_LOT_OPTION' | translate }}
+                </option>
+                @for (lot of itemLots(); track lot.id) {
+                  <option [ngValue]="lot.id">
+                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }}, {{ lot.expiryDate }})
+                  </option>
+                }
+              </select>
+            </div>
+          </div>
+        }
 
         <!-- RECEIPT-specific fields -->
         @if (isReceipt()) {
@@ -115,12 +140,13 @@
               />
             </div>
             <div class="field">
-              <label for="rxExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }}</label>
+              <label for="rxExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }} *</label>
               <input
                 id="rxExpiry"
                 type="date"
                 [(ngModel)]="receiptExpiryDate"
                 name="receiptExpiryDate"
+                required
               />
             </div>
             <div class="field">

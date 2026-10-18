@@ -8,12 +8,14 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
   PharmacyResponse,
   InventoryItemResponse,
+  StockLotResponse,
   StockTransactionRequest,
   StockTransactionResponse,
 } from '../services/pharmacy.service';
@@ -63,7 +65,15 @@ export class StockAdjustmentComponent implements OnInit {
 
   // Filter
   filterType = '';
+  /** Every type, for the history filter (dispenses are listed, not entered here). */
   readonly transactionTypes: TxType[] = ['RECEIPT', 'DISPENSE', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
+  /**
+   * D82: the types this form may record. A dispense leaves stock through the
+   * prescription dispense workflow only, and the server refuses it here.
+   */
+  readonly formTransactionTypes: TxType[] = ['RECEIPT', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
+  /** D82: the selected item's lots; a lot-tracked item moves through one of them. */
+  itemLots = signal<StockLotResponse[]>([]);
   readonly adjustmentReasonCodes = ADJUSTMENT_REASON_CODES;
 
   // Form
@@ -149,6 +159,7 @@ export class StockAdjustmentComponent implements OnInit {
   openForm(): void {
     this.resetTypedForm();
     this.form = this.emptyForm();
+    this.itemLots.set([]);
     this.showForm.set(true);
   }
 
@@ -167,6 +178,25 @@ export class StockAdjustmentComponent implements OnInit {
     this.receiptCostPerUnit = undefined;
     this.transferDestinationPharmacyId = '';
     this.returnReference = '';
+  }
+
+  onItemChange(itemId: string): void {
+    this.form.inventoryItemId = itemId;
+    this.form.stockLotId = undefined;
+    this.itemLots.set([]);
+    if (!itemId) return;
+    this.svc.listLotsByInventoryItem(itemId, 0, 100).subscribe({
+      next: (res) => this.itemLots.set(res?.data?.content ?? []),
+      error: () => this.itemLots.set([]),
+    });
+  }
+
+  /** ISO date (YYYY-MM-DD) of today in the browser's calendar. */
+  private today(): string {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
   }
 
   onTypeChange(t: TxType | ''): void {
@@ -200,7 +230,21 @@ export class StockAdjustmentComponent implements OnInit {
     this.applyTypedFieldsToForm();
 
     this.saving.set(true);
-    this.svc.recordTransaction(this.form).subscribe({
+    // D108: a goods receipt creates the lot (with its expiry) and counts it,
+    // instead of raising the item total against a lot number nobody holds.
+    const request$: Observable<unknown> = this.isReceipt()
+      ? this.svc.receiveStock({
+          inventoryItemId: this.form.inventoryItemId,
+          lotNumber: this.receiptLotNumber.trim(),
+          expiryDate: this.receiptExpiryDate,
+          initialQuantity: this.form.quantity,
+          supplier: this.receiptSupplier.trim() || undefined,
+          unitCost: this.receiptCostPerUnit ?? undefined,
+          receivedDate: this.today(),
+          notes: this.receiptPoReference.trim() || undefined,
+        })
+      : this.svc.recordTransaction(this.form);
+    request$.subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.TX_RECORDED'));
         this.closeForm();
@@ -231,6 +275,15 @@ export class StockAdjustmentComponent implements OnInit {
     }
     if (this.isReceipt() && !this.receiptLotNumber?.trim()) {
       return 'PHARMACY.RECEIPT_LOT_REQUIRED';
+    }
+    if (this.isReceipt() && !this.receiptExpiryDate) {
+      return 'PHARMACY.RECEIPT_EXPIRY_REQUIRED';
+    }
+    if (this.isReceipt() && this.receiptExpiryDate < this.today()) {
+      return 'PHARMACY.RECEIPT_LOT_EXPIRED';
+    }
+    if (!this.isReceipt() && this.itemLots().length > 0 && !this.form.stockLotId) {
+      return 'PHARMACY.LOT_REQUIRED_FOR_MOVEMENT';
     }
     return null;
   }

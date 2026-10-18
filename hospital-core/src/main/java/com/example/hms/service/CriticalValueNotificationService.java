@@ -400,7 +400,7 @@ public class CriticalValueNotificationService {
             LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
             severity = dto != null ? dto.getSeverityFlag() : null;
         }
-        return "CRITICAL".equalsIgnoreCase(severity) || "HIGH".equalsIgnoreCase(severity);
+        return labResultMapper.raisesCriticalAlert(result, severity);
     }
 
     private String resolveOrderingUsername(LabResult result) {

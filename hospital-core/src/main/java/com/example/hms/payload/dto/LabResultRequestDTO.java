@@ -69,5 +69,11 @@ public class LabResultRequestDTO {
     private LocalDateTime resultDate;
 
     private String notes;
+
+    /**
+     * D81: the RELEASED result on the same order that this new result
+     * corrects. Optional; ignored on the ingest path.
+     */
+    private UUID supersedesResultId;
 }
 

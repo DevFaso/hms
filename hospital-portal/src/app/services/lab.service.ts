@@ -41,6 +41,7 @@ export interface LabResultResponse {
    * so the release control reads this to know whether it is ours to offer.
    */
   performingHospitalId?: string | null;
+  labTestCode?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;
@@ -70,6 +71,10 @@ export interface LabResultResponse {
   releasedByFullName: string | null;
   /** D58: released by the same user who entered it — a single-reviewer release. */
   selfReleased?: boolean;
+  /** D81: the released result this one corrects. */
+  supersedesResultId?: string | null;
+  /** D81: set on a released result once a correction replaced it. */
+  supersededByResultId?: string | null;
   /** The user who entered the result, so a self-release can be confirmed up front. */
   enteredByUserId?: string | null;
   signedAt: string | null;
@@ -143,6 +148,9 @@ export interface LabTestReferenceRange {
   ageMax: number | null;
   gender: 'ALL' | 'MALE' | 'FEMALE';
   notes: string | null;
+  /** D107: panic limits; a value beyond them grades CRITICAL. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -268,6 +276,8 @@ export interface LabResultRequest {
   resultUnit?: string;
   resultDate: string;
   notes?: string;
+  /** D81: the released result on the same order that this new result corrects. */
+  supersedesResultId?: string;
 }
 
 export interface LabTestDefinitionRequest {

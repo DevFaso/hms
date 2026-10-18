@@ -249,6 +249,8 @@ export class LabResultsComponent implements OnInit {
   showModal = signal(false);
   editing = signal(false);
   editingId = signal<string | null>(null);
+  /** D81: the released result a new entry corrects; null for an ordinary entry. */
+  correcting = signal<LabResultResponse | null>(null);
   saving = signal(false);
   form: LabResultRequest = this.emptyForm();
 
@@ -307,7 +309,32 @@ export class LabResultsComponent implements OnInit {
     this.form = this.emptyForm();
     this.editing.set(false);
     this.editingId.set(null);
+    this.correcting.set(null);
     this.showModal.set(true);
+  }
+
+  /**
+   * D81: a released result cannot be edited or deleted; its correction is a
+   * new result on the same order that names it, so the released row is
+   * marked superseded and both stay on record.
+   */
+  openCorrection(r: LabResultResponse): void {
+    this.form = {
+      ...this.emptyForm(),
+      labOrderId: r.labOrderId ?? '',
+      patientId: r.patientId ?? '',
+      resultUnit: r.resultUnit ?? '',
+      supersedesResultId: r.id,
+    };
+    this.editing.set(false);
+    this.editingId.set(null);
+    this.correcting.set(r);
+    this.showModal.set(true);
+  }
+
+  /** A released result that no correction has replaced yet. */
+  canCorrect(r: LabResultResponse): boolean {
+    return this.canEnterResults() && !!r.released && !r.supersededByResultId;
   }
 
   openEdit(r: LabResultResponse): void {
@@ -322,6 +349,7 @@ export class LabResultsComponent implements OnInit {
     };
     this.editing.set(true);
     this.editingId.set(r.id);
+    this.correcting.set(null);
     this.showModal.set(true);
   }
 

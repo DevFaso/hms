@@ -243,6 +243,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // /dashboard/lab-ops/summary, which D2 also opened to the bench roles that
   // actually see this view.
   labOpsSummary = signal<LabOpsSummary | null>(null);
+  /**
+   * D107: orders still waiting on the bench - placed, pending, collected or
+   * received - the same set as the lab page's pending tab, less IN_PROGRESS,
+   * which has its own card. It read statusPending alone, and a new order is
+   * ORDERED, so the card said 0 with a queue full of work.
+   */
+  readonly labPendingCount = computed(() => {
+    const s = this.labOpsSummary();
+    if (!s) return null;
+    return (
+      (s.statusOrdered ?? 0) +
+      (s.statusPending ?? 0) +
+      (s.statusCollected ?? 0) +
+      (s.statusReceived ?? 0)
+    );
+  });
 
   // ── Work-queue counts (role audit D1 + D2) ────────────────
   // Exact totals, read from the paginated endpoints with size=1 so the count

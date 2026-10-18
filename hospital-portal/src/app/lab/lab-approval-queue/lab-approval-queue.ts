@@ -79,6 +79,12 @@ export class LabApprovalQueueComponent implements OnInit {
   readonly isLabDirector = this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR']);
   readonly isQualityManager = this.auth.hasAnyRole(['ROLE_QUALITY_MANAGER']);
   readonly isSuperAdmin = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
+  /** D124: who may move an APPROVED definition to ACTIVE (mirrors the server). */
+  readonly canActivate = this.auth.hasAnyRole([
+    'ROLE_LAB_DIRECTOR',
+    'ROLE_LAB_MANAGER',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   // Approval modal
   showApprovalModal = signal(false);
@@ -125,6 +131,7 @@ export class LabApprovalQueueComponent implements OnInit {
           (d) =>
             d.approvalStatus === 'PENDING_QA_REVIEW' ||
             d.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' ||
+            d.approvalStatus === 'APPROVED' ||
             d.approvalStatus === 'DRAFT',
         );
         this.definitions.set(pending);
