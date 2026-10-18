@@ -25,6 +25,6 @@ WHERE ur.role_id = r.id
       FROM security.user_role_hospital_assignment a
       JOIN security.roles other ON other.id = a.role_id
       WHERE a.user_id = ur.user_id
-        AND a.active = TRUE
+        AND a.is_active = TRUE
         AND upper(other.code) <> 'ROLE_PATIENT'
   );
