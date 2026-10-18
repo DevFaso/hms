@@ -93,7 +93,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         // E9 #62 — a live break-the-glass session unlocks the foreign sensitive
         // problems the D3 rule withholds; the ledger row names the session.
         boolean unlocked = readable != null && breakGlassGate.isUnlocked(requesterUserId, patientId, hospitalId);
-        List<AllergySummaryDTO> allergies = loadAllergies(patientId);
+        List<AllergySummaryDTO> allergies = loadAllergies(patientId, hospitalId);
         // E9 #64 — what D3 withholds is counted, so the banner can say so.
         WithheldRows withheld = new WithheldRows();
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked, withheld);
@@ -167,8 +167,11 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      * penicillin allergy recorded at Hôpital A is exactly the row the ED at
      * Hôpital B must see.
      */
-    private List<AllergySummaryDTO> loadAllergies(UUID patientId) {
-        List<PatientAllergy> source = allergyRepository.findByPatient_Id(patientId);
+    private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
+        // QA D110: an opted-out patient's other-hospital rows stay there.
+        List<PatientAllergy> source = hospitalId == null
+            ? allergyRepository.findByPatient_Id(patientId)
+            : allergyRepository.findVisibleAt(patientId, hospitalId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator

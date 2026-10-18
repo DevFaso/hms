@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.BillingInvoiceRequestDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceSearchRequest;
 import com.example.hms.payload.dto.InvoicePdfResponseDTO;
+import org.springframework.security.access.AccessDeniedException;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -83,6 +84,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Encounter encounter = (dto.getEncounterReference() != null)
             ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
             : null;
+        requireWritableTarget(hospital, patient, encounter);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
 
@@ -93,6 +95,26 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * QA D70: the hospital name, patient e-mail and encounter code on the request are claims.
+     * A pinned caller may only bill in the hospital they act in, for a patient registered
+     * there, against an encounter of that hospital. Only an unscoped super-admin (Global)
+     * may target another hospital.
+     */
+    private void requireWritableTarget(Hospital hospital, Patient patient, Encounter encounter) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospital.getId())) {
+            throw new AccessDeniedException("Invoices can only be created in the hospital you are acting in.");
+        }
+        if (!patient.isRegisteredInHospital(hospital.getId())) {
+            throw new BusinessException("The patient is not registered at this hospital.");
+        }
+        if (encounter != null && encounter.getHospital() != null
+                && !hospital.getId().equals(encounter.getHospital().getId())) {
+            throw new BusinessException("The encounter does not belong to this hospital.");
+        }
     }
 
     @Override
@@ -127,7 +149,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale) {
-        return invoiceRepository.findByPatient_Id(patientId, pageable)
+        // QA D101: a DRAFT invoice is not yet issued to the patient.
+        return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
             .map(invoiceMapper::toBillingInvoiceResponseDTO);
     }
 
@@ -183,6 +206,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Encounter encounter = (dto.getEncounterReference() != null)
             ? encounterRepository.findByCode(dto.getEncounterReference()).orElse(null)
             : null;
+        requireWritableTarget(hospital, patient, encounter);
 
         invoice.setPatient(patient);
         invoice.setHospital(hospital);

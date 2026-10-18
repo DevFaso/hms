@@ -249,6 +249,40 @@ class GeneralReferralServiceImplTest {
         verify(referralRepository).save(referral);
     }
 
+    // QA D90: a doctor of the sending hospital cannot acknowledge a referral addressed to another hospital.
+    @Test
+    void acknowledgeReferral_bySendingHospitalOfAnExternalReferral_isRefused() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        Hospital receiving = buildHospital(UUID.randomUUID(), "Receiving Hospital");
+        referral.setReceivingHospital(receiving);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(referral.getHospital().getId());
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () ->
+            generalReferralService.acknowledgeReferral(referralId, "Ready", UUID.randomUUID()));
+        verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    // QA D90: the named receiver must work at the receiving hospital.
+    @Test
+    void acknowledgeReferral_namingAReceiverFromAnotherHospital_isRefused() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        Hospital receiving = buildHospital(UUID.randomUUID(), "Receiving Hospital");
+        referral.setReceivingHospital(receiving);
+        UUID providerId = UUID.randomUUID();
+        Staff foreign = buildStaff(providerId, "Dr. Elsewhere");
+        foreign.setHospital(referral.getHospital());
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+        when(staffRepository.findById(providerId)).thenReturn(Optional.of(foreign));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+            generalReferralService.acknowledgeReferral(referralId, "Ready", providerId));
+        verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
     @Test
     void acknowledgeReferral_withUnknownReceivingProvider_throws() {
         UUID referralId = UUID.randomUUID();

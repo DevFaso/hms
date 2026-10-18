@@ -20,6 +20,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByPatient_Id(UUID patientId, Pageable pageable);
 
+    /** QA D101: the patient portal never lists an invoice still being drafted. */
+    Page<BillingInvoice> findByPatient_IdAndStatusNot(UUID patientId, com.example.hms.enums.InvoiceStatus status,
+                                                      Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
 

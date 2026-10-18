@@ -429,10 +429,14 @@ public class UserAccountAccess {
         if (staffAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
         }
+        // QA D125: only a hospital administrator reads patients' contact details from the
+        // directory; other staff still see the account (chat needs the id and the name).
+        boolean administrator = staffAssignments.stream()
+            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
         return new DirectoryScope(false, staffAssignments.stream()
             .map(UserAccountAccess::hospitalIdOf)
             .filter(Objects::nonNull)
-            .collect(Collectors.toUnmodifiableSet()));
+            .collect(Collectors.toUnmodifiableSet()), administrator);
     }
 
     /**
@@ -442,13 +446,19 @@ public class UserAccountAccess {
      *                    view included when the caller asks for it
      * @param hospitalIds otherwise, only live accounts holding an assignment
      *                    at one of these hospitals; empty means none at all
+     * @param seesPatientContacts whether the e-mail and username of a non-staff
+     *                    (patient) account may be returned — administrators only (QA D125)
      */
-    public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds) {
+    public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds, boolean seesPatientContacts) {
 
-        static final DirectoryScope EVERYONE = new DirectoryScope(true, Set.of());
+        static final DirectoryScope EVERYONE = new DirectoryScope(true, Set.of(), true);
 
         public DirectoryScope {
             hospitalIds = Set.copyOf(hospitalIds);
+        }
+
+        public DirectoryScope(boolean everyone, Set<UUID> hospitalIds) {
+            this(everyone, hospitalIds, everyone);
         }
     }
 

@@ -110,6 +110,8 @@ class BillingInvoiceServiceImplTest {
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
         hospital.setName("General Hospital");
+        patient.getHospitalRegistrations().add(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(hospital).build());
 
         when(patientRepository.findByUsernameOrEmail("patient@example.com"))
             .thenReturn(Optional.of(patient));
@@ -253,6 +255,61 @@ class BillingInvoiceServiceImplTest {
         when(invoiceRepository.findById(invoiceId)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+    }
+
+    // ---- QA D101: a draft invoice is never listed to the patient ----
+
+    @org.junit.jupiter.api.Test
+    void portalInvoicesLeaveOutDrafts() {
+        UUID patientId = UUID.randomUUID();
+        when(invoiceRepository.findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(Collections.emptyList()));
+
+        billingInvoiceService.getInvoicesForPortalPatient(patientId, PageRequest.of(0, 20), Locale.ENGLISH);
+
+        verify(invoiceRepository).findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any(Pageable.class));
+        verify(invoiceRepository, org.mockito.Mockito.never()).findByPatient_Id(any(), any());
+    }
+
+    // ---- QA D70: a typed hospital name is a claim, not a scope ----
+
+    @org.junit.jupiter.api.Test
+    void createInvoice_refusesAnotherHospitalNamedByAPinnedCaller() {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Hospital foreign = new Hospital();
+        foreign.setId(UUID.randomUUID());
+        foreign.setName("Other Hospital");
+        patient.getHospitalRegistrations().add(com.example.hms.model.PatientHospitalRegistration.builder()
+            .patient(patient).hospital(foreign).build());
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(patientRepository.findByUsernameOrEmail("p@example.com")).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalByNameIgnoreCase("Other Hospital")).thenReturn(Optional.of(foreign));
+        BillingInvoiceRequestDTO request = BillingInvoiceRequestDTO.builder()
+            .patientEmail("p@example.com").hospitalName("Other Hospital").invoiceNumber("INV-X")
+            .invoiceDate(LocalDate.of(2024, 1, 10)).dueDate(LocalDate.of(2024, 2, 10)).build();
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        verify(invoiceRepository, org.mockito.Mockito.never()).saveAndFlush(any(BillingInvoice.class));
+    }
+
+    @org.junit.jupiter.api.Test
+    void createInvoice_refusesAPatientNotRegisteredAtTheHospital() {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Hospital own = new Hospital();
+        own.setId(UUID.randomUUID());
+        own.setName("Own Hospital");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(own.getId());
+        when(patientRepository.findByUsernameOrEmail("p@example.com")).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalByNameIgnoreCase("Own Hospital")).thenReturn(Optional.of(own));
+        BillingInvoiceRequestDTO request = BillingInvoiceRequestDTO.builder()
+            .patientEmail("p@example.com").hospitalName("Own Hospital").invoiceNumber("INV-Y")
+            .invoiceDate(LocalDate.of(2024, 1, 10)).dueDate(LocalDate.of(2024, 2, 10)).build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
     }
 
     // ---- Tenant isolation: GET /billing-invoices/hospital/{hospitalId} ----
