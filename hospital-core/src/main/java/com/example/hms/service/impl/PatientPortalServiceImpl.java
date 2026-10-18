@@ -655,7 +655,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getDepartmentsForHospital(Authentication auth, UUID hospitalId) {
         requireActiveRegistration(auth, hospitalId);
+        // QA D169: only departments where someone can actually be booked.
+        java.util.Set<UUID> bookable = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
         return departmentRepository.findByHospitalId(hospitalId).stream()
+                .filter(d -> bookable.contains(d.getId()))
                 .map(d -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
                     m.put("id", d.getId());

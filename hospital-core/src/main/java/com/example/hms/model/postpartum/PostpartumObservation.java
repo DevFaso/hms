@@ -352,7 +352,8 @@ public class PostpartumObservation extends BaseEntity {
             .code(alert.getCode())
             .message(alert.getMessage() != null ? alert.getMessage().trim() : null)
             .triggeredBy(alert.getTriggeredBy())
-            .createdAt(alert.getCreatedAt())
+            // An @Embeddable never receives @PrePersist, so the timestamp is stamped here (D131).
+            .createdAt(alert.getCreatedAt() != null ? alert.getCreatedAt() : LocalDateTime.now())
             .build();
         alerts.add(sanitized);
     }

@@ -1,7 +1,6 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.PostpartumEducationTopic;
-import com.example.hms.enums.PostpartumSchedulePhase;
 import com.example.hms.model.postpartum.PostpartumCarePlan;
 import com.example.hms.model.postpartum.PostpartumObservation;
 import com.example.hms.model.postpartum.PostpartumObservationAlert;
@@ -111,9 +110,7 @@ public class PostpartumObservationMapper {
             return null;
         }
         boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
-        Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
-            ? null
-            : plan.getShiftFrequencyMinutes();
+        Integer frequency = plan.currentCheckFrequencyMinutes();
         return PostpartumScheduleDTO.builder()
             .carePlanId(plan.getId())
             .phase(plan.getActivePhase())
