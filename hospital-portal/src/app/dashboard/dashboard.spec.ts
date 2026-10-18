@@ -1035,9 +1035,10 @@ describe('Dashboard i18n refactor coverage', () => {
     });
   }
 
-  it('getApptStatusLabel returns the raw value for unknown statuses', () => {
-    const c = createComponent(['ROLE_DOCTOR']);
-    expect(c.getApptStatusLabel('SOMETHING_WEIRD')).toBe('SOMETHING_WEIRD');
+  it('D175: getApptStatusLabel never shows the raw CHECKED_IN token', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    // No bundle is loaded here, so the shared vocabulary's English fallback answers.
+    expect(c.getApptStatusLabel('CHECKED_IN')).toBe('Checked In');
   });
 
   // ── Locale-aware time formatters ──────────────────────────────

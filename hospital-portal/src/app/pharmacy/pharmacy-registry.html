@@ -13,6 +13,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'PHARMACY.SEARCH_PHARMACIES' | translate"
       type="text"
       [placeholder]="'PHARMACY.SEARCH_PHARMACIES' | translate"
       [(ngModel)]="searchTerm"

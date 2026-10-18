@@ -92,7 +92,7 @@
               <td>{{ def.sampleType || '—' }}</td>
               <td>
                 <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-                  {{ def.approvalStatus | titlecase }}
+                  {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
                 </span>
               </td>
               <td>
@@ -228,7 +228,7 @@
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
             <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-              {{ def.approvalStatus | titlecase }}
+              {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
           @if (def.rejectionReason) {

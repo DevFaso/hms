@@ -34,7 +34,7 @@
               @for (item of medicalHistory(); track item.id) {
                 <tr>
                   <td>{{ item.description }}</td>
-                  <td>{{ item.diagnosedAt | date: 'MM/dd/yyyy' }}</td>
+                  <td>{{ item.diagnosedAt | date: 'shortDate' }}</td>
                 </tr>
               }
             </tbody>
@@ -96,7 +96,7 @@
               @for (item of surgicalHistory(); track item.id) {
                 <tr>
                   <td>{{ item.procedureDisplay }}</td>
-                  <td>{{ item.procedureDate | date: 'MM/dd/yyyy' }}</td>
+                  <td>{{ item.procedureDate | date: 'shortDate' }}</td>
                   <td>{{ item.outcome || '-' }}</td>
                 </tr>
               }
@@ -241,7 +241,7 @@
                   'PORTAL.MEDICAL_HISTORY.QUIT_DATE' | translate
                 }}</span>
                 <span class="social-value">{{
-                  socialHistory()?.tobaccoQuitDate | date: 'MM/dd/yyyy'
+                  socialHistory()?.tobaccoQuitDate | date: 'shortDate'
                 }}</span>
               </div>
             }
