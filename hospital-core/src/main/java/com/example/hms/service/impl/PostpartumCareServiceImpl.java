@@ -249,7 +249,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
         }
-        throw new BusinessException("Unable to resolve hospital context for postpartum observation.");
+        throw new BusinessException("postpartum.hospital.required");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -519,6 +519,12 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
         if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
             applyImmediatePhaseScheduling(plan, observation, request);
+            // QA D104: a critical alert that closes the immediate window (e.g. a
+            // haemorrhage with stabilization confirmed) must land in enhanced
+            // monitoring, not in the routine 8-hour shift baseline.
+            if (escalateMonitoring && plan.isImmediateWindowCompleted()) {
+                applyShiftPhaseScheduling(plan, observation, request, true);
+            }
         } else {
             applyShiftPhaseScheduling(plan, observation, request, escalateMonitoring);
         }

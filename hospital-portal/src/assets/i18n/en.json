@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Clinical decision support",
     "FORCE_OVERRIDE": "Override critical advisory after clinical review",
+    "OVERRIDE_REASON": "Reason for the override (recorded on the prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Warning",
@@ -2397,7 +2398,11 @@
       "SIGNED": "Signed",
       "COSIGNED": "Co-signed",
       "ADDENDUM": "Addendum added"
-    }
+    },
+    "START": "Start visit",
+    "STARTED": "Visit started",
+    "CHECK_OUT": "Check out",
+    "NOT_FOUND": "Encounter not found"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3701,7 +3706,9 @@
     "ACVPU_NEW_CONFUSION": "New confusion",
     "ACVPU_VOICE": "Responds to voice",
     "ACVPU_PAIN": "Responds to pain",
-    "ACVPU_UNRESPONSIVE": "Unresponsive"
+    "ACVPU_UNRESPONSIVE": "Unresponsive",
+    "OVERRIDE_EXPLAIN": "The bedside five-rights scan is done in the eMAR. To record this dose as given from here, enter the reason for the override.",
+    "OPEN_EMAR": "Open the eMAR to scan instead"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -5364,6 +5371,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Blocked by Plan",
         "PLATFORM_REGISTRY_UPDATED": "Platform Registry Updated",
         "PRESCRIPTION_BACKORDER": "Prescription on Backorder",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Prescription Allergy Warning Overridden",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Prescription Clarification Requested",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Prescription Clarification Resolved",
         "PRESCRIPTION_CREATED": "Prescription Created",
@@ -6057,7 +6065,19 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
-    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one."
+    "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one.",
+    "ROUTE_NOT_RECORDED": "Not recorded",
+    "ROUTES": {
+      "PO": "Oral (PO)",
+      "IV": "Intravenous (IV)",
+      "IM": "Intramuscular (IM)",
+      "SC": "Subcutaneous (SC)",
+      "SL": "Sublingual (SL)",
+      "PR": "Rectal (PR)",
+      "TOP": "Topical (TOP)",
+      "INH": "Inhaled (INH)",
+      "NEB": "Nebulised (NEB)"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

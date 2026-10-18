@@ -51,6 +51,14 @@ public class PrescriptionRequestDTO {
     @Size(max = 100)
     private String frequency;
 
+    /**
+     * Administration route (PO, IV, IM, SC, ...). The MAR five-rights route
+     * check compares the bedside scan with this value; without it every
+     * order looked oral and an IV dose always failed the route right.
+     */
+    @Size(max = 80)
+    private String route;
+
     @Size(max = 100)
     private String duration;
 
@@ -65,6 +73,10 @@ public class PrescriptionRequestDTO {
      * Should be used only after clinician review.
      */
     private Boolean forceOverride;
+
+    /** Why the prescriber overrides a documented allergy; required with forceOverride on a match (QA D83). */
+    @jakarta.validation.constraints.Size(max = 1024)
+    private String overrideReason;
 
     /**
      * Flag this prescription as a controlled substance (P2 #15).

@@ -119,7 +119,8 @@ describe('PostpartumTabComponent — screening', () => {
     const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
     patientSpy.search.and.returnValue(of([]));
     patientSpy.lookup.and.returnValue(of([]));
-    const authSpy = jasmine.createSpyObj('AuthService', ['getUserProfile']);
+    const authSpy = jasmine.createSpyObj('AuthService', ['getUserProfile', 'getHospitalId']);
+    authSpy.getHospitalId.and.returnValue('h1');
     authSpy.getUserProfile.and.returnValue({ staffId: 's1' });
 
     await TestBed.configureTestingModule({
@@ -152,6 +153,17 @@ describe('PostpartumTabComponent — screening', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('POSTPARTUM.PICK_PATIENT_HINT');
     expect(text).not.toContain('MATERNITY.PICK_PATIENT_HINT');
+  });
+
+  it('D86: the first postpartum observation carries the acting hospital', () => {
+    postpartumSpy.createObservation.and.returnValue(
+      of({ alerts: [] } as unknown as PostpartumObservationResponse),
+    );
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openObservation();
+    component.submitObservation();
+    const body = postpartumSpy.createObservation.calls.mostRecent().args[1];
+    expect(body.hospitalId).toBe('h1');
   });
 
   it('picking a patient loads the screening history for the plan instrument', () => {

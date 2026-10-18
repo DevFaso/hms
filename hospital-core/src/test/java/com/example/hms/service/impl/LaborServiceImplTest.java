@@ -462,4 +462,16 @@ class LaborServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void recordDeliveryRefusesABirthBeforeLabourOnset() {
+        // QA D104: a delivery time before the labour onset was accepted.
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(2));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(LocalDateTime.now().minusHours(5));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class);
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
 }

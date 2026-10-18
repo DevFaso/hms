@@ -42,6 +42,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getPatientFlow',
       'getPendingAdmissions',
       'captureVitals',
+      'administerMedication',
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -467,5 +468,45 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(component.taskForm().patientId).toBeUndefined();
     component.closeTaskCreate();
     expect(component.taskPatient()).toBeNull();
+  });
+
+  describe('QA round 2 (D78, D130)', () => {
+    it('D78: Give asks for an override reason and sends it as overrideReason', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+      component.administerMedication('rx-1');
+      expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+      expect(component.reasonPrompt()).toEqual({ taskId: 'rx-1', action: 'GIVEN' });
+
+      component.reasonText.set('Scanner broken on ward');
+      component.confirmHoldRefuse();
+
+      expect(nurseServiceSpy.administerMedication).toHaveBeenCalledWith('rx-1', {
+        status: 'GIVEN',
+        overrideReason: 'Scanner broken on ward',
+      });
+      expect(component.reasonPrompt()).toBeNull();
+    });
+
+    it("D78: a refusal shows the server's localised reason, not the generic toast", () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({ error: { message: 'Cette dose a déjà été enregistrée.' } })),
+      );
+      component.promptHoldRefuse('rx-1', 'HELD');
+      component.reasonText.set('NPO');
+      component.confirmHoldRefuse();
+      expect(toastSpy.error).toHaveBeenCalledWith('Cette dose a déjà été enregistrée.');
+    });
+
+    it('D130: Escape closes the nurse task modal', () => {
+      component.taskCreateOpen.set(true);
+      component.onEscapeKey();
+      expect(component.taskCreateOpen()).toBeFalse();
+    });
+
+    it('D130: Escape closes the care note modal', () => {
+      component.careNoteFor.set({ patientId: 'p1', patientName: 'A' });
+      component.onEscapeKey();
+      expect(component.careNoteFor()).toBeNull();
+    });
   });
 });

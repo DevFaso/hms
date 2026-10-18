@@ -187,7 +187,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         }
         return encounterNoteRepository.findByEncounter_IdIn(encounterById.keySet()).stream()
             .filter(n -> n.getEncounter() != null
-                && encounterById.containsKey(n.getEncounter().getId()))
+                && encounterById.containsKey(n.getEncounter().getId())
+                && !Encounter.PRESCRIPTION_ANCHOR_NOTE.equals(n.getEncounter().getNotes()))
             .map(n -> toNoteDto(n, encounterById.get(n.getEncounter().getId())))
             .sorted(Comparator.comparing(NoteEntryDTO::getDocumentedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())))

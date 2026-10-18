@@ -772,6 +772,7 @@
   "CDS": {
     "SECTION_LABEL": "Aide à la décision clinique",
     "FORCE_OVERRIDE": "Outrepasser l'alerte critique après revue clinique",
+    "OVERRIDE_REASON": "Motif de la dérogation (enregistré sur la prescription)",
     "INDICATOR": {
       "INFO": "Info",
       "WARNING": "Avertissement",
@@ -2397,7 +2398,11 @@
       "SIGNED": "Signée",
       "COSIGNED": "Contresignée",
       "ADDENDUM": "Addendum ajouté"
-    }
+    },
+    "START": "Commencer la consultation",
+    "STARTED": "Consultation commencée",
+    "CHECK_OUT": "Sortie du patient",
+    "NOT_FOUND": "Consultation introuvable"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -3701,7 +3706,9 @@
     "ACVPU_NEW_CONFUSION": "Confusion nouvelle",
     "ACVPU_VOICE": "Répond à la voix",
     "ACVPU_PAIN": "Répond à la douleur",
-    "ACVPU_UNRESPONSIVE": "Aréactif"
+    "ACVPU_UNRESPONSIVE": "Aréactif",
+    "OVERRIDE_EXPLAIN": "Le scan des cinq bons au chevet se fait dans l'eMAR. Pour enregistrer cette dose comme administrée depuis cet écran, indiquez le motif de la dérogation.",
+    "OPEN_EMAR": "Ouvrir l'eMAR pour scanner"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -5330,6 +5337,7 @@
         "PLAN_FEATURE_GATE_BLOCKED": "Bloqué par le forfait",
         "PLATFORM_REGISTRY_UPDATED": "Registre de la plateforme modifié",
         "PRESCRIPTION_BACKORDER": "Ordonnance en rupture de stock",
+        "PRESCRIPTION_ALLERGY_OVERRIDDEN": "Alerte d'allergie de l'ordonnance outrepassée",
         "PRESCRIPTION_CLARIFICATION_REQUESTED": "Clarification d'ordonnance demandée",
         "PRESCRIPTION_CLARIFICATION_RESOLVED": "Clarification d'ordonnance résolue",
         "PRESCRIPTION_CREATED": "Ordonnance créée",
@@ -6057,7 +6065,19 @@
     },
     "QUANTITY_VALUE": "{{value}} {{unit}}",
     "REFILLS_VALUE": "{{remaining}} sur {{allowed}} restant(s)",
-    "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne."
+    "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne.",
+    "ROUTE_NOT_RECORDED": "Non renseignée",
+    "ROUTES": {
+      "PO": "Orale (PO)",
+      "IV": "Intraveineuse (IV)",
+      "IM": "Intramusculaire (IM)",
+      "SC": "Sous-cutanée (SC)",
+      "SL": "Sublinguale (SL)",
+      "PR": "Rectale (PR)",
+      "TOP": "Topique (TOP)",
+      "INH": "Inhalée (INH)",
+      "NEB": "Nébulisation (NEB)"
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
