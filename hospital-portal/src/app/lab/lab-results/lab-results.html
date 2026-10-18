@@ -81,6 +81,7 @@
   <div class="search-box">
     <span class="material-symbols-outlined">search</span>
     <input
+      [attr.aria-label]="'LAB_RESULTS.SEARCH' | translate"
       type="text"
       [placeholder]="'LAB_RESULTS.SEARCH' | translate"
       [(ngModel)]="searchTerm"

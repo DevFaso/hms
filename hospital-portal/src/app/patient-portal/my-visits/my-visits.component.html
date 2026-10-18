@@ -37,11 +37,14 @@
                 >{{ enc.type | enumLabel: 'encounterType' }} ·
                 {{ enc.department || ('PORTAL.VISITS.GENERAL' | translate) }}</span
               >
-              <span class="pli-sub">{{
-                enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate)
-              }}</span>
+              <span class="pli-sub"
+                >{{ enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate) }}
+                @if (enc.hospitalName) {
+                  · <span class="pli-hospital">{{ enc.hospitalName }}</span>
+                }
+              </span>
               <span class="pli-meta">
-                {{ enc.date | date: 'MMM d, yyyy' }}
+                {{ enc.date | date: 'mediumDate' }}
                 @if (enc.chiefComplaint) {
                   · {{ enc.chiefComplaint }}
                 }
@@ -69,6 +72,12 @@
                     enc.providerName || ('PORTAL.VISITS.NOT_ASSIGNED' | translate)
                   }}</span>
                 </div>
+                @if (enc.hospitalName) {
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.VISITS.HOSPITAL_NAME_LABEL' | translate }}</span>
+                    <span class="dv">{{ enc.hospitalName }}</span>
+                  </div>
+                }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.DEPARTMENT' | translate }}</span>
                   <span class="dv">{{

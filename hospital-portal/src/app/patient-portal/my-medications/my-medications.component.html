@@ -56,7 +56,7 @@
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
                   {{ 'PORTAL.MEDICATIONS.STARTED' | translate }}
-                  {{ med.startDate | date: 'MMM d, yyyy' }}</span
+                  {{ med.startDate | date: 'mediumDate' }}</span
                 >
               </div>
               <span class="portal-status-chip" [attr.data-status]="med.status">{{

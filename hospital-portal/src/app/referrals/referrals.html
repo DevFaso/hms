@@ -83,6 +83,7 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'REFERRALS.SEARCH' | translate"
         type="text"
         [placeholder]="'REFERRALS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
