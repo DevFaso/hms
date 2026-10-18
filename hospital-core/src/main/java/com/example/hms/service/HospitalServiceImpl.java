@@ -23,7 +23,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.utility.RoleValidator;
-import org.apache.kafka.common.errors.DuplicateResourceException;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -162,7 +161,7 @@ public class HospitalServiceImpl implements HospitalService {
         if (exists) {
             String message = messageSource.getMessage("hospital.exists",
                     new Object[]{dto.getName()}, "Hospital already exists.", locale);
-            throw new DuplicateResourceException(message);
+            throw new ConflictException("name:" + message); // QA D167: a 409, not Kafka's exception (which answered 500)
         }
 
         Organization organization = null;

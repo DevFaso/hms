@@ -58,6 +58,7 @@ class ChatMessageServiceImplTest {
     @Mock private FileUploadService fileUploadService;
     @Mock private PatientRepository patientRepository;
     @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @InjectMocks
     private ChatMessageServiceImpl chatMessageService;
@@ -112,7 +113,7 @@ class ChatMessageServiceImplTest {
         // Simulate current user
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
-        assertThrows(SecurityException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertThrows(IllegalArgumentException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
     }
 
     @Test
@@ -213,7 +214,77 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
 
-        assertThrows(SecurityException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
+    }
+
+    private com.example.hms.model.PatientHospitalRegistration registrationAt(UUID hospitalId) {
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+        r.setHospital(hospital);
+        return r;
+    }
+
+    @Test
+    void qaD170_patientCannotMessageAClinicianAtAHospitalWhereNotRegistered() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        User patient = userWithRole(patientId, "ROLE_PATIENT");
+        User doctorAtB = userWithRole(doctorId, "ROLE_DOCTOR");
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(doctorAtB));
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(false);
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+        ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build();
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+            () -> service.sendMessage(dto, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD170_patientMessagesAClinicianOfTheirOwnHospital() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorId = UUID.randomUUID();
+        UUID hospitalA = UUID.randomUUID();
+        User patient = userWithRole(patientId, "ROLE_PATIENT");
+        User doctor = userWithRole(doctorId, "ROLE_DOCTOR");
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(doctorId)).thenReturn(Optional.of(doctor));
+        when(patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientId))
+            .thenReturn(List.of(registrationAt(hospitalA)));
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(doctorId, hospitalA))
+            .thenReturn(true);
+        when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(patientId)).thenReturn(true);
+        when(chatMessageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(chatMessageMapper.toChatMessageResponseDTO(any(ChatMessage.class), any(java.util.Collection.class)))
+            .thenReturn(ChatMessageResponseDTO.builder().build());
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+
+        assertNotNull(service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build(), Locale.ENGLISH));
+    }
+
+    @Test
+    void qaD197_patientToPatientIsAForbiddenNotAServerError() {
+        UUID patientId = UUID.randomUUID();
+        UUID otherId = UUID.randomUUID();
+        when(userRepository.findById(patientId)).thenReturn(Optional.of(userWithRole(patientId, "ROLE_PATIENT")));
+        when(userRepository.findById(otherId)).thenReturn(Optional.of(userWithRole(otherId, "ROLE_PATIENT")));
+        setSecurityContext("ROLE_PATIENT");
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(patientId).when(service).getCurrentUserId();
+
+        assertThrows(org.springframework.security.access.AccessDeniedException.class, () -> service.sendMessage(
+            ChatMessageRequestDTO.builder().recipientId(otherId).content("hi").build(), Locale.ENGLISH));
     }
 
     // ---- P1 #10 telehealth attachment paths ----

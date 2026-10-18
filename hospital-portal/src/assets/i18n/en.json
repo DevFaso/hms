@@ -3226,8 +3226,10 @@
     "SSO_OR_USERNAME": "or sign in with username",
     "SSO_UNAVAILABLE": "Single sign-on is temporarily unavailable. Please use your username and password to continue.",
     "RESET_PASSWORD_TITLE": "Reset Password",
-    "FP_INSTRUCTION": "Enter the email address associated with your account and we will send you a link to reset your password.",
+    "FP_INSTRUCTION": "Enter the email address or phone number of your account and we will send you a link to reset your password.",
     "EMAIL_ADDRESS": "Email Address",
+    "EMAIL_OR_PHONE": "Email or phone number",
+    "ENTER_EMAIL_OR_PHONE": "Please enter your email address or phone number.",
     "SENDING": "Sending…",
     "SEND_RESET_LINK": "Send Reset Link",
     "FORGOT_USERNAME_TITLE": "Forgot Username",
@@ -3251,7 +3253,7 @@
     "RA_INSTRUCTION": "Enter the e-mail address of your account and we will send a new activation link. It is valid for 24 hours.",
     "SEND_ACTIVATION_LINK": "Send activation link",
     "ACTIVATION_LINK_SENT": "If this address belongs to an account that is not yet active, a new activation link is on its way. It is valid for 24 hours.",
-    "RESET_LINK_SENT": "If that email is registered, a password reset link has been sent. Please check your inbox."
+    "RESET_LINK_SENT": "If that email or phone number is registered, a password reset link has been sent. Please check your inbox or your text messages."
   },
   "NAV": {
     "ADMINISTRATION": "Administration",

@@ -2157,8 +2157,8 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
             when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
-                    any())).thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
+                    any(), any())).thenReturn(onePage);
 
             // Even if a deleted flag reached the service, the scoped path has no deleted view.
             userService.getAllUsers(0, 10, true, true);
@@ -2166,7 +2166,7 @@ class UserServiceImplTest {
 
             verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
             verify(userRepository).searchUsers(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
-                    eq(true), eq(hospitals), any());
+                    eq(false), eq(true), eq(hospitals), any());
         }
 
         @Test
@@ -2202,6 +2202,39 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D198: a non-administrator cannot search the directory by e-mail, username or phone")
+        void nonAdministratorCannotSearchOnContacts() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
+            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), any(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
+
+            userService.searchUsers("p@example.com", null, "p@example.com", 0, 10, false, false);
+
+            verify(userRepository).searchUsers(eq("p@example.com"), isNull(), isNull(), eq("p@example.com"),
+                    eq(false), eq(false), eq(false), eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("QA D198: an account that is a patient stays masked even when it also has a staff record")
+        void patientWithStaffRecordStaysMasked() {
+            User account = new User();
+            account.setStaffProfile(new com.example.hms.model.Staff());
+            account.setPatientProfile(new com.example.hms.model.Patient());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(account)));
+            when(userMapper.toSummaryDTO(account)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+                    .builder().email("p@example.com").username("p@example.com").build());
+
+            var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
+            assertThat(row.getEmail()).isNull();
+            assertThat(row.getUsername()).isNull();
+        }
+
+        @Test
         @DisplayName("QA D125: an administrator keeps a patient account's contact")
         void administratorSeesPatientContacts() {
             User patientAccount = new User();
@@ -2234,15 +2267,15 @@ class UserServiceImplTest {
                     .thenReturn(new UserAccountAccess.DirectoryScope(true, Set.of()));
             when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), any(),
-                    any())).thenReturn(onePage);
+            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
+                    any(), any())).thenReturn(onePage);
 
             userService.getAllUsers(0, 10, true, false);
             userService.searchUsers("a", null, null, 0, 10, false, true);
 
             verify(userRepository).findAllPaged(eq(true), eq(false), eq(false),
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
-            verify(userRepository).searchUsers(eq("a"), isNull(), any(), any(), eq(false), eq(true), eq(false),
+            verify(userRepository).searchUsers(eq("a"), isNull(), any(), any(), eq(true), eq(false), eq(true), eq(false),
                     eq(UserRepository.DIRECTORY_UNSCOPED), any());
         }
     }
