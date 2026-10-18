@@ -455,6 +455,21 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.signingId()).toBeNull();
   });
 
+  it('D174: the localized opaque 403 is recognised by its ACCESS_DENIED code', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          ({ status: 403, error: { message: 'Accès refusé', code: 'ACCESS_DENIED' } }) as unknown,
+      ),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
   it('a non-403 failure without a body falls back to the generic sign failure', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);

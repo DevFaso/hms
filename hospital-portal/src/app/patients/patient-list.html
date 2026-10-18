@@ -24,6 +24,7 @@
     <div class="search-bar toolbar-search">
       <span class="material-symbols-outlined search-icon">search</span>
       <input
+        [attr.aria-label]="'PATIENTS.SEARCH' | translate"
         type="text"
         [placeholder]="'PATIENTS.SEARCH' | translate"
         [value]="searchTerm"
@@ -148,7 +149,8 @@
       }
       @if (statusFilter) {
         <span class="filter-chip">
-          {{ 'COMMON.STATUS' | translate }}: {{ statusFilter | titlecase }}
+          {{ 'COMMON.STATUS' | translate }}:
+          {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
           <button class="chip-remove" (click)="removeFilter('status')">
             <span class="material-symbols-outlined">close</span>
           </button>

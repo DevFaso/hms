@@ -96,6 +96,7 @@
   <div class="search-box">
     <span class="material-symbols-outlined">search</span
     ><input
+      [attr.aria-label]="'BILLING.SEARCH' | translate"
       type="text"
       [placeholder]="'BILLING.SEARCH' | translate"
       [(ngModel)]="searchTerm"

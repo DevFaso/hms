@@ -23,6 +23,7 @@
   <div class="search-bar">
     <span class="material-icons search-icon">search</span>
     <input
+      [attr.aria-label]="'FLAGS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'FLAGS.SEARCH_PLACEHOLDER' | translate"
       [ngModel]="search()"
