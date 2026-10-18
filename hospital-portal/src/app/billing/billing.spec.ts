@@ -400,6 +400,114 @@ describe('BillingComponent', () => {
     expect(toastSpy.error).toHaveBeenCalled();
   });
 
+  describe('payments ledger (QA D140/D142)', () => {
+    const pending = {
+      id: 'p9',
+      amount: 400,
+      paymentDate: '2026-10-18',
+      paymentMethod: 'MOBILE_MONEY',
+      status: 'PENDING' as const,
+    };
+
+    it('loads the ledger with the detail panel and clears it on close', () => {
+      billingSpy.listPayments.and.returnValue(of([pending]));
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      expect(billingSpy.listPayments).toHaveBeenCalledWith('inv-1');
+      expect(component.payments().length).toBe(1);
+      component.closeDetail();
+      expect(component.payments()).toEqual([]);
+    });
+
+    it('empties the ledger when it fails to load', () => {
+      billingSpy.listPayments.and.returnValue(throwError(() => new Error('down')));
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      expect(component.payments()).toEqual([]);
+    });
+
+    it('confirms a pending self-payment and refreshes the invoice', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      billingSpy.confirmPayment.and.returnValue(of(mockInvoice({ status: 'PAID', balanceDue: 0 })));
+      component.confirmPendingPayment(pending);
+      expect(billingSpy.confirmPayment).toHaveBeenCalledWith('inv-1', 'p9');
+      expect(component.selectedInvoice()?.status).toBe('PAID');
+      expect(component.paymentActionBusy()).toBeFalse();
+      expect(toastSpy.success).toHaveBeenCalled();
+    });
+
+    it('reports a refused confirmation', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      billingSpy.confirmPayment.and.returnValue(
+        throwError(() => ({ error: { message: 'already confirmed' } })),
+      );
+      component.confirmPendingPayment(pending);
+      expect(toastSpy.error).toHaveBeenCalledWith('already confirmed');
+      expect(component.paymentActionBusy()).toBeFalse();
+    });
+
+    it('does nothing without a selected invoice', () => {
+      component.confirmPendingPayment(pending);
+      expect(billingSpy.confirmPayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects a pending self-payment with a reason', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      billingSpy.rejectPayment.and.returnValue(of(mockInvoice()));
+      component.openReversal(pending, 'reject');
+      component.reversalReason.set(' wrong reference ');
+      component.submitReversal();
+      expect(billingSpy.rejectPayment).toHaveBeenCalledWith('inv-1', 'p9', 'wrong reference');
+      expect(billingSpy.reversePayment).not.toHaveBeenCalled();
+      expect(component.reversingPayment()).toBeNull();
+    });
+
+    it('keeps the reversal dialog open when the server refuses', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      billingSpy.reversePayment.and.returnValue(throwError(() => ({ error: {} })));
+      component.openReversal(pending, 'reverse');
+      component.reversalReason.set('Refunded');
+      component.submitReversal();
+      expect(toastSpy.error).toHaveBeenCalled();
+      expect(component.reversingPayment()).not.toBeNull();
+      component.closeReversal();
+      expect(component.reversingPayment()).toBeNull();
+    });
+
+    it('downloads a receipt', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
+      spyOn(URL, 'revokeObjectURL');
+      const click = spyOn(HTMLAnchorElement.prototype, 'click');
+      billingSpy.getReceiptPdf.and.returnValue(of(new Blob(['%PDF'])));
+      component.downloadReceipt(pending);
+      expect(billingSpy.getReceiptPdf).toHaveBeenCalledWith('inv-1', 'p9');
+      expect(click).toHaveBeenCalled();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:x');
+    });
+
+    it('reports a failed receipt download', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      billingSpy.getReceiptPdf.and.returnValue(throwError(() => new Error('nope')));
+      component.downloadReceipt(pending);
+      expect(toastSpy.error).toHaveBeenCalled();
+    });
+
+    it('does not remove a line the user did not confirm (QA D147)', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      spyOn(globalThis, 'confirm').and.returnValue(false);
+      component.removeItem({ id: 'item-1' } as never);
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+    });
+  });
+
   it('renders the invoice status in French, not the wire token', () => {
     // formatStatus() used to produce this badge by swapping underscores for
     // spaces, so a French biller read "PARTIALLY PAID" and no i18n gate could
