@@ -27,7 +27,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                 :namePattern IS NULL OR
                 LOWER(p.firstName) LIKE :namePattern OR
                 LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern
+                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
+                LOWER(r.mrn) LIKE :namePattern
               )
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
           AND (:phonePattern IS NULL OR p.phoneNumberPrimary LIKE :phonePattern ESCAPE '\\' OR p.phoneNumberSecondary LIKE :phonePattern ESCAPE '\\')
@@ -50,7 +51,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                 :namePattern IS NULL OR
                 LOWER(p.firstName) LIKE :namePattern OR
                 LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern
+                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
+                LOWER(r.mrn) LIKE :namePattern
               )
           AND (:dob IS NULL OR CAST(p.dateOfBirth AS string) = :dob)
           AND (:phonePattern IS NULL OR p.phoneNumberPrimary LIKE :phonePattern ESCAPE '\\' OR p.phoneNumberSecondary LIKE :phonePattern ESCAPE '\\')
@@ -206,7 +208,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                 :namePattern IS NULL OR
                 LOWER(p.firstName) LIKE :namePattern OR
                 LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern
+                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
+                LOWER(r.mrn) LIKE :namePattern
               )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
@@ -226,7 +229,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
                 :namePattern IS NULL OR
                 LOWER(p.firstName) LIKE :namePattern OR
                 LOWER(p.lastName)  LIKE :namePattern OR
-                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern
+                LOWER(CONCAT(p.firstName, ' ', p.lastName)) LIKE :namePattern OR
+                LOWER(r.mrn) LIKE :namePattern
               )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)

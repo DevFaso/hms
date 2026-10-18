@@ -23,6 +23,20 @@ export interface DepartmentOption {
  * forced the workaround. Kept in one place so encounters, admissions and
  * referrals cannot drift apart again.
  */
+/**
+ * The department endpoints answer with a plain array (`List<…>` on the
+ * server), but older callers expected a `{ data }` envelope or a `{ content }`
+ * page and read `undefined` from the array, so every department picker was
+ * empty (QA D75). Accept all three shapes so a future wrapper cannot empty
+ * the pickers again.
+ */
+export function unwrapDepartmentList<T>(
+  res: T[] | { data?: T[]; content?: T[] } | null | undefined,
+): T[] {
+  if (Array.isArray(res)) return res;
+  return res?.data ?? res?.content ?? [];
+}
+
 @Injectable({ providedIn: 'root' })
 export class DepartmentLookupService {
   private readonly http = inject(HttpClient);
@@ -38,7 +52,7 @@ export class DepartmentLookupService {
    */
   getActiveDepartments(hospitalId: string): Observable<DepartmentOption[]> {
     return this.http
-      .get<{ data: DepartmentOption[] }>(`/departments/active-minimal/${hospitalId}`)
-      .pipe(map((res) => res?.data ?? []));
+      .get<DepartmentOption[]>(`/departments/active-minimal/${hospitalId}`)
+      .pipe(map((res) => unwrapDepartmentList(res)));
   }
 }

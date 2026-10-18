@@ -74,7 +74,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
           this.searchLoading.set(true);
           this.noMatch.set(false);
           const scoped = this.patientService
-            .search({ name: q, hospitalId: this.hospitalId ?? undefined, size: 8 })
+            .search({
+              name: q,
+              hospitalId: this.hospitalId ?? undefined,
+              size: 8,
+              // QA D80: an admitted patient whose record is inactive must still
+              // be found by the task, handoff and discharge pickers.
+              includeInactive: true,
+            })
             .pipe(catchError(() => of([] as PatientResponse[])));
           // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
           // MRN) — free-text name fragments must never leave the hospital scope.

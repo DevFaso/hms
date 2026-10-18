@@ -73,6 +73,9 @@ import java.util.UUID;
 @Tag(name = "Patient Management", description = "CRUD operations for patients (staff only)")
 public class PatientController {
 
+    /** How many matches the ?search= form of GET /patients returns: a typeahead, not a list. */
+    private static final int LIST_SEARCH_LIMIT = 20;
+
     private static final String ROLE_RECEPTIONIST = "ROLE_RECEPTIONIST";
     private static final String MSG_DOCTOR_CONTEXT_REQUIRED = "Unable to resolve authenticated doctor context.";
     private static final List<String> CLINICAL_CHART_UPDATE_ROLES = List.of(
@@ -152,6 +155,7 @@ public class PatientController {
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(name = "assignedTo", required = false) String assignedTo,
         @RequestParam(name = "inhouse", required = false) String inhouse,
+        @RequestParam(name = "search", required = false) String search,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
@@ -170,6 +174,19 @@ public class PatientController {
             return ResponseEntity.ok(patients);
         }
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, true);
+        if (search != null && !search.isBlank()) {
+            // The admission, encounter, consultation, lab and appointment
+            // typeaheads send ?search= (QA D79). It used to be dropped, so the
+            // first patients of the hospital were offered whatever was typed and
+            // the wrong patient was admitted. Same matching as /patients/search
+            // (name or MRN), and, like the unfiltered list, inactive records too.
+            PatientSearchCriteria criteria = PatientSearchCriteria.builder()
+                .name(search.trim())
+                .hospitalId(resolvedHospitalId)
+                .includeInactive(true)
+                .build();
+            return ResponseEntity.ok(patientService.searchPatients(criteria, 0, LIST_SEARCH_LIMIT, locale));
+        }
         return ResponseEntity.ok(patientService.getAllPatients(resolvedHospitalId, locale));
     }
 
@@ -341,6 +358,7 @@ public class PatientController {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
         @RequestParam(defaultValue = "true") boolean active,
+        @RequestParam(defaultValue = "false") boolean includeInactive,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
@@ -354,6 +372,7 @@ public class PatientController {
             .email(email)
             .hospitalId(resolvedHospitalId)
             .active(active)
+            .includeInactive(includeInactive)
             .build();
         return ResponseEntity.ok(patientService.searchPatients(criteria, page, size, locale));
     }

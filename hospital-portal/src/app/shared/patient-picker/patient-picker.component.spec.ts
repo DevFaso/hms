@@ -36,7 +36,12 @@ describe('PatientPickerComponent', () => {
     component.ngOnInit();
     component.onQueryChange('do');
     setTimeout(() => {
-      expect(patientSpy.search).toHaveBeenCalledWith({ name: 'do', hospitalId: 'h1', size: 8 });
+      expect(patientSpy.search).toHaveBeenCalledWith({
+        name: 'do',
+        hospitalId: 'h1',
+        size: 8,
+        includeInactive: true,
+      });
       expect(patientSpy.lookup).not.toHaveBeenCalled();
       expect(component.suggestions().map((p) => p.id)).toEqual(['p1', 'p2']);
       expect(component.dropdownOpen()).toBeTrue();

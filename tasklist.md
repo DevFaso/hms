@@ -5125,6 +5125,16 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   order); if the clinical lead decides they do, add MIDWIFE in RoleValidator, the
   controller and `lab.ts` together. Open.
 
+- **QA run 2026-10-18 round 2, patients/pickers residuals (`fix/qa-r2-patients-pickers`).**
+  D74, D75, D79, D80, D93, D99, D118 and D122 are fixed there, and D123's missing
+  default prescriber. Left, each a feature rather than a missed bug: (1) D123's raw
+  UUID inputs (encounter id on the lab and prescription forms, report id on the
+  signature form, dispense id on the pharmacy checkout) want real encounter / report /
+  dispense pickers — new search endpoints and components, not a fix. (2) D74's stray
+  inactive ROLE_PATIENT rows on the three QA staff accounts are now inert (role
+  resolution, assignment lookup and the profile all ignore inactive rows), but they
+  still exist; deleting them is a dev-data cleanup for a super-admin, and the
+  edit-user modal still has no way to list or remove an inactive assignment. Open.
 - **Billing has no tariff / price-list screen (QA D72, round 2, 2026-10-18).**
   An invoice line is typed by hand (description, category, quantity, unit
   price); nothing offers a hospital's priced services to pick from, although

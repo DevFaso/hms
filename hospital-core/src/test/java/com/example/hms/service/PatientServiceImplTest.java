@@ -586,6 +586,22 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void includeInactiveSearchesActiveAndInactiveRecords() {
+        // QA D80: the clinical pickers must find an admitted patient whose
+        // record is switched off; the default stays active-only.
+        PatientSearchCriteria criteria = PatientSearchCriteria.builder()
+            .name("Doctor").hospitalId(hospitalId).includeInactive(true).build();
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
+
+        patientService.searchPatients(criteria, 0, 10, Locale.ENGLISH);
+
+        verify(patientRepository).searchPatientsExtended(
+            any(), eq("%doctor%"), any(), any(), any(), eq(hospitalId), org.mockito.ArgumentMatchers.isNull(),
+            any(Pageable.class));
+    }
+
+    @Test
     void createPatientByStaffRequiresHospitalId() {
         PatientRequestDTO request = PatientRequestDTO.builder().userId(UUID.randomUUID()).build();
 

@@ -38,6 +38,14 @@ describe('DepartmentLookupService', () => {
     expect(result).toEqual([{ id: 'd9', name: 'General Practices' }]);
   });
 
+  it('reads the plain array the API actually returns (QA D75)', () => {
+    let result: { id: string; name: string }[] = [];
+    service.getActiveDepartments('h1').subscribe((d) => (result = d));
+    httpMock.expectOne('/departments/active-minimal/h1').flush([{ id: 'd1', name: 'Cardiologie' }]);
+
+    expect(result).toEqual([{ id: 'd1', name: 'Cardiologie' }]);
+  });
+
   it('returns a department that has no staff assigned to it', () => {
     // The whole point. The previous staff-derived list could not produce this
     // row at all, so a real active department was unselectable.

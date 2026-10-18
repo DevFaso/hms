@@ -163,9 +163,19 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentMinimalDTO> getActiveDepartmentsMinimal(UUID hospitalId, Locale locale) {
-        enforceHospitalScopeOnHospitalId(hospitalId);
+        // A referral names the RECEIVING hospital's department (QA D118): the
+        // controller is scope-exempt for that, but this used to enforce the
+        // caller's own hospital anyway, so picking another hospital was a
+        // silent 403. Another hospital gets a directory - active departments,
+        // id and name only; the caller's own hospital also
+        // gets the contact details, as before. "Own" is the hospital the
+        // request acts at, from the one tenant resolver.
+        boolean ownHospital = hospitalId.equals(roleValidator.getCurrentHospitalId());
         return departmentRepository.findByHospitalId(hospitalId).stream()
-                .map(dept -> new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber()))
+                .filter(Department::isActive)
+                .map(dept -> ownHospital
+                        ? new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber())
+                        : new DepartmentMinimalDTO(dept.getId(), dept.getName(), null, null))
                 .toList();
     }
 

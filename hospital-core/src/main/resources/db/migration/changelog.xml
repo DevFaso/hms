@@ -2812,4 +2812,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V194: hospital.departments.email becomes optional (QA D93), as the
+         form and the request DTO already treat it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V194-department-email-optional" author="hms-team" runOnChange="false">
+        <sqlFile path="V194__department_email_optional.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

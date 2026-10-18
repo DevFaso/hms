@@ -232,31 +232,31 @@ public class AppointmentServiceImpl implements AppointmentService {
             return false;
         }
 
-        List<String> userRoleCodes = user.getUserRoles() == null ? List.of() : user.getUserRoles().stream()
-            .map(UserRole::getRole)
-            .filter(Objects::nonNull)
-            .map(Role::getCode)
-            .filter(Objects::nonNull)
-            .toList();
-
-        boolean directMatch = userRoleCodes.stream().anyMatch(code -> code.equalsIgnoreCase(roleCode));
-        if (directMatch) {
-            log.debug("hasRole() direct match: user={}, roleCode={}, userRoleCodes={}", user.getUsername(), roleCode, userRoleCodes);
-            return true;
-        }
-
-        var assignmentCodes = assignmentRepository.findAllByUserId(user.getId()).stream()
-            .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
+        // Same rule as CustomUserDetailsService: a role that has ANY assignment
+        // row is governed by those rows, and only an ACTIVE row grants it. The
+        // user_roles link is a fallback for legacy roles with no assignment at
+        // all - honouring it for a governed role let an inactive ROLE_PATIENT
+        // (attached to a staff account by a patient registration) narrow a
+        // receptionist's appointment search to their own patient appointments.
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findAllByUserId(user.getId());
+        boolean governed = assignments.stream()
             .map(UserRoleHospitalAssignment::getRole)
             .filter(Objects::nonNull)
             .map(Role::getCode)
+            .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
+        if (governed) {
+            return assignments.stream()
+                .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
+                .map(UserRoleHospitalAssignment::getRole)
+                .filter(Objects::nonNull)
+                .map(Role::getCode)
+                .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
+        }
+        return user.getUserRoles() != null && user.getUserRoles().stream()
+            .map(UserRole::getRole)
             .filter(Objects::nonNull)
-            .toList();
-
-        boolean assignmentMatch = assignmentCodes.stream().anyMatch(code -> code.equalsIgnoreCase(roleCode));
-        log.debug("hasRole() checking assignments: user={}, roleCode={}, userRoleCodes={}, assignmentCodes={}",
-            user.getUsername(), roleCode, userRoleCodes, assignmentCodes);
-        return assignmentMatch;
+            .map(Role::getCode)
+            .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
     }
 
     /* =======================
@@ -314,7 +314,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // --- Staff role assignment in this hospital ---
         final UserRoleHospitalAssignment assignment = assignmentRepository
-            .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+            .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream().findFirst()
             .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
 
@@ -538,7 +538,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
         // 1. Explicit departmentId in the request
         if (request.getDepartmentId() != null) {
+            // Only a department of the appointment's hospital: a caller-supplied
+            // id from another hospital is "not found", not a cross-tenant link.
             return departmentRepository.findById(request.getDepartmentId())
+                .filter(d -> d.getHospital() != null && hospital.getId().equals(d.getHospital().getId()))
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
         }
         // 2. departmentCode in the request
@@ -555,16 +558,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (staff.getDepartment() != null) {
             return staff.getDepartment();
         }
-        // 5. Fallback: first available department in the hospital
-        //    Covers roles like RECEPTIONIST that are not tied to a specific department.
-        List<Department> hospitalDepts = departmentRepository.findByHospitalId(hospital.getId());
-        if (!hospitalDepts.isEmpty()) {
-            log.debug("resolveDepartment: staff {} has no department; using first hospital department '{}'",
-                staff.getId(), hospitalDepts.get(0).getName());
-            return hospitalDepts.get(0);
-        }
-        throw new BusinessException("No departments found for hospital " + hospital.getId()
-            + ". Please add a department or specify departmentId in the request.");
+        // 5. No department named and the clinician has none: refuse (QA D99).
+        //    This used to file the booking under the hospital's FIRST
+        //    department (alphabetically, e.g. the laboratory), a silent and
+        //    wrong placement the patient's chart then carried.
+        throw new BusinessException("appointment.department.required");
     }
 
 
@@ -612,7 +610,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new AccessDeniedException("Staff does not belong to selected hospital");
         }
 
-        UserRoleHospitalAssignment assignment = assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+        UserRoleHospitalAssignment assignment = assignmentRepository
+            .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream()
             .findFirst()
             .orElseThrow(() -> new BusinessException("Staff role assignment not found"));

@@ -21,7 +21,7 @@ import {
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -501,7 +501,7 @@ export class ConsultationsComponent implements OnInit {
     this.assignStaffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
-        this.assignStaff.set(staff.filter((s) => s.active));
+        this.assignStaff.set(staff.filter((s) => s.active && isClinicalProvider(s)));
         this.assignStaffLoading.set(false);
       },
       error: () => {

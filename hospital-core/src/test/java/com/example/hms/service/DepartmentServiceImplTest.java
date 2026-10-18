@@ -223,6 +223,28 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void getActiveDepartmentsMinimal_ownHospital_includesContacts() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isEqualTo("cardio@test.com");
+        assertThat(result.get(0).getPhoneNumber()).isEqualTo("555-1234");
+    }
+
+    @Test
+    void getActiveDepartmentsMinimal_otherHospital_omitsContacts() {
+        when(roleValidator.getCurrentHospitalId()).thenReturn(UUID.randomUUID());
+        when(departmentRepository.findByHospitalId(hospitalId)).thenReturn(List.of(department));
+
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+
+        assertThat(result.get(0).getEmail()).isNull();
+        assertThat(result.get(0).getPhoneNumber()).isNull();
+    }
+
+    @Test
     void isHeadOfDepartment_returnsTrue() {
         when(departmentRepository.existsByHeadOfDepartment_Id(staffId)).thenReturn(true);
         assertThat(departmentService.isHeadOfDepartment(staffId, locale)).isTrue();
@@ -1416,16 +1438,25 @@ class DepartmentServiceImplTest {
     }
 
     @Test
-    void getActiveDepartmentsMinimal_nonSuperAdmin_crossHospital_throwsAccessDenied() {
+    void getActiveDepartmentsMinimal_crossHospital_isANameOnlyDirectoryOfActiveDepartments() {
+        // QA D118: a referral picks the RECEIVING hospital's department. This
+        // used to throw AccessDenied (a silent 403 in the referral form).
         UUID otherHospitalId = UUID.randomUUID();
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
+        Department open = Department.builder().name("Pediatrie").email("ped@example.test")
+            .phoneNumber("+22600000000").build();
+        open.setId(UUID.randomUUID());
+        open.setActive(true);
+        Department closed = Department.builder().name("Ferme").build();
+        closed.setId(UUID.randomUUID());
+        closed.setActive(false);
+        when(departmentRepository.findByHospitalId(otherHospitalId)).thenReturn(List.of(open, closed));
 
-        assertThatThrownBy(() -> departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale))
-            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        List<DepartmentMinimalDTO> result = departmentService.getActiveDepartmentsMinimal(otherHospitalId, locale);
 
-        verify(departmentRepository, never()).findByHospitalId(any(UUID.class));
+        assertThat(result).extracting(DepartmentMinimalDTO::getName).containsExactly("Pediatrie");
+        assertThat(result.get(0).getEmail()).isNull();
+        assertThat(result.get(0).getPhoneNumber()).isNull();
     }
 
     @Test

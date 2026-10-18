@@ -111,5 +111,11 @@ class PatientRepositoryTenantScopeTest {
 
         assertThat(result.getContent()).extracting(Patient::getId)
             .containsExactly(patient.getId());
+
+        // QA D80: the pickers send what was typed as `name`; an MRN typed
+        // there must match the registration's MRN too.
+        Page<Patient> byMrn = patientRepository.searchPatientsExtended(
+            null, "%mrn-123%", null, null, null, scopedHospital.getId(), null, PageRequest.of(0, 5));
+        assertThat(byMrn.getContent()).extracting(Patient::getId).containsExactly(patient.getId());
     }
 }
