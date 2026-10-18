@@ -317,8 +317,9 @@ class LabResultServiceImplLifecycleTest {
         released.setSupersededByResultId(firstCorrection);
         when(labResultRepository.existsById(firstCorrection)).thenReturn(true);
         LabResult second = stubReleasableCorrectionOf(released);
+        UUID secondId = second.getId();
 
-        assertThatThrownBy(() -> service.releaseLabResult(second.getId(), true, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.releaseLabResult(secondId, true, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
         assertThat(second.isReleased()).isFalse();
         assertThat(released.getSupersededByResultId()).isEqualTo(firstCorrection);

@@ -21,7 +21,8 @@ public class LabTestDefinitionMapper {
             return null;
         }
 
-        LabTestDefinition entity = LabTestDefinition.builder()
+        // The hospital is set by the service from the acting scope (D30/D73).
+        return LabTestDefinition.builder()
             .testCode(dto.getTestCode())
             .name(dto.getName())
             .category(dto.getCategory())
@@ -36,9 +37,6 @@ public class LabTestDefinitionMapper {
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
             .build();
-
-        // The hospital is set by the service from the acting scope (D30/D73).
-        return entity;
     }
 
 

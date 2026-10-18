@@ -136,24 +136,13 @@ public class LabResultServiceImpl implements LabResultService {
         return createLabResult(request, true, senderHospitalId);
     }
 
-    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
-                                                 boolean ingested,
-                                                 UUID senderHospitalId) {
-        // The ingest caller's own standing, settled BEFORE the order is read.
-        // Every refusal in it depends on who is calling and which hospital the
-        // message names, never on the order, and each one is the missing-order
-        // 404 - so an order id that exists and one that does not get the same
-        // answer however the caller stands.
-        if (ingested) {
-            requireIngestCallerAtSender(request, senderHospitalId);
-        }
-
-        // Read first, lock later. The write lock on the order is needed only
-        // for the status decision further down, and taking it here held it
-        // across the permission checks and — before the side effects moved
-        // after the commit — across a blocking SMS gateway call.
-        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
-                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+    /**
+     * The tenant boundary for a new result: true when the caller is an
+     * ingest account with no hospital scope of its own (the allowlist pin is
+     * then the boundary), false when the order was compared against the
+     * acting scope.
+     */
+    private boolean requireOrderReachable(LabOrder labOrder, boolean ingested, UUID senderHospitalId) {
         // THE tenant boundary on the ingest path. The sending pair in the
         // message header was resolved against the MLLP allowlist before we
         // were called, and senderHospitalId is the hospital that entry points
@@ -189,6 +178,28 @@ public class LabResultServiceImpl implements LabResultService {
         if (!unscopedIngest) {
             requireOrderInActiveHospital(labOrder);
         }
+        return unscopedIngest;
+    }
+
+    private LabResultResponseDTO createLabResult(LabResultRequestDTO request,
+                                                 boolean ingested,
+                                                 UUID senderHospitalId) {
+        // The ingest caller's own standing, settled BEFORE the order is read.
+        // Every refusal in it depends on who is calling and which hospital the
+        // message names, never on the order, and each one is the missing-order
+        // 404 - so an order id that exists and one that does not get the same
+        // answer however the caller stands.
+        if (ingested) {
+            requireIngestCallerAtSender(request, senderHospitalId);
+        }
+
+        // Read first, lock later. The write lock on the order is needed only
+        // for the status decision further down, and taking it here held it
+        // across the permission checks and — before the side effects moved
+        // after the commit — across a blocking SMS gateway call.
+        LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
+                .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        boolean unscopedIngest = requireOrderReachable(labOrder, ingested, senderHospitalId);
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
         // requireActiveHospitalId THROWS when nothing resolves, which is an
@@ -786,14 +797,6 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * D81: a released result is a record the ordering clinician may already
-     * have acted on. Overwriting or deleting it in place left the row marked
-     * "released by" the director over a value they never released, with the
-     * critical notification still quoting the old one and no trail. A
-     * correction is entered as a NEW result on the same order: the released
-     * row stays as it was, and both are shown, which is the trail.
-     */
-    /**
      * D81: a correction names the released result it replaces. It must be a
      * released result on the SAME order (the order row is locked here, so two
      * corrections cannot both claim it) that no correction has replaced yet.
@@ -876,6 +879,14 @@ public class LabResultServiceImpl implements LabResultService {
         });
     }
 
+    /**
+     * D81: a released result is a record the ordering clinician may already
+     * have acted on. Overwriting or deleting it in place left the row marked
+     * "released by" the director over a value they never released, with the
+     * critical notification still quoting the old one and no trail. A
+     * correction is entered as a NEW result on the same order: the released
+     * row stays as it was, and both are shown, which is the trail.
+     */
     private static void requireNotReleased(LabResult labResult) {
         if (labResult.isReleased()) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.released.immutable"));
