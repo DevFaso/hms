@@ -17,6 +17,15 @@ import java.util.UUID;
 
 public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, UUID> {
 
+    /**
+     * The invoice with a row lock held to the end of the transaction, so two
+     * payment transitions on the same invoice run one after the other and the
+     * amount paid is never computed from a stale read.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT bi FROM BillingInvoice bi WHERE bi.id = :id")
+    Optional<BillingInvoice> findLockedById(@Param("id") UUID id);
+
     @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByPatient_Id(UUID patientId, Pageable pageable);
 

@@ -562,15 +562,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** Validate the invoice is this patient's and payable, then add the amount and settle the status. */
     private BillingInvoice applyPayment(UUID invoiceId, UUID patientId, BigDecimal amount) {
-        BillingInvoice invoice = loadPayable(invoiceId, patientId, amount);
-        return settle(invoice, amount);
+        // Locked: two payments on one invoice must not both add to a stale amount paid.
+        BillingInvoice invoice = invoiceRepository.findLockedById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        return settle(requirePayable(invoice, patientId, amount), amount);
     }
 
     /** The invoice, checked to be this patient's, issued, open, and owing at least {@code amount}. */
     private BillingInvoice loadPayable(UUID invoiceId, UUID patientId, BigDecimal amount) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        return requirePayable(invoice, patientId, amount);
+    }
 
+    /** {@code invoice} checked to be this patient's, issued, open, and owing at least {@code amount}. */
+    private static BillingInvoice requirePayable(BillingInvoice invoice, UUID patientId, BigDecimal amount) {
+        UUID invoiceId = invoice.getId();
         // ── Ownership check: ensure invoice belongs to this patient ──
         if (!invoice.getPatient().getId().equals(patientId)) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
@@ -615,7 +622,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
             com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale) {
-        BillingInvoice invoice = invoiceRepository.findById(invoiceId)
+        BillingInvoice invoice = invoiceRepository.findLockedById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         // ── Tenant isolation: staff record payments on their own hospital's invoices only ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -638,8 +645,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** The invoice in the caller's hospital, or 404 (never 403) for one elsewhere. */
     private BillingInvoice loadInScope(UUID invoiceId) {
-        BillingInvoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        return requireInScope(invoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)));
+    }
+
+    /** As {@link #loadInScope} but with the invoice row locked: every payment transition goes through here. */
+    private BillingInvoice loadInScopeForUpdate(UUID invoiceId) {
+        return requireInScope(invoiceRepository.findLockedById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)));
+    }
+
+    private BillingInvoice requireInScope(BillingInvoice invoice) {
+        UUID invoiceId = invoice.getId();
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && invoice.getHospital() != null
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
@@ -665,14 +682,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public BillingInvoiceResponseDTO confirmPayment(UUID invoiceId, UUID paymentId, UUID staffId, Locale locale) {
-        BillingInvoice invoice = loadInScope(invoiceId);
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
         PaymentTransaction row = loadPaymentRow(invoice, paymentId);
         if (row.getStatus() != PaymentStatus.PENDING) {
             throw new BusinessException("billing.payment.notPending");
         }
         // The balance may have moved since the patient declared it: the same
         // checks as a cashier's payment apply now.
-        BillingInvoice saved = applyPayment(invoice.getId(), invoice.getPatient().getId(), row.getAmount());
+        requirePayable(invoice, invoice.getPatient().getId(), row.getAmount());
+        claimTransition(row, invoice, PaymentStatus.PENDING, PaymentStatus.CONFIRMED, "billing.payment.notPending");
+        BillingInvoice saved = settle(invoice, row.getAmount());
         row.setStatus(PaymentStatus.CONFIRMED);
         row.setConfirmedBy(staffId);
         row.setConfirmedAt(java.time.LocalDateTime.now());
@@ -685,15 +704,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public BillingInvoiceResponseDTO rejectPayment(UUID invoiceId, UUID paymentId, String reason, UUID staffId,
             Locale locale) {
-        BillingInvoice invoice = loadInScope(invoiceId);
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
         PaymentTransaction row = loadPaymentRow(invoice, paymentId);
         if (row.getStatus() != PaymentStatus.PENDING) {
             throw new BusinessException("billing.payment.notPending");
         }
+        String why = requireReason(reason);
+        claimTransition(row, invoice, PaymentStatus.PENDING, PaymentStatus.REJECTED, "billing.payment.notPending");
         row.setStatus(PaymentStatus.REJECTED);
         row.setReversedBy(staffId);
         row.setReversedAt(java.time.LocalDateTime.now());
-        row.setReversalReason(requireReason(reason));
+        row.setReversalReason(why);
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, invoice, row.getId(), "Pending payment rejected");
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
@@ -709,7 +730,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional
     public BillingInvoiceResponseDTO reversePayment(UUID invoiceId, UUID paymentId, String reason, UUID staffId,
             Locale locale) {
-        BillingInvoice invoice = loadInScope(invoiceId);
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
         PaymentTransaction row = loadPaymentRow(invoice, paymentId);
         if (row.getStatus() != PaymentStatus.CONFIRMED) {
             throw new BusinessException("billing.payment.notConfirmed");
@@ -721,6 +742,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             // A ledger that disagrees with the invoice is not settled by a guess.
             throw new BusinessException("billing.payment.ledgerMismatch");
         }
+        claimTransition(row, invoice, PaymentStatus.CONFIRMED, PaymentStatus.REVERSED, "billing.payment.notConfirmed");
         invoice.setAmountPaid(remaining);
         if (remaining.signum() == 0) {
             invoice.setStatus(InvoiceStatus.SENT);
@@ -736,6 +758,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoice saved = invoiceRepository.save(invoice);
         auditPaymentAfterCommit(AuditEventType.REFUND_ISSUED, staffId, saved, row.getId(), "Payment reversed");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * The status check above is a read; this conditional UPDATE is the
+     * guarantee. A concurrent or repeated transition on the same row updates
+     * nothing and is refused, so its amount is never counted twice.
+     */
+    private void claimTransition(PaymentTransaction row, BillingInvoice invoice, PaymentStatus from,
+            PaymentStatus to, String refusalKey) {
+        if (paymentTransactionRepository.transitionStatus(row.getId(), invoice.getId(), from, to) != 1) {
+            throw new BusinessException(refusalKey);
+        }
     }
 
     private static String requireReason(String reason) {

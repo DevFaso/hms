@@ -83,6 +83,11 @@ class BillingInvoiceServiceImplTest {
     @BeforeEach
     void setUp() {
         mocks = MockitoAnnotations.openMocks(this);
+        // The locked read returns whatever a test stubbed for the plain read,
+        // and a transition wins unless a test says it lost the race.
+        when(invoiceRepository.findLockedById(any()))
+            .thenAnswer(inv -> invoiceRepository.findById(inv.getArgument(0)));
+        when(paymentTransactionRepository.transitionStatus(any(), any(), any(), any())).thenReturn(1);
         invoiceMapper = new BillingInvoiceMapper();
         billingInvoiceService = new BillingInvoiceServiceImpl(
             invoiceRepository,
@@ -756,6 +761,47 @@ class BillingInvoiceServiceImplTest {
         assertThrows(com.example.hms.exception.BusinessException.class,
             () -> billingInvoiceService.confirmPayment(invoiceId, rowId, staff, Locale.ENGLISH));
         assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
+    }
+
+    @Test
+    void confirmPayment_thatLosesTheRaceToAConcurrentConfirmIsRefusedAndCountsNothing() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var row = ledgerRow(invoice, "40.00", com.example.hms.enums.PaymentStatus.PENDING);
+        // The other request already moved the row out of PENDING.
+        when(paymentTransactionRepository.transitionStatus(row.getId(), invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING, com.example.hms.enums.PaymentStatus.CONFIRMED))
+            .thenReturn(0);
+        UUID invoiceId = invoice.getId();
+        UUID rowId = row.getId();
+        UUID staff = UUID.randomUUID();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.confirmPayment(invoiceId, rowId, staff, Locale.ENGLISH));
+        assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
+        verify(invoiceRepository, never()).save(any(BillingInvoice.class));
+        verify(invoiceRepository).findLockedById(invoiceId);
+    }
+
+    @Test
+    void reversePayment_thatLosesTheRaceToAConcurrentReverseSubtractsNothing() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setAmountPaid(new BigDecimal("100.00"));
+        invoice.setStatus(InvoiceStatus.PAID);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var row = ledgerRow(invoice, "60.00", com.example.hms.enums.PaymentStatus.CONFIRMED);
+        when(paymentTransactionRepository.transitionStatus(row.getId(), invoice.getId(),
+            com.example.hms.enums.PaymentStatus.CONFIRMED, com.example.hms.enums.PaymentStatus.REVERSED))
+            .thenReturn(0);
+        UUID invoiceId = invoice.getId();
+        UUID rowId = row.getId();
+        UUID staff = UUID.randomUUID();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.reversePayment(invoiceId, rowId, "Refund", staff, Locale.ENGLISH));
+        assertEquals(new BigDecimal("100.00"), invoice.getAmountPaid());
+        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
+        verify(invoiceRepository, never()).save(any(BillingInvoice.class));
     }
 
     @Test
