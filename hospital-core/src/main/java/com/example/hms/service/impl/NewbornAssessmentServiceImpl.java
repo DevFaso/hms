@@ -19,6 +19,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.NewbornAssessmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.utility.ObstetricEligibility;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NewbornAssessmentService;
@@ -87,6 +88,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        boolean recordedOnNewbornChart = isNeonate(patient);
+        if (!recordedOnNewbornChart) {
+            // QA D161 (D103 family): a newborn cannot yet be registered as its own
+            // patient (D163), so the maternity screen records the assessment on the
+            // MOTHER's chart. On a chart that is not a neonate's, the patient is the
+            // mother and the obstetric rule applies, as for every other maternity record.
+            ObstetricEligibility.requireObstetricEligible(patient);
+        }
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
@@ -94,7 +103,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         User documentedBy = resolveRecorderUser(recorderUserId);
 
         com.example.hms.model.labor.DeliveryRecord deliveryRecord =
-            resolveDeliveryRecord(request.getDeliveryRecordId(), hospital);
+            resolveDeliveryRecord(request.getDeliveryRecordId(), hospital,
+                recordedOnNewbornChart ? null : patient);
 
         NewbornAssessment assessment =
             buildAssessment(patient, hospital, registration, staff, documentedBy, request);
@@ -381,12 +391,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
      * <p>Optional: a newborn may be transferred in already born, or predate the
      * L&amp;D module — the entity javadoc says as much. Null in, null out.
      *
-     * <p>Validated against the HOSPITAL, deliberately not against the patient.
-     * A delivery record's patient is the MOTHER; this assessment's patient is the
-     * BABY. Comparing the two would reject every correct link.
+     * <p>Always validated against the HOSPITAL. A delivery record's patient is
+     * the MOTHER: when the assessment sits on a neonate's chart the two differ
+     * and {@code mother} is null; when it sits on the mother's chart (QA D161,
+     * the only path the maternity screen has today) the delivery must be hers.
      */
     private com.example.hms.model.labor.DeliveryRecord resolveDeliveryRecord(UUID deliveryRecordId,
-                                                                             Hospital hospital) {
+                                                                             Hospital hospital,
+                                                                             Patient mother) {
         if (deliveryRecordId == null) {
             return null;
         }
@@ -397,7 +409,20 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             && !hospital.getId().equals(delivery.getHospital().getId())) {
             throw new BusinessException("Delivery record belongs to a different hospital.");
         }
+        if (mother != null && delivery.getPatient() != null
+            && !mother.getId().equals(delivery.getPatient().getId())) {
+            throw new BusinessException("newborn.delivery.otherMother");
+        }
         return delivery;
+    }
+
+    /** Neonatal period: the first 28 days of life (WHO). */
+    private static final int NEONATAL_PERIOD_DAYS = 28;
+
+    /** True when the chart is a neonate's (born within the neonatal period). */
+    static boolean isNeonate(Patient patient) {
+        java.time.LocalDate dob = patient.getDateOfBirth();
+        return dob != null && !dob.isBefore(java.time.LocalDate.now().minusDays(NEONATAL_PERIOD_DAYS));
     }
 
     private PatientHospitalRegistration resolveRegistration(Patient patient,

@@ -271,7 +271,12 @@ class LaborServiceImplTest {
 
         assertThat(response.getAlerts())
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
-        verify(notificationService).createNotification(contains("FETAL_HEART_RATE"), eq("midwife.nina"));
+        // QA D172: a translated type label and French text, never the raw enum or English.
+        ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(text.capture(), eq("midwife.nina"));
+        assertThat(text.getValue())
+            .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
+            .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
     }
 
     @Test
@@ -371,7 +376,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("HEMORRHAGE"), eq("midwife.nina"));
+        verify(notificationService).createNotification(contains("hémorragie"), eq("midwife.nina"));
     }
 
     @Test
