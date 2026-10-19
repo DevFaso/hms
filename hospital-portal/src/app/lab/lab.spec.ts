@@ -206,7 +206,8 @@ describe('LabComponent — performing laboratory', () => {
     component.openSpecimens(order({ labOrderCode: uuid }));
     fixture.detectChanges();
 
-    const title = (fixture.nativeElement as HTMLElement).querySelector('.modal-header h2')?.textContent ?? '';
+    const title =
+      (fixture.nativeElement as HTMLElement).querySelector('.modal-header h2')?.textContent ?? '';
     expect(title).toContain('#3F2A9C1E');
     expect(title).not.toContain(uuid);
   });
