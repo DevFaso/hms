@@ -1630,7 +1630,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // QA D294: a task due in 2020 was accepted and sat overdue for ever.
         // A task is for this shift onward; a little back-dating is allowed.
         if (request.getDueAt() != null
-            && request.getDueAt().isBefore(LocalDateTime.now().minus(TASK_DUE_BACKDATE_LIMIT))) {
+            && request.getDueAt().isBefore(LocalDateTime.now(java.time.ZoneId.systemDefault()).minus(TASK_DUE_BACKDATE_LIMIT))) {
             throw new BusinessException("nurse.task.dueAt.past");
         }
 

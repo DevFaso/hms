@@ -338,7 +338,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
      * small skew between devices) is refused, as is a delivery in the future.
      */
     private static void requireNotInFuture(PostpartumObservationRequestDTO request) {
-        LocalDateTime limit = LocalDateTime.now().plus(CLOCK_SKEW);
+        LocalDateTime limit = LocalDateTime.now(java.time.ZoneId.systemDefault()).plus(CLOCK_SKEW);
         if (request.getObservationTime() != null && request.getObservationTime().isAfter(limit)) {
             throw new BusinessException("maternity.postpartum.observationTime.future");
         }

@@ -169,7 +169,7 @@ public class AdmissionStayEncounterService {
         if (pending.isEmpty()) {
             return;
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
         String closedBy = messageSource.getMessage("nurse.handoff.closedByDischarge", null,
             "Closed at discharge", org.springframework.context.i18n.LocaleContextHolder.getLocale());
         for (var task : pending) {

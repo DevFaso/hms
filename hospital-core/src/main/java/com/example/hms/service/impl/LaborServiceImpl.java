@@ -128,7 +128,7 @@ public class LaborServiceImpl implements LaborService {
         if (request.getLaborOnsetAt() == null) {
             throw new BusinessException("maternity.labor.onset.required");
         }
-        if (request.getLaborOnsetAt().isAfter(LocalDateTime.now().plusMinutes(5))) {
+        if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
             throw new BusinessException("maternity.labor.onset.future");
         }
         Patient patient = patientRepository.findById(patientId)
