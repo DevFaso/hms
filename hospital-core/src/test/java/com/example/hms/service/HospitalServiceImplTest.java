@@ -550,6 +550,22 @@ class HospitalServiceImplTest {
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.updateHospital(id, request, Locale.ENGLISH));
         }
+
+        @Test
+        @DisplayName("refuses a rename onto another hospital's name (D223)")
+        void duplicateNameIsAConflict() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital hospital = buildHospital(id, "Old Name", "OLD-01");
+            HospitalRequestDTO dto = buildUSRequest("QA Hôpital B");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(
+                    "QA Hôpital B", dto.getZipCode())).thenReturn(true);
+
+            assertThrows(com.example.hms.exception.ConflictException.class,
+                    () -> hospitalService.updateHospital(id, dto, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
     }
 
     // ═══════════════ deleteHospital ═══════════════

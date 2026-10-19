@@ -504,6 +504,17 @@ public class ActingScopeResolver {
     }
 
     /** The user-facing sentence for a refusal. */
+    /**
+     * QA D258: the refusal message in the request's language (Accept-Language via
+     * LocaleContextHolder), for a reason name ({@link ActingScope.Reason},
+     * GLOBAL_VIEW or PATIENT_OWNED); {@code englishDefault} when no bundle has it.
+     */
+    public static String localizedRefusalMessage(String reasonName, String englishDefault) {
+        String key = "hospitalScope.refused." + reasonName;
+        String resolved = com.example.hms.utility.MessageUtil.resolveOrRaw(key);
+        return resolved == null || resolved.equals(key) ? englishDefault : resolved;
+    }
+
     public static String refusalMessage(ActingScope.Reason reason) {
         return switch (reason) {
             case NOT_PERMITTED, NO_LONGER_PERMITTED ->

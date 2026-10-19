@@ -82,6 +82,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     @Override
     public PrenatalScheduleResponseDTO generateSchedule(PrenatalScheduleRequestDTO request, Locale locale, String username) {
         Objects.requireNonNull(request, "Prenatal scheduling request is required");
+        Locale textLocale = locale != null ? locale : Locale.FRENCH;
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         ObstetricEligibility.requireObstetricEligible(patient);
@@ -115,20 +116,20 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         boolean highRisk = Boolean.TRUE.equals(request.getHighRisk());
     List<Integer> supplementalWeeks = Optional.ofNullable(request.getSupplementalVisitWeeks()).orElse(List.of());
 
-    List<PrenatalVisitRecommendationDTO> recommendations = buildRecommendations(lmp, today, currentWeek, highRisk, supplementalWeeks, futureAppointments);
+    List<PrenatalVisitRecommendationDTO> recommendations = buildRecommendations(lmp, today, currentWeek, highRisk, supplementalWeeks, futureAppointments, textLocale);
         List<PrenatalAppointmentSummaryDTO> existingAppointments = futureAppointments.stream()
             .map(appt -> toAppointmentSummary(appt, lmp))
             .toList();
 
         List<String> alerts = new ArrayList<>();
         if (dueDate.isBefore(today)) {
-            alerts.add("Estimated due date is in the past – verify patient details.");
+            alerts.add(text(textLocale, "prenatal.schedule.alert.dueDatePast"));
         }
         if (highRisk) {
-            alerts.add("High-risk pregnancy flagged – planner switched to accelerated monitoring.");
+            alerts.add(text(textLocale, "prenatal.schedule.alert.highRisk"));
         }
 
-        detectAppointmentCollisions(existingAppointments, alerts);
+        detectAppointmentCollisions(existingAppointments, alerts, textLocale);
 
         return PrenatalScheduleResponseDTO.builder()
             .patientId(patient.getId())
@@ -255,7 +256,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         int currentWeek,
         boolean highRisk,
         List<Integer> supplementalWeeks,
-        List<Appointment> futureAppointments
+        List<Appointment> futureAppointments,
+        Locale textLocale
     ) {
         List<PrenatalVisitRecommendationDTO> plan = new ArrayList<>();
         Set<Integer> supplemental = supplementalWeeks == null ? Set.of() : supplementalWeeks.stream()
@@ -287,11 +289,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
                 .durationMinutes(duration)
                 .visitType(visitType)
                 .scheduled(false)
-                .notes(buildNotesForVisit(visitType))
-                .recommendation(buildRecommendationText(visitType, weekPointer))
+                .notes(buildNotesForVisit(visitType, textLocale))
+                .recommendation(buildRecommendationText(visitType, weekPointer, textLocale))
                 .build();
 
-            matchExistingAppointment(lmp, recommendation, unmatched);
+            matchExistingAppointment(lmp, recommendation, unmatched, textLocale);
             plan.add(recommendation);
 
             firstVisitAdded = true;
@@ -301,15 +303,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         supplemental.stream()
             .filter(week -> plan.stream().noneMatch(rec -> rec.getGestationalWeek() == week))
-            .map(week -> createSupplementalRecommendation(lmp, week, today))
+            .map(week -> createSupplementalRecommendation(lmp, week, today, textLocale))
             .forEach(plan::add);
 
         plan.sort(Comparator.comparing(PrenatalVisitRecommendationDTO::getGestationalWeek));
-        matchRemainingAppointmentsAsAlerts(lmp, plan, unmatched);
+        matchRemainingAppointmentsAsAlerts(lmp, plan, unmatched, textLocale);
         return plan;
     }
 
-    private PrenatalVisitRecommendationDTO createSupplementalRecommendation(LocalDate lmp, int week, LocalDate today) {
+    private PrenatalVisitRecommendationDTO createSupplementalRecommendation(LocalDate lmp, int week, LocalDate today,
+                                                                           Locale textLocale) {
         LocalDate targetDate = upcomingTargetDate(lmp, week, today);
         int duration = ROUTINE_VISIT_DURATION_MINUTES;
         return PrenatalVisitRecommendationDTO.builder()
@@ -322,8 +325,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .durationMinutes(duration)
             .visitType(PrenatalVisitType.ROUTINE_CHECK)
             .scheduled(false)
-            .notes("Supplemental monitoring visit per care plan")
-            .recommendation("Supplemental prenatal check (week " + week + ")")
+            .notes(text(textLocale, "prenatal.schedule.notes.SUPPLEMENTAL"))
+            .recommendation(text(textLocale, "prenatal.schedule.recommendation.SUPPLEMENTAL", week))
             .build();
     }
 
@@ -361,7 +364,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         };
     }
 
-    private void matchExistingAppointment(LocalDate lmp, PrenatalVisitRecommendationDTO recommendation, List<Appointment> unmatched) {
+    private void matchExistingAppointment(LocalDate lmp, PrenatalVisitRecommendationDTO recommendation, List<Appointment> unmatched,
+                                          Locale textLocale) {
         if (unmatched.isEmpty()) {
             return;
         }
@@ -383,12 +387,13 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             if (appointment.getStartTime() != null && appointment.getEndTime() != null) {
                 recommendation.setDurationMinutes((int) Duration.between(appointment.getStartTime(), appointment.getEndTime()).toMinutes());
             }
-            recommendation.setNotes(mergeNotes(recommendation.getNotes(), appointment.getNotes()));
+            recommendation.setNotes(mergeNotes(recommendation.getNotes(), appointment.getNotes(), textLocale));
             unmatched.remove(appointment);
         });
     }
 
-    private void matchRemainingAppointmentsAsAlerts(LocalDate lmp, List<PrenatalVisitRecommendationDTO> plan, List<Appointment> unmatched) {
+    private void matchRemainingAppointmentsAsAlerts(LocalDate lmp, List<PrenatalVisitRecommendationDTO> plan, List<Appointment> unmatched,
+                                                    Locale textLocale) {
         if (unmatched.isEmpty()) {
             return;
         }
@@ -408,21 +413,21 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
                 .durationMinutes(durationMinutes)
                 .visitType(PrenatalVisitType.ROUTINE_CHECK)
                 .scheduled(true)
-                .recommendation("Existing prenatal appointment without matching guideline")
+                .recommendation(text(textLocale, "prenatal.schedule.recommendation.UNMATCHED"))
                 .notes(appointment.getNotes())
                 .build());
         }
         plan.sort(Comparator.comparing(PrenatalVisitRecommendationDTO::getGestationalWeek));
     }
 
-    private String mergeNotes(String generated, String existing) {
+    private String mergeNotes(String generated, String existing, Locale textLocale) {
         if (existing == null || existing.isBlank()) {
             return generated;
         }
         if (generated == null || generated.isBlank()) {
             return existing;
         }
-        return generated + " | Notes: " + existing;
+        return text(textLocale, "prenatal.schedule.notes.merged", generated, existing);
     }
 
     private PrenatalAppointmentSummaryDTO toAppointmentSummary(Appointment appointment, LocalDate lmp) {
@@ -440,7 +445,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .build();
     }
 
-    private void detectAppointmentCollisions(List<PrenatalAppointmentSummaryDTO> appointments, List<String> alerts) {
+    private void detectAppointmentCollisions(List<PrenatalAppointmentSummaryDTO> appointments, List<String> alerts, Locale textLocale) {
         Set<Integer> seenWeeks = appointments.stream()
             .collect(Collectors.groupingBy(PrenatalAppointmentSummaryDTO::getGestationalWeek, Collectors.counting()))
             .entrySet().stream()
@@ -448,7 +453,8 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .map(Map.Entry::getKey)
             .collect(Collectors.toSet());
         if (!seenWeeks.isEmpty()) {
-            alerts.add("Multiple appointments scheduled for weeks: " + seenWeeks);
+            alerts.add(text(textLocale, "prenatal.schedule.alert.collision", seenWeeks.stream().sorted()
+                .map(String::valueOf).collect(Collectors.joining(", "))));
         }
     }
 
@@ -475,22 +481,28 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         return reference.with(TemporalAdjusters.nextOrSame(DayOfWeek.MONDAY));
     }
 
-    private String buildRecommendationText(PrenatalVisitType type, int week) {
+    private String buildRecommendationText(PrenatalVisitType type, int week, Locale textLocale) {
+        return text(textLocale, "prenatal.schedule.recommendation." + recommendationKey(type), week);
+    }
+
+    private String buildNotesForVisit(PrenatalVisitType type, Locale textLocale) {
+        return text(textLocale, "prenatal.schedule.notes." + recommendationKey(type));
+    }
+
+    private static String recommendationKey(PrenatalVisitType type) {
         return switch (type) {
-            case INITIAL_INTAKE -> "Initial prenatal intake visit (week " + week + ")";
-            case ULTRASOUND -> "Targeted ultrasound and screening (week " + week + ")";
-            case LATE_PREGNANCY -> "Weekly prenatal monitoring (week " + week + ")";
-            default -> "Routine prenatal check (week " + week + ")";
+            case INITIAL_INTAKE, ULTRASOUND, LATE_PREGNANCY -> type.name();
+            default -> "ROUTINE_CHECK";
         };
     }
 
-    private String buildNotesForVisit(PrenatalVisitType type) {
-        return switch (type) {
-            case INITIAL_INTAKE -> "Collect baseline labs, vitals, and education";
-            case ULTRASOUND -> "Schedule ultrasound block and review fetal growth";
-            case LATE_PREGNANCY -> "Monitor blood pressure, fetal movement, and labor readiness";
-            default -> "Standard vitals, fundal height, and symptom review";
-        };
+    /**
+     * QA D249: the schedule is read by the clinician who asked for it, so its
+     * recommendations, notes and alerts are rendered in the request locale (the controller passes it)
+     * from the bundle, not composed in English in code.
+     */
+    private String text(Locale textLocale, String key, Object... args) {
+        return messageSource.getMessage(key, args, textLocale);
     }
 
     private int resolveDuration(Integer override, String reason) {

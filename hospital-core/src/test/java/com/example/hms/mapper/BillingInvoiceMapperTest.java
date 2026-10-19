@@ -28,4 +28,25 @@ class BillingInvoiceMapperTest {
     void noEncounterNoCode_D148() {
         assertThat(mapper.toBillingInvoiceResponseDTO(new BillingInvoice()).getEncounterCode()).isNull();
     }
+
+    /** QA D202: a cancelled invoice is owed by nobody, so every consumer (portal, proxy, staff) reads 0. */
+    @Test
+    void cancelledInvoiceOwesNothing_D202() {
+        BillingInvoice invoice = new BillingInvoice();
+        invoice.setTotalAmount(new java.math.BigDecimal("5000"));
+        invoice.setAmountPaid(java.math.BigDecimal.ZERO);
+        invoice.setStatus(com.example.hms.enums.InvoiceStatus.CANCELLED);
+
+        assertThat(mapper.toBillingInvoiceResponseDTO(invoice).getBalanceDue()).isZero();
+    }
+
+    @Test
+    void openInvoiceStillOwesItsBalance_D202() {
+        BillingInvoice invoice = new BillingInvoice();
+        invoice.setTotalAmount(new java.math.BigDecimal("5000"));
+        invoice.setAmountPaid(new java.math.BigDecimal("1000"));
+        invoice.setStatus(com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID);
+
+        assertThat(mapper.toBillingInvoiceResponseDTO(invoice).getBalanceDue()).isEqualByComparingTo("4000");
+    }
 }

@@ -574,7 +574,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessException("Appointment start and end time must not be null");
         }
 
-        requireHospitalScope(currentUser, existing.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, existing);
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
@@ -703,7 +703,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
-        requireHospitalScope(currentUser, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, appointment);
 
         AppointmentStatus newStatus;
         switch (action.toLowerCase()) {
@@ -830,7 +830,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
-                throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, locale));
+                throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
             }
         }
     // On GET, return full details (existing mapping)
@@ -881,7 +881,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
-        requireHospitalScope(user, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(user, appointment);
 
         appointmentRepository.delete(appointment);
         log.info("Deleted appointment with ID: {}", id);
@@ -1156,6 +1156,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             return true;
         }
         return resolveHospitalScope(user).contains(hospitalId);
+    }
+
+    /**
+     * QA D259: an appointment at a hospital outside the caller's scope answers exactly
+     * as a missing id does (404), like every other tenant-scoped resource — a 403 told
+     * a prober the id exists.
+     */
+    private void requireAppointmentVisible(User user, Appointment appointment) {
+        if (!hasHospitalAccess(user, appointment.getHospital().getId())) {
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
+        }
     }
 
     private void requireHospitalScope(User user, UUID hospitalId, Locale locale) {

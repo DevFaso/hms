@@ -545,7 +545,10 @@ public class GlobalExceptionHandler {
         if (log.isWarnEnabled()) {
             log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
         }
-        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        // QA D258: the message in the caller's language, not the thrower's English.
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            com.example.hms.security.tenant.ActingScopeResolver.localizedRefusalMessage(ex.getReason(), ex.getMessage()),
+            request);
         body.put("code", HospitalScopeRefusedException.CODE);
         body.put("reason", ex.getReason());
         if (ex.getRefusedHospitalId() != null) {

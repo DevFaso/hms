@@ -357,12 +357,16 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                               String code,
                                               String message,
                                               String trigger) {
+        // QA D216 (D172/D61): the stored alert text is shown on the chart and
+        // sent as a notification, so it is rendered in the staff locale from
+        // the bundle; the English literal is only the fallback.
         return NewbornAssessmentAlert.builder()
             .type(type)
             .severity(severity)
             .code(code)
-            .message(message)
-            .triggeredBy(trigger)
+            .message(messageSource.getMessage("newborn.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .triggeredBy(messageSource.getMessage("newborn.alert.trigger." + code, null, trigger,
+                NotificationLocales.STAFF))
             .build();
     }
 
@@ -382,8 +386,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
             .forEach(alert -> {
+                // QA D216: the type is a translated label, never the raw enum.
+                String typeLabel = alert.getType() == null ? ""
+                    : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
                 String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{alert.getType() == null ? "" : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());

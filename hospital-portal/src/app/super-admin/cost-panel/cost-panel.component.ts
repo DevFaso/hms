@@ -169,6 +169,8 @@ export class CostPanelComponent implements OnInit {
     this.featureDisabled.set(false);
     this.service.perTenant(this.window.from || undefined, this.window.to || undefined).subscribe({
       next: (rows) => {
+        // 204 (no body): the cost flag is off (D248).
+        this.featureDisabled.set(rows === null);
         this.rows.set(rows ?? []);
         this.loading.set(false);
       },

@@ -33,18 +33,25 @@ class StaffFacingTextFrenchTest {
 
     private ReloadableResourceBundleMessageSource messageSource;
 
+    /** MessageUtil is static: restore it so later tests in the same JVM see what they set up. */
+    private final org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource)
+        ReflectionTestUtils.getField(MessageUtil.class, "messageSource");
+
     @BeforeEach
     void setUp() {
         messageSource = new ReloadableResourceBundleMessageSource();
         messageSource.setBasenames(com.example.hms.config.MessageBundles.basenames());
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setFallbackToSystemLocale(false);
+        // As in LocaleConfig: '' in a bundle value renders as one apostrophe.
+        messageSource.setAlwaysUseMessageFormat(true);
         MessageUtil.setMessageSource(messageSource);
         LocaleContextHolder.setLocale(Locale.FRENCH);
     }
 
     @AfterEach
     void tearDown() {
+        MessageUtil.setMessageSource(previous);
         LocaleContextHolder.resetLocaleContext();
     }
 
@@ -85,7 +92,7 @@ class StaffFacingTextFrenchTest {
         var service = Mockito.mock(NewbornAssessmentServiceImpl.class, Mockito.CALLS_REAL_METHODS);
         ReflectionTestUtils.setField(service, "messageSource", messageSource);
         String text = ReflectionTestUtils.invokeMethod(service, "alertText", "newborn-apgar-1");
-        assertThat(text).isEqualTo("Score d’Apgar inférieur à 7 à 1 minute.");
+        assertThat(text).isEqualTo("Score d'Apgar inférieur à 7 à 1 minute.");
     }
 
     @Test
@@ -102,7 +109,7 @@ class StaffFacingTextFrenchTest {
         var service = Mockito.mock(PostpartumCareServiceImpl.class, Mockito.CALLS_REAL_METHODS);
         ReflectionTestUtils.setField(service, "messageSource", messageSource);
         String text = ReflectionTestUtils.invokeMethod(service, "alertText", "postpartum-hemorrhage");
-        assertThat(text).startsWith("Risque d’hémorragie détecté.");
+        assertThat(text).startsWith("Risque d'hémorragie détecté.");
     }
 
     @Test

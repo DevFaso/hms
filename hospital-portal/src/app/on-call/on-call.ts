@@ -42,6 +42,34 @@ interface OnCallFormModel {
  * HOSPITAL_ADMIN / SUPER_ADMIN only (mirroring the backend split), so the
  * write controls are gated in-component rather than at the route.
  */
+/**
+ * OnCallScheduleServiceImpl.ON_CALL_JOB_TITLES: the clinical titles the server
+ * rosters. Offering anyone else (or an inactive account) only produced a 400
+ * on save (D242).
+ */
+const ON_CALL_JOB_TITLES: ReadonlySet<string> = new Set([
+  'DOCTOR',
+  'PHYSICIAN',
+  'SURGEON',
+  'ANESTHESIOLOGIST',
+  'RADIOLOGIST',
+  'NURSE',
+  'NURSE_PRACTITIONER',
+  'MIDWIFE',
+  'PHARMACIST',
+  'LAB_TECHNICIAN',
+  'LAB_SCIENTIST',
+  'LABORATORY_SCIENTIST',
+  'LAB_DIRECTOR',
+  'TECHNICIAN',
+  'PHYSIOTHERAPIST',
+  'PSYCHOLOGIST',
+]);
+
+export function isRosterable(staff: StaffResponse): boolean {
+  return staff.active !== false && !!staff.jobTitle && ON_CALL_JOB_TITLES.has(staff.jobTitle);
+}
+
 @Component({
   selector: 'app-on-call',
   standalone: true,
@@ -219,7 +247,7 @@ export class OnCallComponent implements OnInit {
       // while no hospital is in scope, so the id is never absent here.
       const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
-        next: (staff) => this.staffOptions.set(staff),
+        next: (staff) => this.staffOptions.set(staff.filter(isRosterable)),
         error: () => this.toast.error(this.translate.instant('ON_CALL.STAFF_LOAD_ERROR')),
       });
     }

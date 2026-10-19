@@ -215,6 +215,8 @@
     "PULSE": "Pulse",
     "RECORD_DELIVERY": "Record Delivery",
     "RISK_NOTES": "Risk notes",
+    "RECENT_DELIVERY_OVERRIDE": "Override reason (recent delivery)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Required only when a birth was recorded for this patient in the last 20 weeks.",
     "SAVE_DELIVERY": "Save Delivery Record",
     "SAVE_ENTRY": "Save Entry",
     "SEX_FEMALE": "Female",
@@ -1547,7 +1549,8 @@
     "VOICE_MEMO_EMPTY": "Voice memo was empty — please try again.",
     "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
     "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo.",
-    "ATTACHMENT": "Chat attachment"
+    "ATTACHMENT": "Chat attachment",
+    "SUBTITLE_PATIENT": "Write to your care team"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -2479,6 +2482,7 @@
     "LOAD_FAILED": "Failed to load feature flags",
     "NEW_FLAG": "New Flag",
     "NO_FLAGS": "No feature flags found",
+    "NO_FLAGS_MATCHING": "No feature flag matches “{{query}}”",
     "OFF": "OFF",
     "ON": "ON",
     "OVERRIDE_REMOVED": "Override removed for {{key}}",
@@ -6336,7 +6340,8 @@
     "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
     "PASSWORD_MANAGED_BY_SSO": "Your password is managed by your single sign-on provider.",
     "SAVE_NEW_PASSWORD": "Save new password",
-    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link."
+    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link.",
+    "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link."
   },
   "RECEPTION": {
     "COCKPIT_DATE": "Day shown",
@@ -6958,7 +6963,9 @@
     "TOGGLE_VISIBILITY": "Show or hide the password",
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3 to 50 characters: letters, digits, dots, hyphens, underscores",
-    "USERNAME_PLACEHOLDER": "e.g. john.doe"
+    "USERNAME_PLACEHOLDER": "e.g. john.doe",
+    "CURRENT_HINT_SMS": "The temporary password you received by SMS",
+    "CURRENT_HINT_GENERIC": "The temporary password you were given"
   },
   "SETTINGS_HUB": {
     "ACCOUNT_DESC": "Update your name, contact details, photo, and other personal information.",
@@ -10741,14 +10748,14 @@
     "SUBTITLE": "Find a dispense and record the payment",
     "STEP_LOOKUP": "1. Find a dispense",
     "DISPENSE_ID": "Dispense ID",
-    "DISPENSE_ID_PLACEHOLDER": "Dispense UUID",
+    "DISPENSE_ID_PLACEHOLDER": "Dispense ID",
     "LOAD": "Load",
     "MEDICATION": "Medication",
     "QTY_DISPENSED": "Quantity dispensed",
     "PATIENT": "Patient",
     "PHARMACY": "Pharmacy",
     "STEP_PAYMENT": "2. Record the payment",
-    "AMOUNT_XOF": "Amount (XOF)",
+    "AMOUNT_XOF": "Amount (F CFA)",
     "PAYMENT_METHOD": "Payment method",
     "REFERENCE": "Reference",
     "REFERENCE_PLACEHOLDER": "Transaction / policy",

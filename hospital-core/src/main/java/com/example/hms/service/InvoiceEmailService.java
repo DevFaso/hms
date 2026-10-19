@@ -23,6 +23,7 @@ public class InvoiceEmailService {
     private final InvoiceItemRepository invoiceItemRepository;
     private final PdfInvoiceService pdfInvoiceService;
     private final EmailService emailService;
+    private final BillingInvoiceService billingInvoiceService;
 
     @Transactional
     public void emailInvoice(UUID invoiceId, EmailInvoiceRequest req) {
@@ -47,9 +48,13 @@ public class InvoiceEmailService {
             pdf, "invoice-" + invoice.getInvoiceNumber() + ".pdf", "application/pdf"
         );
 
-        // update invoice status, not the item
-        invoice.setStatus(InvoiceStatus.SENT);
-        billingInvoiceRepository.save(invoice);
+        // Emailing issues a draft; a paid or part-paid invoice keeps its status.
+        if (invoice.getStatus() == null || invoice.getStatus() == InvoiceStatus.DRAFT) {
+            invoice.setStatus(InvoiceStatus.SENT);
+            billingInvoiceRepository.save(invoice);
+            // QA D210: issuing by email takes over the visit's check-in copay too.
+            billingInvoiceService.creditCheckInCopays(invoiceId);
+        }
     }
 
     private static String buildEmailBody(BillingInvoice inv, String custom) {

@@ -41,11 +41,23 @@ export class MyBillingComponent implements OnInit {
     this.portal.getMyInvoices().subscribe({
       next: (inv) => {
         this.invoices.set(inv);
-        this.totalBalance.set(inv.reduce((sum, i) => sum + (i.balance ?? 0), 0));
+        this.totalBalance.set(
+          inv.filter((i) => this.isPayable(i)).reduce((sum, i) => sum + (i.balance ?? 0), 0),
+        );
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  /** QA D202: only an issued, open invoice with money left on it is owed or payable. */
+  isPayable(inv: PortalInvoice): boolean {
+    return (
+      (inv.balance ?? 0) > 0 &&
+      inv.status !== 'DRAFT' &&
+      inv.status !== 'CANCELLED' &&
+      inv.status !== 'PAID'
+    );
   }
 
   openPayDialog(inv: PortalInvoice) {

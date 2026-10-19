@@ -365,6 +365,13 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   openCreate(): void {
     this.createForm = this.freshForm();
+    // A hospital admin onboards into their own hospital: freshForm() has no
+    // hospitalId, so re-apply the locked hospital or the request goes out
+    // without one (D201).
+    if (!this.roleContext.isSuperAdmin()) {
+      const own = this.availableHospitals();
+      if (own.length === 1) this.createForm.hospitalId = own[0].id;
+    }
     this.selectedRoles = [];
     this.editing.set(null);
     this.fieldErrors.set({});

@@ -1133,6 +1133,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.hospitalAdminSummary()?.recentAuditEvents ?? [];
   });
 
+  /**
+   * The resource half of a recent-activity line. The raw entity type (USER,
+   * PATIENT…) repeated what the translated event type already says, and the
+   * audit writer's "Unknown Resource" placeholder is not a name (D260).
+   */
+  auditResourceLabel(resourceName: string | null | undefined): string | null {
+    const name = resourceName?.trim();
+    if (!name || name === 'Unknown Resource') return null;
+    return name;
+  }
+
   // ── MVP 17: Staffing by department ──────────────────────────
   staffingByDepartment = computed<DepartmentStaffingRow[]>(() => {
     return this.hospitalAdminSummary()?.staffingByDepartment ?? [];

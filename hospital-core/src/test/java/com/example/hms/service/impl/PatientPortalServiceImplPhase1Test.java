@@ -230,6 +230,35 @@ class PatientPortalServiceImplPhase1Test {
         }
 
         @Test
+        @DisplayName("QA D244: a patient registered at two hospitals gets the current hospital's MRN and both records")
+        void getMyProfile_twoHospitals_carriesTheMrns() {
+            stubPatientResolution();
+            com.example.hms.model.Hospital a = new com.example.hms.model.Hospital();
+            a.setId(UUID.randomUUID());
+            a.setName("Hospital A");
+            com.example.hms.model.Hospital b = new com.example.hms.model.Hospital();
+            b.setId(UUID.randomUUID());
+            b.setName("Hospital B");
+            patient.setHospitalId(b.getId());
+            com.example.hms.model.PatientHospitalRegistration regA = new com.example.hms.model.PatientHospitalRegistration();
+            regA.setHospital(a);
+            regA.setMrn("MRN-A");
+            regA.setActive(true);
+            com.example.hms.model.PatientHospitalRegistration regB = new com.example.hms.model.PatientHospitalRegistration();
+            regB.setHospital(b);
+            regB.setMrn("MRN-B");
+            regB.setActive(true);
+            when(registrationRepository.findByPatientId(patientId)).thenReturn(java.util.List.of(regA, regB));
+
+            PatientProfileDTO result = service.getMyProfile(auth);
+
+            assertThat(result.getMrn()).isEqualTo("MRN-B");
+            assertThat(result.getHospitalRecords())
+                .extracting(PatientProfileDTO.HospitalRecord::getMrn)
+                .containsExactly("MRN-A", "MRN-B");
+        }
+
+        @Test
         @DisplayName("should propagate ResourceNotFoundException when patient not found")
         void getMyProfile_noPatient_throws() {
             stubPatientNotFound();

@@ -109,7 +109,8 @@ public class PostpartumObservationMapper {
         if (plan == null) {
             return null;
         }
-        boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
+        // QA D215: overdue means the next check is in the past, not a stale overdueSince.
+        boolean overdue = plan.getNextDueAt() != null && plan.getNextDueAt().isBefore(LocalDateTime.now());
         Integer frequency = plan.currentCheckFrequencyMinutes();
         return PostpartumScheduleDTO.builder()
             .carePlanId(plan.getId())

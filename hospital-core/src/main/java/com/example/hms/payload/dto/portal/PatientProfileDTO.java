@@ -64,4 +64,23 @@ public class PatientProfileDTO {
     // Hospital context
     private UUID hospitalId;
     private String hospitalName;
+
+    /**
+     * QA D244: a patient registered at several hospitals has one MRN per
+     * hospital. {@link #mrn} is the one at {@link #hospitalId}; this lists
+     * every active registration.
+     */
+    private java.util.List<HospitalRecord> hospitalRecords;
+
+    /** One active registration: the hospital and the MRN it gave the patient. */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class HospitalRecord {
+        private UUID hospitalId;
+        private String hospitalName;
+        private String mrn;
+    }
 }

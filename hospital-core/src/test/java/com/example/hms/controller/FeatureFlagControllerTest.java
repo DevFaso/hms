@@ -2,6 +2,8 @@ package com.example.hms.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -55,5 +57,18 @@ class FeatureFlagControllerTest {
         mockMvc.perform(get("/feature-flags").param("env", "staging"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.hospitalPortfolio").value(false));
+    }
+
+    @Test
+    void refusesAnUnknownFlagKey_D245() throws Exception {
+        when(featureFlagService.isKnownFlagKey("typo-flag")).thenReturn(false);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/feature-flags/typo-flag")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}"))
+            .andExpect(status().isBadRequest());
+        verify(featureFlagService, never())
+            .upsertOverride(any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any(), any(), any());
     }
 }
