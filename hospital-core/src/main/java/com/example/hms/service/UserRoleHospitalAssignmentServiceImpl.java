@@ -331,7 +331,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (isRoleCode(roleCode, ROLE_PATIENT)) {
             // Patient assignments start inactive — activated after email verification
             if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException("PATIENT assignments must be inactive until email verification.");
+                throw new BusinessException("assignment.patient.mustStartInactive");
             }
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
@@ -524,7 +524,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Patient assignments must remain inactive until email verification activates them
         if (Boolean.TRUE.equals(dto.getActive())) {
-            throw new BusinessException("PATIENT assignments cannot be manually activated. Use email verification.");
+            throw new BusinessException("assignment.patient.cannotActivate");
         }
         if (dto.getActive() == null) {
             dto.setActive(target.getActive());
@@ -1102,7 +1102,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deleteAssignment(UUID id) {
-        findChangeable(id);
+        UserRoleHospitalAssignment doomed = findChangeable(id);
         // Prevent deletion if a Staff record still references this assignment.
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
@@ -1121,7 +1121,33 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 "Deactivate it instead to keep that history.");
         }
         assignmentRepository.deleteById(id);
+        dropUserRoleWhenLastAssignment(doomed);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    /**
+     * Deleting the last assignment of a role also drops the user-level
+     * {@code user_roles} link that {@code assignRole} created with it. Left
+     * behind, that link had no assignment to govern it and was honoured as a
+     * legacy global role: deleting a stray patient assignment on a
+     * receptionist brought ROLE_PATIENT back at sign-in (QA D74, D132).
+     */
+    private void dropUserRoleWhenLastAssignment(UserRoleHospitalAssignment doomed) {
+        User user = doomed.getUser();
+        Role role = doomed.getRole();
+        if (user == null || role == null || user.getId() == null || role.getId() == null) {
+            return;
+        }
+        boolean roleStillAssigned = assignmentRepository.findAllByUserId(user.getId()).stream()
+            .filter(other -> !doomed.getId().equals(other.getId()))
+            .map(UserRoleHospitalAssignment::getRole)
+            .filter(Objects::nonNull)
+            .anyMatch(other -> role.getId().equals(other.getId()));
+        if (roleStillAssigned) {
+            return;
+        }
+        user.removeRole(role);
+        userRepository.save(user);
     }
 
     @Override

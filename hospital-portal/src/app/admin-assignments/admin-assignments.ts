@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -73,6 +80,16 @@ export class AdminAssignmentsComponent implements OnInit {
   formHospitalId = signal('');
   formStartDate = signal('');
   formActive = signal(true);
+
+  /**
+   * A PATIENT assignment is switched on by the patient's own verification,
+   * never by an administrator, so the server refuses active=true (QA D194).
+   * The checkbox reads unchecked and locked for it instead of being sent.
+   */
+  readonly patientRoleSelected = computed(() => {
+    const role = this.roles().find((r) => r.id === this.formRoleId());
+    return (role?.code ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
+  });
 
   /* Multi-scope form */
   multiHospitalIds = signal<Set<string>>(new Set());
@@ -238,7 +255,7 @@ export class AdminAssignmentsComponent implements OnInit {
         roleId: this.formRoleId(),
         hospitalId: this.formHospitalId() || undefined,
         startDate: this.formStartDate() || undefined,
-        active: this.formActive(),
+        active: this.patientRoleSelected() ? false : this.formActive(),
       })
       .subscribe({
         next: (created) => {
@@ -293,7 +310,8 @@ export class AdminAssignmentsComponent implements OnInit {
         roleId: this.formRoleId(),
         hospitalId: this.formHospitalId() || undefined,
         startDate: this.formStartDate() || undefined,
-        active: this.formActive(),
+        // A patient row keeps the state its verification gave it.
+        active: this.patientRoleSelected() ? undefined : this.formActive(),
       })
       .subscribe({
         next: (updated) => {

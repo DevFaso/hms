@@ -176,6 +176,40 @@ class AuditEventLogServiceImplTest {
     // ─── Patient key (V141 / Tier 2 item 39) ──────────────────────────
 
     @Test
+    @DisplayName("QA D165: with no role given, the row takes the ACTIVE role at the event's hospital, bare")
+    void logEvent_roleFallback_ignoresAnInactiveRoleElsewhere() {
+        com.example.hms.model.Hospital a = com.example.hms.model.Hospital.builder().name("Hospital A").build();
+        a.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital b = com.example.hms.model.Hospital.builder().name("Hospital B").build();
+        b.setId(UUID.randomUUID());
+        com.example.hms.model.Role nurse = com.example.hms.model.Role.builder().code("ROLE_NURSE").name("ROLE_NURSE").build();
+        com.example.hms.model.Role doctor = com.example.hms.model.Role.builder().code("ROLE_DOCTOR").name("Doctor").build();
+        com.example.hms.model.User actor = new com.example.hms.model.User();
+        actor.setId(UUID.randomUUID());
+        actor.getUserRoles().add(com.example.hms.model.UserRole.builder().role(nurse).build());
+        com.example.hms.model.UserRoleHospitalAssignment oldNurse = com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .hospital(a).role(nurse).active(false).build();
+        com.example.hms.model.UserRoleHospitalAssignment doctorAtB = com.example.hms.model.UserRoleHospitalAssignment.builder()
+            .hospital(b).role(doctor).active(true).build();
+        when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findAllByUserId(actor.getId())).thenReturn(java.util.List.of(oldNurse, doctorAtB));
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .eventType(AuditEventType.BREAK_GLASS_ACCESS)
+            .eventDescription("emergency access")
+            .entityType("BREAK_GLASS_SESSION")
+            .userId(actor.getId())
+            .hospitalName("Hospital B")
+            .build());
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(captor.capture());
+        assertThat(captor.getValue().getRoleName()).isEqualTo("DOCTOR");
+    }
+
+    @Test
     @DisplayName("logEvent takes an explicit patientId over the entityType convention")
     void logEvent_explicitPatientId_wins() {
         // The whole point of the column: an emitter whose entityType is not

@@ -9274,7 +9274,8 @@
     "DELETED": "Affectation supprimée",
     "DELETE_CONFLICT": "Suppression impossible : un dossier du personnel référence encore cette affectation. Désactivez-la plutôt.",
     "IMPORT_FILE_REQUIRED": "Choisissez d'abord un fichier CSV",
-    "IMPORT_ERROR": "L'import a échoué"
+    "IMPORT_ERROR": "L'import a échoué",
+    "PATIENT_ACTIVATES_ITSELF": "Une affectation patient est activée par la vérification du patient lui-même, pas ici."
   },
   "ADMIN_GOV": {
     "TITLE": "Console de Gouvernance",

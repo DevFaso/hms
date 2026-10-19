@@ -92,6 +92,32 @@ class CustomUserDetailsServiceTest {
         assertThat(authorityCodes()).contains("ROLE_DOCTOR");
     }
 
+    @Test
+    void aLeftoverUserLevelPatientRoleOnAStaffAccountIsNotGranted() {
+        // QA D132 (regression of D74): the stray patient assignment was
+        // deleted, so ROLE_PATIENT sat in user_roles with NO assignment row
+        // and was honoured as a legacy global role - sign-in asked the
+        // receptionist to pick between PATIENT and RECEPTIONIST.
+        Role receptionist = role("ROLE_RECEPTIONIST");
+        Role patient = role("ROLE_PATIENT");
+        user.getUserRoles().clear();
+        user.getUserRoles().add(UserRole.builder().role(receptionist).build());
+        user.getUserRoles().add(UserRole.builder().role(patient).build());
+        when(assignmentRepository.findByUser(user)).thenReturn(Set.of(assignment(receptionist, true)));
+
+        assertThat(authorityCodes()).containsExactly("ROLE_RECEPTIONIST");
+    }
+
+    @Test
+    void aPatientOnlyAccountKeepsItsUserLevelPatientRole() {
+        Role patient = role("ROLE_PATIENT");
+        user.getUserRoles().clear();
+        user.getUserRoles().add(UserRole.builder().role(patient).build());
+        when(assignmentRepository.findByUser(user)).thenReturn(Set.of());
+
+        assertThat(authorityCodes()).containsExactly("ROLE_PATIENT");
+    }
+
     private Set<String> authorityCodes() {
         return service.loadUserByUsername("jdoe").getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)

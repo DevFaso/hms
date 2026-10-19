@@ -227,6 +227,46 @@ class AppointmentServiceImplSearchAppointmentsTest {
     }
 
     @Test
+    void aLeftoverUserLevelPatientRoleWithNoAssignmentNeverNarrowsAStaffSearch() {
+        // QA D132, the exact round-3 state: the stray inactive patient
+        // assignment was DELETED, leaving ROLE_PATIENT in user_roles with no
+        // assignment row at all. The D74 fix only looked at assignment rows,
+        // so the link counted again and RECEPTIONIST_A got 0 appointments.
+        User user = userWithRoles("ROLE_PATIENT");
+        when(userRepository.findByUsername(USERNAME)).thenReturn(java.util.Optional.of(user));
+
+        Hospital hospital = Hospital.builder().name("Scoped").code("SC").build();
+        hospital.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment receptionist = UserRoleHospitalAssignment.builder()
+            .hospital(hospital).active(Boolean.TRUE).user(user)
+            .role(Role.builder().code("ROLE_RECEPTIONIST").name("Receptionist").build())
+            .build();
+        receptionist.setId(UUID.randomUUID());
+        when(assignmentRepository.findAllByUserId(user.getId())).thenReturn(List.of(receptionist));
+
+        Page<Appointment> appointments = new PageImpl<>(List.of(new Appointment()));
+        when(appointmentRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(appointments);
+        AppointmentResponseDTO dto = AppointmentResponseDTO.builder().build();
+        when(appointmentMapper.toAppointmentResponseDTO(any(Appointment.class))).thenReturn(dto);
+
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder().build();
+
+        try (MockedStatic<AppointmentSpecification> mocked = mockStatic(AppointmentSpecification.class)) {
+            Specification<Appointment> baseSpec = (root, query, cb) -> null;
+            Specification<Appointment> hospitalSpec = (root, query, cb) -> null;
+            Set<UUID> allowedHospitals = Set.of(hospital.getId());
+            mocked.when(() -> AppointmentSpecification.withFilter(filter)).thenReturn(baseSpec);
+            mocked.when(() -> AppointmentSpecification.inHospitals(allowedHospitals)).thenReturn(hospitalSpec);
+
+            Page<AppointmentResponseDTO> result = appointmentService.searchAppointments(filter, pageable, DEFAULT_LOCALE, USERNAME);
+
+            assertThat(result.getContent()).containsExactly(dto);
+            mocked.verify(() -> AppointmentSpecification.forPatientUser(any()), never());
+            mocked.verify(() -> AppointmentSpecification.inHospitals(allowedHospitals));
+        }
+    }
+
+    @Test
     void aBookingWithNoDepartmentIsRefusedNotFiledUnderTheFirstDepartment() {
         // QA D99: no department in the request and a clinician without one used
         // to land in the hospital's first department (the laboratory).

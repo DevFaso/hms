@@ -1363,6 +1363,25 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     expect(staffServiceSpy.list).toHaveBeenCalled();
   });
 
+  it('offers only the caller as prescriber, never a nurse or another colleague (QA D176)', async () => {
+    // The server refuses an order written under anyone else's name, so the
+    // whole team (nurses included) in the picker only led to that refusal.
+    await setup({ roles: ['ROLE_DOCTOR'] });
+    const auth = TestBed.inject(AuthService);
+    spyOn(auth, 'getUserProfile').and.returnValue({ id: 'u-me' } as LoginUserProfile);
+    staffServiceSpy.list.and.returnValue(
+      of([
+        { id: 'st-nurse', userId: 'u-n', roleCode: 'ROLE_NURSE' },
+        { id: 'st-doc', userId: 'u-d', roleCode: 'ROLE_DOCTOR' },
+        { id: 'st-me', userId: 'u-me', roleCode: 'ROLE_DOCTOR' },
+      ] as StaffResponse[]),
+    );
+
+    component.onScopeChange('h-2');
+
+    expect(component.staffMembers().map((s) => s.id)).toEqual(['st-me']);
+  });
+
   it('re-asks for the staff list on a scope change', async () => {
     // canReadStaff is read live so a scope switch can change the answer, and
     // it only ever ran at ngOnInit: someone who opened the page as a
