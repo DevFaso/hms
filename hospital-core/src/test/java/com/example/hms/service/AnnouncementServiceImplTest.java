@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -334,7 +334,7 @@ class AnnouncementServiceImplTest {
             try {
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.deleteAnnouncement(id))
                     .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
-                verify(announcementRepository, org.mockito.Mockito.never()).delete(any(Announcement.class));
+                verify(announcementRepository, never()).delete(any(Announcement.class));
             } finally {
                 com.example.hms.security.context.HospitalContextHolder.clear();
             }

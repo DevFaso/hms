@@ -44,7 +44,8 @@ class TenantOwnershipTest {
     @Test
     void aCallerPinnedAtBCannotWriteHospitalAsRow() {
         pinTo(HOSPITAL_B);
-        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(hospital(HOSPITAL_A), "admission.notFound", "x"))
+        Hospital owner = hospital(HOSPITAL_A);
+        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(owner, "admission.notFound", "x"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -72,14 +73,16 @@ class TenantOwnershipTest {
     @Test
     void aPatientOnlyCallerIsRefused() {
         HospitalContextHolder.setContext(HospitalContext.builder().patientOwned(true).build());
-        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(hospital(HOSPITAL_A), "k", "x"))
+        Hospital owner = hospital(HOSPITAL_A);
+        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(owner, "k", "x"))
             .isInstanceOf(HospitalScopeRefusedException.class);
     }
 
     @Test
     void aRequestWithNoResolvableHospitalIsRefused() {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(hospital(HOSPITAL_A), "k", "x"))
+        Hospital owner = hospital(HOSPITAL_A);
+        assertThatThrownBy(() -> TenantOwnership.requireOwnedByActingHospital(owner, "k", "x"))
             .isInstanceOf(BusinessException.class);
     }
 

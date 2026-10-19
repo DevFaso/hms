@@ -30,6 +30,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService {
+    private static final String PRIMARY_CARE_LINK_NOT_FOUND_KEY = "primaryCare.link.notFound";
 
     private final PatientPrimaryCareRepository pcpRepo;
     private final PatientRepository patientRepo;
@@ -75,7 +76,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Transactional
     public PatientPrimaryCareResponseDTO updatePrimaryCare(UUID pcpId, PatientPrimaryCareRequestDTO req) {
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
-            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
+            .orElseThrow(() -> new ResourceNotFoundException(PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId));
 
         // Optional updates
         if (req.getStartDate() != null) entity.setStartDate(req.getStartDate());
@@ -108,9 +109,9 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public PatientPrimaryCareResponseDTO endPrimaryCare(UUID pcpId, LocalDate endDate) {
         if (endDate == null) endDate = LocalDate.now();
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
-            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
+            .orElseThrow(() -> new ResourceNotFoundException(PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), "primaryCare.link.notFound", pcpId);
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId);
 
         if (entity.getStartDate() != null && endDate.isBefore(entity.getStartDate())) {
             throw new BusinessException("PCP endDate cannot be before startDate");
@@ -138,8 +139,8 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     public void deletePrimaryCare(UUID pcpId) {
         // QA r5 tenancy sweep: a delete loads under the tenant guard first.
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
-            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), "primaryCare.link.notFound", pcpId);
+            .orElseThrow(() -> new ResourceNotFoundException(PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), PRIMARY_CARE_LINK_NOT_FOUND_KEY, pcpId);
         pcpRepo.delete(entity);
     }
 }

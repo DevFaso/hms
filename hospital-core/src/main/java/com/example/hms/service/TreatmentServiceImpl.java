@@ -28,6 +28,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class TreatmentServiceImpl implements TreatmentService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
 
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "treatment not found" appears 3x in this file.
@@ -50,13 +52,13 @@ public class TreatmentServiceImpl implements TreatmentService {
         treatmentValidationService.validateTreatmentCreation(dto, locale);
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentId()));
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
         // QA r5 tenancy sweep: a service is created at the caller's acting hospital, in one of its departments.
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", dto.getHospitalId());
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", dto.getDepartmentId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentId());
 
         UUID currentUserId = authService.getCurrentUserId();
         String token = authService.getCurrentUserToken();
@@ -97,14 +99,14 @@ public class TreatmentServiceImpl implements TreatmentService {
         treatmentValidationService.validateTreatmentUpdate(treatment, dto, locale);
 
         Department department = departmentRepository.findById(dto.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentId()));
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), TREATMENT_NOT_FOUND_KEY, id);
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", dto.getHospitalId());
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", dto.getDepartmentId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, dto.getDepartmentId());
 
         treatmentMapper.updateTreatmentFromDto(dto, treatment, department, hospital);
         Treatment updatedTreatment = treatmentRepository.save(treatment);

@@ -50,6 +50,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
     private static final String ORDER_SET_NOT_FOUND_KEY = "orderSet.notFound";
@@ -112,9 +113,9 @@ public class AdmissionServiceImpl implements AdmissionService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         
         // QA D262: the admitting hospital is the caller's acting scope; the body's id is a claim.
-        requireActingAt(request.getHospitalId(), "hospital.notFound", request.getHospitalId());
+        requireActingAt(request.getHospitalId(), HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
         // ...and the patient is one this hospital registered.
         if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
             throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
@@ -457,9 +458,9 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionOrderSetResponseDTO createOrderSet(AdmissionOrderSetRequestDTO request) {
-        requireActingAt(request.getHospitalId(), "hospital.notFound", request.getHospitalId());
+        requireActingAt(request.getHospitalId(), HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));

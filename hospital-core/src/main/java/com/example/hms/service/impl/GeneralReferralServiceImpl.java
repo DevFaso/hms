@@ -123,15 +123,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             requirePhysicianAt(receivingProvider, addressedTo);
         }
 
-        Department sourceDepartment = null;
-        if (request.getSourceDepartmentId() != null) {
-            sourceDepartment = departmentRepository.findById(request.getSourceDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", request.getSourceDepartmentId()));
-            // A source department is one of the sending hospital's.
-            if (!belongsTo(sourceDepartment, hospital.getId())) {
-                throw new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", request.getSourceDepartmentId());
-            }
-        }
+        // A source department is one of the sending hospital's.
+        Department sourceDepartment = loadSourceDepartment(request.getSourceDepartmentId(), hospital.getId());
         // A target department is one of the hospital the referral is addressed to.
         UUID targetHospitalId = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
         if (targetDepartment != null && !belongsTo(targetDepartment, targetHospitalId)) {
@@ -676,6 +669,19 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         if (!physician) {
             throw BusinessRuleException.ofKey("generalReferral.receivingProvider.physician.required");
         }
+    }
+
+    /** The referral's source department, which must be one of the sending hospital's; null when none is named. */
+    private Department loadSourceDepartment(UUID sourceDepartmentId, UUID sendingHospitalId) {
+        if (sourceDepartmentId == null) {
+            return null;
+        }
+        Department department = departmentRepository.findById(sourceDepartmentId)
+            .orElseThrow(() -> new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", sourceDepartmentId));
+        if (department.getHospital() == null || !sendingHospitalId.equals(department.getHospital().getId())) {
+            throw new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", sourceDepartmentId);
+        }
+        return department;
     }
 
     private static boolean belongsTo(Department department, UUID hospitalId) {

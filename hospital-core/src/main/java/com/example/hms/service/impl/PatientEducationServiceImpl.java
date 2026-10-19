@@ -49,6 +49,8 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class PatientEducationServiceImpl implements PatientEducationService {
+    private static final String EDUCATION_DOCUMENTATION_NOT_FOUND_KEY = "education.documentation.notFound";
+    private static final String EDUCATION_PROGRESS_NOT_FOUND_KEY = "education.progress.notFound";
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String EDUCATION_RESOURCE_NOT_FOUND_KEY = "education.resource.notFound";
     private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
@@ -282,9 +284,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Updating progress: {}", progressId);
 
         PatientEducationProgress progress = progressRepository.findById(progressId)
-            .orElseThrow(() -> new ResourceNotFoundException("education.progress.notFound", progressId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(progress.getHospitalId(), "education.progress.notFound", progressId);
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(progress.getHospitalId(), EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId);
 
         progressMapper.updateEntityFromDTO(requestDTO, progress);
         progress.setLastAccessedAt(LocalDateTime.now());
@@ -311,7 +313,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public PatientEducationProgressResponseDTO getProgressById(UUID progressId) {
         PatientEducationProgress progress = progressRepository.findById(progressId)
-            .orElseThrow(() -> new ResourceNotFoundException("education.progress.notFound", progressId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_PROGRESS_NOT_FOUND_KEY, progressId));
         return progressMapper.toResponseDTO(progress);
     }
 
@@ -403,9 +405,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         log.info("Updating visit education documentation: {}", documentationId);
 
         VisitEducationDocumentation documentation = documentationRepository.findById(documentationId)
-            .orElseThrow(() -> new ResourceNotFoundException("education.documentation.notFound", documentationId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(documentation.getHospitalId(), "education.documentation.notFound", documentationId);
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(documentation.getHospitalId(), EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId);
 
         documentationMapper.updateEntityFromDTO(requestDTO, documentation);
 
@@ -417,7 +419,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     @Transactional(readOnly = true)
     public VisitEducationDocumentationResponseDTO getVisitDocumentationById(UUID documentationId) {
         VisitEducationDocumentation documentation = documentationRepository.findById(documentationId)
-            .orElseThrow(() -> new ResourceNotFoundException("education.documentation.notFound", documentationId));
+            .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_DOCUMENTATION_NOT_FOUND_KEY, documentationId));
         return documentationMapper.toResponseDTO(documentation);
     }
 

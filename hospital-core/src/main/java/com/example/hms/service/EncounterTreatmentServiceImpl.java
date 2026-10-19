@@ -23,6 +23,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class EncounterTreatmentServiceImpl implements EncounterTreatmentService {
+    private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
     private final EncounterRepository encounterRepository;
     private final TreatmentRepository treatmentRepository;
     private final StaffRepository staffRepository;
@@ -34,11 +35,11 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional
     public EncounterTreatmentResponseDTO addTreatmentToEncounter(EncounterTreatmentRequestDTO dto) {
         Encounter encounter = encounterRepository.findById(dto.getEncounterId())
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", dto.getEncounterId()));
+                .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId()));
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getTreatmentId()));
         // QA r5 tenancy sweep: the encounter is the caller's hospital's, and so is the treatment.
-        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", dto.getEncounterId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId());
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
         Staff staff = null;
         if (dto.getStaffId() != null) {
@@ -53,11 +54,11 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Transactional(readOnly = true)
     public List<EncounterTreatmentResponseDTO> getTreatmentsByEncounter(UUID encounterId) {
         Encounter encounter = encounterRepository.findById(encounterId)
-                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
+                .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, encounterId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && encounter.getHospital() != null
                 && !activeHospitalId.equals(encounter.getHospital().getId())) {
-            throw new ResourceNotFoundException("encounter.notfound", encounterId);
+            throw new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, encounterId);
         }
         List<EncounterTreatment> list = encounterTreatmentRepository.findByEncounter_Id(encounterId);
         return list.stream().map(mapper::toDto).toList();

@@ -36,6 +36,7 @@ import java.util.UUID;
 
 @Service
 public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
+    private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String STAFF_NOT_FOUND_KEY = "staff.notFound";
 
 
@@ -107,9 +108,9 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
             if (department != null) {
-                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", request.getDepartmentId());
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId());
             }
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
@@ -148,9 +149,9 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
             if (department != null) {
-                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", request.getDepartmentId());
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId());
             }
 
         // Freeze the parent: keep the row but flip active off so the picker

@@ -34,6 +34,7 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
+    private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
     private static final String IMMUNIZATION_NOT_FOUND_KEY = "immunization.notFound";
 
 
@@ -68,9 +69,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
             encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
             // QA r5 tenancy sweep: the linked encounter is one of the caller's hospital.
-            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", requestDTO.getEncounterId());
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
         }
 
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
@@ -240,9 +241,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getEncounter() == null || 
              !existingImmunization.getEncounter().getId().equals(requestDTO.getEncounterId()))) {
             Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
             // The linked encounter is one of the immunization's own hospital.
-            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", requestDTO.getEncounterId());
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
             existingImmunization.setEncounter(encounter);
         }
 
