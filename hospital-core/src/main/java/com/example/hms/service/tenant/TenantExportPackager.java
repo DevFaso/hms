@@ -204,7 +204,6 @@ public class TenantExportPackager {
         zip.closeEntry();
     }
 
-    /** The per-table NDJSON entries, in the order they are written. */
     /** The fetcher for a tenant with no hospitals: there is nothing to scope rows to. */
     private static final PageFetcher NO_ROWS = (ids, pageable) -> List.of();
 
