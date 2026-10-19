@@ -110,6 +110,30 @@ class InvoiceItemServiceImplTest {
     }
 
     @Test
+    void aPaidInvoiceTakesNoNewLines_D147() {
+        invoice.setStatus(InvoiceStatus.PAID);
+
+        var request = line();
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("billing.invoice.paidLinesLocked");
+        verify(itemRepository, never()).save(any());
+    }
+
+    @Test
+    void aLineOfAPaidInvoiceCannotBeDeleted_D147() {
+        invoice.setStatus(InvoiceStatus.PAID);
+        InvoiceItem item = InvoiceItem.builder().billingInvoice(invoice).build();
+        item.setId(UUID.randomUUID());
+        when(itemRepository.findById(item.getId())).thenReturn(Optional.of(item));
+
+        UUID itemId = item.getId();
+        assertThatThrownBy(() -> service.deleteInvoiceItem(itemId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(itemRepository, never()).delete(any());
+    }
+
+    @Test
     void deletingALineOfAnotherHospitalIsNotFound() {
         InvoiceItem item = InvoiceItem.builder().billingInvoice(invoice).build();
         item.setId(UUID.randomUUID());

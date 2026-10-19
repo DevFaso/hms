@@ -152,7 +152,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     /**
      * The invoice a line write targets, at the caller's acting hospital: an
      * invoice of another hospital is answered as not found (no probe), and a
-     * cancelled invoice takes no line changes.
+     * cancelled or fully paid invoice takes no line changes.
      */
     private BillingInvoice writableInvoice(UUID invoiceId, String missKey, Object missArg) {
         UUID hospitalId = actingScopeResolver.requirePinned();
@@ -163,6 +163,11 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         }
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BusinessException("billing.invoice.cancelledLocked");
+        }
+        // QA D147: a settled invoice is a closed record (its receipt was
+        // issued against these lines). Reverse the payment to amend it.
+        if (invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new BusinessException("billing.invoice.paidLinesLocked");
         }
         return invoice;
     }

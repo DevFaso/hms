@@ -25,6 +25,7 @@ describe('MyBillingComponent', () => {
       date: '2026-09-01',
       dueDate: '2026-09-30',
       amount: 100,
+      paid: 0,
       balance: 100,
       status: 'SENT',
       facility: '',
@@ -65,7 +66,7 @@ describe('MyBillingComponent', () => {
           PAY_NOW: 'Payer',
           MAKE_PAYMENT: 'Effectuer un paiement',
           AMOUNT_EXCEEDS: 'Le montant dépasse le solde dû',
-          PAYMENT_SUCCESS_AMOUNT: 'Paiement de {{amount}} enregistré',
+          PAYMENT_PENDING: 'Paiement de {{amount}} déclaré, en attente de confirmation',
           PAYMENT_FAILED: 'Le paiement a échoué',
         },
       },
@@ -109,8 +110,9 @@ describe('MyBillingComponent', () => {
     expect(text('.pay-error')).toBe('Le montant dépasse le solde dû');
   });
 
-  it('sends the method and reference with the amount, and confirms in French', () => {
-    portal.payInvoice.and.returnValue(of(invoice({ balance: 0, status: 'PAID' })));
+  it('sends the method and reference with the amount, and says it awaits confirmation (QA D140)', () => {
+    // The server records a declaration as PENDING: the invoice is unchanged.
+    portal.payInvoice.and.returnValue(of(invoice({ balance: 50 })));
     create([invoice({ balance: 50 })]);
     openDialog();
     component.payAmount = 50;
@@ -124,8 +126,17 @@ describe('MyBillingComponent', () => {
       paymentMethod: 'MOBILE_MONEY',
       transactionReference: 'MM-123',
     });
-    expect(text('.pay-success')).toBe('Paiement de 50.00 enregistré');
+    expect(text('.pay-success')).toBe('Paiement de 50 déclaré, en attente de confirmation');
     expect(portal.getMyInvoices).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a fractional franc amount without calling the server (QA D184)', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = 0.5;
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
   });
 
   it('shows the translated failure when the server gives no message', () => {

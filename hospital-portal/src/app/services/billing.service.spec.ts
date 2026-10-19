@@ -42,12 +42,22 @@ describe('BillingService', () => {
     req.flush({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 });
   });
 
-  it('POSTs a payment with only the amount (backend discards the rest)', () => {
-    service.recordPayment('i1', 5000).subscribe((inv) => expect(inv.status).toBe('PAID'));
+  it('POSTs a payment with its method and reference (QA D146)', () => {
+    service
+      .recordPayment('i1', { amount: 5000, method: 'MOBILE_MONEY', reference: 'MM-1' })
+      .subscribe((inv) => expect(inv.status).toBe('PAID'));
     const req = httpMock.expectOne('/billing-invoices/i1/payments');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ amount: 5000 });
+    expect(req.request.body).toEqual({ amount: 5000, method: 'MOBILE_MONEY', reference: 'MM-1' });
     req.flush({ id: 'i1', status: 'PAID', amountPaid: 5000, balanceDue: 0 });
+  });
+
+  it('POSTs a reversal with its reason (QA D142)', () => {
+    service.reversePayment('i1', 'p1', 'Refunded at the desk').subscribe();
+    const req = httpMock.expectOne('/billing-invoices/i1/payments/p1/reverse');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ reason: 'Refunded at the desk' });
+    req.flush({ id: 'i1', status: 'SENT' });
   });
 
   it('POSTs email with explicit attachPdf and locale', () => {
