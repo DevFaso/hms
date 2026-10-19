@@ -572,4 +572,27 @@ class LaborServiceImplTest {
 
         assertThat(created.getGestationalAgeWeeks()).isNull();
     }
+
+    @Test
+    void nullPayloadsAreRejectedInPlainText() {
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+    }
+
+    @Test
+    void recordDeliveryRejectsClosedEpisode() {
+        episode.setStatus(LaborStatus.DELIVERED);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("active labor episode");
+    }
 }
