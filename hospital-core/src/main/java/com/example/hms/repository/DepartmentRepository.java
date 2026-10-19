@@ -32,11 +32,20 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
     @Query("SELECT d FROM Department d JOIN FETCH d.hospital WHERE d.id = :id")
     Optional<Department> findByIdWithHospital(@Param("id") UUID id);
 
-    @Query("SELECT d FROM Department d JOIN FETCH d.headOfDepartment WHERE d.id = :id")
+    /** QA D280: LEFT, so a department without a head is found too (an inner join answered 404 for it). */
+    @Query("SELECT d FROM Department d LEFT JOIN FETCH d.headOfDepartment WHERE d.id = :id")
     Optional<Department> findByIdWithHeadOfDepartment(@Param("id") UUID id);
 
     /** Case-insensitive unique name per hospital */
     boolean existsByNameIgnoreCaseAndHospitalId(String name, UUID hospitalId);
+
+    /** QA D281: a rename may not land on another department's name in the same hospital. */
+    boolean existsByNameIgnoreCaseAndHospitalIdAndIdNot(String name, UUID hospitalId, UUID id);
+
+    /** QA D281: a department code is unique per hospital, case-insensitively. */
+    boolean existsByCodeIgnoreCaseAndHospitalId(String code, UUID hospitalId);
+
+    boolean existsByCodeIgnoreCaseAndHospitalIdAndIdNot(String code, UUID hospitalId, UUID id);
 
     Optional<Department> findByHospitalIdAndNameIgnoreCase(UUID hospitalId, String name);
 
@@ -93,7 +102,8 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID>, J
 
     /* ---------- Translations (if present on your entity) ---------- */
 
-    @Query("SELECT d FROM Department d JOIN FETCH d.departmentTranslations WHERE d.id = :id")
+    /** QA D280: LEFT, so a department without a translation row is found too. */
+    @Query("SELECT DISTINCT d FROM Department d LEFT JOIN FETCH d.departmentTranslations WHERE d.id = :id")
     Optional<Department> findByIdWithTranslations(@Param("id") UUID id);
 
     boolean existsByHeadOfDepartment_Id(UUID staffId);

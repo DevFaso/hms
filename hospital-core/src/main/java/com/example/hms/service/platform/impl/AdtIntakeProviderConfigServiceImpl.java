@@ -72,6 +72,8 @@ public class AdtIntakeProviderConfigServiceImpl
     public void delete(UUID id, Locale locale) {
         AdtIntakeProviderConfig entity = repository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(CONFIG_NOT_FOUND, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), CONFIG_NOT_FOUND, id);
         repository.delete(entity);
         log.info("ADT intake-provider config deleted id={} hospital={}",
             id, entity.getHospital() != null ? entity.getHospital().getId() : null);
