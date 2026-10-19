@@ -34,6 +34,7 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
+    private static final String ENCOUNTER_NOT_FOUND_KEY = "encounter.notfound";
     private static final String IMMUNIZATION_NOT_FOUND_KEY = "immunization.notFound";
 
 
@@ -56,6 +57,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
+        // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
 
         Staff administeredBy = null;
         if (requestDTO.getAdministeredByStaffId() != null) {
@@ -66,7 +69,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
             encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
+            // QA r5 tenancy sweep: the linked encounter is one of the caller's hospital.
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
         }
 
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
@@ -204,6 +209,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         PatientImmunization immunization = immunizationRepository.findById(immunizationId)
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, immunizationId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(immunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, immunizationId);
 
         immunization.setReminderSent(true);
         immunization.setReminderSentDate(LocalDate.now());
@@ -218,6 +225,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
@@ -233,7 +241,9 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getEncounter() == null || 
              !existingImmunization.getEncounter().getId().equals(requestDTO.getEncounterId()))) {
             Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
-                    .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId()));
+            // The linked encounter is one of the immunization's own hospital.
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, requestDTO.getEncounterId());
             existingImmunization.setEncounter(encounter);
         }
 
@@ -250,6 +260,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         PatientImmunization immunization = immunizationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(immunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
         immunization.setActive(false);
         immunizationRepository.save(immunization);

@@ -80,6 +80,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
 
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
+        // QA r5 tenancy sweep: the referral is written at the caller's acting hospital.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
 
         User midwife = resolveUserByUsername(username);
 
@@ -284,8 +286,12 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     }
 
     private ObgynReferral findReferral(UUID referralId) {
-        return referralRepository.findById(referralId)
+        ObgynReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND_WITH_ID, referralId));
+        // QA r5 tenancy sweep: an OB/GYN referral lives inside one hospital; another
+        // hospital's referral answers as unknown, for every write and the by-id read.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(referral.getHospital(), REFERRAL_NOT_FOUND_WITH_ID, referralId);
+        return referral;
     }
 
     private User resolveUserByUsername(String username) {

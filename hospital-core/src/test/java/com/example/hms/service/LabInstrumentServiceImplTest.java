@@ -199,6 +199,7 @@ class LabInstrumentServiceImplTest {
         requestDto.setDepartmentId(DEPARTMENT_ID.toString());
         Department dept = new Department();
         dept.setId(DEPARTMENT_ID);
+        dept.setHospital(hospital);
 
         when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital));
         when(instrumentRepository.existsByHospitalIdAndSerialNumber(HOSPITAL_ID, "SN-001")).thenReturn(false);

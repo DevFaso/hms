@@ -218,8 +218,11 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private TreatmentPlan getPlanOrThrow(UUID id) {
-        return treatmentPlanRepository.findById(id)
+        TreatmentPlan plan = treatmentPlanRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("treatmentPlan.notFound", id));
+        // QA r5 tenancy sweep: every write (update, follow-ups, reviews) loads here.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(plan.getHospital(), "treatmentPlan.notFound", id);
+        return plan;
     }
 
     private Patient fetchPatient(UUID id) {
@@ -228,8 +231,11 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private Hospital fetchHospital(UUID id) {
-        return hospitalRepository.findClinicalById(id)
+        Hospital hospital = hospitalRepository.findClinicalById(id)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", id));
+        // QA r5 tenancy sweep: a plan is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", id);
+        return hospital;
     }
 
     private Encounter resolveEncounter(UUID encounterId) {

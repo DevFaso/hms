@@ -188,14 +188,15 @@ class MedicationHistoryServiceImplTest {
 
     @Test void deletePharmacyFill_success() {
         UUID fillId = UUID.randomUUID();
-        when(pharmacyFillRepository.existsById(fillId)).thenReturn(true);
+        PharmacyFill fill = new PharmacyFill();
+        when(pharmacyFillRepository.findById(fillId)).thenReturn(Optional.of(fill));
         service.deletePharmacyFill(fillId, Locale.ENGLISH);
-        verify(pharmacyFillRepository).deleteById(fillId);
+        verify(pharmacyFillRepository).delete(fill);
     }
 
     @Test void deletePharmacyFill_notFound() {
         UUID fillId = UUID.randomUUID();
-        when(pharmacyFillRepository.existsById(fillId)).thenReturn(false);
+        when(pharmacyFillRepository.findById(fillId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deletePharmacyFill(fillId, Locale.ENGLISH)).isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -513,6 +514,7 @@ class MedicationHistoryServiceImplTest {
         UUID rxId = UUID.randomUUID();
         Prescription rx = new Prescription();
         rx.setId(rxId);
+        rx.setHospital(hospital);
 
         PharmacyFillRequestDTO req = new PharmacyFillRequestDTO();
         req.setPatientId(patientId);

@@ -571,8 +571,11 @@ public class LaborServiceImpl implements LaborService {
         if (registrationId == null) {
             return null;
         }
-        return registrationRepository.findById(registrationId)
+        PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), "registration.notFound", registrationId);
+        return registration;
     }
 
     private Hospital resolveHospital(PatientHospitalRegistration registration, UUID requestedHospitalId) {
