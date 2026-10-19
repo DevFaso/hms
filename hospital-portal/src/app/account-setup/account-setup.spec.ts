@@ -77,6 +77,19 @@ describe('AccountSetupComponent', () => {
     expect(el.querySelector('#newPassword')).not.toBeNull();
   });
 
+  it('QA D256: a phone-only account is told the password came by SMS, not by e-mail', () => {
+    const phoneOnly = create(
+      profile({ email: '', phoneNumber: '+22670000000', forcePasswordChange: true }),
+    );
+    expect(phoneOnly.componentInstance.currentHintKey()).toBe('SETUP.CURRENT_HINT_SMS');
+    expect(phoneOnly.nativeElement.textContent).toContain('SETUP.CURRENT_HINT_SMS');
+  });
+
+  it('QA D256: an account with an e-mail keeps the e-mail hint', () => {
+    const withMail = create(profile({ forcePasswordChange: true }));
+    expect(withMail.componentInstance.currentHintKey()).toBe('SETUP.CURRENT_HINT');
+  });
+
   it('QA D52: offers the current username, and keeping it is valid', () => {
     const fixture = create(profile({ forceUsernameChange: true, forcePasswordChange: false }));
     const c = fixture.componentInstance;

@@ -143,6 +143,11 @@
                 <div class="cell-primary">
                   {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
                 </div>
+                @if (a.encounterCode) {
+                  <div class="cell-secondary" [title]="'BILLING.ENCOUNTER_REFERENCE' | translate">
+                    {{ a.encounterCode }}
+                  </div>
+                }
               </td>
               <td>{{ a.roomBed || '—' }}</td>
               <td>{{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}</td>

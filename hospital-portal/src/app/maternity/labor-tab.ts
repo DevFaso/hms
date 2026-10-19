@@ -167,8 +167,12 @@ export class LaborTabComponent {
         this.startFormOpen.set(false);
         this.loadEpisodes(patient.id);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LABOR.EPISODE_START_ERROR'));
+      error: (err: { error?: { message?: string } }) => {
+        // QA D214: the server's reason (e.g. a recent delivery needs an
+        // override) is shown, not hidden behind a generic failure.
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LABOR.EPISODE_START_ERROR'),
+        );
         this.saving.set(false);
       },
     });

@@ -48,6 +48,11 @@ export class AccountSetupComponent implements OnInit {
 
   needsUsername = signal(false);
   needsPassword = signal(false);
+  /**
+   * QA D256: where the temporary password went — a phone-only account got it by
+   * SMS, not "par e-mail".
+   */
+  currentHintKey = signal('SETUP.CURRENT_HINT');
 
   newUsername = '';
   currentPassword = '';
@@ -75,6 +80,13 @@ export class AccountSetupComponent implements OnInit {
       this.newUsername = profile.username ?? '';
     }
     this.needsPassword.set(!!profile.forcePasswordChange);
+    this.currentHintKey.set(
+      profile.email?.trim()
+        ? 'SETUP.CURRENT_HINT'
+        : profile.phoneNumber?.trim()
+          ? 'SETUP.CURRENT_HINT_SMS'
+          : 'SETUP.CURRENT_HINT_GENERIC',
+    );
 
     if (!this.needsUsername() && !this.needsPassword()) {
       void this.router.navigateByUrl(this.auth.resolveLandingPath());

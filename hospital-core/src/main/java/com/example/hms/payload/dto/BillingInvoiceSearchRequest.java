@@ -22,4 +22,6 @@ public class BillingInvoiceSearchRequest {
     private List<String> statuses;
     private LocalDate fromDate;
     private LocalDate toDate;
+    /** QA D203: matched server-side against the invoice number and the patient's name. */
+    private String query;
 }

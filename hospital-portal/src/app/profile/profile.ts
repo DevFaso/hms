@@ -910,11 +910,17 @@ export class ProfileComponent implements OnInit {
 
   requestPasswordReset(): void {
     const u = this.user();
-    if (!u?.email) {
+    // QA D256: a phone-only account gets its link by SMS, not "no email on file".
+    const request = u?.email
+      ? this.profileService.requestPasswordReset(u.email)
+      : u?.phoneNumber
+        ? this.profileService.requestPasswordResetByPhone(u.phoneNumber)
+        : null;
+    if (!request) {
       this.toast.error(this.translate.instant('PROFILE.NO_EMAIL_ON_FILE'));
       return;
     }
-    this.profileService.requestPasswordReset(u.email).subscribe({
+    request.subscribe({
       next: () => this.toast.success(this.translate.instant('PROFILE.RESET_LINK_SENT')),
       error: () => this.toast.error(this.translate.instant('PROFILE.RESET_REQUEST_FAILED')),
     });

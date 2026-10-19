@@ -183,6 +183,11 @@ export class ProfileService {
     return this.http.post<void>('/auth/password/request', { email });
   }
 
+  /** POST /auth/password/request by phone — a phone-only account gets its link by SMS (QA D256). */
+  requestPasswordResetByPhone(phone: string): Observable<void> {
+    return this.http.post<void>('/auth/password/request', { phone });
+  }
+
   /** POST /auth/me/change-password — change own password */
   changePassword(currentPassword: string, newPassword: string): Observable<{ message: string }> {
     return this.http.post<{ message: string }>('/auth/me/change-password', {

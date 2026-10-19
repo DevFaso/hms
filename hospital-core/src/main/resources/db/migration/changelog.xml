@@ -2881,6 +2881,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V200 - QA D210: flag the check-in copay invoice so the visit
+         invoice credits it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V200-billing-invoice-check-in-copay" author="hms-team" runOnChange="false">
+        <sqlFile path="V200__billing_invoice_check_in_copay.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V202 (QA D224): the after-visit summary's prescription and referral
          summaries are kept on the discharge summary. Single ALTER, no DO block. -->
     <changeSet id="V202-discharge-summary-avs-texts" author="hms-team" runOnChange="false">

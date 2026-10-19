@@ -108,7 +108,7 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Param("hospitalId") UUID hospitalId
     );
 
-    @Query("""
+    @Query(value = """
            SELECT bi FROM BillingInvoice bi
            LEFT JOIN FETCH bi.patient p
            LEFT JOIN FETCH bi.hospital h
@@ -117,6 +117,25 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            AND (:statuses IS NULL OR bi.status IN :statuses)
            AND (CAST(:fromDate AS LocalDate) IS NULL OR bi.invoiceDate >= :fromDate)
            AND (CAST(:toDate AS LocalDate) IS NULL OR bi.invoiceDate <= :toDate)
+           AND (CAST(:query AS String) IS NULL
+                OR LOWER(bi.invoiceNumber) LIKE :query
+                OR LOWER(p.firstName) LIKE :query
+                OR LOWER(p.lastName) LIKE :query
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query)
+           """,
+           countQuery = """
+           SELECT COUNT(bi) FROM BillingInvoice bi
+           LEFT JOIN bi.patient p
+           WHERE (:patientId IS NULL OR bi.patient.id = :patientId)
+           AND (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
+           AND (:statuses IS NULL OR bi.status IN :statuses)
+           AND (CAST(:fromDate AS LocalDate) IS NULL OR bi.invoiceDate >= :fromDate)
+           AND (CAST(:toDate AS LocalDate) IS NULL OR bi.invoiceDate <= :toDate)
+           AND (CAST(:query AS String) IS NULL
+                OR LOWER(bi.invoiceNumber) LIKE :query
+                OR LOWER(p.firstName) LIKE :query
+                OR LOWER(p.lastName) LIKE :query
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query)
            """)
     Page<BillingInvoice> findAllWithFilters(
         @Param("patientId") UUID patientId,
@@ -124,8 +143,34 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Param("statuses") List<InvoiceStatus> statuses,
         @Param("fromDate") LocalDate fromDate,
         @Param("toDate") LocalDate toDate,
+        @Param("query") String query,
         Pageable pageable
     );
+
+    /**
+     * QA D209: the billing KPIs over every invoice in scope, not one page.
+     * Returns one row: {total, paid, outstanding, overdue, revenue, balance}.
+     */
+    @Query("""
+           SELECT COUNT(bi),
+                  SUM(CASE WHEN bi.status = com.example.hms.enums.InvoiceStatus.PAID THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID) THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
+                            AND bi.dueDate < :today THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
+                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+             FROM BillingInvoice bi
+            WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
+           """)
+    List<Object[]> summarize(@Param("hospitalId") UUID hospitalId, @Param("today") LocalDate today);
+
+    /** QA D210: the paid check-in copays of a visit, still standing on their own. */
+    List<BillingInvoice> findByEncounter_IdAndCheckInCopayTrueAndStatus(UUID encounterId, InvoiceStatus status);
 
     /** The invoice an earlier create with this idempotency key produced (QA D94). */
     java.util.Optional<BillingInvoice> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);

@@ -222,6 +222,16 @@ describe('ChatComponent new-conversation picker', () => {
     });
   });
 
+  it('QA D257: a patient is not told to chat "with colleagues"', () => {
+    setUp(['ROLE_PATIENT']);
+    expect(component.subtitleKey).toBe('CHAT.SUBTITLE_PATIENT');
+  });
+
+  it('QA D257: staff keep the colleagues subtitle', () => {
+    setUp(['ROLE_DOCTOR']);
+    expect(component.subtitleKey).toBe('CHAT.SUBTITLE');
+  });
+
   it('uses the patient picker for a dual-role user acting as the patient', () => {
     setUp(['ROLE_NURSE', 'ROLE_PATIENT'], 'ROLE_PATIENT');
     openPicker();

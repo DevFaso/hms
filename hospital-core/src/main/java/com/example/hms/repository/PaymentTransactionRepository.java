@@ -79,4 +79,14 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
         @Param("from") LocalDate from,
         @Param("to") LocalDate to
     );
+
+    /** QA D231: the total of an invoice's ledger rows in one status (null when none). */
+    @Query("""
+           SELECT SUM(pt.amount)
+             FROM PaymentTransaction pt
+            WHERE pt.invoice.id = :invoiceId
+              AND pt.status = :status
+           """)
+    java.math.BigDecimal sumAmountByInvoiceAndStatus(@Param("invoiceId") UUID invoiceId,
+                                                     @Param("status") com.example.hms.enums.PaymentStatus status);
 }
