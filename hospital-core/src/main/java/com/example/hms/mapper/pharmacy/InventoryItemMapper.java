@@ -29,6 +29,7 @@ public class InventoryItemMapper {
             .quantityOnHand(entity.getQuantityOnHand())
             .reorderThreshold(entity.getReorderThreshold())
             .reorderQuantity(entity.getReorderQuantity())
+            .unitPrice(entity.getUnitPrice())
             .unit(entity.getUnit())
             .active(entity.isActive())
             .createdAt(entity.getCreatedAt())
@@ -49,6 +50,7 @@ public class InventoryItemMapper {
             .reorderThreshold(dto.getReorderThreshold() != null ? dto.getReorderThreshold() : BigDecimal.ZERO)
             .reorderQuantity(dto.getReorderQuantity() != null ? dto.getReorderQuantity() : BigDecimal.ZERO)
             .unit(dto.getUnit())
+            .unitPrice(dto.getUnitPrice())
             .active(dto.getActive() == null || dto.getActive())
             .build();
     }
@@ -67,6 +69,9 @@ public class InventoryItemMapper {
         }
         if (dto.getUnit() != null) {
             entity.setUnit(dto.getUnit());
+        }
+        if (dto.getUnitPrice() != null) {
+            entity.setUnitPrice(dto.getUnitPrice());
         }
         if (dto.getActive() != null) {
             entity.setActive(dto.getActive());

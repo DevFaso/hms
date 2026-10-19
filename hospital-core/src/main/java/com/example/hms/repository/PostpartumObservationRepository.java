@@ -29,6 +29,9 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
 
     Optional<PostpartumObservation> findFirstByCarePlan_IdOrderByObservationTimeDesc(UUID carePlanId);
 
+    /** QA D268: a haemorrhage was already recorded on this plan. */
+    boolean existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(UUID carePlanId);
+
     Optional<PostpartumObservation> findByIdAndPatient_IdAndHospital_Id(UUID id, UUID patientId, UUID hospitalId);
 
     @Query("""

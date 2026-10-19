@@ -162,6 +162,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /**
+     * QA D272: an issued visit invoice takes the copay whether or not it has
+     * been part-paid; a copay paid after the invoice was issued is taken when
+     * the clerk records the next payment on it. A DRAFT is not issued yet.
+     */
+    private static final java.util.Set<InvoiceStatus> COPAY_CREDITABLE =
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
+
+    /**
      * QA D210: once a visit's invoice is issued, the copay already paid at
      * check-in for that visit is moved onto it as a payment, and the
      * stand-alone copay invoice is closed, so the patient is not billed twice.
@@ -169,7 +177,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      */
     private void creditCheckInCopays(BillingInvoice target) {
         if (target.getEncounter() == null || target.getEncounter().getId() == null
-                || target.isCheckInCopay() || target.getStatus() != InvoiceStatus.SENT) {
+                || target.isCheckInCopay() || !COPAY_CREDITABLE.contains(target.getStatus())) {
             return;
         }
         List<BillingInvoice> copays = invoiceRepository
@@ -259,8 +267,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             key = dto.getPatientId();
             patient = patientRepository.findById(dto.getPatientId()).orElse(null);
         } else if (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank()) {
-            key = dto.getPatientEmail();
-            patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail()).orElse(null);
+            key = dto.getPatientEmail().trim();
+            patient = patientByLegacyKey(dto.getPatientEmail().trim(), hospitalId);
         } else {
             throw new BusinessException("billing.invoice.patientRequired");
         }
@@ -269,6 +277,38 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new ResourceNotFoundException("patient.notFoundByIdentifier", key);
         }
         return patient;
+    }
+
+    /**
+     * QA D269: most patients here have a phone number and no e-mail, so the
+     * legacy key also takes the patient's id or their MRN at this hospital
+     * before the e-mail/username.
+     */
+    private Patient patientByLegacyKey(String key, UUID hospitalId) {
+        UUID asId = parseUuid(key);
+        if (asId != null) {
+            return patientRepository.findById(asId).orElse(null);
+        }
+        List<Patient> byMrn = registrationRepository.findActiveByHospitalIdAndIdentifier(hospitalId, key).stream()
+            .filter(r -> r.getMrn() != null && r.getMrn().equalsIgnoreCase(key))
+            .map(com.example.hms.model.PatientHospitalRegistration::getPatient)
+            .distinct()
+            .toList();
+        if (byMrn.size() == 1) {
+            return byMrn.get(0);
+        }
+        return patientRepository.findByUsernameOrEmail(key).orElse(null);
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value.length() != 36) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException notAnId) {
+            return null;
+        }
     }
 
     /** The encounter named by code, only when it belongs to the invoicing hospital. */
@@ -825,6 +865,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? PaymentMethod.OTHER
             : parsePaymentMethod(payment.getMethod());
         requireWholeAmount(payment.getAmount());
+        // QA D272: the copay already taken at check-in counts before the clerk's payment.
+        creditCheckInCopays(invoice);
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
             payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);

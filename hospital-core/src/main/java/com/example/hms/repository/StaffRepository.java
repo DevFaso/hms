@@ -17,6 +17,16 @@ import java.util.UUID;
 
 @Repository
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
+
+    /**
+     * QA D282: the staff row with a write lock held to the end of the
+     * transaction, so two shift submissions for the same person run one after
+     * the other and the second one's overlap check sees the first one's shift.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Staff s WHERE s.id = :id")
+    Optional<Staff> findLockedById(@Param("id") UUID id);
+
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("SELECT s FROM Staff s WHERE s.user.isDeleted = false")
     List<Staff> findAllExcludingDeletedUsers();

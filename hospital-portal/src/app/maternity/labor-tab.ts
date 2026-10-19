@@ -158,7 +158,8 @@ export class LaborTabComponent {
 
   submitStart(): void {
     const patient = this.patient();
-    if (!patient) return;
+    // QA D295: an episode needs its onset time; the button is disabled without it.
+    if (!patient || !this.startForm.laborOnsetAt) return;
     this.saving.set(true);
     this.laborService.startEpisode(patient.id, this.startForm).subscribe({
       next: () => {

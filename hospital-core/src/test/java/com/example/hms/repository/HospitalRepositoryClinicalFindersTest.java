@@ -122,4 +122,14 @@ class HospitalRepositoryClinicalFindersTest {
         assertThat(hospitalRepository.findClinicalById(UUID.randomUUID())).isEmpty();
         assertThat(hospitalRepository.findById(pharmacy.getId())).isPresent();
     }
+
+    @Test
+    @DisplayName("QA D285: the duplicate-name check ignores case, blanks and a blank zip code")
+    void duplicateNameCheckIgnoresCaseAndBlanks() {
+        String stored = hospital.getName();
+        assertThat(hospitalRepository.existsByNameIgnoreCaseAndZipCode("  " + stored.toLowerCase() + " ", null)).isTrue();
+        assertThat(hospitalRepository.existsByNameIgnoreCaseAndZipCode(stored.toUpperCase(), "  ")).isTrue();
+        assertThat(hospitalRepository.existsByNameIgnoreCaseAndZipCode(stored, "01 BP 1")).isFalse();
+        assertThat(hospitalRepository.existsByNameIgnoreCaseAndZipCode("Another " + stored, null)).isFalse();
+    }
 }

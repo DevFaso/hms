@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -54,6 +55,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
     private static final String ORDER_SET_NOT_FOUND_KEY = "orderSet.notFound";
+    private static final java.util.Set<com.example.hms.enums.AdmissionStatus> CLOSED_STAY_STATUSES =
+        java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
+            com.example.hms.enums.AdmissionStatus.CANCELLED,
+            com.example.hms.enums.AdmissionStatus.TRANSFERRED,
+            com.example.hms.enums.AdmissionStatus.DECEASED);
 
 
     /**
@@ -236,6 +242,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO dischargePatient(UUID admissionId, AdmissionDischargeRequestDTO request) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        // QA D267: a second discharge answered 200 and overwrote the summary,
+        // the instructions and the discharge time the after-visit summary was
+        // built from. A closed stay is not discharged again.
+        if (CLOSED_STAY_STATUSES.contains(admission.getStatus())) {
+            throw new ConflictException("admission.discharge.alreadyClosed");
+        }
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.dischargingProvider.notFound", request.getDischargingProviderId()));

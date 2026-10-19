@@ -2148,7 +2148,12 @@
     "WRITTEN_OFF": "Radié",
     "FILTER_BY_DATE": "Filtrer par date",
     "FILTER_BY_URGENCY": "Filtrer par urgence",
-    "FILTER_BY_LOCATION": "Filtrer par emplacement"
+    "FILTER_BY_LOCATION": "Filtrer par emplacement",
+    "AGING_CURRENT": "Non échues",
+    "AGING_1_30": "1 à 30 jours",
+    "AGING_31_60": "31 à 60 jours",
+    "AGING_61_90": "61 à 90 jours",
+    "AGING_90_PLUS": "Plus de 90 jours"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
@@ -8204,7 +8209,11 @@
     "RECEIPT_EXPIRY_REQUIRED": "Saisissez la date de péremption du lot.",
     "RECEIPT_LOT_EXPIRED": "Ce lot est périmé et ne peut pas être entré en stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "Cet article est suivi par lot : choisissez le lot concerné par le mouvement.",
-    "SELECT_LOT_OPTION": "Sélectionnez un lot"
+    "SELECT_LOT_OPTION": "Sélectionnez un lot",
+    "UNIT_PRICE": "Prix unitaire (XOF)",
+    "PRICE_SAVED": "Prix enregistré.",
+    "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
+    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -10788,7 +10797,8 @@
     "SUBMIT": "Valider le paiement",
     "PRINT": "Imprimer",
     "NEW_PAYMENT": "Nouveau paiement",
-    "RECEIPT_NO_PATIENT": "Non renseigné"
+    "RECEIPT_NO_PATIENT": "Non renseigné",
+    "NO_PRICE": "La pharmacie n'a pas encore fixé le prix de ce médicament : renseignez son prix unitaire dans l'inventaire avant d'encaisser."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",

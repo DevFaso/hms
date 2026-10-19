@@ -79,6 +79,10 @@ public class InventoryItem extends BaseEntity {
     @Column(name = "unit", length = 60)
     private String unit;
 
+    /** QA D264: the selling price of one unit, in XOF; null until the pharmacy sets it. */
+    @Column(name = "unit_price", precision = 12, scale = 2)
+    private BigDecimal unitPrice;
+
     @Column(name = "active", nullable = false)
     @Builder.Default
     private boolean active = true;

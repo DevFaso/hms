@@ -100,6 +100,8 @@ describe('LabResultsInboxComponent', () => {
   });
 
   it('labels an ungraded non-numeric answer "qualitative", not "not evaluated" (QA D240)', () => {
+    setup([]);
+
     expect(component.flagKey(item({ abnormalFlag: 'UNSPECIFIED', resultValue: 'Positif' }))).toBe(
       'inBasket.labQualitative',
     );

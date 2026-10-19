@@ -993,7 +993,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         key: 'appts_today',
         label: this.t('DASHBOARD.TODAYS_APPOINTMENTS'),
-        value: s.appointments.todayTotal,
+        value: s.appointments.today,
         icon: 'calendar_today',
         color: '#0e7c6b',
         bgColor: '#e6f4f1',
@@ -1172,6 +1172,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   invoiceAging = computed<InvoiceAgingBuckets | null>(() => {
     return this.hospitalAdminSummary()?.invoiceAging ?? null;
   });
+
+  /** QA D283: the server's bucket labels are English; the order is fixed (current … 90+). */
+  readonly agingBucketLabelKeys: readonly string[] = [
+    'DASHBOARD.AGING_CURRENT',
+    'DASHBOARD.AGING_1_30',
+    'DASHBOARD.AGING_31_60',
+    'DASHBOARD.AGING_61_90',
+    'DASHBOARD.AGING_90_PLUS',
+  ];
 
   invoiceAgingBuckets = computed<InvoiceAgingBucket[]>(() => {
     const aging = this.invoiceAging();

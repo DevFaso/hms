@@ -63,6 +63,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private static final int PAIN_ALERT_THRESHOLD = 7;
     private static final int HEMORRHAGE_BLOOD_LOSS_THRESHOLD_ML = 500;
 
+    /** Tolerance for a device clock slightly ahead of the server. */
+    static final java.time.Duration CLOCK_SKEW = java.time.Duration.ofMinutes(5);
+
     private final PostpartumObservationRepository observationRepository;
     private final PostpartumCarePlanRepository carePlanRepository;
     private final PatientRepository patientRepository;
@@ -91,6 +94,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         ObstetricEligibility.requireObstetricEligible(patient);
 
+        requireNotInFuture(request);
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
@@ -327,6 +331,25 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         return carePlanRepository.save(plan);
     }
 
+    /**
+     * QA D268: an observation dated a day ahead closed the immediate-recovery
+     * window and moved a haemorrhage patient to 8-hourly checks. A check is
+     * recorded when it was done, so a time ahead of the server clock (beyond a
+     * small skew between devices) is refused, as is a delivery in the future.
+     */
+    private static void requireNotInFuture(PostpartumObservationRequestDTO request) {
+        LocalDateTime limit = LocalDateTime.now(java.time.ZoneId.systemDefault()).plus(CLOCK_SKEW);
+        if (request.getObservationTime() != null && request.getObservationTime().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.observationTime.future");
+        }
+        if (request.getDeliveryOccurredAt() != null && request.getDeliveryOccurredAt().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.deliveryTime.future");
+        }
+        if (request.getOriginalEntryTime() != null && request.getOriginalEntryTime().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.observationTime.future");
+        }
+    }
+
     private LocalDateTime resolveDeliveryTimestamp(PostpartumObservationRequestDTO request) {
         if (request.getDeliveryOccurredAt() != null) {
             return request.getDeliveryOccurredAt();
@@ -541,11 +564,17 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
 
         if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
-            applyImmediatePhaseScheduling(plan, observation, request);
+            // QA D268: a haemorrhage on this plan, now or earlier in the window,
+            // keeps the 15-minute checks until the midwife confirms
+            // stabilization; the clock and the check count alone do not end them.
+            boolean haemorrhageOnPlan = observation.isHemorrhageProtocolActivated()
+                || (plan.getId() != null
+                    && observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()));
+            applyImmediatePhaseScheduling(plan, observation, request, haemorrhageOnPlan);
             // QA D104: a critical alert that closes the immediate window (e.g. a
             // haemorrhage with stabilization confirmed) must land in enhanced
             // monitoring, not in the routine 8-hour shift baseline.
-            if (escalateMonitoring && plan.isImmediateWindowCompleted()) {
+            if ((escalateMonitoring || haemorrhageOnPlan) && plan.isImmediateWindowCompleted()) {
                 applyShiftPhaseScheduling(plan, observation, request, true);
             }
         } else {
@@ -562,14 +591,16 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
     private void applyImmediatePhaseScheduling(PostpartumCarePlan plan,
                                                PostpartumObservation observation,
-                                               PostpartumObservationRequestDTO request) {
+                                               PostpartumObservationRequestDTO request,
+                                               boolean haemorrhageOnPlan) {
         plan.incrementImmediateObservationCount();
         LocalDateTime windowEnd = plan.getDeliveryOccurredAt()
             .plusMinutes(PostpartumCarePlan.IMMEDIATE_WINDOW_MINUTES);
         boolean targetMet = plan.getImmediateObservationsCompleted() >= plan.getImmediateObservationTarget();
         boolean outsideWindow = observation.getObservationTime().isAfter(windowEnd);
         boolean stabilization = Boolean.TRUE.equals(request.getStabilizationConfirmed());
-        if (targetMet || outsideWindow || stabilization) {
+        boolean closes = haemorrhageOnPlan ? stabilization : (targetMet || outsideWindow || stabilization);
+        if (closes) {
             plan.setImmediateWindowCompleted(true);
             plan.setStabilizationAchievedAt(observation.getObservationTime());
             plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
