@@ -454,6 +454,83 @@
               </div>
             }
           </div>
+
+          <div class="lines-section payments-section">
+            <h3>{{ 'BILLING.PAYMENTS' | translate }}</h3>
+            @if (payments().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_PAYMENTS' | translate }}</p>
+            } @else {
+              <table class="lines-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'BILLING.PAYMENT_DATE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_AMOUNT' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                    <th scope="col">
+                      <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of payments(); track p.id) {
+                    <tr>
+                      <td>{{ p.paymentDate }}</td>
+                      <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
+                      <td>{{ p.referenceNumber || '—' }}</td>
+                      <td class="amount">{{ formatCurrency(p.amount) }}</td>
+                      <td>
+                        {{ 'BILLING.PAYMENT_STATUSES.' + p.status | translate }}
+                        @if (p.reversalReason) {
+                          <div class="cell-secondary">{{ p.reversalReason }}</div>
+                        }
+                      </td>
+                      <td>
+                        @if (p.status === 'PENDING' && canRecordPayment) {
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            [disabled]="paymentActionBusy()"
+                            (click)="confirmPendingPayment(p)"
+                          >
+                            {{ 'BILLING.CONFIRM_PAYMENT' | translate }}
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            [disabled]="paymentActionBusy()"
+                            (click)="openReversal(p, 'reject')"
+                          >
+                            {{ 'BILLING.REJECT_PAYMENT' | translate }}
+                          </button>
+                        }
+                        @if (p.status === 'CONFIRMED') {
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            (click)="downloadReceipt(p)"
+                          >
+                            {{ 'BILLING.RECEIPT' | translate }}
+                          </button>
+                          @if (canReversePayment) {
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              [disabled]="paymentActionBusy()"
+                              (click)="openReversal(p, 'reverse')"
+                            >
+                              {{ 'BILLING.REVERSE_PAYMENT' | translate }}
+                            </button>
+                          }
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -535,6 +612,17 @@
               }}
             </p>
           </div>
+        </div>
+        <div class="field">
+          <label for="bill-encounter">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</label>
+          <input
+            id="bill-encounter"
+            type="text"
+            maxlength="64"
+            [(ngModel)]="form.encounterReference"
+            [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
+          />
+          <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>
         </div>
         <div class="field">
           <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
@@ -705,10 +793,34 @@
           <input
             id="payment-amount"
             type="number"
-            min="0.01"
+            min="1"
+            step="1"
             [max]="inv.balanceDue"
             [ngModel]="paymentAmount()"
             (ngModelChange)="paymentAmount.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="payment-method">{{ 'BILLING.PAYMENT_METHOD' | translate }} *</label>
+          <select
+            id="payment-method"
+            [ngModel]="paymentMethod()"
+            (ngModelChange)="paymentMethod.set($event)"
+          >
+            @for (m of paymentMethods; track m) {
+              <option [value]="m">{{ 'BILLING.PAYMENT_METHODS.' + m | translate }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="payment-reference">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</label>
+          <input
+            id="payment-reference"
+            type="text"
+            maxlength="120"
+            [ngModel]="paymentReference()"
+            (ngModelChange)="paymentReference.set($event)"
+            [placeholder]="'BILLING.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
           />
         </div>
         <p class="muted-note">{{ 'BILLING.PAYMENT_NOTE' | translate }}</p>
@@ -721,6 +833,65 @@
           {{
             paymentSaving() ? ('COMMON.SAVING' | translate) : ('BILLING.RECORD_PAYMENT' | translate)
           }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ REVERSE / REJECT PAYMENT MODAL (QA D140, D142) ═══ -->
+@if (reversingPayment(); as p) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReversal()"
+    (keydown.escape)="closeReversal()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (reversalMode() === 'reverse' ? 'BILLING.REVERSE_PAYMENT' : 'BILLING.REJECT_PAYMENT')
+              | translate
+          }}
+          — {{ formatCurrency(p.amount) }}
+        </h2>
+        <button class="modal-close" (click)="closeReversal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="reversal-reason">{{ 'BILLING.REVERSAL_REASON' | translate }} *</label>
+          <textarea
+            id="reversal-reason"
+            rows="3"
+            maxlength="500"
+            [ngModel]="reversalReason()"
+            (ngModelChange)="reversalReason.set($event)"
+          ></textarea>
+        </div>
+        @if (reversalMode() === 'reverse') {
+          <p class="muted-note">{{ 'BILLING.REVERSAL_NOTE' | translate }}</p>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReversal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="submitReversal()"
+          [disabled]="paymentActionBusy() || !reversalReason().trim()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
         </button>
       </div>
     </div>

@@ -103,6 +103,7 @@ class ReceptionServiceImplTest {
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
+    @Mock private com.example.hms.service.BillingInvoiceService billingInvoiceService;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -1275,6 +1276,75 @@ class ReceptionServiceImplTest {
     @Nested
     @DisplayName("MVP 1 — checkInPatient")
     class CheckInPatientTests {
+
+        private Appointment scheduledAppointment() {
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+            Appointment appointment = new Appointment();
+            appointment.setId(UUID.randomUUID());
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+            when(appointmentRepo.findById(appointment.getId())).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            return appointment;
+        }
+
+        @Test
+        @DisplayName("QA D149: the copay entered at check-in is recorded on the encounter, not dropped")
+        void copayIsRecordedOnTheEncounter_D149() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("2000"))
+                    .identityConfirmed(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+            verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
+                eq(new java.math.BigDecimal("2000")), any());
+            assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @Test
+        @DisplayName("QA D149: no copay, no invoice")
+        void noCopayNoInvoice_D149() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder().appointmentId(appointment.getId()).build();
+
+            service.checkInPatient(request, hospitalId, "receptionist1");
+
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D149/D184: a negative or fractional copay is refused before anything is written")
+        void invalidCopayIsRefusedBeforeTheCheckIn_D149() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO fractional = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId()).copayAmount(new java.math.BigDecimal("0.50")).build();
+            CheckInRequestDTO negative = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId()).copayAmount(new java.math.BigDecimal("-100")).build();
+
+            assertThatThrownBy(() -> service.checkInPatient(fractional, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThatThrownBy(() -> service.checkInPatient(negative, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(appointmentRepo, never()).save(any(Appointment.class));
+            verify(encounterRepo, never()).save(any(Encounter.class));
+        }
 
         @Test
         @DisplayName("successfully checks in a SCHEDULED appointment → creates ARRIVED encounter")

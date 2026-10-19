@@ -1426,7 +1426,7 @@
     "PAYMENT_EXCEEDS_BALANCE": "The amount exceeds the balance due",
     "PAYMENT_FAILED": "Payment failed",
     "PAYMENT_METHOD": "Payment Method",
-    "PAYMENT_NOTE": "Payments apply to SENT or PARTIALLY PAID invoices, up to the balance due.",
+    "PAYMENT_NOTE": "Payments apply to issued or partially paid invoices, up to the balance due, in whole francs.",
     "PAYMENT_RECORDED": "Payment recorded",
     "PAYMENT_TITLE": "Record payment — {{invoice}}",
     "PDF_FAILED": "Failed to download PDF",
@@ -1467,7 +1467,44 @@
     "ITEM_ADDED": "Line added",
     "ITEM_REMOVED": "Line removed",
     "ITEM_SAVE_FAILED": "The line could not be saved",
-    "ITEMS_LOAD_FAILED": "The invoice lines could not be loaded"
+    "ITEMS_LOAD_FAILED": "The invoice lines could not be loaded",
+    "PAYMENT_REFERENCE": "Reference",
+    "PAYMENT_REFERENCE_PLACEHOLDER": "Receipt, transaction or cheque number",
+    "PAYMENT_WHOLE_AMOUNT": "Amounts in francs CFA are whole numbers: enter an amount without decimals.",
+    "PAYMENTS": "Payments",
+    "NO_PAYMENTS": "No payment recorded yet.",
+    "PAYMENT_DATE": "Date",
+    "CONFIRM_PAYMENT": "Confirm",
+    "REJECT_PAYMENT": "Reject payment",
+    "REVERSE_PAYMENT": "Reverse payment",
+    "RECEIPT": "Receipt",
+    "REVERSAL_REASON": "Reason",
+    "REVERSAL_REASON_REQUIRED": "A reason is required.",
+    "REVERSAL_NOTE": "The payment stays in the ledger as reversed and the amount paid and the balance are recalculated. Refund the patient by the same means.",
+    "PAYMENT_CONFIRMED": "Payment confirmed.",
+    "PAYMENT_REVERSED": "Payment reversed.",
+    "PAYMENT_REJECTED": "Payment rejected.",
+    "ITEM_REMOVE_CONFIRM": "Delete this line? The invoice total will be recalculated.",
+    "ENCOUNTER_REFERENCE": "Visit / stay (encounter code)",
+    "ENCOUNTER_REFERENCE_PLACEHOLDER": "e.g. ENC-…",
+    "ENCOUNTER_REFERENCE_HINT": "Links this invoice to the visit or stay it bills. It must belong to this hospital.",
+    "PAYMENT_METHODS": {
+      "CASH": "Cash",
+      "MOBILE_MONEY": "Mobile money",
+      "CARD": "Card",
+      "BANK_TRANSFER": "Bank transfer",
+      "CHECK": "Cheque",
+      "INSURANCE": "Insurance",
+      "OTHER": "Other",
+      "CREDIT_CARD": "Credit card",
+      "DEBIT_CARD": "Debit card"
+    },
+    "PAYMENT_STATUSES": {
+      "PENDING": "Awaiting confirmation",
+      "CONFIRMED": "Confirmed",
+      "REJECTED": "Rejected",
+      "REVERSED": "Reversed"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -4601,7 +4638,9 @@
       "CARD": "Credit / Debit Card",
       "BANK_TRANSFER": "Bank Transfer",
       "MOBILE_MONEY": "Mobile Money",
-      "CASH": "Cash"
+      "CASH": "Cash",
+      "PAYMENT_PENDING": "Your payment of {{amount}} has been declared. It will appear on your invoice once the hospital cashier confirms it.",
+      "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes."
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -5372,6 +5411,7 @@
         "PATIENT_MERGE": "Patient Records Merged",
         "PATIENT_UPDATE": "Patient Updated",
         "PAYMENT_POSTED": "Payment Posted",
+        "PAYMENT_REJECTED": "Payment Rejected",
         "PERMISSION_GRANTED": "Permission Granted",
         "PERMISSION_REVOKED": "Permission Revoked",
         "PHARMACY_DEACTIVATED": "Pharmacy Deactivated",

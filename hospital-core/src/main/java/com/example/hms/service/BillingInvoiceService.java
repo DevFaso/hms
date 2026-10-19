@@ -55,4 +55,26 @@ public interface BillingInvoiceService {
      */
     BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
             com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale);
+
+    /** Every ledger row of an invoice in the caller's hospital (QA D142). */
+    List<com.example.hms.payload.dto.PaymentTransactionResponseDTO> listPayments(UUID invoiceId);
+
+    /** A cashier confirms a patient's PENDING declaration; only then is it counted (QA D140). */
+    BillingInvoiceResponseDTO confirmPayment(UUID invoiceId, UUID paymentId, UUID staffId, Locale locale);
+
+    /** A cashier refuses a patient's PENDING declaration, with a reason (QA D140). */
+    BillingInvoiceResponseDTO rejectPayment(UUID invoiceId, UUID paymentId, String reason, UUID staffId, Locale locale);
+
+    /** Billing staff reverse a CONFIRMED payment with a reason; totals are recomputed (QA D142). */
+    BillingInvoiceResponseDTO reversePayment(UUID invoiceId, UUID paymentId, String reason, UUID staffId, Locale locale);
+
+    /** A receipt PDF for one confirmed payment (QA D141). */
+    InvoicePdfResponseDTO getPaymentReceiptPdf(UUID invoiceId, UUID paymentId, Locale locale);
+
+    /**
+     * QA D149: the copay taken at check-in, as a paid invoice on the visit's
+     * encounter with its cash payment in the ledger. Called inside the
+     * check-in transaction.
+     */
+    void recordCheckInCopay(com.example.hms.model.Encounter encounter, java.math.BigDecimal amount, UUID recordedBy);
 }

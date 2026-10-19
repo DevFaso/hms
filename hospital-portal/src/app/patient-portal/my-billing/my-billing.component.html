@@ -116,6 +116,8 @@
             }}</span>
           </div>
 
+          <p class="pay-label">{{ 'PORTAL.BILLING.PAYMENT_PENDING_NOTE' | translate }}</p>
+
           @if (payError()) {
             <div class="pay-error">{{ payError() }}</div>
           }
@@ -129,9 +131,9 @@
               <input
                 id="payAmount"
                 type="number"
-                [min]="0.01"
+                [min]="1"
                 [max]="payingInvoice()!.balance"
-                step="0.01"
+                step="1"
                 [(ngModel)]="payAmount"
                 [placeholder]="'PORTAL.BILLING.ENTER_AMOUNT' | translate"
               />

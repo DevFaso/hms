@@ -2858,6 +2858,17 @@
     </changeSet>
 
     <!-- =================================================================
+         V189: payment ledger status (PENDING/CONFIRMED/REJECTED/REVERSED)
+         and the reversal audit columns (QA D140, D142). No DO block.
+         ================================================================= -->
+    <changeSet id="V189-payment-transaction-status-and-reversal" author="hms-team" runOnChange="false">
+        <sqlFile path="V189__payment_transaction_status_and_reversal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V193: clinical.encounters.admission_id - an admission's own
          INPATIENT encounter (QA D134/D135/D136). No FK: admissions live in
          public and encounters in clinical, and the column is nullable for
