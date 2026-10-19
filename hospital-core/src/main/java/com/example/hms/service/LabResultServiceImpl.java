@@ -687,7 +687,7 @@ public class LabResultServiceImpl implements LabResultService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // A release worklist is one hospital's queue; the global view has none.
-            throw new BusinessException("A hospital scope is required for the release worklist.");
+            throw new BusinessException("lab.result.releaseScopeRequired");
         }
         // B1: a laboratory releases what it ran, so an order another hospital
         // sent here belongs on this queue — releasing it is exactly what the
@@ -1409,20 +1409,20 @@ public class LabResultServiceImpl implements LabResultService {
 
     private void validateReleasePermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user for release operation.");
+            throw new BusinessException("lab.result.releaseUserUnknown");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (runningHospitalId == null) {
-            throw new BusinessException("Unable to determine hospital context for lab result release.");
+            throw new BusinessException("lab.result.releaseHospitalUnknown");
         }
         // B1: an order sent to another laboratory is released there. The
         // ordering hospital still reads the result — this is not a 404 — but
         // it does not sign off work it did not do.
         if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
             throw new BusinessException(
-                "Only the laboratory performing this order may release its results.");
+                "lab.result.releaseOtherLab");
         }
         UUID hospitalId = runningHospitalId;
 
@@ -1436,19 +1436,19 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR);
 
         if (!allowed) {
-            throw new BusinessException("Only laboratory scientists, managers or directors can release lab results.");
+            throw new BusinessException("lab.result.releaseRoleRequired");
         }
     }
 
     private void validateSignPermissions(UUID userId, UUID hospitalId) {
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user for sign operation.");
+            throw new BusinessException("lab.result.signUserUnknown");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (hospitalId == null) {
-            throw new BusinessException("Unable to determine hospital context for lab result sign-off.");
+            throw new BusinessException("lab.result.signHospitalUnknown");
         }
 
         boolean allowed = roleValidator.isDoctor(userId, hospitalId)
@@ -1456,7 +1456,7 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.isLabScientist(userId, hospitalId);
 
         if (!allowed) {
-            throw new BusinessException("Only attending clinicians may sign lab results.");
+            throw new BusinessException("lab.result.signRoleRequired");
         }
     }
 
@@ -1649,7 +1649,7 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         if (!holdsLabResultAuthorRole(userId, hospitalId)) {
-            throw new BusinessException("User does not have a lab or clinical role for this hospital.");
+            throw new BusinessException("lab.result.noRoleHere");
         }
     }
 
@@ -1677,9 +1677,7 @@ public class LabResultServiceImpl implements LabResultService {
         // for. The read-back path sets acknowledged itself on a match, so this
         // guard never blocks it.
         if (result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null) {
-            throw new BusinessException(
-                "This is a critical result: acknowledge it by reading the value back, not by "
-                    + "dismissing the alert. Use the read-back action.");
+            throw new BusinessException("lab.result.criticalNeedsReadBack");
         }
         result.setAcknowledged(true);
         result.setAcknowledgedAt(LocalDateTime.now());
@@ -1872,7 +1870,7 @@ public class LabResultServiceImpl implements LabResultService {
 
         LabOrder labOrder = current.getLabOrder();
         if (labOrder == null || labOrder.getPatient() == null || labOrder.getLabTestDefinition() == null) {
-            throw new BusinessException("Cannot compare lab results: missing patient or test definition");
+            throw new BusinessException("lab.result.compareMissingData");
         }
 
         UUID patientId = labOrder.getPatient().getId();

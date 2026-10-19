@@ -951,7 +951,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (sanitized == null || sanitized.isBlank()) {
             throw new BusinessException(
                 messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, Locale.getDefault()));
+                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
         }
         return sanitized;
     }
@@ -961,13 +961,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 && assignment.getConfirmationSentAt().plusHours(CONFIRMATION_CODE_EXPIRY_HOURS)
                     .isBefore(LocalDateTime.now())) {
             throw new BusinessException(
-                "Verification code has expired. Please contact the administrator to resend a new code.");
+                "users.verification.expiredContactAdmin");
         }
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
             throw new BusinessException(
                 messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, Locale.getDefault()));
+                    DEFAULT_CONFIRMATION_CODE_INVALID, LocaleContextHolder.getLocale()));
         }
     }
 
@@ -1107,18 +1107,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
         if (staffRepository.existsByAssignment_Id(id)) {
-            throw new ConflictException(
-                "Cannot delete assignment: one or more Staff records still reference it. " +
-                "Reassign or remove the linked staff first.");
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.assignment.deleteStaffLinked"));
         }
         // The same for the encounters it attended: they are clinical history,
         // and an encounter pointing at a deleted assignment could not be edited
         // by anyone (dev, 2026-09-13). V175 makes the database refuse it too;
         // this says why in words. Deactivate instead - it keeps the history.
         if (encounterRepository.existsByAssignment_Id(id)) {
-            throw new ConflictException(
-                "Cannot delete assignment: encounters were recorded under it. " +
-                "Deactivate it instead to keep that history.");
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.assignment.deleteHasEncounters"));
         }
         assignmentRepository.deleteById(id);
         dropUserRoleWhenLastAssignment(doomed);

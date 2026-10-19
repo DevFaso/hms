@@ -53,6 +53,21 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class StockOutRoutingServiceImplTest {
 
+    /**
+     * The services throw message keys (QA D226); render them through the real
+     * bundles in English so the assertions read the words a user sees.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void englishMessageBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetMessageLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PharmacyRepository pharmacyRepository;
     @Mock private InventoryItemRepository inventoryItemRepository;

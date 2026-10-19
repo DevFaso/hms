@@ -561,6 +561,28 @@ public class GlobalExceptionHandler {
      * tenants. Every other message — a {@code @PreAuthorize} refusal, or a
      * sentence composed deep in a service — stays in the log.
      */
+    /**
+     * {@link UnauthorizedAccessException} carries {@code @ResponseStatus(FORBIDDEN)},
+     * but the {@code RuntimeException} catch-all below wins over the annotation,
+     * so every one of them answered a 500 "unexpected error" (QA D226). A keyed
+     * refusal is resolved in the request locale; a free sentence stays in the
+     * log only, since it can carry a username or an id.
+     */
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Object> handleUnauthorizedAccess(UnauthorizedAccessException ex, WebRequest req) {
+        String raw = ex.getMessage();
+        if (com.example.hms.utility.MessageUtil.isMessageKey(raw)) {
+            log.warn("Access refused: {}", raw);
+            return buildErrorResponse(HttpStatus.FORBIDDEN,
+                com.example.hms.utility.MessageUtil.resolveOrRaw(raw, ex.getArgs()), req);
+        }
+        log.warn("Access refused at path {}", req.getDescription(false));
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            localized("error.access.denied", "Access denied"), req);
+        body.put(FIELD_CODE, CODE_ACCESS_DENIED);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());

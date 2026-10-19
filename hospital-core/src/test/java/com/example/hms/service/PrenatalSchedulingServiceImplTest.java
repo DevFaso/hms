@@ -54,6 +54,21 @@ import static org.mockito.Mockito.lenient;
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
 
+    /**
+     * The services throw message keys (QA D226); render them through the real
+     * bundles in English so the assertions read the words a user sees.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void englishMessageBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetMessageLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock
     private AppointmentRepository appointmentRepository;
     @Mock
@@ -375,7 +390,8 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.lmp.implausible");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.lmp.implausible"));
     }
 
     @Test
@@ -393,6 +409,7 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.pregnancy.delivered");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.delivered"));
     }
 }

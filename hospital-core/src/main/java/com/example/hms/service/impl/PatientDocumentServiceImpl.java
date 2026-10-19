@@ -71,8 +71,8 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
         User uploader = resolveUser(userId);
         if (request.getNotes() != null
                 && request.getNotes().length() > PatientDocumentRequestDTO.NOTES_MAX_LENGTH) {
-            throw new IllegalArgumentException("Notes cannot exceed "
-                    + PatientDocumentRequestDTO.NOTES_MAX_LENGTH + " characters");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    "documents.notes.tooLong", String.valueOf(PatientDocumentRequestDTO.NOTES_MAX_LENGTH)));
         }
 
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
@@ -179,9 +179,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      */
     private PatientHospitalRegistration requireRegisteredAt(UUID hospitalId, UUID patientId) {
         if (hospitalId == null) {
-            throw new BusinessException(
-                    "An active hospital is required: patient documents are read through the hospital "
-                            + "the patient is registered at. Select a hospital first.");
+            throw new BusinessException("documents.hospitalRequired");
         }
         if (patientId == null) {
             // No id to name: "Patient not found with ID: null" helped nobody.

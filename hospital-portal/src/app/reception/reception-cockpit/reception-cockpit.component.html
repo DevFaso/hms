@@ -7,8 +7,11 @@
     </div>
     <div class="cockpit-actions">
       <input
+        id="reception-cockpit-date"
         type="date"
         class="date-picker"
+        [attr.aria-label]="'RECEPTION.COCKPIT_DATE' | translate"
+        [title]="'RECEPTION.COCKPIT_DATE' | translate"
         [ngModel]="selectedDate()"
         (ngModelChange)="selectedDate.set($event); onDateChange()"
       />

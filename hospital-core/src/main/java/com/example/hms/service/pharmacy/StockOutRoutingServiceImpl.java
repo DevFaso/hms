@@ -217,7 +217,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
         if (targetPharmacyId == null) {
-            throw new BusinessException("Target pharmacy ID is required for partner routing");
+            throw new BusinessException("stock.routing.targetRequired");
         }
 
         Pharmacy targetPharmacy = pharmacyRepository.findById(targetPharmacyId)
@@ -228,7 +228,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
         if (!EXTERNAL_PHARMACY_TYPES.contains(targetPharmacy.getPharmacyType())) {
             throw new BusinessException(
-                    "Target pharmacy must be a PARTNER_PHARMACY or COMMUNITY_PHARMACY for partner routing");
+                    "stock.routing.targetTypeInvalid");
         }
         // The offer is an SMS and the send is best-effort: without a number the
         // prescription would leave the dispense queue and the patient be sent to
@@ -236,9 +236,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // path makes, and for the same reason.
         String targetPhone = targetPharmacy.getPhoneNumber();
         if (targetPhone == null || targetPhone.isBlank()) {
-            throw new BusinessException(
-                    "Target pharmacy has no phone number on file and cannot be sent the prescription; "
-                            + "add one, or print the prescription for the patient instead.");
+            throw new BusinessException("stock.routing.targetNoPhone");
         }
 
         User currentUser = resolveCurrentUser();
@@ -379,10 +377,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
-            throw new BusinessException("Only PARTNER routing decisions can receive partner responses");
+            throw new BusinessException("stock.routing.responseNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.PENDING) {
-            throw new BusinessException("Routing decision is not in PENDING status");
+            throw new BusinessException("stock.routing.notPending");
         }
 
         Prescription prescription = decision.getPrescription();
@@ -434,10 +432,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
-            throw new BusinessException("Only PARTNER routing decisions can confirm dispense");
+            throw new BusinessException("stock.routing.dispenseNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
-            throw new BusinessException("Routing decision must be in ACCEPTED status to confirm dispense");
+            throw new BusinessException("stock.routing.dispenseNotAccepted");
         }
 
         Prescription prescription = decision.getPrescription();
@@ -451,8 +449,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // has no writer but this one, and silently stamping PARTNER_DISPENSED over
         // it would leave the pharmacist's question unanswerable for good.
         if (prescription.getStatus() == PrescriptionStatus.PENDING_CLARIFICATION) {
-            throw new BusinessException("This prescription is awaiting the prescriber's clarification; "
-                    + "resolve that before recording a partner dispense.");
+            throw new BusinessException("stock.routing.awaitingClarification");
         }
         prescription.setStatus(PrescriptionStatus.PARTNER_DISPENSED);
         prescriptionRepository.save(prescription);
@@ -484,14 +481,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         enforceDecisionHospitalScopeForWrite(decision, hospitalId);
 
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("Recording a partner no-show needs a reason.");
+            throw new BusinessException("stock.routing.noShowReasonRequired");
         }
         if (decision.getRoutingType() != RoutingType.PARTNER) {
-            throw new BusinessException("Only PARTNER routing decisions can be recorded as a no-show");
+            throw new BusinessException("stock.routing.noShowNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
-            throw new BusinessException("Only an ACCEPTED partner decision can be recorded as a no-show; "
-                    + "this one is " + decision.getStatus() + ".");
+            throw new BusinessException("stock.routing.noShowNotAccepted", String.valueOf(decision.getStatus()));
         }
 
         String words = reason.trim();
@@ -499,9 +495,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             // Refused rather than shortened: eating the end of a sentence
             // somebody typed, with nothing on screen to say so, is not
             // something a pharmacy record should do quietly.
-            throw new BusinessException(
-                    "This no-show reason is too long to record. Shorten it by at least "
-                            + (words.length() - NO_SHOW_REASON_MAX_LENGTH) + " characters.");
+            throw new BusinessException("stock.routing.noShowReasonTooLong",
+                    String.valueOf(words.length() - NO_SHOW_REASON_MAX_LENGTH));
         }
 
         Prescription prescription = decision.getPrescription();
@@ -690,7 +685,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private void validateRoutableStatus(Prescription prescription) {
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("Prescription is not in a routable state: " + prescription.getStatus());
+            throw new BusinessException("stock.routing.notRoutable", String.valueOf(prescription.getStatus()));
         }
     }
 
@@ -706,7 +701,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("stock.user.unknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

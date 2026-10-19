@@ -305,7 +305,7 @@ class NewbornAssessmentServiceImplTest {
 
         BusinessException ex = assertThrows(BusinessException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        assertEquals("maternity.patient.male", ex.getMessage());
+        assertEquals("maternity.patient.male", ex.getMessageKey());
         verify(assessmentRepository, never()).save(any());
     }
 

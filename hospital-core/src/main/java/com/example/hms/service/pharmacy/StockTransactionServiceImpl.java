@@ -268,7 +268,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private User resolvePerformer(UUID performedBy) {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine performing user");
+            throw new BusinessException("stock.user.performingUnknown");
         }
         // D82: the movement is recorded against the signed-in user. A
         // caller-supplied performer let one user book a movement in a
@@ -325,11 +325,10 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
     private void takeOff(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
         if (lot != null && stockLotRepository.decrementRemaining(lot.getId(), quantity, now) == 0) {
-            throw new BusinessException("Insufficient lot stock: lot " + lot.getLotNumber()
-                    + " does not hold the requested " + quantity);
+            throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(), String.valueOf(quantity));
         }
         if (inventoryItemRepository.decrementOnHand(item.getId(), quantity, now) == 0) {
-            throw new BusinessException("Insufficient stock: the item does not hold the requested " + quantity);
+            throw new BusinessException("stock.item.insufficient", String.valueOf(quantity));
         }
     }
 

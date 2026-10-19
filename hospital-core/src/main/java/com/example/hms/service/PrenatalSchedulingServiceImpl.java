@@ -180,13 +180,13 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         LocalDate today = LocalDate.now(clock);
         if (appointment.getAppointmentDate().isBefore(today)) {
-            throw new BusinessException("Cannot create reminders for appointments in the past");
+            throw new BusinessException("maternity.reminder.appointmentInPast");
         }
 
         String patientUsername = Optional.ofNullable(appointment.getPatient())
             .map(Patient::getUser)
             .map(User::getUsername)
-            .orElseThrow(() -> new BusinessException("Appointment missing patient user"));
+            .orElseThrow(() -> new BusinessException("maternity.reminder.appointmentNoPatientUser"));
 
         LocalDate reminderDate = appointment.getAppointmentDate().minusDays(request.getDaysBefore());
         if (reminderDate.isBefore(today)) {
@@ -228,7 +228,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (!staff.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException("Selected staff member does not belong to the requested hospital");
+            throw new BusinessException("maternity.schedule.staffNotInHospital");
         }
         return staff;
     }
@@ -238,7 +238,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .filter(Objects::nonNull)
             .anyMatch(reg -> reg.getHospital() != null && hospitalId.equals(reg.getHospital().getId()) && reg.isActive());
         if (!registered) {
-            throw new BusinessException("Patient is not registered in the requested hospital");
+            throw new BusinessException("maternity.schedule.patientNotRegistered");
         }
     }
 
@@ -511,7 +511,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             Staff staff = staffRepository.findById(request.getNewStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getNewStaffId()));
             if (!appointment.getHospital().getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Selected staff member does not belong to appointment hospital");
+                throw new BusinessException("maternity.schedule.staffNotInAppointmentHospital");
             }
             return staff.getId();
         }

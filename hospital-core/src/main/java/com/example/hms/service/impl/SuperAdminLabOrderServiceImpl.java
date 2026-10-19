@@ -72,11 +72,11 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         UserRoleHospitalAssignment assignment = staff.getAssignment();
 
         if (assignment == null || assignment.getHospital() == null) {
-            throw new BusinessException("Ordering staff does not have a valid hospital assignment.");
+            throw new BusinessException("lab.order.orderingStaffNoAssignment");
         }
 
         if (!assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Ordering staff assignment does not match the selected hospital.");
+            throw new BusinessException("lab.order.orderingStaffHospitalMismatch");
         }
 
         String requestedRole = normalize(request.getOrderingStaffRole());
@@ -86,7 +86,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
                 assignmentRole = normalize(assignment.getRole().getName());
             }
             if (assignmentRole == null || !assignmentRole.equalsIgnoreCase(requestedRole)) {
-                throw new BusinessException("Ordering staff does not hold the requested role within this hospital.");
+                throw new BusinessException("lab.order.orderingStaffRoleMissing");
             }
         }
 
@@ -124,7 +124,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
 
         String documentationReference = normalize(request.getDocumentationReference());
         if (Boolean.TRUE.equals(documentationShared) && documentationReference == null) {
-            throw new BusinessException("documentationReference is required when documentation is shared with the laboratory.");
+            throw new BusinessException("lab.order.documentationReferenceRequired");
         }
 
         return LabOrderRequestDTO.builder()
@@ -171,7 +171,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
 
     private Boolean requireBoolean(Boolean value, String field) {
         if (value == null) {
-            throw new BusinessException("Missing required field: " + field);
+            throw new BusinessException("lab.order.missingField", field);
         }
         return value;
     }
@@ -208,7 +208,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
             organization.getId());
 
         if (hospital.getOrganization() == null || !hospital.getOrganization().getId().equals(organization.getId())) {
-            throw new BusinessException("Hospital does not belong to the specified organization.");
+            throw new BusinessException("lab.order.hospitalOtherOrganization");
         }
         return hospital;
     }
@@ -225,7 +225,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         }
 
         if (matches.size() > 1) {
-            throw new BusinessException("Multiple patients match the provided identifier within this hospital.");
+            throw new BusinessException("lab.order.patientAmbiguous");
         }
 
     return matches.get(0);
@@ -246,12 +246,12 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
         }
 
         if (matches.size() > 1) {
-            throw new BusinessException("Multiple staff members match the provided identifier. Please refine the selection using the role or username.");
+            throw new BusinessException("lab.order.staffAmbiguous");
         }
 
     Staff staff = matches.get(0);
         if (!staff.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Staff member is not assigned to the specified hospital.");
+            throw new BusinessException("lab.order.staffNotInHospital");
         }
         return staff;
     }
@@ -386,7 +386,7 @@ public class SuperAdminLabOrderServiceImpl implements SuperAdminLabOrderService 
     private String requireValue(String value, String field) {
         String normalized = normalize(value);
         if (normalized == null) {
-            throw new BusinessException("Missing required field: " + field);
+            throw new BusinessException("lab.order.missingField", field);
         }
         return normalized;
     }

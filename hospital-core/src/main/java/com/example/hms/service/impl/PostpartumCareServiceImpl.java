@@ -84,7 +84,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                                                               UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Postpartum observation request payload is required.");
+            throw new BusinessException("maternity.postpartum.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -221,7 +221,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new BusinessException("maternity.registration.otherPatient");
             }
             return registration;
         }
@@ -256,7 +256,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
             return staff;
         }
@@ -328,7 +328,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return null;
         }
         return observationRepository.findByIdAndPatient_IdAndHospital_Id(observationId, patientId, hospitalId)
-            .orElseThrow(() -> new BusinessException("Unable to record correction; original observation not located."));
+            .orElseThrow(() -> new BusinessException("maternity.postpartum.originalNotFound"));
     }
 
     @SuppressWarnings("java:S107") // builder method needs all domain objects to construct observation

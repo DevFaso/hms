@@ -6334,6 +6334,7 @@
     "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Jour affiché",
     "ACCEPT_OFFER": "Accepter",
     "ACCEPT_OFFER_FAILED": "Échec de l'acceptation de l'offre",
     "ACTIVE_COVERAGE": "Couverture active",

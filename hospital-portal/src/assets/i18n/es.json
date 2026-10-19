@@ -6334,6 +6334,7 @@
     "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Día mostrado",
     "ACCEPT_OFFER": "Aceptar",
     "ACCEPT_OFFER_FAILED": "Error al aceptar la oferta",
     "ACTIVE_COVERAGE": "Cobertura activa",

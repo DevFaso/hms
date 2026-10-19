@@ -84,7 +84,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                          UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Newborn assessment request payload is required.");
+            throw new BusinessException("maternity.newborn.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -407,7 +407,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (hospital != null && delivery.getHospital() != null
             && !hospital.getId().equals(delivery.getHospital().getId())) {
-            throw new BusinessException("Delivery record belongs to a different hospital.");
+            throw new BusinessException("maternity.newborn.deliveryOtherHospital");
         }
         if (mother != null && delivery.getPatient() != null
             && !mother.getId().equals(delivery.getPatient().getId())) {
@@ -432,7 +432,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new BusinessException("maternity.registration.otherPatient");
             }
             return registration;
         }
@@ -460,7 +460,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
         }
-        throw new BusinessException("Unable to resolve hospital context for newborn assessment.");
+        throw new BusinessException("maternity.newborn.hospitalUnresolved");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -469,7 +469,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
             return staff;
         }

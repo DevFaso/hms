@@ -6334,6 +6334,7 @@
     "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Day shown",
     "ACCEPT_OFFER": "Accept",
     "ACCEPT_OFFER_FAILED": "Failed to accept the offer",
     "ACTIVE_COVERAGE": "Active Coverage",

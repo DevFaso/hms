@@ -67,6 +67,63 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // QA D226: keyed service messages reach a French user in French
+    // =========================================================================
+
+    @Nested
+    @DisplayName("QA D226: service messages in the request locale")
+    class D226Localized {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        private ResponseEntity<Object> inFrench(java.util.function.Supplier<ResponseEntity<Object>> call) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            handler.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                return call.get();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("a keyed UnauthorizedAccessException answers 403 in French, not a 500")
+        void keyedRefusalIsA403InFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("lab.result.entryLabStaffOnly", "Glycémie"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message"))
+                .startsWith("Seul le personnel du laboratoire")
+                .contains("Glycémie");
+        }
+
+        @Test
+        @DisplayName("a free-sentence UnauthorizedAccessException stays in the log")
+        void sentenceRefusalIsOpaque() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("Authenticated user not resolvable: jdoe"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message")).doesNotContain("jdoe");
+        }
+
+        @Test
+        @DisplayName("a service BusinessException key renders French")
+        void businessKeyIsFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleBusinessException(
+                new BusinessException("billing.payment.exceedsBalance", "5000", "2000"), request));
+
+            assertThat((String) bodyOf(response).get("message"))
+                .isEqualTo("Le montant du paiement (5000) dépasse le solde dû (2000).");
+        }
+    }
+
+    // =========================================================================
     // handleNotificationTransportUnavailable
     // =========================================================================
 

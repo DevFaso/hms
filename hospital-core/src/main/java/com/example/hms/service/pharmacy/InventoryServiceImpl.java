@@ -80,7 +80,7 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
                 pharmacy.getId(), medication.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
+                throw new BusinessException("stock.inventory.duplicate");
             });
 
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
@@ -339,7 +339,7 @@ public class InventoryServiceImpl implements InventoryService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("stock.user.unknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
