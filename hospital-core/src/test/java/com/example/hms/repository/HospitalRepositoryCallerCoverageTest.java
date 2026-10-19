@@ -81,6 +81,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
+        entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("UserServiceImpl.findByPhoneInAnyForm#findById", "reads the acting hospital's country for the legacy phone forms; grants, writes and lists nothing"),
         entry("FacilityAssignmentGuard.requireCompatible#findById",
             ANY_TYPE + "the role/facility compatibility check is about providers (slice 1)"),
         entry("RecordAccessPolicyImpl.evaluate#findById", ANY_TYPE + "loads the acting facility to refuse a provider (AC-9)"),
@@ -109,6 +111,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("PharmacyClaimServiceImpl.createClaim#findById", PHARMACY_OWN),
         entry("PharmacyPaymentServiceImpl.createPayment#findById", PHARMACY_OWN),
         entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN),
+        entry("LabTestDefinitionServiceImpl.create#findById", "the caller's own acting hospital (pinned scope),"
+            + " not request-supplied; a LABORATORY facility authors its own catalog, so it is not findClinicalById"),
         entry("PanelService.assign#getReferenceById", ACTING_SCOPE),
         entry("ProgramEnrollmentService.enroll#getReferenceById", ACTING_SCOPE),
         entry("RoiRequestService.persistRequest#getReferenceById", ACTING_SCOPE));

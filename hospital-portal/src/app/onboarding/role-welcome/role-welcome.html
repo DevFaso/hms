@@ -12,7 +12,7 @@
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--warn">⚠️</div>
       <h1 class="rw-title">{{ 'ONBOARDING.NOT_FOUND' | translate }}</h1>
-      <p class="rw-body">{{ errorMessage }}</p>
+      <p class="rw-body">{{ errorMessage | translate }}</p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
       </button>
@@ -24,7 +24,7 @@
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--error">✕</div>
       <h1 class="rw-title">{{ 'ONBOARDING.ERROR_TITLE' | translate }}</h1>
-      <p class="rw-body">{{ errorMessage }}</p>
+      <p class="rw-body">{{ errorMessage | translate }}</p>
       <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
         {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
       </button>
@@ -128,8 +128,8 @@
               inputmode="numeric"
               maxlength="1"
               placeholder="·"
-              [title]="'Digit ' + (i + 1) + ' of 6'"
-              [attr.aria-label]="'Digit ' + (i + 1) + ' of 6'"
+              [title]="'ONBOARDING.DIGIT_OF' | translate: { n: i + 1, total: 6 }"
+              [attr.aria-label]="'ONBOARDING.DIGIT_OF' | translate: { n: i + 1, total: 6 }"
               [value]="digit"
               [disabled]="verifying"
               (input)="onDigitInput($event, i)"
@@ -140,7 +140,7 @@
 
         <!-- Error message -->
         @if (verifyError) {
-          <div class="rw-error" role="alert">{{ verifyError }}</div>
+          <div class="rw-error" role="alert">{{ verifyError | translate }}</div>
         }
 
         <!-- Submit button -->
@@ -178,6 +178,7 @@
           }}
         }
       </p>
+      <p class="rw-body rw-other-roles">{{ 'ONBOARDING.OTHER_ROLES_HINT' | translate }}</p>
 
       <!-- Temporary credentials block — only shown for brand-new users -->
       @if (assignment.tempUsername && assignment.tempPassword) {

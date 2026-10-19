@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,7 +13,7 @@ import {
   AcuityLevel,
 } from '../services/admission.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isPhysician } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
@@ -200,7 +201,9 @@ export class AdmissionsComponent implements OnInit {
     const hid = this.roleContext.activeHospitalId;
     this.staffService.list(hid ?? undefined).subscribe((s) => {
       this.allStaff = s ?? [];
-      this.staffMembers.set(s ?? []);
+      // Physicians only: the server refuses a nurse or a midwife as admitting,
+      // attending or discharging provider (QA D84, D176).
+      this.staffMembers.set((s ?? []).filter(isPhysician));
     });
     this.initPatientSearch();
 
@@ -231,6 +234,8 @@ export class AdmissionsComponent implements OnInit {
         next: (h) => {
           this.hospitals.set([h]);
           this.form.hospitalId = h.id;
+          // The modal may already be open when the hospital arrives (D153).
+          if (this.showModal() && !this.editing()) this.loadDepartmentsFor(h.id);
         },
       });
     }
@@ -343,6 +348,10 @@ export class AdmissionsComponent implements OnInit {
       const h = this.hospitals();
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
+    // QA D153: a single-hospital user never picks a hospital, so the
+    // (change) that loads the departments never fired and the list stayed
+    // empty. Load them for whatever hospital the form already carries.
+    this.loadDepartmentsFor(this.form.hospitalId);
     this.showModal.set(true);
   }
 
@@ -425,8 +434,10 @@ export class AdmissionsComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.SAVE_FAILED'));
+      // The server says why (a nurse as admitting provider, QA D176) in the
+      // caller's language; the generic text is the fallback only.
+      error: (err: HttpErrorResponse) => {
+        this.toast.error(err?.error?.message ?? this.translate.instant('ADMISSIONS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
@@ -490,8 +501,10 @@ export class AdmissionsComponent implements OnInit {
           this.discharging.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'),
+          );
           this.discharging.set(false);
         },
       });

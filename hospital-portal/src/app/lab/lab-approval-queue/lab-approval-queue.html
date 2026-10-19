@@ -38,6 +38,13 @@
         countByStatus('PENDING_DIRECTOR_APPROVAL')
       }})
     </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'APPROVED'"
+      (click)="setStatusFilter('APPROVED')"
+    >
+      {{ 'LAB_APPROVAL.TAB.APPROVED' | translate }} ({{ countByStatus('APPROVED') }})
+    </button>
   </div>
 
   <div class="search-box">
@@ -85,7 +92,7 @@
               <td>{{ def.sampleType || '—' }}</td>
               <td>
                 <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-                  {{ def.approvalStatus | titlecase }}
+                  {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
                 </span>
               </td>
               <td>
@@ -156,6 +163,18 @@
                       {{ 'LAB_APPROVAL.ACTION.REJECT' | translate }}
                     </button>
                   }
+
+                  <!-- APPROVED → activate (D124: LAB_DIRECTOR, LAB_MANAGER) -->
+                  @if (def.approvalStatus === 'APPROVED' && canActivate) {
+                    <button
+                      class="btn-action btn-approve"
+                      [title]="'LAB_APPROVAL.ACTION.ACTIVATE_TITLE' | translate"
+                      (click)="openApprovalModal(def, 'ACTIVATE')"
+                    >
+                      <span class="material-symbols-outlined">play_circle</span>
+                      {{ 'LAB_APPROVAL.ACTION.ACTIVATE' | translate }}
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -209,7 +228,7 @@
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
             <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
-              {{ def.approvalStatus | titlecase }}
+              {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
           @if (def.rejectionReason) {
@@ -321,8 +340,9 @@
                 </span>
                 @if (!group.insufficient) {
                   <span class="qc-stats">
-                    Mean: {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp; SD:
-                    {{ group.sd | number: '1.3-3' }}
+                    {{ 'LAB_QC.CHART.MEAN' | translate }}
+                    {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp;
+                    {{ 'LAB_QC.CHART.SD' | translate }} {{ group.sd | number: '1.3-3' }}
                   </span>
                 }
               </div>
@@ -664,6 +684,9 @@
             }
             @case ('REJECT') {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_REJECT' | translate }}
+            }
+            @case ('ACTIVATE') {
+              {{ 'LAB_APPROVAL.CONFIRM.TITLE_ACTIVATE' | translate }}
             }
             @default {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_DEFAULT' | translate }}

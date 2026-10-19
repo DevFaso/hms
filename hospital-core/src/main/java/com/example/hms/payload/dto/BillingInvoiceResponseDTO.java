@@ -19,6 +19,7 @@ public class BillingInvoiceResponseDTO {
     private String id;
 
     // Patient
+    private String patientId;
     private String patientFullName;
     private String patientEmail;
     private String patientPhone;
@@ -29,6 +30,8 @@ public class BillingInvoiceResponseDTO {
     private String hospitalAddress;
 
     // Encounter
+    /** The encounter's code, which the edit form sends back as encounterReference (QA D148). */
+    private String encounterCode;
     private String encounterDescription;
     private String encounterType;
     private String encounterStatus;

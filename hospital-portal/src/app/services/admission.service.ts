@@ -38,6 +38,8 @@ export interface AdmissionResponse {
    *  admission's hospital. Populated by the backend mapper; null when no
    *  open encounter exists. Used by the CPOE order-set picker. */
   currentEncounterId?: string | null;
+  /** The stay's own INPATIENT encounter, open or closed (D135). */
+  encounterId?: string | null;
   attendingPhysicianId: string;
   attendingPhysicianName: string;
   roomBed: string;

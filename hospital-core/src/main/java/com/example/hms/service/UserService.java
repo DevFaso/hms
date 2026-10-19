@@ -66,4 +66,14 @@ public interface UserService {
      * @param newUsername  the desired new username (must be unique, already validated by caller)
      */
     void changeOwnUsername(UUID userId, String newUsername);
+
+    /**
+     * The forced first sign-in, in one transaction: the new username (when
+     * given) and the new password (when given) are applied together, and each
+     * forced-change flag clears only with its own change. Either both land or
+     * neither does, so a rename can no longer end the session before the
+     * password is changed (D17). The caller has already verified the current
+     * password and validated both values.
+     */
+    void completeAccountSetup(UUID userId, String newUsername, String newPassword);
 }

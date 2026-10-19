@@ -55,6 +55,10 @@ public class OrganizationMapper {
             .description(requestDTO.getDescription())
             .type(requestDTO.getType())
             .active(requestDTO.isActive())
+            .primaryContactEmail(blankToNull(requestDTO.getContactEmail()))
+            .primaryContactPhone(blankToNull(requestDTO.getContactPhone()))
+            .defaultTimezone(blankToNull(requestDTO.getTimezone()))
+            .onboardingNotes(blankToNull(requestDTO.getNotes()))
             .build();
     }
 
@@ -66,6 +70,23 @@ public class OrganizationMapper {
         organization.setDescription(requestDTO.getDescription());
         organization.setType(requestDTO.getType());
         organization.setActive(requestDTO.isActive());
+        // QA D191: contact fields sent with the form are kept; absent ones are left alone.
+        if (requestDTO.getContactEmail() != null) {
+            organization.setPrimaryContactEmail(blankToNull(requestDTO.getContactEmail()));
+        }
+        if (requestDTO.getContactPhone() != null) {
+            organization.setPrimaryContactPhone(blankToNull(requestDTO.getContactPhone()));
+        }
+        if (requestDTO.getTimezone() != null) {
+            organization.setDefaultTimezone(blankToNull(requestDTO.getTimezone()));
+        }
+        if (requestDTO.getNotes() != null) {
+            organization.setOnboardingNotes(blankToNull(requestDTO.getNotes()));
+        }
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private List<OrganizationResponseDTO.HospitalMinimalDTO> mapHospitalsToMinimal(java.util.Set<Hospital> hospitals) {

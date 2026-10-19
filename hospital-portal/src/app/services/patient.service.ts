@@ -296,7 +296,7 @@ export interface PatientLabResult {
   value?: string;
   unit?: string;
   referenceRange?: string;
-  /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING. */
+  /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING | UNKNOWN (not interpreted, D31). */
   status?: string;
   released: boolean;
   /**
@@ -451,6 +451,8 @@ export class PatientService {
     email?: string;
     hospitalId?: string;
     size?: number;
+    /** Also match records that are switched off (an admitted patient still needs care). */
+    includeInactive?: boolean;
   }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
     if (params.name) httpParams = httpParams.set('name', params.name);
@@ -459,6 +461,7 @@ export class PatientService {
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params.size) httpParams = httpParams.set('size', params.size);
+    if (params.includeInactive) httpParams = httpParams.set('includeInactive', 'true');
     return this.http.get<PatientResponse[]>('/patients/search', { params: httpParams });
   }
 

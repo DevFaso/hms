@@ -46,6 +46,9 @@ export class PermissionService {
    * UNIONED with this map, so a role missing here still gets its server-side
    * permissions instead of a gutted sidebar.
    */
+  // 'Register Patients' is held by exactly the roles POST /patients and
+  // POST /users/admin-register admit (receptionist, nurse, midwife, hospital
+  // admin, super-admin). A doctor offered the form got a 403 (QA D55).
   private readonly ROLE_PERMISSIONS: Record<string, string[]> = {
     ROLE_SUPER_ADMIN: ['*'],
     ROLE_HOSPITAL_ADMIN: [
@@ -106,7 +109,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       // Clinical — gates nav items
       'Create Encounters',
       'Admit Patients',
@@ -139,7 +141,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       'Create Encounters',
       'Admit Patients',
       'Create Prescriptions',
@@ -163,7 +164,6 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
-      'Register Patients',
       'Create Encounters',
       'Admit Patients',
       'Create Prescriptions',

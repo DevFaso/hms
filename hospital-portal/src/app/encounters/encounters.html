@@ -86,6 +86,7 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span>
       <input
+        [attr.aria-label]="'ENCOUNTERS.SEARCH' | translate"
         type="text"
         [placeholder]="'ENCOUNTERS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
@@ -139,7 +140,9 @@
                 </td>
               }
               <td>
-                <div class="cell-primary">{{ enc.patientName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
+                </div>
               </td>
               <td>{{ enc.staffName || '—' }}</td>
               <td>{{ enc.departmentName || '—' }}</td>
@@ -243,6 +246,22 @@
           </div>
 
           <div class="detail-section transition-actions">
+            @if (canStartEncounter(enc)) {
+              <button
+                class="btn-primary"
+                [disabled]="transitioning()"
+                (click)="startEncounter(enc)"
+              >
+                <span class="material-symbols-outlined">play_arrow</span>
+                {{ 'ENCOUNTERS.START' | translate }}
+              </button>
+            }
+            @if (canCheckOut(enc)) {
+              <button class="btn-primary" [disabled]="transitioning()" (click)="openCheckout(enc)">
+                <span class="material-symbols-outlined">logout</span>
+                {{ 'ENCOUNTERS.CHECK_OUT' | translate }}
+              </button>
+            }
             @if (canCompleteExamination(enc)) {
               <button
                 class="btn-primary"
@@ -284,10 +303,20 @@
               <div class="note-history">
                 @for (n of noteHistory(); track n.id) {
                   <div class="note-history-item">
-                    <p class="notes-content">{{ n.content }}</p>
                     <span class="note-meta">
-                      {{ n.authorName }} — {{ n.createdAt | date: 'short' }}
+                      @if (n.changeKey) {
+                        <strong>{{ n.changeKey | translate }}</strong> ·
+                      }
+                      @if (n.authorName) {
+                        {{ n.authorName }} —
+                      }
+                      {{ n.changedAt | date: 'short' }}
                     </span>
+                    @for (section of n.sections; track section.labelKey) {
+                      <p class="notes-content">
+                        <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                      </p>
+                    }
                   </div>
                 }
               </div>
@@ -764,4 +793,12 @@
       </div>
     </div>
   </div>
+}
+
+@if (checkoutEncounter()) {
+  <app-checkout-dialog
+    [encounter]="checkoutEncounter()"
+    (dismissed)="onCheckoutDismissed()"
+    (checkoutCompleted)="onCheckoutCompleted()"
+  />
 }

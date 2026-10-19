@@ -2,9 +2,11 @@ import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import {
   AfterViewInit,
+  afterNextRender,
   Component,
   ElementRef,
   inject,
+  Injector,
   OnInit,
   PLATFORM_ID,
   ViewChild,
@@ -21,6 +23,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+
+const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
 @Component({
   selector: 'app-login',
@@ -92,6 +96,8 @@ export class Login implements OnInit, AfterViewInit {
   private readonly auth = inject(AuthService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly injector = inject(Injector);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly sessionScope = inject(SessionScopeService);
   private readonly translate = inject(TranslateService);
   private readonly platformId = inject(PLATFORM_ID);
@@ -217,10 +223,7 @@ export class Login implements OnInit, AfterViewInit {
         },
         error: (err) => {
           this.bootstrapLoading = false;
-          this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.SETUP_FAILED');
+          this.error = err?.error?.message ?? this.translate.instant('LOGIN.SETUP_FAILED');
         },
       });
   }
@@ -279,7 +282,13 @@ export class Login implements OnInit, AfterViewInit {
         next: (res) => {
           // ── Multi-role gate: ask user to pick a role ──
           if (res?.roleSelectionRequired && res.availableRoles?.length) {
-            this.availableRoles = res.availableRoles;
+            // ROLE_SUPER_ADMIN first: it reaches every page an inherited role
+            // would, and picking a lesser role by mistake 403s the admin pages.
+            this.availableRoles = [...res.availableRoles].sort(
+              (a, b) => Number(b === SUPER_ADMIN_ROLE) - Number(a === SUPER_ADMIN_ROLE),
+            );
+            this.roleContext.setHeldRoles(res.availableRoles);
+            this.focusRecommendedRole();
             this.roleSelectionMode = true;
             this.loading = false;
             return;
@@ -328,6 +337,8 @@ export class Login implements OnInit, AfterViewInit {
           // role information before the session bootstrap response arrives.
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
+          // No picker means the token holds every role; with one, the picker kept them.
+          if (!selectedRole) this.roleContext.setHeldRoles(jwtRoles);
           if (jwtRoles.length === 1) {
             this.roleContext.activeRole = jwtRoles[0];
           }
@@ -404,9 +415,9 @@ export class Login implements OnInit, AfterViewInit {
         error: (err) => {
           this.loading = false;
           this.error =
-            err?.error?.message ??
-            err?.error?.error ??
-            this.translate.instant('LOGIN.LOGIN_FAILED');
+            // `error` is the HTTP reason phrase ("Unauthorized") — English and
+            // not a sentence. The backend's message is translated (D64).
+            err?.error?.message ?? this.translate.instant('LOGIN.LOGIN_FAILED');
         },
       });
   }
@@ -425,6 +436,22 @@ export class Login implements OnInit, AfterViewInit {
     this.availableRoles = [];
     this.password = '';
     this.error = '';
+  }
+
+  /** Pre-selects the recommended card: Enter signs in with it, Tab still reaches the others. */
+  private focusRecommendedRole(): void {
+    afterNextRender(
+      () =>
+        this.hostEl.nativeElement
+          .querySelector<HTMLButtonElement>('.role-card--recommended')
+          ?.focus(),
+      { injector: this.injector },
+    );
+  }
+
+  /** The card the picker pre-selects: ROLE_SUPER_ADMIN when the account holds it. */
+  isRecommendedRole(role: string): boolean {
+    return role === SUPER_ADMIN_ROLE;
   }
 
   /** Material icon for a role — used in the role-picker cards. */
@@ -480,12 +507,15 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.forgotPasswordLoading) return;
     this.error = '';
     this.forgotPasswordSuccess = '';
-    if (!this.forgotPasswordEmail) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+    const identifier = this.forgotPasswordEmail.trim();
+    if (!identifier) {
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
       return;
     }
     this.forgotPasswordLoading = true;
-    this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
+    // QA D171: a phone-only account gets its reset link by SMS.
+    const body = identifier.includes('@') ? { email: identifier } : { phone: identifier };
+    this.http.post<void>('/auth/password/request', body).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
         this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');

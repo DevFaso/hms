@@ -54,8 +54,11 @@ public final class UserRoleHospitalAssignmentSpecification {
             Join<UserRoleHospitalAssignment, User> userJoin = root.join("user", JoinType.LEFT);
             Join<UserRoleHospitalAssignment, Hospital> hospitalJoin = root.join("hospital", JoinType.LEFT);
             Join<UserRoleHospitalAssignment, Role> roleJoin = root.join("role", JoinType.LEFT);
-            Join<UserRoleHospitalAssignment, User> registrarJoin = root.join("registeredBy", JoinType.LEFT);
 
+            // The assignment's own holder, role, code and hospital only. The
+            // registrar (registeredBy) is not searched: typing a username
+            // also listed every row that user had registered for others,
+            // which read as that user holding them (QA D193).
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(cb.like(cb.lower(userJoin.get("username")), pattern));
             predicates.add(cb.like(cb.lower(userJoin.get("email")), pattern));
@@ -66,10 +69,6 @@ public final class UserRoleHospitalAssignmentSpecification {
             predicates.add(cb.like(cb.lower(root.get("assignmentCode")), pattern));
             predicates.add(cb.like(cb.lower(hospitalJoin.get("name")), pattern));
             predicates.add(cb.like(cb.lower(hospitalJoin.get("code")), pattern));
-            predicates.add(cb.like(cb.lower(registrarJoin.get("username")), pattern));
-            predicates.add(cb.like(cb.lower(registrarJoin.get("email")), pattern));
-            predicates.add(cb.like(cb.lower(registrarJoin.get("firstName")), pattern));
-            predicates.add(cb.like(cb.lower(registrarJoin.get("lastName")), pattern));
 
             return cb.or(predicates.toArray(new Predicate[0]));
         };

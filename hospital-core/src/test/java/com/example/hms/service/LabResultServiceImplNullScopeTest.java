@@ -130,6 +130,37 @@ class LabResultServiceImplNullScopeTest {
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
     }
 
+    /** D81: a released result is immutable; a correction is a new result on the order. */
+    @Nested
+    class ReleasedResult {
+
+        @BeforeEach
+        void scope() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+            result.setReleased(true);
+        }
+
+        @Test
+        void updateOfAReleasedResultIsRefusedAndNothingIsSaved() {
+            LabResultRequestDTO request = request();
+            request.setResultValue("5.0");
+            Throwable refusal = catchThrowable(() -> service.updateLabResult(result.getId(), request, Locale.ENGLISH));
+
+            assertThat(refusal).isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(result.getResultValue()).isEqualTo("12.1");
+            verify(labResultRepository, never()).save(any());
+        }
+
+        @Test
+        void deleteOfAReleasedResultIsRefused() {
+            UUID id = result.getId();
+            Throwable refusal = catchThrowable(() -> service.deleteLabResult(id, Locale.ENGLISH));
+
+            assertThat(refusal).isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(labResultRepository, never()).deleteById(any());
+        }
+    }
+
     /** requireActiveHospitalId()'s step 4: null because the AUTHORITIES say super-admin; the verified flag does not. */
     @Nested
     class UnverifiedNullScope {

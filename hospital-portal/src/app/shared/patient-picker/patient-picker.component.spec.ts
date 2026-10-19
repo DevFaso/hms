@@ -36,7 +36,12 @@ describe('PatientPickerComponent', () => {
     component.ngOnInit();
     component.onQueryChange('do');
     setTimeout(() => {
-      expect(patientSpy.search).toHaveBeenCalledWith({ name: 'do', hospitalId: 'h1', size: 8 });
+      expect(patientSpy.search).toHaveBeenCalledWith({
+        name: 'do',
+        hospitalId: 'h1',
+        size: 8,
+        includeInactive: true,
+      });
       expect(patientSpy.lookup).not.toHaveBeenCalled();
       expect(component.suggestions().map((p) => p.id)).toEqual(['p1', 'p2']);
       expect(component.dropdownOpen()).toBeTrue();
@@ -71,6 +76,17 @@ describe('PatientPickerComponent', () => {
     }, 400);
   });
 
+  it('looks a bare server-issued MRN up across hospitals (QA D129)', (done) => {
+    patientSpy.lookup.and.returnValue(of([mockPatient('p9', 'Dana')]));
+    component.ngOnInit();
+    component.onQueryChange('CHU0421');
+    setTimeout(() => {
+      expect(patientSpy.lookup).toHaveBeenCalled();
+      expect(component.suggestions().map((p) => p.id)).toContain('p9');
+      done();
+    }, 400);
+  });
+
   it('keeps the stream alive when one source errors', (done) => {
     patientSpy.search.and.returnValue(throwError(() => new Error('boom')));
     patientSpy.lookup.and.returnValue(of([mockPatient('p3', 'Cara')]));
@@ -78,6 +94,34 @@ describe('PatientPickerComponent', () => {
     component.onQueryChange('mrn-X4K9Q2A');
     setTimeout(() => {
       expect(component.suggestions().map((p) => p.id)).toEqual(['p3']);
+      done();
+    }, 400);
+  });
+
+  it('says no patient matches when a finished search finds nothing (QA D68)', (done) => {
+    const fixture = TestBed.createComponent(PatientPickerComponent);
+    const picker = fixture.componentInstance;
+    picker.ngOnInit();
+    picker.onQueryChange('zz');
+    setTimeout(() => {
+      fixture.detectChanges();
+      expect(picker.noMatch()).toBeTrue();
+      const el: HTMLElement = fixture.nativeElement;
+      expect(el.querySelector('.picker-no-match')).not.toBeNull();
+      picker.onQueryChange('z');
+      fixture.detectChanges();
+      expect(picker.noMatch()).toBeFalse();
+      expect(el.querySelector('.picker-no-match')).toBeNull();
+      done();
+    }, 400);
+  });
+
+  it('shows no "no match" message while a search has results', (done) => {
+    patientSpy.search.and.returnValue(of([mockPatient('p1', 'Anna')]));
+    component.ngOnInit();
+    component.onQueryChange('an');
+    setTimeout(() => {
+      expect(component.noMatch()).toBeFalse();
       done();
     }, 400);
   });

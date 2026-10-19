@@ -1,5 +1,10 @@
 package com.example.hms.payload.dto;
 
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
@@ -20,6 +25,8 @@ public class TriageSubmissionRequestDTO {
 
     // ── Vital signs ────────────────────────────────────────────
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
 
     @Min(20) @Max(300)
@@ -70,4 +77,10 @@ public class TriageSubmissionRequestDTO {
     /** Exam room identifier, e.g. "Room 3A". */
     @Size(max = 100)
     private String roomAssignment;
+
+    @AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
 }

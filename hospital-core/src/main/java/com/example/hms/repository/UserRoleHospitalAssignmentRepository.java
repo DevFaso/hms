@@ -35,7 +35,26 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /** Prefer this over Optional for multi-row relation */
     List<UserRoleHospitalAssignment> findAllByUserId(UUID userId);
 
-    Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalId(UUID userId, UUID hospitalId);
+    /**
+     * The ACTIVE, non-patient assignments a user holds at one hospital, oldest
+     * first. An inactive row (a pending invitation, a retired grant, or a
+     * ROLE_PATIENT a patient registration attached to a staff account) never
+     * counts as the user's working role there, and a user may hold several
+     * roles at one hospital, so this is a list, never a unique lookup.
+     */
+    @Query("""
+        SELECT a FROM UserRoleHospitalAssignment a
+        WHERE a.user.id = :userId AND a.hospital.id = :hospitalId
+          AND a.active = true AND UPPER(a.role.code) <> 'ROLE_PATIENT'
+        ORDER BY a.createdAt ASC
+        """)
+    List<UserRoleHospitalAssignment> findActiveStaffAssignments(@Param("userId") UUID userId,
+                                                                @Param("hospitalId") UUID hospitalId);
+
+    /** The first of {@link #findActiveStaffAssignments}: the role a staff member works under at a hospital. */
+    default Optional<UserRoleHospitalAssignment> findActiveStaffAssignment(UUID userId, UUID hospitalId) {
+        return findActiveStaffAssignments(userId, hospitalId).stream().findFirst();
+    }
 
     Optional<UserRoleHospitalAssignment> findByUserUsernameAndHospitalIdAndRoleCodeIgnoreCase(
         String username, UUID hospitalId, String roleCode);
@@ -78,6 +97,9 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     boolean existsByUserIdAndActiveTrue(UUID userId);
 
+    /** Any assignment, active or not, whose role is not the given one (QA D24: is this a staff account?). */
+    boolean existsByUserIdAndRole_CodeNot(UUID userId, String roleCode);
+
     boolean existsByUserIdAndHospitalIdAndRoleId(UUID userId, UUID hospitalId, UUID roleId);
 
     boolean existsByUserIdAndHospitalIdAndRoleIdAndActiveTrue(UUID userId, UUID hospitalId, UUID roleId);
@@ -98,6 +120,24 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     boolean existsActiveByUserAndHospitalAndAnyRoleCode(@Param("userId") UUID userId,
                                                         @Param("hospitalId") UUID hospitalId,
                                                         @Param("roleCodes") Set<String> roleCodes);
+
+    /**
+     * QA D157 (#891 review): a controlled-substance witness must be an active,
+     * undeleted account as well as hold an active assignment.
+     */
+    @Query("""
+        SELECT (COUNT(a) > 0)
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.user.id = :userId
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    boolean existsActiveWitness(@Param("userId") UUID userId,
+                                @Param("hospitalId") UUID hospitalId,
+                                @Param("roleCodes") Set<String> roleCodes);
 
     /* ------------ Fetch graphs for DTO mapping ------------ */
 

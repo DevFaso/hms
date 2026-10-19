@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { LabResultSummary, PatientPortalService } from './patient-portal.service';
+import {
+  LabResultSummary,
+  PatientPortalService,
+  PortalInvoice,
+  mapPortalInvoice,
+} from './patient-portal.service';
 
 /**
  * The portal used to decide whether a lab result was abnormal by parsing the
@@ -116,6 +121,22 @@ describe('PatientPortalService lab results', () => {
     expect(lab.isAbnormal).toBeFalse();
   });
 
+  it('D31: maps a released UNKNOWN row (no range, no flag) as not graded, never normal', () => {
+    const [lab] = labResults([
+      {
+        id: 'u1',
+        testName: 'Glucose',
+        value: '28.5',
+        unit: 'mmol/L',
+        status: 'UNKNOWN',
+        released: true,
+      },
+    ]);
+
+    expect(lab.isUngraded).toBeTrue();
+    expect(lab.isAbnormal).toBeFalse();
+  });
+
   it('keeps an abnormal status abnormal, and a matching-unit normal graded, whatever unitMismatch says', () => {
     const mapped = labResults([
       {
@@ -203,14 +224,14 @@ describe('PatientPortalService care team', () => {
     httpMock
       .expectOne('/me/patient/care-team')
       .flush({ data: { primaryCare: pcp, primaryCareHistory: [pcp] } });
-    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp] });
+    expect(received).toEqual({ primaryCare: pcp, primaryCareHistory: [pcp], visitClinicians: [] });
   });
 
   it('normalises an absent current provider and history', () => {
     let received: unknown;
     service.getMyCareTeam().subscribe((t) => (received = t));
     httpMock.expectOne('/me/patient/care-team').flush({ data: {} });
-    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [] });
+    expect(received).toEqual({ primaryCare: null, primaryCareHistory: [], visitClinicians: [] });
   });
 
   it('lets a failure through instead of reporting an empty team', () => {
@@ -261,6 +282,22 @@ describe('PatientPortalService chat recipients', () => {
     expect(ids).toEqual(['u2', 'u1']);
   });
 
+  it('adds the clinicians of open visits after the primary-care doctors, deduped (D115)', () => {
+    let ids: string[] = [];
+    service.getMyCareTeamClinicians().subscribe((r) => (ids = r.map((c) => c.userId)));
+    httpMock.expectOne('/me/patient/care-team').flush({
+      data: {
+        primaryCare: { id: 'p1', doctorUserId: 'u1', doctorDisplay: 'A', current: true },
+        primaryCareHistory: [],
+        visitClinicians: [
+          { userId: 'u3', displayName: 'C', hospitalName: 'H' },
+          { userId: 'u1', displayName: 'A', hospitalName: 'H' },
+        ],
+      },
+    });
+    expect(ids).toEqual(['u1', 'u3']);
+  });
+
   it('reads an empty care team as no one', () => {
     let result: unknown = null;
     service.getMyCareTeamClinicians().subscribe((r) => (result = r));
@@ -296,5 +333,58 @@ describe('PatientPortalService chat recipients', () => {
       .expectOne('/me/patient/care-team')
       .flush({}, { status: 500, statusText: 'Server Error' });
     expect(failed).toBeTrue();
+  });
+});
+
+/**
+ * QA D139: the billing page read `amount`, `balance` and `facility`, which
+ * the API never sends (it sends BillingInvoiceResponseDTO: totalAmount,
+ * balanceDue, hospitalName), so every invoice showed 0 and no Pay button.
+ */
+describe('PatientPortalService invoices', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('maps the wire invoice to the amounts, balance and hospital the page shows', () => {
+    let received: PortalInvoice[] = [];
+    service.getMyInvoices().subscribe((r) => (received = r));
+    httpMock.expectOne('/me/patient/billing/invoices').flush({
+      success: true,
+      data: {
+        content: [
+          {
+            id: 'i1',
+            invoiceNumber: 'HA-2026-000013',
+            invoiceDate: '2026-10-01',
+            dueDate: '2026-10-31',
+            totalAmount: 2500,
+            amountPaid: 1000,
+            balanceDue: 1500,
+            status: 'PARTIALLY_PAID',
+            hospitalName: 'Hôpital A',
+          },
+        ],
+      },
+    });
+    expect(received.length).toBe(1);
+    expect(received[0].amount).toBe(2500);
+    expect(received[0].paid).toBe(1000);
+    expect(received[0].balance).toBe(1500);
+    expect(received[0].facility).toBe('Hôpital A');
+    expect(received[0].date).toBe('2026-10-01');
+  });
+
+  it('derives the balance when the API leaves balanceDue out', () => {
+    expect(mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 300 }).balance).toBe(600);
   });
 });

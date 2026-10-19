@@ -62,6 +62,7 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -174,6 +175,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final HospitalRepository hospitalRepository;
     private final DepartmentRepository departmentRepository;
     private final StaffRepository staffRepository;
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final StaffAvailabilityService staffAvailabilityService;
     private final com.example.hms.repository.UserRepository userRepository;
@@ -240,10 +242,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // silently bypassed it).
         var before = addressHistoryRecorder.snapshot(patient);
 
-        // Only update fields the patient is allowed to change
-        if (dto.getPhoneNumberPrimary() != null)       patient.setPhoneNumberPrimary(dto.getPhoneNumberPrimary());
-        if (dto.getPhoneNumberSecondary() != null)     patient.setPhoneNumberSecondary(dto.getPhoneNumberSecondary());
-        if (dto.getEmail() != null)                    patient.setEmail(dto.getEmail());
+        // Only update fields the patient is allowed to change. Phones and the
+        // e-mail are identifiers: normalised, checked and refused with a
+        // message, never stored as typed (QA D113: free text, another
+        // patient's address, a blank phone failing as a 500).
+        applySelfServiceIdentifiers(patient, dto);
         if (dto.getAddressLine1() != null)             patient.setAddressLine1(dto.getAddressLine1());
         if (dto.getAddressLine2() != null)             patient.setAddressLine2(dto.getAddressLine2());
         if (dto.getCity() != null)                     patient.setCity(dto.getCity());
@@ -251,7 +254,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (dto.getZipCode() != null)                  patient.setZipCode(dto.getZipCode());
         if (dto.getCountry() != null)                  patient.setCountry(dto.getCountry());
         if (dto.getEmergencyContactName() != null)     patient.setEmergencyContactName(dto.getEmergencyContactName());
-        if (dto.getEmergencyContactPhone() != null)    patient.setEmergencyContactPhone(dto.getEmergencyContactPhone());
+        if (dto.getEmergencyContactPhone() != null) {
+            patient.setEmergencyContactPhone(selfServicePhone(patient, dto.getEmergencyContactPhone()));
+        }
         if (dto.getEmergencyContactRelationship() != null)
             patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship());
         if (dto.getPreferredPharmacy() != null)        patient.setPreferredPharmacy(dto.getPreferredPharmacy());
@@ -261,6 +266,56 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         patient = patientRepository.save(patient);
         log.info("Patient {} updated their profile", patient.getId());
         return toProfileDTO(patient);
+    }
+
+    /** The phones and e-mail of a self-service edit: normalised, checked, never stored as typed. */
+    private void applySelfServiceIdentifiers(Patient patient, PatientProfileUpdateDTO dto) {
+        if (dto.getPhoneNumberPrimary() != null) {
+            String primary = selfServicePhone(patient, dto.getPhoneNumberPrimary());
+            if (primary == null) {
+                throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
+            }
+            UUID selfId = patient.getId();
+            if (patientRepository.findByPhoneNumberPrimary(primary)
+                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
+                throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
+            }
+            patient.setPhoneNumberPrimary(primary);
+        }
+        if (dto.getPhoneNumberSecondary() != null) {
+            patient.setPhoneNumberSecondary(selfServicePhone(patient, dto.getPhoneNumberSecondary()));
+        }
+        if (dto.getEmail() != null) {
+            patient.setEmail(selfServiceEmail(patient, dto.getEmail()));
+        }
+    }
+
+    /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
+    private static String selfServicePhone(Patient patient, String raw) {
+        if (raw.isBlank()) {
+            return null;
+        }
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(patient.getCountry()));
+        if (e164 == null) {
+            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+        }
+        return e164;
+    }
+
+    /** Blank clears the address; one held by another patient or account is refused. */
+    private String selfServiceEmail(Patient patient, String raw) {
+        String email = raw.trim();
+        if (email.isEmpty()) {
+            return null;
+        }
+        // The signed-in patient always has an account (findPatient resolves it).
+        boolean takenByAccount = patient.getUser() != null
+                && userRepository.existsEmailOnOtherAccount(email, patient.getUser().getId());
+        if (patientRepository.existsEmailOnOtherPatient(email, patient.getId()) || takenByAccount) {
+            throw new BusinessException(MessageUtil.resolve("user.update.email.taken"));
+        }
+        return email;
     }
 
     // ── Release of information (Tier 2 item 39b) ────────────────────────
@@ -478,7 +533,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         // Verify patient is registered at this hospital
-        requireHospitalRegistration(patientId, dto.getHospitalId());
+        requireBookingRegistration(patientId, dto.getHospitalId());
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
@@ -486,7 +541,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Department department = departmentRepository.findById(dto.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", dto.getDepartmentId()));
         if (!department.getHospital().getId().equals(dto.getHospitalId())) {
-            throw new BusinessException("Department does not belong to the selected hospital");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.departmentOtherHospital"));
         }
 
         // Resolve staff — explicit pick or first available in department
@@ -495,13 +550,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
                     .orElseThrow(() -> new ResourceNotFoundException("provider.notFound", dto.getStaffId()));
             if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
-                throw new BusinessException("Provider does not belong to the selected hospital");
+                throw new BusinessException(MessageUtil.resolve("portal.booking.providerOtherHospital"));
             }
         } else {
             List<Staff> available = staffRepository.findActiveProvidersByHospitalAndDepartment(
                     dto.getHospitalId(), dto.getDepartmentId());
             if (available.isEmpty()) {
-                throw new BusinessException("No providers available in the selected department");
+                throw new BusinessException(MessageUtil.resolve("portal.booking.noProvider"));
             }
             staff = available.get(0); // assign first available
         }
@@ -513,12 +568,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
         if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException("Appointment end time must be after start time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.endBeforeStart"));
         }
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException("The selected provider is not available at the requested time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
         }
 
         // Overlap check
@@ -531,13 +586,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
                 });
         if (hasConflict) {
-            throw new BusinessException("The selected provider already has an appointment at the requested time");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
         }
 
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
-                .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+                .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
+                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable")));
 
         // Create the appointment
         Appointment appointment = new Appointment();
@@ -583,10 +638,27 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .toList();
     }
 
+    /**
+     * QA D128: the booking lookups answer only for a hospital the patient is actively
+     * registered at — the same list {@link #getMyHospitals} offers. Anything else is 404,
+     * so another hospital's departments and staff are not listed to a stranger.
+     */
+    private void requireActiveRegistration(Authentication auth, UUID hospitalId) {
+        UUID patientId = resolvePatientId(auth);
+        if (hospitalId == null
+                || registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId).isEmpty()) {
+            throw new ResourceNotFoundException("hospital.notFound", hospitalId);
+        }
+    }
+
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getDepartmentsForHospital(UUID hospitalId) {
+    public List<Map<String, Object>> getDepartmentsForHospital(Authentication auth, UUID hospitalId) {
+        requireActiveRegistration(auth, hospitalId);
+        // QA D169: only departments where someone can actually be booked.
+        java.util.Set<UUID> bookable = staffRepository.findDepartmentIdsWithActiveProviders(hospitalId);
         return departmentRepository.findByHospitalId(hospitalId).stream()
+                .filter(d -> bookable.contains(d.getId()))
                 .map(d -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
                     m.put("id", d.getId());
@@ -598,7 +670,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> getProvidersForDepartment(UUID hospitalId, UUID departmentId) {
+    public List<Map<String, Object>> getProvidersForDepartment(Authentication auth, UUID hospitalId, UUID departmentId) {
+        requireActiveRegistration(auth, hospitalId);
         return staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
                 .map(s -> {
                     Map<String, Object> m = new java.util.LinkedHashMap<>();
@@ -872,6 +945,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return CareTeamDTO.builder()
                 .primaryCare(currentPcp)
                 .primaryCareHistory(history)
+                .visitClinicians(visitClinicians(patientId))
                 .build();
     }
 
@@ -1075,18 +1149,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    /**
-     * Verify that the patient has an active registration at the given hospital,
-     * so a patient cannot act on behalf of a hospital they have never attended
-     * (IDOR / privilege escalation). Its consent callers went with E9 #65; the
-     * self-service write paths that remain still need it.
-     *
-     * @throws BusinessException (HTTP 400) when no active registration is found.
-     */
-    private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
+    /** QA D128: the booking's own refusal, in the patient's language (it used the consent text). */
+    private void requireBookingRegistration(UUID patientId, UUID hospitalId) {
         if (!isRegisteredAt(patientId, hospitalId)) {
-            throw new BusinessException(
-                    "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
+            throw new BusinessException(MessageUtil.resolve("portal.booking.notRegistered"));
         }
     }
 
@@ -1225,6 +1291,38 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .requestedAt(r.getCreatedAt())
                 .updatedAt(r.getUpdatedAt())
                 .build();
+    }
+
+    /**
+     * The clinicians holding the patient's open visits, newest visit first,
+     * one entry each. Without them a patient seen on a walk-in had an empty
+     * care team and nobody to write to (QA D115).
+     */
+    private List<CareTeamDTO.VisitClinicianEntry> visitClinicians(UUID patientId) {
+        List<com.example.hms.model.Encounter> open = encounterRepository.findOpenWithClinicianByPatientId(
+                patientId, java.util.EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
+                        com.example.hms.enums.EncounterStatus.CANCELLED));
+        Map<UUID, CareTeamDTO.VisitClinicianEntry> byUser = new java.util.LinkedHashMap<>();
+        for (com.example.hms.model.Encounter encounter : open) {
+            com.example.hms.model.User clinician = encounter.getStaff().getUser();
+            // Only someone the patient can actually write to: a live account
+            // holding a clinical-care role, the same test the send applies.
+            if (clinician == null || clinician.isDeleted() || !clinician.isActive()
+                    || !encounter.getStaff().isActive()
+                    || !com.example.hms.service.ChatMessageServiceImpl.holdsClinicalCareRole(clinician)
+                    || byUser.containsKey(clinician.getId())) {
+                continue;
+            }
+            Hospital hospital = encounter.getHospital();
+            byUser.put(clinician.getId(), CareTeamDTO.VisitClinicianEntry.builder()
+                    .userId(clinician.getId())
+                    .displayName(encounter.getStaff().getFullName())
+                    .hospitalId(hospital == null ? null : hospital.getId())
+                    .hospitalName(hospital == null ? null : hospital.getName())
+                    .visitDate(encounter.getEncounterDate())
+                    .build());
+        }
+        return List.copyOf(byUser.values());
     }
 
     /** Map a PrimaryCareResponseDTO to a CareTeam entry. */

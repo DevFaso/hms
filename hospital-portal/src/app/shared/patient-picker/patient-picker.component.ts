@@ -45,6 +45,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
       this.query.set('');
       this.suggestions.set([]);
       this.dropdownOpen.set(false);
+      this.noMatch.set(false);
     }
   }
   @Output() selectedChange = new EventEmitter<PatientResponse | null>();
@@ -54,6 +55,8 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   readonly suggestions = signal<PatientResponse[]>([]);
   readonly dropdownOpen = signal(false);
   readonly searchLoading = signal(false);
+  /** The last finished search found nothing (QA D68): say so, not an empty box. */
+  readonly noMatch = signal(false);
   private readonly search$ = new Subject<string>();
   private searchSub?: Subscription;
 
@@ -69,8 +72,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         // unfiltered because the backend never implemented that param.
         switchMap((q) => {
           this.searchLoading.set(true);
+          this.noMatch.set(false);
           const scoped = this.patientService
-            .search({ name: q, hospitalId: this.hospitalId ?? undefined, size: 8 })
+            .search({
+              name: q,
+              hospitalId: this.hospitalId ?? undefined,
+              size: 8,
+              // QA D80: an admitted patient whose record is inactive must still
+              // be found by the task, handoff and discharge pickers.
+              includeInactive: true,
+            })
             .pipe(catchError(() => of([] as PatientResponse[])));
           // Cross-hospital lookup fires only for EXACT identifiers (phone/email/
           // MRN) — free-text name fragments must never leave the hospital scope.
@@ -90,6 +101,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
         const items = merged.slice(0, 8);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
+        this.noMatch.set(items.length === 0);
         this.searchLoading.set(false);
       });
   }
@@ -98,10 +110,19 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.searchSub?.unsubscribe();
   }
 
-  /** Phone-like (6+ digits/symbols), email-like, or MRN-prefixed input. */
+  /**
+   * Phone-like (6+ digits/symbols), email-like, MRN-prefixed input, or a bare
+   * MRN as the server issues it — a hospital prefix then digits, e.g. CHU0421
+   * (D129: the maternity picker could not find a patient by MRN).
+   */
   private looksLikeIdentifier(q: string): boolean {
     const trimmed = q.trim();
-    return trimmed.includes('@') || /^mrn-/i.test(trimmed) || /^\+?[\d\s().-]{6,}$/.test(trimmed);
+    return (
+      trimmed.includes('@') ||
+      /^mrn-/i.test(trimmed) ||
+      /^[A-Za-z]{2,8}-?\d{3,}$/.test(trimmed) ||
+      /^\+?[\d\s().-]{6,}$/.test(trimmed)
+    );
   }
 
   onQueryChange(q: string): void {
@@ -111,6 +132,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     } else {
       this.suggestions.set([]);
       this.dropdownOpen.set(false);
+      this.noMatch.set(false);
     }
   }
 
@@ -122,6 +144,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
   }
 
   clear(): void {
+    this.noMatch.set(false);
     this.selectedPatient.set(null);
     this.query.set('');
     this.suggestions.set([]);

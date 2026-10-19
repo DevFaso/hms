@@ -110,8 +110,16 @@ export interface InventoryItemResponse {
   reorderQuantity: number;
   unit?: string;
   active: boolean;
+  /** QA D157: a controlled substance; a manual movement of it needs a witness. */
+  controlled?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+/** QA D157: a colleague who may witness a controlled-substance movement. */
+export interface StockWitnessCandidate {
+  userId: string;
+  displayName: string;
 }
 
 export interface StockLotRequest {
@@ -157,6 +165,8 @@ export interface StockTransactionRequest {
   /** Must be a UUID when present (e.g. destination pharmacy on TRANSFER). */
   referenceId?: string;
   performedBy?: string;
+  /** QA D157: the colleague who witnessed a controlled-substance movement. */
+  witnessedBy?: string;
   // FU-2: first-class RECEIPT fields (all optional)
   lotNumber?: string;
   supplier?: string;
@@ -175,6 +185,12 @@ export interface StockTransactionResponse {
   reason?: string;
   referenceId?: string;
   performedBy?: string;
+  /** QA D158: who did it, as a name. */
+  performedByName?: string;
+  witnessedBy?: string;
+  witnessedByName?: string;
+  /** QA D158: the lot's number, never its id. */
+  stockLotNumber?: string;
   createdAt: string;
   // FU-2: first-class RECEIPT fields
   lotNumber?: string;
@@ -263,6 +279,10 @@ export interface DispenseResponse {
   id: string;
   prescriptionId: string;
   patientId: string;
+  /** The patient as a person reads them; sent by GET /pharmacy/dispense/{id} only (QA D102). */
+  patientName?: string;
+  /** The pharmacy name; GET /pharmacy/dispense/{id} only (QA D102). */
+  pharmacyName?: string;
   pharmacyId: string;
   stockLotId?: string;
   /** The dispensing user's id. */
@@ -743,6 +763,13 @@ export class PharmacyService {
     return this.http.post<ApiResponse<StockTransactionResponse>>(
       '/pharmacy/stock-transactions',
       req,
+    );
+  }
+
+  /** QA D157: colleagues of the active hospital who may witness a controlled-substance movement. */
+  listWitnessCandidates(): Observable<ApiResponse<StockWitnessCandidate[]>> {
+    return this.http.get<ApiResponse<StockWitnessCandidate[]>>(
+      '/pharmacy/stock-transactions/witness-candidates',
     );
   }
 

@@ -82,6 +82,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      * through {@link #incrementCounter} which is null-safe.
      */
     private final MeterRegistry meterRegistry;
+    private final org.springframework.context.MessageSource messageSource;
+    private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
 
     // ── Metric names ─────────────────────────────────────────────────────────
     static final String METRIC_AVS_FETCH_TOTAL = "hms.avs.portal.fetch";
@@ -426,8 +428,12 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         int enriched = enrichSparseExistingSummaries(patientId);
 
         // 3. Return all discharge summaries for this patient
+        // QA D151: a summary backfilled for a prescription's anchor
+        // consultation before this filter existed is not shown either.
         List<DischargeSummary> rows = dischargeSummaryRepository
-                .findByPatient_IdOrderByDischargeDateDesc(patientId);
+                .findByPatient_IdOrderByDischargeDateDesc(patientId).stream()
+                .filter(r -> !isPrescriptionAnchor(r.getEncounter()))
+                .toList();
         List<DischargeSummaryResponseDTO> result = rows.stream()
                 .map(dischargeSummaryMapper::toResponseDTO)
                 .toList();
@@ -519,6 +525,11 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Backfilling {} missing discharge summaries for patient {}", orphans.size(), patientId);
         int created = 0;
         for (Encounter enc : orphans) {
+            // QA D151: the completed consultation a stand-alone prescription
+            // creates is bookkeeping, not a visit; it gets no after-visit summary.
+            if (isPrescriptionAnchor(enc)) {
+                continue;
+            }
             try {
                 DischargeSummary summary = new DischargeSummary();
                 summary.setEncounter(enc);
@@ -581,9 +592,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 .findByPatient_IdOrderByDischargeDateDesc(patientId);
         int enriched = 0;
         for (DischargeSummary summary : summaries) {
-            boolean changed = false;
             Encounter enc = summary.getEncounter();
-            if (enc == null) continue;
+            // QA D151: a prescription anchor is never shown, so never enriched.
+            if (enc == null || isPrescriptionAnchor(enc)) continue;
+            boolean changed = false;
 
             // Enrich hospitalCourse from encounter notes if missing.
             //
@@ -632,6 +644,13 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                     .findByEncounter_Id(enc.getId(), page)
                     .getContent();
             for (Prescription rx : prescriptions) {
+                // QA D152: a DRAFT or unsigned order was never given to the
+                // patient, and a withdrawn one is not continued at discharge.
+                if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
+                        || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+                        || (rx.getStatus() != null && rx.getStatus().isWithdrawn())) {
+                    continue;
+                }
                 MedicationReconciliationEntry entry = MedicationReconciliationEntry.builder()
                         .medicationName(rx.getMedicationName())
                         .dosage(rx.getDosage())
@@ -653,13 +672,28 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private String buildDiagnosisTextFromEncounter(Encounter encounter) {
         String raw = encounter.getDischargeDiagnoses();
         if (raw == null || raw.isBlank()) {
-            return "Discharge diagnosis not specified at checkout.";
+            return diagnosisNotSpecified(encounter);
         }
         // Strip JSON array brackets and quotes: ["A","B"] → A; B
         String stripped = raw.replaceAll("[\\[\\]\"]", "").trim();
         if (stripped.isEmpty()) {
-            return "Discharge diagnosis not specified at checkout.";
+            return diagnosisNotSpecified(encounter);
         }
         return stripped.replace(",", ";");
+    }
+
+    /**
+     * QA D151: the placeholder is read by the patient, so it is written in the
+     * patient's language, not as a hard-coded English sentence.
+     */
+    private String diagnosisNotSpecified(Encounter encounter) {
+        java.util.Locale locale = patientLocaleResolver.resolve(encounter.getPatient(),
+                com.example.hms.service.i18n.NotificationLocales.PATIENT_FALLBACK);
+        return messageSource.getMessage("dischargeSummary.diagnosis.notSpecified", null,
+                "Discharge diagnosis not specified at checkout.", locale);
+    }
+
+    static boolean isPrescriptionAnchor(Encounter encounter) {
+        return encounter != null && Encounter.PRESCRIPTION_ANCHOR_NOTE.equals(encounter.getNotes());
     }
 }

@@ -100,7 +100,7 @@ class BillingInvoiceTest {
                 patient, hospital, encounter,
                 "INV-001", invoiceDate, dueDate,
                 total, paid, InvoiceStatus.SENT,
-                "Some notes", items, createdBy, updatedBy
+                "Some notes", items, createdBy, updatedBy, null
             );
 
             assertAll(
@@ -563,7 +563,7 @@ class BillingInvoiceTest {
         }
 
         @Test
-        @DisplayName("totalAmount preset → recomputed from items anyway")
+        @DisplayName("totalAmount preset → kept: the service owns the total (QA D72)")
         void totalAmountRecomputed() {
             BillingInvoice inv = minimalInvoice();
             inv.setInvoiceItems(new HashSet<>());
@@ -576,12 +576,12 @@ class BillingInvoiceTest {
 
             inv.prePersist();
 
-            // recomputeTotals overrides totalAmount
-            assertEquals(new BigDecimal("42.00"), inv.getTotalAmount());
+            // QA D72: the callback used to sum the in-memory lines over the total
+            assertEquals(new BigDecimal("999.00"), inv.getTotalAmount());
         }
 
         @Test
-        @DisplayName("status preset → may be updated by recomputeTotals")
+        @DisplayName("status preset → kept on persist (QA D72/D91)")
         void statusPreset() {
             BillingInvoice inv = minimalInvoice();
             inv.setInvoiceItems(new HashSet<>());
@@ -594,8 +594,7 @@ class BillingInvoiceTest {
 
             inv.prePersist();
 
-            // amountPaid=0 and total>0 → DRAFT (overwrites SENT)
-            assertEquals(InvoiceStatus.DRAFT, inv.getStatus());
+            assertEquals(InvoiceStatus.SENT, inv.getStatus());
         }
 
         @Test
@@ -643,7 +642,7 @@ class BillingInvoiceTest {
     class PreUpdate {
 
         @Test
-        @DisplayName("recomputes totals and validates dates")
+        @DisplayName("keeps the total and validates dates (QA D72)")
         void recomputesAndValidates() {
             BillingInvoice inv = minimalInvoice();
             inv.setInvoiceItems(new HashSet<>());
@@ -654,9 +653,11 @@ class BillingInvoiceTest {
             item.setBillingInvoice(inv);
             inv.getInvoiceItems().add(item);
 
+            inv.setTotalAmount(new BigDecimal("15000.00"));
+
             inv.preUpdate();
 
-            assertEquals(new BigDecimal("75.00"), inv.getTotalAmount());
+            assertEquals(new BigDecimal("15000.00"), inv.getTotalAmount());
         }
 
         @Test
@@ -686,7 +687,7 @@ class BillingInvoiceTest {
         }
 
         @Test
-        @DisplayName("preUpdate with paid in full → PAID status")
+        @DisplayName("preUpdate leaves the status to the payment path (QA D91)")
         void preUpdatePaid() {
             BillingInvoice inv = minimalInvoice();
             inv.setInvoiceItems(new HashSet<>());
@@ -699,7 +700,7 @@ class BillingInvoiceTest {
 
             inv.preUpdate();
 
-            assertEquals(InvoiceStatus.PAID, inv.getStatus());
+            assertEquals(InvoiceStatus.SENT, inv.getStatus());
         }
     }
 

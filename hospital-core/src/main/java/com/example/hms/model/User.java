@@ -40,7 +40,10 @@ import java.util.UUID;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class User extends BaseEntity {
 
-    @Column(nullable = false, unique = true, length = 50)
+    /** The one username length limit: the column, every DTO and the generator share it (D37). */
+    public static final int USERNAME_MAX_LENGTH = 50;
+
+    @Column(nullable = false, unique = true, length = USERNAME_MAX_LENGTH)
     private String username;
 
     @Column(name = "password_hash", nullable = false, length = 255)
@@ -81,6 +84,14 @@ public class User extends BaseEntity {
      */
     @Column(name = "deactivated_by_admin_at")
     private LocalDateTime deactivatedByAdminAt;
+
+    /**
+     * Set by a soft delete: whether the account was activated at that moment
+     * (active, signed in, or an assignment confirmed). The restore puts it
+     * back and clears it. {@code null}: not deleted, or deleted before V187.
+     */
+    @Column(name = "activated_before_delete")
+    private Boolean activatedBeforeDelete;
 
     private LocalDateTime lastLoginAt;
 

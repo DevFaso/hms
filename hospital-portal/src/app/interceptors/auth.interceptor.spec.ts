@@ -80,6 +80,9 @@ describe('apiPrefixInterceptor', () => {
       'auth/logout',
       'auth/token/refresh',
       'me/assignments',
+      'auth/me/complete-setup',
+      'auth/me/change-password',
+      'auth/me/change-username',
     ]) {
       http.get(url).subscribe();
       const req = httpMock.expectOne('/api/' + url);

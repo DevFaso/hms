@@ -163,6 +163,44 @@ describe('ChartReviewComponent', () => {
     }
   });
 
+  it('D61: imaging modality and procedure urgency are labels, not wire tokens', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('fr');
+    translate.use('fr');
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          IMAGING_MODALITY: { XRAY: 'Radiographie' },
+          PROCEDURE_URGENCY: { URGENT: 'Urgent-fr' },
+        },
+      },
+    });
+    chartSpy.getChartReview.and.returnValue(of(populatedChart()));
+    setPatient('p-9');
+
+    const panelText = (tab: string): string => {
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="chart-review-tab-${tab}"]`,
+        ) as HTMLButtonElement
+      ).click();
+      fixture.detectChanges();
+      return (
+        (
+          fixture.nativeElement.querySelector(
+            `[data-testid="chart-review-panel-${tab}"]`,
+          ) as HTMLElement
+        ).textContent ?? ''
+      );
+    };
+    const imaging = panelText('imaging');
+    expect(imaging).toContain('Radiographie');
+    expect(imaging).not.toContain('XRAY');
+    const procedures = panelText('procedures');
+    expect(procedures).toContain('Urgent-fr');
+    expect(procedures).not.toContain('URGENT');
+  });
+
   it('translates the timeline pill for every section, not just the tabs', () => {
     // One badge, six emitters: the timeline pill carries Encounter status, a
     // note's SIGNED/DRAFT, AbnormalFlag, Prescription status, an imaging

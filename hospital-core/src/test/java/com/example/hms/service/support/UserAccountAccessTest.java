@@ -268,6 +268,41 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("QA D190: an inactive row at A does not open a user now working at B")
+        void aStaleInactiveRowDoesNotOpenAnotherHospitalsUser() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            User movedToB = targetWith(assignment("ROLE_NURSE", hospitalA, false), assignment("ROLE_NURSE", hospitalB, true));
+            assertThat(access.canView(movedToB)).isFalse();
+
+            // A pending invitation (or a former employee) active nowhere stays visible to A.
+            User pending = targetWith(assignment("ROLE_NURSE", hospitalA, false));
+            assertThat(access.canView(pending)).isTrue();
+        }
+
+        @Test
+        @DisplayName("canView edges: no target, a super-admin's account, an inactive row nowhere administered")
+        void canViewEdges() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+
+            assertThat(access.canView(null)).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_SUPER_ADMIN", hospitalA, true)))).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_NURSE", hospitalB, false)))).isFalse();
+            assertThat(access.canView(targetWith(assignment("ROLE_NURSE", hospitalA, false),
+                assignment("ROLE_NURSE", null, true)))).isFalse();
+        }
+
+        @Test
+        @DisplayName("canView: a caller who administers no hospital views nobody else")
+        void nonAdministratorViewsNobody() {
+            signIn(false, "ROLE_NURSE");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true));
+            assertThat(access.canView(account(UUID.randomUUID()))).isFalse();
+        }
+
+        @Test
         @DisplayName("an unauthenticated context is nobody")
         void noAuthenticationIsNobody() {
             assertThat(access.currentUserId()).isEmpty();
@@ -449,12 +484,12 @@ class UserAccountAccessTest {
         }
 
         @Test
-        @DisplayName("a surgeon registers patients at their hospital, as a DOCTOR by RoleExpansion")
+        @DisplayName("QA D55: a surgeon (a DOCTOR by RoleExpansion) is not a patient registrar")
         void surgeonRegistersPatients() {
             signIn(false, "ROLE_SURGEON");
             callerHolds(assignment("ROLE_SURGEON", hospitalA, true));
 
-            assertThat(grant("PATIENT", hospitalA)).isEqualTo(hospitalA.getId());
+            assertThatThrownBy(() -> grant("PATIENT", hospitalA)).isInstanceOf(AccessDeniedException.class);
         }
 
         @Test
@@ -489,26 +524,26 @@ class UserAccountAccessTest {
         }
 
         @Test
-        @DisplayName("a doctor at A who is a patient at B cannot discard B's fresh account")
+        @DisplayName("a nurse at A who is a patient at B cannot discard B's fresh account")
         void patientAtAnotherHospitalCannotDiscard() {
-            signIn(false, "ROLE_DOCTOR", "ROLE_PATIENT");
-            callerHolds(assignment("ROLE_DOCTOR", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
+            signIn(false, "ROLE_NURSE", "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
             User freshAtB = targetWith(assignment("ROLE_PATIENT", hospitalB, false));
             when(patientRepository.existsByUserId(freshAtB.getId())).thenReturn(false);
             when(staffRepository.existsByUserId(freshAtB.getId())).thenReturn(false);
 
             assertThat(access.canDelete(freshAtB)).isFalse();
-            // The same doctor still discards the one at A, where they register.
+            // The same nurse still discards the one at A, where they register.
             assertThat(access.canDelete(orphan)).isTrue();
         }
 
         @Test
-        @DisplayName("a surgeon (a DOCTOR by RoleExpansion) discards the orphan at their hospital")
+        @DisplayName("QA D55: a surgeon registers no patient, so has no orphan to discard")
         void surgeonCompensates() {
             signIn(false, "ROLE_SURGEON");
             callerHolds(assignment("ROLE_SURGEON", hospitalA, true));
 
-            assertThat(access.canDelete(orphan)).isTrue();
+            assertThat(access.canDelete(orphan)).isFalse();
         }
 
         @Test

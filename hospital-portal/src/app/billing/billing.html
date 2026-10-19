@@ -96,6 +96,7 @@
   <div class="search-box">
     <span class="material-symbols-outlined">search</span
     ><input
+      [attr.aria-label]="'BILLING.SEARCH' | translate"
       type="text"
       [placeholder]="'BILLING.SEARCH' | translate"
       [(ngModel)]="searchTerm"
@@ -273,7 +274,7 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
       <h3>{{ 'BILLING.NO_INVOICES' | translate }}</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No billing records available.' }}</p>
+      <p>{{ (searchTerm ? 'COMMON.TRY_ADJUST_SEARCH' : 'BILLING.NO_RECORDS_HINT') | translate }}</p>
     </div>
   }
 
@@ -281,7 +282,7 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>Invoice {{ inv.invoiceNumber }}</h2>
+          <h2>{{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}</h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
@@ -341,6 +342,195 @@
               <p>{{ inv.notes }}</p>
             </div>
           }
+
+          <div class="lines-section">
+            <h3>{{ 'BILLING.LINES' | translate }}</h3>
+            @if (itemsLoading()) {
+              <p class="field-hint">{{ 'COMMON.LOADING' | translate }}</p>
+            } @else if (items().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_LINES' | translate }}</p>
+            } @else {
+              <table class="lines-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'BILLING.LINE_DESCRIPTION' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_QUANTITY' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_UNIT_PRICE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.LINE_TOTAL' | translate }}</th>
+                    @if (canDelete || canEditLines(inv)) {
+                      <th scope="col">
+                        <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                      </th>
+                    }
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (it of items(); track it.id) {
+                    <tr>
+                      <td>
+                        {{ it.itemDescription }}
+                        <div class="cell-secondary">
+                          {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                        </div>
+                      </td>
+                      <td>{{ it.quantity }}</td>
+                      <td class="amount">{{ formatCurrency(it.unitPrice) }}</td>
+                      <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                      @if (canDelete || canEditLines(inv)) {
+                        <td>
+                          @if (canEditLines(inv)) {
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              [disabled]="itemSaving()"
+                              [title]="'BILLING.REMOVE_LINE' | translate"
+                              [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                              (click)="removeItem(it)"
+                            >
+                              <span class="material-symbols-outlined">delete</span>
+                            </button>
+                          }
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+
+            @if (canEditLines(inv)) {
+              <div class="line-form">
+                <div class="field">
+                  <label for="line-desc">{{ 'BILLING.LINE_DESCRIPTION' | translate }} *</label>
+                  <input
+                    id="line-desc"
+                    type="text"
+                    maxlength="255"
+                    [ngModel]="newItemDescription()"
+                    (ngModelChange)="newItemDescription.set($event)"
+                  />
+                </div>
+                <div class="field">
+                  <label for="line-cat">{{ 'BILLING.LINE_CATEGORY' | translate }}</label>
+                  <select
+                    id="line-cat"
+                    [ngModel]="newItemCategory()"
+                    (ngModelChange)="newItemCategory.set($event)"
+                  >
+                    @for (c of itemCategories; track c) {
+                      <option [value]="c">{{ c | enumLabel: 'invoiceItemCategory' }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="line-qty">{{ 'BILLING.LINE_QUANTITY' | translate }} *</label>
+                  <input
+                    id="line-qty"
+                    type="number"
+                    min="1"
+                    step="1"
+                    [ngModel]="newItemQuantity()"
+                    (ngModelChange)="newItemQuantity.set($event)"
+                  />
+                </div>
+                <div class="field">
+                  <label for="line-price">{{ 'BILLING.LINE_UNIT_PRICE' | translate }} *</label>
+                  <input
+                    id="line-price"
+                    type="number"
+                    min="0"
+                    [ngModel]="newItemUnitPrice()"
+                    (ngModelChange)="newItemUnitPrice.set($event)"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  [disabled]="!canAddItem()"
+                  (click)="addItem()"
+                >
+                  {{ 'BILLING.ADD_LINE' | translate }}
+                </button>
+              </div>
+            }
+          </div>
+
+          <div class="lines-section payments-section">
+            <h3>{{ 'BILLING.PAYMENTS' | translate }}</h3>
+            @if (payments().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_PAYMENTS' | translate }}</p>
+            } @else {
+              <table class="lines-table">
+                <thead>
+                  <tr>
+                    <th scope="col">{{ 'BILLING.PAYMENT_DATE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_METHOD' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</th>
+                    <th scope="col">{{ 'BILLING.PAYMENT_AMOUNT' | translate }}</th>
+                    <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                    <th scope="col">
+                      <span class="sr-only">{{ 'COMMON.ACTIONS' | translate }}</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of payments(); track p.id) {
+                    <tr>
+                      <td>{{ p.paymentDate }}</td>
+                      <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
+                      <td>{{ p.referenceNumber || '—' }}</td>
+                      <td class="amount">{{ formatCurrency(p.amount) }}</td>
+                      <td>
+                        {{ 'BILLING.PAYMENT_STATUSES.' + p.status | translate }}
+                        @if (p.reversalReason) {
+                          <div class="cell-secondary">{{ p.reversalReason }}</div>
+                        }
+                      </td>
+                      <td>
+                        @if (p.status === 'PENDING' && canRecordPayment) {
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            [disabled]="paymentActionBusy()"
+                            (click)="confirmPendingPayment(p)"
+                          >
+                            {{ 'BILLING.CONFIRM_PAYMENT' | translate }}
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            [disabled]="paymentActionBusy()"
+                            (click)="openReversal(p, 'reject')"
+                          >
+                            {{ 'BILLING.REJECT_PAYMENT' | translate }}
+                          </button>
+                        }
+                        @if (p.status === 'CONFIRMED') {
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            (click)="downloadReceipt(p)"
+                          >
+                            {{ 'BILLING.RECEIPT' | translate }}
+                          </button>
+                          @if (canReversePayment) {
+                            <button
+                              type="button"
+                              class="btn-secondary btn-sm"
+                              [disabled]="paymentActionBusy()"
+                              (click)="openReversal(p, 'reverse')"
+                            >
+                              {{ 'BILLING.REVERSE_PAYMENT' | translate }}
+                            </button>
+                          }
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -369,44 +559,31 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="bill-patientEmail">{{ 'BILLING.PATIENT_EMAIL' | translate }} *</label>
-            <input
-              id="bill-patientEmail"
-              type="email"
-              [(ngModel)]="form.patientEmail"
-              placeholder="patient&#64;example.com"
-              required
-            />
-          </div>
-          <div class="field">
-            <label for="bill-hospitalName">{{ 'BILLING.HOSPITAL_NAME' | translate }} *</label>
-            <input
-              id="bill-hospitalName"
-              type="text"
-              [(ngModel)]="form.hospitalName"
-              [placeholder]="'BILLING.HOSPITAL_NAME_PLACEHOLDER' | translate"
-              required
+            <label for="bill-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
+            <app-patient-picker
+              inputId="bill-patient"
+              [selected]="formPatient()"
+              (selectedChange)="onPatientPicked($event)"
             />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="bill-invoiceNumber">{{ 'BILLING.INVOICE_NUM' | translate }} *</label>
-            <input
-              id="bill-invoiceNumber"
-              type="text"
-              [(ngModel)]="form.invoiceNumber"
-              placeholder="INV-0001"
-              required
-            />
+            <span class="field-label">{{ 'BILLING.INVOICE_NUM' | translate }}</span>
+            <p class="field-hint">
+              {{ editing() ? editingNumber() : ('BILLING.NUMBER_ASSIGNED_ON_SAVE' | translate) }}
+            </p>
           </div>
           <div class="field">
             <label for="bill-status">{{ 'COMMON.STATUS' | translate }} *</label>
-            <select id="bill-status" [(ngModel)]="form.status" required>
-              @for (s of invoiceStatuses; track s) {
+            <select id="bill-status" [(ngModel)]="form.status" [disabled]="statusLocked()" required>
+              @for (s of statusOptions(); track s) {
                 <option [value]="s">{{ s | enumLabel: 'invoiceStatus' }}</option>
               }
             </select>
+            @if (statusLocked()) {
+              <p class="field-hint">{{ 'BILLING.STATUS_FOLLOWS_PAYMENTS' | translate }}</p>
+            }
           </div>
         </div>
         <div class="form-row">
@@ -421,19 +598,31 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="bill-totalAmount">{{ 'BILLING.TOTAL_AMOUNT' | translate }} *</label>
+            <label for="bill-totalAmount">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</label>
             <input
               id="bill-totalAmount"
               type="number"
               [(ngModel)]="form.totalAmount"
+              [disabled]="editingHasLines()"
               min="0"
-              required
             />
+            <p class="field-hint">
+              {{
+                (editingHasLines() ? 'BILLING.TOTAL_FROM_LINES' : 'BILLING.TOTAL_HINT') | translate
+              }}
+            </p>
           </div>
-          <div class="field">
-            <label for="bill-amountPaid">{{ 'BILLING.AMOUNT_PAID' | translate }}</label>
-            <input id="bill-amountPaid" type="number" [(ngModel)]="form.amountPaid" min="0" />
-          </div>
+        </div>
+        <div class="field">
+          <label for="bill-encounter">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</label>
+          <input
+            id="bill-encounter"
+            type="text"
+            maxlength="64"
+            [(ngModel)]="form.encounterReference"
+            [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
+          />
+          <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>
         </div>
         <div class="field">
           <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
@@ -452,14 +641,7 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
-            !form.patientEmail ||
-            !form.hospitalName ||
-            !form.invoiceNumber ||
-            !form.invoiceDate ||
-            !form.dueDate
-          "
+          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
         >
           {{
             saving()
@@ -611,10 +793,34 @@
           <input
             id="payment-amount"
             type="number"
-            min="0.01"
+            min="1"
+            step="1"
             [max]="inv.balanceDue"
             [ngModel]="paymentAmount()"
             (ngModelChange)="paymentAmount.set($event)"
+          />
+        </div>
+        <div class="field">
+          <label for="payment-method">{{ 'BILLING.PAYMENT_METHOD' | translate }} *</label>
+          <select
+            id="payment-method"
+            [ngModel]="paymentMethod()"
+            (ngModelChange)="paymentMethod.set($event)"
+          >
+            @for (m of paymentMethods; track m) {
+              <option [value]="m">{{ 'BILLING.PAYMENT_METHODS.' + m | translate }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="payment-reference">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</label>
+          <input
+            id="payment-reference"
+            type="text"
+            maxlength="120"
+            [ngModel]="paymentReference()"
+            (ngModelChange)="paymentReference.set($event)"
+            [placeholder]="'BILLING.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
           />
         </div>
         <p class="muted-note">{{ 'BILLING.PAYMENT_NOTE' | translate }}</p>
@@ -627,6 +833,65 @@
           {{
             paymentSaving() ? ('COMMON.SAVING' | translate) : ('BILLING.RECORD_PAYMENT' | translate)
           }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ REVERSE / REJECT PAYMENT MODAL (QA D140, D142) ═══ -->
+@if (reversingPayment(); as p) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReversal()"
+    (keydown.escape)="closeReversal()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            (reversalMode() === 'reverse' ? 'BILLING.REVERSE_PAYMENT' : 'BILLING.REJECT_PAYMENT')
+              | translate
+          }}
+          — {{ formatCurrency(p.amount) }}
+        </h2>
+        <button class="modal-close" (click)="closeReversal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="reversal-reason">{{ 'BILLING.REVERSAL_REASON' | translate }} *</label>
+          <textarea
+            id="reversal-reason"
+            rows="3"
+            maxlength="500"
+            [ngModel]="reversalReason()"
+            (ngModelChange)="reversalReason.set($event)"
+          ></textarea>
+        </div>
+        @if (reversalMode() === 'reverse') {
+          <p class="muted-note">{{ 'BILLING.REVERSAL_NOTE' | translate }}</p>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReversal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="submitReversal()"
+          [disabled]="paymentActionBusy() || !reversalReason().trim()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
         </button>
       </div>
     </div>

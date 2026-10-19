@@ -48,6 +48,7 @@
         <div class="conv-search">
           <span class="material-symbols-outlined search-icon">search</span>
           <input
+            [attr.aria-label]="'CHAT.SEARCH_CONVERSATIONS' | translate"
             type="text"
             [placeholder]="'CHAT.SEARCH_CONVERSATIONS' | translate"
             [ngModel]="convSearchTerm()"
@@ -106,6 +107,7 @@
             <div class="new-conv-search">
               <span class="material-symbols-outlined search-icon">person_search</span>
               <input
+                [attr.aria-label]="'CHAT.SEARCH_USERS' | translate"
                 type="text"
                 [placeholder]="'CHAT.SEARCH_USERS' | translate"
                 [ngModel]="userSearchTerm()"
@@ -198,8 +200,8 @@
                           >
                             <img
                               [src]="blobUrl"
-                              [alt]="att.displayName || 'chat attachment'"
-                              [title]="att.displayName || 'chat attachment'"
+                              [alt]="att.displayName || ('CHAT.ATTACHMENT' | translate)"
+                              [title]="att.displayName || ('CHAT.ATTACHMENT' | translate)"
                             />
                           </a>
                         } @else if (att.kind === 'AUDIO') {

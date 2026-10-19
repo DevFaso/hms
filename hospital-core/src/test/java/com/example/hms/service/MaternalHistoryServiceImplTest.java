@@ -597,4 +597,39 @@ class MaternalHistoryServiceImplTest {
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(userId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
     }
+
+    @Test
+    void createMaternalHistory_refusesAPatientRecordedAsMale() {
+        // QA D103 (D46 family): a maternal history was saved for a male patient.
+        patient.setGender("MALE");
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void createMaternalHistory_derivesTheDueDateFromTheLmp() {
+        // QA D162 (D104 family): the due date was never derived from the LMP.
+        java.time.LocalDate lmp = java.time.LocalDate.now().minusWeeks(10);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+        when(maternalHistoryRepository.save(any(MaternalHistory.class))).thenReturn(maternalHistory);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            MaternalHistory entity = invocation.getArgument(0);
+            entity.setLastMenstrualPeriod(lmp);
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(MaternalHistory.class), any());
+
+        maternalHistoryService.createMaternalHistory(requestDTO, username);
+
+        ArgumentCaptor<MaternalHistory> captor = ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getEstimatedDueDate()).isEqualTo(lmp.plusDays(280));
+    }
 }

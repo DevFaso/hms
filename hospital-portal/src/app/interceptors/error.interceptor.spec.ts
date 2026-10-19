@@ -23,6 +23,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST } from '../services/step-up';
+import { backgroundRequestOptions } from '../services/ws-transport';
 
 describe('errorInterceptor', () => {
   let http: HttpClient;
@@ -32,6 +33,7 @@ describe('errorInterceptor', () => {
   let impersonation: jasmine.SpyObj<ImpersonationService>;
   let sessionScope: jasmine.SpyObj<SessionScopeService>;
   let selectedHospital: string | null;
+  let noteRefusal: jasmine.Spy;
 
   beforeEach(() => {
     clearReportedSilent403s();
@@ -63,7 +65,10 @@ describe('errorInterceptor', () => {
         { provide: SessionScopeService, useValue: sessionScope },
         {
           provide: RoleContextService,
-          useValue: { effectiveHospitalIdForRequest: () => selectedHospital },
+          useValue: {
+            effectiveHospitalIdForRequest: () => selectedHospital,
+            noteRefusal: (noteRefusal = jasmine.createSpy('noteRefusal')),
+          },
         },
       ],
     });
@@ -257,6 +262,48 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(401);
   });
 
+  for (const url of ['/api/auth/me/change-password', '/api/auth/me/change-email']) {
+    it(`a wrong current password on ${url} is retried once on a fresh token, then reaches the form without a sign-out (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+      auth.refreshTokenRequest.and.returnValue(
+        of({ accessToken: 'new-token', refreshToken: 'r2' }),
+      );
+
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne(url)
+        .flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+      const retry = httpMock.expectOne(url);
+      expect(retry.request.headers.get('Authorization')).toBe('Bearer new-token');
+      retry.flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+
+      expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(401);
+    });
+
+    it(`an expired access token on ${url} is refreshed and the change succeeds (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+      auth.refreshTokenRequest.and.returnValue(
+        of({ accessToken: 'new-token', refreshToken: 'r2' }),
+      );
+
+      let ok = false;
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ next: () => (ok = true), error: (e) => (error = e) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
+      httpMock.expectOne(url).flush({});
+
+      expect(ok).toBeTrue();
+      expect(error).toBeUndefined();
+      expect(auth.logout).not.toHaveBeenCalled();
+    });
+  }
+
   it('never refreshes or logs out again on the 401 of the logout call itself', () => {
     // AuthService.logout() fires POST /auth/logout; an expired bearer answers
     // 401. A refresh here would mint a new session mid-logout, and a second
@@ -307,11 +354,69 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  it('QA D188: a 403 on the transfer worklist keeps the bed board: no redirect, one audit report', () => {
+    let error: HttpErrorResponse | undefined;
+    http.get('/transfers/pending?hospitalId=h1').subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/transfers/pending?hospitalId=h1')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
   it('on a 403 from a CDS Hooks invocation (a POST), degrades quietly and does not redirect', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/cds-services/hms-bpa-protocols', {}).subscribe({ error: (e) => (error = e) });
     httpMock
       .expectOne('/cds-services/hms-bpa-protocols')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('D54: a refused prescription signature stays on the page so its toast can explain why', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/prescriptions/rx-1/sign', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/prescriptions/rx-1/sign')
+      .flush(
+        { message: 'Only the prescribing clinician can sign this prescription.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+    httpMock.expectNone('/frontend-audit');
+  });
+
+  it('still redirects a 403 on an unrelated write', () => {
+    http.post('/prescriptions', {}).subscribe({ error: () => undefined });
+    httpMock.expectOne('/prescriptions').flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
+  it('QA D35: a 403 on the WebSocket ticket exchange never redirects the page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/auth/ws-ticket', {}).subscribe({ error: (e) => (error = e) });
+    httpMock.expectOne('/auth/ws-ticket').flush(null, { status: 403, statusText: 'Forbidden' });
+    httpMock.expectOne('/frontend-audit').flush({});
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D35: a 403 on any request marked as background never redirects the page', () => {
+    let error: HttpErrorResponse | undefined;
+    http
+      .post('/some/background/call', {}, backgroundRequestOptions())
+      .subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/some/background/call')
       .flush(null, { status: 403, statusText: 'Forbidden' });
     httpMock.expectOne('/frontend-audit').flush({});
 
@@ -388,6 +493,8 @@ describe('errorInterceptor', () => {
     httpMock.expectOne('/billing-invoices').flush(null, { status: 403, statusText: 'Forbidden' });
 
     expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+    // A server refusal names no route roles: the 403 page falls back to super-admin.
+    expect(noteRefusal).toHaveBeenCalledWith(null);
     expect(error?.status).toBe(403);
   });
 

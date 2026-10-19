@@ -291,7 +291,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // Publish an after-commit event so that email + SMS are only dispatched
             // once the transaction has committed and the assignment row is visible.
             // This prevents ghost links where the email is sent for a rolled-back assignment.
-            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
+            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId(),
+                !adminRequest && dto.isWelcomeMailCarriesCode()));
         }
         recordAssignmentAudit(saved);
 
@@ -330,7 +331,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (isRoleCode(roleCode, ROLE_PATIENT)) {
             // Patient assignments start inactive — activated after email verification
             if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException("PATIENT assignments must be inactive until email verification.");
+                throw new BusinessException("assignment.patient.mustStartInactive");
             }
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
@@ -523,7 +524,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // Patient assignments must remain inactive until email verification activates them
         if (Boolean.TRUE.equals(dto.getActive())) {
-            throw new BusinessException("PATIENT assignments cannot be manually activated. Use email verification.");
+            throw new BusinessException("assignment.patient.cannotActivate");
         }
         if (dto.getActive() == null) {
             dto.setActive(target.getActive());
@@ -1101,7 +1102,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deleteAssignment(UUID id) {
-        findChangeable(id);
+        UserRoleHospitalAssignment doomed = findChangeable(id);
         // Prevent deletion if a Staff record still references this assignment.
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
@@ -1120,7 +1121,33 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 "Deactivate it instead to keep that history.");
         }
         assignmentRepository.deleteById(id);
+        dropUserRoleWhenLastAssignment(doomed);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    /**
+     * Deleting the last assignment of a role also drops the user-level
+     * {@code user_roles} link that {@code assignRole} created with it. Left
+     * behind, that link had no assignment to govern it and was honoured as a
+     * legacy global role: deleting a stray patient assignment on a
+     * receptionist brought ROLE_PATIENT back at sign-in (QA D74, D132).
+     */
+    private void dropUserRoleWhenLastAssignment(UserRoleHospitalAssignment doomed) {
+        User user = doomed.getUser();
+        Role role = doomed.getRole();
+        if (user == null || role == null || user.getId() == null || role.getId() == null) {
+            return;
+        }
+        boolean roleStillAssigned = assignmentRepository.findAllByUserId(user.getId()).stream()
+            .filter(other -> !doomed.getId().equals(other.getId()))
+            .map(UserRoleHospitalAssignment::getRole)
+            .filter(Objects::nonNull)
+            .anyMatch(other -> role.getId().equals(other.getId()));
+        if (roleStillAssigned) {
+            return;
+        }
+        user.removeRole(role);
+        userRepository.save(user);
     }
 
     @Override
@@ -1194,6 +1221,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignmentRepository.saveAll(deactivated);
         log.info("🔒 Deactivated {} of {} assignment(s) for user ID '{}' (soft — history preserved).",
             deactivated.size(), assignments.size(), userId);
+    }
+
+    @Override
+    public int reissuePendingInvitationsForRestoredUser(UUID userId) {
+        List<UserRoleHospitalAssignment> pending = assignmentRepository.findByUserId(userId).stream()
+            .filter(a -> a.getConfirmationVerifiedAt() == null)
+            // Only invitations that went out as a code: a patient row activated
+            // by the e-mail link never had one and must not get staff mail.
+            .filter(a -> a.getConfirmationSentAt() != null)
+            .toList();
+        for (UserRoleHospitalAssignment assignment : pending) {
+            reissueCode(assignment, true);
+        }
+        log.info("🔁 Reissued {} pending invitation(s) for restored user ID '{}'.", pending.size(), userId);
+        return pending.size();
     }
 
     /**
@@ -1968,7 +2010,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return;
         }
         String message = String.format(
-            "🔐 HMS account created. Username: %s Temp password: %s — change it at first login.",
+            "🔐 e-Keneya account created. Username: %s Temp password: %s — change it at first login.",
             user.getUsername(),
             tempPassword
         );
@@ -2021,7 +2063,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
 
             String userDisplayName = resolveDisplayName(user, email);
-            String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : "assigned role";
+            String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : null;
             String hospitalDisplay = resolveHospitalName(assignment.getHospital());
             String profileCompletionUrl = assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
 
@@ -2179,9 +2221,32 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void sendNotifications(UUID assignmentId) {
+        sendNotifications(assignmentId, false);
+    }
+
+    @Override
+    public void sendNotifications(UUID assignmentId, boolean emailCoveredByWelcome) {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> assignmentNotFound(assignmentId));
+        // The welcome mail carries the code only when this assignment has both
+        // the confirmation code and the assignment code it reads
+        // (UserServiceImpl.welcomeRoles lists it); without
+        // them it points at this mail, so this mail must still go out.
+        boolean welcomeHasTheCode = hasText(assignment.getConfirmationCode())
+            && hasText(assignment.getAssignmentCode());
+        if (emailCoveredByWelcome && welcomeHasTheCode) {
+            // A brand-new staff account gets ONE mail: the welcome mail
+            // (UserServiceImpl) already carries this code, link and sign-in
+            // details and records its own delivery outcome.
+            log.info("📧 Assignment '{}' e-mail covered by the welcome mail; SMS only", assignment.getId());
+            sendAssignmentSmsNotifications(assignment);
+            return;
+        }
         notifyAssignee(assignment);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     @Override

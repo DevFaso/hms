@@ -23,6 +23,7 @@ import {
   DoctorResultQueueItem,
   PatientSnapshot,
 } from '../services/dashboard.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 /**
  * Every route literal the dashboard links to (tiles, quick actions, fetch
@@ -299,6 +300,19 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.tasksToComplete()).toBe(4);
   });
 
+  it('the lab pending card counts every order still waiting on the bench (D107)', () => {
+    const c = createComponent(['ROLE_LAB_SCIENTIST'], []);
+    expect(c.labPendingCount()).toBeNull();
+    c.labOpsSummary.set({
+      statusOrdered: 3,
+      statusPending: 0,
+      statusCollected: 2,
+      statusReceived: 1,
+      statusInProgress: 5,
+    } as Parameters<typeof c.labOpsSummary.set>[0]);
+    expect(c.labPendingCount()).toBe(6);
+  });
+
   // ── Hero hospital chip ──────────────────────────────────────
 
   it('fetches the active hospital name for the clinician hero', () => {
@@ -473,10 +487,16 @@ describe('Dashboard navigation & RBAC', () => {
     });
     expect(c.qualityManagerStatCards().length).toBe(5);
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('90.0%');
+    // D130: the decimal separator follows the UI language, never a bare dot.
+    const expected =
+      new Intl.NumberFormat(currentLocale(), {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }).format(90) + ' %';
+    expect(passRateCard?.value).toBe(expected);
   });
 
-  it('qualityManagerStatCards pass rate should show N/A when qualityPassRate is null', () => {
+  it('qualityManagerStatCards pass rate should show a dash when qualityPassRate is null', () => {
     const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
     c.isQualityManager.set(true);
     c.qualityManagerDashboard.set({
@@ -495,7 +515,7 @@ describe('Dashboard navigation & RBAC', () => {
       ordersToday: 0,
     });
     const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
-    expect(passRateCard?.value).toBe('N/A');
+    expect(passRateCard?.value).toBe('—');
   });
 
   it('lab-director should take priority over lab-scientist in activeView', () => {
@@ -628,11 +648,22 @@ describe('Dashboard navigation & RBAC', () => {
     (c as unknown as { canAccessRoute(r: string): boolean }).canAccessRoute.call(c, r);
 
   it('canAccessRoute grants a nested child route the parent guard admits', () => {
-    // /patients/new declares no roles of its own; Angular still runs the
-    // /patients guard before activating it, so the child inherits it.
+    // ':id' declares no roles of its own; Angular still runs the /patients
+    // guard before activating it, so the child inherits it.
     const doctor = createComponent(['ROLE_DOCTOR'], []);
-    expect(gate(doctor, '/patients/new')).toBeTrue();
     expect(gate(doctor, '/patients/abc-123')).toBeTrue(); // ':id' segment
+  });
+
+  it('canAccessRoute applies a child route own roles on top of the parent (QA D55)', () => {
+    // /patients/new admits only the POST /patients registrars: the doctor
+    // passes the /patients guard but not the child's.
+    const doctor = createComponent(['ROLE_DOCTOR'], []);
+    expect(gate(doctor, '/patients/new')).toBeFalse();
+  });
+
+  it('canAccessRoute grants /patients/new to a patient registrar', () => {
+    const nurse = createComponent(['ROLE_NURSE'], []);
+    expect(gate(nurse, '/patients/new')).toBeTrue();
   });
 
   it('canAccessRoute denies a nested child route the parent guard rejects', () => {
@@ -1004,9 +1035,10 @@ describe('Dashboard i18n refactor coverage', () => {
     });
   }
 
-  it('getApptStatusLabel returns the raw value for unknown statuses', () => {
-    const c = createComponent(['ROLE_DOCTOR']);
-    expect(c.getApptStatusLabel('SOMETHING_WEIRD')).toBe('SOMETHING_WEIRD');
+  it('D175: getApptStatusLabel never shows the raw CHECKED_IN token', () => {
+    const c = createComponent(['ROLE_NURSE']);
+    // No bundle is loaded here, so the shared vocabulary's English fallback answers.
+    expect(c.getApptStatusLabel('CHECKED_IN')).toBe('Checked In');
   });
 
   // ── Locale-aware time formatters ──────────────────────────────
@@ -1093,12 +1125,18 @@ describe('Dashboard i18n refactor coverage', () => {
     expect(c.getPaymentMethodColor('UNKNOWN')).toBe('#64748b');
   });
 
-  it('formatMethodLabel converts SNAKE_CASE underscores to spaces', () => {
+  it('formatMethodLabel is the locale-aware payment-method label, not an English prettifier', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
-    // Input is already upper-case so the title-case replace is a no-op —
-    // the only observable change is "_" → " ".
-    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('CREDIT CARD');
-    expect(c.formatMethodLabel('bank_transfer')).toBe('Bank Transfer');
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { PAYMENT_METHOD: { CREDIT_CARD: 'Carte de crédit' } } } },
+      true,
+    );
+    translate.use('fr');
+    expect(c.formatMethodLabel('CREDIT_CARD')).toBe('Carte de crédit');
+    // An unkeyed value still degrades to readable words.
+    expect(c.formatMethodLabel('BANK_WIRE')).toBe('Bank Wire');
   });
 
   // ── Language-change subscription path ────────────────────────

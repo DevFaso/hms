@@ -69,4 +69,26 @@ public class PaymentTransaction extends BaseEntity {
 
     @Column(name = "notes", length = 1024)
     private String notes;
+
+    /** QA D140/D142: only CONFIRMED rows count toward the invoice's amount paid. */
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private com.example.hms.enums.PaymentStatus status = com.example.hms.enums.PaymentStatus.CONFIRMED;
+
+    @Column(name = "confirmed_by")
+    private UUID confirmedBy;
+
+    @Column(name = "confirmed_at")
+    private java.time.LocalDateTime confirmedAt;
+
+    @Column(name = "reversed_by")
+    private UUID reversedBy;
+
+    @Column(name = "reversed_at")
+    private java.time.LocalDateTime reversedAt;
+
+    @Column(name = "reversal_reason", length = 500)
+    private String reversalReason;
 }

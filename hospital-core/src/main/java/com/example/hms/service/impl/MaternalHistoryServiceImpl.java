@@ -6,6 +6,8 @@ import com.example.hms.mapper.MaternalHistoryMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MaternalHistory;
 import com.example.hms.model.Patient;
+import com.example.hms.utility.GestationalDating;
+import com.example.hms.utility.ObstetricEligibility;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.clinical.MaternalHistoryRequestDTO;
@@ -64,6 +66,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
+        // QA D103 (D46 family): a maternal history is an obstetric record.
+        ObstetricEligibility.requireObstetricEligible(patient);
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
@@ -88,6 +92,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         maternalHistory.setRecordedBy(staff);
         
         maternalHistoryMapper.updateEntityFromRequest(maternalHistory, request);
+        deriveEstimatedDueDate(maternalHistory);
         
         MaternalHistory saved = maternalHistoryRepository.save(maternalHistory);
         
@@ -106,6 +111,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
+        // QA D103 (D46 family): a maternal history is an obstetric record.
+        ObstetricEligibility.requireObstetricEligible(patient);
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
@@ -135,6 +142,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         newVersion.setRecordedBy(staff);
         
         maternalHistoryMapper.updateEntityFromRequest(newVersion, request);
+        deriveEstimatedDueDate(newVersion);
         
         MaternalHistory saved = maternalHistoryRepository.save(newVersion);
         
@@ -322,6 +330,21 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         maternalHistoryRepository.delete(maternalHistory);
         
         log.warn("Deleted maternal history ID: {} by user: {}", id, username);
+    }
+
+    /**
+     * QA D162 (D104 family): the due date was never derived, so the labour
+     * episode's gestational age stayed blank. When the clinician gives an LMP
+     * that can date a current pregnancy and no due date, Naegele's rule fills it.
+     * An explicit due date always wins.
+     */
+    private void deriveEstimatedDueDate(MaternalHistory history) {
+        if (history.getEstimatedDueDate() != null
+            || !GestationalDating.isPlausibleCurrentLmp(history.getLastMenstrualPeriod(), java.time.LocalDate.now())) {
+            return;
+        }
+        history.setEstimatedDueDate(GestationalDating.dueDateFromLmp(
+            history.getLastMenstrualPeriod(), history.getMenstrualCycleLengthDays()));
     }
 
     @Override

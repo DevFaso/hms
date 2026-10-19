@@ -240,9 +240,20 @@
 
         <div class="role-picker-grid">
           @for (role of availableRoles; track role) {
-            <button type="button" class="role-card" (click)="selectRole(role)" [disabled]="loading">
-              <span class="material-symbols-outlined role-card-icon">{{ roleIcon(role) }}</span>
+            <button
+              type="button"
+              class="role-card"
+              [class.role-card--recommended]="isRecommendedRole(role)"
+              (click)="selectRole(role)"
+              [disabled]="loading"
+            >
+              <span class="material-symbols-outlined role-card-icon" aria-hidden="true">{{
+                roleIcon(role)
+              }}</span>
               <span class="role-card-label">{{ role | roleLabel }}</span>
+              @if (isRecommendedRole(role)) {
+                <span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
+              }
             </button>
           }
         </div>
@@ -398,7 +409,7 @@
     }
 
     <div class="login-footer">
-      <p>&copy; {{ currentYear }} HMS - Hospital Management System</p>
+      <p>{{ 'COMMON.COPYRIGHT_FOOTER' | translate: { year: currentYear } }}</p>
     </div>
   </div>
 </div>
@@ -463,7 +474,7 @@
         }
         <form (ngSubmit)="submitForgotPassword()" class="login-form">
           <div class="form-group">
-            <label for="fp-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }}</label>
+            <label for="fp-email">{{ 'LOGIN.EMAIL_OR_PHONE' | translate }}</label>
             <div class="input-wrapper">
               <svg
                 class="input-icon"
@@ -478,10 +489,10 @@
               </svg>
               <input
                 id="fp-email"
-                type="email"
+                type="text"
                 [(ngModel)]="forgotPasswordEmail"
                 name="fpEmail"
-                autocomplete="email"
+                autocomplete="username"
                 placeholder="you@example.com"
                 [disabled]="forgotPasswordLoading"
                 required

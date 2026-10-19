@@ -108,6 +108,8 @@ public class UserServiceImpl implements UserService {
     private final UserAccountAccess accountAccess;
     /** Role/facility compatibility (provider plan §3.2), checked before anything is saved. */
     private final com.example.hms.security.provider.FacilityAssignmentGuard facilityAssignmentGuard;
+    /** Tells whether generated credentials can reach an e-mail-less patient by SMS. */
+    private final SmsService smsService;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -204,7 +206,7 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(encodedPassword);
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
-        user.setPhoneNumber(request.getPhoneNumber());
+        user.setPhoneNumber(normalizePhone(request.getPhoneNumber(), null));
         user.setActive(true); // immediate activation for bootstrap
         user.setCreatedAt(passwordSetAt);
         user.setPasswordChangedAt(passwordSetAt);
@@ -271,9 +273,14 @@ public class UserServiceImpl implements UserService {
                 request.getUsername(), request.getHospitalId(), request.getRoleNames());
 
         // ---- 0) Normalize/validate inputs ----
-        final String email = request.getEmail() == null ? null : request.getEmail().toLowerCase(Locale.ROOT);
-        final String phone = request.getPhoneNumber();
-        final String username = request.getUsername();
+        final String email = request.getEmail() == null || request.getEmail().isBlank()
+                ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
+        request.setEmail(email);
+        // Username is optional: blank means "generate one" (createNewUser). A
+        // blank username must not take part in the identity lookups below.
+        final String username = request.getUsername() == null || request.getUsername().isBlank()
+                ? null : request.getUsername().trim();
+        request.setUsername(username);
 
         // Determine roles early so patient-specific logic can relax duplicate checks.
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
@@ -293,6 +300,11 @@ public class UserServiceImpl implements UserService {
         } catch (AccessDeniedException denied) {
             throw refusedGrant(roleNames, denied);
         }
+
+        // Normalised only once the caller may grant these roles: a refused
+        // caller gets the 403, never a phone-format 400.
+        final String phone = normalizeRegistrationPhone(request);
+        request.setPhoneNumber(phone);
 
         // ---- 0a) Duplicate checks ----
         if (isPatient) {
@@ -323,7 +335,7 @@ public class UserServiceImpl implements UserService {
                 });
             }
             if (phone != null && !phone.isBlank()) {
-                userRepository.findByPhoneNumber(phone).ifPresent(existing -> {
+                findByPhoneInAnyForm(phone).ifPresent(existing -> {
                     throw conflictFor("phone", "Phone number '" + phone + "'", existing);
                 });
             }
@@ -353,23 +365,36 @@ public class UserServiceImpl implements UserService {
             default -> false;
         });
 
-        // Clinical roles require a medical licence; admin/management roles do not.
-        final boolean requiresLicense = roles.stream().anyMatch(role -> switch (role.getCode()) {
-            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST -> true;
-            default -> false;
-        });
-
         // ---- 3) Resolve/Create User ----
-        final String lic = resolveLicenseNumber(request, requiresLicense);
+        // The licence number is optional for every role: clinicians are
+        // credentialed on diplomas, so it is recorded when known, never required.
+        // Only a staff registration may resolve an existing account by licence:
+        // a patient registration carrying a clinician's licence must not reach it.
+        final String lic = resolveLicenseNumber(request);
 
-        final Optional<User> existingByIdentity = findExistingByIdentity(username, email, phone);
-        final Optional<User> existingByLicense = requiresLicense
+        // Staff identifiers were refused at 0a, so only a patient registration
+        // can land on an existing account here, and 0a has already refused a
+        // staff one.
+        final Optional<User> existingByIdentity = isPatient
+                ? findExistingByIdentity(email, phone)
+                : Optional.empty();
+        final Optional<User> existingByLicense = lic != null && requiresStaff
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 
         final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
+        final boolean passwordSupplied = request.getPassword() != null && !request.getPassword().isBlank();
+        final boolean reclaimed = existingByIdentity.map(this::isDiscardedRegistration).orElse(false);
         final User user = existingByIdentity.or(() -> existingByLicense)
-                .orElseGet(() -> createNewUser(request, username, email, phone, roles));
+                .orElseGet(() -> createNewUser(request, request.getUsername(), email, phone, roles));
+        if (reclaimed) {
+            reclaimDiscardedRegistration(user, request);
+        }
+        // Only a password the SERVER generated is ever delivered to the user
+        // (mail, SMS or the one-time response). An admin-typed password is
+        // never sent anywhere: the admin already knows it.
+        final String generatedPassword = (newUserCreated || reclaimed) && !passwordSupplied
+                ? request.getPassword() : null;
 
         // Re-registration after a frontend compensation delete: the previous
         // attempt soft-deleted the user (FE rolls back when /api/patients
@@ -379,22 +404,32 @@ public class UserServiceImpl implements UserService {
         // save" diagnostic.
         restoreIfSoftDeleted(user);
 
-        applyForcePasswordChangeIfReturning(user, newUserCreated, request);
+        // A returning patient's credentials are theirs: a registrar linking
+        // them at another hospital never rotates them.
+        if (!isPatient) {
+            applyForcePasswordChangeIfReturning(user, newUserCreated, request);
+        }
 
         // ---- 4) Ensure roles + hospital-scoped assignments ----
         final List<UserRoleHospitalAssignment> ensuredAssignments =
-                ensureRolesAndAssignments(user, roles, staffContextHospitalId);
+                ensureRolesAndAssignments(user, roles, staffContextHospitalId,
+                        welcomeMailCarriesCode(newUserCreated, isPatient, roles));
+        if (reclaimed) {
+            // The discard revoked the invitation's code: a fresh one, sent
+            // with the new credentials set below (step 4a).
+            assignmentService.reissuePendingInvitationsForRestoredUser(user.getId());
+        }
 
         // ---- 4a) Forward temp password to the PATIENT assignment ----
         // The assignment notification email (AFTER_COMMIT) will expose these
         // credentials once, then verifyAssignmentByCode() clears them.
-        if (newUserCreated && isPatient && request.getPassword() != null) {
+        if (isPatient && generatedPassword != null) {
             ensuredAssignments.stream()
                     .filter(a -> a.getRole() != null
                             && ROLE_PATIENT.equalsIgnoreCase(a.getRole().getCode()))
                     .findFirst()
                     .ifPresent(patientAssignment -> {
-                        patientAssignment.setTempPlainPassword(request.getPassword());
+                        patientAssignment.setTempPlainPassword(generatedPassword);
                         assignmentRepository.save(patientAssignment);
                     });
         }
@@ -408,29 +443,41 @@ public class UserServiceImpl implements UserService {
 
         // ---- 6) Reload + map ----
         final UserResponseDTO result = reloadAndMap(user.getId());
+        // The portal's compensation delete after a failed patient step may
+        // only discard an account THIS call created (QA D24).
+        result.setNewAccount(newUserCreated || reclaimed);
+
+        // ---- 6a) Generated credentials nobody can deliver ----
+        // No e-mail on file and no real SMS transport: the staff UI shows them
+        // once, from this response only. Never logged, never persisted in clear.
+        if (generatedPassword != null && (email == null || email.isBlank())
+                && (smsService == null || !smsService.deliversRealSms())) {
+            result.setTemporaryUsername(user.getUsername());
+            result.setTemporaryPassword(generatedPassword);
+        }
 
         // ---- 7) Welcome email for brand-new non-patient users (fire-and-forget) ----
         if (newUserCreated && !isPatient) {
             final String displayName = UserDisplayUtil.resolveDisplayName(user);
+            // The raw code: the mail renders the label in its own language.
             final String roleName    = roles.stream()
-                    .map(r -> formatRoleLabel(r.getCode()))
-                    .findFirst().orElse("User");
+                    .map(Role::getCode)
+                    .findFirst().orElse(null);
             final String hospitalName = staffContextHospitalId != null
                     ? hospitalRepository.findById(staffContextHospitalId)
                           .map(Hospital::getName).orElse(null)
                     : null;
-            // The account is inactive until an assignment code is confirmed, so
-            // the welcome mail carries the confirmation screen's address — but
-            // only when there is exactly one assignment to point at. A
-            // two-role registration mails one code per assignment, and
-            // RoleWelcomeComponent validates the typed code against the
-            // assignment named in the URL: linking an arbitrary one would make
-            // the other mail's code look wrong. With several, the mail names
-            // the step and each assignment mail carries its own correct link.
-            final String soleCode = soleAssignmentCode(ensuredAssignments);
-            final String activationUrl = soleCode == null
-                    ? null
-                    : assignmentLinkService.buildProfileCompletionUrl(soleCode);
+            // The account is inactive until its assignment codes are confirmed,
+            // so the welcome mail is the new user's ONLY mail (see
+            // welcomeMailCarriesCode): it lists every role with that
+            // assignment's own 6-digit code and its own confirmation link,
+            // since RoleWelcomeComponent checks the typed code against the
+            // assignment named in the URL. Only assignments that have both
+            // codes are listed — exactly those whose separate mail
+            // UserRoleHospitalAssignmentServiceImpl.sendNotifications skips.
+            final List<EmailService.WelcomeRole> welcomeRoles = welcomeMailCarriesCode(newUserCreated, isPatient, roles)
+                    ? welcomeRoles(ensuredAssignments, assignmentLinkService::buildProfileCompletionUrl)
+                    : List.of();
             // Deferred to AFTER_COMMIT for the same reason
             // AssignmentCreatedEventListener exists: this mail now carries an
             // assignment code in its button, so a rollback after the send
@@ -443,10 +490,20 @@ public class UserServiceImpl implements UserService {
                 boolean sent = com.example.hms.utility.ActivationDeliveryTracker.sendEmailAndReport(
                     com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME,
                     user.getEmail(),
-                    () -> emailService.sendAdminWelcomeEmail(
-                        user.getEmail(), displayName,
-                        user.getUsername(), request.getPassword(),
-                        roleName, hospitalName, activationUrl),
+                    () -> {
+                        if (welcomeRoles.isEmpty()) {
+                            // No assignment with a code: the step is named and
+                            // each assignment mail carries its own code.
+                            emailService.sendAdminWelcomeEmail(
+                                user.getEmail(), displayName,
+                                user.getUsername(), generatedPassword,
+                                roleName, hospitalName, null, null);
+                        } else {
+                            emailService.sendAdminWelcomeEmail(
+                                user.getEmail(), displayName,
+                                user.getUsername(), generatedPassword, welcomeRoles);
+                        }
+                    },
                     emailService::deliversRealEmail);
                 if (sent) {
                     log.info("📧 Welcome email queued for new user '{}'", user.getUsername());
@@ -544,7 +601,7 @@ public class UserServiceImpl implements UserService {
     }
 
     private List<UserRoleHospitalAssignment> ensureRolesAndAssignments(
-            User user, Set<Role> roles, UUID staffContextHospitalId) {
+            User user, Set<Role> roles, UUID staffContextHospitalId, boolean welcomeMailCarriesCode) {
         final List<UserRoleHospitalAssignment> result = new ArrayList<>();
         for (Role r : roles) {
             addUserRoleIfAbsent(user.getId(), r.getId());
@@ -552,7 +609,7 @@ public class UserServiceImpl implements UserService {
             log.info("[ASSIGN] {} -> user={} hospitalId={} (inactive until code verification)",
                     r.getCode(), user.getUsername(), staffContextHospitalId);
 
-            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId));
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, welcomeMailCarriesCode));
         }
         return result;
     }
@@ -571,7 +628,8 @@ public class UserServiceImpl implements UserService {
         staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
             .map(Staff::getLicenseNumber)
             .ifPresent(existingLic -> {
-                if (!existingLic.equalsIgnoreCase(lic)) {
+                // Only two KNOWN numbers can disagree: a licence is optional.
+                if (lic != null && !existingLic.isBlank() && !existingLic.equalsIgnoreCase(lic)) {
                     throw new ConflictException(
                         "License number mismatch for this user in this hospital; expected " + existingLic);
                 }
@@ -591,7 +649,10 @@ public class UserServiceImpl implements UserService {
             });
 
         staff.setAssignment(staffAssignment);
-        staff.setLicenseNumber(lic);
+        if (lic != null) {
+            // Never erase a known licence because this registration omitted it.
+            staff.setLicenseNumber(lic);
+        }
         staff.setEmploymentType(
             request.getEmploymentType() != null ? request.getEmploymentType() : EmploymentType.FULL_TIME);
         staff.setJobTitle(coerceJobTitle(request.getJobTitle(), roles));
@@ -609,29 +670,97 @@ public class UserServiceImpl implements UserService {
         staffRepository.save(staff);
     }
 
-    /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
-    private static String formatRoleLabel(String roleCode) {
-        if (roleCode == null) return "User";
-        String stripped = roleCode.startsWith(ROLE_PREFIX) ? roleCode.substring(ROLE_PREFIX.length()) : roleCode;
-        return java.util.Arrays.stream(stripped.split("_"))
-            .filter(w -> !w.isEmpty())
-            .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
-            .collect(java.util.stream.Collectors.joining(" "));
+    /** The trimmed licence number, or null when none was given. Never required. */
+    private static String resolveLicenseNumber(AdminSignupRequest request) {
+        return Optional.ofNullable(request.getLicenseNumber())
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .orElse(null);
     }
 
-    private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
-        String lic = requiresStaff
-                ? Optional.ofNullable(request.getLicenseNumber()).map(String::trim).orElse("")
-                : "";
-        if (requiresStaff && lic.isEmpty()) {
-            throw new IllegalArgumentException("licenseNumber is required for medical/admin roles.");
+    /**
+     * The registration phone in E.164, a local number taking the calling code
+     * of the target hospital's country (Burkina Faso when unknown). A value
+     * that cannot be a phone number is refused with a translated message.
+     */
+    private String normalizeRegistrationPhone(AdminSignupRequest request) {
+        UUID hospitalId = activeHospitalFromContext();
+        if (hospitalId == null) {
+            hospitalId = request.getHospitalId();
         }
-        return lic;
+        return normalizePhone(request.getPhoneNumber(), hospitalId);
+    }
+
+    /**
+     * Any stored phone in E.164: a local number takes the calling code of the
+     * hospital's country (Burkina Faso when unknown); a value that cannot be a
+     * phone number is refused with a translated message. Blank stays null.
+     */
+    private String normalizePhone(String raw, UUID hospitalId) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String country = hospitalId == null ? null
+                : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                raw, com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country));
+        if (e164 == null) {
+            throw new BusinessException(MessageUtil.resolve("adminSignup.phoneNumber.invalid"));
+        }
+        return e164;
+    }
+
+    /**
+     * A temporary username nobody holds yet: {@code first.last} folded to
+     * ASCII letters, then four random digits, retried on a collision. The user
+     * is made to choose their own at first login (forceUsernameChange).
+     */
+    private String generateTemporaryUsername(String firstName, String lastName) {
+        String base = trimDots(asciiLetters(firstName) + "." + asciiLetters(lastName));
+        if (base.isEmpty()) {
+            base = "user";
+        }
+        if (base.length() > 30) {
+            base = base.substring(0, 30);
+        }
+        for (int attempt = 0; attempt < 20; attempt++) {
+            String candidate = base + String.format(Locale.ROOT, "%04d", SECURE_RANDOM.nextInt(10_000));
+            if (!Boolean.TRUE.equals(userRepository.existsByUsername(candidate))) {
+                return candidate;
+            }
+        }
+        // Twenty collisions on one name is pathological; a random suffix is still unique.
+        return base + "." + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /** Leading and trailing dots removed, without a regex (CodeQL java/polynomial-redos). */
+    private static String trimDots(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && value.charAt(start) == '.') {
+            start++;
+        }
+        while (end > start && value.charAt(end - 1) == '.') {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    private static String asciiLetters(String value) {
+        if (value == null) {
+            return "";
+        }
+        String folded = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "");
+        return folded.toLowerCase(Locale.ROOT).replaceAll("[^a-z]", "");
     }
 
     private User createNewUser(AdminSignupRequest request, String username, String email, String phone, Set<Role> roles) {
         User u = new User();
-        u.setUsername(username);
+        boolean usernameGenerated = username == null || username.isBlank();
+        u.setUsername(usernameGenerated
+                ? generateTemporaryUsername(request.getFirstName(), request.getLastName())
+                : username);
         u.setEmail(email);
         LocalDateTime passwordSetAt = LocalDateTime.now();
 
@@ -639,7 +768,8 @@ public class UserServiceImpl implements UserService {
         // registration by receptionist).  The user will be forced to change it on
         // first login via forcePasswordChange flag.
         String rawPassword = request.getPassword();
-        if (rawPassword == null || rawPassword.isBlank()) {
+        boolean passwordChosenByAdmin = rawPassword != null && !rawPassword.isBlank();
+        if (!passwordChosenByAdmin) {
             rawPassword = generateTempPassword();
             request.setForcePasswordChange(true);
         }
@@ -679,9 +809,15 @@ public class UserServiceImpl implements UserService {
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         }
 
-        if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
+        if (isPatient || usernameGenerated || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
             u.setForceUsernameChange(true);
+        }
+        // Every caller is an administrator registering someone else: a password
+        // they typed is known to them, so the holder replaces it at first sign-in
+        // (D38). The username they chose stays.
+        if (passwordChosenByAdmin) {
+            u.setForcePasswordChange(true);
         }
         u.setCreatedAt(passwordSetAt);
         u.setPasswordChangedAt(passwordSetAt);
@@ -712,24 +848,136 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * For patient registrations, allow reuse of existing users across hospitals.
-     * Only reject if the patient already has an active assignment at the target hospital.
+     * Finds an existing account by the identifiers the request actually carries
+     * (email first, then phone in any stored form). A null or blank identifier is
+     * never looked up, so it cannot match every account lacking that field.
      */
+    private Optional<User> findExistingByIdentity(String email, String phone) {
+        // Only an identifier the request actually carries is ever looked up.
+        // The derived OR queries this used to call turned a null phone into a
+        // `phone_number IS NULL` predicate, so a patient registered with an
+        // email and no phone matched the first phone-less account on the
+        // platform - a staff member (QA D24). The username is not an identity
+        // at all: the portal generates a random one per registration, and a
+        // collision with someone else's must never merge two people.
+        if (email != null && !email.isBlank()) {
+            Optional<User> byEmail = userRepository.findByEmail(email);
+            if (byEmail.isPresent()) {
+                return byEmail;
+            }
+        }
+        return findByPhoneInAnyForm(phone);
+    }
+
     /**
-     * A null email must NEVER reach the 3-way derived query: Spring Data turns a
-     * null argument into an {@code email IS NULL} predicate, matching every
-     * email-less (phone-first) user — cross-patient account merges would follow.
+     * An account a registration created and then discarded itself: a
+     * soft-deleted patient account that was never activated and never got a
+     * patient record (the portal's compensation delete after a failed patient
+     * step). Anything else soft-deleted stays an administrator's to restore.
      */
-    private Optional<User> findExistingByIdentity(String username, String email, String phone) {
-        return (email == null || email.isBlank())
-            ? userRepository.findFirstByUsernameIgnoreCaseOrPhoneNumber(username, phone)
-            : userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+    private boolean isDiscardedRegistration(User existing) {
+        return existing != null
+                && existing.isDeleted()
+                && !Boolean.TRUE.equals(existing.getActivatedBeforeDelete())
+                && existing.getLastLoginAt() == null
+                && !patientRepository.existsByUserId(existing.getId());
+    }
+
+    /**
+     * Fresh one-time credentials for a reclaimed registration: the discarded
+     * attempt's temporary password was revoked with its invitation and was
+     * never delivered with a working code.
+     */
+    private void reclaimDiscardedRegistration(User user, AdminSignupRequest request) {
+        String rawPassword = request.getPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            rawPassword = generateTempPassword();
+        }
+        request.setPassword(rawPassword);
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        user.setPasswordHash(passwordEncoder.encode(rawPassword));
+        user.setPasswordChangedAt(now);
+        user.setForcePasswordChange(true);
+        user.setForceUsernameChange(true);
+        user.setActive(false);
+        userRepository.save(user);
+    }
+
+    /**
+     * A patient registration may link an existing PATIENT account (Epic-style,
+     * one person across hospitals), never a staff one: no ROLE_PATIENT is ever
+     * added to, no password change forced on, and no activation message sent
+     * to an account that holds a staff role or a staff record (QA D24). The
+     * registrar gets a conflict naming the field; the person is registered
+     * with a different email or phone.
+     */
+    private void refuseStaffAccountForPatient(User existing, String email) {
+        if (existing == null) {
+            return;
+        }
+        boolean staffAccount = staffRepository.existsByUserId(existing.getId())
+                || assignmentRepository.existsByUserIdAndRole_CodeNot(existing.getId(), ROLE_PATIENT);
+        if (!staffAccount) {
+            return;
+        }
+        boolean byEmail = email != null && email.equalsIgnoreCase(existing.getEmail());
+        throw new ConflictException(byEmail
+                ? "email:This email belongs to a staff account and cannot be used for a patient."
+                : "phone:This phone number belongs to a staff account and cannot be used for a patient.");
+    }
+
+    /**
+     * A user holding this E.164 phone, or one of the legacy shapes it was
+     * stored in before registration normalised it: the digits without the
+     * plus, and the national number without the calling code. Exact matches
+     * only, so the lookup stays index-friendly; the backfill of legacy rows
+     * is tracked in tasklist.md.
+     */
+    private Optional<User> findByPhoneInAnyForm(String e164) {
+        if (e164 == null || e164.isBlank()) {
+            return Optional.empty();
+        }
+        Set<String> forms = new LinkedHashSet<>();
+        forms.add(e164);
+        if (e164.startsWith("+")) {
+            String digits = e164.substring(1);
+            forms.add(digits);
+            UUID hospitalId = activeHospitalFromContext();
+            String country = hospitalId == null ? null
+                    : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+            for (String code : new LinkedHashSet<>(List.of(com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE,
+                    com.example.hms.utility.PhoneNumbers.callingCodeForCountry(country)))) {
+                if (digits.startsWith(code) && digits.length() > code.length()) {
+                    forms.add(digits.substring(code.length()));
+                }
+            }
+        }
+        for (String form : forms) {
+            Optional<User> hit = userRepository.findByPhoneNumber(form);
+            if (hit.isPresent()) {
+                return hit;
+            }
+        }
+        return Optional.empty();
     }
 
     private void checkPatientAlreadyAtHospital(String username, String email, String phone,
                                                 AdminSignupRequest request) {
-        Optional<User> existing = findExistingByIdentity(username, email, phone);
+        Optional<User> existing = findExistingByIdentity(email, phone);
         if (existing.isEmpty()) {
+            // A new person. A requested username someone else already holds
+            // is dropped so the server generates one, instead of the
+            // registration either failing or merging into that account.
+            if (username != null && userRepository.findByUsernameIgnoreCase(username).isPresent()) {
+                request.setUsername(null);
+            }
+            return;
+        }
+        refuseStaffAccountForPatient(existing.get(), email);
+        if (isDiscardedRegistration(existing.get())) {
+            // The registrar's own earlier attempt, discarded when its patient
+            // step failed: the retry reclaims it (QA D40), instead of a 409
+            // "already registered" against an account nobody can see.
             return;
         }
         UUID targetHospitalId = resolveHospitalForPatient(request);
@@ -862,6 +1110,38 @@ public class UserServiceImpl implements UserService {
         }
     }
 
+    /**
+     * QA D51: a restore is its own event (USER_RESTORE), not the generic
+     * DATA_UPDATE the write interceptor would record. Ids and flags only in
+     * the details: no name, email or phone of the restored account.
+     */
+    private void recordUserRestoreAudit(User restoredUser, boolean reactivated) {
+        try {
+            Optional<User> actorOpt = resolveCurrentActor();
+            User actor = actorOpt.orElse(restoredUser);
+            UUID assignmentId = actorOpt.map(this::resolveActorAssignmentId).orElse(null);
+
+            Map<String, Object> details = new HashMap<>();
+            details.put("targetUserId", restoredUser.getId());
+            details.put("reactivated", reactivated);
+
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(actor.getId())
+                .assignmentId(assignmentId)
+                .userName(resolveUserDisplayName(actor))
+                .eventType(AuditEventType.USER_RESTORE)
+                .eventDescription("User account restored")
+                .resourceId(restoredUser.getId().toString())
+                .resourceName(resolveUserDisplayName(restoredUser))
+                .entityType("USER")
+                .status(AuditStatus.SUCCESS)
+                .details(details)
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("⚠️ Failed to record user restore audit for '{}': {}", restoredUser.getId(), ex.getMessage());
+        }
+    }
+
     private Optional<User> resolveCurrentActor() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -871,7 +1151,7 @@ public class UserServiceImpl implements UserService {
         if (principal == null || principal.isBlank()) {
             return Optional.empty();
         }
-        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal, null);
+        return userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(principal, principal, principal);
     }
 
     private UUID resolveActorAssignmentId(User actor) {
@@ -902,7 +1182,19 @@ public class UserServiceImpl implements UserService {
         return "Unknown User";
     }
 
-    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId) {
+    /**
+     * A brand-new staff account gets ONE e-mail: the welcome mail lists every
+     * role it was registered with, each with its own confirmation code and
+     * link, so the separate role-assignment mails are suppressed. An existing
+     * user given another assignment, or a patient, keeps the role-assignment
+     * mail.
+     */
+    static boolean welcomeMailCarriesCode(boolean newUserCreated, boolean isPatient, Set<Role> roles) {
+        return newUserCreated && !isPatient && roles != null && !roles.isEmpty();
+    }
+
+    private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId,
+                                                             boolean welcomeMailCarriesCode) {
         UUID roleId = role.getId();
 
         // avoid duplicates
@@ -917,6 +1209,7 @@ public class UserServiceImpl implements UserService {
                     .roleId(roleId)
                     .hospitalId(hospitalId) // may be null for global
                     .active(false)
+                    .welcomeMailCarriesCode(welcomeMailCarriesCode)
                     .build());
         }
 
@@ -963,6 +1256,25 @@ public class UserServiceImpl implements UserService {
                 return JobTitle.LAB_TECHNICIAN;
             case ROLE_PHARMACIST:
                 return JobTitle.PHARMACIST;
+            // QA D137: every role that gets a staff row needs a title -
+            // staff.job_title is NOT NULL, and a receptionist registered with
+            // no title used to fail the whole onboarding with a 400.
+            case "ROLE_RECEPTIONIST":
+                return JobTitle.RECEPTIONIST;
+            case "ROLE_MIDWIFE":
+                return JobTitle.MIDWIFE;
+            case "ROLE_RADIOLOGIST":
+                return JobTitle.RADIOLOGIST;
+            case "ROLE_SURGEON":
+                return JobTitle.SURGEON;
+            case "ROLE_PHYSICIAN":
+                return JobTitle.PHYSICIAN;
+            case "ROLE_LAB_TECHNICIAN":
+                return JobTitle.LAB_TECHNICIAN;
+            case "ROLE_LAB_DIRECTOR":
+                return JobTitle.LAB_DIRECTOR;
+            case "ROLE_BILLING_SPECIALIST":
+                return JobTitle.BILLING_SPECIALIST;
             default:
                 return null;
         }
@@ -997,7 +1309,7 @@ public class UserServiceImpl implements UserService {
         boolean scoped = !scope.everyone();
         Page<User> users = userRepository.findAllPaged(
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(userMapper::toSummaryDTO);
+        return users.map(u -> directoryRow(u, scope));
     }
 
     @Override
@@ -1010,9 +1322,39 @@ public class UserServiceImpl implements UserService {
             return Page.empty(pageable);
         }
         boolean scoped = !scope.everyone();
-        Page<User> users = userRepository.searchUsers(name, role, email,
+        // The free-text box also finds an account by e-mail or phone (D119);
+        // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
+        // QA D198: a caller who cannot read contact details cannot search on them either.
+        Page<User> users = userRepository.searchUsers(name, phoneDigits(name), role, email,
+            scope.seesPatientContacts(),
             !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(userMapper::toSummaryDTO);
+        return users.map(u -> directoryRow(u, scope));
+    }
+
+    /**
+     * QA D125/D198: a non-administrator sees a patient account in the directory (chat
+     * still needs its id, name and role) but never its e-mail or its username, which for
+     * a patient is commonly the e-mail address too. An account holding a patient profile
+     * is a patient's even when it also holds a staff record, so it is masked too.
+     */
+    private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
+        UserSummaryDTO dto = userMapper.toSummaryDTO(user);
+        if (dto != null && !scope.seesPatientContacts()
+                && (user.getStaffProfile() == null || user.getPatientProfile() != null)) {
+            dto.setEmail(null);
+            dto.setUsername(null);
+        }
+        return dto;
+    }
+
+    /** The digits of a search term that looks like a phone number, else null. */
+    static String phoneDigits(String term) {
+        if (term == null) {
+            return null;
+        }
+        String digits = term.replaceAll("\\D", "");
+        boolean phoneShaped = term.strip().matches("[+\\d][\\d\\s().-]*");
+        return phoneShaped && digits.length() >= 4 ? digits : null;
     }
 
     /** The caller's hospitals, or the repository's sentinel when the directory is unscoped. */
@@ -1038,6 +1380,14 @@ public class UserServiceImpl implements UserService {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
 
+        // Read before anything is switched off: the restore puts back this
+        // answer, since afterwards nothing on the account or its rows can
+        // tell a verified account from a pending invitee (D21).
+        // A repeat delete keeps the first answer: by then the account is
+        // already switched off and would be recorded as never activated.
+        if (!user.isDeleted()) {
+            user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
+        }
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
@@ -1070,13 +1420,27 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_ENABLE, "restore", id);
+            throw refused(AuditEventType.USER_RESTORE, "restore", id);
         }
 
+        // Restore the state before the delete, not "active". A pending invitee
+        // (never signed in, no confirmed assignment) has never proved they
+        // hold the address the invitation went to: switching them on here let
+        // them sign in with the mailed temporary password and no code (D21).
+        // They stay inactive and get a fresh code for each invitation the
+        // delete revoked; the marker is cleared so that code can activate the
+        // account, exactly as a first invitation does (V184: an inactive
+        // account without the marker is simply not activated yet).
+        Boolean recorded = user.getActivatedBeforeDelete();
+        boolean previouslyActivated = recorded != null ? recorded : wasEverActivated(user);
+        user.setActivatedBeforeDelete(null);
         user.setDeleted(false);
-        user.setActive(true);
+        user.setActive(previouslyActivated);
         user.setDeactivatedByAdminAt(null);
         userRepository.save(user);
+        if (!previouslyActivated) {
+            assignmentService.reissuePendingInvitationsForRestoredUser(user.getId());
+        }
         // A lockout collected while the account was switched off must not
         // survive it being switched on. After commit: a rollback must not
         // leave the counter cleared for an account that stayed deactivated.
@@ -1094,6 +1458,7 @@ public class UserServiceImpl implements UserService {
         }
 
         log.info("♻️ User restored with ID: {}", id);
+        recordUserRestoreAudit(user, previouslyActivated);
 
         // After commit, like the reset above: a failure in the staff loop or at
         // commit would otherwise deliver "your account has been restored" for a
@@ -1128,6 +1493,27 @@ public class UserServiceImpl implements UserService {
         });
     }
 
+    /** Merge-preserve of the identity fields: only a provided value overwrites. */
+    private static void applyNameAndEmail(User user, UpdateUserRequestDTO dto) {
+        if (hasText(dto.getUsername())) {
+            // An administrator choosing the name settles the forced rename:
+            // the holder is no longer asked to pick one at next sign-in (D127).
+            if (!dto.getUsername().equals(user.getUsername())) {
+                user.setForceUsernameChange(false);
+            }
+            user.setUsername(dto.getUsername());
+        }
+        if (hasText(dto.getEmail())) {
+            user.setEmail(dto.getEmail());
+        }
+        if (hasText(dto.getFirstName())) {
+            user.setFirstName(dto.getFirstName());
+        }
+        if (hasText(dto.getLastName())) {
+            user.setLastName(dto.getLastName());
+        }
+    }
+
     @Override
     @Transactional
     public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
@@ -1143,25 +1529,21 @@ public class UserServiceImpl implements UserService {
         } else if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_UPDATE, "update", id);
         }
+        // A deleted account is restored first, then edited: an edit would
+        // otherwise rewrite a tombstone nobody can see (D126).
+        if (user.isDeleted()) {
+            throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
+        }
         requireIdentifiersFree(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
         boolean reactivated = false;
-        if (hasText(dto.getUsername())) {
-            user.setUsername(dto.getUsername());
-        }
-        if (hasText(dto.getEmail())) {
-            user.setEmail(dto.getEmail());
-        }
-        if (hasText(dto.getFirstName())) {
-            user.setFirstName(dto.getFirstName());
-        }
-        if (hasText(dto.getLastName())) {
-            user.setLastName(dto.getLastName());
-        }
-        if (hasText(dto.getPhoneNumber())) {
-            user.setPhoneNumber(dto.getPhoneNumber());
+        applyNameAndEmail(user, dto);
+        // Normalised only when it changed: the edit dialog sends the stored
+        // phone back, and a legacy value toE164 refuses must not block an edit.
+        if (hasText(dto.getPhoneNumber()) && !dto.getPhoneNumber().trim().equals(user.getPhoneNumber())) {
+            user.setPhoneNumber(normalizePhone(dto.getPhoneNumber(), activeHospitalFromContext()));
         }
         if (dto.getActive() != null) {
             reactivated = applyActive(user, dto.getActive());
@@ -1194,7 +1576,18 @@ public class UserServiceImpl implements UserService {
             user.setPasswordChangedAt(passwordSetAt);
             user.setPasswordRotationWarningAt(null);
             user.setPasswordRotationForcedAt(null);
-            user.setForcePasswordChange(false);
+            // Only an administrator reaches here (a self-edit cannot carry a
+            // password), and a password someone else chose is a shared secret:
+            // the holder must replace it at the next sign-in (D38).
+            user.setForcePasswordChange(true);
+            // An administrator handing out a new password means the holder
+            // should sign in with it now: the lock collected on the old one
+            // must not refuse it (D18). After commit, as above; a reactivation
+            // in the same update already registered the same clear.
+            if (!reactivated) {
+                TransactionCallbacks.afterCommit(
+                    () -> loginAttemptService.resetAttempts(reactivatedId));
+            }
         }
 
         User updated = userRepository.save(user);
@@ -1320,6 +1713,38 @@ public class UserServiceImpl implements UserService {
                 .status(AuditStatus.FAILURE)
                 .build());
         return denied;
+    }
+
+    /** The account has signed in, or one of its assignments was confirmed with its code. */
+    private boolean hasSignedInOrConfirmed(User user) {
+        return user.getLastLoginAt() != null
+                || assignmentRepository.findByUserId(user.getId()).stream()
+                        .anyMatch(a -> a.getConfirmationVerifiedAt() != null);
+    }
+
+    /**
+     * Fallback for an account deleted before V187 recorded
+     * {@code activated_before_delete}: whether it was ever switched on, guessed
+     * from what the delete left behind. A deleted account's active flag no
+     * longer says it, since the delete cleared it. Inexact for one case only:
+     * a patient verified by e-mail who never signed in still shows a sent,
+     * unconfirmed sign-up row and is restored inactive.
+     */
+    private boolean wasEverActivated(User user) {
+        if (hasSignedInOrConfirmed(user)) {
+            return true;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(user.getId());
+        // Only an account still waiting on something counts as never activated:
+        // an unused e-mail verification link, or an invitation code that was
+        // sent and never entered. An account verified by e-mail (the link
+        // clears the token but stamps no assignment) or created active by the
+        // platform waits on nothing, so it was activated.
+        if (user.getActivationToken() != null) {
+            return false;
+        }
+        return assignments.stream()
+                .noneMatch(a -> a.getConfirmationSentAt() != null && a.getConfirmationVerifiedAt() == null);
     }
 
     /** The one answer for a missing account and for one the caller may not touch. */
@@ -1466,7 +1891,8 @@ public class UserServiceImpl implements UserService {
                 return jt;
             }
         }
-        return null;
+        // A staff row always carries a title (NOT NULL column, QA D137).
+        return JobTitle.ADMINISTRATIVE_STAFF;
     }
 
     /*
@@ -1517,6 +1943,51 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void completeAccountSetup(UUID userId, String newUsername, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
+        // The holder may keep the name they were given (QA D52): that clears
+        // the flag without a rename.
+        final boolean renamed = newUsername != null && !newUsername.equals(user.getUsername());
+        if (newUsername != null) {
+            // Any letter case, deleted accounts included: the same rule as an
+            // administrator's rename (requireIdentifiersFree).
+            if (userRepository.existsUsernameOnOtherAccount(newUsername, userId)) {
+                throw new BusinessException(MessageUtil.resolve("account.setup.username.taken"));
+            }
+            user.setUsername(newUsername);
+            user.setForceUsernameChange(false);
+        }
+        String encodedPassword = null;
+        if (newPassword != null) {
+            encodedPassword = passwordEncoder.encode(newPassword);
+            user.setPasswordHash(encodedPassword);
+            user.setPasswordChangedAt(LocalDateTime.now());
+            user.setForcePasswordChange(false);
+            user.setPasswordRotationWarningAt(null);
+            user.setPasswordRotationForcedAt(null);
+        }
+        userRepository.save(user);
+        if (encodedPassword != null) {
+            passwordHistoryService.recordPassword(userId, encodedPassword);
+        }
+        // Ids only: never the username typed, never the password.
+        final boolean passwordChanged = newPassword != null;
+        TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userId(userId)
+                .eventType(passwordChanged ? AuditEventType.PASSWORD_CHANGED : AuditEventType.USER_UPDATE)
+                .eventDescription("First sign-in setup completed")
+                .details(Map.of("usernameChanged", renamed, "passwordChanged", passwordChanged))
+                .resourceId(userId.toString())
+                .entityType("USER")
+                .status(AuditStatus.SUCCESS)
+                .build()));
+        log.info("🔑 [ACCOUNT-SETUP] Setup completed for user={} (username={}, password={})",
+                userId, renamed, passwordChanged);
+    }
+
+    @Override
+    @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
@@ -1529,7 +2000,7 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * Generate a temporary password: 9 chars mixing uppercase, lowercase, digits, and specials.
+     * Generate a temporary password: 14 chars mixing uppercase, lowercase, digits, and specials.
      * Guarantees at least one character from each category.
      */
     private String generateTempPassword() {
@@ -1540,14 +2011,14 @@ public class UserServiceImpl implements UserService {
         String all     = upper + lower + digits + special;
 
         // Guarantee one from each category
-        StringBuilder sb = new StringBuilder(9);
+        StringBuilder sb = new StringBuilder(14);
         sb.append(upper.charAt(SECURE_RANDOM.nextInt(upper.length())));
         sb.append(lower.charAt(SECURE_RANDOM.nextInt(lower.length())));
         sb.append(digits.charAt(SECURE_RANDOM.nextInt(digits.length())));
         sb.append(special.charAt(SECURE_RANDOM.nextInt(special.length())));
 
-        // Fill remaining 5 chars
-        for (int i = 4; i < 9; i++) {
+        // Fill remaining 10 chars
+        for (int i = 4; i < 14; i++) {
             sb.append(all.charAt(SECURE_RANDOM.nextInt(all.length())));
         }
 
@@ -1564,27 +2035,34 @@ public class UserServiceImpl implements UserService {
 
 
     /**
-     * The assignment code the welcome mail may link, or null when there is no
-     * single right answer.
-     *
-     * <p>A two-role registration mails one confirmation code per assignment,
-     * and {@code RoleWelcomeComponent} validates the typed code against the
-     * assignment named in the URL — so linking an arbitrary one would make the
-     * other mail's code look wrong. With several, the welcome mail names the
-     * step instead, and each assignment mail carries its own correct link.
+     * The roles the welcome mail lists: every assignment that has both its
+     * confirmation code and its assignment code, each with the link to its
+     * own confirmation screen. An assignment missing either is left out, and
+     * its own role-assignment mail still goes out
+     * (UserRoleHospitalAssignmentServiceImpl.sendNotifications applies the
+     * same test).
      *
      * <p>Visible for testing.
      */
-    static String soleAssignmentCode(List<UserRoleHospitalAssignment> assignments) {
+    static List<EmailService.WelcomeRole> welcomeRoles(List<UserRoleHospitalAssignment> assignments,
+                                                       java.util.function.UnaryOperator<String> linkFor) {
         if (assignments == null) {
-            return null;
+            return List.of();
         }
-        List<String> codes = assignments.stream()
-                .map(UserRoleHospitalAssignment::getAssignmentCode)
-                .filter(c -> c != null && !c.isBlank())
-                .distinct()
-                .toList();
-        return codes.size() == 1 ? codes.get(0) : null;
+        List<EmailService.WelcomeRole> out = new ArrayList<>();
+        for (UserRoleHospitalAssignment a : assignments) {
+            String confirmation = a.getConfirmationCode();
+            String code = a.getAssignmentCode();
+            if (confirmation == null || confirmation.isBlank() || code == null || code.isBlank()) {
+                continue;
+            }
+            out.add(new EmailService.WelcomeRole(
+                    a.getRole() != null ? a.getRole().getCode() : null,
+                    a.getHospital() != null ? a.getHospital().getName() : null,
+                    confirmation,
+                    linkFor.apply(code)));
+        }
+        return out;
     }
 
 }

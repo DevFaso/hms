@@ -4,7 +4,13 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { signal } from '@angular/core';
-import { LabResultsComponent } from './lab-results';
+import {
+  LabResultsComponent,
+  shortOrderCode,
+  toLocalInputValue,
+  toServerDateTime,
+} from './lab-results';
+import { AuthService } from '../../auth/auth.service';
 import { LabOrderResponse, LabResultResponse } from '../../services/lab.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { expandRoleEquivalents } from '../../core/role-equivalence';
@@ -104,7 +110,8 @@ describe('LabResultsComponent', () => {
 
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('[data-testid="unit-mismatch-result-1"]')).toBeNull();
-    expect(host.querySelector('.severity-high')?.textContent).toContain('HIGH');
+    // D61: the flag is a label (enumLabel), never the raw wire token.
+    expect(host.querySelector('.severity-high')?.textContent?.trim()).toBe('High');
   });
 
   it('should load results on init', () => {
@@ -157,6 +164,51 @@ describe('LabResultsComponent', () => {
     component.applyFilter();
     expect(component.filtered().length).toBe(1);
     expect(component.filtered()[0].patientFullName).toBe('Alice Smith');
+  });
+
+  describe('D81: released results', () => {
+    function allowEntry(): void {
+      spyOn(
+        component as unknown as { canEnterResults: () => boolean },
+        'canEnterResults',
+      ).and.returnValue(true);
+    }
+
+    it('hides Edit and Delete on a released result and offers a correction instead', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('.delete-link')).toBeNull();
+      expect(host.querySelector('[data-testid="correct-result-1"]')).not.toBeNull();
+    });
+
+    it('opens the create modal on the same order, naming the released result', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true })]);
+
+      component.openCorrection(component.results()[0]);
+
+      expect(component.showModal()).toBeTrue();
+      expect(component.editing()).toBeFalse();
+      expect(component.form.labOrderId).toBe('order-1');
+      expect(component.form.supersedesResultId).toBe('result-1');
+      expect(component.form.resultValue).toBe('');
+    });
+
+    it('marks a superseded result and offers no second correction of it', () => {
+      allowEntry();
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersededByResultId: 'result-2' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
+    });
   });
 
   it('should open create modal', () => {
@@ -581,5 +633,168 @@ describe('LabResultsComponent — read-back role gate', () => {
       canEnterResults(): boolean;
     };
     expect(component.canEnterResults()).toBeFalse();
+  });
+});
+
+/** QA run 2026-10-17: result times (D49), the order picker (D57), self-release (D58). */
+describe('LabResultsComponent — QA lab-results defects', () => {
+  let fixture: ComponentFixture<LabResultsComponent>;
+  let component: LabResultsComponent;
+  let httpMock: HttpTestingController;
+
+  const order = {
+    id: '3f6c2a9e-1b2c-4d5e-8f90-123456789abc',
+    labOrderCode: '3f6c2a9e-1b2c-4d5e-8f90-123456789abc',
+    patientId: 'patient-1',
+    patientFullName: 'Awa Traore',
+    labTestName: 'Glucose',
+    labTestCode: 'GLU',
+    orderDatetime: '2026-10-17T14:00:00',
+  } as LabOrderResponse;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      imports: [LabResultsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: { getUserId: () => 'user-1' } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: () => 'h-1',
+            hasAnyActiveRole: () => true,
+            hasAnyActiveRoleExactly: () => true,
+          },
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(LabResultsComponent);
+    component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  function flushInit(results: Record<string, unknown>[] = []): void {
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: results, totalElements: results.length, totalPages: 1, number: 0 },
+        success: true,
+      });
+    httpMock
+      .expectOne((r) => r.url === '/lab-orders' && r.method === 'GET')
+      .flush({
+        data: { content: [order], totalElements: 1, totalPages: 1, number: 0 },
+        success: true,
+      });
+    httpMock
+      .expectOne((r) => r.url.includes('/assignments'))
+      .flush([{ id: 'assign-1', active: true }]);
+  }
+
+  it('D49: sends the entered wall-clock time as the server (UTC) clock, and reads it back', () => {
+    const local = '2026-10-17T14:39';
+    expect(toServerDateTime(local)).toBe(new Date(local).toISOString().slice(0, 19));
+    expect(toLocalInputValue(toServerDateTime(local))).toBe(local);
+    expect(toLocalInputValue('2026-10-17T18:32:52Z')).toBe(
+      toLocalInputValue('2026-10-17T18:32:52'),
+    );
+  });
+
+  it('D49: the create request carries the converted result time', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.openCreate();
+    component.form.labOrderId = order.id;
+    component.form.resultValue = '5.4';
+    component.form.resultDate = '2026-10-17T14:39';
+
+    component.submitForm();
+
+    const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
+    expect(req.request.body.resultDate).toBe(toServerDateTime('2026-10-17T14:39'));
+    expect(component.form.resultDate).toBe('2026-10-17T14:39');
+    req.flush({ id: 'r-new' });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
+  });
+
+  it('D57: the order picker names the patient and the test, never the bare UUID', () => {
+    fixture.detectChanges();
+    flushInit();
+    component.openCreate();
+    fixture.detectChanges();
+
+    const option = (fixture.nativeElement as HTMLElement).querySelector(
+      `#lr-orderId option[value="${order.id}"]`,
+    );
+    expect(option).not.toBeNull();
+    // TranslateModule.forRoot() echoes the key; the label is built from the key
+    // and its params, so assert the key is used, not the raw UUID alone.
+    expect(option?.textContent).toContain('LAB_RESULTS.ORDER_OPTION');
+    expect(option?.textContent).not.toContain(order.labOrderCode);
+    expect(shortOrderCode(order.labOrderCode)).toBe('#3F6C2A9E');
+    expect(shortOrderCode(null)).toBe('—');
+  });
+
+  it('D58: releasing a result you entered asks first, then sends it as a self-release', () => {
+    fixture.detectChanges();
+    const mine = mockResult({ enteredByUserId: 'user-1' });
+    flushInit([mine]);
+
+    component.releaseResult(mine as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="self-release-modal"]'),
+    ).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('selfRelease')).toBe('true');
+    req.flush({ ...mine, released: true, selfReleased: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
+  });
+
+  it("D58: a colleague's result is released at once, and a 409 turns into the confirmation", () => {
+    fixture.detectChanges();
+    const theirs = mockResult({ enteredByUserId: 'user-2' });
+    flushInit([theirs]);
+
+    component.releaseResult(theirs as unknown as LabResultResponse);
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.has('selfRelease')).toBeFalse();
+    req.flush({ message: 'self' }, { status: 409, statusText: 'Conflict' });
+
+    expect(component.selfReleaseTarget()?.id).toBe('result-1');
+  });
+
+  it('D58: shows a self-released result as one', () => {
+    fixture.detectChanges();
+    flushInit([mockResult({ released: true, selfReleased: true })]);
+    fixture.detectChanges();
+
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="self-released-badge"]'),
+    ).not.toBeNull();
   });
 });

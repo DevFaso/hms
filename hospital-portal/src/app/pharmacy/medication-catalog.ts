@@ -1,8 +1,16 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 import {
   PharmacyService,
   MedicationCatalogItemRequest,
@@ -21,6 +29,17 @@ export class MedicationCatalogComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /**
+   * QA D50: creating, editing and deleting a catalog entry is the hospital
+   * admin's and the super-admin's (MedicationCatalogController POST/PUT/
+   * DELETE). Everyone else who may read the catalog (the pharmacist among
+   * them) sees it read-only instead of a button the API answers with 403.
+   */
+  readonly canManage = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
+  );
 
   items = signal<MedicationCatalogItemResponse[]>([]);
   filtered = signal<MedicationCatalogItemResponse[]>([]);
@@ -120,8 +139,12 @@ export class MedicationCatalogComponent implements OnInit {
     this.editing.set(null);
   }
 
-  /** WHO ATC: anatomical letter, two digits, two letters, two digits (e.g. J01CA04). */
-  static readonly ATC_PATTERN = /^[A-Z]\d{2}[A-Z]{2}\d{2}$/;
+  /**
+   * WHO ATC at level 3, 4 or 5: J01 (therapeutic group), J01C (pharmacological
+   * subgroup), J01CA (chemical subgroup) or J01CA04 (substance). A 5-character
+   * chemical subgroup is a valid ATC code and used to be rejected (D129).
+   */
+  static readonly ATC_PATTERN = /^[A-Z]\d{2}(?:[A-Z](?:[A-Z](?:\d{2})?)?)?$/;
 
   /** RxNorm RxCUI: 1–12 digits. */
   static readonly RXNORM_PATTERN = /^\d{1,12}$/;

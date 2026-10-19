@@ -5,15 +5,22 @@
       <p class="page-subtitle">{{ 'PHARMACY.GOODS_RECEIPT_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select
-        class="pharmacy-select"
-        [(ngModel)]="selectedPharmacyId"
-        (ngModelChange)="onPharmacyChange()"
-      >
-        @for (p of pharmacies(); track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <select
+          class="pharmacy-select"
+          [attr.aria-label]="'PHARMACY.SELECT_PHARMACY' | translate"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
       <button class="btn-primary" (click)="openReceiveForm()">
         <span class="material-symbols-outlined">add_box</span>
         {{ 'PHARMACY.RECEIVE_STOCK' | translate }}
@@ -41,7 +48,9 @@
               <option value="">{{ 'PHARMACY.SELECT_INVENTORY_ITEM' | translate }}</option>
               @for (item of inventoryItems(); track item.id) {
                 <option [value]="item.id">
-                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                  {{ getItemName(item) }} ({{
+                    'PHARMACY.QTY_ON_HAND' | translate: { qty: item.quantityOnHand }
+                  }})
                 </option>
               }
             </select>
@@ -93,7 +102,7 @@
             />
           </div>
           <div class="field">
-            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (FCFA)</label>
+            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (F CFA)</label>
             <input
               id="grCost"
               type="number"
@@ -155,7 +164,9 @@
                 }}</span>
               </td>
               <td>{{ lot.supplier ?? '—' }}</td>
-              <td>{{ lot.unitCost ? (lot.unitCost | number: '1.0-0') + ' FCFA' : '—' }}</td>
+              <td>
+                {{ lot.unitCost ? (lot.unitCost | currency: 'XOF' : 'symbol' : '1.0-0') : '—' }}
+              </td>
             </tr>
           }
         </tbody>

@@ -331,7 +331,7 @@ class SlotInventoryServiceImplTest {
         UUID clinicianUserId = UUID.randomUUID();
         clinicianUser.setId(clinicianUserId);
         staff.setUser(clinicianUser);
-        when(assignmentRepository.findByUserIdAndHospitalId(clinicianUserId, hospitalId))
+        when(assignmentRepository.findActiveStaffAssignment(clinicianUserId, hospitalId))
             .thenReturn(Optional.of(new UserRoleHospitalAssignment()));
 
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(i -> {
@@ -428,7 +428,7 @@ class SlotInventoryServiceImplTest {
         // refusal, not a degraded appointment.
         AppointmentSlot slot = bookableSlot();
         UUID clinicianUserId = staff.getUser().getId();
-        when(assignmentRepository.findByUserIdAndHospitalId(clinicianUserId, hospitalId))
+        when(assignmentRepository.findActiveStaffAssignment(clinicianUserId, hospitalId))
             .thenReturn(Optional.empty());
 
         UUID slotId = slot.getId();

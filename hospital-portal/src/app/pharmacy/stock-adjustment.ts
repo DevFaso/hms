@@ -1,3 +1,4 @@
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   Component,
   computed,
@@ -8,14 +9,17 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Observable } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
   PharmacyResponse,
   InventoryItemResponse,
+  StockLotResponse,
   StockTransactionRequest,
   StockTransactionResponse,
+  StockWitnessCandidate,
 } from '../services/pharmacy.service';
 
 /**
@@ -41,7 +45,7 @@ const ADJUSTMENT_REASON_CODES = [
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './stock-adjustment.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-adjustment.scss',
@@ -52,6 +56,8 @@ export class StockAdjustmentComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
+  /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
+  pharmaciesLoaded = signal(false);
   selectedPharmacyId = '';
   inventoryItems = signal<InventoryItemResponse[]>([]);
 
@@ -61,8 +67,18 @@ export class StockAdjustmentComponent implements OnInit {
 
   // Filter
   filterType = '';
+  /** Every type, for the history filter (dispenses are listed, not entered here). */
   readonly transactionTypes: TxType[] = ['RECEIPT', 'DISPENSE', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
+  /**
+   * D82: the types this form may record. A dispense leaves stock through the
+   * prescription dispense workflow only, and the server refuses it here.
+   */
+  readonly formTransactionTypes: TxType[] = ['RECEIPT', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
+  /** D82: the selected item's lots; a lot-tracked item moves through one of them. */
+  itemLots = signal<StockLotResponse[]>([]);
   readonly adjustmentReasonCodes = ADJUSTMENT_REASON_CODES;
+  /** QA D157: colleagues who may witness a controlled-substance movement. */
+  witnessCandidates = signal<StockWitnessCandidate[]>([]);
 
   // Form
   showForm = signal(false);
@@ -98,6 +114,7 @@ export class StockAdjustmentComponent implements OnInit {
       next: (page) => {
         const list = page?.content ?? [];
         this.pharmacies.set(list);
+        this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.onPharmacyChange();
@@ -146,7 +163,36 @@ export class StockAdjustmentComponent implements OnInit {
   openForm(): void {
     this.resetTypedForm();
     this.form = this.emptyForm();
+    this.itemLots.set([]);
     this.showForm.set(true);
+    this.loadWitnessCandidates();
+  }
+
+  private loadWitnessCandidates(): void {
+    this.svc.listWitnessCandidates().subscribe({
+      next: (res) => this.witnessCandidates.set(res?.data ?? []),
+      error: () => this.witnessCandidates.set([]),
+    });
+  }
+
+  /** QA D157: the item chosen in the form. */
+  selectedItem(): InventoryItemResponse | undefined {
+    return this.inventoryItems().find((i) => i.id === this.form.inventoryItemId);
+  }
+
+  /** QA D157: a manual movement of a controlled substance (anything but a receipt) is witnessed. */
+  needsWitness(): boolean {
+    return !!this.txType() && !this.isReceipt() && !!this.selectedItem()?.controlled;
+  }
+
+  /**
+   * QA D143: a quantity is positive, except an adjustment, which is signed
+   * (a negative one writes stock off) but never zero.
+   */
+  quantityValid(): boolean {
+    const q = Number(this.form.quantity);
+    if (!Number.isFinite(q) || q === 0) return false;
+    return this.isAdjustment() || q > 0;
   }
 
   closeForm(): void {
@@ -166,6 +212,25 @@ export class StockAdjustmentComponent implements OnInit {
     this.returnReference = '';
   }
 
+  onItemChange(itemId: string): void {
+    this.form.inventoryItemId = itemId;
+    this.form.stockLotId = undefined;
+    this.itemLots.set([]);
+    if (!itemId) return;
+    this.svc.listLotsByInventoryItem(itemId, 0, 100).subscribe({
+      next: (res) => this.itemLots.set(res?.data?.content ?? []),
+      error: () => this.itemLots.set([]),
+    });
+  }
+
+  /** ISO date (YYYY-MM-DD) of today in the browser's calendar. */
+  private today(): string {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mm}-${dd}`;
+  }
+
   onTypeChange(t: TxType | ''): void {
     this.txType.set(t);
     this.form.transactionType = t;
@@ -183,8 +248,18 @@ export class StockAdjustmentComponent implements OnInit {
    * sending to the backend.
    */
   submitForm(): void {
-    if (!this.form.inventoryItemId || !this.txType() || this.form.quantity <= 0) {
+    if (!this.form.inventoryItemId || !this.txType()) {
       this.toast.error(this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS'));
+      return;
+    }
+    if (!this.quantityValid()) {
+      this.toast.error(
+        this.translate.instant(
+          this.isAdjustment()
+            ? 'PHARMACY.ADJUSTMENT_QUANTITY_NONZERO'
+            : 'PHARMACY.TX_QUANTITY_POSITIVE',
+        ),
+      );
       return;
     }
 
@@ -197,7 +272,21 @@ export class StockAdjustmentComponent implements OnInit {
     this.applyTypedFieldsToForm();
 
     this.saving.set(true);
-    this.svc.recordTransaction(this.form).subscribe({
+    // D108: a goods receipt creates the lot (with its expiry) and counts it,
+    // instead of raising the item total against a lot number nobody holds.
+    const request$: Observable<unknown> = this.isReceipt()
+      ? this.svc.receiveStock({
+          inventoryItemId: this.form.inventoryItemId,
+          lotNumber: this.receiptLotNumber.trim(),
+          expiryDate: this.receiptExpiryDate,
+          initialQuantity: this.form.quantity,
+          supplier: this.receiptSupplier.trim() || undefined,
+          unitCost: this.receiptCostPerUnit ?? undefined,
+          receivedDate: this.today(),
+          notes: this.receiptPoReference.trim() || undefined,
+        })
+      : this.svc.recordTransaction(this.form);
+    request$.subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.TX_RECORDED'));
         this.closeForm();
@@ -229,6 +318,18 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.isReceipt() && !this.receiptLotNumber?.trim()) {
       return 'PHARMACY.RECEIPT_LOT_REQUIRED';
     }
+    if (this.isReceipt() && !this.receiptExpiryDate) {
+      return 'PHARMACY.RECEIPT_EXPIRY_REQUIRED';
+    }
+    if (this.isReceipt() && this.receiptExpiryDate < this.today()) {
+      return 'PHARMACY.RECEIPT_LOT_EXPIRED';
+    }
+    if (!this.isReceipt() && this.itemLots().length > 0 && !this.form.stockLotId) {
+      return 'PHARMACY.LOT_REQUIRED_FOR_MOVEMENT';
+    }
+    if (this.needsWitness() && !this.form.witnessedBy) {
+      return 'PHARMACY.WITNESS_REQUIRED';
+    }
     return null;
   }
 
@@ -247,6 +348,9 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.expiryDate = undefined;
     this.form.unitCost = undefined;
     this.form.referenceId = undefined;
+    if (!this.needsWitness()) {
+      this.form.witnessedBy = undefined;
+    }
 
     if (this.isReceipt()) {
       this.form.lotNumber = this.receiptLotNumber.trim();
@@ -277,6 +381,20 @@ export class StockAdjustmentComponent implements OnInit {
     return (
       item.medicationName ?? item.medicationCode ?? this.translate.instant('PHARMACY.UNKNOWN_ITEM')
     );
+  }
+
+  /**
+   * QA D158: the sign a ledger row reads with. Receipts and returns add,
+   * an adjustment carries its own sign, everything else takes stock off.
+   * The old list named types that do not exist (RECEIVE, ADJUSTMENT_IN…),
+   * so every receipt read as negative.
+   */
+  signedQuantity(tx: StockTransactionResponse): string {
+    const q = Number(tx.quantity);
+    const magnitude = Math.abs(q);
+    if (tx.transactionType === 'ADJUSTMENT') return (q < 0 ? '-' : '+') + magnitude;
+    if (tx.transactionType === 'RECEIPT' || tx.transactionType === 'RETURN') return '+' + magnitude;
+    return '-' + magnitude;
   }
 
   getTypeClass(type: string): string {

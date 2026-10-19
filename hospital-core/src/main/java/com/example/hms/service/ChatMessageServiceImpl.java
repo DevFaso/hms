@@ -22,6 +22,7 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import org.springframework.security.access.AccessDeniedException;
 import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +53,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
+    private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
@@ -72,6 +74,21 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         ROLE_DOCTOR, "ROLE_PHYSICIAN", "ROLE_SURGEON", ROLE_NURSE, ROLE_MIDWIFE
     );
 
+    /**
+     * Whether a patient may message this user: the same role test the send
+     * path applies, shared so a picker (the portal care team, QA D115) never
+     * offers a recipient whose send would be refused.
+     */
+    public static boolean holdsClinicalCareRole(User user) {
+        return user != null && user.getUserRoles() != null && user.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null && ur.getRole().getName() != null)
+            .map(ur -> {
+                String roleName = ur.getRole().getName();
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
+            })
+            .anyMatch(CLINICAL_CARE_ROLES::contains);
+    }
+
 
     private static final int MAX_ATTACHMENTS_PER_MESSAGE = 4;
     private static final int MIN_AUDIO_DURATION_SECONDS = 1;
@@ -88,6 +105,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final ChatAttachmentRepository chatAttachmentRepository;
     private final FileUploadService fileUploadService;
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final PatientLocaleResolver patientLocaleResolver;
 
     @Override
@@ -119,14 +137,13 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         }
 
         if (sender.getId().equals(recipient.getId())) {
-            throw new SecurityException("Cannot send a chat message to yourself.");
+            throw new IllegalArgumentException("Cannot send a chat message to yourself.");
         }
 
         // Enforce role-based messaging hierarchy. Sender roles are
-        // read from SecurityContextHolder inside the validator; the
-        // sender User itself is not needed (Sonar S1172 / Pattern 18
-        // in docs/SonarQubeInstructions.md).
-        validateMessageHierarchy(recipient);
+        // read from SecurityContextHolder inside the validator; the sender
+        // is passed for the patient/clinician shared-hospital check.
+        validateMessageHierarchy(sender, recipient);
 
         // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
         boolean isSuperAdmin = isSuperAdminContext();
@@ -155,7 +172,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             } else {
                 // No hospital context provided — just ensure the sender is a legitimate active user
                 if (!userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(sender.getId())) {
-                    throw new SecurityException("Sender has no active role assignment in the system.");
+                    throw new AccessDeniedException("Sender has no active role assignment in the system.");
                 }
                 // assignment stays null — cross-hospital / general chat
             }
@@ -303,7 +320,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
      * caller's effective authorities. Sonar S1172 / Pattern 18 in
      * docs/SonarQubeInstructions.md.</p>
      */
-    private void validateMessageHierarchy(User recipient) {
+    private void validateMessageHierarchy(User sender, User recipient) {
         // SUPER_ADMIN bypasses all hierarchy checks
         if (isSuperAdminContext()) {
             return;
@@ -320,7 +337,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .filter(ur -> ur.getRole() != null)
             .map(ur -> {
                 String roleName = ur.getRole().getName();
-                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+                return roleName.startsWith(ROLE_PREFIX) ? roleName : ROLE_PREFIX + roleName;
             })
             .collect(java.util.stream.Collectors.toSet());
 
@@ -336,8 +353,32 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             ? (senderIsStaff || recipientIsClinical)
             : senderIsClinical;
 
+        // QA D197: a refusal is a 403, not a raw SecurityException (which answered 500).
         if (!allowed) {
-            throw new SecurityException("Your role does not permit messaging this user.");
+            throw new AccessDeniedException("Your role does not permit messaging this user.");
+        }
+
+        // QA D170: the patient boundary is also a relationship. A patient reaches a
+        // clinician only at a hospital where the patient holds an active registration
+        // and the clinician an active assignment; a clinician reaches a patient only
+        // on the same terms.
+        if (!senderIsStaff && recipientIsStaff) {
+            requireSharedHospital(sender.getId(), recipient.getId());
+        } else if (senderIsStaff && !recipientIsStaff) {
+            requireSharedHospital(recipient.getId(), sender.getId());
+        }
+    }
+
+    private void requireSharedHospital(UUID patientUserId, UUID staffUserId) {
+        boolean shared = patientHospitalRegistrationRepository.findByPatientUserIdAndActiveTrue(patientUserId)
+            .stream()
+            .map(r -> r.getHospital() == null ? null : r.getHospital().getId())
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .anyMatch(hospitalId -> userRoleHospitalAssignmentRepository
+                .existsByUserIdAndHospitalIdAndActiveTrue(staffUserId, hospitalId));
+        if (!shared) {
+            throw new AccessDeniedException("You can only message your care team at a hospital where you are registered.");
         }
     }
 
@@ -345,7 +386,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         boolean exists = userRoleHospitalAssignmentRepository
             .existsByUserIdAndHospitalIdAndActiveTrue(senderId, hospitalId);
         if (!exists) {
-            throw new SecurityException("Sender is not assigned to the specified hospital.");
+            throw new AccessDeniedException("Sender is not assigned to the specified hospital.");
         }
     }
 

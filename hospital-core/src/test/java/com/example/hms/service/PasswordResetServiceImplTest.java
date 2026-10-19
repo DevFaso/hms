@@ -38,6 +38,10 @@ class PasswordResetServiceImplTest {
     @Mock private PasswordResetTokenRepository tokenRepository;
     @Mock private EmailService emailService;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private com.example.hms.security.LoginAttemptService loginAttemptService;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private SmsService smsService;
+    @Mock private org.springframework.context.MessageSource messageSource;
 
     /** Fixed instant: token validity and cleanup are computed against the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 1, 10, 0);
@@ -81,6 +85,43 @@ class PasswordResetServiceImplTest {
     }
 
     @Test
+    void qaD171_aPhoneOnlyAccountGetsItsResetLinkBySms() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+
+        service.requestResetByPhone("70 20 20 20", Locale.FRENCH, "127.0.0.1");
+
+        verify(tokenRepository).save(any(PasswordResetToken.class));
+        verify(smsService).send("+22670202020", "link");
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+    }
+
+    @Test
+    void qaD171_noTokenIsIssuedWithoutARealSmsTransport() {
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(false);
+
+        service.requestResetByPhone("70202020", Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    void qaD171_anUnknownPhoneIsSilent() {
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.empty());
+
+        service.requestResetByPhone("70202020", Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
+    }
+
+    @Test
     void requestReset_userNotFound() {
         when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.requestReset("unknown@test.com", Locale.ENGLISH))
@@ -107,6 +148,59 @@ class PasswordResetServiceImplTest {
         assertThat(resetToken.getConsumedAt()).isNotNull();
         // confirmation email must be sent after a successful reset
         verify(emailService).sendPasswordResetConfirmationEmail(eq("test@test.com"), anyString());
+    }
+
+    @Test
+    void confirmReset_clearsTheLockAndAuditsIdsOnly() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(NOW.plusHours(1))
+            .build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        service.confirmReset(rawToken, "newPassword");
+
+        // D18: no transaction in a unit test, so the after-commit callback runs inline.
+        verify(loginAttemptService).resetAttempts(userId);
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PASSWORD_RESET_COMPLETE);
+        assertThat(audit.getValue().getUserId()).isEqualTo(userId);
+        assertThat(String.valueOf(audit.getValue())).doesNotContain("newPassword").doesNotContain(rawToken);
+    }
+
+    @Test
+    void confirmReset_expiredToken_keepsTheLock() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(NOW.minusHours(1))
+            .build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+
+        assertThatThrownBy(() -> service.confirmReset(rawToken, "newPassword"))
+            .isInstanceOf(IllegalStateException.class);
+        verify(loginAttemptService, never()).resetAttempts(any());
+    }
+
+    @Test
+    void requestReset_auditsTheRequestByIdOnly() {
+        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.requestReset("test@test.com", Locale.ENGLISH);
+
+        ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PASSWORD_RESET_REQUEST);
+        assertThat(audit.getValue().getUserId()).isEqualTo(userId);
+        assertThat(String.valueOf(audit.getValue())).doesNotContain("test@test.com");
     }
 
     @Test

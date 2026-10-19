@@ -55,6 +55,7 @@ class AdmissionServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
+    @Mock private com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private AdmissionMapper admissionMapper;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
@@ -80,6 +81,29 @@ class AdmissionServiceImplTest {
         patient = new Patient(); patient.setId(patientId);
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
         staff = new Staff(); staff.setId(staffId);
+        com.example.hms.model.User staffUser = new com.example.hms.model.User();
+        staffUser.setId(UUID.randomUUID());
+        staff.setUser(staffUser);
+        // The admitting provider is a doctor unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+    }
+
+    @Test
+    void admitPatient_refusesANurseAsAdmittingProvider() {
+        // QA D84: a nurse was accepted as admitting physician.
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("admission.provider.physician.required");
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test
@@ -100,6 +124,8 @@ class AdmissionServiceImplTest {
         when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
 
         assertThat(service.admitPatient(request)).isEqualTo(response);
+        // QA D98/D135: every admission opens its own INPATIENT encounter.
+        verify(stayEncounters).openStayEncounter(admission);
     }
 
     @Test
@@ -240,6 +266,29 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void dischargePatient_refusesANurseAsDischargingProvider() {
+        // QA D176: the discharge picker offered nurses and the server took them.
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("admission.dischargingProvider.physician.required");
+        verify(admissionRepository, never()).save(any());
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+    }
+
+    @Test
     void dischargePatient_success() {
         Admission admission = new Admission();
         admission.setId(admissionId);
@@ -282,7 +331,9 @@ class AdmissionServiceImplTest {
 
         service.dischargePatient(admissionId, request);
 
-        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+        // QA D134: the stay's own encounters, never the patient-wide sweep.
+        verify(stayEncounters).recordDischarge(admission);
+        verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
     }
 
     /* ── P0 #4: structured bed assignment ─────────────────────────────── */

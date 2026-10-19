@@ -41,6 +41,7 @@ public class BillingInvoiceMapper {
         if (patient == null) return;
 
         String fullName = buildPatientName(patient);
+        dto.setPatientId(patient.getId() != null ? patient.getId().toString() : null);
         dto.setPatientFullName(fullName);
         dto.setPatientName(fullName);
         dto.setPatientEmail(patient.getEmail());
@@ -75,6 +76,7 @@ public class BillingInvoiceMapper {
     private void populateEncounterInfo(BillingInvoiceResponseDTO dto, Encounter encounter) {
         if (encounter == null) return;
 
+        dto.setEncounterCode(encounter.getCode());
         dto.setEncounterDescription(encounter.getNotes());
         dto.setEncounterType(encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null);
         dto.setEncounterStatus(encounter.getStatus() != null ? encounter.getStatus().name() : null);

@@ -45,6 +45,9 @@ public class AdmissionResponseDTO {
      */
     private UUID currentEncounterId;
 
+    /** The stay's own INPATIENT encounter, open or closed (QA D135, V193). */
+    private UUID encounterId;
+
     private UUID departmentId;
     private String departmentName;
 

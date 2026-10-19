@@ -12,6 +12,7 @@ import {
   CareTeamDTO,
   PatientPortalService,
   PrimaryCareEntry,
+  VisitClinicianEntry,
 } from '../../services/patient-portal.service';
 
 /**
@@ -42,7 +43,13 @@ export class MyCareTeamComponent implements OnInit {
       (e) => !e.current && e.id !== current?.id,
     );
   });
-  readonly empty = computed(() => !this.current() && this.previous().length === 0);
+  /** The clinicians of the patient's visits still open (QA D115). */
+  readonly visitClinicians = computed<VisitClinicianEntry[]>(
+    () => this.team()?.visitClinicians ?? [],
+  );
+  readonly empty = computed(
+    () => !this.current() && this.previous().length === 0 && this.visitClinicians().length === 0,
+  );
 
   ngOnInit(): void {
     this.portal.getMyCareTeam().subscribe({

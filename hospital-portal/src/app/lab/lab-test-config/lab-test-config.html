@@ -42,6 +42,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'LAB_TEST_CONFIG.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [ngModel]="searchKeyword()"
       (ngModelChange)="searchKeyword.set($event)"
@@ -208,6 +209,28 @@
                 />
               </div>
               <div class="range-field">
+                <label [for]="'crit-low-' + i">{{
+                  'LAB_TEST_CONFIG.CRITICAL_LOW' | translate
+                }}</label>
+                <input
+                  type="number"
+                  [id]="'crit-low-' + i"
+                  [ngModel]="range.criticalLow"
+                  (ngModelChange)="range.criticalLow = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'crit-high-' + i">{{
+                  'LAB_TEST_CONFIG.CRITICAL_HIGH' | translate
+                }}</label>
+                <input
+                  type="number"
+                  [id]="'crit-high-' + i"
+                  [ngModel]="range.criticalHigh"
+                  (ngModelChange)="range.criticalHigh = $event"
+                />
+              </div>
+              <div class="range-field">
                 <label [for]="'unit-' + i">{{ 'LAB_TEST_CONFIG.RANGE_UNIT' | translate }}</label>
                 <input
                   type="text"
@@ -220,7 +243,7 @@
                 <label [for]="'gender-' + i">{{ 'LAB_TEST_CONFIG.GENDER' | translate }}</label>
                 <select
                   [id]="'gender-' + i"
-                  [title]="'Gender'"
+                  [title]="'LAB_TEST_CONFIG.GENDER' | translate"
                   [ngModel]="range.gender"
                   (ngModelChange)="range.gender = $event"
                 >
@@ -318,7 +341,7 @@
               id="defTestCode"
               type="text"
               [(ngModel)]="defForm.testCode"
-              [placeholder]="'e.g. CBC'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_CODE' | translate"
               required
             />
           </div>
@@ -328,7 +351,7 @@
               id="defTestName"
               type="text"
               [(ngModel)]="defForm.testName"
-              [placeholder]="'e.g. Complete Blood Count'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_NAME' | translate"
               required
             />
           </div>
@@ -338,7 +361,7 @@
               id="defCategory"
               type="text"
               [(ngModel)]="defForm.category"
-              [placeholder]="'e.g. Hematology'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_CATEGORY' | translate"
             />
           </div>
           <div class="form-group">
@@ -347,7 +370,7 @@
               id="defUnit"
               type="text"
               [(ngModel)]="defForm.unit"
-              [placeholder]="'e.g. cells/mcL'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_UNIT' | translate"
             />
           </div>
           <div class="form-group">
@@ -356,7 +379,7 @@
               id="defSampleType"
               type="text"
               [(ngModel)]="defForm.sampleType"
-              [placeholder]="'e.g. Blood'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_SAMPLE' | translate"
             />
           </div>
           <div class="form-group">
@@ -365,7 +388,7 @@
               id="defTurnaround"
               type="number"
               [(ngModel)]="defForm.turnaroundTime"
-              [placeholder]="'Minutes'"
+              [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_MINUTES' | translate"
               min="1"
               max="10080"
             />

@@ -32,8 +32,8 @@ class UserRepositorySearchQueryTest {
     @Test
     void searchUsersQueryExplicitlyCastsParametersToString() throws NoSuchMethodException {
         Method searchUsers = UserRepository.class.getDeclaredMethod(
-                "searchUsers", String.class, String.class, String.class,
-                boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
+                "searchUsers", String.class, String.class, String.class, String.class,
+                boolean.class, boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
         Query query = searchUsers.getAnnotation(Query.class);
 
         assertThat(query).as("@Query annotation must be present on searchUsers").isNotNull();
@@ -58,8 +58,8 @@ class UserRepositorySearchQueryTest {
     @Test
     void directoryValueAndCountQueriesShareOneScopedWhereClause() throws NoSuchMethodException {
         Method search = UserRepository.class.getDeclaredMethod(
-                "searchUsers", String.class, String.class, String.class,
-                boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
+                "searchUsers", String.class, String.class, String.class, String.class,
+                boolean.class, boolean.class, boolean.class, boolean.class, java.util.Collection.class, Pageable.class);
         Method list = UserRepository.class.getDeclaredMethod(
                 "findAllPaged", boolean.class, boolean.class, boolean.class,
                 java.util.Collection.class, Pageable.class);

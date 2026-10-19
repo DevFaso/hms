@@ -65,6 +65,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
     /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
     @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -343,6 +344,37 @@ class UserRoleHospitalAssignmentServiceImplTest {
         } finally {
             com.example.hms.utility.ActivationDeliveryTracker.close();
         }
+    }
+
+    @Test
+    void sendNotifications_skipsTheAssignmentMailWhenTheWelcomeMailCarriesTheCode() {
+        // D10: a new single-role staff account gets ONE mail (the welcome
+        // mail with the code); the role-assignment mail must not follow it.
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode("CTO-TEST-0001");
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService, never()).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void sendNotifications_stillMailsTheCodeWhenTheWelcomeMailCannotCarryIt() {
+        // Without an assignment code the welcome mail has no link to carry the
+        // code with and falls back to "see the other mail": that mail must
+        // then still go out, or the new user never receives the code.
+        assignment.setConfirmationCode("602517");
+        assignment.setAssignmentCode(null);
+        when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+
+        service.sendNotifications(assignment.getId(), true);
+
+        verify(emailService).sendRoleAssignmentConfirmationEmail(
+            any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -671,5 +703,89 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.deleteAssignment(id);
 
         verify(assignmentRepository).deleteById(id);
+    }
+
+    @Test
+    void deletingTheLastAssignmentOfARoleDropsItsUserLevelLink() {
+        // QA D132: deleting the stray patient assignment left the user_roles
+        // link behind, which then counted as a global role at sign-in.
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).isEmpty();
+        verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void deletingOneOfTwoAssignmentsOfARoleKeepsItsUserLevelLink() {
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        UserRoleHospitalAssignment sibling = new UserRoleHospitalAssignment();
+        sibling.setId(UUID.randomUUID());
+        sibling.setUser(assignee);
+        sibling.setRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment, sibling));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).hasSize(1);
+        verify(userRepository, never()).save(assignee);
+    }
+
+    @Test
+    void anActivePatientAssignmentIsRefusedWithATranslatedKey() {
+        // QA D194: the refusal was an English sentence.
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(Boolean.TRUE);
+
+        assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                service, "enforceRoleScopeConstraints", dto, "ROLE_PATIENT", false))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("assignment.patient.mustStartInactive");
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("D21: a restored invitee's unconfirmed invitations get fresh codes, mailed; confirmed rows are left alone")
+    void reissuesOnlyTheUnconfirmedInvitations() {
+        assignment.setActive(false);
+        assignment.setConfirmationCode(null); // revoked by the delete
+        assignment.setConfirmationVerifiedAt(null);
+        assignment.setConfirmationSentAt(java.time.LocalDateTime.now().minusDays(1));
+        UserRoleHospitalAssignment linkOnly = new UserRoleHospitalAssignment();
+        linkOnly.setId(UUID.randomUUID());
+        linkOnly.setUser(assignee);
+        linkOnly.setHospital(hospital);
+        linkOnly.setConfirmationSentAt(null); // a patient row activated by the e-mail link
+        UserRoleHospitalAssignment confirmed = new UserRoleHospitalAssignment();
+        confirmed.setId(UUID.randomUUID());
+        confirmed.setUser(assignee);
+        confirmed.setHospital(hospital);
+        confirmed.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(5));
+        confirmed.setConfirmationCode(null);
+        when(assignmentRepository.findByUserId(assignee.getId()))
+            .thenReturn(java.util.List.of(assignment, linkOnly, confirmed));
+        when(assignmentRepository.save(org.mockito.ArgumentMatchers.any(UserRoleHospitalAssignment.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        int reissued = service.reissuePendingInvitationsForRestoredUser(assignee.getId());
+
+        org.assertj.core.api.Assertions.assertThat(reissued).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(assignment.getConfirmationCode()).isNotBlank();
+        org.assertj.core.api.Assertions.assertThat(assignment.getActive()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(confirmed.getConfirmationCode()).isNull();
+        org.assertj.core.api.Assertions.assertThat(linkOnly.getConfirmationCode()).isNull();
+        verify(eventPublisher)
+            .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
     }
 }

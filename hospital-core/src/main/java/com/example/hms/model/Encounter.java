@@ -56,6 +56,13 @@ import java.util.Set;
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Encounter extends BaseEntity {
 
+    /**
+     * Marks the completed consultation a prescription creates when it has no
+     * visit to hang on (QA D41/D85). It is bookkeeping, not documentation, so
+     * the chart review and record PDF keep its notes out of "Notes".
+     */
+    public static final String PRESCRIPTION_ANCHOR_NOTE = "Auto-generated for prescription entry";
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_encounter_patient"))
@@ -148,6 +155,14 @@ public class Encounter extends BaseEntity {
     /** Discharge diagnoses stored as JSON array text (MVP 6). */
     @Column(name = "discharge_diagnoses", columnDefinition = "TEXT")
     private String dischargeDiagnoses;
+
+    /**
+     * The admission this INPATIENT encounter belongs to (QA D134/D135, V193).
+     * Null for every outpatient row. A discharge completes the encounters
+     * carrying its admission id and no others.
+     */
+    @Column(name = "admission_id")
+    private java.util.UUID admissionId;
 
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;

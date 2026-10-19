@@ -63,7 +63,7 @@ export class RoleWelcomeComponent implements OnInit {
     const code = this.route.snapshot.queryParamMap.get('assignment');
     if (!code) {
       this.pageState = 'not-found';
-      this.errorMessage = 'No assignment code was found in the link. Please check your email.';
+      this.errorMessage = 'ONBOARDING.ERR_NO_LINK_CODE';
       return;
     }
 
@@ -81,10 +81,10 @@ export class RoleWelcomeComponent implements OnInit {
       error: (err) => {
         if (err.status === 404) {
           this.pageState = 'not-found';
-          this.errorMessage = 'This assignment link is invalid or has expired.';
+          this.errorMessage = 'ONBOARDING.ERR_LINK_INVALID';
         } else {
           this.pageState = 'error';
-          this.errorMessage = 'Unable to load your assignment. Please try again later.';
+          this.errorMessage = 'ONBOARDING.ERR_LOAD_FAILED';
         }
       },
     });
@@ -184,11 +184,11 @@ export class RoleWelcomeComponent implements OnInit {
         setTimeout(() => this.focusDigit(0), 50);
 
         if (err.status === 400) {
-          this.verifyError = 'Incorrect code. Please check your email and try again.';
+          this.verifyError = 'ONBOARDING.ERR_CODE_INCORRECT';
         } else if (err.status === 404) {
-          this.verifyError = 'Assignment not found. Please use the original email link.';
+          this.verifyError = 'ONBOARDING.ERR_ASSIGNMENT_NOT_FOUND';
         } else {
-          this.verifyError = 'Something went wrong. Please try again.';
+          this.verifyError = 'ONBOARDING.ERR_GENERIC';
         }
       },
     });

@@ -1,5 +1,8 @@
 package com.example.hms.payload.dto.clinical.labor;
 
+import com.example.hms.payload.dto.VitalSignLimits;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.DecimalMax;
 import com.example.hms.enums.LiquorColour;
 import com.example.hms.enums.MouldingDegree;
 import jakarta.validation.constraints.Max;
@@ -50,6 +53,8 @@ public class PartographEntryRequestDTO {
     private Integer systolicBpMmHg;
     @Min(0) @Max(250)
     private Integer diastolicBpMmHg;
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
     @Min(0)
     private Integer urineOutputMl;

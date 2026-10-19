@@ -41,6 +41,7 @@ export interface LabResultResponse {
    * so the release control reads this to know whether it is ours to offer.
    */
   performingHospitalId?: string | null;
+  labTestCode?: string | null;
   labTestName: string;
   resultValue: string;
   resultUnit: string;
@@ -68,6 +69,14 @@ export interface LabResultResponse {
   released: boolean;
   releasedAt: string | null;
   releasedByFullName: string | null;
+  /** D58: released by the same user who entered it — a single-reviewer release. */
+  selfReleased?: boolean;
+  /** D81: the released result this one corrects. */
+  supersedesResultId?: string | null;
+  /** D81: set on a released result once a correction replaced it. */
+  supersededByResultId?: string | null;
+  /** The user who entered the result, so a self-release can be confirmed up front. */
+  enteredByUserId?: string | null;
   signedAt: string | null;
   signedBy: string | null;
   signatureValue: string | null;
@@ -139,6 +148,9 @@ export interface LabTestReferenceRange {
   ageMax: number | null;
   gender: 'ALL' | 'MALE' | 'FEMALE';
   notes: string | null;
+  /** D107: panic limits; a value beyond them grades CRITICAL. */
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -264,6 +276,8 @@ export interface LabResultRequest {
   resultUnit?: string;
   resultDate: string;
   notes?: string;
+  /** D81: the released result on the same order that this new result corrects. */
+  supersedesResultId?: string;
 }
 
 export interface LabTestDefinitionRequest {
@@ -498,8 +512,14 @@ export class LabService {
     return this.http.delete('/lab-results/' + id, { responseType: 'text' });
   }
 
-  releaseResult(id: string): Observable<LabResultResponse> {
-    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {});
+  /**
+   * D58: `selfRelease` confirms that the caller, who entered the result,
+   * releases it without a second reviewer. Without it the API answers 409 for
+   * a self-release.
+   */
+  releaseResult(id: string, selfRelease = false): Observable<LabResultResponse> {
+    const params = selfRelease ? new HttpParams().set('selfRelease', 'true') : undefined;
+    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {}, { params });
   }
 
   // ── Lab Test Definition CRUD ─────────────────────────────────────────

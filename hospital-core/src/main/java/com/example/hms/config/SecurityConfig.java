@@ -312,7 +312,20 @@ public class SecurityConfig {
         var provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         provider.setAuthoritiesMapper(authoritiesMapper());
+        checkPasswordBeforeAccountStatus(provider);
         return provider;
+    }
+
+    /**
+     * QA D168: by default the provider checks enabled/locked BEFORE the password, so
+     * "account inactive" answered a wrong password too and told anyone that the
+     * username exists and is inactive. The status is checked only once the password
+     * matched; a wrong password is a plain bad-credentials answer for every account.
+     */
+    static void checkPasswordBeforeAccountStatus(DaoAuthenticationProvider provider) {
+        provider.setPreAuthenticationChecks(user -> { });
+        provider.setPostAuthenticationChecks(
+            new org.springframework.security.authentication.AccountStatusUserDetailsChecker());
     }
 
     /**
@@ -424,6 +437,11 @@ public class SecurityConfig {
                     // and CSRF has nothing to protect. The native apps send no
                     // XSRF header, which made these unreachable for them.
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/me/change-password"),
+                    // The WebSocket ticket exchange: same header-only bearer
+                    // auth, mints no cookie and changes no state. A stale
+                    // XSRF cookie after login rotation made it answer 403
+                    // (QA D35), leaving every socket unauthenticated.
+                    PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/ws-ticket"),
                     PathPatternRequestMatcher.withDefaults().matcher("/me/push-devices/**"),
                     PathPatternRequestMatcher.withDefaults().matcher("/auth/password/**"),
                     PathPatternRequestMatcher.withDefaults().matcher(HttpMethod.POST, "/auth/resend-verification"),
@@ -570,6 +588,15 @@ public class SecurityConfig {
                 // matcher rejected the picker call, so both pages had a dead
                 // search box — 2026-08-23 role audit, D4. Chart list/detail
                 // stays narrower at the controller.
+                // QA D92: the invoice form picks its patient with the shared
+                // picker, so the two billing roles reach the picker's two
+                // reads, and only those; the rest of /patients stays closed to them.
+                .requestMatchers(HttpMethod.GET, API_PATIENTS + "/search", API_PATIENTS + "/lookup")
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_PHARMACIST,
+                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, ROLE_SUPER_ADMIN,
+                        ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
                         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
@@ -623,13 +650,14 @@ public class SecurityConfig {
                 .hasAnyAuthority(SecurityConstants.authorities(SecurityConstants.ADMIN_REGISTER_AUTHORITIES))
 
                 // -------------------- Hospitals (tenant-safe) --------------------
-                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
+                // /me/hospital and /me/hospitals return only the caller's assigned hospital(s):
+                // the controller answers from the caller's OWN acting scope, so there is
+                // nothing a role list here protects. Every authenticated page resolves its
+                // hospital scope through it, and a role list kept drifting behind the roles
+                // that exist (role audit D7 added three; QA D33: the pharmacist was still
+                // missing and the pharmacy registry went to /error/403).
                 .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
-                        // Role audit D7: every authenticated page resolves its
-                        // hospital scope here, so the chart 403s without it.
-                        ROLE_RADIOLOGIST, ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST)
+                .authenticated()
 
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.
@@ -763,7 +791,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 .requestMatchers(HttpMethod.DELETE, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 .requestMatchers("/invoices/*/email", "/invoices/*/send-to")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)

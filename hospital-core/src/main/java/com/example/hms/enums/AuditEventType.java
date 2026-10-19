@@ -26,6 +26,8 @@ public enum AuditEventType {
     USER_DELETE,
     USER_DISABLE,
     USER_ENABLE,
+    /** A soft-deleted account put back (QA D51): its own event, not a generic DATA_UPDATE. */
+    USER_RESTORE,
     USER_BOOTSTRAP,
     ROLE_ASSIGNED,
     ROLE_REVOKED,
@@ -87,6 +89,7 @@ public enum AuditEventType {
     INVOICE_CREATED,
     INVOICE_UPDATED,
     PAYMENT_POSTED,
+    PAYMENT_REJECTED,
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
 
@@ -125,6 +128,8 @@ public enum AuditEventType {
     PRESCRIPTION_CLARIFICATION_REQUESTED,
     /** The prescriber answered and the order returned to SIGNED (G5). */
     PRESCRIPTION_CLARIFICATION_RESOLVED,
+    /** D83: a prescriber overrode (or an edit cleared) an allergy hard stop. */
+    PRESCRIPTION_ALLERGY_OVERRIDDEN,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

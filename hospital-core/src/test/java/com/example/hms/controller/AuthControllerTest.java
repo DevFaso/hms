@@ -39,6 +39,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,6 +67,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerTest {
 
     @Autowired private MockMvc mockMvc;
+
+    @org.junit.jupiter.api.BeforeAll
+    static void messageBundles() {
+        var source = new org.springframework.context.support.ResourceBundleMessageSource();
+        source.setBasename("messages");
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        com.example.hms.utility.MessageUtil.setMessageSource(source);
+    }
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private UserRepository userRepository;
@@ -316,6 +326,33 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    /** D64: a French sign-in screen got "Invalid username or password." in English. */
+    @Test
+    void login_withInvalidCredentials_isTranslated() throws Exception {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("nobody", "wrongpassword", null))))
+                .andExpect(status().isUnauthorized())
+                // The slice's MessageSource does not unescape '' for argument-less
+                // messages the way the production LocaleConfig does, so match the
+                // part without the apostrophe.
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.endsWith("utilisateur ou mot de passe incorrect.")));
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "es")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("nobody", "wrongpassword", null))))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Nombre de usuario o contraseña incorrectos."));
+    }
+
     @Test
     void bootstrapStatus_returnsAllowedFlag() throws Exception {
         when(userRepository.count()).thenReturn(0L);
@@ -364,6 +401,121 @@ class AuthControllerTest {
                 username, "jwt-token-placeholder",
                 AuthorityUtils.createAuthorityList("ROLE_STAFF"));
         SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    // =====================================================================
+    // POST /auth/me/complete-setup  (D17: the forced first sign-in, one call)
+    // =====================================================================
+
+    private com.example.hms.model.User forcedInvitee(boolean rename, boolean password) {
+        com.example.hms.model.User u = com.example.hms.model.User.builder()
+                .username("invitee.tmp").isActive(true).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(u, "id", java.util.UUID.randomUUID());
+        u.setForceUsernameChange(rename);
+        u.setForcePasswordChange(password);
+        when(userRepository.findByUsername("invitee.tmp")).thenReturn(java.util.Optional.of(u));
+        authenticateAs("invitee.tmp");
+        return u;
+    }
+
+    private void currentPasswordAccepted() {
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("invitee.tmp", null));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions completeSetup(String json) throws Exception {
+        return mockMvc.perform(post("/auth/me/complete-setup").contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    @Test
+    void completeSetup_appliesUsernameAndPasswordInOneServiceCall() throws Exception {
+        var u = forcedInvitee(true, true);
+        currentPasswordAccepted();
+
+        completeSetup("{\"newUsername\":\" awa.traore \",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isOk());
+
+        verify(userService).completeAccountSetup(u.getId(), "awa.traore", "New#Pass2026");
+        verify(userService, never()).changeOwnUsername(any(), any());
+        verify(userService, never()).changeOwnPassword(any(), any());
+    }
+
+    @Test
+    void completeSetup_keepingTheCurrentUsernameIsAccepted() throws Exception {
+        // QA D52: the forced step refused the name the account already had.
+        var u = forcedInvitee(true, true);
+        currentPasswordAccepted();
+
+        completeSetup("{\"newUsername\":\"invitee.tmp\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isOk());
+
+        verify(userService).completeAccountSetup(u.getId(), "invitee.tmp", "New#Pass2026");
+    }
+
+    @Test
+    void completeSetup_onlyThePasswordWhenOnlyItIsForced() throws Exception {
+        var u = forcedInvitee(false, true);
+        currentPasswordAccepted();
+
+        completeSetup("{\"newUsername\":\"sneaky.rename\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isOk());
+
+        verify(userService).completeAccountSetup(u.getId(), null, "New#Pass2026");
+    }
+
+    @Test
+    void completeSetup_wrongCurrentPasswordIs400AndChangesNothing() throws Exception {
+        forcedInvitee(true, true);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        completeSetup("{\"newUsername\":\"awa.traore\",\"currentPassword\":\"wrong\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("The current password is incorrect."));
+
+        verify(userService, never()).completeAccountSetup(any(), any(), any());
+    }
+
+    @Test
+    void completeSetup_refusesBadValuesBeforeChangingAnything() throws Exception {
+        forcedInvitee(true, true);
+        currentPasswordAccepted();
+        when(passwordHistoryService.isPasswordReused(any(), eq("Old#Pass2025"))).thenReturn(true);
+
+        for (String json : java.util.List.of(
+                "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"short\"}",
+                "{\"newUsername\":\"bad name\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}",
+                "{\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}",
+                "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\"}",
+                "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"Temp#Pass1\"}",
+                "{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"Old#Pass2025\"}")) {
+            completeSetup(json).andExpect(status().isBadRequest());
+        }
+
+        verify(userService, never()).completeAccountSetup(any(), any(), any());
+    }
+
+    @Test
+    void completeSetup_nothingPendingIs400() throws Exception {
+        forcedInvitee(false, false);
+
+        completeSetup("{\"currentPassword\":\"Temp#Pass1\",\"newPassword\":\"New#Pass2026\"}")
+                .andExpect(status().isBadRequest());
+
+        verify(authenticationManager, never()).authenticate(any());
+        verify(userService, never()).completeAccountSetup(any(), any(), any());
+    }
+
+    @Test
+    void completeSetup_aTakenUsernameIs400() throws Exception {
+        forcedInvitee(true, false);
+        currentPasswordAccepted();
+        doThrow(new com.example.hms.exception.BusinessException("This username is already taken."))
+                .when(userService).completeAccountSetup(any(), eq("awa.traore"), eq(null));
+
+        completeSetup("{\"newUsername\":\"awa.traore\",\"currentPassword\":\"Temp#Pass1\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("This username is already taken."));
     }
 
     @Test
@@ -1024,12 +1176,58 @@ class AuthControllerTest {
                                 new LoginRequest("someone", "AnyPass1!", null))))
                 .andExpect(status().is(423))
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("2 minute(s)")));
+                        "Account is temporarily locked. Try again in 2 minutes."));
 
         // The lock is read once, and the password is never tried: the answer
         // is the same whether "someone" exists or not.
         verify(loginAttemptService).remainingLockMs("someone");
         verify(authenticationManager, never()).authenticate(any());
+    }
+
+    @Test
+    void login_locked_isTranslatedWithPlural() throws Exception {
+        when(loginAttemptService.remainingLockMs("someone")).thenReturn(30_000L);
+
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "AnyPass1!", null))))
+                .andExpect(status().is(423))
+                .andExpect(jsonPath("$.message").value(
+                        "Compte temporairement verrouillé. Réessayez dans 1 minute."));
+
+        when(loginAttemptService.remainingLockMs("someone")).thenReturn(12 * 60_000L);
+        mockMvc.perform(post("/auth/login")
+                        .header("Accept-Language", "es")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "AnyPass1!", null))))
+                .andExpect(jsonPath("$.message").value(
+                        "La cuenta está bloqueada temporalmente. Vuelva a intentarlo en 12 minutos."));
+    }
+
+    @Test
+    void login_badCredentials_auditsLoginFailureByAccountIdOnly() throws Exception {
+        java.util.UUID accountId = java.util.UUID.randomUUID();
+        when(userRepository.findIdsByUsernameIgnoreCase("someone")).thenReturn(java.util.List.of(accountId));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                new LoginRequest("someone", "Secret-Typed-1!", null))))
+                .andExpect(status().isUnauthorized());
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        org.assertj.core.api.Assertions.assertThat(audit.getValue().getEventType())
+                .isEqualTo(com.example.hms.enums.AuditEventType.LOGIN_FAILURE);
+        org.assertj.core.api.Assertions.assertThat(audit.getValue().getUserId()).isEqualTo(accountId);
+        org.assertj.core.api.Assertions.assertThat(String.valueOf(audit.getValue()))
+                .doesNotContain("Secret-Typed-1!").doesNotContain("someone");
     }
 
     // =====================================================================
@@ -1144,6 +1342,8 @@ class AuthControllerTest {
             for (var request : java.util.List.of(
                     post("/auth/me/change-username").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"newUsername\":\"taken.over\"}"),
+                    post("/auth/me/complete-setup").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"newUsername\":\"taken.over\",\"currentPassword\":\"Old#Pass2026\"}"),
                     post("/auth/me/change-password").contentType(MediaType.APPLICATION_JSON)
                             .content("{\"currentPassword\":\"Old#Pass2026\",\"newPassword\":\"New#Pass2026x\"}"),
                     org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/auth/credentials/recovery")

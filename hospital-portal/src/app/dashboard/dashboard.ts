@@ -9,7 +9,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HospitalService } from '../services/hospital.service';
@@ -76,6 +76,7 @@ import { LabService } from '../services/lab.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
 import {
   CredentialRenewalComponent,
@@ -135,7 +136,6 @@ interface NavTile {
     CommonModule,
     RouterLink,
     DatePipe,
-    TitleCasePipe,
     TranslateModule,
     DoctorWorklistComponent,
     DoctorPatientFlowComponent,
@@ -152,6 +152,7 @@ interface NavTile {
 export class DashboardComponent implements OnInit, OnDestroy {
   // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly hospitalService = inject(HospitalService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
@@ -241,6 +242,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // /dashboard/lab-ops/summary, which D2 also opened to the bench roles that
   // actually see this view.
   labOpsSummary = signal<LabOpsSummary | null>(null);
+  /**
+   * D107: orders still waiting on the bench - placed, pending, collected or
+   * received - the same set as the lab page's pending tab, less IN_PROGRESS,
+   * which has its own card. It read statusPending alone, and a new order is
+   * ORDERED, so the card said 0 with a queue full of work.
+   */
+  readonly labPendingCount = computed(() => {
+    const s = this.labOpsSummary();
+    if (!s) return null;
+    return (
+      (s.statusOrdered ?? 0) +
+      (s.statusPending ?? 0) +
+      (s.statusCollected ?? 0) +
+      (s.statusReceived ?? 0)
+    );
+  });
 
   // ── Work-queue counts (role audit D1 + D2) ────────────────
   // Exact totals, read from the paginated endpoints with size=1 so the count
@@ -1697,7 +1714,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const d = this.qualityManagerDashboard();
     if (!d) return [];
     const passRateDisplay: string =
-      d.qualityPassRate != null ? d.qualityPassRate.toFixed(1) + '%' : 'N/A';
+      d.qualityPassRate != null
+        ? new Intl.NumberFormat(currentLocale(), {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          }).format(d.qualityPassRate) + '\u00a0%'
+        : '—';
     return [
       {
         key: 'pending_qa',
@@ -2985,7 +3007,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       REQUESTED: 'APPOINTMENTS.REQUESTED',
     };
     const key = map[status];
-    return key ? this.t(key) : status;
+    // Any other status (CHECKED_IN, PENDING, RESCHEDULED…) used to be shown
+    // as the raw wire token (D175): the shared vocabulary covers the rest.
+    return key ? this.t(key) : this.enumLabels.transform(status, 'appointmentStatus');
   }
 
   getTrendIcon(trend: string): string {
@@ -3073,6 +3097,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   formatMethodLabel(method: string): string {
-    return method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    return this.enumLabels.transform(method, 'paymentMethod');
   }
 }

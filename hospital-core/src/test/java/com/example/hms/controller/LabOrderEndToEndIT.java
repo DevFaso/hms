@@ -182,6 +182,7 @@ class LabOrderEndToEndIT extends BaseIT {
             .unit("mmol/L")
             .referenceRanges(List.of(LabTestReferenceRange.builder()
                 .minValue(0.0).maxValue(RANGE_MAX).unit("mmol/L").build()))
+            .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
             .build());
     }
 
@@ -232,6 +233,7 @@ class LabOrderEndToEndIT extends BaseIT {
         // 3b. B8: the roles the annotation admits get past the edge too. They
         //     post on a second order so the queue assertion below stays exact.
         UUID secondOrderId = placeOrder(LocalDateTime.now().minusHours(2));
+        collectSpecimen(secondOrderId);
         postResult(director, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
         postResult(qualityManager, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
@@ -244,11 +246,19 @@ class LabOrderEndToEndIT extends BaseIT {
             .andExpect(status().isForbidden());
         assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
 
-        // 5. The scientist releases; the only result of the order is now
-        //    released, so the order is COMPLETED (B2).
+        // 5. The scientist who entered the result releases it (D58): one click
+        //    is refused, because a self-release must be explicit...
         mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(scientist)).with(csrf()))
+            .andExpect(status().isConflict());
+        assertThat(labResultRepository.findById(resultId).orElseThrow().isReleased()).isFalse();
+        //    ...and the confirmed self-release goes through, marked as one. The
+        //    only result of the order is now released, so the order is
+        //    COMPLETED (B2).
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).param("selfRelease", "true")
+                .with(signedInAs(scientist)).with(csrf()))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.released").value(true));
+            .andExpect(jsonPath("$.released").value(true))
+            .andExpect(jsonPath("$.selfReleased").value(true));
         assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
         // the second order still has two unreleased results
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
@@ -273,6 +283,7 @@ class LabOrderEndToEndIT extends BaseIT {
         // row. A duplicate row is visible and correctable — a release of both
         // completes the order — and a lost result is neither.
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
+        collectSpecimen(orderId);
         LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
 
         String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
@@ -310,6 +321,7 @@ class LabOrderEndToEndIT extends BaseIT {
     @DisplayName("a critical value notifies the doctor, stays unreleased, and is acknowledged only by a matching read-back")
     void criticalValueClosesTheLoopThroughReadBack() throws Exception {
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        collectSpecimen(orderId);
 
         UUID resultId = postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
             .andExpect(jsonPath("$.severityFlag").value("HIGH"))
@@ -350,6 +362,16 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     // ── HTTP helpers ─────────────────────────────────────────────────────
+
+    /** D107: a hand-entered result needs a collected specimen first. */
+    private void collectSpecimen(UUID orderId) throws Exception {
+        mockMvc.perform(post(LAB_ORDER_SPECIMENS, orderId)
+                .contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(LabSpecimenRequestDTO.builder().specimenType("BLOOD").build()))
+                .with(signedInAs(technician)).with(csrf()))
+            .andExpect(status().isCreated());
+    }
 
     private UUID placeOrder(LocalDateTime orderedAt) throws Exception {
         LabOrderRequestDTO request = LabOrderRequestDTO.builder()

@@ -57,6 +57,7 @@ class PatientLabResultServiceImplTest {
     @Mock private LabResultMapper labResultMapper;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @InjectMocks private PatientLabResultServiceImpl service;
 
@@ -185,6 +186,34 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getValue()).isEqualTo("5.0");
         assertThat(row.getUnit()).isEqualTo("mg/dL");
         assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
+    }
+
+    /** QA D160: the care team (not the lab) sees that a result is pending, not its preliminary value. */
+    @Test void staffView_outsideTheLab_unreleasedRow_isPendingWithoutValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, false);
+        assertThat(results).hasSize(1);
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getValue()).isNull();
+        assertThat(row.getUnit()).isNull();
+        assertThat(row.getNotes()).isNull();
+        assertThat(row.getPerformedBy()).isNull();
+    }
+
+    /** QA D160: the laboratory itself still sees the preliminary value it has to release. */
+    @Test void staffView_laboratory_unreleasedRow_keepsItsValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, true);
+        assertThat(results.get(0).getValue()).isEqualTo("5.0");
     }
 
     /** B3 — patient path: the row is there so the patient knows a result is expected, but nothing of it. */
@@ -412,7 +441,47 @@ class PatientLabResultServiceImplTest {
         }
     }
 
-    @Test void getLabResults_released_normalStatus() {
+    /** D49 - collectedAt is the specimen's real collection time (the earliest), never the order time. */
+    @Test void collectedAt_isTheEarliestSpecimenCollection_notTheOrderTime() {
+        LabResult lr = buildLabResult("5.0", "mmol/L", true, false);
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setOrderDatetime(LocalDateTime.of(2026, 10, 17, 14, 0));
+        order.setLabTestDefinition(new LabTestDefinition());
+        lr.setLabOrder(order);
+        LocalDateTime drawn = LocalDateTime.of(2026, 10, 17, 14, 20);
+        com.example.hms.model.LabSpecimen first = new com.example.hms.model.LabSpecimen();
+        first.setLabOrder(order);
+        first.setCollectedAt(drawn);
+        com.example.hms.model.LabSpecimen later = new com.example.hms.model.LabSpecimen();
+        later.setLabOrder(order);
+        later.setCollectedAt(drawn.plusMinutes(40));
+        com.example.hms.model.LabSpecimen notYet = new com.example.hms.model.LabSpecimen();
+        notYet.setLabOrder(order);
+        when(labSpecimenRepository.findByLabOrder_IdIn(Set.of(order.getId()))).thenReturn(List.of(later, notYet, first));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10).get(0).getCollectedAt()).isEqualTo(drawn);
+    }
+
+    /** D49 - no collection recorded: no collection time is invented from the order. */
+    @Test void collectedAt_withoutARecordedCollection_isNull() {
+        LabResult lr = buildLabResult("5.0", "mmol/L", true, false);
+        LabOrder order = new LabOrder();
+        order.setId(UUID.randomUUID());
+        order.setOrderDatetime(LocalDateTime.of(2026, 10, 17, 14, 0));
+        order.setLabTestDefinition(new LabTestDefinition());
+        lr.setLabOrder(order);
+        when(labSpecimenRepository.findByLabOrder_IdIn(Set.of(order.getId()))).thenReturn(List.of());
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        assertThat(service.getLabResultsForPatient(patientId, hospitalId, 10).get(0).getCollectedAt()).isNull();
+    }
+
+    /** D31 - released, no reference range and no recorded flag: not interpreted, never NORMAL. */
+    @Test void getLabResults_released_unrangedAndUnflagged_isUnknownNotNormal() {
         LabResult lr = buildLabResult("5.0", "mg/dL", true, false);
         LabTestDefinition testDef = new LabTestDefinition();
         testDef.setName("Glucose"); testDef.setTestCode("GLU");
@@ -429,7 +498,7 @@ class PatientLabResultServiceImplTest {
             .thenReturn(List.of(lr));
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
-        assertThat(results.get(0).getStatus()).isEqualTo("NORMAL");
+        assertThat(results.get(0).getStatus()).isEqualTo("UNKNOWN");
     }
 
     @Test void getLabResults_released_criticalSeverity() {

@@ -61,6 +61,7 @@ describe('MyVisitsComponent', () => {
           NOT_ASSIGNED: 'Non attribué',
           DEPARTMENT: 'Service',
           CHIEF_COMPLAINT: 'Motif',
+          HOSPITAL_NAME_LABEL: 'Établissement',
         },
       },
     });
@@ -75,12 +76,14 @@ describe('MyVisitsComponent', () => {
   it('lists each visit with its department and provider', () => {
     create([visit()]);
     expect(texts('.pli-title')[0]).toContain('Cardiologie');
-    expect(texts('.pli-sub')).toEqual(['Dr Awa Traoré']);
+    expect(texts('.pli-sub')[0]).toContain('Dr Awa Traoré');
+    // D185: a patient seen at two hospitals must see where each visit happened.
+    expect(texts('.pli-hospital')).toEqual(['CHU Yalgado']);
     expect(host().querySelector('.detail-panel')).toBeNull();
   });
 
   it('falls back to translated words when the department or provider is missing', () => {
-    create([visit({ department: '', providerName: '' })]);
+    create([visit({ department: '', providerName: '', hospitalName: '' })]);
     expect(texts('.pli-title')[0]).toContain('Général');
     expect(texts('.pli-sub')).toEqual(['Soignant']);
 

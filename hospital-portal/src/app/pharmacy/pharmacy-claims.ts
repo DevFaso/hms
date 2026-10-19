@@ -8,7 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PharmacyClaimResponse,
   PharmacyClaimStatus,
@@ -18,7 +18,7 @@ import { ToastService } from '../core/toast.service';
 
 interface StatusOption {
   value: PharmacyClaimStatus;
-  labelFr: string;
+  labelKey: string;
 }
 
 /**
@@ -30,7 +30,7 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [CommonModule, FormsModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, DecimalPipe],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
@@ -45,11 +45,11 @@ export class PharmacyClaimsComponent implements OnInit {
   readonly filter = signal<PharmacyClaimStatus | 'ALL'>('ALL');
 
   readonly statusOptions: StatusOption[] = [
-    { value: 'DRAFT', labelFr: 'Brouillon' },
-    { value: 'SUBMITTED', labelFr: 'Soumis' },
-    { value: 'ACCEPTED', labelFr: 'Accepté' },
-    { value: 'REJECTED', labelFr: 'Rejeté' },
-    { value: 'PAID', labelFr: 'Payé' },
+    { value: 'DRAFT', labelKey: 'PHARMACY_CLAIMS.STATUS.DRAFT' },
+    { value: 'SUBMITTED', labelKey: 'PHARMACY_CLAIMS.STATUS.SUBMITTED' },
+    { value: 'ACCEPTED', labelKey: 'PHARMACY_CLAIMS.STATUS.ACCEPTED' },
+    { value: 'REJECTED', labelKey: 'PHARMACY_CLAIMS.STATUS.REJECTED' },
+    { value: 'PAID', labelKey: 'PHARMACY_CLAIMS.STATUS.PAID' },
   ];
 
   ngOnInit(): void {
@@ -77,7 +77,8 @@ export class PharmacyClaimsComponent implements OnInit {
   });
 
   statusLabel(s: PharmacyClaimStatus): string {
-    return this.statusOptions.find((o) => o.value === s)?.labelFr ?? s;
+    const key = this.statusOptions.find((o) => o.value === s)?.labelKey;
+    return key ? this.translate.instant(key) : s;
   }
 
   submit(c: PharmacyClaimResponse): void {

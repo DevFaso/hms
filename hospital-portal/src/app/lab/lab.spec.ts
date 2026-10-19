@@ -5,10 +5,16 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { LabComponent } from './lab';
-import { LabService, LabOrderResponse, PerformingLab } from '../services/lab.service';
+import {
+  LabService,
+  LabOrderResponse,
+  LabTestDefinition,
+  PerformingLab,
+} from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { PatientService } from '../services/patient.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -129,6 +135,13 @@ describe('LabComponent — performing laboratory', () => {
     fixture.detectChanges();
   }
 
+  it('does not offer a midwife the order form the server refuses her (D106)', async () => {
+    await setup(['ROLE_MIDWIFE'], []);
+
+    expect(component.canCreateOrder()).toBeFalse();
+    expect(labService.listPerformingLabs).not.toHaveBeenCalled();
+  });
+
   it('offers a provider the performing laboratories, defaulting to this hospital', async () => {
     await setup(['ROLE_DOCTOR'], []);
 
@@ -144,6 +157,61 @@ describe('LabComponent — performing laboratory', () => {
     expect(options).toEqual(['', LAB_B, 'lab-c']);
     expect(select.value).toBe('');
     expect(component.form.performingHospitalId).toBe('');
+  });
+
+  it('D48: offers only ACTIVE definitions to order, keeping the one an edited order names', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const def = (
+      id: string,
+      approvalStatus: LabTestDefinition['approvalStatus'],
+      isActive = true,
+    ) => ({ id, testCode: id, testName: id, isActive, approvalStatus }) as LabTestDefinition;
+    component.labTestDefs.set([
+      def('active', 'ACTIVE'),
+      def('draft', 'DRAFT'),
+      def('approved', 'APPROVED'),
+      def('switched-off', 'ACTIVE', false),
+      def('retired', 'RETIRED'),
+    ]);
+
+    component.form.labTestDefinitionId = '';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active']);
+
+    component.form.labTestDefinitionId = 'retired';
+    expect(component.orderableTestDefs().map((d) => d.id)).toEqual(['active', 'retired']);
+  });
+
+  it('QA D177: the specimen form starts from the test definition sample type', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    component.labTestDefs.set([
+      {
+        id: 'cbc',
+        testCode: 'CBC',
+        testName: 'CBC',
+        sampleType: 'Sang total EDTA',
+      } as LabTestDefinition,
+    ]);
+
+    component.openSpecimens(order({ labTestCode: 'CBC' }));
+
+    expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+  });
+
+  it('QA D177: picking a patient lists their encounters instead of asking for an id', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    const encounters = TestBed.inject(EncounterService);
+    spyOn(encounters, 'list').and.returnValue(
+      of([
+        { id: 'e-old', encounterDate: '2026-09-01T08:00:00' },
+        { id: 'e-new', encounterDate: '2026-10-01T08:00:00' },
+      ] as EncounterResponse[]),
+    );
+
+    component.selectPatient({ id: 'p-1', firstName: 'A', lastName: 'D' } as PatientResponse);
+
+    expect(encounters.list).toHaveBeenCalledWith(jasmine.objectContaining({ patientId: 'p-1' }));
+    expect(component.patientEncounters().map((e) => e.id)).toEqual(['e-new', 'e-old']);
   });
 
   it('does not fetch the laboratories for a user who cannot place orders', async () => {

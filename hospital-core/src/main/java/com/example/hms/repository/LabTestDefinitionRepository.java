@@ -64,13 +64,26 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
           AND (:category IS NULL OR LOWER(l.category) = LOWER(CAST(:category AS string)))
           AND (:active IS NULL OR l.active = :active)
           AND (:approvalStatus IS NULL OR l.approvalStatus = :approvalStatus)
+          AND (:everyHospital = true OR l.hospital IS NULL OR l.hospital.id = :hospitalId)
     """)
     Page<LabTestDefinition> search(@Param("keyword") String keyword,
                                    @Param("unit") String unit,
                                    @Param("category") String category,
                                    @Param("active") Boolean active,
                                    @Param("approvalStatus") LabTestDefinitionApprovalStatus approvalStatus,
+                                   @Param("everyHospital") boolean everyHospital,
+                                   @Param("hospitalId") UUID hospitalId,
                                    Pageable pageable);
+
+    /**
+     * D30: the global catalog plus one hospital's own rows. A null hospital
+     * id reads the global rows only.
+     */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE l.hospital IS NULL OR l.hospital.id = :hospitalId
+    """)
+    List<LabTestDefinition> findVisibleAt(@Param("hospitalId") UUID hospitalId);
 
     @Query("""
         SELECT l FROM LabTestDefinition l

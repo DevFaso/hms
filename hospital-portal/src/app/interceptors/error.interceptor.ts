@@ -27,6 +27,7 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
+import { BACKGROUND_REQUEST } from '../services/ws-transport';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -40,6 +41,9 @@ const SILENT_403_PATTERNS = [
   /\/lab-orders(\?|$|\/)/,
   /\/lab-results(\?|$|\/)/,
   /\/lab-specimens(\?|$|\/)/,
+  // The bed board's held-bed overlay (QA D188): a role the server keeps off
+  // the transfer worklist (decision D5) still keeps the board it is reading.
+  /\/transfers\/pending(\?|$)/,
 ];
 
 /**
@@ -49,9 +53,31 @@ const SILENT_403_PATTERNS = [
  * but if the two ever drift the chart must still open — the panel degrades to
  * its error text instead of the whole page redirecting to /error/403.
  */
-const SILENT_403_POST_PATTERNS = [/\/cds-services\/[^/?]+(\?|$)/];
+const SILENT_403_POST_PATTERNS = [
+  /\/cds-services\/[^/?]+(\?|$)/,
+  // The WebSocket ticket exchange (QA D35): the sockets retry with backoff;
+  // a refusal must never take the page the user is on to /error/403.
+  /\/auth\/ws-ticket(\?|$)/,
+];
+
+/**
+ * Clinical actions whose refusal the page itself reports in a toast (D54).
+ * A 403 on "sign this prescription" is a business answer — not yours to
+ * sign, co-sign outstanding — and redirecting to /error/403 threw the
+ * prescriber off the list with no word on why.
+ */
+const PAGE_HANDLED_403_ACTION_PATTERNS = [
+  /\/prescriptions\/[^/?]+\/(sign|cosign|pharmacist-verify)(\?|$)/,
+];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
+
+/** Requests whose 401 means "the password you typed is wrong". */
+export const CREDENTIAL_CHECK_PATTERNS: readonly RegExp[] = [
+  /\/auth\/verify-password(?:[/?#]|$)/i,
+  /\/auth\/me\/change-password(?:[/?#]|$)/i,
+  /\/auth\/me\/change-email(?:[/?#]|$)/i,
+];
 
 /**
  * URL+method pairs already reported this session — a background GET that keeps
@@ -199,11 +225,17 @@ function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<u
   return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
 
+/** Wraps the retried credential-check error so it bypasses the refresh-failure sign-out. */
+class CredentialRetryError {
+  constructor(readonly error: unknown) {}
+}
+
 function tryRefreshAndRetry(
   req: HttpRequest<unknown>,
   next: HttpHandlerFn,
   auth: AuthService,
   router: Router,
+  credentialCheck = false,
 ): Observable<HttpEvent<unknown>> {
   const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
 
@@ -221,9 +253,19 @@ function tryRefreshAndRetry(
         // Unblock all queued requests with the new token.
         refreshDone$.next(tokens.accessToken);
 
-        return next(cloneWithToken(req, tokens.accessToken));
+        const retried = next(cloneWithToken(req, tokens.accessToken));
+        // A credential check retried on a fresh token that still answers 401
+        // means the typed password is wrong: hand it to the form, never sign
+        // out (D87). The marker lets the catchError below tell it apart from
+        // a refresh failure.
+        return credentialCheck
+          ? retried.pipe(catchError((e) => throwError(() => new CredentialRetryError(e))))
+          : retried;
       }),
       catchError((refreshError) => {
+        if (refreshError instanceof CredentialRetryError) {
+          return throwError(() => refreshError.error);
+        }
         isRefreshing = false;
         refreshDone$.next('__REFRESH_FAILED__');
         // Reset to null so refreshDone$ is ready for the next login session.
@@ -277,7 +319,11 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
         const isRefreshCall = req.url.includes('/auth/token/refresh');
-        const isVerifyPassword = req.url.includes('/auth/verify-password');
+        // Endpoints that check the password typed in the form answer a wrong
+        // one with 401 (the mobile apps rely on it). That is a form error, not
+        // an expired session: refreshing and then signing out threw the user
+        // out of their own profile (D87).
+        const isVerifyPassword = CREDENTIAL_CHECK_PATTERNS.some((p) => p.test(req.url));
 
         // Closes Copilot review #4 on PR #224. If the 401 fires while an
         // impersonation token is in use (typically because the 30-min TTL
@@ -296,14 +342,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
           return throwError(() => error);
         }
 
-        if (
-          !isRefreshCall &&
-          !isVerifyPassword &&
-          (auth.getRefreshToken() || auth.getUserProfile())
-        ) {
+        if (!isRefreshCall && (auth.getRefreshToken() || auth.getUserProfile())) {
           // We either have a legacy refresh token in storage OR a recorded
           // session profile (S-01 cookie-based refresh). Attempt silent renewal.
-          return tryRefreshAndRetry(req, next, auth, router);
+          // A credential check is refreshed and retried once too (the access
+          // token may have expired while the form was open); a 401 on the
+          // retry is the wrong-password answer and reaches the form (D87).
+          return tryRefreshAndRetry(req, next, auth, router, isVerifyPassword);
         }
 
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
@@ -330,13 +375,21 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Never redirect (or re-report) when the audit sink itself is forbidden.
         const isAuditCall = req.url.includes('/frontend-audit');
         const isSilent =
+          req.context.get(BACKGROUND_REQUEST) ||
           ((req.method === 'GET' || req.method === 'HEAD') &&
             SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url))) ||
           (req.method === 'POST' &&
             SILENT_403_POST_PATTERNS.some((pattern) => pattern.test(req.url)));
-        if (isSilent) {
+        const isPageHandledAction =
+          req.method !== 'GET' &&
+          PAGE_HANDLED_403_ACTION_PATTERNS.some((pattern) => pattern.test(req.url));
+        if (isPageHandledAction) {
+          // The page's error handler shows the refusal; no redirect.
+        } else if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {
+          // A server refusal: the portal cannot know which role it wanted.
+          roleContext.noteRefusal(null);
           void router.navigate(['/error/403']);
         }
       }

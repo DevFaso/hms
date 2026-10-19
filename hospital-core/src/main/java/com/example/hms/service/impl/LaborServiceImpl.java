@@ -55,6 +55,8 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.GestationalDating;
+import com.example.hms.utility.ObstetricEligibility;
 import java.util.Locale;
 
 /**
@@ -115,6 +117,7 @@ public class LaborServiceImpl implements LaborService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        ObstetricEligibility.requireObstetricEligible(patient);
         PatientHospitalRegistration registration = resolveRegistration(request.getRegistrationId());
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
 
@@ -256,6 +259,11 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("A delivery record already exists for this labor episode.");
         }
 
+        LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
+        // QA D104: a birth cannot precede the recorded labour onset.
+        if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
+            throw new BusinessException("labor.delivery.beforeOnset");
+        }
         Staff deliveredBy = resolveStaff(request.getDeliveredByStaffId(), episode.getHospital());
         User documentedBy = resolveUser(recorderUserId);
 
@@ -265,7 +273,7 @@ public class LaborServiceImpl implements LaborService {
             .hospital(episode.getHospital())
             .deliveredByStaff(deliveredBy)
             .documentedBy(documentedBy)
-            .birthDateTime(request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now())
+            .birthDateTime(birthAt)
             .deliveryMode(request.getDeliveryMode())
             .liveBirth(request.getLiveBirth() == null || request.getLiveBirth())
             .numberOfInfants(request.getNumberOfInfants() != null ? request.getNumberOfInfants() : 1)
@@ -320,20 +328,20 @@ public class LaborServiceImpl implements LaborService {
         if (fhr != null && fhr < FHR_BRADYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-bradycardia",
-                "Fetal heart rate " + fhr + " bpm below " + FHR_BRADYCARDIA_BPM + " — fetal distress.",
+                alertText("labor-fetal-bradycardia", fhr, FHR_BRADYCARDIA_BPM),
                 "fetalHeartRateBpm");
         } else if (fhr != null && fhr > FHR_TACHYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-tachycardia",
-                "Fetal heart rate " + fhr + " bpm above " + FHR_TACHYCARDIA_BPM + " — fetal distress.",
+                alertText("labor-fetal-tachycardia", fhr, FHR_TACHYCARDIA_BPM),
                 "fetalHeartRateBpm");
         }
         if (entry.getLiquorColour() == LiquorColour.MECONIUM_STAINED
             || entry.getLiquorColour() == LiquorColour.BLOOD_STAINED) {
             entry.addAlert(LaborAlertType.LIQUOR, LaborAlertSeverity.CAUTION,
                 "labor-liquor",
-                "Liquor " + entry.getLiquorColour().name().toLowerCase().replace('_', ' ')
-                    + " — monitor fetal condition closely.",
+                alertText("labor-liquor", messageSource.getMessage(
+                    "labor.liquor." + entry.getLiquorColour().name(), null, NotificationLocales.STAFF)),
                 "liquorColour");
         }
     }
@@ -357,14 +365,12 @@ public class LaborServiceImpl implements LaborService {
         if (lagHours >= ACTION_LINE_LAG_HOURS) {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.URGENT,
                 "labor-action-line",
-                "Cervical dilation " + dilation + " cm has crossed the WHO action line ("
-                    + String.format("%.1f", lagHours) + " h behind expected progress) — senior review required.",
+                alertText("labor-action-line", dilation, lagHours),
                 "cervicalDilationCm");
         } else if (lagHours > 0) {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.CAUTION,
                 "labor-alert-line",
-                "Cervical dilation " + dilation + " cm is behind the WHO alert line ("
-                    + String.format("%.1f", lagHours) + " h behind expected progress).",
+                alertText("labor-alert-line", dilation, lagHours),
                 "cervicalDilationCm");
         }
     }
@@ -373,13 +379,13 @@ public class LaborServiceImpl implements LaborService {
         if (entry.getTemperatureCelsius() != null && entry.getTemperatureCelsius() >= MATERNAL_FEVER_C) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-fever",
-                "Maternal temperature " + entry.getTemperatureCelsius() + " °C — possible infection.",
+                alertText("labor-maternal-fever", entry.getTemperatureCelsius()),
                 "temperatureCelsius");
         }
         if (entry.getPulseBpm() != null && entry.getPulseBpm() > MATERNAL_TACHYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-maternal-tachycardia",
-                "Maternal pulse " + entry.getPulseBpm() + " bpm — assess for hemorrhage, infection or dehydration.",
+                alertText("labor-maternal-tachycardia", entry.getPulseBpm()),
                 "pulseBpm");
         }
         Integer sys = entry.getSystolicBpMmHg();
@@ -389,12 +395,12 @@ public class LaborServiceImpl implements LaborService {
         if (severe) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
-                "Severe hypertension " + sys + "/" + dia + " mmHg — pre-eclampsia protocol.",
+                alertText("labor-severe-hypertension", sys, dia),
                 "bloodPressure");
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
-                "Elevated blood pressure " + sys + "/" + dia + " mmHg — recheck and monitor for pre-eclampsia.",
+                alertText("labor-hypertension", sys, dia),
                 "bloodPressure");
         }
     }
@@ -404,31 +410,31 @@ public class LaborServiceImpl implements LaborService {
         if (ebl != null && ebl >= PPH_BLOOD_LOSS_ML) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
                 "labor-pph",
-                "Estimated blood loss " + ebl + " ml — postpartum hemorrhage threshold reached.",
+                alertText("labor-pph", ebl),
                 "estimatedBloodLossMl");
         }
         if (Boolean.FALSE.equals(record.getPlacentaComplete())) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
                 "labor-retained-placenta",
-                "Placenta incomplete — retained products; hemorrhage risk.",
+                alertText("labor-retained-placenta"),
                 "placentaComplete");
         }
         Integer apgar5 = record.getApgarFiveMinute();
         if (apgar5 != null && apgar5 < APGAR_CRITICAL) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
                 "labor-apgar-critical",
-                "5-minute APGAR " + apgar5 + " — neonatal resuscitation and escalation required.",
+                alertText("labor-apgar-critical", apgar5),
                 "apgarFiveMinute");
         } else if (apgar5 != null && apgar5 < APGAR_LOW) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
                 "labor-apgar-low",
-                "5-minute APGAR " + apgar5 + " — close neonatal observation required.",
+                alertText("labor-apgar-low", apgar5),
                 "apgarFiveMinute");
         }
         if (!record.isLiveBirth()) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
                 "labor-stillbirth",
-                "Stillbirth recorded — bereavement support and mortality review workflow.",
+                alertText("labor-stillbirth"),
                 "liveBirth");
         }
     }
@@ -506,22 +512,39 @@ public class LaborServiceImpl implements LaborService {
 
     /**
      * Gestational age at admission: explicit value wins; otherwise derived
-     * from the current maternal history's EDD (40 weeks minus time to EDD).
+     * from the current maternal history's EDD (40 weeks minus time to EDD),
+     * or, when only the LMP was recorded (QA D162), from the LMP's due date.
      */
     private Integer resolveGestationalAgeWeeks(Integer requested, MaternalHistory history) {
         if (requested != null) {
             return requested;
         }
-        if (history == null || history.getEstimatedDueDate() == null) {
+        if (history == null) {
             return null;
         }
         LocalDate edd = history.getEstimatedDueDate();
+        if (edd == null && GestationalDating.isPlausibleCurrentLmp(history.getLastMenstrualPeriod(), LocalDate.now())) {
+            edd = GestationalDating.dueDateFromLmp(history.getLastMenstrualPeriod(),
+                history.getMenstrualCycleLengthDays());
+        }
+        if (edd == null) {
+            return null;
+        }
         long daysToEdd = ChronoUnit.DAYS.between(LocalDate.now(), edd);
         long weeks = TERM_WEEKS - Math.round(daysToEdd / 7.0);
         if (weeks < 20 || weeks > 45) {
             return null; // implausible — leave blank rather than mislead
         }
         return (int) weeks;
+    }
+
+    /**
+     * QA D172 (D61/D121): alert text is rendered from the message bundle in the
+     * staff locale (it is stored, shown on the chart and sent as a notification),
+     * not composed in English in code.
+     */
+    private String alertText(String code, Object... args) {
+        return messageSource.getMessage("labor.alert.msg." + code, args, NotificationLocales.STAFF);
     }
 
     /** URGENT alerts notify the documenting clinician — best-effort, house policy. */
@@ -538,8 +561,11 @@ public class LaborServiceImpl implements LaborService {
         alerts.stream()
             .filter(alert -> alert.getSeverity() == LaborAlertSeverity.URGENT)
             .forEach(alert -> {
+                // QA D172 (D61/D121): the type is a translated label, never the raw enum.
+                String typeLabel = alert.getType() == null ? ""
+                    : messageSource.getMessage("labor.alert.type." + alert.getType().name(), null, locale);
                 String message = messageSource.getMessage("labor.alert.notification",
-                    new Object[]{alert.getType(), patientName, alert.getMessage()}, locale);
+                    new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
                 } catch (RuntimeException ex) {

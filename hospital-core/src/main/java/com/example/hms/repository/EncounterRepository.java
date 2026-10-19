@@ -93,6 +93,23 @@ public interface EncounterRepository
     // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
     List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
 
+    /**
+     * The patient's visits still open, with the clinician who holds each: the
+     * portal's care team and message recipients (QA D115). The patient's own
+     * chart across hospitals — ownership is the bound, not a hospital scope.
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.staff s
+        JOIN FETCH s.user
+        LEFT JOIN FETCH e.hospital
+        WHERE e.patient.id = :patientId
+          AND e.status NOT IN :closed
+        ORDER BY e.encounterDate DESC
+    """)
+    List<Encounter> findOpenWithClinicianByPatientId(@Param("patientId") UUID patientId,
+                                                     @Param("closed") Collection<EncounterStatus> closed);
+
     // Find the most recent encounter for a patient at a hospital in a given status
     Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
         UUID patientId, UUID hospitalId, EncounterStatus status);
@@ -152,6 +169,19 @@ public interface EncounterRepository
      */
     List<Encounter> findByPatient_IdAndHospital_IdAndStatusNotIn(
             UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
+
+    /** An admission's own open encounters (QA D134): what its discharge closes. */
+    List<Encounter> findByAdmissionIdAndStatusNotIn(UUID admissionId, Collection<EncounterStatus> statuses);
+
+    /**
+     * The patient's open hospital stay at this hospital led by this clinician
+     * (QA D136): a prescription's encounter must carry its prescriber.
+     */
+    Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+            UUID patientId, UUID staffId, UUID hospitalId, Collection<EncounterStatus> statuses);
+
+    /** An admission's own encounter, most recent first (QA D135). */
+    Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);
 
     /**
      * Unpaged list of encounters for a patient at a specific hospital, eagerly fetching

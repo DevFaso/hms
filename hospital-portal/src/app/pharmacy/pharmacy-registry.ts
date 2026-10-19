@@ -6,11 +6,12 @@ import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './pharmacy-registry.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-registry.scss',

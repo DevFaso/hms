@@ -27,16 +27,16 @@ class EncounterAutoCompletionServiceTest {
 
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientTrackerEventPublisher trackerEventPublisher;
+    @Mock private AuditEventLogService auditEventLogService;
 
     @InjectMocks
     private EncounterAutoCompletionService service;
 
-    private UUID patientId, hospitalId;
+    private UUID admissionId;
 
     @BeforeEach
     void setUp() {
-        patientId = UUID.randomUUID();
-        hospitalId = UUID.randomUUID();
+        admissionId = UUID.randomUUID();
     }
 
     @Test
@@ -45,11 +45,11 @@ class EncounterAutoCompletionServiceTest {
         active.setId(UUID.randomUUID());
         active.setStatus(EncounterStatus.IN_PROGRESS);
 
-        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
-                eq(patientId), eq(hospitalId), anyCollection()))
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(
+                eq(admissionId), anyCollection()))
                 .thenReturn(List.of(active));
 
-        service.completeActiveEncounters(patientId, hospitalId);
+        service.completeAdmissionEncounters(admissionId);
 
         assertThat(active.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
         assertThat(active.getCheckoutTimestamp()).isNotNull();
@@ -62,11 +62,11 @@ class EncounterAutoCompletionServiceTest {
 
     @Test
     void noActiveEncounters_noSaveNoEvents() {
-        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
-                eq(patientId), eq(hospitalId), anyCollection()))
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(
+                eq(admissionId), anyCollection()))
                 .thenReturn(Collections.emptyList());
 
-        service.completeActiveEncounters(patientId, hospitalId);
+        service.completeAdmissionEncounters(admissionId);
 
         verify(encounterRepository, never()).saveAll(any());
         verify(trackerEventPublisher, never()).publishStatusTransition(any(), any(), any());
@@ -81,15 +81,48 @@ class EncounterAutoCompletionServiceTest {
         awaitingResults.setId(UUID.randomUUID());
         awaitingResults.setStatus(EncounterStatus.AWAITING_RESULTS);
 
-        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
-                eq(patientId), eq(hospitalId), anyCollection()))
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(
+                eq(admissionId), anyCollection()))
                 .thenReturn(List.of(waiting, awaitingResults));
 
-        service.completeActiveEncounters(patientId, hospitalId);
+        service.completeAdmissionEncounters(admissionId);
 
         verify(trackerEventPublisher).publishStatusTransition(
                 waiting, EncounterStatus.WAITING_FOR_PHYSICIAN.name(), EncounterStatus.COMPLETED.name());
         verify(trackerEventPublisher).publishStatusTransition(
                 awaitingResults, EncounterStatus.AWAITING_RESULTS.name(), EncounterStatus.COMPLETED.name());
+    }
+
+    @Test
+    void qaD134_neverReadsThePatientsOtherEncounters_andAuditsEachClosure() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setStatus(EncounterStatus.IN_PROGRESS);
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(eq(admissionId), anyCollection()))
+                .thenReturn(List.of(stay));
+
+        service.completeAdmissionEncounters(admissionId);
+
+        // The patient-wide finder is what closed the unrelated outpatient visit.
+        verify(encounterRepository, never()).findByPatient_IdAndHospital_IdAndStatusNotIn(any(), any(), any());
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getResourceId()).isEqualTo(stay.getId().toString());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ENCOUNTER_UPDATE);
+    }
+
+    @Test
+    void anAuditFailureDoesNotUndoTheDischarge() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setStatus(EncounterStatus.IN_PROGRESS);
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(eq(admissionId), anyCollection()))
+                .thenReturn(List.of(stay));
+        when(auditEventLogService.logEvent(any())).thenThrow(new IllegalStateException("audit down"));
+
+        service.completeAdmissionEncounters(admissionId);
+
+        assertThat(stay.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
     }
 }

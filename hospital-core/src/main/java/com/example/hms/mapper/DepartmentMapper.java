@@ -64,7 +64,7 @@ public class DepartmentMapper {
         department.setName(dto.getName());
         department.setDescription(dto.getDescription());
         department.setPhoneNumber(dto.getPhoneNumber());
-        department.setEmail(dto.getEmail());
+        department.setEmail(dto.getEmail() == null || dto.getEmail().isBlank() ? null : dto.getEmail().trim());
         department.setHospital(hospital);
         department.setHeadOfDepartment(headOfDepartment);
         department.setAssignment(assignment);
@@ -88,7 +88,7 @@ public class DepartmentMapper {
         department.setName(dto.getName());
         department.setDescription(dto.getDescription());
         department.setPhoneNumber(dto.getPhoneNumber());
-        department.setEmail(dto.getEmail());
+        department.setEmail(dto.getEmail() == null || dto.getEmail().isBlank() ? null : dto.getEmail().trim());
         department.setHospital(hospital);
         department.setHeadOfDepartment(headOfDepartment);
         department.setActive(dto.isActive());

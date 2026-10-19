@@ -93,6 +93,7 @@ class EncounterTest {
                 EncounterStatus.COMPLETED, "notes", null, null,
                 null, null, null, null, null,
                 null, null, null, // checkoutTimestamp, followUpInstructions, dischargeDiagnoses (MVP 6)
+                null, // admissionId (V193, QA D134)
                 "CODE-1",
                 // HL7 ADT visit-sync columns (V99) — externalVisitNumber, externalSendingApplication, externalSendingFacility, externalMessageControlId
                 null, null, null, null,

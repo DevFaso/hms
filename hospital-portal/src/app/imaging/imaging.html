@@ -86,6 +86,7 @@
       <div class="search-box">
         <span class="material-symbols-outlined">search</span
         ><input
+          [attr.aria-label]="'IMAGING.SEARCH_PLACEHOLDER' | translate"
           type="text"
           [placeholder]="'IMAGING.SEARCH_PLACEHOLDER' | translate"
           [(ngModel)]="searchTerm"
@@ -139,7 +140,7 @@
                 <td>{{ o.bodyRegion || '—' }}</td>
                 <td>
                   <span class="priority-badge {{ getPriorityClass(o.priority) }}">{{
-                    o.priority
+                    o.priority | enumLabel: 'imagingOrderPriority'
                   }}</span>
                 </td>
                 <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
@@ -707,7 +708,7 @@
               <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span
               ><span class="field-value"
                 ><span class="priority-badge {{ getPriorityClass(ord.priority) }}">{{
-                  ord.priority
+                  ord.priority | enumLabel: 'imagingOrderPriority'
                 }}</span></span
               >
             </div>
@@ -955,7 +956,8 @@
           <span class="material-symbols-outlined">warning</span>
           <p>
             {{ 'IMAGING.CONFIRM_CANCEL' | translate }}
-            <strong>{{ deletingItem()?.modality }}</strong> {{ 'IMAGING.ORDER_FOR' | translate }}
+            <strong>{{ deletingItem()?.modality | enumLabel: 'imagingModality' }}</strong>
+            {{ 'IMAGING.ORDER_FOR' | translate }}
             <strong>{{ deletingItem()?.patientDisplayName }}</strong
             >?
           </p>

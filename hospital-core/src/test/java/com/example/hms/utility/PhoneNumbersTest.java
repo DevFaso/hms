@@ -78,4 +78,35 @@ class PhoneNumbersTest {
         assertThat(PhoneNumbers.candidates(null, BF)).isEmpty();
         assertThat(PhoneNumbers.candidates("  ", BF)).isEmpty();
     }
+
+    @Test
+    @DisplayName("toE164: a local Burkina Faso number takes +226; spaced, 00 and + forms agree")
+    void toE164NormalisesLocalNumbers() {
+        assertThat(PhoneNumbers.toE164("70202020", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("70 20 20 20", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("0022670202020", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("+226 70-20-20-20", BF)).isEqualTo("+22670202020");
+        assertThat(PhoneNumbers.toE164("0612345678", "33")).isEqualTo("+33612345678");
+    }
+
+    @Test
+    @DisplayName("toE164: letters, too few or too many digits, and a malformed +226 number are refused")
+    void toE164RefusesInvalid() {
+        assertThat(PhoneNumbers.toE164("abc", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("7020", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("702020201", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("+2267020202", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("+1234567890123456", BF)).isNull();
+        assertThat(PhoneNumbers.toE164("  ", BF)).isNull();
+    }
+
+    @Test
+    @DisplayName("callingCodeForCountry: Burkina Faso by name or code, and the default when unknown")
+    void callingCodes() {
+        assertThat(PhoneNumbers.callingCodeForCountry("Burkina Faso")).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("BF")).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("Côte d’Ivoire")).isEqualTo("225");
+        assertThat(PhoneNumbers.callingCodeForCountry(null)).isEqualTo("226");
+        assertThat(PhoneNumbers.callingCodeForCountry("Atlantis")).isEqualTo("226");
+    }
 }

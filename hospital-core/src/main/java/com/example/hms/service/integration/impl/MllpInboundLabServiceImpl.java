@@ -592,19 +592,21 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * collapse to {@link AbnormalFlag#CRITICAL}: the enum carries no
      * critical direction and every critical consumer (notification,
      * escalation sweep, worklist counts) keys on that one value.
-     * Anything outside the recognised set degrades to {@link AbnormalFlag#NORMAL}
-     * — better to mis-flag a result as normal and surface it for review
-     * than to silently drop it.
+     * A blank OBX-8, or a code outside the recognised set, is NO flag (null):
+     * the analyzer asserted nothing, and recording NORMAL there reached the
+     * patient as "normal" for a value nobody interpreted (D31). The result is
+     * still stored and still waits on the release worklist; only an explicit
+     * {@code N} records NORMAL.
      */
     private AbnormalFlag toAbnormalFlag(String hl7Flag) {
-        if (!StringUtils.hasText(hl7Flag)) return AbnormalFlag.NORMAL;
+        if (!StringUtils.hasText(hl7Flag)) return null;
         return switch (hl7Flag.trim().toUpperCase(Locale.ROOT)) {
-            case "N", "" -> AbnormalFlag.NORMAL;
+            case "N" -> AbnormalFlag.NORMAL;
             case "A" -> AbnormalFlag.ABNORMAL;
             case "L" -> AbnormalFlag.ABNORMAL_LOW;
             case "H" -> AbnormalFlag.ABNORMAL_HIGH;
             case "LL", "HH", "AA", ">", "<" -> AbnormalFlag.CRITICAL;
-            default -> AbnormalFlag.NORMAL;
+            default -> null;
         };
     }
 }

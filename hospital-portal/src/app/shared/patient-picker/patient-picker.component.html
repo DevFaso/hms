@@ -3,7 +3,7 @@
     <div class="chip-avatar">{{ initials(sp) }}</div>
     <div class="chip-info">
       <span class="chip-name">{{ sp.firstName }} {{ sp.lastName }}</span>
-      <span class="chip-sub">{{ sp.email }}</span>
+      <span class="chip-sub">{{ sp.email || sp.phoneNumberPrimary }}</span>
     </div>
     <button
       type="button"
@@ -18,6 +18,7 @@
   <div class="patient-picker-wrap">
     <span class="material-symbols-outlined picker-search-icon">person_search</span>
     <input
+      [attr.aria-label]="'COMMON.SEARCH_PATIENT' | translate"
       [id]="inputId"
       class="picker-input"
       type="text"
@@ -46,11 +47,16 @@
             <div class="opt-avatar">{{ initials(p) }}</div>
             <div class="opt-info">
               <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-              <span class="opt-meta">{{ p.email }}</span>
+              <span class="opt-meta">{{ p.email || p.phoneNumberPrimary }}</span>
             </div>
           </div>
         }
       </div>
+    }
+    @if (noMatch() && !searchLoading() && query().length >= 2) {
+      <p class="picker-no-match" role="status">
+        {{ 'COMMON.PATIENT_PICKER_NO_MATCH' | translate }}
+      </p>
     }
   </div>
 }

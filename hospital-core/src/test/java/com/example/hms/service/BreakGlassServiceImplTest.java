@@ -192,11 +192,39 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
-        @DisplayName("clamps caller-supplied TTL above 240 min to the 240-min ceiling")
-        void declareClampsTtl() {
+        @DisplayName("QA D165: the audit row carries the actor's ACTIVE assignment at the session hospital")
+        void declareLinksTheActingAssignment() {
+            // Without it the audit service took the first user_roles link: a
+            // doctor's break-glass at B was filed as ROLE_NURSE from an
+            // inactive assignment at another hospital.
             stubAuthenticatedDoctor();
             when(sessionRepository.save(any(BreakGlassSession.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+            com.example.hms.model.UserRoleHospitalAssignment doctorHere = new com.example.hms.model.UserRoleHospitalAssignment();
+            doctorHere.setId(UUID.randomUUID());
+            when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId))
+                .thenReturn(java.util.Optional.of(doctorHere));
+
+            service.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build());
+
+            ArgumentCaptor<AuditEventRequestDTO> audit =
+                ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditService).logEvent(audit.capture());
+            assertThat(audit.getValue().getAssignmentId()).isEqualTo(doctorHere.getId());
+        }
+
+        @Test
+        @DisplayName("QA D186: rejects a TTL above the 240-min ceiling instead of silently capping it")
+        void declareRejectsHighTtl() {
+            stubAuthenticatedDoctor();
 
             BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
                 .patientId(patientId)
@@ -205,12 +233,10 @@ class BreakGlassServiceImplTest {
                 .ttlMinutes(9999)
                 .build();
 
-            service.declare(req);
+            assertThatThrownBy(() -> service.declare(req))
+                .isInstanceOf(BusinessException.class);
 
-            ArgumentCaptor<BreakGlassSession> captor = ArgumentCaptor.forClass(BreakGlassSession.class);
-            verify(sessionRepository).save(captor.capture());
-            assertThat(captor.getValue().getExpiresAt())
-                .isBefore(LocalDateTime.now().plusMinutes(241));
+            verify(sessionRepository, never()).save(any());
         }
 
         @Test

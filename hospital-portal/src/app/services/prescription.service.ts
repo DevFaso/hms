@@ -23,6 +23,8 @@ export interface PrescriptionResponse {
   medicationDisplayName: string;
   dosage: string;
   frequency: string;
+  /** Administration route code (PO, IV, ...); null on orders that never recorded one. */
+  route?: string | null;
   duration: string;
   notes: string;
   /**
@@ -170,10 +172,14 @@ export interface PrescriptionRequest {
   medicationName: string;
   dosage?: string;
   frequency?: string;
+  /** D109: the route the MAR five-rights check compares the bedside entry with. */
+  route?: string;
   duration?: string;
   notes?: string;
   status?: PrescriptionStatusType;
   forceOverride?: boolean;
+  /** Required with forceOverride when a documented allergy matches (QA D83). */
+  overrideReason?: string;
   /**
    * Safeguard flags (P2 #15). Set-only: the backend refuses clearing a flag by
    * edit. controlledSubstance is deliberately not offered by the form yet —

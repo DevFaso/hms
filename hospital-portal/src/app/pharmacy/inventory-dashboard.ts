@@ -31,6 +31,8 @@ export class InventoryDashboardComponent implements OnInit {
 
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);
+  /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
+  pharmaciesLoaded = signal(false);
   selectedPharmacyId = '';
 
   // Stock levels
@@ -63,6 +65,7 @@ export class InventoryDashboardComponent implements OnInit {
     this.svc.listPharmacies(0, 100).subscribe({
       next: (page) => {
         this.pharmacies.set(page?.content ?? []);
+        this.pharmaciesLoaded.set(true);
         const list = page?.content ?? [];
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;

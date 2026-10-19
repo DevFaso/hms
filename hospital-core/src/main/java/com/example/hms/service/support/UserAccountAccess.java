@@ -172,7 +172,26 @@ public class UserAccountAccess {
             return false;
         }
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(target.getId());
-        return !holdsAny(target, assignments, Set.of(SUPER_ADMIN))
+        if (holdsAny(target, assignments, Set.of(SUPER_ADMIN))) {
+            return false;
+        }
+        // An ACTIVE assignment here always counts. An inactive one counts
+        // only while the account is active nowhere else: a pending invitation
+        // or a former employee stays visible to the hospital that holds it,
+        // but someone now working at hospital B is B's to read, not A's
+        // through a stale row left at A (QA D190).
+        boolean activeHere = assignments.stream()
+            .filter(a -> Boolean.TRUE.equals(a.getActive()))
+            .map(UserAccountAccess::hospitalIdOf)
+            .anyMatch(administered::contains);
+        if (activeHere) {
+            return true;
+        }
+        boolean activeElsewhere = assignments.stream()
+            .filter(a -> Boolean.TRUE.equals(a.getActive()))
+            .map(UserAccountAccess::hospitalIdOf)
+            .anyMatch(hospitalId -> hospitalId == null || !administered.contains(hospitalId));
+        return !activeElsewhere
             && assignments.stream().map(UserAccountAccess::hospitalIdOf).anyMatch(administered::contains);
     }
 
@@ -418,7 +437,7 @@ public class UserAccountAccess {
     public DirectoryScope requireDirectoryAccess() {
         Caller caller = caller();
         if (caller.superAdmin()) {
-            return DirectoryScope.EVERYONE;
+            return DirectoryScope.ALL_ACCOUNTS;
         }
         List<UserRoleHospitalAssignment> staffAssignments = caller.activeAssignments().stream()
             .filter(a -> {
@@ -429,10 +448,14 @@ public class UserAccountAccess {
         if (staffAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
         }
+        // QA D125: only a hospital administrator reads patients' contact details from the
+        // directory; other staff still see the account (chat needs the id and the name).
+        boolean administrator = staffAssignments.stream()
+            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
         return new DirectoryScope(false, staffAssignments.stream()
             .map(UserAccountAccess::hospitalIdOf)
             .filter(Objects::nonNull)
-            .collect(Collectors.toUnmodifiableSet()));
+            .collect(Collectors.toUnmodifiableSet()), administrator);
     }
 
     /**
@@ -442,13 +465,19 @@ public class UserAccountAccess {
      *                    view included when the caller asks for it
      * @param hospitalIds otherwise, only live accounts holding an assignment
      *                    at one of these hospitals; empty means none at all
+     * @param seesPatientContacts whether the e-mail and username of a non-staff
+     *                    (patient) account may be returned — administrators only (QA D125)
      */
-    public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds) {
+    public record DirectoryScope(boolean everyone, Set<UUID> hospitalIds, boolean seesPatientContacts) {
 
-        static final DirectoryScope EVERYONE = new DirectoryScope(true, Set.of());
+        static final DirectoryScope ALL_ACCOUNTS = new DirectoryScope(true, Set.of(), true);
 
         public DirectoryScope {
             hospitalIds = Set.copyOf(hospitalIds);
+        }
+
+        public DirectoryScope(boolean everyone, Set<UUID> hospitalIds) {
+            this(everyone, hospitalIds, everyone);
         }
     }
 

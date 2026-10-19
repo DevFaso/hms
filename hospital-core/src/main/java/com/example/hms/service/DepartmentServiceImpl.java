@@ -28,7 +28,6 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -163,10 +162,39 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentMinimalDTO> getActiveDepartmentsMinimal(UUID hospitalId, Locale locale) {
-        enforceHospitalScopeOnHospitalId(hospitalId);
+        // A referral names the RECEIVING hospital's department (QA D118): the
+        // controller is scope-exempt for that, but this used to enforce the
+        // caller's own hospital anyway, so picking another hospital was a
+        // silent 403. Another hospital gets a directory - active departments,
+        // id and name only; the caller's own hospital also
+        // gets the contact details, as before. "Own" is the hospital the
+        // request acts at, from the one tenant resolver.
+        UUID actingHospitalId = roleValidator.getCurrentHospitalId();
+        boolean ownHospital = hospitalId.equals(actingHospitalId);
+        // QA D145: another hospital's directory exists for the referral form only, so only a
+        // clinician who writes referrals at the acting hospital reads it; an administrator or
+        // a receptionist of hospital A has no business listing hospital B's departments.
+        if (!ownHospital && !roleValidator.isSuperAdminFromJwtClaim()
+                && !writesReferralsAt(roleValidator.getCurrentUserId(), actingHospitalId)) {
+            throw new AccessDeniedException("Access denied");
+        }
         return departmentRepository.findByHospitalId(hospitalId).stream()
-                .map(dept -> new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber()))
+                .filter(Department::isActive)
+                .map(dept -> ownHospital
+                        ? new DepartmentMinimalDTO(dept.getId(), dept.getName(), dept.getEmail(), dept.getPhoneNumber())
+                        : new DepartmentMinimalDTO(dept.getId(), dept.getName(), null, null))
                 .toList();
+    }
+
+    private boolean writesReferralsAt(UUID userId, UUID hospitalId) {
+        if (userId == null || hospitalId == null) {
+            return false;
+        }
+        return roleValidator.isDoctor(userId, hospitalId)
+                || roleValidator.isPhysician(userId, hospitalId)
+                || roleValidator.isSurgeon(userId, hospitalId)
+                || roleValidator.isNurse(userId, hospitalId)
+                || roleValidator.isMidwife(userId, hospitalId);
     }
 
     @Override
@@ -346,7 +374,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public void deleteDepartment(UUID id, Locale locale) {
         Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
 
         enforceHospitalScopeOnEntity(department);
 
@@ -495,8 +523,12 @@ public class DepartmentServiceImpl implements DepartmentService {
 
     private UserRoleHospitalAssignment resolveCreatorAssignment(Hospital hospital) {
         UUID currentUserId = authService.getCurrentUserId();
+        // A user can hold several assignments at one hospital (an admin who is also a
+        // doctor, or an inactive patient role). A single-result lookup throws on the
+        // second row, so prefer the active HOSPITAL_ADMIN assignment, then any active one.
         Optional<UserRoleHospitalAssignment> existingAssignment = roleAssignmentRepository
-            .findByUserIdAndHospitalId(currentUserId, hospital.getId());
+            .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(currentUserId, hospital.getId(), ROLE_HOSPITAL_ADMIN)
+            .or(() -> roleAssignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(currentUserId, hospital.getId()));
 
         if (existingAssignment.isPresent()) {
             return existingAssignment.get();

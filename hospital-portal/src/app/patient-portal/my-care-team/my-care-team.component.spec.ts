@@ -58,6 +58,7 @@ describe('MyCareTeamComponent', () => {
           PRIMARY_PROVIDER: 'Médecin traitant',
           SINCE: 'Depuis le {{date}}',
           HISTORY_TITLE: 'Médecins traitants précédents',
+          VISITS_TITLE: 'Soignants de vos consultations en cours',
           LOAD_ERROR: 'Impossible de charger votre équipe soignante. Réessayez.',
         },
       },
@@ -105,6 +106,26 @@ describe('MyCareTeamComponent', () => {
     });
     expect(host().querySelector('[data-testid="care-team-current"]')).toBeNull();
     expect(texts('[data-testid="care-team-history"] .ct-name')).toEqual(['Dr Awa Traoré']);
+  });
+
+  it('lists the clinicians of open visits, so a walk-in patient is not told they have no team (D115)', () => {
+    create({
+      primaryCare: null,
+      primaryCareHistory: [],
+      visitClinicians: [
+        {
+          userId: 'd-9',
+          displayName: 'Dr Issa Ouédraogo',
+          hospitalId: 'h-1',
+          hospitalName: 'CHU Yalgado',
+          visitDate: null,
+        },
+      ],
+    });
+    expect(host().querySelector('[data-testid="care-team-empty"]')).toBeNull();
+    const section = host().querySelector('[data-testid="care-team-visits"]');
+    expect(section?.textContent).toContain('Soignants de vos consultations en cours');
+    expect(section?.textContent).toContain('Dr Issa Ouédraogo');
   });
 
   it('shows the translated empty state when there is no primary care on file', () => {

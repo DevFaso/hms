@@ -71,8 +71,16 @@ describe('ConsultationsComponent', () => {
     staffSpy = jasmine.createSpyObj('StaffService', ['list']);
     staffSpy.list.and.returnValue(
       of([
-        { id: 'st1', name: 'Dr A', active: true, specialization: 'Cardiology' } as StaffResponse,
-        { id: 'st2', name: 'Dr B', active: false } as StaffResponse,
+        {
+          id: 'st1',
+          name: 'Dr A',
+          active: true,
+          roleCode: 'ROLE_DOCTOR',
+          specialization: 'Cardiology',
+        } as StaffResponse,
+        { id: 'st2', name: 'Dr B', active: false, roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+        // QA D122: a receptionist is never offered as a consultant.
+        { id: 'st3', name: 'Desk', active: true, roleCode: 'ROLE_RECEPTIONIST' } as StaffResponse,
       ]),
     );
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);

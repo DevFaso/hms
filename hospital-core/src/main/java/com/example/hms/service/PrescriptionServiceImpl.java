@@ -10,7 +10,9 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
@@ -93,16 +95,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaims;
     /** G15 AC-12: readiness on the patient-portal prescriptions read. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    /** D83: an allergy override is audited (who, when, which reason digest). */
+    private final AuditEventLogService auditEventLogService;
 
     @Override
     @Transactional
     public PrescriptionResponseDTO createPrescription(PrescriptionRequestDTO request, Locale locale) {
         rejectClientAssertedWorkflowStatus(request);
         UUID currentUserId = authService.getCurrentUserId();
+        // QA D85: the new order belongs to the hospital the caller acts in. It
+        // used to land at the home hospital of the caller's FIRST staff row, so
+        // a doctor working in two hospitals wrote prescriptions the acting
+        // hospital's chart and record PDF never showed.
+        UUID actingHospitalId = roleValidator.requireActiveHospitalId();
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -110,25 +119,33 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
         }
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
+        }
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before prescribing
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        String allergyOverride = checkAllergyConflicts(patient, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
+        if (allergyOverride != null) {
+            auditAllergyOverrideAfterCommit(saved, currentUserId, allergyOverride, "Allergy override recorded at creation");
+        }
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
@@ -874,8 +891,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Patient patient = resolvePatient(request, locale);
 
-    Staff staff = resolveStaffContext(request, currentUserId);
-    Encounter encounter = resolveEncounterContext(request, patient, staff);
+        Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -893,19 +910,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
+        // The staff member written as prescriber must be able to prescribe,
+        // on update as on create (D28).
+        requirePrescribingRole(staff, hospitalId);
 
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
         // DECISION SUPPORT: Check allergies before updating prescription
-        checkAllergyConflicts(patient, hospitalId, request.getMedicationName(), request.getForceOverride());
+        String allergyOverride = checkAllergyConflicts(patient, request);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         PrescriptionStatus statusBefore = existing.getStatus();
+        String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -965,8 +987,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsForPortalPatient(UUID patientId, Locale locale) {
+        // QA D101: an unsigned prescription (DRAFT, PENDING_SIGNATURE) is the prescriber's
+        // work in progress, not something issued to the patient.
         java.util.List<Prescription> rows = prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
-            .getContent();
+            .getContent().stream()
+            .filter(p -> p.getStatus() != com.example.hms.enums.PrescriptionStatus.DRAFT
+                && p.getStatus() != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE)
+            .toList();
         // G15 AC-12: a fill waiting at the counter, one query for the list.
         java.util.Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(rows);
@@ -1067,13 +1094,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return resolveAssignmentForStaff(staff, hospitalId);
     }
 
-    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId) {
+    /**
+     * The prescriber named on the order — {@code request.staffId} when the
+     * caller picks one — must hold a prescribing role at the order's hospital.
+     * Checking only the caller let a doctor attribute a prescription to a
+     * receptionist, whose own staff assignment then became the prescriber of
+     * record (QA D28).
+     */
+    private void requirePrescribingRole(Staff staff, UUID hospitalId) {
+        UUID prescriberUserId = staff.getUser() != null ? staff.getUser().getId() : null;
+        if (prescriberUserId == null) {
+            throw new BusinessException("prescription.assignment.missing.staff.user");
+        }
+        if (!roleValidator.canCreatePrescription(prescriberUserId, hospitalId)) {
+            throw new BusinessException("prescription.prescriber.role.required");
+        }
+    }
+
+    private Staff resolveStaffContext(PrescriptionRequestDTO request, UUID currentUserId, UUID actingHospitalId) {
         if (request.getStaffId() != null) {
-            return staffRepository.findById(request.getStaffId())
+            Staff named = staffRepository.findById(request.getStaffId())
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notfound", request.getStaffId()));
+            // QA D84: the prescriber of record is the signed-in prescriber; an
+            // order cannot be written under a colleague's (or a nurse's) name.
+            UUID namedUserId = named.getUser() != null ? named.getUser().getId() : null;
+            if (currentUserId != null && namedUserId != null && !currentUserId.equals(namedUserId)) {
+                throw new BusinessException("prescription.prescriber.must.be.self");
+            }
+            return named;
         }
         if (currentUserId == null) {
             throw new BusinessException("prescription.staff.context.missing");
+        }
+        if (actingHospitalId != null) {
+            Optional<Staff> here = staffRepository.findByUserIdAndHospitalId(currentUserId, actingHospitalId);
+            if (here.isPresent()) {
+                return here.get();
+            }
         }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new BusinessException("prescription.staff.context.missing"));
@@ -1081,15 +1138,28 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
-                                              Staff staff) {
+                                              Staff staff,
+                                              UUID actingHospitalId) {
         if (request.getEncounterId() != null) {
             return encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
         }
 
-        UUID hospitalId = determineHospitalId(staff, patient);
+        UUID hospitalId = actingHospitalId != null ? actingHospitalId : determineHospitalId(staff, patient);
         if (hospitalId == null) {
             throw new BusinessException("prescription.hospital.context.missing");
+        }
+
+        // QA D136/D151: an order for an inpatient by the clinician leading the
+        // stay belongs to the stay (an encounter carries one prescriber). Filed
+        // there, it stops with the discharge (the MAR and the patient's list
+        // read the stay's status) and it does not mint a phantom consultation.
+        Optional<Encounter> stay = encounterRepository
+            .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                patient.getId(), staff.getId(), hospitalId,
+                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+        if (stay.isPresent()) {
+            return stay.get();
         }
 
         Optional<Encounter> existing = encounterRepository
@@ -1116,21 +1186,41 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter createEncounterSnapshot(Patient patient,
                                               Staff staff,
                                               UserRoleHospitalAssignment assignment) {
-        if (staff.getHospital() == null) {
+        // Anchor at the hospital the assignment was resolved for, which is the
+        // acting hospital when one is pinned, rather than the staff home hospital.
+        Hospital hospital = assignment != null && assignment.getHospital() != null
+            ? assignment.getHospital() : staff.getHospital();
+        if (staff.getHospital() == null || hospital == null) {
             throw new BusinessException("prescription.staff.hospital.missing");
         }
+        // The anchor exists only because a prescription row needs an encounter:
+        // it is recorded as already finished, in the prescriber's department, so
+        // it never surfaces as an open visit on a worklist or tracker with no
+        // department (QA D41).
+        LocalDateTime now = LocalDateTime.now();
         Encounter encounter = Encounter.builder()
             .patient(patient)
             .staff(staff)
-            .hospital(staff.getHospital())
+            .hospital(hospital)
+            .department(departmentAtHospital(staff, hospital))
             .assignment(assignment)
             .encounterType(EncounterType.CONSULTATION)
-            .encounterDate(LocalDateTime.now())
-            .status(EncounterStatus.IN_PROGRESS)
-            .notes("Auto-generated for prescription entry")
+            .encounterDate(now)
+            .checkoutTimestamp(now)
+            .status(EncounterStatus.COMPLETED)
+            .notes(Encounter.PRESCRIPTION_ANCHOR_NOTE)
             .build();
         encounter.setCode(generateEncounterCode());
         return encounterRepository.save(encounter);
+    }
+
+    private static Department departmentAtHospital(Staff staff, Hospital hospital) {
+        Department department = staff.getDepartment();
+        if (department == null || department.getHospital() == null
+            || !department.getHospital().getId().equals(hospital.getId())) {
+            return null;
+        }
+        return department;
     }
 
     private String generateEncounterCode() {
@@ -1168,58 +1258,134 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
-     * Check patient allergies against the medication being prescribed.
-     * Logs warnings and throws BusinessException if severe allergy found without override.
+     * Check patient allergies against the medication being prescribed (QA D83).
+     * Any active documented allergy that matches the drug — by name, ignoring
+     * accents, or by drug class (a penicillin allergy covers amoxicillin) —
+     * blocks the order unless the prescriber overrides it WITH a reason. The
+     * reason is stored on the prescription so the override is on record.
+     *
+     * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private void checkAllergyConflicts(Patient patient, UUID hospitalId, String medicationName, Boolean forceOverride) {
+    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request) {
+        String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
-            return; // Cannot check without medication name
+            return null; // Cannot check without medication name
         }
 
-        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId);
-        String medLower = medicationName.toLowerCase();
-        
+        // A hard safety stop: an allergy recorded at ANY hospital counts.
+        List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
+        String med = normalizeDrugText(medicationName);
+        String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
+        boolean conflict = false;
         for (PatientAllergy allergy : allergies) {
-            if (allergy.isActive() && matchesAllergen(medLower, allergy.getAllergenDisplay())) {
-                handleAllergyConflict(patient, allergy, medicationName, forceOverride);
+            if (allergy.isActive() && matchesAllergen(med, allergy.getAllergenDisplay())) {
+                conflict = true;
+                handleAllergyConflict(patient, allergy, medicationName, request.getForceOverride(), reason);
             }
         }
+        return conflict ? reason : null;
     }
 
-    private boolean matchesAllergen(String medLower, String allergenDisplay) {
-        if (allergenDisplay == null) {
+    private static void recordAllergyOverride(Prescription prescription, String overrideReason) {
+        if (overrideReason != null) {
+            prescription.setOverrideReason(overrideReason);
+            prescription.setAllergiesReviewed(true);
+        }
+    }
+
+    /**
+     * An edit either still conflicts (the new reason is recorded and audited,
+     * so a replaced reason leaves a trail) or no longer does (the stale
+     * override is cleared - it vouched for a drug that is no longer ordered -
+     * and the clearing is audited too).
+     */
+    private void applyAllergyOverrideOnUpdate(Prescription existing, String allergyOverride,
+                                              String overrideBefore, UUID actorId) {
+        if (allergyOverride != null) {
+            recordAllergyOverride(existing, allergyOverride);
+            if (!allergyOverride.equals(overrideBefore)) {
+                auditAllergyOverrideAfterCommit(existing, actorId, allergyOverride,
+                    overrideBefore != null ? "Allergy override reason replaced on edit" : "Allergy override recorded on edit");
+            }
+        } else if (overrideBefore != null || existing.isAllergiesReviewed()) {
+            existing.setOverrideReason(null);
+            existing.setAllergiesReviewed(false);
+            auditAllergyOverrideAfterCommit(existing, actorId, null,
+                "Allergy override cleared: the edited order no longer conflicts");
+        }
+    }
+
+    /**
+     * After commit, outside the clinical write. Ids and a digest of the
+     * reason only: the reason is free text and the audit row is not
+     * encrypted, so the digest proves which reason stood without copying it.
+     */
+    private void auditAllergyOverrideAfterCommit(Prescription prescription, UUID actorId,
+                                                 String reason, String description) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        String details = reason == null ? "{\"overrideCleared\":true}"
+            : "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\"}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType("Prescription")
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Allergy override audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */
+    static String normalizeDrugText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .trim();
+    }
+
+    static boolean matchesAllergen(String med, String allergenDisplay) {
+        String allergen = normalizeDrugText(allergenDisplay);
+        if (allergen.isEmpty() || med.isEmpty()) {
             return false;
         }
-        String allergenLower = allergenDisplay.toLowerCase();
-        return allergenLower.contains(medLower) || medLower.contains(allergenLower);
+        if (allergen.contains(med) || med.contains(allergen)) {
+            return true;
+        }
+        // "penicillin" / "pénicilline" / "penicilina": the whole -cillin class.
+        return allergen.contains("penicil") && (med.contains("cillin") || med.contains("cilin") || med.contains("penicil"));
     }
 
-    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName, Boolean forceOverride) {
+    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName,
+                                       Boolean forceOverride, String reason) {
         String severityStr = allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN";
-        String reaction = allergy.getReaction() != null ? allergy.getReaction() : "unspecified reaction";
 
-        logger.warn("ALLERGY ALERT: Patient {} has documented allergy to '{}' (severity: {}, reaction: {}). " +
-                   "Attempted to prescribe '{}'. Override: {}",
-                   patient.getId(), sanitizeLog(allergy.getAllergenDisplay()), severityStr,
-                   sanitizeLog(reaction), sanitizeLog(medicationName), forceOverride);
-        
-        if (isSevereAllergy(allergy.getSeverity()) && !Boolean.TRUE.equals(forceOverride)) {
-            throw new BusinessException(
-                String.format("ALLERGY CONFLICT: Patient has a documented %s allergy to '%s' with reaction: %s. " +
-                            "Cannot prescribe '%s' without explicit override. Review patient allergies before proceeding.",
-                            severityStr, allergy.getAllergenDisplay(), reaction, medicationName)
-            );
-        }
-        
-        logger.info("Prescription proceeding with documented {} allergy to '{}'", severityStr, allergy.getAllergenDisplay());
-    }
+        logger.warn("ALLERGY ALERT: patient {} has a documented {} allergy matching the prescribed drug. Override: {}",
+                   patient.getId(), severityStr, forceOverride);
 
-    private boolean isSevereAllergy(com.example.hms.enums.AllergySeverity severity) {
-        if (severity == null) {
-            return false;
+        if (!Boolean.TRUE.equals(forceOverride) || reason.isEmpty()) {
+            // Sent as a critical CDS card so the prescribing screen shows the
+            // alert and offers the override (with its mandatory reason).
+            String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
+                allergy.getAllergenDisplay(), severityStr, medicationName);
+            CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
+                null, null, null, UUID.randomUUID().toString());
+            throw new CdsCriticalBlockException(message, List.of(card));
         }
-        return severity == com.example.hms.enums.AllergySeverity.SEVERE 
-            || severity == com.example.hms.enums.AllergySeverity.LIFE_THREATENING;
     }
 
     /** Strip newline/carriage-return characters to prevent log-injection attacks (S5145). */

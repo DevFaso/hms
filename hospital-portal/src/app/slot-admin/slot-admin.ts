@@ -21,7 +21,7 @@ import {
   VisitTypeRequest,
   VisitTypeResponse,
 } from '../services/slot-inventory.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
@@ -465,7 +465,7 @@ export class SlotAdminComponent implements OnInit {
       // while no hospital is in scope, so the id is never absent here.
       const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
       this.staffService.list(hospitalId ?? undefined).subscribe({
-        next: (staff) => this.staffOptions.set(staff),
+        next: (staff) => this.staffOptions.set(staff.filter(isClinicalProvider)),
         error: () => this.staffOptions.set([]),
       });
     }

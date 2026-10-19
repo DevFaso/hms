@@ -1,36 +1,36 @@
 <div class="pharmacy-checkout">
   <header class="page-header no-print">
-    <h2>Encaissement pharmacie</h2>
-    <p class="subtitle">Recherche de dispense et enregistrement du paiement</p>
+    <h2>{{ 'PHARMACY_CHECKOUT.TITLE' | translate }}</h2>
+    <p class="subtitle">{{ 'PHARMACY_CHECKOUT.SUBTITLE' | translate }}</p>
   </header>
 
   <!-- Lookup card -->
   @if (!receipt()) {
     <section class="card no-print">
-      <h3>1. Rechercher un dispense</h3>
+      <h3>{{ 'PHARMACY_CHECKOUT.STEP_LOOKUP' | translate }}</h3>
       <div class="form-row">
-        <label for="dispenseId">Identifiant du dispense</label>
+        <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_ID' | translate }}</label>
         <input
           id="dispenseId"
           type="text"
           [(ngModel)]="dispenseId"
-          placeholder="UUID du dispense"
+          [placeholder]="'PHARMACY_CHECKOUT.DISPENSE_ID_PLACEHOLDER' | translate"
         />
         <button type="button" class="btn-primary" [disabled]="loading()" (click)="loadDispense()">
-          Charger
+          {{ 'PHARMACY_CHECKOUT.LOAD' | translate }}
         </button>
       </div>
       @if (dispense(); as d) {
         <div class="dispense-summary">
           <dl>
-            <dt>Médicament</dt>
+            <dt>{{ 'PHARMACY_CHECKOUT.MEDICATION' | translate }}</dt>
             <dd>{{ d.medicationName }}</dd>
-            <dt>Quantité délivrée</dt>
+            <dt>{{ 'PHARMACY_CHECKOUT.QTY_DISPENSED' | translate }}</dt>
             <dd>{{ d.quantityDispensed }} {{ d.unit }}</dd>
-            <dt>Patient</dt>
-            <dd>{{ d.patientId }}</dd>
-            <dt>Pharmacie</dt>
-            <dd>{{ d.pharmacyId }}</dd>
+            <dt>{{ 'PHARMACY_CHECKOUT.PATIENT' | translate }}</dt>
+            <dd>{{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}</dd>
+            <dt>{{ 'PHARMACY_CHECKOUT.PHARMACY' | translate }}</dt>
+            <dd>{{ d.pharmacyName || '—' }}</dd>
           </dl>
         </div>
       }
@@ -40,40 +40,40 @@
   <!-- Payment form -->
   @if (dispense() && !receipt()) {
     <section class="card no-print">
-      <h3>2. Enregistrer le paiement</h3>
+      <h3>{{ 'PHARMACY_CHECKOUT.STEP_PAYMENT' | translate }}</h3>
       <div class="form-row">
-        <label for="amount">Montant (XOF)</label>
+        <label for="amount">{{ 'PHARMACY_CHECKOUT.AMOUNT_XOF' | translate }}</label>
         <input id="amount" type="number" min="0" [(ngModel)]="amount" />
       </div>
       <div class="form-row">
-        <span class="form-label">Mode de paiement</span>
+        <span class="form-label">{{ 'PHARMACY_CHECKOUT.PAYMENT_METHOD' | translate }}</span>
         <div class="radio-group">
           @for (m of methods; track m) {
             <label class="radio">
               <input type="radio" name="method" [value]="m.value" [(ngModel)]="paymentMethod" />
-              {{ m.labelFr }}
+              {{ m.labelKey | translate }}
             </label>
           }
         </div>
       </div>
       @if (paymentMethod !== 'CASH') {
         <div class="form-row">
-          <label for="ref">Référence</label>
+          <label for="ref">{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate }}</label>
           <input
             id="ref"
             type="text"
             [(ngModel)]="referenceNumber"
-            placeholder="Transaction / police"
+            [placeholder]="'PHARMACY_CHECKOUT.REFERENCE_PLACEHOLDER' | translate"
           />
         </div>
       }
       <div class="form-row">
-        <label for="notes">Notes</label>
+        <label for="notes">{{ 'COMMON.NOTES' | translate }}</label>
         <textarea id="notes" [(ngModel)]="notes" rows="2"></textarea>
       </div>
       <div class="actions">
         <button type="button" class="btn-primary" [disabled]="loading()" (click)="submit()">
-          Valider le paiement
+          {{ 'PHARMACY_CHECKOUT.SUBMIT' | translate }}
         </button>
       </div>
     </section>
@@ -85,18 +85,18 @@
       <header class="receipt-header">
         <h1>Reçu de pharmacie</h1>
         <p class="receipt-meta">
-          Nº {{ r.id }}<br />
+          Nº {{ receiptNumber(r.id) }}<br />
           Émis le : {{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}
         </p>
       </header>
       <div class="receipt-body">
         <dl>
-          <dt>Dispense</dt>
-          <dd>{{ r.dispenseId }}</dd>
           <dt>Médicament</dt>
           <dd>{{ dispense()?.medicationName }}</dd>
           <dt>Patient</dt>
-          <dd>{{ r.patientId }}</dd>
+          <dd>
+            {{ dispense()?.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }}
+          </dd>
           <dt>Mode de paiement</dt>
           <dd>{{ methodLabel(r.paymentMethod) }}</dd>
           @if (r.referenceNumber) {
@@ -119,8 +119,12 @@
         <p class="signature">Signature du pharmacien : ____________________</p>
       </footer>
       <div class="actions no-print">
-        <button type="button" class="btn-primary" (click)="printReceipt()">Imprimer</button>
-        <button type="button" class="btn-secondary" (click)="reset()">Nouveau paiement</button>
+        <button type="button" class="btn-primary" (click)="printReceipt()">
+          {{ 'PHARMACY_CHECKOUT.PRINT' | translate }}
+        </button>
+        <button type="button" class="btn-secondary" (click)="reset()">
+          {{ 'PHARMACY_CHECKOUT.NEW_PAYMENT' | translate }}
+        </button>
       </div>
     </section>
   }

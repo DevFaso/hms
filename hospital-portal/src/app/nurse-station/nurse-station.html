@@ -337,7 +337,7 @@
                     <td>{{ o.orderType | enumLabel: 'orderSourceType' }}</td>
                     <td>
                       <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
-                        o.priority
+                        o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
                     <td>{{ o.dueTime | date: 'shortTime' }}</td>
@@ -794,7 +794,9 @@
                     <td>{{ a.departmentName || '—' }}</td>
                     <td>{{ a.admittingDoctor || '—' }}</td>
                     <td>{{ a.admissionDateTime | date: 'short' }}</td>
-                    <td>{{ a.admissionType || '—' }}</td>
+                    <td>
+                      {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -975,14 +977,17 @@
       (keydown.escape)="cancelHoldRefuse()"
     >
       <h3 id="reason-dialog-title">
-        {{
-          reasonPrompt()?.action === 'HELD'
-            ? ('NURSE.HOLD' | translate)
-            : ('NURSE.REFUSE' | translate)
-        }}
+        {{ reasonActionLabelKey() | translate }}
         {{ 'NURSE.MEDICATION' | translate }}
       </h3>
-      <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
+      @if (reasonPrompt()?.action === 'GIVEN') {
+        <p>{{ 'NURSE.OVERRIDE_EXPLAIN' | translate }}</p>
+        <p>
+          <a routerLink="/emar">{{ 'NURSE.OPEN_EMAR' | translate }}</a>
+        </p>
+      } @else {
+        <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
+      }
       <textarea
         class="reason-input"
         [ngModel]="reasonText()"
@@ -1000,11 +1005,7 @@
           [disabled]="!reasonText()"
         >
           {{ 'NURSE.CONFIRM' | translate }}
-          {{
-            reasonPrompt()?.action === 'HELD'
-              ? ('NURSE.HOLD' | translate)
-              : ('NURSE.REFUSE' | translate)
-          }}
+          {{ reasonActionLabelKey() | translate }}
         </button>
       </div>
     </div>
@@ -1041,8 +1042,8 @@
             id="vf-temp"
             type="number"
             step="0.1"
-            min="30"
-            max="45"
+            min="25"
+            max="44"
             [placeholder]="'NURSE.VITALS_PLACEHOLDER.TEMP' | translate"
             [value]="vitalsForm().temperatureCelsius ?? ''"
             (input)="updateVitalsField('temperatureCelsius', $any($event.target).value)"
@@ -1229,6 +1230,7 @@
     class="modal-backdrop"
     (click)="closeTaskCreate()"
     (keydown.enter)="closeTaskCreate()"
+    (keydown.escape)="closeTaskCreate()"
     tabindex="0"
     role="button"
   >
@@ -1247,14 +1249,12 @@
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="tc-patient">{{ 'NURSE.PATIENT_ID' | translate }}</label>
-          <input
-            id="tc-patient"
-            type="text"
-            class="reason-input"
-            [placeholder]="'NURSE.PATIENT_UUID_PLACEHOLDER' | translate"
-            [value]="taskForm().patientId"
-            (input)="updateTaskField('patientId', $any($event.target).value)"
+          <label for="tc-patient">{{ 'APPOINTMENTS.PATIENT' | translate }}</label>
+          <app-patient-picker
+            inputId="tc-patient"
+            [hospitalId]="hospitalId()"
+            [selected]="taskPatient()"
+            (selectedChange)="onTaskPatientChange($event)"
           />
         </div>
         <div class="form-row">
@@ -1345,6 +1345,7 @@
     class="modal-backdrop"
     (click)="closeHandoffCreate()"
     (keydown.enter)="closeHandoffCreate()"
+    (keydown.escape)="closeHandoffCreate()"
     tabindex="0"
     role="button"
   >
@@ -1455,6 +1456,7 @@
     class="modal-backdrop"
     (click)="closeCareNote()"
     (keydown.enter)="closeCareNote()"
+    (keydown.escape)="closeCareNote()"
     tabindex="0"
     role="button"
   >

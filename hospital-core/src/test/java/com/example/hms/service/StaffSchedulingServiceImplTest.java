@@ -100,6 +100,20 @@ class StaffSchedulingServiceImplTest {
     }
 
     @Test
+    void findLeaves_withoutDatesReachesAYearAheadAndAMonthBack() {
+        // D117: a leave request starting in a month sat outside the 14-day
+        // shift window, so the admin never saw it to decide on it.
+        UUID hospitalId = UUID.randomUUID();
+        when(leaveRepository.findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(any(), any(), any()))
+            .thenReturn(Collections.emptyList());
+
+        service.findLeaves(hospitalId, null, null, null, null, Locale.ENGLISH);
+
+        verify(leaveRepository).findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(
+            hospitalId, TODAY.minusDays(31), TODAY.plusDays(366));
+    }
+
+    @Test
     void scheduleShift_rejectsYesterdayOnTheInjectedClock() {
         UUID staffId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -117,6 +131,47 @@ class StaffSchedulingServiceImplTest {
             .isInstanceOf(BusinessRuleException.class)
             .hasMessageContaining("schedule.shift.pastDate");
         verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    @Test
+    void scheduleShift_refusesAStaffMemberWhoseAccountIsInactive() {
+        // QA D166 (partial D117): qa.r2.nurse290579 - staff row active, account
+        // never verified - was given shift 03bb53f2.
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        staff.getUser().setActive(false);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+
+        StaffShiftRequestDTO tomorrow = new StaffShiftRequestDTO(
+            staffId, hospitalId, null, TODAY.plusDays(1),
+            LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.scheduleShift(tomorrow, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("schedule.staff.inactive");
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    @Test
+    void scheduleShift_refusesAStaffMemberWhoseAssignmentIsInactive() {
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        com.example.hms.model.UserRoleHospitalAssignment pending = new com.example.hms.model.UserRoleHospitalAssignment();
+        pending.setActive(false);
+        staff.setAssignment(pending);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+
+        StaffShiftRequestDTO tomorrow = new StaffShiftRequestDTO(
+            staffId, hospitalId, null, TODAY.plusDays(1),
+            LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.scheduleShift(tomorrow, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("schedule.staff.inactive");
     }
 
     @Test

@@ -809,7 +809,7 @@ public class EncounterServiceImpl implements EncounterService {
         } else {
             validateStaffRole(userId, hospitalId, locale);
             assignment = assignmentRepository
-                .findByUserIdAndHospitalId(userId, hospitalId)
+            .findActiveStaffAssignment(userId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_ASSIGNMENT_NOT_FOUND));
         }
 
@@ -2101,7 +2101,7 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setDischargeDate(checkoutTime.toLocalDate());
         summary.setDischargeTime(checkoutTime);
         summary.setDisposition(DischargeDisposition.HOME);
-        summary.setDischargeDiagnosis(buildDischargeDiagnosisText(request));
+        summary.setDischargeDiagnosis(buildDischargeDiagnosisText(encounter, request));
         summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
 
         // Encounter notes → hospitalCourse (visit summary)
@@ -2115,6 +2115,13 @@ public class EncounterServiceImpl implements EncounterService {
                     .findByEncounter_Id(encounter.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
                     .getContent();
             for (Prescription rx : prescriptions) {
+                // QA D152: a DRAFT or unsigned order was never given to the
+                // patient, and a withdrawn one is not continued at discharge.
+                if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
+                        || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+                        || (rx.getStatus() != null && rx.getStatus().isWithdrawn())) {
+                    continue;
+                }
                 MedicationReconciliationEntry entry = MedicationReconciliationEntry.builder()
                         .medicationName(rx.getMedicationName())
                         .dosage(rx.getDosage())
@@ -2132,15 +2139,22 @@ public class EncounterServiceImpl implements EncounterService {
         dischargeSummaryRepository.save(summary);
     }
 
-    private String buildDischargeDiagnosisText(com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
-        if (request == null || request.getDischargeDiagnoses() == null || request.getDischargeDiagnoses().isEmpty()) {
-            return "Discharge diagnosis not specified at checkout.";
+    private String buildDischargeDiagnosisText(Encounter encounter,
+                                               com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
+        String joined = request == null || request.getDischargeDiagnoses() == null ? ""
+            : request.getDischargeDiagnoses().stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .collect(Collectors.joining("; "));
+        if (!joined.isBlank()) {
+            return joined;
         }
-        return request.getDischargeDiagnoses().stream()
-            .filter(Objects::nonNull)
-            .map(String::trim)
-            .filter(s -> !s.isBlank())
-            .collect(Collectors.joining("; "));
+        // QA D151: read by the patient, so in the patient's language rather
+        // than a hard-coded English sentence (a list of blanks is no diagnosis).
+        Locale locale = patientLocaleResolver.resolve(encounter.getPatient(), NotificationLocales.PATIENT_FALLBACK);
+        return messageSource.getMessage("dischargeSummary.diagnosis.notSpecified", null,
+            "Discharge diagnosis not specified at checkout.", locale);
     }
 
     private void notifyPatientAfterVisitSummary(Encounter encounter) {
@@ -2325,6 +2339,8 @@ public class EncounterServiceImpl implements EncounterService {
                             + ". Expected ARRIVED or TRIAGE.");
         }
 
+        requireTriageRecorded(encounter);
+
         encounter.setTriageTimestamp(LocalDateTime.now());
         encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
         Encounter saved = encounterRepository.save(encounter);
@@ -2332,6 +2348,27 @@ public class EncounterServiceImpl implements EncounterService {
         trackerEventPublisher.publishStatusTransition(saved, current.name(),
                 EncounterStatus.WAITING_FOR_PHYSICIAN.name());
         return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    /**
+     * QA D155: "Terminer le triage" moved a patient to the physician queue in
+     * one click with no vital signs and no ESI. Triage is done when it has
+     * been recorded: an ESI on the encounter and a set of vitals taken at this
+     * hospital since the patient arrived. The atomic triage submission
+     * records both; this shortcut only closes a triage already recorded.
+     */
+    private void requireTriageRecorded(Encounter encounter) {
+        LocalDateTime since = encounter.getArrivalTimestamp() != null
+            ? encounter.getArrivalTimestamp() : encounter.getEncounterDate();
+        boolean vitalsTaken = encounter.getPatient() != null && encounter.getHospital() != null
+            && patientVitalSignRepository
+                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
+                    encounter.getPatient().getId(), encounter.getHospital().getId())
+                .map(v -> since == null || (v.getRecordedAt() != null && !v.getRecordedAt().isBefore(since)))
+                .orElse(false);
+        if (encounter.getEsiScore() == null || !vitalsTaken) {
+            throw new BusinessException("encounter.triage.incomplete");
+        }
     }
 
     // ------------------------------------------------------------------

@@ -22,7 +22,7 @@ import {
 } from '../../services/slot-inventory.service';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { ReferralService, DepartmentMinimal } from '../../services/referral.service';
-import { StaffService, StaffResponse } from '../../services/staff.service';
+import { StaffService, isClinicalProvider, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
@@ -102,7 +102,7 @@ export class WaitlistPanelComponent implements OnInit {
     }
 
     this.staffService.list(hospitalId).subscribe({
-      next: (list) => this.allStaff.set(list),
+      next: (list) => this.allStaff.set(list.filter(isClinicalProvider)),
     });
 
     this.patientSearch$

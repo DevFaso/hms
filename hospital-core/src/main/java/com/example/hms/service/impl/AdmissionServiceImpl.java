@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -74,6 +75,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final EncounterAutoCompletionService encounterAutoCompletion;
+    private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     private final BedAssignmentService bedAssignmentService;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
@@ -81,6 +83,25 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+
+    /**
+     * QA D84 (D28 family): the admitting and attending providers must hold a
+     * physician role at the admission's hospital — a nurse is not one.
+     */
+    private void requirePhysician(Staff staff, UUID hospitalId) {
+        requirePhysician(staff, hospitalId, "admission.provider.physician.required");
+    }
+
+    private void requirePhysician(Staff staff, UUID hospitalId, String refusalKey) {
+        UUID userId = staff.getUser() != null ? staff.getUser().getId() : null;
+        boolean physician = userId != null
+            && (roleValidator.isDoctor(userId, hospitalId)
+                || roleValidator.isPhysician(userId, hospitalId)
+                || roleValidator.isSurgeon(userId, hospitalId));
+        if (!physician) {
+            throw new BusinessException(refusalKey);
+        }
+    }
 
     @Override
     @Transactional
@@ -93,6 +114,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
+
+        requirePhysician(admittingProvider, hospital.getId());
 
         Admission admission = new Admission();
         admission.setPatient(patient);
@@ -108,6 +131,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAttendingPhysicianId() != null) {
             Staff attending = staffRepository.findById(request.getAttendingPhysicianId())
                 .orElseThrow(() -> new ResourceNotFoundException("admission.attendingPhysician.notFound", request.getAttendingPhysicianId()));
+            requirePhysician(attending, hospital.getId());
             admission.setAttendingPhysician(attending);
         }
 
@@ -134,6 +158,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
 
         admission = admissionRepository.save(admission);
+        // QA D98/D135: the stay opens its own INPATIENT encounter, so notes,
+        // the discharge summary and the after-visit summary have a home.
+        stayEncounters.openStayEncounter(admission);
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -166,6 +193,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         if (request.getAttendingPhysicianId() != null) {
             Staff attending = staffRepository.findById(request.getAttendingPhysicianId())
                 .orElseThrow(() -> new ResourceNotFoundException("admission.attendingPhysician.notFound", request.getAttendingPhysicianId()));
+            requirePhysician(attending, admission.getHospital().getId());
             admission.setAttendingPhysician(attending);
         }
 
@@ -207,6 +235,10 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.dischargingProvider.notFound", request.getDischargingProviderId()));
+        // QA D84/D176: the discharging provider, like the admitting one, is a
+        // physician at the admission's hospital - a nurse is not one.
+        requirePhysician(dischargingProvider, admission.getHospital().getId(),
+            "admission.dischargingProvider.physician.required");
 
         admission.discharge(
             request.getDischargeDisposition(),
@@ -221,7 +253,9 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         admission = admissionRepository.save(admission);
 
-        // Auto-complete any active encounters for this patient + hospital
+        // The stay's encounter carries the discharge (D151), then it and only
+        // it is completed (D134).
+        stayEncounters.recordDischarge(admission);
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)
@@ -231,15 +265,15 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     /**
-     * When an admission is discharged, any non-terminal encounter for the same
-     * patient + hospital should transition to COMPLETED automatically.
+     * When an admission is discharged, its own non-terminal encounters
+     * transition to COMPLETED automatically.
      * Delegates to the shared auto-completion service so the discharge-approval
      * path behaves identically and tracker boards get WebSocket updates.
      */
     private void completeActiveEncounters(Admission admission) {
-        encounterAutoCompletion.completeActiveEncounters(
-                admission.getPatient().getId(),
-                admission.getHospital().getId());
+        // QA D134: the stay's own encounters only, never the patient's
+        // unrelated outpatient visit at the same hospital.
+        encounterAutoCompletion.completeAdmissionEncounters(admission.getId());
     }
 
     @Override

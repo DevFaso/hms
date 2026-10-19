@@ -46,7 +46,7 @@ export interface LabResultSummary {
   testName: string;
   result: string;
   referenceRange: string;
-  /** PENDING while unreleased, else NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL. */
+  /** PENDING while unreleased, else NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | UNKNOWN (not interpreted). */
   status: string;
   collectedDate: string;
   /** The lab has released this result; until then the API sends no value at all. */
@@ -336,7 +336,12 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     released: !pending,
     isPending: pending,
     isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
-    isUngraded: !pending && !ABNORMAL_LAB_STATUSES.has(l.status) && l.unitMismatch === true,
+    // D31: UNKNOWN = released but nothing interpreted it (no range applies,
+    // no flag recorded) — never drawn as a green "within normal limits".
+    isUngraded:
+      !pending &&
+      !ABNORMAL_LAB_STATUSES.has(l.status) &&
+      (l.unitMismatch === true || l.status === 'UNKNOWN'),
     unit: l.unit ?? '',
     orderedBy: l.orderedBy ?? '',
     performedBy: l.performedBy ?? '',
@@ -402,12 +407,49 @@ interface EncounterApiResponse {
   };
 }
 
+/**
+ * Raw shape of BillingInvoiceResponseDTO as the portal endpoints send it
+ * (QA D139: the page used to read `amount`/`balance`/`facility`, which the
+ * API never sends, so every invoice showed 0 and no Pay button).
+ */
+export interface InvoiceApiResponse {
+  id: string;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  dueDate?: string | null;
+  totalAmount?: number | null;
+  amountPaid?: number | null;
+  balanceDue?: number | null;
+  status?: string | null;
+  hospitalName?: string | null;
+  encounterDescription?: string | null;
+  notes?: string | null;
+}
+
+export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
+  const total = Number(api.totalAmount ?? 0);
+  const paid = Number(api.amountPaid ?? 0);
+  return {
+    id: api.id,
+    invoiceNumber: api.invoiceNumber ?? '',
+    date: api.invoiceDate ?? '',
+    dueDate: api.dueDate ?? '',
+    amount: total,
+    paid,
+    balance: api.balanceDue != null ? Number(api.balanceDue) : Math.max(total - paid, 0),
+    status: api.status ?? '',
+    facility: api.hospitalName ?? '',
+    description: api.encounterDescription ?? '',
+  };
+}
+
 export interface PortalInvoice {
   id: string;
   invoiceNumber: string;
   date: string;
   dueDate: string;
   amount: number;
+  paid: number;
   balance: number;
   status: string;
   facility: string;
@@ -432,11 +474,23 @@ export interface PrimaryCareEntry {
   current: boolean;
 }
 
-/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory }. */
+/** A clinician holding one of the patient's visits still open (QA D115). */
+export interface VisitClinicianEntry {
+  userId: string;
+  displayName: string | null;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  /** ISO local date-time of the newest open visit with this clinician. */
+  visitDate: string | null;
+}
+
+/** GET /me/patient/care-team — CareTeamDTO { primaryCare, primaryCareHistory, visitClinicians }. */
 export interface CareTeamDTO {
   primaryCare: PrimaryCareEntry | null;
   /** Newest first; includes the current link. */
   primaryCareHistory: PrimaryCareEntry[];
+  /** Newest visit first, one entry per clinician. */
+  visitClinicians?: VisitClinicianEntry[];
 }
 
 /** A clinician a patient can address a chat message to. */
@@ -1045,17 +1099,20 @@ export class PatientPortalService {
 
   getMyInvoices(): Observable<PortalInvoice[]> {
     return this.http
-      .get<ApiWrapper<{ content: PortalInvoice[] }>>(`${this.base}/billing/invoices`)
+      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(`${this.base}/billing/invoices`)
       .pipe(
-        map((r) => r.data?.content ?? []),
+        map((r) => (r.data?.content ?? []).map(mapPortalInvoice)),
         catchError(() => of([])),
       );
   }
 
   payInvoice(invoiceId: string, payment: PatientPaymentRequest): Observable<PortalInvoice> {
     return this.http
-      .post<ApiWrapper<PortalInvoice>>(`${this.base}/billing/invoices/${invoiceId}/pay`, payment)
-      .pipe(map((r) => r.data));
+      .post<ApiWrapper<InvoiceApiResponse>>(
+        `${this.base}/billing/invoices/${invoiceId}/pay`,
+        payment,
+      )
+      .pipe(map((r) => mapPortalInvoice(r.data)));
   }
 
   /**
@@ -1067,6 +1124,7 @@ export class PatientPortalService {
       map((r) => ({
         primaryCare: r.data?.primaryCare ?? null,
         primaryCareHistory: r.data?.primaryCareHistory ?? [],
+        visitClinicians: r.data?.visitClinicians ?? [],
       })),
     );
   }
@@ -1084,13 +1142,20 @@ export class PatientPortalService {
           ...(team?.primaryCare ? [team.primaryCare] : []),
           ...(team?.primaryCareHistory ?? []),
         ];
-        return distinctClinicians(
-          entries.map((e) => ({
+        return distinctClinicians([
+          ...entries.map((e) => ({
             userId: e.doctorUserId ?? '',
             name: e.doctorDisplay ?? '',
             hospitalName: e.hospitalName ?? null,
           })),
-        );
+          // The clinicians of open visits: without them a walk-in patient
+          // had nobody to write to (QA D115).
+          ...(team?.visitClinicians ?? []).map((v) => ({
+            userId: v.userId ?? '',
+            name: v.displayName ?? '',
+            hospitalName: v.hospitalName ?? null,
+          })),
+        ]);
       }),
     );
   }
@@ -1432,13 +1497,13 @@ export class PatientPortalService {
 
   getProxyBilling(patientId: string): Observable<PortalInvoice[]> {
     return this.http
-      .get<ApiWrapper<{ content: PortalInvoice[] }>>(
+      .get<ApiWrapper<{ content: InvoiceApiResponse[] }>>(
         `${this.base}/proxy-access/${patientId}/billing`,
         {
           params: { page: 0, size: 20 },
         },
       )
-      .pipe(map((r) => r.data?.content ?? []));
+      .pipe(map((r) => (r.data?.content ?? []).map(mapPortalInvoice)));
   }
 
   getProxyRecords(patientId: string): Observable<HealthSummaryDTO> {

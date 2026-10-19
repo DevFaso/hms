@@ -17,6 +17,11 @@ import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
+/** A user whose only role is ROLE_PATIENT (a patient portal account). */
+function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
+  return (u.roleName ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
+}
+
 @Component({
   selector: 'app-staff-list',
   standalone: true,
@@ -162,9 +167,23 @@ export class StaffListComponent implements OnInit {
     'LABORATORY_SCIENTIST',
   ]);
 
-  /** Whether the currently-selected job title requires a specialization / licence */
+  /**
+   * Physician titles: the specialization list is medical specialties
+   * (cardiology, paediatrics...), which a pharmacist, nurse or lab scientist
+   * does not have (QA D195). The server requires one for doctors and
+   * radiologists only.
+   */
+  private readonly specialtyTitles = new Set([
+    'DOCTOR',
+    'PHYSICIAN',
+    'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+  ]);
+
+  /** Whether the currently-selected job title takes a medical specialization */
   get needsSpecialization(): boolean {
-    return this.licencedTitles.has(this.form.jobTitle ?? '');
+    return this.specialtyTitles.has(this.form.jobTitle ?? '');
   }
 
   get needsLicence(): boolean {
@@ -175,7 +194,8 @@ export class StaffListComponent implements OnInit {
     this.loadStaff();
     this.loadAssignedHospitals();
     this.userService.list(0, 500).subscribe({
-      next: (page) => this.users.set(page.content),
+      // QA D122: a patient account is never offered as a new staff member.
+      next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
     });
   }
 
@@ -318,9 +338,11 @@ export class StaffListComponent implements OnInit {
     if (!payload.employmentType) delete payload.employmentType;
     if (!payload.startDate) delete payload.startDate;
     if (!payload.roleName) delete payload.roleName;
-    // Never send specialization or licenseNumber for non-clinical roles
+    // Never send a specialization for a non-physician, nor a licence for a non-clinical role
     if (!this.needsSpecialization) {
       delete payload.specialization;
+    }
+    if (!this.needsLicence) {
       delete payload.licenseNumber;
     }
 

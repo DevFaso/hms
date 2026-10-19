@@ -1842,6 +1842,15 @@ class EncounterServiceImplTest {
             Encounter e = new Encounter();
             e.setId(UUID.randomUUID());
             e.setStatus(EncounterStatus.ARRIVED);
+            e.setEsiScore(3);
+            com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+            p.setId(UUID.randomUUID());
+            e.setPatient(p);
+            PatientVitalSign v = new PatientVitalSign();
+            v.setRecordedAt(LocalDateTime.now());
+            org.mockito.Mockito.lenient().when(patientVitalSignRepository
+                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(p.getId()), any()))
+                .thenReturn(Optional.of(v));
             if (hospitalId != null) {
                 Hospital h = new Hospital();
                 h.setId(hospitalId);
@@ -1970,6 +1979,33 @@ class EncounterServiceImplTest {
 
             assertThat(mine.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
             verify(encounterRepository).save(mine);
+        }
+
+        @Test
+        @DisplayName("QA D155: triage cannot be completed with no ESI and no vitals")
+        void completeTriageRefusesAnUnrecordedTriage() {
+            Encounter mine = encounterAt(CALLER_HOSPITAL);
+            mine.setEsiScore(null);
+            encounterExists(mine);
+            UUID id = mine.getId();
+
+            assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("encounter.triage.incomplete");
+            assertThat(mine.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+        }
+
+        @Test
+        @DisplayName("QA D155: an ESI alone is not a triage: vitals since arrival are needed")
+        void completeTriageRefusesWithoutVitalsSinceArrival() {
+            Encounter mine = encounterAt(CALLER_HOSPITAL);
+            mine.setArrivalTimestamp(LocalDateTime.now().plusMinutes(5));
+            encounterExists(mine);
+            UUID id = mine.getId();
+
+            assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("encounter.triage.incomplete");
         }
 
         @Test
@@ -2107,7 +2143,7 @@ class EncounterServiceImplTest {
         verify(roleValidator, never()).isDoctor(any(), any());
         verify(roleValidator, never()).isNurse(any(), any());
         verify(roleValidator, never()).isHospitalAdmin(any(), any());
-        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(assignmentRepository, never()).findActiveStaffAssignment(any(), any());
         verify(encounterMapper).mergeEncounter(
             any(com.example.hms.payload.dto.EncounterRequestDTO.class),
             eq(existing), eq(patient), eq(staff), eq(hospital),
@@ -2181,7 +2217,7 @@ class EncounterServiceImplTest {
         assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, false, hospitalId))
             .isInstanceOf(BusinessException.class);
 
-        verify(assignmentRepository, never()).findByUserIdAndHospitalId(any(), any());
+        verify(assignmentRepository, never()).findActiveStaffAssignment(any(), any());
         verify(encounterRepository, never()).save(any(Encounter.class));
     }
 }

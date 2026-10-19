@@ -17,6 +17,28 @@
     "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
     "out."
   ],
+  "fulfillmentMode": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyFulfillmentMode.java"
+  },
+  "imagingLaterality": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingLaterality.java"
+  },
+  "imagingOrderPriority": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingOrderPriority.java"
+  },
+  "admissionType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionType.java"
+  },
+  "stockTransactionType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/StockTransactionType.java"
+  },
+  "pharmacyType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyType.java" },
+  "procedureUrgency": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ProcedureUrgency.java"
+  },
+  "labSeverityFlag": {
+    "reason": "LabResultResponseDTO.severityFlag is a String that LabResultMapper.determineSeverityFlag DERIVES (NORMAL / LOW / HIGH, and UNSPECIFIED when no reference range applies); the chart-review abnormalFlag is an AbnormalFlag name (ABNORMAL / CRITICAL ...). PORTAL.ENUM.LAB_SEVERITY_FLAG keys NORMAL, LOW, HIGH, CRITICAL, ABNORMAL and UNSPECIFIED; check by hand when either source changes."
+  },
   "admissionStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/AdmissionStatus.java"
   },
@@ -78,6 +100,9 @@
   },
   "immunizationStatus": {
     "reason": "PatientImmunization.status is a free String column (length 50), not an enum, so nothing can verify it. Its vocabulary is the comment on the field and the portal form that writes it: COMPLETED / NOT_DONE / REFUSED / DEFERRED / ENTERED_IN_ERROR."
+  },
+  "invoiceItemCategory": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/ItemCategory.java"
   },
   "invoiceStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/InvoiceStatus.java"
@@ -168,6 +193,9 @@
   "shiftType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffShiftType.java" },
   "signatureStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/SignatureStatus.java"
+  },
+  "specialization": {
+    "reason": "Staff.specialization is a free String; the vocabulary is the portal's own SPECIALIZATIONS list in users/user-list.ts"
   },
   "status": {
     "reason": "a deliberate shared pool across 13 call sites whose DTOs disagree, plus two vocabularies a service INVENTS and no enum holds: PatientMedicationServiceImpl.resolveStatus (ACTIVE / COMPLETED / DISCONTINUED / ON_HOLD) and PatientLabResultServiceImpl.resolveStatus (PENDING / NORMAL / CRITICAL / ABNORMAL_HIGH / ABNORMAL_LOW). A 14th caller was added deliberately: the chart-review TIMELINE pill, whose one badge carries all six ChartReviewServiceImpl sections — Encounter status, a note's SIGNED/DRAFT, AbnormalFlag, Prescription status, imaging report-status-or-order-status, and ProcedureOrder status — so the pool now holds every value those six can emit, each copied from the group that owns it. Every OTHER site whose field really carries one enum has been pointed at that enum's own domain instead — if you are about to add another `status` call, check first whether yours is one of those."

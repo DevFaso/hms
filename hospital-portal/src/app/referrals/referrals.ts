@@ -10,7 +10,11 @@ import {
   ReferralRequest,
   DepartmentMinimal,
 } from '../services/referral.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  HospitalDirectoryEntry,
+} from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -52,7 +56,7 @@ export class ReferralsComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   /** All hospitals for the destination picker (loaded once) */
-  allHospitals = signal<HospitalResponse[]>([]);
+  allHospitals = signal<HospitalDirectoryEntry[]>([]);
   sourceDepartments = signal<DepartmentMinimal[]>([]);
   targetDepartments = signal<DepartmentMinimal[]>([]);
 
@@ -173,6 +177,14 @@ export class ReferralsComponent implements OnInit {
     }));
   }
 
+  /** The localized specialty name, so a list never shows CARDIOLOGY raw (D121). */
+  specialtyLabel(value: string | null | undefined): string {
+    if (!value) return '';
+    const key = `REFERRALS.SPECIALTY_OPTION.${value}`;
+    const label = this.translate.instant(key);
+    return label && label !== key ? label : value;
+  }
+
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
     // the auth interceptor sends the right X-Hospital-Id (or omits it
@@ -222,7 +234,7 @@ export class ReferralsComponent implements OnInit {
 
   /** Load all hospitals for the destination hospital picker */
   private loadAllHospitals(): void {
-    this.hospitalService.list().subscribe({
+    this.hospitalService.directory().subscribe({
       next: (h) => this.allHospitals.set(h ?? []),
     });
   }

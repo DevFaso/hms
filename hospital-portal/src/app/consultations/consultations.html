@@ -113,6 +113,7 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'CONSULTATIONS.SEARCH' | translate"
         type="text"
         [placeholder]="'CONSULTATIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
@@ -174,11 +175,13 @@
                 </td>
               }
               <td>
-                <div class="cell-primary">{{ c.patientName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ c.patientName || ('COMMON.UNKNOWN' | translate) }}
+                </div>
                 <div class="cell-secondary">{{ c.patientMrn }}</div>
               </td>
               <td>{{ c.specialtyRequested || '—' }}</td>
-              <td>{{ c.consultantName || 'Unassigned' }}</td>
+              <td>{{ c.consultantName || ('COMMON.UNASSIGNED' | translate) }}</td>
               <td>
                 <span class="urgency-badge {{ getUrgencyClass(c.urgency) }}">{{
                   c.urgency | enumLabel: 'consultationUrgency'
@@ -317,7 +320,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'CONSULTATIONS.CONSULTANT' | translate }}</span
-              ><span class="field-value">{{ con.consultantName || 'Unassigned' }}</span>
+              ><span class="field-value">{{
+                con.consultantName || ('COMMON.UNASSIGNED' | translate)
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'CONSULTATIONS.URGENCY' | translate }}</span
@@ -691,7 +696,8 @@
               ? ('CONSULTATIONS.REASSIGN' | translate)
               : ('CONSULTATIONS.ASSIGN' | translate)
           }}
-          consultant for <strong>{{ assigningItem()?.patientName }}</strong> —
+          {{ 'CONSULTATIONS.CONSULTANT_FOR' | translate }}
+          <strong>{{ assigningItem()?.patientName }}</strong> —
           <strong>{{ assigningItem()?.specialtyRequested }}</strong>
         </p>
         <div class="field">

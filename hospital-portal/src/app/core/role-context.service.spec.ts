@@ -207,4 +207,49 @@ describe('RoleContextService', () => {
     svc.scopeToHospital('hosp-99');
     expect(svc.effectiveHospitalIdForRequest()).toBe('hosp-7');
   });
+
+  // ── D7: which held role would have opened a refused page ──
+
+  describe('roleThatWouldAllow', () => {
+    afterEach(() => svc.clearSession());
+
+    it('names ROLE_SUPER_ADMIN on a server refusal when the account holds it', () => {
+      svc.setHeldRoles(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
+      svc.activeRole = 'ROLE_HOSPITAL_ADMIN';
+      svc.noteRefusal(null);
+      expect(svc.roleThatWouldAllow()).toBe('ROLE_SUPER_ADMIN');
+    });
+
+    it('names the held role a refused route asked for', () => {
+      svc.setHeldRoles(['ROLE_NURSE', 'ROLE_DOCTOR']);
+      svc.activeRole = 'ROLE_NURSE';
+      svc.noteRefusal(['ROLE_DOCTOR']);
+      expect(svc.roleThatWouldAllow()).toBe('ROLE_DOCTOR');
+    });
+
+    it('names nothing when no other held role satisfies the route', () => {
+      svc.setHeldRoles(['ROLE_NURSE', 'ROLE_SUPER_ADMIN']);
+      svc.activeRole = 'ROLE_NURSE';
+      svc.noteRefusal(['ROLE_DOCTOR']);
+      expect(svc.roleThatWouldAllow()).toBeNull();
+    });
+
+    it('names nothing when the active role already is the super-admin', () => {
+      svc.setHeldRoles(['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN']);
+      svc.activeRole = 'ROLE_SUPER_ADMIN';
+      svc.noteRefusal(null);
+      expect(svc.roleThatWouldAllow()).toBeNull();
+    });
+
+    it('keeps the held roles across a reload and forgets them at sign-out', () => {
+      svc.setHeldRoles(['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN']);
+      expect(JSON.parse(sessionStorage.getItem('hms.heldRoles') ?? '[]')).toEqual([
+        'ROLE_SUPER_ADMIN',
+        'ROLE_HOSPITAL_ADMIN',
+      ]);
+      svc.clearSession();
+      expect(svc.heldRoles).toEqual([]);
+      expect(sessionStorage.getItem('hms.heldRoles')).toBeNull();
+    });
+  });
 });

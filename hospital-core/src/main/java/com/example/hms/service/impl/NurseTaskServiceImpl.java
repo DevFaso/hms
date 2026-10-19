@@ -30,6 +30,7 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.ProcedureOrder;
 import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
@@ -275,9 +276,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Prescription> prescriptions = prescriptionRepository
             .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
 
+        List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
+
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
         for (Prescription rx : prescriptions) {
-            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
+            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -287,7 +290,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .patientName(ctx.displayName())
                     .medication(rx.getMedicationName())
                     .dose(buildDoseDisplay(rx))
-                    .route(rx.getRoute() != null ? rx.getRoute() : "PO")
+                    .route(rx.getRoute())
                     .dueTime(computeMedicationDueTime(rx, now))
                     .status(marStatus)
                     .requiresPharmacistVerification(
@@ -299,10 +302,21 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return result;
     }
 
+    /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */
+    static boolean endedWithAStay(Prescription rx, List<Admission> closedStays) {
+        return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
+    }
+
     /** Returns true when a status filter is active and the given status does not match it. */
     private boolean isFilteredOut(String statusFilter, String actualStatus) {
         if (statusFilter == null || statusFilter.isBlank()) return false;
-        return !statusFilter.trim().toUpperCase(Locale.ROOT).equals(actualStatus);
+        String wanted = statusFilter.trim().toUpperCase(Locale.ROOT);
+        // D76: "PENDING" means "still to give". The list never emits a
+        // PENDING status, so an exact match always came back empty.
+        if (STATUS_PENDING.equals(wanted)) {
+            return !(STATUS_DUE.equals(actualStatus) || STATUS_OVERDUE.equals(actualStatus));
+        }
+        return !wanted.equals(actualStatus);
     }
 
     @Override
@@ -322,7 +336,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String overrideReason = request != null ? request.getOverrideReason() : null;
 
         // Try to find a real prescription matching the task ID
-        Optional<Prescription> rxOpt = prescriptionRepository.findById(medicationTaskId);
+        // Locked: two concurrent administrations of the same prescription
+        // must not both see the same dose as still due (D77).
+        // Tenant-scoped lock: a foreign-hospital id must not lock that row.
+        Optional<Prescription> rxOpt = lockPrescription(medicationTaskId, hospitalId);
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
@@ -335,6 +352,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
+            requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
@@ -443,9 +461,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Optional<MedicationAdministrationRecord> existing = marRepository.findById(marId);
         if (existing.isPresent()) return existing.get();
 
-        Prescription rx = prescriptionRepository.findById(marId)
+        Prescription rx = lockPrescription(marId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nurse.mar.notFound", marId));
         validateHospitalMatch(rx.getHospital(), hospitalId);
+
+        // Re-verifying the same dose reuses its PENDING row instead of
+        // leaving one orphan row per verify call (D77).
+        LocalDateTime slot = requireNextDue(rx);
+        Optional<MedicationAdministrationRecord> pending = findPendingForSlot(rx, slot);
+        if (pending.isPresent()) return pending.get();
 
         MedicationAdministrationRecord seeded = MedicationAdministrationRecord.builder()
             .prescription(rx)
@@ -453,8 +477,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .hospital(rx.getHospital())
             .medicationName(rx.getMedicationName())
             .dose(buildDoseDisplay(rx))
-            .route(rx.getRoute() != null ? rx.getRoute() : "PO")
-            .scheduledTime(computeMedicationDueTime(rx, LocalDateTime.now()))
+            .route(rx.getRoute())
+            .scheduledTime(slot)
             .status(MedicationAdministrationStatus.PENDING)
             .build();
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(seeded::setAdministeredByStaff);
@@ -494,8 +518,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
 
         if (overrideReason == null || overrideReason.isBlank()) {
-            throw new BusinessException(
-                "Five-rights check failed (" + check.failedChecks() + "); an override reason is required to record GIVEN.");
+            throw new BusinessException("nurse.mar.fiveRightsFailedOverrideRequired",
+                check.failedChecks().stream().map(Enum::name).toList().toString());
         }
         mar.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
         mar.setOverrideReason(overrideReason);
@@ -838,6 +862,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return count;
     }
 
+    /** The patient's discharged stays here; none are fetched when there is no prescription to end. */
+    private List<Admission> closedStaysFor(UUID patientId, UUID hospitalId, List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return List.of();
+        }
+        return admissionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+            .filter(a -> a.getActualDischargeDateTime() != null)
+            .toList();
+    }
+
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
     private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
@@ -846,8 +880,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (ctx.patientId() == null || hospitalId == null) continue;
             List<Prescription> prescriptions = prescriptionRepository
                 .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
+            List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
             for (Prescription rx : prescriptions) {
-                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
+                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
@@ -865,27 +900,106 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Determine MAR status from a Prescription's creation time (simplified schedule). */
     private String resolveMarStatus(Prescription rx, LocalDateTime now) {
-        // Check if there's already a MAR record marked as GIVEN for this prescription
-        List<MedicationAdministrationRecord> records = marRepository
-            .findByPatient_IdAndHospital_IdAndStatus(
-                rx.getPatient().getId(), rx.getHospital().getId(),
-                MedicationAdministrationStatus.GIVEN);
-        boolean alreadyGiven = records.stream().anyMatch(r -> r.getPrescription().getId().equals(rx.getId()));
-        if (alreadyGiven) return STATUS_COMPLETED;
-
-        // Use prescription creation time + 4 hours as a naive "due" window
-        LocalDateTime createdAt = rx.getCreatedAt() != null ? rx.getCreatedAt() : now.minusHours(1);
-        LocalDateTime dueBy = createdAt.plusHours(4);
-        if (dueBy.isBefore(now)) return STATUS_OVERDUE;
+        LocalDateTime dueBy = computeMedicationDueTime(rx, now);
+        if (dueBy == null) return STATUS_COMPLETED;
+        // A dose may be given up to an hour either side of its slot (D154).
+        if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
         return STATUS_DUE;
     }
 
-    /** Compute a display due-time for a medication. */
+    /**
+     * When the next dose of a prescription is due, or {@code null} when no
+     * dose is left to give (D77).
+     *
+     * <p>The first dose is due four hours after the order. Each recorded
+     * outcome (given, held, refused, missed) closes its slot; a repeating
+     * frequency then schedules the next slot one interval after it, and a
+     * one-off, PRN or unparseable frequency leaves nothing more to give.
+     * Before this, the first GIVEN marked the whole course COMPLETED, so a
+     * q12h order never produced its second dose, and nothing stopped the
+     * same dose being recorded again.
+     */
     private LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now) {
-        if (rx.getCreatedAt() != null) {
-            return rx.getCreatedAt().plusHours(4);
+        // QA D154: the first dose is due when the order starts, which is its
+        // signature (or, failing that, its creation), not four hours later.
+        LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
+        LocalDateTime first = start != null ? start : now.plusHours(1);
+        if (rx.getId() == null) return first;
+        Optional<MedicationAdministrationRecord> lastClosed = marRepository
+            .findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
+            .findFirst();
+        if (lastClosed.isEmpty()) return first;
+        Integer interval = MarDoseSchedule.intervalHours(rx.getFrequency());
+        if (interval == null) return null;
+        return lastClosed.get().getScheduledTime().plusHours(interval);
+    }
+
+    /**
+     * How long before its slot a dose may be given. QA D154: two q12h doses
+     * were recorded 72 seconds apart because any future slot counted as due.
+     */
+    static final Duration EARLY_ADMINISTRATION_WINDOW = Duration.ofHours(1);
+
+    /** The slot the next administration fills; refuses when the course has none left. */
+    private LocalDateTime requireNextDue(Prescription rx) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime slot = computeMedicationDueTime(rx, now);
+        if (slot == null) {
+            throw new BusinessException("nurse.mar.noDoseDue");
         }
-        return now.plusHours(1);
+        if (slot.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) {
+            throw new BusinessException("nurse.mar.doseNotYetDue");
+        }
+        return slot;
+    }
+
+    private Optional<MedicationAdministrationRecord> findPendingForSlot(Prescription rx, LocalDateTime slot) {
+        return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+            .filter(r -> r.getStatus() == MedicationAdministrationStatus.PENDING)
+            .filter(r -> slot.equals(r.getScheduledTime()))
+            .findFirst();
+    }
+
+    /**
+     * A MAR row may be finalised once. Refuses a row already recorded, and a
+     * PENDING row whose slot another row has since closed (D77).
+     */
+    private void requireStillPending(MedicationAdministrationRecord marRecord, UUID hospitalId) {
+        Prescription rx = marRecord.getPrescription();
+        if (rx != null && rx.getId() != null) {
+            // Same per-prescription lock as the prescription path, taken
+            // BEFORE the status is checked so a concurrent finaliser is
+            // serialised behind it (D77), and scoped to the caller's tenant.
+            lockPrescription(rx.getId(), hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("nurse.medicationTask.notFound", marRecord.getId()));
+        }
+        // Re-read the status from the database after the lock: the managed
+        // entity was loaded before it and may be stale.
+        MedicationAdministrationStatus current = marRepository.findStatusById(marRecord.getId())
+            .orElse(marRecord.getStatus());
+        if (current != MedicationAdministrationStatus.PENDING) {
+            throw new BusinessException("nurse.mar.alreadyRecorded");
+        }
+        if (rx == null || rx.getId() == null) return;
+        boolean slotClosed = marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+            .anyMatch(r -> r.getStatus() != MedicationAdministrationStatus.PENDING
+                && !r.getId().equals(marRecord.getId())
+                && marRecord.getScheduledTime() != null
+                && marRecord.getScheduledTime().equals(r.getScheduledTime()));
+        if (slotClosed) {
+            throw new BusinessException("nurse.mar.alreadyRecorded");
+        }
+    }
+
+    /**
+     * PESSIMISTIC_WRITE lock on a prescription, within the acting hospital
+     * when there is one; only the global view locks by bare id.
+     */
+    private Optional<Prescription> lockPrescription(UUID prescriptionId, UUID hospitalId) {
+        return hospitalId != null
+            ? prescriptionRepository.findByIdAndHospitalIdForUpdate(prescriptionId, hospitalId)
+            : prescriptionRepository.findByIdForUpdate(prescriptionId);
     }
 
     /** Build a human-readable dose string from Prescription fields. */
@@ -921,25 +1035,30 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!pharmacistVerificationService.blocksAdministration(rx)) {
             return;
         }
-        throw new BusinessException(
-            ("%s has not been verified by a pharmacist. It is a high-risk medication, so it "
-                + "cannot be administered until a pharmacist verifies it. Record the dose as "
-                + "HELD if the patient is waiting.")
-                .formatted(rx.getMedicationName() != null ? rx.getMedicationName() : "This medication"));
+        throw new BusinessException("nurse.mar.pharmacistVerificationRequired",
+            rx.getMedicationName() != null ? rx.getMedicationName() : "-");
     }
 
     private NurseMedicationTaskResponseDTO persistMarRecord(
         Prescription rx, UUID nurseUserId, UUID hospitalId,
         MedicationAdministrationStatus status, String note, String overrideReason
     ) {
+        LocalDateTime slot = requireNextDue(rx);
+        Optional<MedicationAdministrationRecord> verified = findPendingForSlot(rx, slot);
+        if (verified.isPresent()) {
+            // The bedside verify call already materialised this dose: finalise
+            // that row so its five-rights scan counts, instead of demanding an
+            // override as if nothing had been scanned (D78).
+            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId, status, note, overrideReason);
+        }
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
             .patient(rx.getPatient())
             .hospital(rx.getHospital())
             .medicationName(rx.getMedicationName())
             .dose(buildDoseDisplay(rx))
-            .route(rx.getRoute() != null ? rx.getRoute() : "PO")
-            .scheduledTime(computeMedicationDueTime(rx, LocalDateTime.now()))
+            .route(rx.getRoute())
+            .scheduledTime(slot)
             .administeredAt(LocalDateTime.now())
             .status(status)
             .reason(status == MedicationAdministrationStatus.HELD
@@ -954,8 +1073,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // queries that range over scan_verified_at still see this record.
         if (status == MedicationAdministrationStatus.GIVEN) {
             if (overrideReason == null || overrideReason.isBlank()) {
-                throw new BusinessException(
-                    "Five-rights verification has not been completed; an override reason is required to record GIVEN.");
+                throw new BusinessException("nurse.mar.overrideRequired");
             }
             marRecord.setFiveRightsStatus(FiveRightsStatus.OVERRIDDEN);
             marRecord.setOverrideReason(overrideReason);
@@ -975,7 +1093,34 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .patientName(rx.getPatient().getFullName())
             .medication(rx.getMedicationName())
             .dose(buildDoseDisplay(rx))
-            .route(rx.getRoute() != null ? rx.getRoute() : "PO")
+            .route(rx.getRoute())
+            .dueTime(saved.getScheduledTime())
+            .status(status.name())
+            .build();
+    }
+
+    private NurseMedicationTaskResponseDTO finalizeVerifiedRow(
+        Prescription rx, MedicationAdministrationRecord marRecord, UUID nurseUserId, UUID hospitalId,
+        MedicationAdministrationStatus status, String note, String overrideReason
+    ) {
+        marRecord.setStatus(status);
+        marRecord.setAdministeredAt(LocalDateTime.now());
+        marRecord.setNotes(note);
+        if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
+            marRecord.setReason(note);
+        }
+        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
+        recordOverrideOnAdminister(marRecord, status, overrideReason);
+        MedicationAdministrationRecord saved = marRepository.save(marRecord);
+        return NurseMedicationTaskResponseDTO.builder()
+            .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
+            .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
+            .id(saved.getId())
+            .patientId(rx.getPatient().getId())
+            .patientName(rx.getPatient().getFullName())
+            .medication(rx.getMedicationName())
+            .dose(saved.getDose())
+            .route(saved.getRoute())
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .build();
@@ -1271,7 +1416,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             || com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5;
         vital.setClinicallySignificant(clinicallySig);
 
-        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(vital::setRecordedByStaff);
+        resolveNurseStaff(nurseUserId, hospitalId).ifPresent(staff -> {
+            vital.setRecordedByStaff(staff);
+            // The QA run found nurse-station rows with no recording assignment
+            // (D29 evidence): carry the nurse's assignment when it is at this hospital.
+            UserRoleHospitalAssignment assignment = staff.getAssignment();
+            if (assignment != null && assignment.getHospital() != null
+                && hospitalId.equals(assignment.getHospital().getId())) {
+                vital.setRecordedByAssignment(assignment);
+            }
+        });
         vitalSignRepository.save(vital);
 
         // Advance encounter status after vitals are captured.

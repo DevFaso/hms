@@ -245,7 +245,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(status(put("/users/" + nurseA.getId()), doctor, Map.of("password", "Attacker-Chosen-1")))
             .isEqualTo(404);
         assertThat(status(get("/users/" + nurseA.getId()), doctor, null)).isEqualTo(404);
-        assertThat(status(delete("/users/" + nurseA.getId()), doctor, null)).isEqualTo(404);
+        // QA D55: a doctor is no longer a registrar, so the delete is refused at the door.
+        assertThat(status(delete("/users/" + nurseA.getId()), doctor, null)).isEqualTo(403);
     }
 
     @Test
@@ -377,7 +378,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         // The form sends the email and username back unchanged; changing either has its own endpoint.
         assertThat(status(put("/users/" + patientA.getId()), patient, Map.of(
             "firstName", "Awa", "lastName", "Traore", "email", patientA.getEmail(),
-            "phoneNumber", "+22671" + next(), "username", patientA.getUsername()))).isEqualTo(200);
+            "phoneNumber", "+226710" + next(), "username", patientA.getUsername()))).isEqualTo(200);
         assertThat(userRepository.findById(patientA.getId()).orElseThrow().getFirstName()).isEqualTo("Awa");
 
         assertThat(status(put("/users/" + patientA.getId()), patient, Map.of("password", "Self-Set-Pass-1")))
@@ -398,7 +399,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "username", "orphan" + suffix,
             "firstName", "Orphan",
             "lastName", "Account",
-            "phoneNumber", "+22672" + suffix,
+            "phoneNumber", "+226720" + suffix,
             "roleNames", List.of("PATIENT"),
             "hospitalId", hospitalA.getId().toString(),
             "forcePasswordChange", true));
@@ -436,7 +437,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "password", "Chosen-Pass-1",
             "firstName", "Mint",
             "lastName", "Admin",
-            "phoneNumber", "+22676" + suffix,
+            "phoneNumber", "+226760" + suffix,
             "roleNames", List.of("SUPER_ADMIN")));
 
         assertThat(refused.getResponse().getStatus()).isEqualTo(403);
@@ -509,18 +510,13 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a surgeon's compensation works: register the patient, discard the orphan")
+    @DisplayName("QA D55: a surgeon cannot open a patient registration POST /patients would refuse")
     void surgeonCompensation() throws Exception {
         User surgeon = account("surA", "ROLE_SURGEON", hospitalA);
         String token = hms(surgeon, "ROLE_SURGEON");
 
         MvcResult registered = perform(post("/users/admin-register"), token, signup("orphan", "PATIENT", hospitalA));
-        assertThat(registered.getResponse().getStatus()).isEqualTo(201);
-        UUID orphanId = idOf(registered);
-        createdUsers.add(orphanId);
-
-        assertThat(status(delete("/users/" + orphanId), token, null)).isEqualTo(200);
-        assertThat(userRepository.findById(orphanId).orElseThrow().isDeleted()).isTrue();
+        assertThat(registered.getResponse().getStatus()).isEqualTo(403);
     }
 
     // ------------------------------------------------- the directory's scope
@@ -551,13 +547,22 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(ids(last)).hasSize(atA.size() - 4);
 
         // Search: B's doctor is not found by name, email or role; A's accounts are.
-        assertThat(total(page(get("/users/search").param("name", doctorB.getUsername()), nurse))).isZero();
-        assertThat(total(page(get("/users/search").param("email", doctorB.getEmail()), nurse))).isZero();
-        assertThat(total(page(get("/users/search").param("name", "sa"), nurse))).isZero();
+        assertThat(List.of(
+                total(page(get("/users/search").param("name", doctorB.getUsername()), nurse)),
+                total(page(get("/users/search").param("email", doctorB.getEmail()), nurse)),
+                total(page(get("/users/search").param("name", "sa"), nurse))))
+            .containsOnly(0L);
         var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
         assertThat(total(doctors)).isEqualTo(1);
         assertThat(ids(doctors)).containsExactly(dualAB.getId());
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), nurse);
+        // QA D198: none of these accounts holds a staff profile, so a nurse sees their
+        // e-mails masked and cannot confirm one by searching; A's administrator can.
+        assertThat(List.of(
+                total(page(get("/users/search").param("email", "users-gate.test"), nurse)),
+                total(page(get("/users/search").param("name", patientA.getEmail()), nurse))))
+            .containsOnly(0L);
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"),
+            hms(adminA, "ROLE_HOSPITAL_ADMIN"));
         assertThat(total(byDomain)).isEqualTo(atA.size());
         assertThat(ids(byDomain)).hasSize(2);
 
@@ -776,7 +781,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
             "email", prefix + suffix + "@signup.test",
             "firstName", prefix,
             "lastName", "Signup" + suffix,
-            "phoneNumber", "+22677" + suffix,
+            "phoneNumber", "+226770" + suffix,
             "roleNames", List.of(role),
             "hospitalId", hospital.getId().toString());
     }

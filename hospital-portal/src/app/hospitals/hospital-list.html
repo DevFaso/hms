@@ -4,15 +4,21 @@
       <h1 class="page-title">{{ 'HOSPITALS.TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'HOSPITALS.SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'HOSPITALS.NEW' | translate }}
-    </button>
+    <!-- QA D36: creating, editing and deleting a hospital is the
+         super-admin's only (POST/PUT/DELETE /hospitals), so the buttons
+         are not offered to anyone the API would refuse. -->
+    @if (isSuperAdmin()) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'HOSPITALS.NEW' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -32,7 +38,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th>{{ 'COMMON.NAME' | translate }}</th>
             <th>{{ 'HOSPITALS.CODE' | translate }}</th>
             <th>{{ 'HOSPITALS.LOCATION' | translate }}</th>
             <th>{{ 'PATIENTS.PHONE' | translate }}</th>
@@ -98,21 +104,23 @@
                     >
                       <span class="material-symbols-outlined">open_in_new</span>
                     </a>
+                    <button
+                      class="action-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      [attr.data-test]="'hospital-edit-' + h.id"
+                      (click)="openEdit(h)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button
+                      class="action-link danger"
+                      [title]="'COMMON.DELETE' | translate"
+                      [attr.data-test]="'hospital-delete-' + h.id"
+                      (click)="confirmDelete(h)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
                   }
-                  <button
-                    class="action-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(h)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="action-link danger"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(h)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
                 </div>
               </td>
             </tr>

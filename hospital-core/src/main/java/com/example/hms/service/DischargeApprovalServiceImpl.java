@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.DischargeStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.BusinessException;
@@ -12,6 +13,7 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.discharge.DischargeApprovalDecisionDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalRequestDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalResponseDTO;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.DischargeApprovalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.StaffRepository;
@@ -37,13 +39,19 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private static final EnumSet<DischargeStatus> ACTIVE_STATUSES = EnumSet.of(DischargeStatus.PENDING, DischargeStatus.APPROVED);
 
+    private static final java.util.Set<AdmissionStatus> OPEN_ADMISSION_STATUSES = java.util.EnumSet.of(
+        AdmissionStatus.PENDING, AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE,
+        AdmissionStatus.AWAITING_DISCHARGE);
+
     private final DischargeApprovalRepository dischargeApprovalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final DischargeApprovalMapper mapper;
     private final EncounterAutoCompletionService encounterAutoCompletion;
+    private final AdmissionRepository admissionRepository;
     private final BedAssignmentService bedAssignmentService;
+    private final AdmissionStayEncounterService stayEncounters;
 
     @Override
     @Transactional
@@ -115,19 +123,25 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         registration.markDischarged();
         registrationRepository.save(registration);
 
-        // The approval flow is a discharge in its own right (it marks the
-        // registration discharged), so it must also complete the patient's
-        // active encounters — otherwise they linger In Progress unless the
-        // separate POST /admissions/{id}/discharge is called afterwards.
-        encounterAutoCompletion.completeActiveEncounters(
+        // QA D134/D151: the approval path closes each open stay as the direct
+        // discharge does: beds freed while the stay still holds them, the
+        // admission row discharged (so the MAR's closed-stay rule sees it),
+        // the discharge carried onto the stay encounter, then that encounter,
+        // and never an outpatient visit in progress, completed.
+        java.util.List<com.example.hms.model.Admission> openStays = admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
                 registration.getPatient().getId(),
-                registration.getHospital().getId());
-
-        // This path works off the registration, not the Admission row — free
-        // any structured beds still held by the patient's admissions.
+                registration.getHospital().getId(),
+                OPEN_ADMISSION_STATUSES);
         bedAssignmentService.releaseBedsForPatient(
                 registration.getPatient().getId(),
                 registration.getHospital().getId());
+        for (com.example.hms.model.Admission stay : openStays) {
+            stay.discharge(stay.getDischargeDisposition(), stay.getDischargeSummary(),
+                stay.getDischargeInstructions(), doctor);
+            admissionRepository.save(stay);
+            stayEncounters.recordDischarge(stay);
+            encounterAutoCompletion.completeAdmissionEncounters(stay.getId());
+        }
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);
         log.info("Doctor {} approved discharge request {}", doctor.getId(), approvalId);

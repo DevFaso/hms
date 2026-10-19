@@ -18,6 +18,7 @@ import com.example.hms.payload.dto.prenatal.PrenatalScheduleRequestDTO;
 import com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO;
 import com.example.hms.payload.dto.prenatal.PrenatalVisitRecommendationDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.DeliveryRecordRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
@@ -52,6 +53,8 @@ import java.util.stream.Collectors;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.service.i18n.PatientLocaleResolver;
+import com.example.hms.utility.GestationalDating;
+import com.example.hms.utility.ObstetricEligibility;
 
 @Service
 @RequiredArgsConstructor
@@ -74,12 +77,14 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private final Clock clock;
     private final MessageSource messageSource;
     private final PatientLocaleResolver patientLocaleResolver;
+    private final DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
     public PrenatalScheduleResponseDTO generateSchedule(PrenatalScheduleRequestDTO request, Locale locale, String username) {
         Objects.requireNonNull(request, "Prenatal scheduling request is required");
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
+        ObstetricEligibility.requireObstetricEligible(patient);
 
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
@@ -89,8 +94,17 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         ensurePatientBelongsToHospital(patient, hospital.getId());
 
         LocalDate lmp = request.getLastMenstrualPeriodDate();
-        LocalDate dueDate = resolveDueDate(request, lmp);
         LocalDate today = LocalDate.now(clock);
+        // QA D164: an LMP 93 weeks ago (or in the future) cannot date a current
+        // pregnancy, and a pregnancy already delivered needs no antenatal visits.
+        if (!GestationalDating.isPlausibleCurrentLmp(lmp, today)) {
+            throw new BusinessException("prenatal.lmp.implausible");
+        }
+        if (deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+                patient.getId(), lmp.atStartOfDay())) {
+            throw new BusinessException("prenatal.pregnancy.delivered");
+        }
+        LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
 
         List<Appointment> futureAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId()).stream()
@@ -245,7 +259,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     ) {
         List<PrenatalVisitRecommendationDTO> plan = new ArrayList<>();
         Set<Integer> supplemental = supplementalWeeks == null ? Set.of() : supplementalWeeks.stream()
-            .filter(week -> week > 0 && week <= 44)
+            .filter(week -> week > 0 && week <= 44 && week >= currentWeek)
             .collect(Collectors.toCollection(LinkedHashSet::new));
 
         int weekPointer = Math.max(8, currentWeek);
@@ -259,12 +273,9 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         while (weekPointer <= MAX_STANDARD_GESTATIONAL_WEEK) {
             PrenatalVisitType visitType = determineVisitType(weekPointer, firstVisitAdded);
             int duration = resolveDurationForType(visitType);
-            LocalDate targetDate = alignToPreferredWeekday(lmp.plusWeeks(weekPointer));
-            LocalDate windowStart = targetDate.minusDays(3);
+            LocalDate targetDate = upcomingTargetDate(lmp, weekPointer, today);
+            LocalDate windowStart = windowStartFor(targetDate, today);
             LocalDate windowEnd = targetDate.plusDays(3);
-            if (windowStart.isBefore(today)) {
-                windowStart = today;
-            }
 
             PrenatalVisitRecommendationDTO recommendation = PrenatalVisitRecommendationDTO.builder()
                 .targetDate(targetDate)
@@ -299,11 +310,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     }
 
     private PrenatalVisitRecommendationDTO createSupplementalRecommendation(LocalDate lmp, int week, LocalDate today) {
-        LocalDate targetDate = alignToPreferredWeekday(lmp.plusWeeks(week));
+        LocalDate targetDate = upcomingTargetDate(lmp, week, today);
         int duration = ROUTINE_VISIT_DURATION_MINUTES;
         return PrenatalVisitRecommendationDTO.builder()
             .targetDate(targetDate)
-            .windowStart(targetDate.minusDays(3).isBefore(today) ? today : targetDate.minusDays(3))
+            .windowStart(windowStartFor(targetDate, today))
             .windowEnd(targetDate.plusDays(3))
             .suggestedStartTime(DEFAULT_START_TIME)
             .suggestedEndTime(DEFAULT_START_TIME.plusMinutes(duration))
@@ -439,6 +450,25 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         if (!seenWeeks.isEmpty()) {
             alerts.add("Multiple appointments scheduled for weeks: " + seenWeeks);
         }
+    }
+
+    /**
+     * The visit's target date, never in the past. The planner starts at the
+     * current gestational week, whose calendar date (LMP + whole weeks, moved
+     * to a Monday) is usually a few days behind today; that put the first
+     * visit's target in the past, and clamping only the window start to today
+     * left the window inverted, start after end (QA D47). A past target moves
+     * to the next preferred weekday from today.
+     */
+    private LocalDate upcomingTargetDate(LocalDate lmp, int gestationalWeek, LocalDate today) {
+        LocalDate target = alignToPreferredWeekday(lmp.plusWeeks(gestationalWeek));
+        return target.isBefore(today) ? alignToPreferredWeekday(today) : target;
+    }
+
+    /** Three days before the target, but not before today; never after the target. */
+    private static LocalDate windowStartFor(LocalDate targetDate, LocalDate today) {
+        LocalDate start = targetDate.minusDays(3);
+        return start.isBefore(today) ? today : start;
     }
 
     private LocalDate alignToPreferredWeekday(LocalDate reference) {

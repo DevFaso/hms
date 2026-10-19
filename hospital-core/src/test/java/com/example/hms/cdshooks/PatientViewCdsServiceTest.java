@@ -68,6 +68,39 @@ class PatientViewCdsServiceTest {
         assertThat(problem.indicator()).isEqualTo(CdsCard.Indicator.INFO);
     }
 
+    /** D61: a French caller reads a French card, severity included. */
+    @Test
+    void cardsFollowTheRequestLocale() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        PatientAllergy a = new PatientAllergy();
+        a.setPatient(patient);
+        a.setAllergenDisplay("Penicilline");
+        a.setReaction("urticaire");
+        a.setSeverity(AllergySeverity.SEVERE);
+        a.setActive(true);
+        PatientAllergy b = new PatientAllergy();
+        b.setPatient(patient);
+        b.setAllergenDisplay("Arachide");
+        b.setActive(true);
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a, b));
+        when(problemRepo.findByPatient_Id(patientId)).thenReturn(List.of());
+        service.setCardText(new CdsCardText(com.example.hms.i18n.TestMessageSources.bundles()));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            CdsCard card = service.evaluate(new CdsHookRequest(
+                "patient-view", "fr", null, null, null,
+                Map.of("patientId", patientId.toString()), null)).cards().get(0);
+
+            assertThat(card.summary()).isEqualTo("2 allergies actives au dossier");
+            assertThat(card.detail()).contains("réaction : urticaire").contains("(sévère)")
+                .doesNotContain("reaction:").doesNotContain("severe");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     @Test
     void problemCardRendersIcdAndLoincFromSeedTable() {
         UUID patientId = UUID.randomUUID();

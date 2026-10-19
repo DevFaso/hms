@@ -17,8 +17,21 @@ import java.util.UUID;
 
 public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, UUID> {
 
+    /**
+     * The invoice with a row lock held to the end of the transaction, so two
+     * payment transitions on the same invoice run one after the other and the
+     * amount paid is never computed from a stale read.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT bi FROM BillingInvoice bi WHERE bi.id = :id")
+    Optional<BillingInvoice> findLockedById(@Param("id") UUID id);
+
     @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByPatient_Id(UUID patientId, Pageable pageable);
+
+    /** QA D101: the patient portal never lists an invoice still being drafted. */
+    Page<BillingInvoice> findByPatient_IdAndStatusNot(UUID patientId, com.example.hms.enums.InvoiceStatus status,
+                                                      Pageable pageable);
 
     @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
@@ -113,4 +126,11 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         @Param("toDate") LocalDate toDate,
         Pageable pageable
     );
+
+    /** The invoice an earlier create with this idempotency key produced (QA D94). */
+    java.util.Optional<BillingInvoice> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
+
+    /** True when the invoice carries at least one line (QA D72). */
+    @Query("SELECT CASE WHEN COUNT(ii) > 0 THEN TRUE ELSE FALSE END FROM InvoiceItem ii WHERE ii.billingInvoice.id = :invoiceId")
+    boolean hasItems(@Param("invoiceId") UUID invoiceId);
 }

@@ -43,6 +43,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d{1,5})\\s?days?", Pattern.CASE_INSENSITIVE);
     private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d{1,5})\\s?weeks?", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_LIMIT = 50;
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String STATUS_COMPLETED = "COMPLETED";
     /** The key PatientChartAccess throws: a refused staff read reads as "no such patient". */
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
@@ -54,6 +56,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private final CrossHospitalReachRecorder reachRecorder;
     /** G15 AC-12: a fill waiting at the counter, on each row. */
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -91,7 +94,12 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // dropped by consent/restriction) and logged their own read as a
             // cross-hospital disclosure. No reach is recorded: nothing is
             // disclosed to anyone but the owner.
-            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
+            // QA D152 (D101 on a second endpoint): the D101 fix filtered
+            // unsigned work in progress out of /me/patient/prescriptions only;
+            // /medications and the dashboard card read here and still listed a
+            // DRAFT as the patient's medication.
+            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent()
+                .stream().filter(p -> isIssued(p.getStatus())).toList();
         } else if (hospitalId != null) {
             Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
@@ -130,11 +138,17 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .toList();
 
         Map<UUID, RefillRequest> latestRefills = latestRefillsFor(visible);
+        // QA D136: the same stay-end rule as the MAR, so an order a
+        // non-attending clinician wrote during the stay ends with it too.
+        List<com.example.hms.model.Admission> closedStays = visible.isEmpty() ? List.of()
+            : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patient.getId()).stream()
+                .filter(a -> a.getActualDischargeDateTime() != null)
+                .toList();
         Map<UUID, com.example.hms.service.pharmacy.ReadyForCollectionLookup.Readiness> ready =
             readyForCollection.openPreparations(visible);
 
         return visible.stream()
-            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId())), ready.get(p.getId())))
+            .map(p -> withReadiness(toResponse(p, latestRefills.get(p.getId()), closedStays), ready.get(p.getId())))
             .toList();
     }
 
@@ -157,11 +171,18 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return latest;
     }
 
-    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill) {
+    private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill,
+                                                    List<com.example.hms.model.Admission> closedStays) {
         LocalDate startDate = Optional.ofNullable(prescription.getCreatedAt())
             .map(LocalDateTime::toLocalDate)
             .orElse(null);
         LocalDate endDate = resolveEndDate(startDate, prescription.getDuration());
+
+        String status = resolveStatus(prescription.getStatus(), endDate);
+        if (STATUS_ACTIVE.equals(status)
+            && com.example.hms.service.InpatientOrderEnd.endedWithAStay(prescription, closedStays)) {
+            status = STATUS_COMPLETED;
+        }
 
         return PatientMedicationResponseDTO.builder()
             .id(prescription.getId())
@@ -169,7 +190,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .dosage(prescription.getDosage())
             .frequency(prescription.getFrequency())
             .route(prescription.getRoute())
-            .status(resolveStatus(prescription.getStatus(), endDate))
+            .status(status)
             .startDate(startDate)
             .endDate(endDate)
             .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
@@ -249,15 +270,20 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         }
     }
 
+    /** Signed or beyond: an order the patient was actually given (D101/D152). */
+    static boolean isIssued(PrescriptionStatus status) {
+        return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
+    }
+
     private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {
         if (status == null) {
-            return endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
+            return endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
         }
 
         return switch (status) {
             case DISCONTINUED, CANCELLED -> "DISCONTINUED";
             case DRAFT, PENDING_SIGNATURE, TRANSMISSION_FAILED -> "ON_HOLD";
-            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? "COMPLETED" : "ACTIVE";
+            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
         };
     }
 }

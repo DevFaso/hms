@@ -10,6 +10,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
@@ -79,6 +80,11 @@ public class InvoiceItem extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_item_service"))
     private Treatment relatedService;
 
+    /**
+     * QA D72: this ran on update only, so a NEW line reached the insert with
+     * no total and bean validation refused it ("totalPrice must not be null").
+     */
+    @PrePersist
     @PreUpdate
     public void validateAndCalculate() {
         // If linked to a service and unitPrice is not set, default from service

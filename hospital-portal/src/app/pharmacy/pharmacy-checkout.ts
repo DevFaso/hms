@@ -44,10 +44,10 @@ export class PharmacyCheckoutComponent {
   dispense = signal<DispenseResponse | null>(null);
   receipt = signal<PharmacyPaymentResponse | null>(null);
 
-  readonly methods: { value: PharmacyPaymentMethod; labelFr: string }[] = [
-    { value: 'CASH', labelFr: 'Espèces' },
-    { value: 'MOBILE_MONEY', labelFr: 'Mobile Money' },
-    { value: 'INSURANCE', labelFr: 'Assurance' },
+  readonly methods: { value: PharmacyPaymentMethod; labelKey: string }[] = [
+    { value: 'CASH', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.CASH' },
+    { value: 'MOBILE_MONEY', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.MOBILE_MONEY' },
+    { value: 'INSURANCE', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.INSURANCE' },
   ];
 
   loadDispense(): void {
@@ -128,7 +128,13 @@ export class PharmacyCheckoutComponent {
     this.receipt.set(null);
   }
 
+  /** A short receipt reference instead of the raw payment UUID (QA D102). */
+  receiptNumber(id: string | null | undefined): string {
+    return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
+  }
+
   methodLabel(m: PharmacyPaymentMethod): string {
-    return this.methods.find((x) => x.value === m)?.labelFr ?? m;
+    const key = this.methods.find((x) => x.value === m)?.labelKey;
+    return key ? this.translate.instant(key) : m;
   }
 }

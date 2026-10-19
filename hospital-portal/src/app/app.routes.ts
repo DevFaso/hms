@@ -289,7 +289,19 @@ export const routes: Routes = [
               import('./patients/patient-list').then((m) => m.PatientListComponent),
           },
           {
+            // Exactly the registrars POST /patients admits (QA D55): a doctor
+            // reached the form and got a 403 on submit.
             path: 'new',
+            canActivate: [RoleGuard],
+            data: {
+              roles: [
+                'ROLE_SUPER_ADMIN',
+                'ROLE_HOSPITAL_ADMIN',
+                'ROLE_RECEPTIONIST',
+                'ROLE_NURSE',
+                'ROLE_MIDWIFE',
+              ],
+            },
             loadComponent: () =>
               import('./patients/patient-form').then((m) => m.PatientFormComponent),
           },
@@ -880,7 +892,8 @@ export const routes: Routes = [
       {
         path: 'users',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        // The hospital admin onboards their own staff (QA D117).
+        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN'] },
         loadComponent: () => import('./users/user-list').then((m) => m.UserListComponent),
       },
 
@@ -905,6 +918,15 @@ export const routes: Routes = [
       // Encounters
       {
         path: 'encounters',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () => import('./encounters/encounters').then((m) => m.EncountersComponent),
+      },
+      // D96: the worklist's "start" and every deep link land on one encounter.
+      {
+        path: 'encounters/:id',
         canActivate: [RoleGuard],
         data: {
           roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
@@ -1292,9 +1314,10 @@ export const routes: Routes = [
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],
         data: {
-          // E9 #68: mirrors PharmacyDirectoryController, which admits clinicians and
-          // pharmacists only since E9 #67 (D5).
-          roles: ['ROLE_PHARMACIST', 'ROLE_SUPER_ADMIN'],
+          // E9 #68 / QA D39: the page reads and writes /pharmacy-registry
+          // (PharmacyRegistryController), whose list admits the hospital admin
+          // and whose create/update/delete are hospital-admin and super-admin only.
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),

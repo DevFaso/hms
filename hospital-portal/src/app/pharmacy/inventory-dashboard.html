@@ -5,15 +5,22 @@
       <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select
-        class="pharmacy-select"
-        [(ngModel)]="selectedPharmacyId"
-        (ngModelChange)="onPharmacyChange()"
-      >
-        @for (p of pharmacies(); track p.id) {
-          <option [value]="p.id">{{ p.name }}</option>
-        }
-      </select>
+      @if (pharmaciesLoaded() && pharmacies().length === 0) {
+        <p class="pharmacy-empty-hint" role="status" data-testid="no-pharmacy-hint">
+          {{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}
+        </p>
+      } @else {
+        <select
+          class="pharmacy-select"
+          [attr.aria-label]="'PHARMACY.SELECT_PHARMACY' | translate"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      }
       <button class="btn-primary" (click)="openCreateItem()">
         <span class="material-symbols-outlined">add</span>
         {{ 'PHARMACY.ADD_ITEM' | translate }}
@@ -53,9 +60,9 @@
           <thead>
             <tr>
               <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
-              <th>{{ 'PHARMACY.QTY_ON_HAND' | translate }}</th>
+              <th>{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}</th>
               <th>{{ 'PHARMACY.REORDER_THRESHOLD' | translate }}</th>
-              <th>{{ 'PHARMACY.REORDER_QTY' | translate }}</th>
+              <th>{{ 'PHARMACY.REORDER_QTY_COLUMN' | translate }}</th>
               <th>{{ 'PHARMACY.UNIT' | translate }}</th>
               <th>{{ 'COMMON.STATUS' | translate }}</th>
             </tr>
@@ -127,12 +134,23 @@
               <span class="material-symbols-outlined">warning</span>
             </div>
             <div class="alert-info">
-              <h4>{{ item.medicationName ?? item.medicationCode ?? 'Unknown' }}</h4>
+              <h4>
+                {{ item.medicationName ?? item.medicationCode ?? ('COMMON.UNKNOWN' | translate) }}
+              </h4>
               <p class="alert-detail">
-                <strong>{{ item.quantityOnHand }}</strong> {{ item.unit ?? 'units' }} remaining
-                (threshold: {{ item.reorderThreshold }})
+                {{
+                  'PHARMACY.STOCK_REMAINING'
+                    | translate
+                      : {
+                          qty: item.quantityOnHand,
+                          unit: item.unit ?? ('PHARMACY.UNITS' | translate),
+                          threshold: item.reorderThreshold,
+                        }
+                }}
               </p>
-              <p class="alert-detail reorder">Reorder qty: {{ item.reorderQuantity }}</p>
+              <p class="alert-detail reorder">
+                {{ 'PHARMACY.REORDER_QTY' | translate: { qty: item.reorderQuantity } }}
+              </p>
             </div>
           </div>
         }
@@ -257,7 +275,7 @@
             </div>
             <div class="form-row">
               <div class="field">
-                <label for="ciQty">{{ 'PHARMACY.QTY_ON_HAND' | translate }}</label>
+                <label for="ciQty">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}</label>
                 <input
                   id="ciQty"
                   type="number"
@@ -289,7 +307,7 @@
                 />
               </div>
               <div class="field">
-                <label for="ciReorderQty">{{ 'PHARMACY.REORDER_QTY' | translate }}</label>
+                <label for="ciReorderQty">{{ 'PHARMACY.REORDER_QTY_COLUMN' | translate }}</label>
                 <input
                   id="ciReorderQty"
                   type="number"

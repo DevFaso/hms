@@ -27,7 +27,7 @@
         (click)="toggleSidebar()"
         [attr.aria-label]="'SHELL.TOGGLE_SIDEBAR' | translate"
       >
-        <span class="material-symbols-outlined">
+        <span class="material-symbols-outlined" aria-hidden="true">
           {{ sidebarCollapsed() ? 'chevron_right' : 'chevron_left' }}
         </span>
       </button>
@@ -96,6 +96,13 @@
               draggable="true"
               [attr.aria-grabbed]="dragIndex() === entry.flatIndex"
               aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              [attr.aria-label]="
+                sidebarCollapsed()
+                  ? entry.item.translationKey
+                    ? (entry.item.translationKey | translate)
+                    : entry.item.label
+                  : null
+              "
               (click)="closeOverlays()"
               (keydown)="onNavKeydown($event, entry.flatIndex)"
               (dragstart)="onDragStart($event, entry.flatIndex)"
@@ -110,7 +117,9 @@
                 aria-hidden="true"
                 >drag_indicator</span
               >
-              <span class="material-symbols-outlined nav-icon">{{ entry.item.icon }}</span>
+              <span class="material-symbols-outlined nav-icon" aria-hidden="true">{{
+                entry.item.icon
+              }}</span>
               @if (!sidebarCollapsed()) {
                 <span class="nav-label">{{
                   entry.item.translationKey
@@ -152,6 +161,16 @@
     </div>
   </aside>
 
+  @if (!sidebarCollapsed()) {
+    <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
+    <div
+      class="sidebar-backdrop"
+      aria-hidden="true"
+      (click)="closeSidebar()"
+      (keydown.escape)="closeSidebar()"
+    ></div>
+  }
+
   <!-- Main Content -->
   <div class="main-area">
     <!-- Header -->
@@ -162,7 +181,7 @@
           (click)="toggleSidebar()"
           [attr.aria-label]="'SHELL.MENU' | translate"
         >
-          <span class="material-symbols-outlined">menu</span>
+          <span class="material-symbols-outlined" aria-hidden="true">menu</span>
         </button>
         <h2 class="page-title">{{ 'SHELL.PAGE_TITLE' | translate }}</h2>
       </div>
@@ -207,7 +226,7 @@
           (click)="closeOverlays()"
           [attr.aria-label]="translate.instant('NAV.MESSAGES_ARIA', { count: chatUnread() })"
         >
-          <span class="material-symbols-outlined">chat</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chat</span>
           @if (chatUnread() > 0) {
             <span class="badge">{{ chatUnread() > 99 ? '99+' : chatUnread() }}</span>
           }
@@ -221,7 +240,7 @@
           (click)="closeOverlays()"
           [attr.aria-label]="translate.instant('NAV.ANNOUNCEMENTS')"
         >
-          <span class="material-symbols-outlined">campaign</span>
+          <span class="material-symbols-outlined" aria-hidden="true">campaign</span>
         </a>
 
         <!-- Notifications -->
@@ -230,14 +249,18 @@
           (click)="toggleNotifications()"
           [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
-          <span class="material-symbols-outlined">notifications</span>
+          <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
           @if (unreadCount() > 0) {
             <span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
           }
         </button>
 
         <!-- Profile -->
-        <button class="profile-btn" (click)="toggleProfileMenu()">
+        <button
+          class="profile-btn"
+          (click)="toggleProfileMenu()"
+          [attr.aria-label]="userName() ? null : ('SHELL.MY_PROFILE' | translate)"
+        >
           <div class="avatar">
             @if (userAvatarUrl()) {
               <img
@@ -252,7 +275,9 @@
           @if (userName()) {
             <span class="profile-name">{{ userName() }}</span>
           }
-          <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          <span class="material-symbols-outlined dropdown-arrow" aria-hidden="true"
+            >expand_more</span
+          >
         </button>
       </div>
     </header>
@@ -270,12 +295,20 @@
           <h3>{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
           <div class="panel-header-actions">
             @if (unreadCount() > 0) {
-              <button class="mark-all-btn" (click)="markAllNotificationsRead()">
-                <span class="material-symbols-outlined">done_all</span>
+              <button
+                class="mark-all-btn"
+                (click)="markAllNotificationsRead()"
+                [attr.aria-label]="'NOTIFICATIONS.MARK_ALL_READ' | translate"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">done_all</span>
               </button>
             }
-            <button class="close-panel" (click)="toggleNotifications()">
-              <span class="material-symbols-outlined">close</span>
+            <button
+              class="close-panel"
+              (click)="toggleNotifications()"
+              [attr.aria-label]="'COMMON.CLOSE' | translate"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
         </div>
@@ -290,14 +323,14 @@
               (click)="onNotifItemClick(n)"
               type="button"
             >
-              <span class="material-symbols-outlined notif-icon">
+              <span class="material-symbols-outlined notif-icon" aria-hidden="true">
                 {{
                   n.type === 'ALERT' ? 'warning' : n.type === 'SUCCESS' ? 'check_circle' : 'info'
                 }}
               </span>
               <div class="notif-content">
                 <p class="notif-msg">{{ n.message }}</p>
-                <span class="notif-time">{{ n.createdAt | date: 'MMM d, h:mm a' }}</span>
+                <span class="notif-time">{{ n.createdAt | date: 'short' }}</span>
               </div>
               @if (!n.read) {
                 <span class="notif-unread-dot"></span>
@@ -343,14 +376,17 @@
         </div>
         <hr />
         <a class="pm-item" routerLink="/profile" (click)="closeOverlays()">
-          <span class="material-symbols-outlined">person</span> {{ 'SHELL.MY_PROFILE' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">person</span>
+          {{ 'SHELL.MY_PROFILE' | translate }}
         </a>
         <a class="pm-item" routerLink="/settings" (click)="closeOverlays()">
-          <span class="material-symbols-outlined">settings</span> {{ 'SHELL.SETTINGS' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+          {{ 'SHELL.SETTINGS' | translate }}
         </a>
         <hr />
         <button class="pm-item logout" (click)="logout()">
-          <span class="material-symbols-outlined">logout</span> {{ 'SHELL.SIGN_OUT' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          {{ 'SHELL.SIGN_OUT' | translate }}
         </button>
       </div>
     }

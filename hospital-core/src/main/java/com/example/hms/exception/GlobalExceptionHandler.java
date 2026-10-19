@@ -5,6 +5,9 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -39,6 +42,60 @@ public class GlobalExceptionHandler {
     private static final String FIELD_ERROR     = "error";
     private static final String FIELD_MESSAGE   = "message";
     private static final String FIELD_PATH      = "path";
+    private static final String FIELD_CODE      = "code";
+
+    /** Machine-readable codes the portal maps onto its own translated text (D53). */
+    static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
+    static final String CODE_INVALID_PARAMETER = "INVALID_PARAMETER";
+    static final String CODE_UNEXPECTED_ERROR  = "UNEXPECTED_ERROR";
+    static final String CODE_ACCESS_DENIED     = "ACCESS_DENIED";
+
+    /**
+     * Optional so the many tests that build the advice with {@code new} keep
+     * working; each lookup has an English default when it is absent.
+     */
+    private MessageSource messageSource;
+
+    @Autowired(required = false)
+    public void setMessageSource(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
+
+    /** Resolve a user-facing message in the request's locale, falling back to the default text. */
+    private String localized(String key, String defaultText, Object... args) {
+        if (messageSource == null) {
+            return java.text.MessageFormat.format(defaultText.replace("'", "''"), args);
+        }
+        return messageSource.getMessage(key, args, defaultText.replace("'", "''"), LocaleContextHolder.getLocale());
+    }
+
+    /**
+     * A message a thrower authored. Many services throw IllegalArgument/
+     * IllegalState/Conflict with a bundle KEY rather than a sentence; those
+     * exceptions, unlike {@link BusinessException}, never resolve it, so the
+     * key (or its English default) reached a French user (D174). A key is
+     * resolved in the request locale here; free text passes unchanged.
+     */
+    private static String passThrough(String message) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(message);
+    }
+
+    /**
+     * {@code ResponseStatusException} carries its own status and a reason the
+     * controller wrote. It extends RuntimeException, so without this handler
+     * the catch-all below turned every intended 400/403/409 into a 500.
+     */
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Object> handleResponseStatus(
+            org.springframework.web.server.ResponseStatusException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null || status.is5xxServerError()) {
+            return handleRuntimeException(ex, request);
+        }
+        String reason = ex.getReason();
+        return buildErrorResponse(status,
+            reason == null ? status.getReasonPhrase() : passThrough(reason), request);
+    }
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Object> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
@@ -61,7 +118,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
-        body.put(FIELD_MESSAGE, message);
+        body.put(FIELD_MESSAGE, passThrough(message));
         if (field != null) body.put("field", field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
@@ -122,7 +179,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Object> handleIllegalArgumentException(IllegalArgumentException ex, WebRequest request) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, passThrough(ex.getMessage()), request);
     }
 
     @ExceptionHandler(IllegalStateException.class)
@@ -132,15 +189,16 @@ public class GlobalExceptionHandler {
         if (ex.getMessage() != null && ex.getMessage().contains("audit")) {
             log.error("Unexpected audit exception leaked to controller layer: {}", ex.getMessage(), ex);
             return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
-                    "An internal error occurred. The operation may have succeeded.", request);
+                    localized("error.internal.mayHaveSucceeded",
+                        "An internal error occurred. The operation may have succeeded."), request);
         }
         log.warn("Illegal state (business rule violation): {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, passThrough(ex.getMessage()), request);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Object> handleBadCredentials(BadCredentialsException ex, WebRequest request) {
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
     /**
@@ -152,7 +210,7 @@ public class GlobalExceptionHandler {
         if (log.isWarnEnabled()) {
             log.warn("Token no longer valid at path {}", request.getDescription(false));
         }
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Session expired. Please log in again.", request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, localized("error.session.expired", "Session expired. Please log in again."), request);
     }
 
     /**
@@ -169,7 +227,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedException.class)
     public ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
         log.warn("Unauthorized at path {}: {}", request.getDescription(false), ex.getMessage());
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, passThrough(ex.getMessage()), request);
     }
 
     /**
@@ -202,54 +260,67 @@ public class GlobalExceptionHandler {
     private String describeIntegrityViolation(String detail) {
         String lower = detail == null ? "" : detail.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("unique") || lower.contains("duplicate key")) {
-            return "That record already exists.";
+            return localized("error.integrity.duplicate", "That record already exists.");
         }
         if (lower.contains("foreign key")) {
-            return "A referenced record does not exist or is still in use.";
+            return localized("error.integrity.reference", "A referenced record does not exist or is still in use.");
         }
         if (lower.contains("not-null") || lower.contains("not null")) {
-            return "A required value is missing. Please contact support if this persists.";
+            return localized("error.integrity.required",
+                "A required value is missing. Please contact support if this persists.");
         }
-        return "The request could not be saved because it violates a data constraint.";
+        return localized("error.integrity.constraint",
+            "The request could not be saved because it violates a data constraint.");
     }
 
     /**
-     * Catches Jackson deserialisation failures (unknown enum values, malformed
-     * JSON, type-coercion errors) and surfaces them as 400 with the original
-     * Jackson message — far more actionable than the generic 500 the catch-all
-     * RuntimeException handler used to produce. Triggered on dev when the
-     * pharmacy-registry frontend posted {@code "pharmacyType":"COMMUNITY"}
-     * against the {@code PharmacyType} enum whose accepted values are
-     * {@code COMMUNITY_PHARMACY / PARTNER_PHARMACY / HOSPITAL_DISPENSARY}.
+     * Jackson deserialisation failures (unknown enum values, malformed JSON,
+     * type-coercion errors) are a 400 — but the parser's own message is never
+     * returned (D53). It named Java types and the accepted enum constants
+     * ("Cannot deserialize value of type `...PharmacyType` from String ...")
+     * and the portal showed it verbatim in a toast. The detail goes to the
+     * log; the caller gets a translated sentence naming at most the field,
+     * plus {@code code=MALFORMED_REQUEST} for clients that translate locally.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, WebRequest request) {
-        // Jackson exception messages embed the offending field path and the
-        // accepted values for enums; surface them so the caller can self-
-        // diagnose. The cause's message is shorter and cleaner than the
-        // outer JsonMappingException stack-trace prefix, but it can be null
-        // even when the cause itself is non-null (rare Jackson paths build a
-        // cause with no detail message) — fall through to the outer message
-        // and then to a fixed default so the response is never
-        // "Malformed request body: null".
-        String detail = resolveJacksonDetail(ex);
-        String message = detail.isEmpty()
-            ? "Malformed request body."
-            : "Malformed request body: " + detail;
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+        if (log.isWarnEnabled()) {
+            log.warn("Unreadable request body at path {}: {}",
+                request.getDescription(false), ex.getMostSpecificCause().getClass().getSimpleName());
+        }
+        String field = resolveJacksonField(ex);
+        String message = field == null
+            ? localized("error.request.malformed",
+                "The request could not be read. Check the values entered and try again.")
+            : localized("error.request.invalidField",
+                "The value entered for \"{0}\" is not valid.", field);
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        if (field != null) {
+            body.put("field", field);
+        }
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
-    private static String resolveJacksonDetail(HttpMessageNotReadableException ex) {
-        // getMostSpecificCause() falls back to the throwable itself when no
-        // cause is chained, so it is documented non-null. Its detail message,
-        // however, can be null on edge-case Jackson paths.
-        String causeMessage = ex.getMostSpecificCause().getMessage();
-        if (causeMessage != null && !causeMessage.isBlank()) {
-            return causeMessage;
+    /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
+    private static String resolveJacksonField(HttpMessageNotReadableException ex) {
+        if (!(ex.getMostSpecificCause() instanceof tools.jackson.core.JacksonException jackson)) {
+            return null;
         }
-        String outer = ex.getMessage();
-        return outer != null && !outer.isBlank() ? outer : "";
+        StringBuilder path = new StringBuilder();
+        for (tools.jackson.core.JacksonException.Reference ref : jackson.getPath()) {
+            String name = ref.getPropertyName();
+            if (name != null) {
+                if (!path.isEmpty()) {
+                    path.append('.');
+                }
+                path.append(name);
+            } else if (ref.getIndex() >= 0) {
+                path.append('[').append(ref.getIndex()).append(']');
+            }
+        }
+        return path.isEmpty() ? null : path.toString();
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -268,7 +339,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, "Validation errors in request");
+        body.put(FIELD_MESSAGE, localized("error.validation.request", "Validation errors in request"));
         body.put("fieldErrors", fieldErrors);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
@@ -288,7 +359,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, "Constraint violation in request parameters");
+        body.put(FIELD_MESSAGE, localized("error.validation.parameters", "Constraint violation in request parameters"));
         body.put("fieldErrors", violations);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
@@ -303,8 +374,9 @@ public class GlobalExceptionHandler {
             request.getDescription(false), ex.getMessage(), ex);
         return buildErrorResponse(
             HttpStatus.INTERNAL_SERVER_ERROR,
-            "A referenced record could not be found. This may indicate a data integrity issue. " +
-            "Please contact support if this persists.",
+            localized("error.reference.missing",
+                "A referenced record could not be found. This may indicate a data integrity issue. "
+                + "Please contact support if this persists."),
             request);
     }
 
@@ -318,12 +390,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Object> handleTypeMismatch(
             MethodArgumentTypeMismatchException ex, WebRequest request) {
-        String requiredType = ex.getRequiredType() != null
-                ? ex.getRequiredType().getSimpleName()
-                : "value";
-        String message = "Invalid value '" + ex.getValue() + "' for parameter '"
-                + ex.getName() + "' (expected " + requiredType + ")";
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+        // The value and the Java type stay in the log (D53): the caller is
+        // told which parameter, in its own language, and nothing else.
+        if (log.isWarnEnabled()) {
+            log.warn("Parameter type mismatch at path {}: parameter {} expected {}",
+                request.getDescription(false), ex.getName(),
+                ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
+        }
+        String message = localized("error.request.invalidParameter",
+            "The value supplied for the parameter \"{0}\" is not valid.", ex.getName());
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     /**
@@ -375,10 +453,11 @@ public class GlobalExceptionHandler {
         if (status.is4xxClientError()) {
             log.warn("FHIR operation refused at path {} with {}: {}",
                 request.getDescription(false), status.value(), ex.getMessage());
-            return buildErrorResponse(status, ex.getMessage(), request);
+            return buildErrorResponse(status, passThrough(ex.getMessage()), request);
         }
         log.error("FHIR operation failed at path {}", request.getDescription(false), ex);
-        return buildErrorResponse(status, "An unexpected error occurred.", request);
+        return buildErrorResponse(status,
+            localized("error.unexpected", "An unexpected error occurred. Please try again or contact support."), request);
     }
 
     @ExceptionHandler(RuntimeException.class)
@@ -386,7 +465,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
     log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
-    return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred: " + ex.getMessage(), request);
+    // Never echo the exception text: it can carry SQL, class names or row data (D32).
+    // The exception text stays in the log (D53): it is an internal Java
+    // message ("Cannot invoke ... because ... is null") no user can act on,
+    // and it can carry identifiers.
+    Map<String, Object> body = errorBody(HttpStatus.INTERNAL_SERVER_ERROR,
+        localized("error.unexpected", "An unexpected error occurred. Please try again or contact support."),
+        request);
+    body.put(FIELD_CODE, CODE_UNEXPECTED_ERROR);
+    return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     private ResponseEntity<Object> buildErrorResponse(HttpStatus status, String message, WebRequest request) {
@@ -477,17 +564,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
-        String message = ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null
-            ? ex.getMessage()
-            : "Access denied";
-        return buildErrorResponse(HttpStatus.FORBIDDEN, message, req);
+        if (ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null) {
+            return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+        }
+        // The opaque default is localized now (D174), so clients that hid it by
+        // comparing the English literal key on this code instead.
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            localized("error.access.denied", "Access denied"), req);
+        body.put(FIELD_CODE, CODE_ACCESS_DENIED);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Object> handleMaxUploadSize(MaxUploadSizeExceededException ex, WebRequest request) {
         log.warn("File upload too large: {}", ex.getMessage());
-        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, "File size exceeds the maximum allowed limit of "
-                + com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL, request);
+        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE,
+            localized("error.upload.tooLarge", "File size exceeds the maximum allowed limit of {0}",
+                com.example.hms.service.FileUploadService.MAX_UPLOAD_LABEL), request);
     }
 
 

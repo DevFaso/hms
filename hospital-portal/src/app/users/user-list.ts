@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  computed,
   inject,
   OnDestroy,
   OnInit,
@@ -24,11 +25,37 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 
+const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
+
+/** Local (70202020) or international (+226 70 20 20 20 / 00226...) - the server normalises to E.164. */
+const PHONE_PATTERN = /^\+?[\d\s.()-]{8,20}$/;
+
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_LAB_SCIENTIST',
   'ROLE_PHARMACIST',
+]);
+
+/** Roles a non-super-admin is never offered in the create modal (QA D189). Bare codes. */
+const STAFF_MODAL_EXCLUDED_ROLES = new Set([
+  'SUPER_ADMIN',
+  'ADMIN',
+  'HOSPITAL_ADMIN',
+  'PROVIDER_ADMIN',
+  'PATIENT',
+]);
+
+function bareRoleCode(code: string | undefined | null): string {
+  return (code ?? '').toUpperCase().replace(/^ROLE_/, '');
+}
+
+/** Roles whose holders have a medical specialty (QA D195): not nurses, pharmacists or lab staff. */
+const SPECIALTY_ROLE_CODES = new Set([
+  'ROLE_DOCTOR',
+  'ROLE_PHYSICIAN',
+  'ROLE_SURGEON',
+  'ROLE_RADIOLOGIST',
 ]);
 
 const JOB_TITLES = [
@@ -141,6 +168,18 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
+
+  /**
+   * The roles the create modal offers (QA D189). Only a super-admin grants an
+   * admin role (the server refuses anyone else with a 403), and a patient is
+   * registered from the patient form, not here, so a hospital admin is
+   * offered staff roles only.
+   */
+  readonly grantableRoles = computed(() => {
+    const roles = this.availableRoles();
+    if (this.roleContext.isSuperAdmin()) return roles;
+    return roles.filter((r) => !STAFF_MODAL_EXCLUDED_ROLES.has(bareRoleCode(r.code)));
+  });
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields
@@ -152,9 +191,27 @@ export class UserListComponent implements OnInit, OnDestroy {
   readonly employmentTypes = EMPLOYMENT_TYPES;
   readonly specializations = SPECIALIZATIONS;
 
-  /** True when any selected role is a medical role requiring a license number */
-  get licenseRequired(): boolean {
+  /** One-time credentials the server generated and could not deliver; shown once. */
+  issuedCredentials = signal<{ username: string; password: string } | null>(null);
+
+  /**
+   * True when a selected role is a regulated profession: the licence field is
+   * shown. It is ALWAYS optional - clinicians are credentialed on diplomas.
+   */
+  get licenseApplicable(): boolean {
     return this.selectedRoles.some((r) => MEDICAL_ROLE_CODES.has(r));
+  }
+
+  /** True when a selected role is a physician's: only then is a medical specialization asked. */
+  get specializationApplicable(): boolean {
+    return this.selectedRoles.some((r) => SPECIALTY_ROLE_CODES.has(r));
+  }
+
+  /** E-mail is optional only for a patient-only registration (phone-first). */
+  get emailRequired(): boolean {
+    return (
+      this.selectedRoles.length === 0 || this.selectedRoles.some((r) => !PATIENT_ROLE_CODES.has(r))
+    );
   }
 
   ngOnInit(): void {
@@ -315,6 +372,8 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   openEdit(user: UserSummary): void {
+    // A deleted account is restored first; the server refuses the edit (D126).
+    if (user.deleted) return;
     this.editing.set(user);
     // Pre-populate with summary data; phoneNumber comes from full detail fetch.
     this.createForm = {
@@ -341,6 +400,10 @@ export class UserListComponent implements OnInit, OnDestroy {
     });
   }
 
+  dismissCredentials(): void {
+    this.issuedCredentials.set(null);
+  }
+
   closeCreate(): void {
     this.showCreate.set(false);
     this.editing.set(null);
@@ -356,17 +419,22 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.selectedRoles = this.selectedRoles.filter((r) => r !== roleCode);
     }
     // Clear licenseNumber when no medical role selected
-    if (!this.licenseRequired) {
+    if (!this.licenseApplicable) {
       this.createForm.licenseNumber = undefined;
+    }
+    if (!this.specializationApplicable) {
+      this.createForm.specialization = undefined;
     }
   }
 
   submitCreate(): void {
     const isEdit = !!this.editing();
+    // Username and password are never asked on create: the server generates
+    // one-time credentials. Edits keep the username field.
     if (
-      !this.createForm.username ||
-      !this.createForm.email ||
-      (!isEdit && !this.createForm.password) ||
+      (isEdit && !this.createForm.username) ||
+      (this.emailRequired && !this.createForm.email?.trim()) ||
+      (!isEdit && !this.createForm.phoneNumber?.trim()) ||
       !this.createForm.firstName ||
       !this.createForm.lastName
     ) {
@@ -377,8 +445,13 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
       return;
     }
-    if (this.licenseRequired && !this.createForm.licenseNumber?.trim()) {
-      this.toast.error(this.translate.instant('USERS.TOAST.LICENSE_REQUIRED'));
+    const phone = this.createForm.phoneNumber?.trim();
+    if (phone && !PHONE_PATTERN.test(phone)) {
+      this.fieldErrors.update((prev) => ({
+        ...prev,
+        phoneNumber: this.translate.instant('USERS.PHONE_INVALID'),
+      }));
+      this.toast.error(this.translate.instant('USERS.PHONE_INVALID'));
       return;
     }
 
@@ -400,6 +473,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!payload.departmentId) delete payload.departmentId;
     if (!payload.password?.trim()) delete payload.password;
     if (!payload.phoneNumber?.trim()) delete payload.phoneNumber;
+    if (!payload.email?.trim()) delete payload.email;
+    if (!existing) {
+      delete payload.username;
+      delete payload.password;
+    }
 
     const op = existing
       ? this.userService.update(existing.id, payload)
@@ -416,6 +494,12 @@ export class UserListComponent implements OnInit, OnDestroy {
         if (!existing) {
           for (const key of deliveryWarningKeys(saved.activationDelivery)) {
             this.toast.warning(this.translate.instant(key));
+          }
+          if (saved.temporaryUsername && saved.temporaryPassword) {
+            this.issuedCredentials.set({
+              username: saved.temporaryUsername,
+              password: saved.temporaryPassword,
+            });
           }
         }
         this.showCreate.set(false);
@@ -574,13 +658,6 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (page >= 0 && page < this.totalPages()) {
       this.loadUsers(page);
     }
-  }
-
-  formatEnumLabel(value: string): string {
-    return value
-      .replaceAll('_', ' ')
-      .toLowerCase()
-      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
   }
 
   private freshForm(): AdminRegisterRequest {

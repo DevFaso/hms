@@ -61,6 +61,7 @@ class StockTransactionServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @InjectMocks
     private StockTransactionServiceImpl service;
@@ -231,75 +232,91 @@ class StockTransactionServiceImplTest {
     class RecordDispense {
 
         @Test
-        @DisplayName("subtracts quantity from item and lot")
-        void success() {
-            BigDecimal qty = new BigDecimal("10.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.DISPENSE, qty);
-            stubCommonMocks(dto, true);
-
-            service.recordTransaction(dto);
-
-            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("90.00"));
-            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("40.00"));
-            verify(stockLotRepository, never()).save(any(StockLot.class));
-            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
-        }
-
-        @Test
-        @DisplayName("throws BusinessException when insufficient item stock")
-        void insufficientItemStock() {
-            stockLot.setRemainingQuantity(new BigDecimal("500.00")); // the item is what refuses
-            BigDecimal qty = new BigDecimal("200.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.DISPENSE, qty);
-
+        @DisplayName("D82: a dispense is refused here; it goes through the prescription workflow")
+        void dispenseIsRefused() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.DISPENSE, new BigDecimal("5.00"));
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            StockTransaction tx = StockTransaction.builder()
-                    .inventoryItem(inventoryItem)
-                    .stockLot(stockLot)
-                    .transactionType(StockTransactionType.DISPENSE)
-                    .quantity(qty)
-                    .performedByUser(user)
-                    .build();
-            tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
-                    .thenReturn(tx);
-            when(stockTransactionRepository.save(tx)).thenReturn(tx);
 
-            assertThatThrownBy(() -> service.recordTransaction(dto))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Insufficient stock");
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+        }
+    }
+
+    // ── D82: accountability of a manual movement ─────────────────────────
+
+    @Nested
+    @DisplayName("recordTransaction — accountability (D82)")
+    class Accountability {
+
+        private void stubUpToTheRules() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
         }
 
         @Test
-        @DisplayName("throws BusinessException when insufficient lot stock")
-        void insufficientLotStock() {
-            // Item has enough stock, but lot doesn't
-            inventoryItem.setQuantityOnHand(new BigDecimal("500.00"));
-            BigDecimal qty = new BigDecimal("60.00"); // lot only has 50
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.DISPENSE, qty);
-
-            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
-            stubHospitalScope();
+        @DisplayName("an adjustment with no reason is refused")
+        void adjustmentWithoutReason() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("100.00"));
+            dto.setReason("  ");
+            stubUpToTheRules();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            StockTransaction tx = StockTransaction.builder()
-                    .inventoryItem(inventoryItem)
-                    .stockLot(stockLot)
-                    .transactionType(StockTransactionType.DISPENSE)
-                    .quantity(qty)
-                    .performedByUser(user)
-                    .build();
-            tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
-                    .thenReturn(tx);
-            when(stockTransactionRepository.save(tx)).thenReturn(tx);
 
-            assertThatThrownBy(() -> service.recordTransaction(dto))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Insufficient lot stock");
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a lot-tracked item cannot be adjusted without a lot")
+        void lotTrackedItemWithoutLot() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("100.00"));
+            dto.setStockLotId(null);
+            stubUpToTheRules();
+            when(stockLotRepository.existsByInventoryItemId(inventoryItemId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("another item's lot is refused")
+        void lotOfAnotherItem() {
+            InventoryItem other = InventoryItem.builder().pharmacy(pharmacy).build();
+            other.setId(UUID.randomUUID());
+            stockLot.setInventoryItem(other);
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("5.00"));
+            stubUpToTheRules();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("a movement booked in a colleague's name is refused")
+        void performerMustBeTheCaller() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("5.00"));
+            dto.setPerformedBy(UUID.randomUUID());
+            stubUpToTheRules();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D108: nothing is received into an expired lot")
+        void receiptIntoExpiredLot() {
+            stockLot.setExpiryDate(LocalDate.now().minusDays(1));
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, new BigDecimal("5.00"));
+            stubUpToTheRules();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any());
         }
     }
 
@@ -346,6 +363,7 @@ class StockTransactionServiceImplTest {
             when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
@@ -384,6 +402,150 @@ class StockTransactionServiceImplTest {
 
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("90.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("40.00"));
+        }
+    }
+
+    // ── QA D143 / D157: write-offs and the controlled-substance witness ─────
+
+    @Nested
+    @DisplayName("QA D143 / D157: write-offs and witnesses")
+    class WriteOffAndWitness {
+
+        private final UUID witnessId = UUID.randomUUID();
+
+        private void makeControlled() {
+            inventoryItem.getMedicationCatalogItem().setControlled(true);
+        }
+
+        private void stubUpToTheWitness() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        }
+
+        @Test
+        @DisplayName("D143: a write-off larger than the lot is refused and nothing moves")
+        void writeOffBeyondTheLotIsRefused() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-60.00"));
+            stubUpToTheWitness();
+            StockTransaction tx = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(dto.getTransactionType()).quantity(dto.getQuantity()).performedByUser(user).build();
+            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), any(), eq(user))).thenReturn(tx);
+            when(stockTransactionRepository.save(tx)).thenReturn(tx);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+        }
+
+        @Test
+        @DisplayName("D157: a controlled-substance write-off with no witness is refused")
+        void controlledAdjustmentWithoutWitnessIsRefused() {
+            makeControlled();
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-1.00"));
+            stubUpToTheWitness();
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.required") || e.getMessage().contains("witness"));
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
+        }
+
+        @Test
+        @DisplayName("D157: the performer cannot witness their own movement")
+        void selfWitnessIsRefused() {
+            makeControlled();
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-1.00"));
+            dto.setWitnessedBy(userId);
+            stubUpToTheWitness();
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.notSelf") || e.getMessage().contains("someone other"));
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D157: a witness with no stock role at this hospital is refused")
+        void witnessFromNowhereIsRefused() {
+            makeControlled();
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-1.00"));
+            dto.setWitnessedBy(witnessId);
+            stubUpToTheWitness();
+            when(assignmentRepository.existsActiveWitness(
+                    witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("stockTransaction.witness.invalid") || e.getMessage().contains("of this hospital"));
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D157: a witnessed controlled write-off is recorded with its witness and takes stock off")
+        void witnessedControlledWriteOffIsRecorded() {
+            makeControlled();
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-1.00"));
+            dto.setWitnessedBy(witnessId);
+            User witness = new User();
+            witness.setId(witnessId);
+            stubCommonMocks(dto, true);
+            when(assignmentRepository.existsActiveWitness(
+                    witnessId, hospitalId, StockTransactionServiceImpl.WITNESS_ROLE_CODES)).thenReturn(true);
+            when(userRepository.findById(witnessId)).thenReturn(Optional.of(witness));
+            org.mockito.ArgumentCaptor<StockTransaction> saved = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+
+            service.recordTransaction(dto);
+
+            verify(stockTransactionRepository).save(saved.capture());
+            assertThat(saved.getValue().getWitnessedByUser()).isSameAs(witness);
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("49.00"));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("99.00"));
+        }
+
+        @Test
+        @DisplayName("D157: witness candidates are the other active stock-role holders of the hospital")
+        void witnessCandidates() {
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            com.example.hms.model.Role pharmacist = new com.example.hms.model.Role();
+            pharmacist.setCode("ROLE_PHARMACIST");
+            com.example.hms.model.Role nurse = new com.example.hms.model.Role();
+            nurse.setCode("ROLE_NURSE");
+            User colleague = new User();
+            colleague.setId(witnessId);
+            colleague.setFirstName("Awa");
+            colleague.setLastName("Traore");
+            User nurseUser = new User();
+            nurseUser.setId(UUID.randomUUID());
+            User retired = new User();
+            retired.setId(UUID.randomUUID());
+            User deactivated = new User();
+            deactivated.setId(UUID.randomUUID());
+            deactivated.setActive(false);
+            when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
+                    assignment(user, pharmacist, true),
+                    assignment(colleague, pharmacist, true),
+                    assignment(nurseUser, nurse, true),
+                    assignment(retired, pharmacist, false),
+                    assignment(deactivated, pharmacist, true)));
+
+            var candidates = service.listWitnessCandidates();
+
+            assertThat(candidates).extracting(c -> c.userId()).containsExactly(witnessId);
+            assertThat(candidates.get(0).displayName()).isEqualTo("Awa Traore");
+        }
+
+        private com.example.hms.model.UserRoleHospitalAssignment assignment(
+                User u, com.example.hms.model.Role role, boolean active) {
+            com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+            a.setUser(u);
+            a.setRole(role);
+            a.setActive(active);
+            return a;
         }
     }
 
@@ -718,7 +880,7 @@ class StockTransactionServiceImplTest {
         }
 
         @Test
-        @DisplayName("throws ResourceNotFoundException when performer user not found")
+        @DisplayName("throws ResourceNotFoundException when the signed-in user is not found")
         void performerNotFound() {
             BigDecimal qty = new BigDecimal("10.00");
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
@@ -726,11 +888,12 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.performer.notFound");
+                    .hasFieldOrPropertyWithValue("messageKey", "user.current.notfound");
         }
     }
 }

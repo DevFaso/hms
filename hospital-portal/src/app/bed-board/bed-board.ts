@@ -91,16 +91,29 @@ export class BedBoardComponent implements OnInit {
     'PROTECTIVE',
   ];
 
+  /**
+   * Isolation and transfers are clinical: IsolationController and
+   * TransferController keep the hospital admin off the chart, so offering the
+   * buttons to that role only produced 403s (D88).
+   */
   readonly canManagePrecautions = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
-    'ROLE_HOSPITAL_ADMIN',
     'ROLE_SUPER_ADMIN',
   ]);
 
   /** Same roles the backend allows to order and carry out a move. */
   readonly canTransfer = this.canManagePrecautions;
+
+  /** TransferController.WARD_TEAM: the clinical roles plus the front desk. */
+  readonly canReadTransfers = this.roleContext.hasAnyActiveRole([
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_SUPER_ADMIN',
+  ]);
 
   /** Transfer modal state. */
   showTransferModal = signal(false);
@@ -197,12 +210,21 @@ export class BedBoardComponent implements OnInit {
   }
 
   loadPendingTransfers(): void {
+    if (!this.canReadTransfers) return;
     this.transfers
       .getPending()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => this.pendingTransfers.set(list),
-        error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR')),
+        error: (err: unknown) => {
+          // QA D188: the role gate reads the roles the session listed, which
+          // can be wider than what the server grants this token (a multi-role
+          // user acting as hospital admin). The worklist only marks held beds;
+          // a refusal is the server applying decision D5, not a load failure.
+          this.pendingTransfers.set([]);
+          if ((err as { status?: number } | null)?.status === 403) return;
+          this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR'));
+        },
       });
   }
 

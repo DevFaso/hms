@@ -48,6 +48,7 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
+import com.example.hms.utility.ObstetricEligibility;
 import java.util.Locale;
 
 @Service
@@ -87,6 +88,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        ObstetricEligibility.requireObstetricEligible(patient);
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
@@ -197,9 +199,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             schedule = response.getSchedule();
         } else {
             boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
-            Integer frequency = plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING
-                ? null
-                : plan.getShiftFrequencyMinutes();
+            Integer frequency = plan.currentCheckFrequencyMinutes();
             schedule = PostpartumScheduleDTO.builder()
                 .carePlanId(plan.getId())
                 .phase(plan.getActivePhase())
@@ -247,7 +247,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
         }
-        throw new BusinessException("Unable to resolve hospital context for postpartum observation.");
+        throw new BusinessException("postpartum.hospital.required");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -517,6 +517,12 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
         if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
             applyImmediatePhaseScheduling(plan, observation, request);
+            // QA D104: a critical alert that closes the immediate window (e.g. a
+            // haemorrhage with stabilization confirmed) must land in enhanced
+            // monitoring, not in the routine 8-hour shift baseline.
+            if (escalateMonitoring && plan.isImmediateWindowCompleted()) {
+                applyShiftPhaseScheduling(plan, observation, request, true);
+            }
         } else {
             applyShiftPhaseScheduling(plan, observation, request, escalateMonitoring);
         }

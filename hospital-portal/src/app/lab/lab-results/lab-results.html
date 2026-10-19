@@ -81,6 +81,7 @@
   <div class="search-box">
     <span class="material-symbols-outlined">search</span>
     <input
+      [attr.aria-label]="'LAB_RESULTS.SEARCH' | translate"
       type="text"
       [placeholder]="'LAB_RESULTS.SEARCH' | translate"
       [(ngModel)]="searchTerm"
@@ -121,7 +122,9 @@
                   <div class="cell-primary">{{ r.hospitalName || '—' }}</div>
                 </td>
               }
-              <td class="order-code">{{ r.labOrderCode || '—' }}</td>
+              <td class="order-code" [title]="r.labOrderCode || ''">
+                {{ shortOrderCode(r.labOrderCode) }}
+              </td>
               <td>
                 <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
                 <div class="cell-secondary">{{ r.patientEmail || '' }}</div>
@@ -142,7 +145,9 @@
                     >{{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER' | translate }}</span
                   >
                 } @else if (r.severityFlag) {
-                  <span [class]="getSeverityClass(r.severityFlag)">{{ r.severityFlag }}</span>
+                  <span [class]="getSeverityClass(r.severityFlag)">{{
+                    r.severityFlag | enumLabel: 'labSeverityFlag'
+                  }}</span>
                 } @else {
                   <span>—</span>
                 }
@@ -155,7 +160,28 @@
                   <span class="status-badge status-released">{{
                     'LAB_RESULTS.RELEASED' | translate
                   }}</span>
+                  @if (r.supersededByResultId) {
+                    <span
+                      class="status-badge status-superseded"
+                      [title]="'LAB_RESULTS.SUPERSEDED_HINT' | translate"
+                      [attr.data-testid]="'superseded-' + r.id"
+                      >{{ 'LAB_RESULTS.SUPERSEDED' | translate }}</span
+                    >
+                  }
+                  @if (r.selfReleased) {
+                    <span
+                      class="status-badge status-self-released"
+                      [title]="'LAB_RESULTS.SELF_RELEASED_HINT' | translate"
+                      data-testid="self-released-badge"
+                      >{{ 'LAB_RESULTS.SELF_RELEASED' | translate }}</span
+                    >
+                  }
                 } @else {
+                  @if (r.supersedesResultId) {
+                    <span class="status-badge status-correction">{{
+                      'LAB_RESULTS.CORRECTION' | translate
+                    }}</span>
+                  }
                   <span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
                   }}</span>
@@ -170,13 +196,25 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link edit-link"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(r)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!r.released) {
+                    <button
+                      class="action-link edit-link"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(r)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  } @else if (canCorrect(r)) {
+                    <!-- D81: released results are immutable; a correction is a new linked result. -->
+                    <button
+                      class="action-link edit-link"
+                      [attr.data-testid]="'correct-' + r.id"
+                      [title]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
+                      (click)="openCorrection(r)"
+                    >
+                      <span class="material-symbols-outlined">edit_note</span>
+                    </button>
+                  }
                   @if (canReleaseResult(r)) {
                     <button
                       class="action-link release-link"
@@ -228,13 +266,15 @@
                   >
                     <span class="material-symbols-outlined">timeline</span>
                   </button>
-                  <button
-                    class="action-link delete-link"
-                    [title]="'COMMON.DELETE' | translate"
-                    (click)="confirmDelete(r)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (!r.released) {
+                    <button
+                      class="action-link delete-link"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(r)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -267,7 +307,9 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>{{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ r.labOrderCode }}</h2>
+          <h2>
+            {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
@@ -306,7 +348,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
-              <span class="field-value">{{ r.resultDate | date: 'long' }}</span>
+              <span class="field-value">{{ r.resultDate | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
@@ -322,15 +364,18 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | date: 'long' }} — {{ getReleasedByDisplay(r) }}</span
-                >
+                  >{{ r.releasedAt | date: 'medium' }} — {{ getReleasedByDisplay(r) }}
+                  @if (r.selfReleased) {
+                    ({{ 'LAB_RESULTS.SELF_RELEASED' | translate }})
+                  }
+                </span>
               </div>
             }
             @if (r.acknowledged) {
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.acknowledgedAt | date: 'long' }} — {{ r.acknowledgedBy }}</span
+                  >{{ r.acknowledgedAt | date: 'medium' }} — {{ r.acknowledgedBy }}</span
                 >
               </div>
             }
@@ -338,7 +383,7 @@
               <div class="detail-field" data-testid="read-back-evidence">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
                 <span class="field-value"
-                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'long' }} —
+                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'medium' }} —
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
@@ -359,7 +404,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.SIGNED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.signedAt ? (r.signedAt | date: 'long') : '—' }} —
+                  >{{ r.signedAt ? (r.signedAt | date: 'medium') : '—' }} —
                   {{ r.signedBy || '—' }}</span
                 >
               </div>
@@ -452,7 +497,9 @@
           {{
             editing()
               ? ('LAB_RESULTS.EDIT_RESULT' | translate)
-              : ('LAB_RESULTS.NEW_RESULT' | translate)
+              : correcting()
+                ? ('LAB_RESULTS.ENTER_CORRECTION' | translate)
+                : ('LAB_RESULTS.NEW_RESULT' | translate)
           }}
         </h2>
         <button class="modal-close" (click)="closeModal()">
@@ -460,7 +507,15 @@
         </button>
       </div>
       <div class="modal-body">
-        @if (!editing()) {
+        @if (correcting(); as c) {
+          <p class="correction-note" data-testid="correction-note">
+            {{
+              'LAB_RESULTS.CORRECTION_OF'
+                | translate
+                  : { test: c.labTestName || c.labTestCode || '—', value: c.resultValue || '—' }
+            }}
+          </p>
+        } @else if (!editing()) {
           <div class="form-row">
             <div class="field">
               <label for="lr-orderId">{{ 'LAB.ORDER' | translate }} *</label>
@@ -472,7 +527,18 @@
               >
                 <option value="">{{ 'LAB_RESULTS.SELECT_ORDER' | translate }}</option>
                 @for (o of orders(); track o.id) {
-                  <option [value]="o.id">{{ o.labOrderCode }} — {{ o.labTestName }}</option>
+                  <option [value]="o.id">
+                    {{
+                      'LAB_RESULTS.ORDER_OPTION'
+                        | translate
+                          : {
+                              patient: o.patientFullName || '—',
+                              test: o.labTestName || o.labTestCode || '—',
+                              date: o.orderDatetime ? (o.orderDatetime | date: 'short') : '—',
+                              code: shortOrderCode(o.labOrderCode),
+                            }
+                    }}
+                  </option>
                 }
               </select>
             </div>
@@ -544,6 +610,55 @@
   </div>
 }
 
+<!-- ═══ SELF-RELEASE CONFIRM (D58) ═══ -->
+@if (selfReleaseTarget(); as target) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelSelfRelease()"
+    (keydown.escape)="cancelSelfRelease()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelSelfRelease()"
+      data-testid="self-release-modal"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.SELF_RELEASE_TITLE' | translate }}</h2>
+        <button class="modal-close" (click)="cancelSelfRelease()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          {{
+            'LAB_RESULTS.SELF_RELEASE_BODY'
+              | translate
+                : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
+          }}
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelSelfRelease()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="confirmSelfRelease()"
+          data-testid="self-release-confirm"
+        >
+          {{ 'LAB_RESULTS.SELF_RELEASE_CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
   <div
@@ -567,7 +682,12 @@
       <div class="modal-body">
         <p class="delete-warning">
           {{ 'LAB_RESULTS.DELETE_CONFIRM' | translate }}
-          <strong>{{ deletingResult()?.labOrderCode }}</strong>
+          <strong
+            >{{ deletingResult()?.labTestName || '—' }} —
+            {{ deletingResult()?.patientFullName || '—' }} ({{
+              shortOrderCode(deletingResult()?.labOrderCode)
+            }})</strong
+          >
           {{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
@@ -593,7 +713,10 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.SIGN_TITLE' | translate }} — {{ signTarget()?.labOrderCode }}</h2>
+        <h2>
+          {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
+          {{ shortOrderCode(signTarget()?.labOrderCode) }}
+        </h2>
         <button class="modal-close" (click)="closeSign()">
           <span class="material-symbols-outlined">close</span>
         </button>

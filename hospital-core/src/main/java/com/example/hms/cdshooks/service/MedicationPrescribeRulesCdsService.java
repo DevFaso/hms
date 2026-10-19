@@ -42,6 +42,14 @@ import java.util.UUID;
 @Component
 public class MedicationPrescribeRulesCdsService implements CdsHookService {
 
+    /** Card wording in the caller's language (D61); English when built outside Spring. */
+    private com.example.hms.cdshooks.CdsCardText text = com.example.hms.cdshooks.CdsCardText.ENGLISH;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setCardText(com.example.hms.cdshooks.CdsCardText text) {
+        this.text = text;
+    }
+
     private static final String ID = "hms-medication-prescribe-rules";
     private static final Source SOURCE = new Source(
         "HMS medication-prescribe rules",
@@ -135,8 +143,8 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
             .map(MedicationCatalogItem::getTallManName)
             .filter(s -> s != null && !s.isBlank())
             .map(tallMan -> new CdsCard(
-                "Confusable name — verify spelling",
-                "Use ISMP tall-man lettering: " + tallMan,
+                text.get("cds.tallMan.summary", "Confusable name — verify spelling"),
+                text.get("cds.tallMan.detail", "Use ISMP tall-man lettering: {0}", tallMan),
                 CdsCard.Indicator.INFO,
                 SOURCE,
                 null, null, null, null

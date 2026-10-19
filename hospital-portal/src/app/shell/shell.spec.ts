@@ -120,6 +120,32 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  it('starts with the drawer closed on a phone, so it does not cover the topbar (D116)', () => {
+    spyOn(globalThis, 'matchMedia').and.callFake(
+      (q: string) => ({ matches: q === '(max-width: 768px)' }) as MediaQueryList,
+    );
+    const { component } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    expect(component.sidebarCollapsed()).toBeTrue();
+    component.toggleSidebar();
+    expect(component.sidebarCollapsed()).toBeFalse();
+    component.closeSidebar();
+    expect(component.sidebarCollapsed()).toBeTrue();
+  });
+
+  it('keeps the sidebar open on a desktop', () => {
+    spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+    const { component } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    expect(component.sidebarCollapsed()).toBeFalse();
+  });
+
   it('omits Dashboard and Administration when activeRole is ROLE_SUPER_ADMIN', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_SUPER_ADMIN',
@@ -218,6 +244,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     });
 
     expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
+  });
+
+  it('a hospital admin reaches Users to onboard staff, exactly once (D117)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      wildcardPermission: false,
+    });
+
+    expect(items.filter((i) => i.route === '/users').length).toBe(1);
   });
 
   it('hides the duplicate-patient panel from roles outside its route guard', () => {
@@ -744,6 +780,16 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
 
     const guards = guardedRoutes();
     const portalRoles = [...new Set([...guards.values()].flatMap((r) => r ?? []))].sort();
+
+    it('a hospital admin can reach the pharmacy registry it administers (QA D39)', () => {
+      expect(guards.get('pharmacy-registry')).toContain('ROLE_HOSPITAL_ADMIN');
+      const { items } = createComponent({
+        activeRole: 'ROLE_HOSPITAL_ADMIN',
+        roles: ['ROLE_HOSPITAL_ADMIN'],
+        wildcardPermission: true,
+      });
+      expect(items.map((i) => i.route)).toContain('/pharmacy-registry');
+    });
 
     it('derives the role set from the route guards', () => {
       expect(portalRoles).toContain('ROLE_DOCTOR');

@@ -336,11 +336,12 @@ public class LabOrderServiceImpl implements LabOrderService {
         boolean authorized = roleValidator.canOrderLabTests(userId, hospitalId);
         if (!authorized) {
             log.warn("User {} is not authorized to place lab orders in hospital {}", userId, hospitalId);
-            throw new BusinessException("Only doctors, physicians, nurses, or nurse practitioners can place lab orders.");
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("laborder.orderingRole.notAllowed"));
         }
 
         LabTestDefinition testDefinition = labTestDefinitionRepository.findById(request.getLabTestDefinitionId())
             .orElseThrow(() -> new ResourceNotFoundException("labtestdefinition.notfound"));
+        requireOrderableHere(testDefinition, hospital, base);
 
         UserRoleHospitalAssignment assignment = resolveOrderingAssignment(base, request.getAssignmentId(), staff, hospital);
 
@@ -401,6 +402,29 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         return current;
+    }
+
+    /**
+     * D48 / D30: a new order (or an order moved to another test) must name a
+     * definition that is ACTIVE, and that is either global or this hospital's
+     * own. A DRAFT was ordered and resulted; another tenant's private
+     * definition was reachable by id. An existing order keeping its test is
+     * left alone: a definition retired after the order was placed must not
+     * strand the sample.
+     */
+    private static void requireOrderableHere(LabTestDefinition definition, Hospital hospital, LabOrder base) {
+        boolean unchanged = base != null && base.getLabTestDefinition() != null
+            && base.getLabTestDefinition().getId() != null
+            && base.getLabTestDefinition().getId().equals(definition.getId());
+        if (unchanged) {
+            return;
+        }
+        if (definition.getHospital() != null && !definition.getHospital().getId().equals(hospital.getId())) {
+            throw new ResourceNotFoundException("labtestdefinition.notfound");
+        }
+        if (!definition.isOrderable()) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labtestdefinition.notOrderable"));
+        }
     }
 
     /**

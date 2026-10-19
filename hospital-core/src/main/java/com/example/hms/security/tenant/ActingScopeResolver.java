@@ -259,7 +259,13 @@ public class ActingScopeResolver {
         "/auth/session/bootstrap",
         "/auth/logout",
         "/auth/token/refresh",
-        "/me/assignments");
+        "/me/assignments",
+        // The caller's own credentials, never hospital data: the forced first
+        // sign-in runs them before any role is confirmed, so a hospital the
+        // caller is still only invited to must not refuse them (D22).
+        "/auth/me/complete-setup",
+        "/auth/me/change-password",
+        "/auth/me/change-username");
 
     /** True when {@code request} targets one of {@link #SCOPE_ESTABLISHING_PATHS}. */
     public static boolean isScopeEstablishing(HttpServletRequest request) {

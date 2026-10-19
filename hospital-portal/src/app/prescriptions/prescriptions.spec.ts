@@ -1,3 +1,4 @@
+import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -26,7 +27,7 @@ import {
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
-import { StaffService } from '../services/staff.service';
+import { StaffResponse, StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -119,6 +120,19 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  it('opens a new prescription with the caller as the prescriber (QA D123)', () => {
+    const auth = TestBed.inject(AuthService);
+    spyOn(auth, 'getUserProfile').and.returnValue({ id: 'u-me' } as LoginUserProfile);
+    component.staffMembers.set([
+      { id: 'st-other', userId: 'u-other', roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+      { id: 'st-me', userId: 'u-me', roleCode: 'ROLE_DOCTOR' } as StaffResponse,
+    ]);
+
+    component.openCreate();
+
+    expect(component.form.staffId).toBe('st-me');
+  });
 
   it('does not render the dispatch modal until it is opened', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="rx-dispatch-modal"]')).toBeNull();
@@ -321,8 +335,11 @@ describe('PrescriptionsComponent — signing', () => {
     component.openEdit(rx('d', 'DRAFT'));
     expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
     component.openEdit(rx('c', 'CANCELLED'));
-    component.openCreate();
+    component.openEdit(rx('d2', 'DRAFT'));
     expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
+    // D129: a new prescription is never offered a withdrawn status.
+    component.openCreate();
+    expect(component.statusOptions().map((s) => s.value)).toEqual(['DRAFT', 'PENDING_SIGNATURE']);
   });
 
   it('offers signing only for a prescription still awaiting a signature', () => {
@@ -413,6 +430,56 @@ describe('PrescriptionsComponent — signing', () => {
 
     expect(toast.error).toHaveBeenCalledWith(message);
     expect(component.signingId()).toBeNull();
+  });
+
+  it('D54: an opaque 403 still produces a translated refusal, never the HTTP status line', () => {
+    // HttpErrorResponse.message is "Http failure response for ...: 403
+    // Forbidden" — English and technical; "Access denied" is the backend's
+    // opaque default. Neither may reach the toast.
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          ({
+            status: 403,
+            message: 'Http failure response for /api/prescriptions/rx-1/sign: 403 Forbidden',
+            error: { message: 'Access denied' },
+          }) as unknown,
+      ),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+    expect(component.signingId()).toBeNull();
+  });
+
+  it('D174: the localized opaque 403 is recognised by its ACCESS_DENIED code', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          ({ status: 403, error: { message: 'Accès refusé', code: 'ACCESS_DENIED' } }) as unknown,
+      ),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
+  it('a non-403 failure without a body falls back to the generic sign failure', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);
+    prescriptionService.sign.and.returnValue(
+      throwError(() => ({ status: 500, message: 'Http failure response', error: null }) as unknown),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.SIGN_FAILED');
   });
 });
 
@@ -1294,6 +1361,25 @@ describe('PrescriptionsComponent — prescriber pharmacy visibility (G7/G10/G11)
     await setup({ roles: ['ROLE_DOCTOR'] });
 
     expect(staffServiceSpy.list).toHaveBeenCalled();
+  });
+
+  it('offers only the caller as prescriber, never a nurse or another colleague (QA D176)', async () => {
+    // The server refuses an order written under anyone else's name, so the
+    // whole team (nurses included) in the picker only led to that refusal.
+    await setup({ roles: ['ROLE_DOCTOR'] });
+    const auth = TestBed.inject(AuthService);
+    spyOn(auth, 'getUserProfile').and.returnValue({ id: 'u-me' } as LoginUserProfile);
+    staffServiceSpy.list.and.returnValue(
+      of([
+        { id: 'st-nurse', userId: 'u-n', roleCode: 'ROLE_NURSE' },
+        { id: 'st-doc', userId: 'u-d', roleCode: 'ROLE_DOCTOR' },
+        { id: 'st-me', userId: 'u-me', roleCode: 'ROLE_DOCTOR' },
+      ] as StaffResponse[]),
+    );
+
+    component.onScopeChange('h-2');
+
+    expect(component.staffMembers().map((s) => s.id)).toEqual(['st-me']);
   });
 
   it('re-asks for the staff list on a scope change', async () => {

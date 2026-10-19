@@ -2727,4 +2727,158 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V185 — security.users.phone_number backfilled to E.164 (#866
+         residual). One DO block (splitStatements=false). Rows whose E.164
+         form is already held are left unchanged and counted in a NOTICE.
+         Idempotent. The Sage export plan moves to V186.
+         ================================================================= -->
+    <changeSet id="V185-users-phone-e164-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V185__users_phone_e164_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V187 — security.users.activated_before_delete (PR #872, D21): the
+         soft delete records whether the account was activated, so the
+         restore brings an e-mail-verified account back active and keeps a
+         pending invitee inactive. Additive, idempotent, no DO blocks, no
+         backfill. (V185/V186 taken by other branches.)
+         ================================================================= -->
+    <changeSet id="V187-user-activated-before-delete" author="hms-team" runOnChange="false">
+        <sqlFile path="V187__user_activated_before_delete.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V188 - clinical.patients.is_active no longer mirrors a pending
+         portal account (QA D27): puts back the records the old copy switched
+         off. Data-only UPDATE, idempotent, no DO blocks. (V186 reserved by
+         another branch.)
+         ================================================================= -->
+    <changeSet id="V188-patient-active-not-account-state" author="hms-team" runOnChange="false">
+        <sqlFile path="V188__patient_active_not_account_state.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V191: lab test definitions - re-file the rows create/update wrongly
+         saved global back under their author's hospital (D30), and record
+         the switched-on DRAFT/APPROVED rows as ACTIVE now that only ACTIVE
+         definitions are orderable (D48). Data-only, idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V191-lab-test-definition-scope-and-orderable" author="hms-team" runOnChange="false">
+        <sqlFile path="V191__lab_test_definition_scope_and_orderable.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V190: billing invoices - unique per-hospital invoice numbers, the
+         idempotent-create key and the per-hospital numbering counter (D94).
+         No DO block.
+         ================================================================= -->
+    <changeSet id="V190-billing-invoice-numbering-and-idempotency" author="hms-team" runOnChange="false">
+        <sqlFile path="V190__billing_invoice_numbering_and_idempotency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V192: lab test definitions - re-file the rows the entity hook kept
+         saving global after V191 (D73, regression of D30). Data-only,
+         idempotent, no DO block.
+         ================================================================= -->
+    <changeSet id="V192-lab-test-definition-rescope-after-hook" author="hms-team" runOnChange="false">
+        <sqlFile path="V192__lab_test_definition_rescope_after_hook.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V195: lab results - supersedes link for corrections (D81). -->
+    <changeSet id="V195-lab-result-supersedes-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V195__lab_result_supersedes_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V194: hospital.departments.email becomes optional (QA D93), as the
+         form and the request DTO already treat it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V194-department-email-optional" author="hms-team" runOnChange="false">
+        <sqlFile path="V194__department_email_optional.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V197: default now() on the postpartum and newborn alert created_at
+         columns (QA D131). Two ALTERs, no DO block.
+         ================================================================= -->
+    <changeSet id="V197-maternity-alert-created-at-default" author="hms-team" runOnChange="false">
+        <sqlFile path="V197__maternity_alert_created_at_default.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V196: clinical.stock_transactions.witnessed_by (QA D157), the second
+         person on a controlled-substance adjustment. No DO block.
+         ================================================================= -->
+    <changeSet id="V196-stock-transaction-witness" author="hms-team" runOnChange="false">
+        <sqlFile path="V196__stock_transaction_witness.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V198: drop the leftover user-level ROLE_PATIENT link on staff
+         accounts that hold no patient assignment (QA D74, D132). Single
+         DELETE, no DO block.
+         ================================================================= -->
+    <changeSet id="V198-drop-leftover-user-level-patient-role" author="hms-team" runOnChange="false">
+        <sqlFile path="V198__drop_leftover_user_level_patient_role.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V189: payment ledger status (PENDING/CONFIRMED/REJECTED/REVERSED)
+         and the reversal audit columns (QA D140, D142). No DO block.
+         ================================================================= -->
+    <changeSet id="V189-payment-transaction-status-and-reversal" author="hms-team" runOnChange="false">
+        <sqlFile path="V189__payment_transaction_status_and_reversal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V193: clinical.encounters.admission_id - an admission's own
+         INPATIENT encounter (QA D134/D135/D136). No FK: admissions live in
+         public and encounters in clinical, and the column is nullable for
+         every outpatient row. Single ALTER + index, no DO block.
+         ================================================================= -->
+    <changeSet id="V193-encounter-admission-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V193__encounter_admission_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

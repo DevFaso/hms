@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
@@ -72,6 +73,12 @@ export class ProfileComponent implements OnInit {
   formDirty = signal(false);
   /** The current password, asked for only when the email is being changed. */
   emailChangePassword = signal('');
+
+  /** Self-service password change fields (security tab). */
+  pwdCurrent = signal('');
+  pwdNew = signal('');
+  pwdConfirm = signal('');
+  changingPassword = signal(false);
 
   /**
    * A single sign-on session: Keycloak owns the email on that path and the
@@ -854,6 +861,53 @@ export class ProfileComponent implements OnInit {
   }
 
   /* ── Security Actions ── */
+  /**
+   * Self-service password change (D38): an administrator-set password forces a
+   * change, and the profile is where the holder makes it outside first login.
+   */
+  changePassword(): void {
+    const current = this.pwdCurrent();
+    const next = this.pwdNew();
+    if (next.length < 8) {
+      this.toast.error(this.translate.instant('PROFILE.PASSWORD_TOO_SHORT'));
+      return;
+    }
+    if (next !== this.pwdConfirm()) {
+      this.toast.error(this.translate.instant('PROFILE.PASSWORD_MISMATCH'));
+      return;
+    }
+    if (next === current) {
+      this.toast.error(this.translate.instant('PROFILE.PASSWORD_SAME_AS_CURRENT'));
+      return;
+    }
+    this.changingPassword.set(true);
+    this.profileService
+      .changePassword(current, next)
+      .pipe(finalize(() => this.changingPassword.set(false)))
+      .subscribe({
+        next: () => {
+          this.pwdCurrent.set('');
+          this.pwdNew.set('');
+          this.pwdConfirm.set('');
+          this.credentials.update((c) => (c ? { ...c, forcePasswordChange: false } : c));
+          this.toast.success(this.translate.instant('PROFILE.PASSWORD_CHANGED'));
+          // QA D114: the server now refuses every token issued before the change,
+          // this session's included, so sign in again with the new password.
+          this.auth.logout();
+          void this.router.navigateByUrl('/login');
+        },
+        error: (err: { status?: number }) => {
+          let key = 'PROFILE.PASSWORD_CHANGE_FAILED';
+          if (err?.status === 401) {
+            key = 'PROFILE.PASSWORD_CURRENT_WRONG';
+          } else if (err?.status === 400) {
+            key = 'PROFILE.PASSWORD_CHANGE_REFUSED';
+          }
+          this.toast.error(this.translate.instant(key));
+        },
+      });
+  }
+
   requestPasswordReset(): void {
     const u = this.user();
     if (!u?.email) {

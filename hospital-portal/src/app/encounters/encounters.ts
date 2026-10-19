@@ -13,8 +13,9 @@ import {
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
+import { NoteHistoryView, toNoteHistoryView } from './note-history-view';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
@@ -26,6 +27,7 @@ import { EncounterNoteFormComponent } from './encounter-note-form/encounter-note
 import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/eligibility-check-dialog.component';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 
 @Component({
   selector: 'app-encounters',
@@ -38,6 +40,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
     EligibilityCheckDialogComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
+    CheckoutDialogComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -80,7 +83,7 @@ export class EncountersComponent implements OnInit {
   showEligibilityDialog = signal(false);
 
   /* Note history + addendums */
-  noteHistory = signal<EncounterNoteResponse[]>([]);
+  noteHistory = signal<NoteHistoryView[]>([]);
   noteHistoryLoading = signal(false);
 
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
@@ -159,6 +162,16 @@ export class EncountersComponent implements OnInit {
 
     this.loadEncounters();
 
+    // D96: /encounters/:id (the worklist "start" and deep links) opens that
+    // encounter's detail instead of falling through to the wildcard route.
+    const deepLinkId = this.route.snapshot?.paramMap?.get('id');
+    if (deepLinkId) {
+      this.encounterService.getById(deepLinkId).subscribe({
+        next: (enc) => this.selectEncounter(enc),
+        error: () => this.toast.error(this.translate.instant('ENCOUNTERS.NOT_FOUND')),
+      });
+    }
+
     // Determine role-based hospital access. We intentionally consult
     // `auth.hasAnyRole` here (and not the `roleContext.isSuperAdmin()`
     // signal) because this branch existed before the cross-tenant
@@ -195,7 +208,9 @@ export class EncountersComponent implements OnInit {
     this.staffService.list(hid ?? undefined).subscribe({
       next: (list) => {
         this.allStaff = list;
-        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email })));
+        this.staffMembers.set(
+          list.filter(isClinicalProvider).map((s) => ({ id: s.id, name: s.name || s.email })),
+        );
       },
     });
     this.initPatientSearch();
@@ -558,7 +573,7 @@ export class EncountersComponent implements OnInit {
     this.noteHistoryLoading.set(true);
     this.encounterService.getNoteHistory(encounterId).subscribe({
       next: (history) => {
-        this.noteHistory.set(history ?? []);
+        this.noteHistory.set((history ?? []).map(toNoteHistoryView));
         this.noteHistoryLoading.set(false);
       },
       error: () => {
@@ -590,6 +605,56 @@ export class EncountersComponent implements OnInit {
   }
 
   /* ── Status transitions ── */
+
+  /** D96: a doctor picks up a patient who is waiting for one. */
+  canStartEncounter(enc: EncounterResponse): boolean {
+    return (
+      enc.status === 'WAITING_FOR_PHYSICIAN' &&
+      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'])
+    );
+  }
+
+  /** D96: a visit ready for discharge can be checked out from here too. */
+  canCheckOut(enc: EncounterResponse): boolean {
+    return enc.status === 'READY_FOR_DISCHARGE';
+  }
+
+  readonly checkoutEncounter = signal<EncounterResponse | null>(null);
+
+  startEncounter(enc: EncounterResponse): void {
+    this.transitioning.set(true);
+    this.encounterService.startEncounter(enc.id).subscribe({
+      next: (updated) => {
+        this.toast.success(this.translate.instant('ENCOUNTERS.STARTED'));
+        this.transitioning.set(false);
+        this.selectedEncounter.set(updated);
+        this.loadEncounters();
+      },
+      error: () => {
+        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+        this.transitioning.set(false);
+      },
+    });
+  }
+
+  openCheckout(enc: EncounterResponse): void {
+    this.checkoutEncounter.set(enc);
+  }
+
+  onCheckoutDismissed(): void {
+    this.checkoutEncounter.set(null);
+  }
+
+  onCheckoutCompleted(): void {
+    const enc = this.checkoutEncounter();
+    this.checkoutEncounter.set(null);
+    this.loadEncounters();
+    if (enc) {
+      this.encounterService.getById(enc.id).subscribe({
+        next: (updated) => this.selectedEncounter.set(updated),
+      });
+    }
+  }
 
   canCompleteExamination(enc: EncounterResponse): boolean {
     return enc.status === 'IN_PROGRESS';

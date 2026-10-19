@@ -4842,7 +4842,7 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **External providers: the facility audit trail scopes through a live assignment
   join**, so rows whose assignment was hard-deleted vanish from it; it needs a
   `hospital_id` snapshot on `audit_event_logs` (a migration: V183 is #853's MFA
-  hotfix, V184 #852's admin-disable marker, the Sage export plan takes V185, so
+  hotfix, V184 #852's admin-disable marker, V185 the users phone E.164 backfill, the Sage export plan now uses V186, so
   take the next free number when this is scheduled) (found in #852's round-1
   review). Open.
 - **Provider audit page: its 400 answers are English text.** A bad `page`/`size` on
@@ -4883,6 +4883,14 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   switches the scope chip while on `/appointments/calendar` keeps seeing (and fetching)
   the first hospital under the new chip. Pre-existing; read the scope at fetch time, as
   the other scope-aware pages do (found in #855's final review). Open.
+- **Onboarding e-mail residuals (#865, dev test defects D10-D14).** (a) D14: the app adds
+  no unsubscribe link and no `List-Unsubscribe` header; the one seen on dev is injected
+  by the SMTP provider: disable subscription tracking for the transactional sender (dev
+  and prod). (b) D10: a new staff account with SEVERAL roles still gets the welcome mail
+  plus one assignment mail per code; one mail needs a multi-code activation screen.
+  (c) D11: partner pharmacy SMS templates (`sms.partner.*`) still start "HMS Rx"; rename
+  with the partner owners (replies parse the prefix). (d) D12: staff mails render in
+  French because `User` has no language; add a preferred-language field. Open.
 - **The patient apps and the refresh 409 (#853): fix before their next release.** A
   refresh token is now spent atomically: of concurrent refreshes with one token, one
   wins and the rest get 409 "superseded". The portal retries (the shared cookie has
@@ -5038,6 +5046,123 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   `/appointments/new?date=…&time=…` (date only from an all-day month cell),
   but `AppointmentFormComponent` reads neither param, so the form opens blank
   (found in #855's review; the form side was kept out of that PR). Open.
+- **Account-flow residuals from the D17-D22 fix (fix/account-activation-flows).**
+  Pre-existing, outside that PR's diff: the `ACCOUNT_LOCKED` audit row still stores the
+  typed username (use the account id, as `LOGIN_FAILURE` now does); the legacy
+  `/auth/me/change-password` and `/auth/me/change-username` answer English sentences
+  (the setup screen no longer calls them; the profile page does); `changeOwnUsername`
+  checks uniqueness case-sensitively (the new `complete-setup` path and the admin rename
+  use `existsUsernameOnOtherAccount`). Restore edge: a never-activated account with no
+  assignment at all (a self-registered patient who never verified) comes back inactive
+  with nothing to re-send; the patient e-mail verification resend is the way in. Open.
+- **Decision (2026-10-17, QA D58, `fix/qa-lab-results`): a laboratory result may be
+  released by the person who entered it — explicitly, audited and visibly; there is no
+  mandatory four-eyes rule.** Many laboratories here are one technician, so a second
+  reviewer cannot be required. What changed instead of a block: the release endpoint
+  answers 409 to the author unless the call says `selfRelease=true` (the portal asks in a
+  dialog that names it a self-release); a confirmed self-release writes its own
+  `LAB_RESULT_RELEASED` audit row ("Self-release: …", after commit, ids only); and every
+  read of the result carries `selfReleased`, shown as a badge on the results list and in
+  the detail. A hospital that wants four eyes later needs a per-hospital setting, a
+  product decision, not a code default. Decided.
+- **The portal shows the API's zone-less times as browser-local everywhere.** The API
+  stores `LocalDateTime` on the server's UTC clock and sends it without a zone; the
+  portal's `date` pipe reads it as local time. In Burkina Faso (UTC+0) that is
+  invisible; a workstation in another zone sees every time shifted. D49 converted only
+  the lab result entry form (`toServerDateTime` / `toLocalInputValue` in
+  `lab-results.ts`) and added a server-side refusal of a result timed before its order
+  or in the future. The general fix (send instants with an offset, or one portal-wide
+  conversion) touches every date the portal renders, so it is its own PR. Open.
+- **A one-person laboratory cannot activate its own test definitions.** Since D48 only
+  an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
+  SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded
+  every switched-on DRAFT/APPROVED row as ACTIVE so no existing catalog stopped being
+  orderable, but a new definition at a hospital without those roles waits on a
+  super-admin. Whether a small laboratory gets a shortened workflow (like D58's
+  explicit self-release) is a product decision. Open.
+- **The doctor results queue and the chart drawer read an acknowledged, unflagged result
+  as NORMAL** (`ResultReviewServiceImpl.toQueueItem`, `PatientSnapshotServiceImpl.labResultFlag`).
+  Same family as D31, but it is the three-value contract those screens bucket on and the
+  doctor's acknowledgement is what turns it NORMAL; changing the label is a decision for
+  the clinicians. Note: since D31 a blank or unknown analyzer OBX-8 is stored with no
+  flag, so those rows now sit in the queue's ABNORMAL bucket until acknowledged (they
+  read NORMAL before). Open.
+- **Lab test definition uniqueness is global in the entity, per hospital in practice.**
+  `LabTestDefinition` declares `uq_lab_testdef_name_global` / `uq_lab_testdef_code_global`
+  on `name` / `test_code`. No migration under `db/migration` names them, so Postgres is likely not
+  affected, but the H2 test schema (built from the entities) refuses two hospitals with
+  the same test code — which D30 makes the normal case. Drop the entity constraints or
+  make them `(hospital_id, test_code)`. Open.
+
+- **QA run 2026-10-17, ux-i18n residuals (`fix/qa-ux-i18n`).** D53, D54 and D60–D66
+  are fixed there; this is what that PR left, each a separate decision rather than a
+  missed sibling. (1) The BPA protocol cards' title and summary come from the seeded
+  `bpa_protocol` rows, in English; translating them is clinical content and needs a
+  verified French/Spanish source (same rule as the EPDS text), so the card wording that
+  lives in code is localised (`CdsCardText`, `cds.*` keys) and the seeded text is not.
+  (2) The printed pharmacy receipt (`pharmacy-checkout.html`, T-44) stays French by
+  design; only the working screens follow the UI language. (3) Other backend sentences
+  still composed in English outside the paths the QA run hit (for example
+  `IllegalStateException` business messages echoed by `GlobalExceptionHandler`, and the
+  bootstrap/refresh/logout replies in `AuthController`) want the same `MessageUtil`
+  treatment; the `/auth/me/change-password` and `/auth/me/change-username` replies noted
+  in the bullet above are now translated. Open.
+- **QA run 2026-10-18 round 2, lab/pharmacy residuals (`fix/qa-r2-lab-pharmacy`).** D73,
+  D81, D82, D95, D106, D107, D108 and D124 are fixed there; this is what that PR left. (1)
+  D82 witness for controlled substances: nothing in the catalogue says which inventory
+  item is a controlled substance (only a prescription carries `controlled_substance`), so
+  a second-person witness on a stock movement needs a new catalogue classification, a
+  witness column on `stock_transactions` and a witness step in the stock screen - a new
+  feature. The PR closes the hole around it: manual DISPENSE is refused, every non-receipt
+  movement needs a reason, a lot-tracked item moves through its own lot, lot count
+  corrections move the item total and are recorded, and the performer is always the
+  signed-in user. (2) D73: a definition authored with no owning assignment while the hook
+  was nulling the hospital cannot be attributed and V192 leaves it global; a lab director
+  retires and re-authors any such row. (3) D107: critical limits are per reference range
+  and optional; a range without them keeps alerting on HIGH as before (fail-safe), so a
+  laboratory that wants HIGH labelled and not paged sets its limits. (4) D106: midwives
+  are kept out of lab ordering (RoleValidator says nothing has established that they
+  order); if the clinical lead decides they do, add MIDWIFE in RoleValidator, the
+  controller and `lab.ts` together. Open.
+
+- **QA run 2026-10-18 round 2, patients/pickers residuals (`fix/qa-r2-patients-pickers`).**
+  D74, D75, D79, D80, D93, D99, D118 and D122 are fixed there, and D123's missing
+  default prescriber. Left, each a feature rather than a missed bug: (1) D123's raw
+  UUID inputs (encounter id on the lab and prescription forms, report id on the
+  signature form, dispense id on the pharmacy checkout) want real encounter / report /
+  dispense pickers — new search endpoints and components, not a fix. (2) D74's stray
+  inactive ROLE_PATIENT rows on the three QA staff accounts are now inert (role
+  resolution, assignment lookup and the profile all ignore inactive rows), but they
+  still exist; deleting them is a dev-data cleanup for a super-admin, and the
+  edit-user modal still has no way to list or remove an inactive assignment. Open.
+- **Billing has no tariff / price-list screen (QA D72, round 2, 2026-10-18).**
+  An invoice line is typed by hand (description, category, quantity, unit
+  price); nothing offers a hospital's priced services to pick from, although
+  `InvoiceItem.relatedService` and `Treatment.price` exist. Deferred as a new
+  feature (a whole catalog module: per-hospital tariffs, effective dates,
+  insurer schedules), not a bug: `fix/qa-r2-billing` made invoices work end to
+  end with typed lines (server-computed totals, payments only through payment
+  records, server numbering, idempotent create).
+- **Pharmacy checkout finds a dispense by its UUID only (QA D102, round 2).**
+  The cashier types or pastes a dispense id; there is no worklist of dispenses
+  awaiting payment to pick from. Deferred as a new screen; `fix/qa-r2-billing`
+  fixed the bugs around it (BILLING_SPECIALIST's 403 on `GET
+  /pharmacy/dispense/{id}`, raw patient/pharmacy/payment UUIDs on the screen
+  and the receipt). The receipt's French text is still hard-coded in the
+  template (pre-existing).
+- **A stay or visit does not charge itself (QA D148, round 3).** An invoice can
+  now be linked to its encounter (the edit form sends and keeps the encounter
+  code; a code of another hospital is refused), and the check-in copay becomes a
+  paid invoice on the visit's encounter (D149). Charging a whole stay
+  automatically (bed-days, administered drugs, lab orders posted as lines) is
+  deferred as a new feature: it needs the priced-service catalog above and a
+  charge-capture rule per order type. `fix/qa-r3-billing` fixed the bugs around
+  it (the link was write-only in the UI). Patient online payment also has no
+  payment provider: a patient's payment is a PENDING declaration until a cashier
+  confirms it (D140); a provider callback (mobile money / card) is a new
+  integration.
+
+- **Controlled-substance witness co-signature (QA D157/D82, PR #891 review).** #891 makes a controlled-substance write-off/adjustment name a second, active, undeleted colleague holding a stock role in the owning hospital, never the performer. The witness still does not authenticate: the performer picks a user id, so one pharmacist can record a witness who never confirmed. A real fix is a new flow (the witness confirms with their own credential or PIN, or a pending movement the witness approves from their own session, with throttling and lockout so the endpoint cannot be used to guess a colleague's password). Deferred as a new feature; D157 is only PARTLY fixed until it ships.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -5065,6 +5190,15 @@ they stay visible instead of living in a javadoc.
   protocol written out.
 
 ## Operational, open right now
+
+- ⚠ **USER ACTION — Keycloak prod bootstrap (D9).** After the opt-in
+  entrypoint fix (`fix/keycloak-bootstrap-opt-in`) is synced to main: first
+  SAVE the current `kc-admin` password (`KC_BOOTSTRAP_ADMIN_PASSWORD` on
+  `hms-keycloak-prod`) in the password manager, then make sure
+  `KC_BOOTSTRAP_ADMIN` is NOT set and remove `KC_BOOTSTRAP_ADMIN_USERNAME` /
+  `KC_BOOTSTRAP_ADMIN_PASSWORD` from `hms-keycloak-prod`. The per-boot
+  `kc.sh bootstrap-admin` was SIGKILLed (rc=137) and aborted the 2026-10-13
+  prod deploy on every retry (and twice on 2026-10-09).
 
 - ~~Deploy prod~~ ✅ prod is on `7ff43fba` (2026-08-26), both Railway services
   SUCCESS, `/api/actuator/health` UP. `ddl-auto: validate` means that healthy
@@ -5345,3 +5479,27 @@ ships*, not for building — and check the shipped surface before trusting a
   the registration rule is an authorization change, not the display fix — but
   it is a split a reader will trip over, and it should be resolved one way or
   the other with a decision behind it.
+- **Generated credentials for an e-mail-less patient travel in the HTTP
+  response when no real SMS transport is configured** (fix/registration-defects,
+  2026-10-16). `POST /users/admin-register` now generates the username and a
+  one-time password; with no e-mail and `SmsService.deliversRealSms()` false the
+  registration response carries `temporaryUsername`/`temporaryPassword` once
+  and the staff UI shows them in a one-time dialog. Remove that fallback (or
+  replace it with a set-password link the desk prints) once IKODDI SMS is live
+  on every environment. Also: phones are now stored E.164 (`+226…`) on every
+  write path (registration, profile update, bootstrap), and registration also
+  matches the two legacy shapes exactly (`22670202020`, `70202020`;
+  `UserServiceImpl.findByPhoneInAnyForm`). Older rows written with spaces,
+  dashes or a trunk zero are now rewritten to E.164 by V185 (fix/onboarding-residuals,
+  done); rows whose E.164 form another account already holds were left unchanged
+  and counted in the deploy NOTICE: resolve those by hand, then drop the
+  legacy-form lookup (open). The admin welcome mail still shows
+  "—" for the password when an API caller supplied one (never the typed value).
+- **403 role hint only knows roles the password-login picker listed.**
+  (fix/portal-ui-defects, D7.) The JWT carries only the role picked at sign-in,
+  so the portal keeps the picker's `availableRoles` in sessionStorage
+  (`RoleContextService.heldRoles`) to say "sign in again choosing Y". An SSO
+  (Keycloak) sign-in never shows that picker, so no hint appears there, and a
+  server-side 403 names no required role, so the page can only suggest
+  ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
+  roles in the session bootstrap, and a required-role hint in 403 bodies.

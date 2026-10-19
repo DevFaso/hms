@@ -23,6 +23,7 @@
     <div class="search-bar toolbar-search">
       <span class="material-symbols-outlined search-icon">search</span>
       <input
+        [attr.aria-label]="'USERS.SEARCH_PLACEHOLDER' | translate"
         type="text"
         [placeholder]="'USERS.SEARCH_PLACEHOLDER' | translate"
         [value]="searchTerm"
@@ -169,13 +170,15 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button
-                    class="action-link edit"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEdit(user)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (!user.deleted) {
+                    <button
+                      class="action-link edit"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEdit(user)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                   @if (user.deleted) {
                     <button
                       class="action-link restore"
@@ -317,57 +320,69 @@
               </div>
             </div>
 
-            <!-- Username & Email -->
+            <!-- Username (edit only) & Email. On create the server generates
+                 one-time credentials: no username or password is asked. -->
             <div class="field-row">
+              @if (editing()) {
+                <div class="field">
+                  <label for="username">{{ 'USERS.USERNAME' | translate }} *</label>
+                  <input
+                    id="username"
+                    type="text"
+                    [(ngModel)]="createForm.username"
+                    name="username"
+                    required
+                    [class.input-error]="fieldErrors()['username']"
+                    (ngModelChange)="clearFieldError('username')"
+                  />
+                  @if (fieldErrors()['username']) {
+                    <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
+                  }
+                </div>
+              }
               <div class="field">
-                <label for="username">{{ 'USERS.USERNAME' | translate }} *</label>
-                <input
-                  id="username"
-                  type="text"
-                  [(ngModel)]="createForm.username"
-                  name="username"
-                  required
-                  [class.input-error]="fieldErrors()['username']"
-                  (ngModelChange)="clearFieldError('username')"
-                />
-                @if (fieldErrors()['username']) {
-                  <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
-                }
-              </div>
-              <div class="field">
-                <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
+                <label for="email"
+                  >{{ 'PATIENTS.EMAIL' | translate }}{{ emailRequired ? ' *' : '' }}</label
+                >
                 <input
                   id="email"
                   type="email"
                   [(ngModel)]="createForm.email"
                   name="email"
-                  required
+                  [required]="emailRequired"
                   [class.input-error]="fieldErrors()['email']"
                   (ngModelChange)="clearFieldError('email')"
                 />
                 @if (fieldErrors()['email']) {
                   <span class="field-error-msg">{{ fieldErrors()['email'] }}</span>
                 }
+                @if (!emailRequired) {
+                  <span class="hint-text">{{
+                    'USERS.EMAIL_OPTIONAL_PATIENT_HINT' | translate
+                  }}</span>
+                }
               </div>
             </div>
 
-            <!-- Password & Phone -->
+            <!-- Password (edit only) & Phone -->
             <div class="field-row">
-              <div class="field">
-                <label for="password">{{ 'USERS.PASSWORD' | translate }} *</label>
-                <input
-                  id="password"
-                  type="password"
-                  [(ngModel)]="createForm.password"
-                  name="password"
-                  required
-                  [class.input-error]="fieldErrors()['password']"
-                  (ngModelChange)="clearFieldError('password')"
-                />
-                @if (fieldErrors()['password']) {
-                  <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
-                }
-              </div>
+              @if (editing()) {
+                <div class="field">
+                  <label for="password">{{ 'USERS.PASSWORD' | translate }}</label>
+                  <input
+                    id="password"
+                    type="password"
+                    [(ngModel)]="createForm.password"
+                    name="password"
+                    autocomplete="new-password"
+                    [class.input-error]="fieldErrors()['password']"
+                    (ngModelChange)="clearFieldError('password')"
+                  />
+                  @if (fieldErrors()['password']) {
+                    <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
+                  }
+                </div>
+              }
               <div class="field">
                 <label for="phoneNumber">{{ 'PATIENTS.PHONE' | translate }} *</label>
                 <input
@@ -376,13 +391,14 @@
                   [(ngModel)]="createForm.phoneNumber"
                   name="phoneNumber"
                   required
-                  placeholder="+226 70 00 00 00"
+                  placeholder="70 20 20 20"
                   [class.input-error]="fieldErrors()['phoneNumber']"
                   (ngModelChange)="clearFieldError('phoneNumber')"
                 />
                 @if (fieldErrors()['phoneNumber']) {
                   <span class="field-error-msg">{{ fieldErrors()['phoneNumber'] }}</span>
                 }
+                <span class="hint-text">{{ 'USERS.PHONE_HINT' | translate }}</span>
               </div>
             </div>
 
@@ -390,7 +406,7 @@
             <fieldset class="field">
               <legend>{{ 'USERS.ROLES' | translate }} *</legend>
               <div class="role-checkbox-group">
-                @for (role of availableRoles(); track role.id) {
+                @for (role of grantableRoles(); track role.id) {
                   <label class="role-checkbox">
                     <input
                       type="checkbox"
@@ -407,15 +423,14 @@
             </fieldset>
 
             <!-- License Number (conditional) -->
-            @if (licenseRequired) {
+            @if (licenseApplicable) {
               <div class="field">
-                <label for="licenseNumber">{{ 'USERS.LICENSE_NUMBER' | translate }} *</label>
+                <label for="licenseNumber">{{ 'USERS.LICENSE_NUMBER' | translate }}</label>
                 <input
                   id="licenseNumber"
                   type="text"
                   [(ngModel)]="createForm.licenseNumber"
                   name="licenseNumber"
-                  required
                   [placeholder]="'USERS.LICENSE_PLACEHOLDER' | translate"
                   [class.input-error]="fieldErrors()['licenseNumber']"
                   (ngModelChange)="clearFieldError('licenseNumber')"
@@ -473,20 +488,22 @@
               </div>
             </div>
 
-            <!-- Specialization -->
-            <div class="field">
-              <label for="specialization">{{ 'USERS.SPECIALIZATION' | translate }}</label>
-              <select
-                id="specialization"
-                [(ngModel)]="createForm.specialization"
-                name="specialization"
-              >
-                <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
-                @for (sp of specializations; track sp) {
-                  <option [value]="sp">{{ formatEnumLabel(sp) }}</option>
-                }
-              </select>
-            </div>
+            <!-- Specialization: physicians only (QA D195) -->
+            @if (specializationApplicable) {
+              <div class="field">
+                <label for="specialization">{{ 'USERS.SPECIALIZATION' | translate }}</label>
+                <select
+                  id="specialization"
+                  [(ngModel)]="createForm.specialization"
+                  name="specialization"
+                >
+                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
+                  @for (sp of specializations; track sp) {
+                    <option [value]="sp">{{ sp | enumLabel: 'specialization' }}</option>
+                  }
+                </select>
+              </div>
+            }
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">
@@ -503,6 +520,40 @@
             </button>
           </div>
         </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- One-time credentials (no e-mail, no SMS transport): shown once, never stored -->
+  @if (issuedCredentials(); as creds) {
+    <div class="modal-backdrop" (keydown.escape)="dismissCredentials()" tabindex="-1">
+      <dialog
+        class="modal"
+        open
+        data-test="issued-credentials"
+        aria-labelledby="issued-credentials-title"
+        (keydown.escape)="dismissCredentials()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2 id="issued-credentials-title">{{ 'USERS.CREDENTIALS_ONCE_TITLE' | translate }}</h2>
+        </div>
+        <div class="modal-body">
+          <p>{{ 'USERS.CREDENTIALS_ONCE_HINT' | translate }}</p>
+          <p>
+            {{ 'USERS.USERNAME' | translate }} :
+            <strong data-test="issued-username">{{ creds.username }}</strong>
+          </p>
+          <p>
+            {{ 'USERS.TEMPORARY_PASSWORD' | translate }} :
+            <strong data-test="issued-password">{{ creds.password }}</strong>
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-primary" (click)="dismissCredentials()">
+            {{ 'USERS.CREDENTIALS_ONCE_DONE' | translate }}
+          </button>
+        </div>
       </dialog>
     </div>
   }
@@ -533,8 +584,8 @@
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
               {{ 'USERS.CONFIRM_DELETE' | translate }}
-              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong
-              >?
+              <!-- QA D192: the sentence already ends with its own question mark. -->
+              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong>
             </p>
             <p class="delete-detail">
               {{ 'USERS.DELETE_WARNING' | translate }}

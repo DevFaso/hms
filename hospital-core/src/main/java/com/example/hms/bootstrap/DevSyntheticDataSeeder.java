@@ -1225,6 +1225,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
                     .unit(seed.unit())
                     .turnaroundTimeMinutes(seed.turnaroundMinutes())
                     .active(true)
+                    // Seeded catalog is orderable (D48: only ACTIVE definitions are).
+                    .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
                     .build();
             } else {
                 definition.setTestCode(seed.code());

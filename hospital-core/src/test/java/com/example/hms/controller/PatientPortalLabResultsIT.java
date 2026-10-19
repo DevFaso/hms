@@ -420,8 +420,8 @@ class PatientPortalLabResultsIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("staff read keeps the preliminary value and labels it released=false")
-    void staffReadKeepsThePreliminaryValue() throws Exception {
+    @DisplayName("QA D160: a doctor's read shows the pending row, released=false, without the lab's preliminary value")
+    void doctorReadHidesThePreliminaryValue() throws Exception {
         mockMvc.perform(get(STAFF_LAB_RESULTS, patient.getId()).contextPath(API)
                 .param("hospitalId", hospital.getId().toString())
                 .with(doctor()))
@@ -429,7 +429,7 @@ class PatientPortalLabResultsIT extends BaseIT {
             .andExpect(jsonPath("$", hasSize(1)))
             .andExpect(jsonPath("$[0].status").value("PENDING"))
             .andExpect(jsonPath("$[0].released").value(false))
-            .andExpect(jsonPath("$[0].value").value(PRELIMINARY_VALUE));
+            .andExpect(jsonPath("$[0].value").doesNotExist());
     }
 
     private RequestPostProcessor patient() {

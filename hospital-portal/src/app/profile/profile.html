@@ -562,7 +562,7 @@
                 <div class="security-action-info">
                   <p class="security-action-title">{{ 'PROFILE.CHANGE_PASSWORD' | translate }}</p>
                   <p class="security-action-desc">
-                    {{ 'PROFILE.SEND_RESET_DESC' | translate }}
+                    {{ 'PROFILE.FORGOT_PASSWORD_DESC' | translate }}
                     @if (credentials()?.forcePasswordChange) {
                       <span class="force-change-badge"
                         >⚠ {{ 'PROFILE.PASSWORD_CHANGE_REQUIRED' | translate }}</span
@@ -575,6 +575,60 @@
                   {{ 'PROFILE.SEND_RESET_LINK' | translate }}
                 </button>
               </div>
+              @if (ssoSession()) {
+                <p class="form-hint">{{ 'PROFILE.PASSWORD_MANAGED_BY_SSO' | translate }}</p>
+              } @else {
+                <form class="change-password-form" (ngSubmit)="changePassword()" autocomplete="off">
+                  <p class="security-action-desc">
+                    {{ 'PROFILE.CHANGE_PASSWORD_DESC' | translate }}
+                  </p>
+                  <div class="form-group">
+                    <label for="pwdCurrent">{{ 'PROFILE.CURRENT_PASSWORD' | translate }}</label>
+                    <input
+                      type="password"
+                      id="pwdCurrent"
+                      name="pwdCurrent"
+                      autocomplete="current-password"
+                      class="form-control"
+                      [ngModel]="pwdCurrent()"
+                      (ngModelChange)="pwdCurrent.set($event)"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pwdNew">{{ 'PROFILE.NEW_PASSWORD' | translate }}</label>
+                    <input
+                      type="password"
+                      id="pwdNew"
+                      name="pwdNew"
+                      autocomplete="new-password"
+                      minlength="8"
+                      class="form-control"
+                      [ngModel]="pwdNew()"
+                      (ngModelChange)="pwdNew.set($event)"
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="pwdConfirm">{{ 'PROFILE.CONFIRM_PASSWORD' | translate }}</label>
+                    <input
+                      type="password"
+                      id="pwdConfirm"
+                      name="pwdConfirm"
+                      autocomplete="new-password"
+                      class="form-control"
+                      [ngModel]="pwdConfirm()"
+                      (ngModelChange)="pwdConfirm.set($event)"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    [disabled]="changingPassword() || !pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                  >
+                    <span class="material-symbols-outlined">key</span>
+                    {{ 'PROFILE.SAVE_NEW_PASSWORD' | translate }}
+                  </button>
+                </form>
+              }
             </div>
           </div>
 
@@ -658,7 +712,9 @@
                       inputmode="numeric"
                     />
                     <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
-                      {{ mfaLoading() ? 'Verifying…' : 'Verify' }}
+                      {{
+                        (mfaLoading() ? 'MFA.CHALLENGE_VERIFYING' : 'PROFILE.VERIFY') | translate
+                      }}
                     </button>
                   </form>
                 </div>
@@ -747,7 +803,7 @@
                     [disabled]="mfaLoading()"
                   >
                     <span class="material-symbols-outlined">security</span>
-                    {{ mfaLoading() ? 'Setting up…' : 'Set Up TOTP' }}
+                    {{ (mfaLoading() ? 'MFA.ENROLL_STARTING' : 'PROFILE.SET_UP_TOTP') | translate }}
                   </button>
                 </div>
               }
@@ -781,7 +837,10 @@
                   </div>
                   <div class="form-row">
                     <label class="form-label" for="recovery-value">{{
-                      newRecoveryType() === 'EMAIL' ? 'Email Address' : 'Phone Number'
+                      (newRecoveryType() === 'EMAIL'
+                        ? 'PROFILE.EMAIL_ADDRESS'
+                        : 'PROFILE.PHONE_NUMBER'
+                      ) | translate
                     }}</label>
                     <input
                       id="recovery-value"
@@ -813,7 +872,7 @@
                       (click)="saveRecoveryContact()"
                       [disabled]="recoverySaving()"
                     >
-                      {{ recoverySaving() ? 'Saving…' : 'Save' }}
+                      {{ (recoverySaving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
                     </button>
                     <button class="btn-secondary" (click)="cancelAddRecovery()">
                       {{ 'COMMON.CANCEL' | translate }}
@@ -892,7 +951,12 @@
                               (click)="submitVerificationCode()"
                               [disabled]="verificationSending() || verificationCode().length < 6"
                             >
-                              {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
+                              {{
+                                (verificationSending()
+                                  ? 'MFA.CHALLENGE_VERIFYING'
+                                  : 'COMMON.CONFIRM'
+                                ) | translate
+                              }}
                             </button>
                             <button class="btn-secondary" (click)="cancelVerification()">
                               {{ 'COMMON.CANCEL' | translate }}
@@ -969,8 +1033,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.MFA_STATUS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.mfaEnrolledCount }} enrolled,
-                        {{ credentials()!.verifiedMfaCount }} verified
+                        {{
+                          'PROFILE.MFA_COUNTS'
+                            | translate
+                              : {
+                                  enrolled: credentials()!.mfaEnrolledCount,
+                                  verified: credentials()!.verifiedMfaCount,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>

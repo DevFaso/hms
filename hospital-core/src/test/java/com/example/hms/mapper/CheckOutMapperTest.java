@@ -127,6 +127,61 @@ class CheckOutMapperTest {
         }
 
         @Test
+        void blankSectionsFallBackToTheSignedNote() {
+            // QA D42: a visit documented in a signed note produced an empty summary.
+            Encounter encounter = buildEncounter();
+            encounter.setChiefComplaint(null);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("Cough for a week");
+            note.setAssessment("Acute bronchitis");
+            note.setPlan("Fluids, review in 7 days");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, CheckOutRequestDTO.builder().build(), null);
+
+            assertThat(avs.getChiefComplaint()).isEqualTo("Cough for a week");
+            assertThat(avs.getDischargeDiagnoses()).containsExactly("Acute bronchitis");
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Fluids, review in 7 days");
+        }
+
+        @Test
+        void checkoutTextWinsAndPatientInstructionsBeatThePlan() {
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("From the note");
+            note.setAssessment("Note assessment");
+            note.setPlan("Note plan");
+            note.setPatientInstructions("Take with food");
+            note.setSignedAt(java.time.LocalDateTime.of(2025, 7, 1, 11, 0));
+            encounter.setEncounterNote(note);
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .dischargeDiagnoses(List.of("Typed at checkout"))
+                .build();
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, request, null);
+
+            assertThat(avs.getChiefComplaint()).isEqualTo("Headache and fatigue");
+            assertThat(avs.getDischargeDiagnoses()).containsExactly("Typed at checkout");
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Take with food");
+        }
+
+        @Test
+        void anUnsignedDraftNoteIsNeverShown() {
+            Encounter encounter = buildEncounter();
+            encounter.setChiefComplaint(null);
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setChiefComplaint("Draft");
+            note.setAssessment("Draft assessment");
+            encounter.setEncounterNote(note);
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, null, null);
+
+            assertThat(avs.getChiefComplaint()).isNull();
+            assertThat(avs.getDischargeDiagnoses()).isEmpty();
+        }
+
+        @Test
         void handlesLinkedAppointment() {
             Encounter encounter = buildEncounter();
             Appointment appointment = new Appointment();

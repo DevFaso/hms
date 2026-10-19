@@ -2,7 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { PatientDetailComponent } from './patient-detail';
 import { PatientService } from '../services/patient.service';
@@ -164,6 +164,21 @@ describe('PatientDetailComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('D61: the age reads in the active language, not a hard-coded "years"', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PATIENTS: { AGE_YEARS: '{{count}} ans', AGE_YEAR: '{{count}} an' } },
+      true,
+    );
+    translate.use('fr');
+    const dob = new Date();
+    dob.setFullYear(dob.getFullYear() - 41);
+    dob.setDate(dob.getDate() - 1);
+
+    expect(component.getAge(dob.toISOString().slice(0, 10))).toBe('41 ans');
+  });
+
   /** Pin the caller's roles on the spy (a single role becomes the active role, as the real service does). */
   function holdRoles(roles: string[]): void {
     (
@@ -279,6 +294,17 @@ describe('PatientDetailComponent', () => {
       roles.includes('ROLE_RECEPTIONIST'),
     );
     expect(component.canViewAppointments()).toBeTrue();
+  });
+
+  it('hides the Documents tab from the front desk and the pharmacy (QA D112)', () => {
+    for (const role of ['ROLE_RECEPTIONIST', 'ROLE_PHARMACIST']) {
+      roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes(role));
+      expect(component.canViewDocuments()).withContext(role).toBeFalse();
+    }
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    expect(component.canViewDocuments()).toBeTrue();
   });
 
   it('routes consulting clinicians to Chart Review for labs and imaging', () => {

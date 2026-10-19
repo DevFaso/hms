@@ -6,9 +6,17 @@ import {
   BillingService,
   BillingInvoiceResponse,
   BillingInvoiceRequest,
+  InvoiceItemCategory,
+  InvoiceItemResponse,
   InvoiceStatus,
+  INVOICE_ITEM_CATEGORIES,
   INVOICE_STATUSES,
+  PaymentRow,
+  STAFF_PAYMENT_METHODS,
+  StaffPaymentMethod,
 } from '../services/billing.service';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -21,7 +29,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
@@ -36,7 +44,11 @@ export class BillingComponent implements OnInit {
   // Permission-gated action flags
   readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   readonly canEdit = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
-  readonly canDelete = this.permissions.hasAnyPermission('Delete Invoice', 'Manage Billing');
+  /** QA D181: the server deletes only for SUPER_ADMIN and HOSPITAL_ADMIN, so a
+   *  billing specialist holding "Manage Billing" no longer sees a button that 403s. */
+  readonly canDelete =
+    this.permissions.hasAnyPermission('Delete Invoice', 'Manage Billing') &&
+    this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN']);
   readonly canEmail = this.permissions.hasAnyPermission('Email Invoice', 'Manage Billing');
   readonly canViewReports = this.permissions.hasAnyPermission(
     'View Billing Reports',
@@ -50,6 +62,8 @@ export class BillingComponent implements OnInit {
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
   ]);
+  /** QA D142: the server reverses a payment for these roles only. */
+  readonly canReversePayment = this.canRecordPayment;
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
@@ -75,6 +89,24 @@ export class BillingComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: BillingInvoiceRequest = this.emptyForm();
+  /** The patient chosen in the picker (QA D92: phone-only patients too). */
+  formPatient = signal<PatientResponse | null>(null);
+  /** The number of the invoice being edited; the server allocates it (QA D94). */
+  editingNumber = signal('');
+  /** The status the edited invoice has now; a paid status follows payments (QA D91). */
+  editingStatus = signal<InvoiceStatus>('DRAFT');
+  /** With lines, the total is their sum and cannot be typed (QA D72). */
+  editingHasLines = signal(false);
+
+  /* ── Invoice lines (detail panel) ── */
+  items = signal<InvoiceItemResponse[]>([]);
+  itemsLoading = signal(false);
+  itemSaving = signal(false);
+  newItemDescription = signal('');
+  newItemCategory = signal<InvoiceItemCategory>('SERVICE');
+  newItemQuantity = signal<number | null>(1);
+  newItemUnitPrice = signal<number | null>(null);
+  readonly itemCategories: InvoiceItemCategory[] = INVOICE_ITEM_CATEGORIES;
 
   showDeleteConfirm = signal(false);
   deletingInv = signal<BillingInvoiceResponse | null>(null);
@@ -93,7 +125,18 @@ export class BillingComponent implements OnInit {
   showPaymentModal = signal(false);
   paymentInv = signal<BillingInvoiceResponse | null>(null);
   paymentAmount = signal<number | null>(null);
+  /** QA D146: the method and the reference are recorded, not discarded. */
+  paymentMethod = signal<StaffPaymentMethod>('CASH');
+  paymentReference = signal('');
   paymentSaving = signal(false);
+  readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
+
+  /* ── Payments ledger (detail panel, QA D140/D142) ── */
+  payments = signal<PaymentRow[]>([]);
+  paymentActionBusy = signal(false);
+  reversingPayment = signal<PaymentRow | null>(null);
+  reversalMode = signal<'reverse' | 'reject'>('reverse');
+  reversalReason = signal('');
 
   readonly invoiceStatuses: InvoiceStatus[] = INVOICE_STATUSES;
 
@@ -103,19 +146,33 @@ export class BillingComponent implements OnInit {
 
   emptyForm(): BillingInvoiceRequest {
     return {
-      patientEmail: '',
-      hospitalName: '',
-      invoiceNumber: '',
+      patientId: '',
       invoiceDate: '',
       dueDate: '',
       totalAmount: 0,
-      amountPaid: 0,
       status: 'DRAFT',
     };
   }
 
+  /** Statuses staff may choose; PAID/PARTIALLY_PAID come from recorded payments. */
+  statusOptions(): InvoiceStatus[] {
+    if (!this.editing()) return ['DRAFT', 'SENT'];
+    const current = this.editingStatus();
+    if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
+    return ['DRAFT', 'SENT', 'CANCELLED'];
+  }
+
+  statusLocked(): boolean {
+    const current = this.editingStatus();
+    return this.editing() && (current === 'PAID' || current === 'PARTIALLY_PAID');
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
+    // One key per form: a double click or a retry creates one invoice (QA D94).
+    this.form.clientRequestId = crypto.randomUUID();
+    this.formPatient.set(null);
+    this.editingHasLines.set(false);
     this.editing.set(false);
     this.editingId.set(null);
     this.showModal.set(true);
@@ -123,20 +180,42 @@ export class BillingComponent implements OnInit {
 
   openEdit(inv: BillingInvoiceResponse): void {
     this.form = {
-      patientEmail: inv.patientEmail ?? '',
-      hospitalName: inv.hospitalName ?? '',
-      encounterReference: inv.encounterDescription,
-      invoiceNumber: inv.invoiceNumber ?? '',
+      patientId: inv.patientId ?? '',
       invoiceDate: inv.invoiceDate?.substring(0, 10) ?? '',
       dueDate: inv.dueDate?.substring(0, 10) ?? '',
       totalAmount: inv.totalAmount ?? 0,
-      amountPaid: inv.amountPaid ?? 0,
       status: inv.status ?? 'DRAFT',
       notes: inv.notes,
+      // QA D148: the visit link survives an edit.
+      encounterReference: inv.encounterCode ?? undefined,
     };
+    this.formPatient.set(
+      inv.patientId
+        ? {
+            id: inv.patientId,
+            firstName: inv.patientFullName ?? '',
+            lastName: '',
+            email: inv.patientEmail,
+            phoneNumberPrimary: inv.patientPhone,
+            active: true,
+          }
+        : null,
+    );
+    this.editingNumber.set(inv.invoiceNumber ?? '');
+    this.editingStatus.set(inv.status ?? 'DRAFT');
+    this.editingHasLines.set(false);
+    this.billingService.getInvoiceItems(inv.id).subscribe({
+      next: (lines) => this.editingHasLines.set((lines ?? []).length > 0),
+      error: () => this.editingHasLines.set(false),
+    });
     this.editing.set(true);
     this.editingId.set(inv.id);
     this.showModal.set(true);
+  }
+
+  onPatientPicked(p: PatientResponse | null): void {
+    this.formPatient.set(p);
+    this.form.patientId = p?.id ?? '';
   }
 
   closeModal(): void {
@@ -144,6 +223,7 @@ export class BillingComponent implements OnInit {
   }
 
   submitForm(): void {
+    if (this.saving()) return;
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -259,7 +339,10 @@ export class BillingComponent implements OnInit {
           new Date(i.dueDate) < today,
       ).length,
       totalRevenue: list.reduce((sum, i) => sum + (i.amountPaid ?? 0), 0),
-      balance: list.reduce((sum, i) => sum + (i.balanceDue ?? 0), 0),
+      // QA D150: a draft is not yet owed and a cancelled invoice never is.
+      balance: list
+        .filter((i) => i.status === 'SENT' || i.status === 'PARTIALLY_PAID')
+        .reduce((sum, i) => sum + (i.balanceDue ?? 0), 0),
     });
   }
 
@@ -295,10 +378,212 @@ export class BillingComponent implements OnInit {
 
   viewInvoice(inv: BillingInvoiceResponse): void {
     this.selectedInvoice.set(inv);
+    this.resetNewItem();
+    this.loadItems(inv.id);
+    this.loadPayments(inv.id);
   }
 
   closeDetail(): void {
     this.selectedInvoice.set(null);
+    this.items.set([]);
+    this.payments.set([]);
+  }
+
+  /* ── Invoice lines ── */
+
+  private loadItems(invoiceId: string): void {
+    this.itemsLoading.set(true);
+    this.billingService.getInvoiceItems(invoiceId).subscribe({
+      next: (lines) => {
+        this.items.set(lines ?? []);
+        this.itemsLoading.set(false);
+      },
+      error: () => {
+        this.items.set([]);
+        this.itemsLoading.set(false);
+        this.toast.error(this.translate.instant('BILLING.ITEMS_LOAD_FAILED'));
+      },
+    });
+  }
+
+  private resetNewItem(): void {
+    this.newItemDescription.set('');
+    this.newItemCategory.set('SERVICE');
+    this.newItemQuantity.set(1);
+    this.newItemUnitPrice.set(null);
+  }
+
+  /** QA D147: a paid or cancelled invoice is closed; the server refuses line changes too. */
+  canEditLines(inv: BillingInvoiceResponse): boolean {
+    return this.canEdit && inv.status !== 'CANCELLED' && inv.status !== 'PAID';
+  }
+
+  canAddItem(): boolean {
+    const qty = this.newItemQuantity();
+    const price = this.newItemUnitPrice();
+    return (
+      !this.itemSaving() &&
+      this.newItemDescription().trim().length > 0 &&
+      !!qty &&
+      qty >= 1 &&
+      !!price &&
+      price > 0
+    );
+  }
+
+  addItem(): void {
+    const inv = this.selectedInvoice();
+    if (!inv || !this.canAddItem()) return;
+    this.itemSaving.set(true);
+    this.billingService
+      .createInvoiceItem({
+        billingInvoiceId: inv.id,
+        itemDescription: this.newItemDescription().trim(),
+        itemCategory: this.newItemCategory(),
+        quantity: this.newItemQuantity() ?? 1,
+        unitPrice: this.newItemUnitPrice() ?? 0,
+      })
+      .subscribe({
+        next: () => {
+          this.itemSaving.set(false);
+          this.resetNewItem();
+          this.toast.success(this.translate.instant('BILLING.ITEM_ADDED'));
+          this.refreshSelected(inv.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.itemSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
+  removeItem(item: InvoiceItemResponse): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
+    // QA D147: a line deletion is not silent.
+    if (!globalThis.confirm(this.translate.instant('BILLING.ITEM_REMOVE_CONFIRM'))) return;
+    this.itemSaving.set(true);
+    this.billingService.deleteInvoiceItem(item.id).subscribe({
+      next: () => {
+        this.itemSaving.set(false);
+        this.toast.success(this.translate.instant('BILLING.ITEM_REMOVED'));
+        this.refreshSelected(inv.id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.itemSaving.set(false);
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'));
+      },
+    });
+  }
+
+  /** Re-read the invoice after a line change: the server recomputed its total. */
+  private refreshSelected(invoiceId: string): void {
+    this.loadItems(invoiceId);
+    this.billingService.getInvoice(invoiceId).subscribe({
+      next: (updated) => {
+        if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
+        this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+        this.computeStats(this.invoices());
+        this.applyFilter();
+      },
+      error: () => this.toast.error(this.translate.instant('BILLING.LOAD_FAILED')),
+    });
+  }
+
+  /* ── Payments ledger ── */
+
+  private loadPayments(invoiceId: string): void {
+    this.billingService.listPayments(invoiceId).subscribe({
+      next: (rows) => {
+        if (this.selectedInvoice()?.id === invoiceId) this.payments.set(rows ?? []);
+      },
+      error: () => this.payments.set([]),
+    });
+  }
+
+  private applyUpdated(updated: BillingInvoiceResponse): void {
+    if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
+    this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
+    this.computeStats(this.invoices());
+    this.applyFilter();
+    this.loadPayments(updated.id);
+  }
+
+  confirmPendingPayment(p: PaymentRow): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.paymentActionBusy()) return;
+    this.paymentActionBusy.set(true);
+    this.billingService.confirmPayment(inv.id, p.id).subscribe({
+      next: (updated) => {
+        this.paymentActionBusy.set(false);
+        this.toast.success(this.translate.instant('BILLING.PAYMENT_CONFIRMED'));
+        this.applyUpdated(updated);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.paymentActionBusy.set(false);
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
+      },
+    });
+  }
+
+  openReversal(p: PaymentRow, mode: 'reverse' | 'reject'): void {
+    this.reversingPayment.set(p);
+    this.reversalMode.set(mode);
+    this.reversalReason.set('');
+  }
+
+  closeReversal(): void {
+    this.reversingPayment.set(null);
+  }
+
+  submitReversal(): void {
+    const inv = this.selectedInvoice();
+    const p = this.reversingPayment();
+    const reason = this.reversalReason().trim();
+    if (!inv || !p || this.paymentActionBusy()) return;
+    if (!reason) {
+      this.toast.error(this.translate.instant('BILLING.REVERSAL_REASON_REQUIRED'));
+      return;
+    }
+    this.paymentActionBusy.set(true);
+    const reversing = this.reversalMode() === 'reverse';
+    const op = reversing
+      ? this.billingService.reversePayment(inv.id, p.id, reason)
+      : this.billingService.rejectPayment(inv.id, p.id, reason);
+    op.subscribe({
+      next: (updated) => {
+        this.paymentActionBusy.set(false);
+        this.toast.success(
+          this.translate.instant(
+            reversing ? 'BILLING.PAYMENT_REVERSED' : 'BILLING.PAYMENT_REJECTED',
+          ),
+        );
+        this.closeReversal();
+        this.applyUpdated(updated);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.paymentActionBusy.set(false);
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.PAYMENT_FAILED'));
+      },
+    });
+  }
+
+  downloadReceipt(p: PaymentRow): void {
+    const inv = this.selectedInvoice();
+    if (!inv) return;
+    this.billingService.getReceiptPdf(inv.id, p.id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `receipt-${inv.invoiceNumber || inv.id}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
+    });
   }
 
   downloadPdf(id: string): void {
@@ -387,6 +672,8 @@ export class BillingComponent implements OnInit {
   openPayment(inv: BillingInvoiceResponse): void {
     this.paymentInv.set(inv);
     this.paymentAmount.set(inv.balanceDue ?? null);
+    this.paymentMethod.set('CASH');
+    this.paymentReference.set('');
     this.showPaymentModal.set(true);
   }
 
@@ -406,8 +693,15 @@ export class BillingComponent implements OnInit {
       this.toast.error(this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'));
       return;
     }
+    // QA D184: francs CFA have no cents.
+    if (!Number.isInteger(amount)) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+      return;
+    }
     this.paymentSaving.set(true);
-    this.billingService.recordPayment(inv.id, amount).subscribe({
+    const reference = this.paymentReference().trim();
+    const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
+    this.billingService.recordPayment(inv.id, payment).subscribe({
       next: (updated) => {
         this.paymentSaving.set(false);
         this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
@@ -415,6 +709,10 @@ export class BillingComponent implements OnInit {
         this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
         this.computeStats(this.invoices());
         this.applyFilter();
+        if (this.selectedInvoice()?.id === updated.id) {
+          this.selectedInvoice.set(updated);
+          this.loadPayments(updated.id);
+        }
       },
       error: (err: HttpErrorResponse) => {
         this.paymentSaving.set(false);

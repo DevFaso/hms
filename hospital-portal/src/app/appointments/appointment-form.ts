@@ -3,10 +3,10 @@ import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@ang
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { of, Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -114,8 +114,10 @@ export class AppointmentFormComponent implements OnInit {
       });
 
       // Load staff for the locked hospital once.
+      // Bookable providers only (QA D56/D122): never an admin, a receptionist
+      // or an account whose only role here is ROLE_PATIENT.
       this.staffService.list(lockedId).subscribe((list) => {
-        this.allStaff = list;
+        this.allStaff = list.filter(isClinicalProvider);
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
       });
@@ -193,7 +195,7 @@ export class AppointmentFormComponent implements OnInit {
               return of(this.allStaff);
             }
             // Unrestricted / multi-hospital user only — safe to fetch staff here.
-            return this.staffService.list();
+            return this.staffService.list().pipe(map((list) => list.filter(isClinicalProvider)));
           }
           return of(this.allStaff);
         }),
@@ -296,7 +298,7 @@ export class AppointmentFormComponent implements OnInit {
       // Unrestricted / multi-hospital user selected a hospital: fetch staff for it
       this.staffService.list(hospitalId).subscribe((list) => {
         if (!this.staffLoaded) {
-          this.allStaff = [...this.allStaff, ...list];
+          this.allStaff = [...this.allStaff, ...list.filter(isClinicalProvider)];
         }
         this.setDeptsFromStaff(hospitalId);
       });

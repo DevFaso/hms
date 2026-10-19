@@ -13,6 +13,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'ROLES.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'ROLES.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -252,8 +253,7 @@
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
-              {{ 'ROLES.CONFIRM_DELETE' | translate }} <strong>{{ deletingRole()?.name }}</strong
-              >?
+              {{ 'ROLES.CONFIRM_DELETE' | translate }} <strong>{{ deletingRole()?.name }}</strong>
             </p>
             <p class="delete-detail">
               {{ 'ROLES.DELETE_WARNING' | translate }}

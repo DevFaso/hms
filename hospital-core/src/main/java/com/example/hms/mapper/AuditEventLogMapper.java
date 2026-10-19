@@ -48,7 +48,7 @@ public class AuditEventLogMapper {
             ? resolveResourceName(event)
             : resolveResourceNameFromColumns(event);
         String hospitalName = resolveHospitalName(event, assignment);
-        String roleName = resolveRoleName(event, assignment, user);
+        String roleName = resolveRoleName(event, assignment);
 
         return AuditEventLogResponseDTO.builder()
             .id(event.getId())
@@ -103,14 +103,14 @@ public class AuditEventLogMapper {
         return hospitalName;
     }
 
-    private String resolveRoleName(AuditEventLog event, UserRoleHospitalAssignment assignment, User user) {
+    private String resolveRoleName(AuditEventLog event, UserRoleHospitalAssignment assignment) {
         String roleName = event.getRoleName();
         if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
             roleName = assignment.getRole().getName();
         }
-        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-            roleName = user.getUserRoles().iterator().next().getRole().getName();
-        }
+        // No fallback to the account's raw user_roles links: the first such
+        // link is arbitrary and may be a leftover ROLE_PATIENT (QA D132), so a
+        // row with no recorded role shows none rather than a wrong one.
         // Bare token or null: a legacy row's "ROLE_X" and "Unknown Role" are
         // normalised here, on the way out, since no write can reach them.
         return RoleNames.bareRole(roleName);

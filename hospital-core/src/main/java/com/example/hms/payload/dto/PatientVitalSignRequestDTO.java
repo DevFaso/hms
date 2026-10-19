@@ -1,5 +1,8 @@
 package com.example.hms.payload.dto;
 
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -28,6 +31,8 @@ public class PatientVitalSignRequestDTO {
     @Size(max = 40)
     private String source;
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
 
     @Min(20)
@@ -84,4 +89,26 @@ public class PatientVitalSignRequestDTO {
 
     @PastOrPresent
     private LocalDateTime recordedAt;
+
+    @AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
+
+    /** D111: a submission with no measurement at all is not a reading. */
+    @AssertTrue(message = "{vitals.empty}")
+    @JsonIgnore
+    public boolean isAnyMeasurementPresent() {
+        return temperatureCelsius != null
+            || heartRateBpm != null
+            || respiratoryRateBpm != null
+            || systolicBpMmHg != null
+            || diastolicBpMmHg != null
+            || spo2Percent != null
+            || bloodGlucoseMgDl != null
+            || weightKg != null
+            || heightCm != null
+            || headCircumferenceCm != null;
+    }
 }

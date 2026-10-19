@@ -11,6 +11,7 @@ import {
   AfterViewChecked,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -129,6 +130,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* Task create dialog */
   taskCreateOpen = signal(false);
   taskForm = signal<Partial<NurseTaskCreateRequest>>({});
+  /** The patient picked in the create-task modal; its id is what the request carries. */
+  taskPatient = signal<PatientResponse | null>(null);
   taskCreating = signal(false);
 
   /* Handoff create dialog (P0 #1 — real SBAR handoffs) */
@@ -144,7 +147,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /* MAR action state */
   actionInProgress = signal<string | null>(null);
-  reasonPrompt = signal<{ taskId: string; action: string } | null>(null);
+  reasonPrompt = signal<{ taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' } | null>(null);
   reasonText = signal('');
 
   /* Triage & Nursing-Intake dialog state (MVP 2 + MVP 3) */
@@ -169,6 +172,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.closeVitalsDialog();
     } else if (this.handoffCreateOpen()) {
       this.closeHandoffCreate();
+    } else if (this.taskCreateOpen()) {
+      this.closeTaskCreate();
+    } else if (this.careNoteFor()) {
+      this.closeCareNote();
     }
   }
 
@@ -409,23 +416,30 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /* ── MAR Actions ───────────────────────────────────────── */
 
+  /**
+   * D78: the nurse station has no bedside scan, so the server refuses a
+   * GIVEN without a five-rights override reason. Ask for that reason up
+   * front (the eMAR is the scanning path) instead of sending a request that
+   * can only fail.
+   */
   administerMedication(taskId: string): void {
-    this.actionInProgress.set(taskId);
-    this.nurseService.administerMedication(taskId, { status: 'GIVEN' }).subscribe({
-      next: () => {
-        this.toast.success(
-          this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
-            action: this.translate.instant('NURSE.MED_ACTION.GIVEN'),
-          }),
-        );
-        this.actionInProgress.set(null);
-        this.loadAll();
-      },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
-        this.actionInProgress.set(null);
-      },
-    });
+    this.reasonPrompt.set({ taskId, action: 'GIVEN' });
+    this.reasonText.set('');
+  }
+
+  /** Translation key naming the action the reason prompt is for. */
+  reasonActionLabelKey(): string {
+    const action = this.reasonPrompt()?.action;
+    if (action === 'GIVEN') return 'NURSE.GIVE';
+    return action === 'HELD' ? 'NURSE.HOLD' : 'NURSE.REFUSE';
+  }
+
+  /** The server's own (localised) refusal, or the generic toast. */
+  private actionError(err: unknown): string {
+    const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+    return typeof message === 'string' && message.trim()
+      ? message
+      : this.translate.instant('NURSE.TOAST.ACTION_FAILED');
   }
 
   promptHoldRefuse(taskId: string, action: 'HELD' | 'REFUSED'): void {
@@ -442,28 +456,30 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       return;
     }
     this.actionInProgress.set(prompt.taskId);
-    this.nurseService
-      .administerMedication(prompt.taskId, { status: prompt.action, note: reason })
-      .subscribe({
-        next: () => {
-          // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
-          // signature), so feed it directly into the NURSE.MED_ACTION.* key.
-          // The prior `=== 'HOLD'` check was always false and silently coerced
-          // every Hold toast into "refused" — caught by Copilot review on PR #256.
-          this.toast.success(
-            this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
-              action: this.translate.instant('NURSE.MED_ACTION.' + prompt.action),
-            }),
-          );
-          this.actionInProgress.set(null);
-          this.reasonPrompt.set(null);
-          this.loadAll();
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('NURSE.TOAST.ACTION_FAILED'));
-          this.actionInProgress.set(null);
-        },
-      });
+    const payload =
+      prompt.action === 'GIVEN'
+        ? { status: 'GIVEN', overrideReason: reason }
+        : { status: prompt.action, note: reason };
+    this.nurseService.administerMedication(prompt.taskId, payload).subscribe({
+      next: () => {
+        // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
+        // signature), so feed it directly into the NURSE.MED_ACTION.* key.
+        // The prior `=== 'HOLD'` check was always false and silently coerced
+        // every Hold toast into "refused" — caught by Copilot review on PR #256.
+        this.toast.success(
+          this.translate.instant('NURSE.TOAST.MED_ACTION_RECORDED', {
+            action: this.translate.instant('NURSE.MED_ACTION.' + prompt.action),
+          }),
+        );
+        this.actionInProgress.set(null);
+        this.reasonPrompt.set(null);
+        this.loadAll();
+      },
+      error: (err: unknown) => {
+        this.toast.error(this.actionError(err));
+        this.actionInProgress.set(null);
+      },
+    });
   }
 
   cancelHoldRefuse(): void {
@@ -523,6 +539,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;
     }
+    const implausible = firstImplausibleVital(form);
+    if (implausible) {
+      this.toast.error(
+        this.translate.instant(implausible.messageKey, {
+          min: implausible.min,
+          max: implausible.max,
+        }),
+      );
+      return;
+    }
     this.vitalsCapturing.set(true);
     this.nurseService.captureVitals(target.patientId, form).subscribe({
       next: () => {
@@ -533,8 +559,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeVitalsDialog();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
+      error: (err: { error?: { fieldErrors?: Record<string, string> } }) => {
+        // A 400 from the plausibility bounds carries the server's translated
+        // per-field message; anything else keeps the generic toast.
+        const fieldMessage = Object.values(err?.error?.fieldErrors ?? {})[0];
+        this.toast.error(fieldMessage ?? this.translate.instant('NURSE.TOAST.VITALS_SAVE_FAILED'));
         this.vitalsCapturing.set(false);
       },
     });
@@ -663,12 +692,20 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   openTaskCreate(): void {
     this.taskForm.set({});
+    this.taskPatient.set(null);
     this.taskCreateOpen.set(true);
   }
 
   closeTaskCreate(): void {
     this.taskCreateOpen.set(false);
     this.taskForm.set({});
+    this.taskPatient.set(null);
+  }
+
+  /** The modal picks a patient by name; a raw UUID field was the only way in before (QA D45). */
+  onTaskPatientChange(patient: PatientResponse | null): void {
+    this.taskPatient.set(patient);
+    this.taskForm.update((f) => ({ ...f, patientId: patient?.id }));
   }
 
   updateTaskField(field: keyof NurseTaskCreateRequest, value: string): void {
@@ -804,7 +841,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * Look up the most recent non-completed encounter for a patient and open the triage dialog.
    */
   openTriage(patientId: string): void {
-    this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc));
+    // QA D179: triage is for the visit waiting to be triaged, not whichever
+    // open encounter came first (a hospital stay has one too now).
+    this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc), [
+      'ARRIVED',
+      'TRIAGE',
+    ]);
   }
 
   onTriageCompleted(): void {
@@ -830,12 +872,18 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private lookupActiveEncounter(
     patientId: string,
     callback: (enc: EncounterResponse) => void,
+    preferredStatuses: string[] = [],
   ): void {
     this.encounterLookupInProgress.set(true);
     this.encounterService.list({ patientId }).subscribe({
       next: (encounters) => {
         this.encounterLookupInProgress.set(false);
-        const active = encounters.find((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        const open = encounters.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        // An inpatient stay's encounter is never the outpatient visit a
+        // triage or an intake is about (D179).
+        const visits = open.filter((e) => e.encounterType !== 'INPATIENT');
+        const active =
+          visits.find((e) => preferredStatuses.includes(e.status ?? '')) ?? visits[0] ?? open[0];
         if (active) {
           callback(active);
         } else {

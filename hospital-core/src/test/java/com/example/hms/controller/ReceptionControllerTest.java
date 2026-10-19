@@ -142,4 +142,18 @@ class ReceptionControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       GET /reception/patients/duplicate-candidates (QA D40)
+       ═══════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void duplicateCandidates_noPinnedHospital_returnsEmptyWithoutSearching() {
+        HospitalContextHolder.clear();
+
+        var response = controller.getDuplicateCandidates("Awa", null, null);
+
+        org.assertj.core.api.Assertions.assertThat(response.getBody()).isEmpty();
+        org.mockito.Mockito.verifyNoInteractions(receptionService);
+    }
 }

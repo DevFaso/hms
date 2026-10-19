@@ -25,8 +25,10 @@ import {
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -37,6 +39,7 @@ import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+import { AuthService } from '../auth/auth.service';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -148,6 +151,9 @@ export class PrescriptionsComponent implements OnInit {
   private readonly prescriptionService = inject(PrescriptionService);
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
+  private readonly encounterService = inject(EncounterService);
+  /** QA D177: the selected patient's encounters, so the prescription links one by name. */
+  readonly patientEncounters = signal<EncounterResponse[]>([]);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
@@ -156,6 +162,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly auth = inject(AuthService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -226,7 +233,15 @@ export class PrescriptionsComponent implements OnInit {
       .list()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: (s) => this.staffMembers.set(s ?? []),
+        // The prescriber of record is the signed-in prescriber: the server
+        // refuses an order written under a colleague's name, nurse or not
+        // (QA D84, D176). Offering the whole team only led to that refusal.
+        next: (s) => {
+          const me = this.auth.getUserProfile()?.id;
+          this.staffMembers.set(
+            (s ?? []).filter((m) => isClinicalProvider(m) && !!me && m.userId === me),
+          );
+        },
         // Said out loud rather than rendered as an empty dropdown: a
         // prescriber who cannot find their own name would otherwise assume
         // the list is simply short.
@@ -322,11 +337,19 @@ export class PrescriptionsComponent implements OnInit {
   editingWithdrawn = signal(false);
 
   statusOptions(): { value: string; labelKey: string }[] {
+    if (!this.editing()) {
+      // A new order cannot be born withdrawn: offering Cancelled or
+      // Discontinued at creation recorded an order nobody ever placed (D129).
+      return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
+    }
     if (!this.editingWithdrawn()) {
       return this.prescriptionStatuses;
     }
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
   }
+
+  /** D109: administration routes the prescriber picks from (codes the MAR compares). */
+  readonly routes: readonly string[] = ['PO', 'IV', 'IM', 'SC', 'SL', 'PR', 'TOP', 'INH', 'NEB'];
 
   emptyForm(): PrescriptionRequest {
     return {
@@ -334,6 +357,7 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: '',
       dosage: '',
       frequency: '',
+      route: 'PO',
       duration: '',
       notes: '',
       status: 'DRAFT',
@@ -376,20 +400,60 @@ export class PrescriptionsComponent implements OnInit {
     this.form.patientId = p.id;
     this.patientDropdownOpen.set(false);
     this.patientQuery.set('');
+    this.loadPatientEncounters(p.id);
   }
 
   clearPatient(): void {
     this.selectedPatient.set(null);
     this.form.patientId = '';
     this.patientQuery.set('');
+    this.form.encounterId = undefined;
+    this.patientEncounters.set([]);
+  }
+
+  /** QA D177: the encounters a prescription may be linked to, newest first. */
+  private loadPatientEncounters(patientId: string): void {
+    this.patientEncounters.set([]);
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.encounterService.list({ patientId, hospitalId }).subscribe({
+      next: (list) => {
+        if (this.form.patientId !== patientId) return;
+        this.patientEncounters.set(
+          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+        );
+      },
+      error: () => this.patientEncounters.set([]),
+    });
+  }
+
+  hasEncounterOption(id: string): boolean {
+    return this.patientEncounters().some((e) => e.id === id);
+  }
+
+  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  encounterLabel(e: EncounterResponse): string {
+    const date = e.encounterDate
+      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      : '';
+    return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
 
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
 
+  /** The caller's own staff row at this hospital, if they are in the prescriber list. */
+  ownPrescriberStaffId(): string {
+    const userId = this.auth.getUserProfile()?.id;
+    if (!userId) return '';
+    return this.staffMembers().find((s) => s.userId === userId)?.id ?? '';
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
+    // QA D123: a clinician prescribing opens the form with THEMSELVES as the
+    // prescriber, instead of an empty choice in a list of colleagues.
+    this.form.staffId = this.ownPrescriberStaffId();
     this.editing.set(false);
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
@@ -406,6 +470,7 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
+      route: p.route ?? '',
       duration: p.duration ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
@@ -416,6 +481,8 @@ export class PrescriptionsComponent implements OnInit {
       lastName: p.patientFullName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
     } as PatientResponse);
+    this.patientEncounters.set([]);
+    if (p.patientId) this.loadPatientEncounters(p.patientId);
     this.editing.set(true);
     this.editingId.set(p.id);
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
@@ -459,9 +526,17 @@ export class PrescriptionsComponent implements OnInit {
           // the forceOverride checkbox for re-submission.
           this.cdsAdvisories.set(cards);
           this.cdsCriticalBlocked.set(true);
-          this.toast.error(this.extractErrorMessage(err));
+          this.toast.error(
+            this.extractErrorMessage(err) ||
+              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
+          );
         } else {
-          this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'));
+          // The server's reason (e.g. "the prescriber must be you", QA D176)
+          // in the caller's language; the generic text only as a fallback.
+          this.toast.error(
+            this.extractErrorMessage(err) ||
+              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
+          );
         }
         this.saving.set(false);
       },
@@ -473,6 +548,7 @@ export class PrescriptionsComponent implements OnInit {
     this.cdsAdvisories.set([]);
     this.cdsCriticalBlocked.set(false);
     this.form.forceOverride = undefined;
+    this.form.overrideReason = undefined;
   }
 
   /** Allow the clinician to dismiss non-blocking advisories without re-submitting. */
@@ -481,12 +557,31 @@ export class PrescriptionsComponent implements OnInit {
     this.closeModal();
   }
 
+  /**
+   * The backend's own sentence for a refusal, or '' when there is none worth
+   * showing. Never HttpErrorResponse.message ("Http failure response for
+   * ...: 403 Forbidden" — English, technical; D53/D54), and never the opaque
+   * "Access denied" default (now localized, so recognised by its ACCESS_DENIED
+   * code), which the caller replaces with translated text.
+   */
   private extractErrorMessage(err: unknown): string {
     if (err && typeof err === 'object') {
-      const e = err as { error?: { message?: string }; message?: string };
-      return e.error?.message ?? e.message ?? '';
+      const e = err as { error?: { message?: unknown; code?: unknown } | null };
+      if (e.error?.code === 'ACCESS_DENIED') {
+        return '';
+      }
+      const msg = e.error && typeof e.error.message === 'string' ? e.error.message.trim() : '';
+      return msg === 'Access denied' ? '' : msg;
     }
     return '';
+  }
+
+  /** Translated fallback for a refused action: a 403 says "not allowed", anything else "failed". */
+  private refusalText(err: unknown, failedKey: string): string {
+    const status = (err as { status?: number } | null)?.status;
+    return this.translate.instant(
+      status === 403 ? 'PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN' : failedKey,
+    );
   }
 
   /**
@@ -578,7 +673,7 @@ export class PrescriptionsComponent implements OnInit {
       },
       error: (err: unknown) => {
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
+        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
         this.signingId.set(null);
       },
     });
@@ -649,7 +744,7 @@ export class PrescriptionsComponent implements OnInit {
         this.verifying.set(false);
         const msg = this.extractErrorMessage(err);
         this.toast.error(
-          msg || this.translate.instant('PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
+          msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.PHARMACIST_VERIFY_FAILED'),
         );
       },
     });
@@ -669,7 +764,7 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.translate.instant('PRESCRIPTIONS.TOAST.SIGN_FAILED'));
+        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED'));
         this.signingId.set(null);
       },
     });

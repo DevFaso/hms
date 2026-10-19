@@ -107,6 +107,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
     private final PrescriptionQueueClaimService queueClaimService;
+    /** QA D156: an in-scope prescription is verified by a pharmacist before it is filled. */
+    private final PharmacistVerificationService pharmacistVerificationService;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -728,6 +730,12 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
+        // fill with no lot used to be accepted as DISPENSED with no stock
+        // movement at all, so the shelf and the ledger drifted apart.
+        if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
+            throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
+        }
         DispenseVerificationResult verification =
                 dispenseVerificationService.verify(prescription, stockLot,
                         dto.getPatientScanValue(), dto.getProductScanValue());
@@ -781,6 +789,13 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         controlledSubstanceGuard.requireDispensable(prescription);
+        // QA D156: the pharmacist-verification step existed but only the MAR
+        // read it, so a controlled or co-sign prescription was filled with
+        // nobody having verified it. The same scope gates the counter.
+        if (pharmacistVerificationService != null
+                && pharmacistVerificationService.blocksAdministration(prescription)) {
+            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+        }
         return prescription;
     }
 
@@ -1015,7 +1030,15 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         enforceHospitalScope(dispense.getPharmacy());
-        return dispenseMapper.toResponseDTO(dispense);
+        DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
+        // QA D102: the checkout and its receipt show names, not raw ids.
+        if (dispense.getPatient() != null) {
+            dto.setPatientName(dispense.getPatient().getFullName());
+        }
+        if (dispense.getPharmacy() != null) {
+            dto.setPharmacyName(dispense.getPharmacy().getName());
+        }
+        return dto;
     }
 
     @Override
@@ -1359,6 +1382,12 @@ public class DispenseServiceImpl implements DispenseService {
      *                 prescriber should hear about (a fill), as opposed to
      *                 bookkeeping after a cancellation
      */
+    private boolean allFillsOwedAreComplete(Prescription prescription) {
+        long fillsOwed = 1L + (prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0);
+        return dispenseRepository.countCompleteFillsForPrescription(
+            prescription.getId(), DispenseRepository.NOT_A_FILL) >= fillsOwed;
+    }
+
     private void updatePrescriptionStatusFromHistory(Prescription prescription, boolean announce) {
         BigDecimal expected = expectedLifetimeQuantity(prescription);
         BigDecimal dispensedToDate = dispenseRepository
@@ -1372,6 +1401,14 @@ public class DispenseServiceImpl implements DispenseService {
             // All dispenses cancelled — return to a dispensable state
             nextStatus = PrescriptionStatus.SIGNED;
         } else if (expected.signum() > 0 && dispensedToDate.compareTo(expected) >= 0) {
+            nextStatus = PrescriptionStatus.DISPENSED;
+        } else if (expected.signum() <= 0 && allFillsOwedAreComplete(prescription)) {
+            // D95: the prescription states no quantity (the prescribing form
+            // does not send one), so the lifetime total is 0 and the
+            // comparison above can never succeed: every fill, however
+            // complete, left it PARTIALLY_FILLED and in the queue. Without a
+            // quantity, a fill that handed over everything it asked for is the
+            // whole fill - one for the original and one per released refill.
             nextStatus = PrescriptionStatus.DISPENSED;
         } else {
             nextStatus = PrescriptionStatus.PARTIALLY_FILLED;

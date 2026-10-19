@@ -122,8 +122,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      *
      * Scope (UserAccountAccess.requireDirectoryAccess): with :scoped = false
      * (the super-admin) every account, the deleted view included on request.
-     * With :scoped = true only LIVE accounts holding an assignment, any role,
-     * active or not, at one of :hospitalIds; EXISTS, not a join, so an
+     * With :scoped = true only LIVE accounts holding an ACTIVE assignment at
+     * one of :hospitalIds, or an inactive one there while active nowhere
+     * else (a pending invitation or a former employee), the same rule as
+     * UserAccountAccess.canView: someone now working at B is not listed by
+     * A through a stale row left at A (QA D190). EXISTS, not a join, so an
      * account assigned at two of those hospitals is one row. The scope is in
      * the query: filtering a global page in memory would load other tenants'
      * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
@@ -134,10 +137,21 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
           AND (:scoped = false
                OR (u.isDeleted = false
-                   AND EXISTS (
-                       SELECT 1 FROM UserRoleHospitalAssignment ha
-                       WHERE ha.user = u
-                         AND ha.hospital.id IN :hospitalIds)))
+                   AND (EXISTS (
+                           SELECT 1 FROM UserRoleHospitalAssignment ha
+                           WHERE ha.user = u
+                             AND ha.active = true
+                             AND ha.hospital.id IN :hospitalIds)
+                        OR (EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment hi
+                               WHERE hi.user = u
+                                 AND hi.hospital.id IN :hospitalIds)
+                            AND NOT EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment ho
+                               LEFT JOIN ho.hospital hoh
+                               WHERE ho.user = u
+                                 AND ho.active = true
+                                 AND (hoh IS NULL OR hoh.id NOT IN :hospitalIds))))))
         """;
 
     /*
@@ -150,15 +164,30 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * is listed by GET /users and must be found by role=NURSE too.
      * Unscoped (the super-admin), the role filter is unchanged: an active
      * assignment anywhere, or a global UserRole.
+     * QA D198: the username, e-mail and phone are matched only on rows whose
+     * contacts the caller can read, the same rule UserServiceImpl.directoryRow
+     * masks by: every row for a caller who may read contact details
+     * (contactSearch), otherwise only staff accounts holding no patient
+     * profile. A masked e-mail cannot be confirmed by searching for it, and a
+     * colleague's visible e-mail is still searchable.
      */
     String DIRECTORY_SEARCH_FILTERS = """
           AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
-                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND ( LOWER(u.username)            LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR LOWER(COALESCE(u.email, '')) LIKE LOWER(CONCAT('%', cast(:name AS string), '%'))
+                           OR ( :phoneDigits IS NOT NULL
+                                AND u.phoneNumber LIKE CONCAT('%', cast(:phoneDigits AS string), '%') ) ) )
               )
           AND ( :email IS NULL
-                OR LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%'))
+                OR ( ( :contactSearch = true
+                     OR ( EXISTS (SELECT 1 FROM Staff sv WHERE sv.user = u)
+                          AND NOT EXISTS (SELECT 1 FROM Patient pv WHERE pv.user = u) ) )
+                     AND LOWER(u.email) LIKE LOWER(CONCAT('%', cast(:email AS string), '%')) )
               )
           AND ( :role IS NULL
                 OR EXISTS (
@@ -185,8 +214,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS)
     Page<User> searchUsers(@Param("name") String name,
+                           @Param("phoneDigits") String phoneDigits,
                            @Param("role") String role,
                            @Param("email") String email,
+                           @Param("contactSearch") boolean contactSearch,
                            @Param("includeDeleted") boolean includeDeleted,
                            @Param("onlyDeleted") boolean onlyDeleted,
                            @Param("scoped") boolean scoped,

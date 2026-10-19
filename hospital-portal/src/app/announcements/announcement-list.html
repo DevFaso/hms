@@ -15,6 +15,7 @@
   <div class="search-bar">
     <span class="material-symbols-outlined search-icon">search</span>
     <input
+      [attr.aria-label]="'ANNOUNCEMENTS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'ANNOUNCEMENTS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
@@ -70,11 +71,12 @@
       <h3>{{ 'ANNOUNCEMENTS.NO_ANNOUNCEMENTS' | translate }}</h3>
       <p>
         {{
-          searchTerm
-            ? 'Try adjusting your search.'
+          (searchTerm
+            ? 'COMMON.TRY_ADJUST_SEARCH'
             : canManage
-              ? 'Create your first announcement.'
-              : 'No announcements yet.'
+              ? 'ANNOUNCEMENTS.CREATE_FIRST'
+              : 'ANNOUNCEMENTS.NONE_YET'
+          ) | translate
         }}
       </p>
     </div>

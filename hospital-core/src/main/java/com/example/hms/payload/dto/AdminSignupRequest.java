@@ -21,13 +21,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@LicenseRequiredForMedicalRoles(message = "{adminSignup.licenseNumber.required}")
 public class AdminSignupRequest {
     /** Optional: hospital name for registration (alternative to hospitalId). */
     @JsonProperty("hospitalName")
     private String hospitalName;
 
-    @NotBlank(message = "{adminSignup.username.required}")
+    // Optional: when omitted the service generates a temporary unique username
+    // from the first/last name and sets forceUsernameChange=true.
     private String username;
 
     // Optional for PATIENT registrations (phone-first: most patients have no
@@ -36,9 +36,9 @@ public class AdminSignupRequest {
     @Email
     private String email;
 
-    // Password is optional for non-patient staff registrations: when omitted the service
-    // auto-generates a temporary password and sets forcePasswordChange=true so the user
-    // is prompted to choose a permanent one on first login.
+    // Optional, kept for API compatibility: when omitted (the portal never sends
+    // it) the service generates a strong one-time password and sets
+    // forcePasswordChange=true. An admin-typed password is never e-mailed.
     private String password;
 
     @NotBlank(message = "{adminSignup.firstName.required}")
@@ -57,7 +57,7 @@ public class AdminSignupRequest {
     @NotEmpty(message = "{adminSignup.roleNames.required}")
     private Set<@NotBlank String> roleNames;
 
-    private String licenseNumber;              // required only for medical/admin roles (validator)
+    private String licenseNumber;              // optional for every role: licences are never mandatory
     private JobTitle jobTitle;                 // optional
     private EmploymentType employmentType;     // optional; service defaults FULL_TIME if null
     private UUID departmentId;                 // optional

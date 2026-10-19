@@ -11,6 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 
 import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
 import { KpiSparklineComponent } from './kpi-sparkline.component';
+import { currentLocale } from '../../shared/i18n/app-locale';
 
 interface KpiCard {
   /** Translation key prefix; the template appends ".label" and ".help". */
@@ -139,7 +140,11 @@ export class KpiCardsComponent implements OnInit {
 
   private formatPercent(value: number | undefined): string {
     if (value == null || !Number.isFinite(value)) return '—';
-    return `${(value * 100).toFixed(1)}%`;
+    return new Intl.NumberFormat(currentLocale(), {
+      style: 'percent',
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value);
   }
 
   private formatSampleSize(n: number | undefined): string {

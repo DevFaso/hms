@@ -24,6 +24,8 @@ export class GoodsReceiptComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   pharmacies = signal<PharmacyResponse[]>([]);
+  /** True once the pharmacy list answered, so an empty list shows a hint, not a blank select (D59). */
+  pharmaciesLoaded = signal(false);
   selectedPharmacyId = '';
   inventoryItems = signal<InventoryItemResponse[]>([]);
 
@@ -46,6 +48,7 @@ export class GoodsReceiptComponent implements OnInit {
       next: (page) => {
         const list = page?.content ?? [];
         this.pharmacies.set(list);
+        this.pharmaciesLoaded.set(true);
         if (list.length > 0) {
           this.selectedPharmacyId = list[0].id;
           this.onPharmacyChange();
@@ -132,7 +135,13 @@ export class GoodsReceiptComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.SELECT_ITEM_REQUIRED'));
       return;
     }
-    if (!this.form.lotNumber || !this.form.expiryDate || this.form.initialQuantity <= 0) {
+    // QA D143: a quantity that is present but not positive gets its own
+    // message, not "required fields", which sent the user hunting.
+    if (this.form.initialQuantity != null && this.form.initialQuantity <= 0) {
+      this.toast.error(this.translate.instant('PHARMACY.RECEIPT_QUANTITY_POSITIVE'));
+      return;
+    }
+    if (!this.form.lotNumber || !this.form.expiryDate || !this.form.initialQuantity) {
       this.toast.error(this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED'));
       return;
     }

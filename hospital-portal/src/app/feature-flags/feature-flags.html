@@ -23,6 +23,7 @@
   <div class="search-bar">
     <span class="material-icons search-icon">search</span>
     <input
+      [attr.aria-label]="'FLAGS.SEARCH_PLACEHOLDER' | translate"
       type="text"
       [placeholder]="'FLAGS.SEARCH_PLACEHOLDER' | translate"
       [ngModel]="search()"
@@ -54,7 +55,10 @@
               class="toggle-btn"
               [class.on]="flag.enabled"
               (click)="toggleFlag(flag)"
-              [attr.aria-label]="flag.enabled ? 'Disable ' + flag.key : 'Enable ' + flag.key"
+              [attr.aria-label]="
+                (flag.enabled ? 'FLAGS.DISABLE_FLAG' : 'FLAGS.ENABLE_FLAG')
+                  | translate: { key: flag.key }
+              "
             >
               <span class="toggle-track">
                 <span class="toggle-thumb"></span>

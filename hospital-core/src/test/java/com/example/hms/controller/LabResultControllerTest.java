@@ -180,7 +180,7 @@ class LabResultControllerTest {
     @Test
     void releaseLabResult_preAuthorize_excludesLabTechnician() throws Exception {
         List<String> roles = extractRolesFromMethod("releaseLabResult",
-                UUID.class, Locale.class);
+                UUID.class, boolean.class, Locale.class);
         assertThat(roles).isNotEmpty()
                 .doesNotContain("LAB_TECHNICIAN");
     }

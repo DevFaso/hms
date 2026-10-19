@@ -23,7 +23,6 @@ import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.utility.RoleValidator;
-import org.apache.kafka.common.errors.DuplicateResourceException;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -92,12 +91,11 @@ public class HospitalServiceImpl implements HospitalService {
             return List.of();
         }
 
-        // No hospital-scope filtering here: the hospital directory (name,
-        // address, phone) is not sensitive, and clinical staff need the full
-        // list to pick destination hospitals in referral / consultation
-        // workflows.  Access is already gated by SecurityConfig + controller
-        // @PreAuthorize.
-        return hospitals.stream()
+        // QA D36: the full record (address, phone, email, licence) is the
+        // caller's own hospitals' only; a super-admin reads every one. The
+        // destination picker of cross-hospital workflows reads the directory
+        // ({@link #getHospitalDirectory()}) instead.
+        return applyHospitalScope(hospitals).stream()
                 .filter(java.util.Objects::nonNull)
                 .map(hospitalMapper::toHospitalDTO)
                 .toList();
@@ -127,6 +125,19 @@ public class HospitalServiceImpl implements HospitalService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.HospitalDirectoryEntryDTO> getHospitalDirectory() {
+        List<Hospital> hospitals = hospitalRepository.findAllForFilters(null, null, null, null);
+        if (hospitals == null) {
+            return List.of();
+        }
+        return hospitals.stream()
+                .filter(h -> h != null && h.isActive())
+                .map(h -> new com.example.hms.payload.dto.HospitalDirectoryEntryDTO(h.getId(), h.getName(), h.getCity()))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public HospitalResponseDTO getHospitalById(UUID id, Locale locale) {
         Hospital hospital = getHospitalOrThrow(id);
         requireHospitalScope(hospital.getId(), locale);
@@ -150,7 +161,7 @@ public class HospitalServiceImpl implements HospitalService {
         if (exists) {
             String message = messageSource.getMessage("hospital.exists",
                     new Object[]{dto.getName()}, "Hospital already exists.", locale);
-            throw new DuplicateResourceException(message);
+            throw new ConflictException("name:" + message); // QA D167: a 409, not Kafka's exception (which answered 500)
         }
 
         Organization organization = null;

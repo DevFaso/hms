@@ -1,39 +1,45 @@
 <section class="claims">
   <header class="claims__header">
-    <h1>Demandes de remboursement (AMU / Assurance)</h1>
+    <h1>{{ 'PHARMACY_CLAIMS.TITLE' | translate }}</h1>
     <div class="claims__actions">
       <label class="filter">
-        Statut :
+        {{ 'PHARMACY_CLAIMS.STATUS_FILTER' | translate }}
         <select [ngModel]="filter()" (ngModelChange)="filter.set($event)" name="filter">
-          <option value="ALL">Tous</option>
+          <option value="ALL">{{ 'PHARMACY_CLAIMS.ALL' | translate }}</option>
           @for (o of statusOptions; track o) {
-            <option [value]="o.value">{{ o.labelFr }}</option>
+            <option [value]="o.value">{{ o.labelKey | translate }}</option>
           }
         </select>
       </label>
-      <button type="button" (click)="load()" [disabled]="loading()">Actualiser</button>
-      <button type="button" (click)="exportCsv()">Exporter CSV</button>
-      <button type="button" (click)="exportFhir()">Exporter FHIR</button>
+      <button type="button" (click)="load()" [disabled]="loading()">
+        {{ 'PHARMACY_CLAIMS.REFRESH' | translate }}
+      </button>
+      <button type="button" (click)="exportCsv()">
+        {{ 'PHARMACY_CLAIMS.EXPORT_CSV' | translate }}
+      </button>
+      <button type="button" (click)="exportFhir()">
+        {{ 'PHARMACY_CLAIMS.EXPORT_FHIR' | translate }}
+      </button>
     </div>
   </header>
 
   @if (loading()) {
-    <p class="hint">Chargement…</p>
+    <p class="hint">{{ 'COMMON.LOADING' | translate }}</p>
   }
   @if (!loading() && filtered().length === 0) {
-    <p class="hint">Aucune demande à afficher.</p>
+    <p class="hint">{{ 'PHARMACY_CLAIMS.EMPTY' | translate }}</p>
   }
 
   @if (filtered().length > 0) {
     <table class="claims__table">
       <thead>
         <tr>
-          <th>Créé le</th>
-          <th>Patient</th>
-          <th>Référence couverture</th>
-          <th>Montant</th>
-          <th>Statut</th>
-          <th>Actions</th>
+          <th>{{ 'PHARMACY_CLAIMS.COL_CREATED' | translate }}</th>
+          <th>{{ 'PHARMACY_CLAIMS.COL_PATIENT' | translate }}</th>
+          <th>{{ 'PHARMACY_CLAIMS.COL_COVERAGE_REF' | translate }}</th>
+          <th>{{ 'PHARMACY_CLAIMS.COL_AMOUNT' | translate }}</th>
+          <th>{{ 'PHARMACY_CLAIMS.COL_STATUS' | translate }}</th>
+          <th>{{ 'COMMON.ACTIONS' | translate }}</th>
         </tr>
       </thead>
       <tbody>
@@ -50,16 +56,18 @@
             </td>
             <td class="actions">
               @if (c.claimStatus === 'DRAFT') {
-                <button (click)="submit(c)">Soumettre</button>
+                <button (click)="submit(c)">{{ 'PHARMACY_CLAIMS.SUBMIT' | translate }}</button>
               }
               @if (c.claimStatus === 'SUBMITTED') {
-                <button (click)="accept(c)">Accepter</button>
+                <button (click)="accept(c)">{{ 'PHARMACY_CLAIMS.ACCEPT' | translate }}</button>
               }
               @if (c.claimStatus === 'SUBMITTED') {
-                <button (click)="reject(c)" class="danger">Rejeter</button>
+                <button (click)="reject(c)" class="danger">
+                  {{ 'PHARMACY_CLAIMS.REJECT' | translate }}
+                </button>
               }
               @if (c.claimStatus === 'ACCEPTED') {
-                <button (click)="pay(c)">Marquer payé</button>
+                <button (click)="pay(c)">{{ 'PHARMACY_CLAIMS.MARK_PAID' | translate }}</button>
               }
             </td>
           </tr>

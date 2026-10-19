@@ -12,7 +12,15 @@ public record StaffAvailabilityRequestDTO(
     @jakarta.validation.constraints.FutureOrPresent LocalDate date,
     LocalTime availableFrom,
     LocalTime availableTo,
-    boolean dayOff,
+    Boolean dayOff,
     String note,
     @NotNull UUID departmentId
-) { }
+) {
+    // A body that leaves this out or sends null gets the documented default
+    // (QA D23): Jackson 3 refuses a null for a primitive record component.
+    public StaffAvailabilityRequestDTO {
+        if (dayOff == null) {
+            dayOff = Boolean.FALSE;
+        }
+    }
+}

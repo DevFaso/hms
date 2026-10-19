@@ -1,5 +1,9 @@
 package com.example.hms.payload.dto.portal;
 
+import jakarta.validation.constraints.AssertTrue;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import com.example.hms.payload.dto.VitalSignLimits;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -21,6 +25,8 @@ import java.time.LocalDateTime;
 @Schema(description = "Patient-reported vital reading from home (e.g. blood pressure cuff, thermometer, glucometer)")
 public class HomeVitalReadingDTO {
 
+    @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
+    @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     @Schema(description = "Body temperature in Celsius", example = "36.8")
     private Double temperatureCelsius;
 
@@ -67,4 +73,25 @@ public class HomeVitalReadingDTO {
     @PastOrPresent
     @Schema(description = "When the reading was taken (defaults to now if omitted)")
     private LocalDateTime recordedAt;
+
+    @AssertTrue(message = "{vitals.bloodPressure.invalid}")
+    @JsonIgnore
+    public boolean isBloodPressureOrdered() {
+        return VitalSignLimits.bloodPressureOrdered(systolicBpMmHg, diastolicBpMmHg);
+    }
+
+    /** D111: a submission with no measurement at all is not a reading. */
+    @AssertTrue(message = "{vitals.empty}")
+    @JsonIgnore
+    public boolean isAnyMeasurementPresent() {
+        return temperatureCelsius != null
+            || heartRateBpm != null
+            || respiratoryRateBpm != null
+            || systolicBpMmHg != null
+            || diastolicBpMmHg != null
+            || spo2Percent != null
+            || bloodGlucoseMgDl != null
+            || weightKg != null
+            || heightCm != null;
+    }
 }

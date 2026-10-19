@@ -329,6 +329,19 @@ class StaffServiceImplTest {
     }
 
     @Test
+    void aPhoneOnlyAccountIsResolvedByItsUsername() {
+        // QA D122: an account registered by phone has no e-mail; the staff form
+        // now sends its username, which must resolve to the account.
+        when(userRepository.findByEmail("phone.user")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("phone.user")).thenReturn(Optional.of(user));
+
+        Object resolved = org.springframework.test.util.ReflectionTestUtils
+            .invokeMethod(staffService, "resolveStaffUser", " phone.user ");
+
+        assertThat(resolved).isSameAs(user);
+    }
+
+    @Test
     void updateStaffDepartment_updatesSuccessfully() {
         Department dept = new Department();
         dept.setId(UUID.randomUUID());
@@ -512,6 +525,23 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaff_unknownAccount_triesUsernameThenThrows() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail(" phone-user ")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .build();
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("phone-user")).thenReturn(Optional.empty());
+        when(userRepository.findByUsername("phone-user")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> staffService.updateStaff(staffId, dto, locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(userRepository).findByUsername("phone-user");
     }
 
     @Test

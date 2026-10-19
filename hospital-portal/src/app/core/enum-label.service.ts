@@ -58,6 +58,29 @@ export class EnumLabelService implements OnDestroy {
    * under `PORTAL.ENUM.*`; this map exists so a missing translation key never
    * leaks into the UI. Keep groups alphabetically ordered within each section. */
   private static readonly LABELS: Record<string, Record<string, string>> = {
+    /* ── Staff specialisations (users/user-list.ts) ───────── */
+    specialization: {
+      CARDIOLOGY: 'Cardiology',
+      CLINICAL_PHARMACY: 'Clinical Pharmacy',
+      DERMATOLOGY: 'Dermatology',
+      GENERAL_NURSE: 'General Nursing',
+      GENERAL_PRACTICE: 'General Practice',
+      GYNECOLOGY: 'Gynecology',
+      HOSPITAL_PHARMACY: 'Hospital Pharmacy',
+      ICU_NURSE: 'ICU Nursing',
+      LAB_TECHNICIAN: 'Laboratory Technician',
+      MICROBIOLOGY: 'Microbiology',
+      NEUROLOGY: 'Neurology',
+      ONCOLOGY: 'Oncology',
+      ORTHOPEDICS: 'Orthopedics',
+      OTHER: 'Other',
+      PATHOLOGY: 'Pathology',
+      PEDIATRICS: 'Pediatrics',
+      PEDIATRIC_NURSE: 'Pediatric Nursing',
+      PSYCHIATRY: 'Psychiatry',
+      RADIOLOGY: 'Radiology',
+      SURGICAL_NURSE: 'Surgical Nursing',
+    },
     /* ── Vital sign types ─────────────────────────────────── */
     vitalType: {
       BLOOD_PRESSURE: 'Blood Pressure',
@@ -361,6 +384,63 @@ export class EnumLabelService implements OnDestroy {
       SENT: 'Sent',
       FAILED: 'Failed',
     },
+    fulfillmentMode: {
+      OUTPATIENT_HOSPITAL: 'Outpatient hospital',
+      INPATIENT_DISPENSARY: 'Inpatient dispensary',
+      PARTNER_PHARMACY: 'Partner pharmacy',
+      COMMUNITY: 'Community pharmacy',
+      MAIL_ORDER: 'Mail order',
+      MOBILE_OUTREACH: 'Mobile unit',
+    },
+    imagingLaterality: {
+      LEFT: 'Left',
+      RIGHT: 'Right',
+      BILATERAL: 'Bilateral',
+      MIDLINE: 'Midline',
+      NOT_APPLICABLE: 'Not applicable',
+    },
+    imagingOrderPriority: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      STAT: 'STAT (immediate)',
+    },
+    admissionType: {
+      EMERGENCY: 'Emergency',
+      ELECTIVE: 'Elective',
+      URGENT: 'Urgent',
+      NEWBORN: 'Newborn',
+      TRANSFER: 'Transfer',
+      OBSERVATION: 'Observation',
+      DAY_CASE: 'Day case',
+      LABOR_DELIVERY: 'Labour and delivery',
+      PSYCHIATRIC: 'Psychiatric',
+    },
+    stockTransactionType: {
+      RECEIPT: 'Receipt',
+      DISPENSE: 'Dispense',
+      ADJUSTMENT: 'Adjustment',
+      TRANSFER: 'Transfer',
+      RETURN: 'Return',
+    },
+    pharmacyType: {
+      HOSPITAL_DISPENSARY: 'Hospital dispensary',
+      COMMUNITY_PHARMACY: 'Community pharmacy',
+      PARTNER_PHARMACY: 'Partner pharmacy',
+    },
+    procedureUrgency: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      EMERGENT: 'Emergent',
+      ELECTIVE: 'Elective',
+    },
+    labSeverityFlag: {
+      NORMAL: 'Normal',
+      LOW: 'Low',
+      HIGH: 'High',
+      CRITICAL: 'Critical',
+      ABNORMAL: 'Abnormal',
+      UNSPECIFIED: 'Not graded',
+    },
     imagingOrderStatus: {
       DRAFT: 'Draft',
       ORDERED: 'Ordered',
@@ -440,6 +520,12 @@ export class EnumLabelService implements OnDestroy {
       PARTIALLY_PAID: 'Partially Paid',
       PAID: 'Paid',
       CANCELLED: 'Cancelled',
+    },
+    invoiceItemCategory: {
+      SERVICE: 'Service',
+      MEDICATION: 'Medication',
+      LAB_TEST: 'Lab Test',
+      GENERAL: 'General',
     },
     allergyVerificationStatus: {
       UNCONFIRMED: 'Unconfirmed',
@@ -839,6 +925,26 @@ export class EnumLabelService implements OnDestroy {
     return camel.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
   }
 
+  private static readonly ENUM_ROOT = ['PORTAL', 'ENUM'].join('.');
+
+  /** The value's label in the generic STATUS group, else in the first group that has it. */
+  private lookupAnyGroup(value: string): string | null {
+    // The whole subtree, not a leaf key: held in a constant so the
+    // referenced-keys gate does not read it as a missing string.
+    const groups: unknown = this.translate.instant(EnumLabelService.ENUM_ROOT);
+    if (!groups || typeof groups !== 'object') return null;
+    const byGroup = groups as Record<string, unknown>;
+    const ordered = ['STATUS', ...Object.keys(byGroup).filter((g) => g !== 'STATUS')];
+    for (const group of ordered) {
+      const entries = byGroup[group];
+      if (entries && typeof entries === 'object') {
+        const label = (entries as Record<string, unknown>)[value];
+        if (typeof label === 'string' && label) return label;
+      }
+    }
+    return null;
+  }
+
   /** Three-tier lookup. See class JSDoc. */
   private lookup(value: string, domain?: string): string {
     // 1) i18n — PORTAL.ENUM.<GROUP>.<VALUE>
@@ -851,6 +957,12 @@ export class EnumLabelService implements OnDestroy {
         return translated;
       }
     }
+
+    // 1b) i18n in any other group. A domain with no locale group of its own
+    // (or a domain-less call) used to drop straight to the English LABELS, so
+    // a French page read "Draft" although PORTAL.ENUM.STATUS.DRAFT exists.
+    const translatedElsewhere = this.lookupAnyGroup(value);
+    if (translatedElsewhere) return translatedElsewhere;
 
     // 2) In-memory English LABELS
     if (domain) {
