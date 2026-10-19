@@ -48,6 +48,22 @@ import com.example.hms.enums.SensitivityCategory;
 @ExtendWith(MockitoExtension.class)
 class AdmissionServiceImplTest {
 
+    /**
+     * The services throw message keys (QA D226); render them through the real
+     * bundles in English so the assertions do not depend on which test last set
+     * the static MessageUtil source.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void englishMessageBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetMessageLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private AdmissionRepository admissionRepository;
     @Mock private AdmissionOrderSetRepository orderSetRepository;
     @Mock private PatientRepository patientRepository;
@@ -102,7 +118,7 @@ class AdmissionServiceImplTest {
 
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessageContaining("admission.provider.physician.required");
+            .hasMessageContaining("The admitting and attending providers must be physicians at this hospital.");
         verify(admissionRepository, never()).save(any());
     }
 

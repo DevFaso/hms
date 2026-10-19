@@ -55,7 +55,23 @@ import static org.mockito.Mockito.when;
 @DisplayName("PrescriptionServiceImpl: a patient reads only their own prescription")
 class PrescriptionServiceImplPatientOwnershipTest {
 
-    private static final String NOT_FOUND_KEY = "prescription.notfound";
+    /**
+     * The services throw message keys (QA D226); render them through the real
+     * bundles in English so the assertions do not depend on which test last set
+     * the static MessageUtil source.
+     */
+    @org.junit.jupiter.api.BeforeEach
+    void englishMessageBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetMessageLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    private static final String NOT_FOUND_KEY = "Prescription not found";
 
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
