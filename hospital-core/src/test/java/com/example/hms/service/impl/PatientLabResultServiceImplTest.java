@@ -188,6 +188,34 @@ class PatientLabResultServiceImplTest {
         assertThat(row.getPerformedBy()).isEqualTo("Tech Nician");
     }
 
+    /** QA D160: the care team (not the lab) sees that a result is pending, not its preliminary value. */
+    @Test void staffView_outsideTheLab_unreleasedRow_isPendingWithoutValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, false);
+        assertThat(results).hasSize(1);
+        PatientLabResultResponseDTO row = results.get(0);
+        assertThat(row.getStatus()).isEqualTo("PENDING");
+        assertThat(row.isReleased()).isFalse();
+        assertThat(row.getTestName()).isEqualTo("Glucose");
+        assertThat(row.getValue()).isNull();
+        assertThat(row.getUnit()).isNull();
+        assertThat(row.getNotes()).isNull();
+        assertThat(row.getPerformedBy()).isNull();
+    }
+
+    /** QA D160: the laboratory itself still sees the preliminary value it has to release. */
+    @Test void staffView_laboratory_unreleasedRow_keepsItsValue() {
+        LabResult lr = unreleasedGlucoseWithEverything();
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(null);
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10, true);
+        assertThat(results.get(0).getValue()).isEqualTo("5.0");
+    }
+
     /** B3 — patient path: the row is there so the patient knows a result is expected, but nothing of it. */
     @Test void portalView_unreleasedRow_isPendingWithoutValue() {
         LabResult lr = unreleasedGlucoseWithEverything();

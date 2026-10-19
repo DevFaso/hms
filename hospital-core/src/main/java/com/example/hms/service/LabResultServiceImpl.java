@@ -98,6 +98,8 @@ public class LabResultServiceImpl implements LabResultService {
     private static final UUID NO_HOSPITAL = new UUID(0L, 0L);
     private final com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     private final AuditEventLogService auditEventLogService;
+    /** QA D178: a released result lands in the ordering clinician's in-basket. */
+    private final InBasketService inBasketService;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -1204,7 +1206,58 @@ public class LabResultServiceImpl implements LabResultService {
         // registered for after this transaction commits.
         completeOrderIfAllReleased(labResult.getLabOrder());
         enqueueReleasedObservationAfterCommit(labResult);
+        fileInOrderingClinicianInBasketAfterCommit(labResult);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * QA D178: the in-basket's Results tab reads {@code in_basket_items}, and
+     * nothing ever wrote a RESULT row, so it counted 0 beside a review queue
+     * holding three released results. The release files one for the
+     * clinician who ordered the test, at the ordering hospital.
+     *
+     * <p>Everything is read here, inside the release transaction: the
+     * callback runs after commit with no persistence context, so it must not
+     * touch a lazy association. Its own transaction, and a failure is logged
+     * (ids only) rather than undoing the release.
+     */
+    private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult) {
+        if (inBasketService == null) {
+            return;
+        }
+        LabOrder order = labResult.getLabOrder();
+        if (order == null || order.getOrderingStaff() == null || order.getOrderingStaff().getUser() == null
+                || order.getHospital() == null) {
+            return;
+        }
+        String severity = labResultMapper.severityFlagOf(labResult);
+        com.example.hms.enums.InBasketPriority priority = switch (severity) {
+            case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
+            case "LOW", "HIGH" -> com.example.hms.enums.InBasketPriority.URGENT;
+            default -> com.example.hms.enums.InBasketPriority.NORMAL;
+        };
+        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
+        com.example.hms.model.Patient patient = order.getPatient();
+        com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request =
+            new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
+        request.setRecipientUserId(order.getOrderingStaff().getUser().getId());
+        request.setHospitalId(order.getHospital().getId());
+        request.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
+        request.setPriority(priority);
+        request.setTitle(testName != null ? testName : "Lab result");
+        request.setReferenceId(labResult.getId());
+        request.setReferenceType("LAB_RESULT");
+        request.setPatientId(patient != null ? patient.getId() : null);
+        request.setPatientName(patient != null ? (patient.getFirstName() + " " + patient.getLastName()).trim() : null);
+        request.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
+        UUID resultId = labResult.getId();
+        TransactionCallbacks.afterCommit(() -> {
+            try {
+                inBasketService.createItemInNewTransaction(request);
+            } catch (RuntimeException ex) {
+                LOG.warn("In-basket item not filed for released result {}: {}", resultId, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /**

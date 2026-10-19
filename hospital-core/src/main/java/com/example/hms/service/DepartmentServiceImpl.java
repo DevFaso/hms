@@ -28,7 +28,6 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Join;
@@ -375,7 +374,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public void deleteDepartment(UUID id, Locale locale) {
         Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MESSAGE_DEPARTMENT_NOT_FOUND, id));
 
         enforceHospitalScopeOnEntity(department);
 

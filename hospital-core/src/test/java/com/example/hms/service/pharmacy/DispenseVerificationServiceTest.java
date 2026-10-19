@@ -256,6 +256,29 @@ class DispenseVerificationServiceTest {
         assertThat(result.failedChecks()).isEmpty();
     }
 
+    /** QA D138: the free text a prescriber types names the catalogue drug plus strength and form. */
+    @Test
+    void aFreeTextPrescriptionWithAccentsStrengthAndFormMatchesItsCatalogueDrug() {
+        prescription.setMedicationCode(null);
+        prescription.setMedicationName("Paracétamol 500 mg comprimé");
+        StockLot lot = lotOf(null, "paracetamol", TODAY.plusMonths(3));
+
+        DispenseVerificationResult result = service.verify(prescription, lot, null, null);
+
+        assertThat(result.failedChecks()).isEmpty();
+    }
+
+    @Test
+    void aFreeTextNameThatOnlyStartsWithTheCatalogueWordIsNotTheSameDrug() {
+        prescription.setMedicationCode(null);
+        prescription.setMedicationName("Paracetamolcodeine 500 mg");
+        StockLot lot = lotOf(null, "Paracetamol", TODAY.plusMonths(3));
+
+        DispenseVerificationResult result = service.verify(prescription, lot, null, null);
+
+        assertThat(result.failedChecks()).contains(DispenseCheck.DRUG);
+    }
+
     @Test
     void anUncodedPrescriptionStillCatchesAPlainlyWrongDrug() {
         prescription.setMedicationCode(null);

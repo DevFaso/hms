@@ -29,7 +29,7 @@ import com.itextpdf.layout.element.Cell;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -54,9 +54,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
-    private static final String LAB_TEST_DEFINITION_NOT_FOUND = "Lab Test Definition not found";
+    private static final String LAB_TEST_DEFINITION_NOT_FOUND = "labtestdefinition.notfound";
     private static final String CURRENT_USER_RESOLUTION_ERROR = "Unable to resolve current user context";
-    private static final String ASSIGNMENT_NOT_FOUND = "Assignment not found";
+    private static final String ASSIGNMENT_NOT_FOUND = "assignment.notfound";
 
     private final LabTestDefinitionRepository repository;
     private final LabTestDefinitionMapper mapper;
@@ -87,7 +87,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         Hospital hospital = null;
         if (dto.getAssignmentId() != null) {
             assignment = assignmentRepository.findById(dto.getAssignmentId())
-                .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
             assertOwnAssignment(currentUser, assignment);
             hospital = assignment.getHospital();
             if (hospital == null) {
@@ -104,7 +104,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             }
             assertUserCanManageHospitalId(currentUser, activeHospitalId);
             hospital = hospitalRepository.findById(activeHospitalId)
-                .orElseThrow(() -> new EntityNotFoundException("Hospital not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", activeHospitalId));
         }
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
@@ -117,7 +117,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     public LabTestDefinitionResponseDTO getById(UUID id) {
         LabTestDefinition definition = repository.findById(id)
             .filter(this::isVisibleToCaller)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
         return mapper.toDto(definition);
     }
 
@@ -167,7 +167,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition existing = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         assertCanManage(currentUser, existing);
 
@@ -180,7 +180,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             && (existing.getAssignment() == null
                 || !dto.getAssignmentId().equals(existing.getAssignment().getId()))) {
             UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-                .orElseThrow(() -> new EntityNotFoundException(ASSIGNMENT_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
             assertOwnAssignment(currentUser, assignment);
             UUID assignmentHospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
             UUID definitionHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
@@ -188,6 +188,15 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 throw new AccessDeniedException("A lab test definition cannot be moved to another hospital.");
             }
             existing.setAssignment(assignment);
+        }
+        if (dto.getReferenceRanges() != null) {
+            assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
+        }
+        // Activation belongs to the approval workflow: an edit may switch a
+        // definition off, never on (QA D159, same bypass as the ranges).
+        if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
+            throw new IllegalStateException(
+                "A lab test definition is activated through its approval workflow, not by editing it.");
         }
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
@@ -203,7 +212,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition existing = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
         assertCanManage(currentUser, existing);
         Objects.requireNonNull(existing, "Lab Test Definition reference cannot be null");
         repository.delete(existing);
@@ -370,7 +379,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition definition = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         String action = dto.getAction() == null ? "" : dto.getAction().trim().toUpperCase(Locale.ROOT);
 
@@ -441,6 +450,35 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
+    /** Statuses whose reference ranges were reviewed and may not move without a new review (QA D159). */
+    private static final EnumSet<LabTestDefinitionApprovalStatus> RANGES_LOCKED = EnumSet.of(
+        LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+        LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+        LabTestDefinitionApprovalStatus.APPROVED,
+        LabTestDefinitionApprovalStatus.ACTIVE,
+        LabTestDefinitionApprovalStatus.RETIRED);
+
+    /**
+     * QA D159: the reference ranges are what QA and the director approved,
+     * and they grade every result. Changing them on a definition under
+     * review, approved or live would put unreviewed ranges in front of
+     * clinicians, so only a draft or a rejected definition takes new ones.
+     * Re-sending the same ranges (an edit of the name, say) is not a change.
+     */
+    private void assertRangesEditable(LabTestDefinition definition, List<LabTestReferenceRange> proposed) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        List<LabTestReferenceRange> current = definition.getReferenceRanges() == null
+            ? List.of() : definition.getReferenceRanges();
+        List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
+        if (!current.equals(next)) {
+            throw new IllegalStateException(
+                "The reference ranges of a definition that is " + definition.getApprovalStatus()
+                + " cannot be changed without a new approval: retire it and submit a new definition for review.");
+        }
+    }
+
     private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
         if (!allowed.contains(definition.getApprovalStatus())) {
             throw new IllegalStateException(
@@ -459,11 +497,12 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
 
         LabTestDefinition definition = repository.findById(id)
-            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         assertCanManage(currentUser, definition);
 
         List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
+        assertRangesEditable(definition, entityRanges);
 
         definition.setReferenceRanges(entityRanges);
         return mapper.toDto(repository.save(definition));

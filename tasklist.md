@@ -5151,6 +5151,8 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   and the receipt). The receipt's French text is still hard-coded in the
   template (pre-existing).
 
+- **Controlled-substance witness co-signature (QA D157/D82, PR #891 review).** #891 makes a controlled-substance write-off/adjustment name a second, active, undeleted colleague holding a stock role in the owning hospital, never the performer. The witness still does not authenticate: the performer picks a user id, so one pharmacist can record a witness who never confirmed. A real fix is a new flow (the witness confirms with their own credential or PIN, or a pending movement the witness approves from their own session, with throttling and lockout so the endpoint cannot be used to guess a colleague's password). Deferred as a new feature; D157 is only PARTLY fixed until it ships.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

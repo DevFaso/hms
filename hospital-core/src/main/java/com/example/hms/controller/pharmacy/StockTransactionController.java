@@ -25,7 +25,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -46,6 +48,15 @@ public class StockTransactionController {
             @Valid @RequestBody StockTransactionRequestDTO dto) {
         StockTransactionResponseDTO created = stockTransactionService.recordTransaction(dto);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
+    }
+
+    @GetMapping("/witness-candidates")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "List witness candidates",
+            description = "Colleagues of the active hospital who may witness a controlled-substance movement")
+    @ApiResponse(responseCode = "200", description = "Candidates retrieved")
+    public ResponseEntity<ApiResponseWrapper<List<StockWitnessCandidateDTO>>> listWitnessCandidates() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(stockTransactionService.listWitnessCandidates()));
     }
 
     @GetMapping("/{id}")

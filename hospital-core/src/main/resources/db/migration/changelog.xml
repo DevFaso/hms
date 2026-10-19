@@ -2834,4 +2834,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V196: clinical.stock_transactions.witnessed_by (QA D157), the second
+         person on a controlled-substance adjustment. No DO block.
+         ================================================================= -->
+    <changeSet id="V196-stock-transaction-witness" author="hms-team" runOnChange="false">
+        <sqlFile path="V196__stock_transaction_witness.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
