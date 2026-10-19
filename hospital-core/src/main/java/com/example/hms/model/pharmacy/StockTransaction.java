@@ -47,7 +47,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"inventoryItem", "stockLot", "performedByUser"})
+@ToString(exclude = {"inventoryItem", "stockLot", "performedByUser", "witnessedByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class StockTransaction extends BaseEntity {
 
@@ -83,6 +83,15 @@ public class StockTransaction extends BaseEntity {
     @JoinColumn(name = "performed_by", nullable = false,
         foreignKey = @ForeignKey(name = "fk_st_user"))
     private User performedByUser;
+
+    /**
+     * QA D157: the second person who witnessed a manual movement of a
+     * controlled substance. Null for every other movement.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "witnessed_by",
+        foreignKey = @ForeignKey(name = "fk_st_witness"))
+    private User witnessedByUser;
 
     // ── FU-2 (P-06 backend): first-class fields for stock RECEIPT entries ──
     // All nullable so that DISPENSE / TRANSFER / ADJUSTMENT / RETURN rows are

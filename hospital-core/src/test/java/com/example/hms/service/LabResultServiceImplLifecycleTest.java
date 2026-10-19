@@ -72,6 +72,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private InBasketService inBasketService;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -478,6 +479,41 @@ class LabResultServiceImplLifecycleTest {
         verify(labOrderRepository).updateStatusFrom(
             order.getId(), LabOrderStatus.RESULTED, LabOrderStatus.COMPLETED);
         verify(labOrderRepository, never()).save(any(LabOrder.class));
+    }
+
+    @Test
+    @DisplayName("QA D178 — a release files a RESULT item in the ordering clinician's in-basket, after commit")
+    void releaseFilesTheResultInTheOrderingClinicianInBasket() {
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        com.example.hms.model.Staff orderingStaff = new com.example.hms.model.Staff();
+        orderingStaff.setUser(doctor);
+        order.setOrderingStaff(orderingStaff);
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult last = resultOn(order, false);
+        when(labResultRepository.findById(last.getId())).thenReturn(Optional.of(last));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any())).thenReturn(1);
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
+        when(labResultMapper.severityFlagOf(last)).thenReturn(LabResultMapper.FLAG_CRITICAL);
+        when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> filed =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
+
+        verify(inBasketService).createItemInNewTransaction(filed.capture());
+        assertThat(filed.getValue().getRecipientUserId()).isEqualTo(doctor.getId());
+        assertThat(filed.getValue().getHospitalId()).isEqualTo(hospitalId);
+        assertThat(filed.getValue().getItemType()).isEqualTo(com.example.hms.enums.InBasketItemType.RESULT);
+        assertThat(filed.getValue().getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.CRITICAL);
+        assertThat(filed.getValue().getReferenceId()).isEqualTo(last.getId());
+        assertThat(filed.getValue().getTitle()).isEqualTo("Potassium");
     }
 
     @Test

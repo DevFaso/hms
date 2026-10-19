@@ -76,13 +76,20 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, false);
+        return getLabResults(patientId, hospitalId, limit, false, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit,
+                                                                     boolean includeUnreleasedValues) {
+        return getLabResults(patientId, hospitalId, limit, false, includeUnreleasedValues);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit) {
-        return getLabResults(patientId, hospitalId, limit, true);
+        return getLabResults(patientId, hospitalId, limit, true, false);
     }
 
     /**
@@ -105,7 +112,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      *        see the comment there.
      */
     private List<PatientLabResultResponseDTO> getLabResults(UUID patientId, UUID hospitalId, int limit,
-                                                            boolean portalView) {
+                                                            boolean portalView, boolean includeUnreleasedValues) {
         log.info("Fetching lab results for patient {} in hospital {}", patientId, hospitalId);
 
         // Staff: the chart gate — cross-hospital safe, and the hospital
@@ -164,7 +171,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(visible);
         return visible.stream()
-            .map(result -> toResponse(result, portalView, collectedAtByOrder))
+            .map(result -> toResponse(result, portalView || !includeUnreleasedValues, collectedAtByOrder))
             .toList();
     }
 

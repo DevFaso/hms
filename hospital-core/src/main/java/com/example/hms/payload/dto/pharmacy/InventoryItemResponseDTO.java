@@ -29,6 +29,8 @@ public class InventoryItemResponseDTO {
     private BigDecimal reorderQuantity;
     private String unit;
     private boolean active;
+    /** QA D157: a controlled substance; a manual movement of it needs a witness. */
+    private boolean controlled;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

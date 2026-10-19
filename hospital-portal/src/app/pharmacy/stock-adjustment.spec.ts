@@ -23,7 +23,15 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'listLotsByInventoryItem',
       'recordTransaction',
       'receiveStock',
+      'listWitnessCandidates',
     ]);
+    svc.listWitnessCandidates.and.returnValue(
+      of({ data: [{ userId: 'u-2', displayName: 'Awa Traore' }] } as unknown as ReturnType<
+        PharmacyService['listWitnessCandidates']
+      > extends Observable<infer T>
+        ? T
+        : never),
+    );
     svc.listPharmacies.and.returnValue(of({ content: [] } as unknown as PharmaciesPage));
     svc.listLotsByInventoryItem.and.returnValue(
       of({
@@ -60,6 +68,70 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.RECEIPT_LOT_EXPIRED');
     expect(svc.receiveStock).not.toHaveBeenCalled();
     expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  it('QA D143: sends a negative adjustment (a write-off) instead of refusing it', () => {
+    const c = create();
+    svc.recordTransaction.and.returnValue(of({}) as never);
+    svc.listTransactionsByPharmacy.and.returnValue(of({}) as never);
+    svc.listInventoryByPharmacy.and.returnValue(of({}) as never);
+    c.openForm();
+    c.onTypeChange('ADJUSTMENT');
+    c.onItemChange('item-1');
+    c.form.stockLotId = 'lot-1';
+    c.form.quantity = -1;
+    c.adjustmentReasonCode = 'CONTROLLED_DISCREPANCY';
+    c.adjustmentNotes = 'count';
+
+    c.submitForm();
+
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(svc.recordTransaction).toHaveBeenCalledWith(
+      jasmine.objectContaining({ transactionType: 'ADJUSTMENT', quantity: -1 }),
+    );
+  });
+
+  it('QA D143: a zero adjustment and a negative receipt get their own message', () => {
+    const c = create();
+    c.openForm();
+    c.onTypeChange('ADJUSTMENT');
+    c.form.inventoryItemId = 'item-1';
+    c.form.quantity = 0;
+    c.submitForm();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.ADJUSTMENT_QUANTITY_NONZERO');
+
+    c.onTypeChange('RETURN');
+    c.form.quantity = -3;
+    c.submitForm();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.TX_QUANTITY_POSITIVE');
+    expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  it('QA D157: a controlled item needs a witness before anything is sent', () => {
+    const c = create();
+    c.inventoryItems.set([{ id: 'morph', controlled: true, quantityOnHand: 10 } as never]);
+    c.openForm();
+    c.onTypeChange('ADJUSTMENT');
+    c.onItemChange('morph');
+    c.form.stockLotId = 'lot-1';
+    c.form.quantity = -1;
+    c.adjustmentReasonCode = 'CONTROLLED_DISCREPANCY';
+    c.adjustmentNotes = 'count';
+
+    expect(c.needsWitness()).toBeTrue();
+    expect(c.witnessCandidates().length).toBe(1);
+    c.submitForm();
+
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+    expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  it('QA D158: the ledger signs receipts positive and an adjustment by its own sign', () => {
+    const c = create();
+    expect(c.signedQuantity({ transactionType: 'RECEIPT', quantity: 20 } as never)).toBe('+20');
+    expect(c.signedQuantity({ transactionType: 'ADJUSTMENT', quantity: -1 } as never)).toBe('-1');
+    expect(c.signedQuantity({ transactionType: 'ADJUSTMENT', quantity: 4 } as never)).toBe('+4');
+    expect(c.signedQuantity({ transactionType: 'DISPENSE', quantity: 2 } as never)).toBe('-2');
   });
 
   it('requires a lot to adjust a lot-tracked item', () => {

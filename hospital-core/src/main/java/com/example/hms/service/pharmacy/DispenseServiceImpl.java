@@ -107,6 +107,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
     private final PrescriptionQueueClaimService queueClaimService;
+    /** QA D156: an in-scope prescription is verified by a pharmacist before it is filled. */
+    private final PharmacistVerificationService pharmacistVerificationService;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -728,6 +730,12 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
+        // fill with no lot used to be accepted as DISPENSED with no stock
+        // movement at all, so the shelf and the ledger drifted apart.
+        if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
+            throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
+        }
         DispenseVerificationResult verification =
                 dispenseVerificationService.verify(prescription, stockLot,
                         dto.getPatientScanValue(), dto.getProductScanValue());
@@ -781,6 +789,13 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         controlledSubstanceGuard.requireDispensable(prescription);
+        // QA D156: the pharmacist-verification step existed but only the MAR
+        // read it, so a controlled or co-sign prescription was filled with
+        // nobody having verified it. The same scope gates the counter.
+        if (pharmacistVerificationService != null
+                && pharmacistVerificationService.blocksAdministration(prescription)) {
+            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+        }
         return prescription;
     }
 

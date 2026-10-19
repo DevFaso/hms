@@ -2835,6 +2835,17 @@
     </changeSet>
 
     <!-- =================================================================
+         V196: clinical.stock_transactions.witnessed_by (QA D157), the second
+         person on a controlled-substance adjustment. No DO block.
+         ================================================================= -->
+    <changeSet id="V196-stock-transaction-witness" author="hms-team" runOnChange="false">
+        <sqlFile path="V196__stock_transaction_witness.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
          V193: clinical.encounters.admission_id - an admission's own
          INPATIENT encounter (QA D134/D135/D136). No FK: admissions live in
          public and encounters in clinical, and the column is nullable for

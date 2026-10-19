@@ -135,7 +135,13 @@ export class GoodsReceiptComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.SELECT_ITEM_REQUIRED'));
       return;
     }
-    if (!this.form.lotNumber || !this.form.expiryDate || this.form.initialQuantity <= 0) {
+    // QA D143: a quantity that is present but not positive gets its own
+    // message, not "required fields", which sent the user hunting.
+    if (this.form.initialQuantity != null && this.form.initialQuantity <= 0) {
+      this.toast.error(this.translate.instant('PHARMACY.RECEIPT_QUANTITY_POSITIVE'));
+      return;
+    }
+    if (!this.form.lotNumber || !this.form.expiryDate || !this.form.initialQuantity) {
       this.toast.error(this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED'));
       return;
     }

@@ -121,6 +121,24 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                                         @Param("hospitalId") UUID hospitalId,
                                                         @Param("roleCodes") Set<String> roleCodes);
 
+    /**
+     * QA D157 (#891 review): a controlled-substance witness must be an active,
+     * undeleted account as well as hold an active assignment.
+     */
+    @Query("""
+        SELECT (COUNT(a) > 0)
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND a.user.id = :userId
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) IN (:roleCodes)
+    """)
+    boolean existsActiveWitness(@Param("userId") UUID userId,
+                                @Param("hospitalId") UUID hospitalId,
+                                @Param("roleCodes") Set<String> roleCodes);
+
     /* ------------ Fetch graphs for DTO mapping ------------ */
 
     /** Deep enough for most response DTOs (user/hospital/role/registeredBy). */

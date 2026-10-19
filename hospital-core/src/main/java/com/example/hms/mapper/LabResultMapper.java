@@ -159,6 +159,20 @@ public class LabResultMapper {
     }
 
     /**
+     * QA D178: the severity the lab-results screen shows for this result
+     * (CRITICAL, LOW, HIGH, NORMAL or UNSPECIFIED), so every other screen
+     * can grade it the same way instead of guessing.
+     */
+    public String severityFlagOf(LabResult result) {
+        if (result == null) {
+            return FLAG_UNSPECIFIED;
+        }
+        OrderContext context = extractOrderContext(result.getLabOrder());
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        return determineSeverityFlag(result.getResultValue(), graded);
+    }
+
+    /**
      * The reference range {@link #toResponseDTO} graded this result against
      * (its {@code severityFlag}), or null when there was none to grade
      * against. A reader showing "the" range beside the value must show THIS
