@@ -67,6 +67,9 @@ class DischargeSummaryServiceImplTest {
     /** Real registry so the portal-fetch tests can assert counter values. */
     @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
 
+    @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
+
     @InjectMocks private DischargeSummaryServiceImpl service;
 
     private UUID summaryId, patientId, encounterId, hospitalId, staffId, assignmentId;
@@ -428,6 +431,57 @@ class DischargeSummaryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D151: a prescription's anchor consultation gets no after-visit summary, old or new")
+        void portalFetch_prescriptionAnchor_isNeitherBackfilledNorShown() {
+            Encounter anchor = new Encounter();
+            anchor.setId(UUID.randomUUID());
+            anchor.setPatient(patient);
+            anchor.setHospital(hospital);
+            anchor.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+            DischargeSummary phantom = new DischargeSummary();
+            phantom.setEncounter(anchor);
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of(anchor));
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(phantom));
+
+            List<DischargeSummaryResponseDTO> result =
+                    service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(result).isEmpty();
+            verify(dischargeSummaryRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D151: the missing-diagnosis placeholder is written in the patient's language")
+        void portalFetch_missingDiagnosis_isLocalised() {
+            Encounter orphan = new Encounter();
+            orphan.setId(UUID.randomUUID());
+            orphan.setPatient(patient);
+            orphan.setHospital(hospital);
+            orphan.setStaff(staff);
+            orphan.setAssignment(assignment);
+            orphan.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            orphan.setCheckoutTimestamp(java.time.LocalDateTime.now().minusDays(1));
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                    .thenReturn(List.of(orphan));
+            when(patientLocaleResolver.resolve(any(), any())).thenReturn(java.util.Locale.FRENCH);
+            when(messageSource.getMessage(eq("dischargeSummary.diagnosis.notSpecified"), any(), any(),
+                    eq(java.util.Locale.FRENCH))).thenReturn("Diagnostic de sortie non précisé lors de la sortie.");
+            when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of());
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+            verify(dischargeSummaryRepository).save(saved.capture());
+            assertThat(saved.getValue().getDischargeDiagnosis())
+                    .isEqualTo("Diagnostic de sortie non précisé lors de la sortie.");
+        }
+
+        @Test
         @DisplayName("orphan COMPLETED encounter → backfilled, counter tagged backfilled")
         void portalFetch_orphanEncounter_backfilled() {
             // Simulate the 2026-04-11 incident: encounter COMPLETED with notes +
@@ -492,6 +546,35 @@ class DischargeSummaryServiceImplTest {
             assertThat(counterCount(
                     DischargeSummaryServiceImpl.METRIC_AVS_FETCH_TOTAL,
                     DischargeSummaryServiceImpl.OUTCOME_HIT)).isEqualTo(2.0d);
+        }
+
+        @Test
+        @DisplayName("QA D152: the medication reconciliation leaves out DRAFT, unsigned and withdrawn orders")
+        void portalFetch_reconciliation_leavesOutDraftUnsignedAndWithdrawn() {
+            summary.setHospitalCourse("already enriched");
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId)).thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            List<com.example.hms.model.Prescription> rxs = new java.util.ArrayList<>();
+            for (com.example.hms.enums.PrescriptionStatus st : List.of(
+                    com.example.hms.enums.PrescriptionStatus.DRAFT,
+                    com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
+                    com.example.hms.enums.PrescriptionStatus.CANCELLED,
+                    com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
+                    com.example.hms.enums.PrescriptionStatus.SIGNED)) {
+                com.example.hms.model.Prescription rx = new com.example.hms.model.Prescription();
+                rx.setMedicationName(st.name());
+                rx.setStatus(st);
+                rxs.add(rx);
+            }
+            when(prescriptionRepository.findByEncounter_Id(eq(encounterId), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(rxs));
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(summary.getMedicationReconciliation())
+                    .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
+                    .containsExactly("SIGNED");
         }
 
         /**

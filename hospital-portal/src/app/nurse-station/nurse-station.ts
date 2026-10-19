@@ -841,7 +841,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * Look up the most recent non-completed encounter for a patient and open the triage dialog.
    */
   openTriage(patientId: string): void {
-    this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc));
+    // QA D179: triage is for the visit waiting to be triaged, not whichever
+    // open encounter came first (a hospital stay has one too now).
+    this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc), [
+      'ARRIVED',
+      'TRIAGE',
+    ]);
   }
 
   onTriageCompleted(): void {
@@ -867,12 +872,18 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private lookupActiveEncounter(
     patientId: string,
     callback: (enc: EncounterResponse) => void,
+    preferredStatuses: string[] = [],
   ): void {
     this.encounterLookupInProgress.set(true);
     this.encounterService.list({ patientId }).subscribe({
       next: (encounters) => {
         this.encounterLookupInProgress.set(false);
-        const active = encounters.find((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        const open = encounters.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        // An inpatient stay's encounter is never the outpatient visit a
+        // triage or an intake is about (D179).
+        const visits = open.filter((e) => e.encounterType !== 'INPATIENT');
+        const active =
+          visits.find((e) => preferredStatuses.includes(e.status ?? '')) ?? visits[0] ?? open[0];
         if (active) {
           callback(active);
         } else {

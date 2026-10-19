@@ -276,9 +276,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Prescription> prescriptions = prescriptionRepository
             .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
 
+        List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
+
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
         for (Prescription rx : prescriptions) {
-            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
+            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -298,6 +300,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
         return result;
+    }
+
+    /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */
+    static boolean endedWithAStay(Prescription rx, List<Admission> closedStays) {
+        return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
     }
 
     /** Returns true when a status filter is active and the given status does not match it. */
@@ -855,6 +862,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return count;
     }
 
+    /** The patient's discharged stays here; none are fetched when there is no prescription to end. */
+    private List<Admission> closedStaysFor(UUID patientId, UUID hospitalId, List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return List.of();
+        }
+        return admissionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+            .filter(a -> a.getActualDischargeDateTime() != null)
+            .toList();
+    }
+
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
     private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
@@ -863,8 +880,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (ctx.patientId() == null || hospitalId == null) continue;
             List<Prescription> prescriptions = prescriptionRepository
                 .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
+            List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
             for (Prescription rx : prescriptions) {
-                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
+                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
@@ -884,7 +902,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private String resolveMarStatus(Prescription rx, LocalDateTime now) {
         LocalDateTime dueBy = computeMedicationDueTime(rx, now);
         if (dueBy == null) return STATUS_COMPLETED;
-        if (dueBy.isBefore(now)) return STATUS_OVERDUE;
+        // A dose may be given up to an hour either side of its slot (D154).
+        if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
         return STATUS_DUE;
     }
 
@@ -901,7 +920,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * same dose being recorded again.
      */
     private LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now) {
-        LocalDateTime first = rx.getCreatedAt() != null ? rx.getCreatedAt().plusHours(4) : now.plusHours(1);
+        // QA D154: the first dose is due when the order starts, which is its
+        // signature (or, failing that, its creation), not four hours later.
+        LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
+        LocalDateTime first = start != null ? start : now.plusHours(1);
         if (rx.getId() == null) return first;
         Optional<MedicationAdministrationRecord> lastClosed = marRepository
             .findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
@@ -913,11 +935,21 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return lastClosed.get().getScheduledTime().plusHours(interval);
     }
 
+    /**
+     * How long before its slot a dose may be given. QA D154: two q12h doses
+     * were recorded 72 seconds apart because any future slot counted as due.
+     */
+    static final Duration EARLY_ADMINISTRATION_WINDOW = Duration.ofHours(1);
+
     /** The slot the next administration fills; refuses when the course has none left. */
     private LocalDateTime requireNextDue(Prescription rx) {
-        LocalDateTime slot = computeMedicationDueTime(rx, LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime slot = computeMedicationDueTime(rx, now);
         if (slot == null) {
             throw new BusinessException("nurse.mar.noDoseDue");
+        }
+        if (slot.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) {
+            throw new BusinessException("nurse.mar.doseNotYetDue");
         }
         return slot;
     }

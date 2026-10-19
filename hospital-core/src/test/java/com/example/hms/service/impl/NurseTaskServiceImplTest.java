@@ -2600,9 +2600,9 @@ class NurseTaskServiceImplTest {
         when(rx.getMedicationCode()).thenReturn("AMOX-500");
         when(rx.getDosage()).thenReturn("500 mg");
         when(rx.getRoute()).thenReturn("PO");
-        // Created 4 h ago so computeMedicationDueTime → now, keeping the
-        // materialised MAR inside the ±60-minute TIME window.
-        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(4));
+        // Created just now: the first dose is due at the order start (D154),
+        // keeping the materialised MAR inside the ±60-minute TIME window.
+        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
 
         when(marRepository.findById(rxId)).thenReturn(Optional.empty());
         when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
@@ -2884,6 +2884,84 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void D154_theFirstDoseIsDueWhenTheOrderIsSigned() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime signed = LocalDateTime.now().minusMinutes(10);
+        rx.setSignedAt(signed);
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        // Not four hours after the order: at its start.
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(signed);
+    }
+
+    @Test
+    void D154_aQ12hDoseCannotBeGivenSeventyTwoSecondsAfterThePreviousOne() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setCreatedAt(LocalDateTime.now().minusMinutes(5));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        // The first dose was just given; the next slot is twelve hours away.
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN)));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseNotYetDue");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void D136_aDischargedPatientsInpatientOrderIsNoLongerDue() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        UUID patientId = rx.getPatient().getId();
+        // Ordered during a stay that has since been discharged, on no
+        // particular encounter (the QA Ceftriaxone).
+        Admission stay = new Admission();
+        stay.setAdmissionDateTime(rx.getCreatedAt().minusHours(1));
+        stay.setActualDischargeDateTime(LocalDateTime.now().minusMinutes(1));
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+        when(admissionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(stay));
+
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, "PENDING")).isEmpty();
+    }
+
+    @Test
+    void D136_anOrderOnAClosedStayEncounterHasEndedButAnOutpatientOrderHasNot() {
+        Prescription onStay = new Prescription();
+        com.example.hms.model.Encounter closedStay = new com.example.hms.model.Encounter();
+        closedStay.setAdmissionId(UUID.randomUUID());
+        closedStay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        onStay.setEncounter(closedStay);
+        Prescription outpatient = new Prescription();
+        outpatient.setCreatedAt(LocalDateTime.now());
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        outpatient.setEncounter(visit);
+
+        assertThat(NurseTaskServiceImpl.endedWithAStay(onStay, List.of())).isTrue();
+        assertThat(NurseTaskServiceImpl.endedWithAStay(outpatient, List.of())).isFalse();
+    }
+
+    @Test
     void D76_pendingFilterReturnsTheDosesStillToGive() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -2909,7 +2987,7 @@ class NurseTaskServiceImplTest {
         Prescription rx = scheduledRx(hospitalId, "q12h");
         UUID patientId = rx.getPatient().getId();
         rx.setStatus(PrescriptionStatus.SIGNED);
-        LocalDateTime firstSlot = rx.getCreatedAt().plusHours(4);
+        LocalDateTime firstSlot = rx.getCreatedAt();
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
@@ -2930,7 +3008,7 @@ class NurseTaskServiceImplTest {
         Prescription rx = scheduledRx(hospitalId, "once");
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
-            .thenReturn(List.of(closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.GIVEN)));
+            .thenReturn(List.of(closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN)));
         UUID rxId = rx.getId();
         NurseMedicationAdministrationRequestDTO given = givenRequest();
 
@@ -2945,7 +3023,9 @@ class NurseTaskServiceImplTest {
     void D77_theSecondRecordFillsTheNextSlotNotTheSameOne() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "BID");
-        LocalDateTime firstSlot = rx.getCreatedAt().plusHours(4);
+        // Thirteen hours on, the second BID dose is due (D154: not before).
+        rx.setCreatedAt(LocalDateTime.now().minusHours(13));
+        LocalDateTime firstSlot = rx.getCreatedAt();
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
             .thenReturn(List.of(closedDose(rx, firstSlot, MedicationAdministrationStatus.GIVEN)));
@@ -2978,7 +3058,7 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "q12h");
         MedicationAdministrationRecord pending =
-            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.PENDING);
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenReturn(List.of(pending));
         when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> i.getArgument(0));
@@ -2998,8 +3078,9 @@ class NurseTaskServiceImplTest {
     void D78_administeringByPrescriptionIdFinalisesTheVerifiedRowWithoutAnOverride() {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setCreatedAt(LocalDateTime.now()); // the slot is now (D154)
         MedicationAdministrationRecord verified =
-            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.PENDING);
         verified.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
         verified.setPatientScanValue(rx.getPatient().getId().toString());
         verified.setMedicationScanValue("CEF-1G");
@@ -3040,7 +3121,7 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         Prescription rx = scheduledRx(hospitalId, "q12h");
         MedicationAdministrationRecord stale =
-            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.PENDING);
         when(marRepository.findById(stale.getId())).thenReturn(Optional.of(stale));
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
         // Another nurse committed GIVEN while this call waited on the lock.

@@ -75,6 +75,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final EncounterAutoCompletionService encounterAutoCompletion;
+    private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     private final BedAssignmentService bedAssignmentService;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
@@ -157,6 +158,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
 
         admission = admissionRepository.save(admission);
+        // QA D98/D135: the stay opens its own INPATIENT encounter, so notes,
+        // the discharge summary and the after-visit summary have a home.
+        stayEncounters.openStayEncounter(admission);
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -249,7 +253,9 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         admission = admissionRepository.save(admission);
 
-        // Auto-complete any active encounters for this patient + hospital
+        // The stay's encounter carries the discharge (D151), then it and only
+        // it is completed (D134).
+        stayEncounters.recordDischarge(admission);
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)
@@ -259,15 +265,15 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     /**
-     * When an admission is discharged, any non-terminal encounter for the same
-     * patient + hospital should transition to COMPLETED automatically.
+     * When an admission is discharged, its own non-terminal encounters
+     * transition to COMPLETED automatically.
      * Delegates to the shared auto-completion service so the discharge-approval
      * path behaves identically and tracker boards get WebSocket updates.
      */
     private void completeActiveEncounters(Admission admission) {
-        encounterAutoCompletion.completeActiveEncounters(
-                admission.getPatient().getId(),
-                admission.getHospital().getId());
+        // QA D134: the stay's own encounters only, never the patient's
+        // unrelated outpatient visit at the same hospital.
+        encounterAutoCompletion.completeAdmissionEncounters(admission.getId());
     }
 
     @Override

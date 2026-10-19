@@ -268,6 +268,8 @@ describe('AdmissionsComponent', () => {
     });
 
     it('re-applies the locked hospital on create and saves', () => {
+      // D153: opening the form now loads the departments of the locked hospital.
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
       component.ngOnInit();
       component.openCreate();
       expect(component.form.hospitalId).toBe('h1');

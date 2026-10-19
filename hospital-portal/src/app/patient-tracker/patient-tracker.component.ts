@@ -18,7 +18,8 @@ import {
 } from '../services/patient-tracker.service';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ToastService } from '../core/toast.service';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import {
   EncounterService,
@@ -60,6 +61,8 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
   private readonly encounterService = inject(EncounterService);
+  private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   private refreshSub?: Subscription;
   private wsEventsSub?: Subscription;
@@ -206,8 +209,13 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.triageInProgress.set(false);
         this.loadBoard();
       },
-      error: () => {
+      error: (err: { error?: { message?: string } } | null) => {
         this.triageInProgress.set(false);
+        // QA D155: the server refuses a triage with no vitals or ESI; say so
+        // rather than leaving the card where it was without a word.
+        this.toast.error(
+          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
+        );
       },
     });
   }

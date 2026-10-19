@@ -156,6 +156,14 @@ public class Encounter extends BaseEntity {
     @Column(name = "discharge_diagnoses", columnDefinition = "TEXT")
     private String dischargeDiagnoses;
 
+    /**
+     * The admission this INPATIENT encounter belongs to (QA D134/D135, V193).
+     * Null for every outpatient row. A discharge completes the encounters
+     * carrying its admission id and no others.
+     */
+    @Column(name = "admission_id")
+    private java.util.UUID admissionId;
+
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 

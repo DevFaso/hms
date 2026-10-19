@@ -41,6 +41,9 @@ const SILENT_403_PATTERNS = [
   /\/lab-orders(\?|$|\/)/,
   /\/lab-results(\?|$|\/)/,
   /\/lab-specimens(\?|$|\/)/,
+  // The bed board's held-bed overlay (QA D188): a role the server keeps off
+  // the transfer worklist (decision D5) still keeps the board it is reading.
+  /\/transfers\/pending(\?|$)/,
 ];
 
 /**

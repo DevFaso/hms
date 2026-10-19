@@ -55,6 +55,7 @@ class AdmissionServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private EncounterAutoCompletionService encounterAutoCompletion;
+    @Mock private com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Mock private AdmissionMapper admissionMapper;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
@@ -123,6 +124,8 @@ class AdmissionServiceImplTest {
         when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
 
         assertThat(service.admitPatient(request)).isEqualTo(response);
+        // QA D98/D135: every admission opens its own INPATIENT encounter.
+        verify(stayEncounters).openStayEncounter(admission);
     }
 
     @Test
@@ -328,7 +331,9 @@ class AdmissionServiceImplTest {
 
         service.dischargePatient(admissionId, request);
 
-        verify(encounterAutoCompletion).completeActiveEncounters(patientId, hospitalId);
+        // QA D134: the stay's own encounters, never the patient-wide sweep.
+        verify(stayEncounters).recordDischarge(admission);
+        verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
     }
 
     /* ── P0 #4: structured bed assignment ─────────────────────────────── */

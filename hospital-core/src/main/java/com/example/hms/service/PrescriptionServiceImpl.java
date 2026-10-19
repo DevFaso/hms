@@ -1150,6 +1150,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new BusinessException("prescription.hospital.context.missing");
         }
 
+        // QA D136/D151: an order for an inpatient by the clinician leading the
+        // stay belongs to the stay (an encounter carries one prescriber). Filed
+        // there, it stops with the discharge (the MAR and the patient's list
+        // read the stay's status) and it does not mint a phantom consultation.
+        Optional<Encounter> stay = encounterRepository
+            .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                patient.getId(), staff.getId(), hospitalId,
+                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+        if (stay.isPresent()) {
+            return stay.get();
+        }
+
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId);
