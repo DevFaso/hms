@@ -1,5 +1,6 @@
 package com.example.hms.i18n;
 
+import com.example.hms.config.MessageBundles;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,7 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The four backend bundles agree with each other, and the exception sites that
- * name a key agree with the bundle. The portal has had a strict
+ * name a key agree with the bundle. A locale's bundle is the merge of its area
+ * files ({@code i18n/messages-<area><suffix>.properties}, see {@link MessageBundles}). The portal has had a strict
  * {@code i18n:parity} gate for a long time; until this test the backend had
  * none, and {@code messages_fr} and {@code messages_es} had drifted 77 and 73
  * keys behind the base - each one falling back to English with no marker, so
@@ -126,16 +128,19 @@ class MessageBundleParityTest {
     void noDuplicateKeys(String suffix) throws IOException {
         // java.util.Properties keeps the last of two definitions silently, so a
         // duplicate is invisible to every test that goes through it.
-        Map<String, Integer> seen = new HashMap<>();
+        Map<String, String> seen = new HashMap<>();
         List<String> duplicates = new ArrayList<>();
-        List<String> lines = Files.readAllLines(RESOURCES.resolve("messages" + suffix + ".properties"),
-            StandardCharsets.UTF_8);
-        for (int i = 0; i < lines.size(); i++) {
-            Matcher m = DEFINITION.matcher(lines.get(i));
-            if (m.find()) {
-                Integer first = seen.putIfAbsent(m.group(1), i + 1);
-                if (first != null) {
-                    duplicates.add(m.group(1) + " (lines " + first + " and " + (i + 1) + ")");
+        for (String area : MessageBundles.AREAS) {
+            String file = MessageBundles.resource(area, suffix);
+            List<String> lines = Files.readAllLines(RESOURCES.resolve(file), StandardCharsets.UTF_8);
+            for (int i = 0; i < lines.size(); i++) {
+                Matcher m = DEFINITION.matcher(lines.get(i));
+                if (m.find()) {
+                    String where = file + ":" + (i + 1);
+                    String first = seen.putIfAbsent(m.group(1), where);
+                    if (first != null) {
+                        duplicates.add(m.group(1) + " (" + first + " and " + where + ")");
+                    }
                 }
             }
         }
@@ -199,13 +204,23 @@ class MessageBundleParityTest {
             .isEmpty();
     }
 
+    /** One locale's bundle: every area file with that suffix, merged. */
     static Properties load(String suffix) throws IOException {
         Properties bundle = new Properties();
-        try (Reader reader = Files.newBufferedReader(
-                RESOURCES.resolve("messages" + suffix + ".properties"), StandardCharsets.UTF_8)) {
-            bundle.load(reader);
+        for (String area : MessageBundles.AREAS) {
+            bundle.putAll(loadFile(area, suffix));
         }
         return bundle;
+    }
+
+    /** One area file, parsed by java.util.Properties exactly as Spring parses it. */
+    static Properties loadFile(String area, String suffix) throws IOException {
+        Properties file = new Properties();
+        try (Reader reader = Files.newBufferedReader(
+                RESOURCES.resolve(MessageBundles.resource(area, suffix)), StandardCharsets.UTF_8)) {
+            file.load(reader);
+        }
+        return file;
     }
 
     static SortedSet<Integer> placeholders(String value) {
