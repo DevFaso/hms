@@ -201,6 +201,41 @@ subprojects {
         // Restart test JVM every 250 classes to prevent metaspace/heap accumulation
         forkEvery = 250
 
+        // Fork-level parallelism. Safe because every test JVM is its own
+        // process and every Spring context already gets its OWN in-memory H2
+        // database (spring.datasource.url in application-test.yml carries
+        // ${random.uuid}), so no state is shared between forks. JUnit's
+        // in-JVM parallel mode is deliberately NOT used: tests in one JVM
+        // share static state (MessageUtil, SharedClinicalRowsCleanup, ...).
+        // Each fork takes maxHeapSize, so the default is half the cores capped
+        // at 4 (2 on a 4-vCPU GitHub runner = 4 GiB of test heap out of 16).
+        // Override with -PtestForks=N.
+        maxParallelForks = project.hasProperty('testForks')
+            ? (project.property('testForks') as int)
+            : Math.max(1, Math.min(4, Runtime.runtime.availableProcessors().intdiv(2)))
+
+        // CI sharding: -PtestShardCount=N -PtestShardIndex=i runs only the
+        // top-level test classes whose name hashes to shard i, so N runners
+        // split the suite and a final job merges their JaCoCo exec files.
+        // Nested/inner classes ($) follow their enclosing class. Without the
+        // properties every class runs, exactly as before.
+        if (project.hasProperty('testShardCount')) {
+            int shardCount = project.property('testShardCount') as int
+            int shardIndex = project.property('testShardIndex') as int
+            if (shardCount < 1 || shardIndex < 0 || shardIndex >= shardCount) {
+                throw new GradleException("testShardIndex ${shardIndex} is outside 0..${shardCount - 1}")
+            }
+            exclude { element ->
+                if (element.directory || !element.name.endsWith('.class')) {
+                    return false
+                }
+                String path = element.relativePath.pathString
+                int inner = path.indexOf('$')
+                String topLevel = inner >= 0 ? path.substring(0, inner) : path - '.class'
+                return Math.floorMod(topLevel.hashCode(), shardCount) != shardIndex
+            }
+        }
+
         testLogging {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'
@@ -232,8 +267,16 @@ subprojects {
         }
     }
 
+    // CI runs the suite in shards (backend-ci.yml); the merge job downloads
+    // each shard's exec file into build/jacoco/ next to test.exec and runs
+    // these two tasks with -x test, so the report and the 80% gate are
+    // computed on the MERGED coverage. Locally only test.exec exists and
+    // the result is exactly what it was.
+    def allExecFiles = fileTree(layout.buildDirectory.dir('jacoco')) { include '*.exec' }
+
     tasks.named('jacocoTestReport') {
         dependsOn test
+        executionData.setFrom(allExecFiles)
         reports {
             xml.required = true
             html.required = true
@@ -242,6 +285,7 @@ subprojects {
 
     tasks.named('jacocoTestCoverageVerification') {
         dependsOn jacocoTestReport
+        executionData.setFrom(allExecFiles)
         violationRules {
             rule {
                 limit {
