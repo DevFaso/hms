@@ -215,6 +215,8 @@
     "PULSE": "Pulse",
     "RECORD_DELIVERY": "Record Delivery",
     "RISK_NOTES": "Risk notes",
+    "RECENT_DELIVERY_OVERRIDE": "Override reason (recent delivery)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Required only when a birth was recorded for this patient in the last 20 weeks.",
     "SAVE_DELIVERY": "Save Delivery Record",
     "SAVE_ENTRY": "Save Entry",
     "SEX_FEMALE": "Female",

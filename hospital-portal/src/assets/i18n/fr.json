@@ -215,6 +215,8 @@
     "PULSE": "Pouls",
     "RECORD_DELIVERY": "Enregistrer l'accouchement",
     "RISK_NOTES": "Notes de risque",
+    "RECENT_DELIVERY_OVERRIDE": "Motif de dérogation (accouchement récent)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Obligatoire uniquement si une naissance a été enregistrée pour cette patiente au cours des 20 dernières semaines.",
     "SAVE_DELIVERY": "Enregistrer le compte rendu",
     "SAVE_ENTRY": "Enregistrer l'entrée",
     "SEX_FEMALE": "Féminin",

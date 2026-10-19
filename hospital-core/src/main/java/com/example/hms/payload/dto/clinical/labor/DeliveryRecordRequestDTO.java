@@ -57,4 +57,11 @@ public class DeliveryRecordRequestDTO {
     private PerinealTear perinealTear;
 
     private String notes;
+
+    /**
+     * QA D214 (#896 review): required only when another birth was recorded
+     * for this mother within 20 weeks of this one; kept on the record notes.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String recentDeliveryOverrideReason;
 }

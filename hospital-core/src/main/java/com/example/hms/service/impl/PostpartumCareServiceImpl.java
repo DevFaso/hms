@@ -77,6 +77,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -198,7 +199,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (response != null && response.getSchedule() != null) {
             schedule = response.getSchedule();
         } else {
-            boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
+            boolean overdue = plan.getNextDueAt() != null && plan.getNextDueAt().isBefore(LocalDateTime.now());
             Integer frequency = plan.currentCheckFrequencyMinutes();
             schedule = PostpartumScheduleDTO.builder()
                 .carePlanId(plan.getId())
@@ -287,6 +288,18 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         Optional<PostpartumCarePlan> existing = carePlanRepository
             .findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patient.getId(), hospital.getId());
+        LocalDateTime latestBirth = deliveryRecordRepository
+            .findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patient.getId(), hospital.getId())
+            .map(com.example.hms.model.labor.DeliveryRecord::getBirthDateTime)
+            .orElse(null);
+        if (existing.isPresent() && latestBirth != null && existing.get().getDeliveryOccurredAt() != null
+            && existing.get().getDeliveryOccurredAt().isBefore(latestBirth)) {
+            // QA D215 (D162): the active plan belongs to an earlier delivery.
+            // Close it; the new birth starts its own plan in immediate recovery.
+            existing.get().markClosed(latestBirth);
+            carePlanRepository.save(existing.get());
+            existing = Optional.empty();
+        }
         if (existing.isPresent()) {
             PostpartumCarePlan plan = existing.get();
             if (plan.getRegistration() == null && registration != null) {
@@ -303,7 +316,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .patient(patient)
             .hospital(hospital)
             .registration(registration)
-            .deliveryOccurredAt(resolveDeliveryTimestamp(request))
+            .deliveryOccurredAt(request.getDeliveryOccurredAt() == null && latestBirth != null
+                ? latestBirth : resolveDeliveryTimestamp(request))
             .build();
         if (plan.getDeliveryOccurredAt() == null) {
             plan.setDeliveryOccurredAt(LocalDateTime.now());
@@ -482,12 +496,15 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
                                                   String code, String message, String triggeredBy) {
+        // QA D216 (D172/D61): stored, charted and notified text in the staff
+        // locale; the English literal is only the fallback.
         return PostpartumObservationAlert.builder()
             .type(type)
             .severity(severity)
             .code(code)
-            .message(message)
-            .triggeredBy(triggeredBy)
+            .message(messageSource.getMessage("postpartum.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .triggeredBy(messageSource.getMessage("postpartum.alert.trigger." + code, null, triggeredBy,
+                NotificationLocales.STAFF))
             .build();
     }
 
@@ -573,7 +590,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 ? request.getEnhancedMonitoringFrequencyMinutes()
                 : Math.max(PostpartumCarePlan.MIN_SHIFT_FREQUENCY_MINUTES, frequency / 2));
             plan.setShiftFrequencyMinutes(enhancedFrequency);
-            plan.setEscalationReason("Critical postpartum alert triggered");
+            plan.setEscalationReason(messageSource.getMessage("postpartum.escalation.critical", null,
+                "Critical postpartum alert triggered", NotificationLocales.STAFF));
             plan.setNextDueAt(observation.getObservationTime().plusMinutes(enhancedFrequency));
         } else if (plan.isEnhancedMonitoring() && resolveEnhanced) {
             plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
@@ -641,7 +659,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         LocalDateTime nextDue = plan.getNextDueAt();
         if (nextDue != null && nextDue.isBefore(LocalDateTime.now())) {
             plan.setOverdueSince(nextDue);
-        } else if (plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
+        } else {
+            // QA D215: a check due in the future is not overdue; a stale
+            // overdueSince from an earlier miss must not survive it.
             plan.setOverdueSince(null);
         }
     }
@@ -687,8 +707,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
             .forEach(alert -> {
+                // QA D216: the type is a translated label, never the raw enum.
+                String typeLabel = alert.getType() == null ? ""
+                    : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
                 String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
