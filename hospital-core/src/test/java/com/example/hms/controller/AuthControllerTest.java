@@ -71,7 +71,8 @@ class AuthControllerTest {
     @org.junit.jupiter.api.BeforeAll
     static void messageBundles() {
         var source = new org.springframework.context.support.ResourceBundleMessageSource();
-        source.setBasename("messages");
+        source.setBasenames(java.util.Arrays.stream(com.example.hms.config.MessageBundles.basenames())
+            .map(b -> b.substring("classpath:".length())).toArray(String[]::new));
         source.setDefaultEncoding("UTF-8");
         source.setFallbackToSystemLocale(false);
         com.example.hms.utility.MessageUtil.setMessageSource(source);
