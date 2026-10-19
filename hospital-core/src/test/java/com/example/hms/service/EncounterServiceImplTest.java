@@ -122,6 +122,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
     @Mock private PatientLocaleResolver patientLocaleResolver;
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+    @Mock private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -531,6 +532,44 @@ class EncounterServiceImplTest {
 
         verify(patientVitalSignRepository).save(any(PatientVitalSign.class));
         verify(encounterRepository).save(any(Encounter.class));
+    }
+
+    @Test
+    void submitTriage_routesTheVitalsThroughTheNews2Escalation_D265() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+        doctorUser.setUsername("doctor_a");
+        Staff doctor = new Staff();
+        doctor.setUser(doctorUser);
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(doctor);
+
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
+                .esiScore(2).respiratoryRateBpm(30).spo2Percent(88).systolicBpMmHg(85)
+                .heartRateBpm(135).temperatureCelsius(39.5).build();
+
+        PatientVitalSign savedVital = new PatientVitalSign();
+        savedVital.setId(UUID.randomUUID());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.submitTriage(encounterId, request, "nurse_a", true, null);
+
+        org.mockito.ArgumentCaptor<PatientVitalSign> vital = org.mockito.ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(news2EscalationService).escalateIfNeeded(vital.capture(), eq(patient.getId()),
+                eq(hospital.getId()), eq("nurse_a"), eq("doctor_a"));
+        assertThat(vital.getValue().getRespiratoryRateBpm()).isEqualTo(30);
+        assertThat(vital.getValue().getSpo2Percent()).isEqualTo(88);
     }
 
     @Test

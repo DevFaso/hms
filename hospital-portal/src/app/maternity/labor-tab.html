@@ -42,7 +42,13 @@
       <div class="form-row">
         <div class="field">
           <label for="labor-onset">{{ 'LABOR.ONSET_TIME' | translate }}</label>
-          <input id="labor-onset" type="datetime-local" [(ngModel)]="startForm.laborOnsetAt" />
+          <input
+            id="labor-onset"
+            type="datetime-local"
+            required
+            aria-required="true"
+            [(ngModel)]="startForm.laborOnsetAt"
+          />
         </div>
         <div class="field">
           <label for="labor-membranes">{{ 'LABOR.MEMBRANE_STATUS' | translate }}</label>
@@ -96,7 +102,11 @@
         <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitStart()" [disabled]="saving()">
+        <button
+          class="btn-primary"
+          (click)="submitStart()"
+          [disabled]="saving() || !startForm.laborOnsetAt"
+        >
           {{ 'LABOR.START_EPISODE' | translate }}
         </button>
       </div>

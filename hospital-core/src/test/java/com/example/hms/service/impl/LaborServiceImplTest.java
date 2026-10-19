@@ -145,12 +145,40 @@ class LaborServiceImplTest {
         // QA D46: a labour episode was accepted for a MALE patient.
         patient.setGender("MALE");
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class);
         verify(episodeRepository, never())
             .save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void startEpisodeRefusesAnEpisodeWithNoOnsetTime_D295() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.onset.required");
+        verify(episodeRepository, never()).save(org.mockito.ArgumentMatchers.any());
+
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(request))
+                .extracting(v -> v.getPropertyPath().toString())
+                .containsExactly("laborOnsetAt");
+        }
+    }
+
+    @Test
+    void startEpisodeRefusesAFutureOnsetTime_D295() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().plusHours(3)).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.labor.onset.future");
     }
 
     @Test
@@ -160,7 +188,7 @@ class LaborServiceImplTest {
         when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
             .thenReturn(true);
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
@@ -180,7 +208,7 @@ class LaborServiceImplTest {
         history.setEstimatedDueDate(LocalDate.now().plusWeeks(2)); // → 38 weeks
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
 
@@ -605,7 +633,7 @@ class LaborServiceImplTest {
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
-            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
 
         assertThat(created.getGestationalAgeWeeks()).isEqualTo(38);
     }
@@ -621,7 +649,7 @@ class LaborServiceImplTest {
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
-            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
 
         assertThat(created.getGestationalAgeWeeks()).isNull();
     }
@@ -658,7 +686,7 @@ class LaborServiceImplTest {
         when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
             org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
@@ -673,7 +701,7 @@ class LaborServiceImplTest {
         when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
             org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
 
-        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2))
             .recentDeliveryOverrideReason("Second twin retained").riskNotes("Anaemia").build();
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
@@ -692,7 +720,7 @@ class LaborServiceImplTest {
             org.mockito.ArgumentMatchers.eq(patientId), since.capture())).thenReturn(false);
 
         service.startEpisode(patientId, recorderUserId,
-            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
 
         assertThat(since.getValue()).isBetween(
             LocalDateTime.now().minusDays(141), LocalDateTime.now().minusDays(139));

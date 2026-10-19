@@ -89,6 +89,27 @@ class News2EscalationServiceTest {
     }
 
     @Test
+    void aTriageSetWithNoStayAlertsTheNurseAndTheVisitPhysician_D265() {
+        messages.addMessage("news2.escalation.high", Locale.getDefault(), "HIGH {0} {1} {2}");
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        when(admissionRepository.findCurrentAdmissionByPatient(patient.getId())).thenReturn(Optional.empty());
+        // QA D265 set: NEWS2 14 (RR 30, SpO2 88, BP 85, HR 135, T 39.5, new confusion).
+        PatientVitalSign triage = PatientVitalSign.builder()
+            .patient(patient).recordedAt(LocalDateTime.now()).source("TRIAGE")
+            .respiratoryRateBpm(30).spo2Percent(88).systolicBpMmHg(85).heartRateBpm(135)
+            .temperatureCelsius(39.5).consciousnessLevel(com.example.hms.enums.ConsciousnessLevel.NEW_CONFUSION)
+            .build();
+
+        NewsScoreCalculator.NewsScoreResult score =
+            service.escalateIfNeeded(triage, patient.getId(), UUID.randomUUID(), "nurse_a", "dr_a");
+
+        assertThat(score.riskBand()).isEqualTo(NewsScoreCalculator.RiskBand.HIGH);
+        verify(notificationService).createNotification(anyString(), eq("nurse_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+        verify(notificationService).createNotification(anyString(), eq("dr_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+    }
+
+    @Test
     void aLowScoreAlertsNobody() {
         PatientVitalSign calm = PatientVitalSign.builder()
             .temperatureCelsius(37.0).heartRateBpm(70).respiratoryRateBpm(14)

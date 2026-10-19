@@ -157,6 +157,9 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponseDTO createHospital(HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
         validateAddressFields(dto, locale);
+        // QA D285: "Clinique  X " and "clinique x" are one hospital; the name
+        // is stored as typed, minus stray blanks, and checked the same way.
+        dto.setName(normalizeName(dto.getName()));
 
         boolean exists = hospitalRepository.existsByNameIgnoreCaseAndZipCode(dto.getName(), dto.getZipCode());
         if (exists) {
@@ -183,6 +186,15 @@ public class HospitalServiceImpl implements HospitalService {
     }
 
 
+    /** Trims and collapses inner runs of blanks; null stays null. */
+    static String normalizeName(String name) {
+        return name == null ? null : name.trim().replaceAll("\\s+", " ");
+    }
+
+    private static String normalizeZip(String zip) {
+        return zip == null || zip.isBlank() ? "" : zip.trim();
+    }
+
     @Override
     @Transactional
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
@@ -191,10 +203,14 @@ public class HospitalServiceImpl implements HospitalService {
         validateAddressFields(dto, locale);
         // The create rule holds on update too: renaming onto another
         // hospital's name and zip code is a 409, not a silent duplicate (D223).
+        if (dto.getName() != null) {
+            dto.setName(normalizeName(dto.getName()));
+        }
         String name = dto.getName() != null ? dto.getName() : hospital.getName();
         String zipCode = dto.getZipCode() != null ? dto.getZipCode() : hospital.getZipCode();
         boolean identityChanged = name != null
-            && (!name.equalsIgnoreCase(hospital.getName()) || !Objects.equals(zipCode, hospital.getZipCode()));
+            && (!name.equalsIgnoreCase(normalizeName(hospital.getName()))
+                || !Objects.equals(normalizeZip(zipCode), normalizeZip(hospital.getZipCode())));
         // Unchanged, the only match is this hospital itself.
         if (identityChanged && hospitalRepository.existsByNameIgnoreCaseAndZipCode(name, zipCode)) {
             String message = messageSource.getMessage("hospital.exists",

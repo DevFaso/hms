@@ -15,6 +15,22 @@ class FiveRightsVerificationServiceTest {
 
     private final FiveRightsVerificationService service = new FiveRightsVerificationService();
 
+    @org.junit.jupiter.api.BeforeAll
+    static void realBundles() {
+        // The reasons are bundle keys resolved in the caller's locale (D274).
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+    }
+
+    @org.junit.jupiter.api.BeforeEach
+    void english() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     private static final UUID PATIENT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
 
     @Test
@@ -43,6 +59,52 @@ class FiveRightsVerificationServiceTest {
 
         assertThat(result.failedChecks()).contains(FiveRightsCheck.PATIENT);
         assertThat(result.getFailureReasons().get(FiveRightsCheck.PATIENT)).contains("not scanned");
+    }
+
+    @Test
+    void reasonsAreInTheNursesLanguage_D274() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            LocalDateTime scheduled = LocalDateTime.now();
+            FiveRightsVerificationResult result = service.verify(
+                mar(scheduled), null, "AMOX-500", "250 mg", "PO", scheduled.plusHours(3));
+
+            assertThat(result.getFailureReasons().get(FiveRightsCheck.PATIENT))
+                .isEqualTo("Le bracelet du patient n'a pas été scanné.");
+            assertThat(result.getFailureReasons().get(FiveRightsCheck.DOSE))
+                .isEqualTo("La dose saisie ne correspond pas à la dose prescrite.");
+            assertThat(result.getFailureReasons().get(FiveRightsCheck.TIME))
+                .isEqualTo("L'administration est hors de la fenêtre de 60 minutes.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void theMrnPrintedOnTheWristbandIdentifiesThePatientAtThisHospital_D274() {
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = marWithMrn(hospitalId, "MRN-A-0042");
+
+        FiveRightsVerificationResult typed = service.verify(
+            mar, " mrn-a-0042 ", "AMOX-500", "500 mg", "PO", LocalDateTime.now());
+        assertThat(typed.getOutcomes().get(FiveRightsCheck.PATIENT)).isTrue();
+
+        FiveRightsVerificationResult otherMrn = service.verify(
+            mar, "MRN-A-0043", "AMOX-500", "500 mg", "PO", LocalDateTime.now());
+        assertThat(otherMrn.failedChecks()).contains(FiveRightsCheck.PATIENT);
+    }
+
+    @Test
+    void anMrnFromAnotherHospitalDoesNotIdentifyThePatient_D274() {
+        UUID hospitalId = UUID.randomUUID();
+        MedicationAdministrationRecord mar = marWithMrn(hospitalId, "MRN-A-0042");
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        mar.setHospital(elsewhere);
+
+        FiveRightsVerificationResult result = service.verify(
+            mar, "MRN-A-0042", "AMOX-500", "500 mg", "PO", LocalDateTime.now());
+        assertThat(result.failedChecks()).contains(FiveRightsCheck.PATIENT);
     }
 
     @Test
@@ -163,6 +225,19 @@ class FiveRightsVerificationServiceTest {
         rx.setDosage("500 mg");
         rx.setRoute("PO");
         return rx;
+    }
+
+    private MedicationAdministrationRecord marWithMrn(UUID hospitalId, String mrn) {
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        registration.setMrn(mrn);
+        MedicationAdministrationRecord r = mar(LocalDateTime.now());
+        r.getPatient().getHospitalRegistrations().add(registration);
+        r.setHospital(hospital);
+        return r;
     }
 
     private MedicationAdministrationRecord mar(LocalDateTime scheduledTime) {

@@ -41,6 +41,7 @@ class AdmissionStayEncounterServiceTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    @Mock private com.example.hms.repository.NursingTaskRepository nursingTaskRepository;
     @Mock private org.springframework.context.MessageSource messageSource;
 
     @InjectMocks private AdmissionStayEncounterService service;
@@ -156,6 +157,25 @@ class AdmissionStayEncounterServiceTest {
         assertThat(open.getCompletedAt()).isNotNull();
         assertThat(open.getCompletedByName()).isEqualTo("Clôturée à la sortie");
         verify(nurseHandoffRepository).saveAll(List.of(open));
+    }
+
+    @Test
+    void theDischargeClosesThePatientsPendingNursingTasks_D294() {
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.empty());
+        com.example.hms.model.NursingTask open = new com.example.hms.model.NursingTask();
+        open.setStatus("PENDING");
+        when(nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(open));
+        when(messageSource.getMessage(eq("nurse.handoff.closedByDischarge"), any(), any(), any()))
+            .thenReturn("Clôturée à la sortie");
+
+        service.recordDischarge(admission);
+
+        assertThat(open.getStatus()).isEqualTo("COMPLETED");
+        assertThat(open.getCompletedAt()).isNotNull();
+        assertThat(open.getCompletedByName()).isEqualTo("Clôturée à la sortie");
+        verify(nursingTaskRepository).saveAll(List.of(open));
     }
 
     @Test

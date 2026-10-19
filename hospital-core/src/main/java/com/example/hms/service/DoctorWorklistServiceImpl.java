@@ -320,7 +320,9 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .mrn(p.getMrnForHospital(encHospitalId))
                 .age(age)
                 .sex(p.getGender())
-                .room(roomBed[0])
+                // QA D292 (D179): an outpatient has no stay; the room the triage
+                // nurse put them in is on the encounter.
+                .room(roomBed[0] != null ? roomBed[0] : blankToNull(enc.getRoomAssignment()))
                 .bed(roomBed[1])
                 .location(location)
                 .latestVitalsSummary(latestVitalsSummary)
@@ -338,6 +340,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
      * the reason the visit was booked for. It used to read the free-text notes,
      * which are blank on a fresh encounter, so the column was always null.
      */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     static String chiefComplaintOf(Encounter enc) {
         if (enc.getChiefComplaint() != null && !enc.getChiefComplaint().isBlank()) {
             return enc.getChiefComplaint();

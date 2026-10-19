@@ -135,11 +135,22 @@ describe('LaborTabComponent', () => {
     laborSpy.episodes.and.returnValue(of([episode('e2', 'ACTIVE')]));
 
     component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
     component.submitStart();
 
     expect(laborSpy.startEpisode).toHaveBeenCalledWith('p1', jasmine.any(Object));
     expect(toastSpy.success).toHaveBeenCalled();
     expect(component.startFormOpen()).toBeFalse();
+  });
+
+  it('D295: an episode is not started without an onset time', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+
+    component.openStartForm();
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(component.startFormOpen()).toBeTrue();
   });
 
   it('D214: a refused start shows the server reason and sends the override', () => {
@@ -149,6 +160,7 @@ describe('LaborTabComponent', () => {
     );
 
     component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
     component.startForm.recentDeliveryOverrideReason = 'Second jumeau';
     component.submitStart();
 

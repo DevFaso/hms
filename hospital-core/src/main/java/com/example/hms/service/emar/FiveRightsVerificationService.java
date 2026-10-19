@@ -50,7 +50,8 @@ public class FiveRightsVerificationService {
         Prescription rx = mar.getPrescription();
         FiveRightsVerificationResult.Builder b = FiveRightsVerificationResult.builder();
 
-        verifyPatient(mar.getPatient(), patientScan, b);
+        verifyPatient(mar.getPatient(), mar.getHospital() != null ? mar.getHospital().getId() : null,
+            patientScan, b);
         verifyDrug(rx, medicationScan, b);
         verifyDose(rx, doseScan, b);
         verifyRoute(rx, routeScan, b);
@@ -60,24 +61,31 @@ public class FiveRightsVerificationService {
     }
 
     /** Right patient: the scanned wristband must resolve to the prescription's patient UUID. */
-    private void verifyPatient(Patient patient, String scan, FiveRightsVerificationResult.Builder b) {
+    private void verifyPatient(Patient patient, UUID hospitalId, String scan,
+                               FiveRightsVerificationResult.Builder b) {
         if (isBlank(scan)) {
-            b.fail(FiveRightsCheck.PATIENT, "patient wristband was not scanned");
+            b.fail(FiveRightsCheck.PATIENT, reason("emar.fiveRights.patient.notScanned"));
             return;
         }
         if (patient == null || patient.getId() == null) {
-            b.fail(FiveRightsCheck.PATIENT, "MAR record has no patient");
+            b.fail(FiveRightsCheck.PATIENT, reason("emar.fiveRights.patient.missing"));
             return;
         }
         UUID scanned = parseUuidOrNull(scan);
+        if (scanned == null && matchesMrn(patient, hospitalId, scan)) {
+            // QA D274: the MRN printed on the wristband, typed when the QR will
+            // not scan, identifies the patient at this hospital as well.
+            b.pass(FiveRightsCheck.PATIENT);
+            return;
+        }
         if (scanned == null) {
-            b.fail(FiveRightsCheck.PATIENT, "scanned wristband value is not a patient identifier");
+            b.fail(FiveRightsCheck.PATIENT, reason("emar.fiveRights.patient.unrecognised"));
             return;
         }
         if (patient.getId().equals(scanned)) {
             b.pass(FiveRightsCheck.PATIENT);
         } else {
-            b.fail(FiveRightsCheck.PATIENT, "scanned patient does not match the prescribed patient");
+            b.fail(FiveRightsCheck.PATIENT, reason("emar.fiveRights.patient.mismatch"));
         }
     }
 
@@ -88,11 +96,11 @@ public class FiveRightsVerificationService {
      */
     private void verifyDrug(Prescription rx, String scan, FiveRightsVerificationResult.Builder b) {
         if (isBlank(scan)) {
-            b.fail(FiveRightsCheck.DRUG, "medication barcode was not scanned");
+            b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.notScanned"));
             return;
         }
         if (rx == null) {
-            b.fail(FiveRightsCheck.DRUG, "MAR record has no prescription");
+            b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.noPrescription"));
             return;
         }
         String normalized = normalize(scan);
@@ -101,7 +109,7 @@ public class FiveRightsVerificationService {
             if (code.equals(normalized)) {
                 b.pass(FiveRightsCheck.DRUG);
             } else {
-                b.fail(FiveRightsCheck.DRUG, "scanned medication code does not match prescribed code");
+                b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.codeMismatch"));
             }
             return;
         }
@@ -109,41 +117,41 @@ public class FiveRightsVerificationService {
         if (!isBlank(name) && name.equals(normalized)) {
             b.pass(FiveRightsCheck.DRUG);
         } else {
-            b.fail(FiveRightsCheck.DRUG, "scanned medication does not match prescribed medication");
+            b.fail(FiveRightsCheck.DRUG, reason("emar.fiveRights.drug.mismatch"));
         }
     }
 
     /** Right dose: the scanned dose token must match the prescription's dosage. */
     private void verifyDose(Prescription rx, String scan, FiveRightsVerificationResult.Builder b) {
         if (isBlank(scan)) {
-            b.fail(FiveRightsCheck.DOSE, "dose was not entered");
+            b.fail(FiveRightsCheck.DOSE, reason("emar.fiveRights.dose.missing"));
             return;
         }
         if (rx == null || isBlank(rx.getDosage())) {
-            b.fail(FiveRightsCheck.DOSE, "prescription does not record a dose");
+            b.fail(FiveRightsCheck.DOSE, reason("emar.fiveRights.dose.notPrescribed"));
             return;
         }
         if (normalize(rx.getDosage()).equals(normalize(scan))) {
             b.pass(FiveRightsCheck.DOSE);
         } else {
-            b.fail(FiveRightsCheck.DOSE, "entered dose does not match prescribed dose");
+            b.fail(FiveRightsCheck.DOSE, reason("emar.fiveRights.dose.mismatch"));
         }
     }
 
     /** Right route: scanned route must match the prescription. */
     private void verifyRoute(Prescription rx, String scan, FiveRightsVerificationResult.Builder b) {
         if (isBlank(scan)) {
-            b.fail(FiveRightsCheck.ROUTE, "route was not entered");
+            b.fail(FiveRightsCheck.ROUTE, reason("emar.fiveRights.route.missing"));
             return;
         }
         if (rx == null || isBlank(rx.getRoute())) {
-            b.fail(FiveRightsCheck.ROUTE, "prescription does not record a route");
+            b.fail(FiveRightsCheck.ROUTE, reason("emar.fiveRights.route.notPrescribed"));
             return;
         }
         if (normalize(rx.getRoute()).equals(normalize(scan))) {
             b.pass(FiveRightsCheck.ROUTE);
         } else {
-            b.fail(FiveRightsCheck.ROUTE, "entered route does not match prescribed route");
+            b.fail(FiveRightsCheck.ROUTE, reason("emar.fiveRights.route.mismatch"));
         }
     }
 
@@ -153,7 +161,7 @@ public class FiveRightsVerificationService {
         FiveRightsVerificationResult.Builder b
     ) {
         if (scheduledTime == null) {
-            b.fail(FiveRightsCheck.TIME, "MAR record has no scheduled time");
+            b.fail(FiveRightsCheck.TIME, reason("emar.fiveRights.time.notScheduled"));
             return;
         }
         LocalDateTime when = administeredAt != null ? administeredAt : LocalDateTime.now();
@@ -162,8 +170,26 @@ public class FiveRightsVerificationService {
             b.pass(FiveRightsCheck.TIME);
         } else {
             b.fail(FiveRightsCheck.TIME,
-                "administration is outside the " + DEFAULT_TIME_WINDOW.toMinutes() + "-minute window");
+                reason("emar.fiveRights.time.outsideWindow", DEFAULT_TIME_WINDOW.toMinutes()));
         }
+    }
+
+    /** The MRN the patient holds at the MAR's hospital (MRNs are per hospital). */
+    private static boolean matchesMrn(Patient patient, UUID hospitalId, String scan) {
+        if (hospitalId == null) {
+            return false;
+        }
+        String mrn = patient.getMrnForHospital(hospitalId);
+        return !isBlank(mrn) && normalize(mrn).equals(normalize(scan));
+    }
+
+    /**
+     * QA D274 (D233 not fixed): the refusal reasons reached a French nurse in
+     * English. They are bundle keys resolved in the caller's locale; with no
+     * message source (plain unit tests) the key itself is returned.
+     */
+    private static String reason(String key, Object... args) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(key, args);
     }
 
     private static boolean isBlank(String s) {

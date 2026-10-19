@@ -20,6 +20,8 @@ public class LaborEpisodeRequestDTO {
     private UUID registrationId;
     private UUID admittedByStaffId;
 
+    /** QA D295: the partograph and the labour durations are measured from it. */
+    @jakarta.validation.constraints.NotNull(message = "{maternity.labor.onset.required}")
     private LocalDateTime laborOnsetAt;
     private LocalDateTime admittedAt;
     private MembraneStatus membraneStatus;

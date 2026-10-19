@@ -71,9 +71,19 @@ public class PostpartumObservationRequestDTO {
     @DecimalMin(value = VitalSignLimits.TEMPERATURE_MIN_C, message = "{vitals.temperature.range}")
     @DecimalMax(value = VitalSignLimits.TEMPERATURE_MAX_C, message = "{vitals.temperature.range}")
     private Double temperatureCelsius;
+    // QA D277: a systolic of 900 was stored with no alert. Same physiological
+    // bounds as every other vitals form (VitalSignLimits).
+    @Min(value = VitalSignLimits.SYSTOLIC_MIN, message = "{vitals.systolic.range}")
+    @Max(value = VitalSignLimits.SYSTOLIC_MAX, message = "{vitals.systolic.range}")
     private Integer systolicBpMmHg;
+    @Min(value = VitalSignLimits.DIASTOLIC_MIN, message = "{vitals.diastolic.range}")
+    @Max(value = VitalSignLimits.DIASTOLIC_MAX, message = "{vitals.diastolic.range}")
     private Integer diastolicBpMmHg;
+    @Min(value = VitalSignLimits.HEART_RATE_MIN, message = "{vitals.heartRate.range}")
+    @Max(value = VitalSignLimits.HEART_RATE_MAX, message = "{vitals.heartRate.range}")
     private Integer pulseBpm;
+    @Min(value = VitalSignLimits.RESPIRATORY_RATE_MIN, message = "{vitals.respiratoryRate.range}")
+    @Max(value = VitalSignLimits.RESPIRATORY_RATE_MAX, message = "{vitals.respiratoryRate.range}")
     private Integer respirationsPerMin;
 
     @Min(0)

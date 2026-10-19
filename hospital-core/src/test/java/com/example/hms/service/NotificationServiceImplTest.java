@@ -132,7 +132,22 @@ class NotificationServiceImplTest {
     @DisplayName("getNotificationsForUser(String, Boolean, String, Pageable)")
     class GetNotificationsForUserPaged {
 
-        private final Pageable pageable = PageRequest.of(0, 10);
+        private final Pageable pageable = PageRequest.of(0, 10, NotificationServiceImpl.NEWEST_FIRST);
+
+        @Test
+        @DisplayName("QA D278: an unsorted request is read newest first, id breaking a tie")
+        void unsortedRequestIsReadNewestFirst() {
+            when(notificationRepository.findByRecipientUsername(eq(username), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(sampleNotification)));
+
+            service.getNotificationsForUser(username, null, null, PageRequest.of(2, 10));
+
+            org.mockito.ArgumentCaptor<Pageable> used = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+            verify(notificationRepository).findByRecipientUsername(eq(username), used.capture());
+            assertThat(used.getValue().getPageNumber()).isEqualTo(2);
+            assertThat(used.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
+            assertThat(used.getValue().getSort().getOrderFor("id").isDescending()).isTrue();
+        }
 
         @Test
         @DisplayName("filters by read AND search when both provided")

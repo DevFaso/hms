@@ -290,6 +290,38 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void dischargePatient_aSecondDischargeIsAConflictAndChangesNothing_D267() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        AdmissionDischargeRequestDTO first = new AdmissionDischargeRequestDTO();
+        first.setDischargingProviderId(staffId);
+        first.setDischargeDisposition(DischargeDisposition.HOME);
+        first.setDischargeSummary("Full summary");
+        first.setDischargeInstructions("Rest");
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        service.dischargePatient(admissionId, first);
+        java.time.LocalDateTime dischargedAt = admission.getActualDischargeDateTime();
+
+        AdmissionDischargeRequestDTO again = new AdmissionDischargeRequestDTO();
+        again.setDischargingProviderId(staffId);
+        again.setDischargeDisposition(DischargeDisposition.HOME);
+        again.setDischargeSummary("again");
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, again))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage("admission.discharge.alreadyClosed");
+        assertThat(admission.getDischargeSummary()).isEqualTo("Full summary");
+        assertThat(admission.getDischargeInstructions()).isEqualTo("Rest");
+        assertThat(admission.getActualDischargeDateTime()).isEqualTo(dischargedAt);
+        verify(admissionRepository, org.mockito.Mockito.times(1)).save(admission);
+    }
+
+    @Test
     void dischargePatient_success() {
         Admission admission = new Admission();
         admission.setId(admissionId);

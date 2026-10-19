@@ -73,6 +73,18 @@ public class News2EscalationService {
      */
     public NewsScoreResult escalateIfNeeded(PatientVitalSign vital, UUID patientId, UUID hospitalId,
                                             String recorderUsername) {
+        return escalateIfNeeded(vital, patientId, hospitalId, recorderUsername, null);
+    }
+
+    /**
+     * QA D265: the same escalation for a vital set taken outside a stay — at
+     * triage there is no admission, so the clinician who owns the visit
+     * ({@code visitPhysicianUsername}, the encounter's provider) is alerted as
+     * well as the recorder. Every path that stores a vital set comes through
+     * here, so the bands and recipients cannot drift between paths.
+     */
+    public NewsScoreResult escalateIfNeeded(PatientVitalSign vital, UUID patientId, UUID hospitalId,
+                                            String recorderUsername, String visitPhysicianUsername) {
         NewsScoreResult score = NewsScoreCalculator.score(vital);
         if (!needsEscalation(score) || patientId == null || hospitalId == null) {
             return score;
@@ -82,6 +94,9 @@ public class News2EscalationService {
             recipients.add(recorderUsername);
         }
         responsiblePhysicianUsername(patientId, hospitalId).ifPresent(recipients::add);
+        if (visitPhysicianUsername != null && !visitPhysicianUsername.isBlank()) {
+            recipients.add(visitPhysicianUsername);
+        }
         if (recipients.isEmpty()) {
             return score;
         }

@@ -141,6 +141,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
+    /** How far before now a new task may be dated (a shift's worth of back-entry). */
+    static final java.time.Duration TASK_DUE_BACKDATE_LIMIT = java.time.Duration.ofHours(12);
     private static final String MSG_PATIENT_NOT_FOUND = "Patient not found: ";
     private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
     private static final String DEFAULT_PATIENT_NAME = "Patient";
@@ -1623,6 +1625,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");
+        }
+
+        // QA D294: a task due in 2020 was accepted and sat overdue for ever.
+        // A task is for this shift onward; a little back-dating is allowed.
+        if (request.getDueAt() != null
+            && request.getDueAt().isBefore(LocalDateTime.now().minus(TASK_DUE_BACKDATE_LIMIT))) {
+            throw new BusinessException("nurse.task.dueAt.past");
         }
 
         String createdByName = resolveNurseName(nurseUserId);
