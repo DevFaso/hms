@@ -533,14 +533,21 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * which is why the expiry and drug-match holes V138 closes went unnoticed
    * for so long: in practice every dispense went through with no lot at all,
    * and so with no stock decrement either.
+   *
+   * QA D241: only the lots of the prescribed drug. The picker used to list
+   * every lot of the pharmacy (morphine included) for any prescription.
    */
   private loadStockLots(): void {
-    if (!this.selectedPharmacyId) {
-      this.stockLots.set([]);
+    const rxId = this.selectedPrescription?.id;
+    this.stockLots.set([]);
+    if (!this.selectedPharmacyId || !rxId) {
       return;
     }
-    this.svc.listLotsByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
-      next: (res) => this.stockLots.set(res?.data?.content ?? []),
+    this.svc.listDispensableLots(rxId, this.selectedPharmacyId).subscribe({
+      next: (res) => {
+        // A late answer for a prescription that is no longer open is dropped.
+        if (this.selectedPrescription?.id === rxId) this.stockLots.set(res?.data ?? []);
+      },
       error: () => this.stockLots.set([]),
     });
   }
@@ -728,6 +735,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.quantityRequested = rx.quantity ?? 0;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.showForm.set(true);
+    this.loadStockLots();
   }
 
   submitDispense(): void {

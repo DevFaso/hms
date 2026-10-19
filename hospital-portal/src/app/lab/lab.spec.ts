@@ -198,6 +198,20 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
   });
 
+  it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    const uuid = '3f2a9c1e-7b4d-4e8a-9c21-0d5e6f7a8b9c';
+
+    component.openSpecimens(order({ labOrderCode: uuid }));
+    fixture.detectChanges();
+
+    const title =
+      (fixture.nativeElement as HTMLElement).querySelector('.modal-header h2')?.textContent ?? '';
+    expect(title).toContain('#3F2A9C1E');
+    expect(title).not.toContain(uuid);
+  });
+
   it('QA D177: picking a patient lists their encounters instead of asking for an id', async () => {
     await setup(['ROLE_DOCTOR'], []);
     const encounters = TestBed.inject(EncounterService);

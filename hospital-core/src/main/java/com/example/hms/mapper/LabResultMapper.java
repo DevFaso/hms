@@ -51,7 +51,7 @@ public class LabResultMapper {
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range());
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -126,7 +126,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range());
 
         return LabResultTrendPointDTO.builder()
             .labResultId(result.getId() != null ? result.getId().toString() : null)
@@ -169,7 +169,35 @@ public class LabResultMapper {
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
         LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
-        return determineSeverityFlag(result.getResultValue(), graded);
+        return effectiveSeverityFlag(result, graded);
+    }
+
+    /**
+     * QA D206 / D212: the ONE severity every screen shows. It is the range
+     * grade, except that a result the server treats as critical is labelled
+     * CRITICAL: a value above a range that declares no critical limits (the
+     * D107 fail-safe that pages it), or an analyzer's CRITICAL flag. Never
+     * the notification stamp: that describes a page, not the current value.
+     * Before this, K 7.9 on such a range was paged as a critical value and
+     * shown as "Eleve" with a critical tile of 0.
+     */
+    private static String effectiveSeverityFlag(LabResult result, LabTestReferenceRange graded) {
+        String flag = determineSeverityFlag(result.getResultValue(), graded);
+        if (FLAG_CRITICAL.equals(flag)) {
+            return flag;
+        }
+        // From the value only: an analyzer's CRITICAL flag is part of the
+        // result. The criticalNotifiedAt stamp is NOT - it records a page
+        // about a value that may since have been amended (79 -> 4.2), and
+        // keying the label on it kept a corrected typo CRITICAL for good.
+        if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
+            return FLAG_CRITICAL;
+        }
+        if ("HIGH".equals(flag) && graded != null
+                && graded.getCriticalLow() == null && graded.getCriticalHigh() == null) {
+            return FLAG_CRITICAL;
+        }
+        return flag;
     }
 
     /**

@@ -119,7 +119,8 @@ import static org.mockito.Mockito.when;
         DispenseVerificationService.class,
         ControlledSubstanceGuard.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
         StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
-        PrescriptionRoutingMapper.class, EncryptionKeyHolder.class, PreparedFillConcurrencyPostgresIT.Config.class})
+        PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class, EncryptionKeyHolder.class,
+        PreparedFillConcurrencyPostgresIT.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PreparedFillConcurrencyPostgresIT {
 

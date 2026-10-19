@@ -3,6 +3,7 @@ package com.example.hms.service;
 import static com.example.hms.config.SecurityConstants.*;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.LabTestDefinitionMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabTestDefinition;
@@ -64,6 +65,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final ActingScopeResolver actingScopeResolver;
+    /** QA D213: each approval step is audited by name. */
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
 
     /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
     private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
@@ -389,10 +392,15 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
                 definition.setRejectionReason(null);
+                definition.setSubmittedById(currentUser.getId());
+                definition.setReviewedById(null);
+                definition.setApprovedById(null);
             }
             case "COMPLETE_QA_REVIEW" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                assertNotSameUser(currentUser, definition.getSubmittedById(),
+                    "The QA review must be completed by someone other than the person who submitted it.");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
@@ -400,6 +408,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "APPROVE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                assertNotSameUser(currentUser, definition.getReviewedById(),
+                    "The director's approval must come from someone other than the QA reviewer.");
+                assertNotSameUser(currentUser, definition.getSubmittedById(),
+                    "The director's approval must come from someone other than the person who submitted it.");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());
@@ -407,6 +419,11 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "ACTIVATE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
+                // QA D213: a live test with no reference range grades nothing.
+                if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+                    throw new BusinessException(
+                        "A lab test definition cannot be activated without at least one reference range.");
+                }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
             }
@@ -431,7 +448,45 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             default -> throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.unknownAction", String.valueOf(dto.getAction())));
         }
 
-        return mapper.toDto(repository.save(definition));
+        LabTestDefinition saved = repository.save(definition);
+        auditApprovalStep(currentUser, saved, action);
+        return mapper.toDto(saved);
+    }
+
+    /**
+     * QA D213: the four steps were four identical generic audit rows. This
+     * one names the step and the status it led to. Ids only, no PHI.
+     */
+    private void auditApprovalStep(User actor, LabTestDefinition definition, String action) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .userId(actor.getId())
+                .hospitalName(definition.getHospital() != null ? definition.getHospital().getName() : null)
+                .eventDescription("Lab test definition approval step " + action + " -> "
+                    + definition.getApprovalStatus())
+                .entityType("LabTestDefinition")
+                .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+                .build());
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                .warn("Approval-step audit not written for definition {}: {}", definition.getId(),
+                    ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * QA D213: four-eyes. A super-admin is exempt: a global definition has
+     * no other approver.
+     */
+    private void assertNotSameUser(User user, UUID previousActor, String message) {
+        if (previousActor != null && previousActor.equals(user.getId()) && !isSuperAdmin(user)) {
+            throw new BusinessException(message);
+        }
     }
 
     /**

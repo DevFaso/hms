@@ -118,6 +118,11 @@ class DispenseServiceImplTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** QA D241: real, so the lot picker's response is what the portal gets. */
+    @org.mockito.Spy
+    private com.example.hms.mapper.pharmacy.StockLotMapper stockLotMapper =
+        new com.example.hms.mapper.pharmacy.StockLotMapper();
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -2173,6 +2178,70 @@ class DispenseServiceImplTest {
                     .hasMessageContaining("PARTNER_PHARMACY");
 
             verify(dispenseRepository, never()).save(any());
+        }
+    }
+
+    /**
+     * QA D241: the counter's lot picker listed every lot of the pharmacy,
+     * morphine included, for a paracetamol order. The server lists only
+     * lots of the prescribed drug with stock left, for a prescription of the
+     * caller's own hospital.
+     */
+    @Nested
+    @DisplayName("listDispensableLots (QA D241)")
+    class ListDispensableLots {
+
+        private StockLot lot(String genericName, String lotNumber, BigDecimal remaining) {
+            MedicationCatalogItem drug = new MedicationCatalogItem();
+            drug.setId(UUID.randomUUID());
+            drug.setGenericName(genericName);
+            InventoryItem item = InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(drug)
+                    .quantityOnHand(BigDecimal.valueOf(100)).build();
+            item.setId(UUID.randomUUID());
+            StockLot lot = StockLot.builder().inventoryItem(item).lotNumber(lotNumber)
+                    .expiryDate(TODAY.plusMonths(6)).remainingQuantity(remaining)
+                    .barcodeValue(LotBarcode.mint()).build();
+            lot.setId(UUID.randomUUID());
+            return lot;
+        }
+
+        @Test
+        void onlyLotsOfThePrescribedDrugWithStockLeftAreListed() {
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            StockLot paracetamol = lot("paracetamol", "PCM-1", BigDecimal.valueOf(40));
+            StockLot emptyParacetamol = lot("paracetamol", "PCM-0", BigDecimal.ZERO);
+            StockLot morphine = lot("morphine", "MOR-1", BigDecimal.valueOf(20));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(paracetamol, emptyParacetamol, morphine)));
+
+            assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
+                    .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
+                    .containsExactly("PCM-1");
+        }
+
+        @Test
+        void withoutAnActiveHospitalNothingIsListed() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).findById(any());
+        }
+
+        @Test
+        void aPrescriptionOfAnotherHospitalIsRefusedLikeAMissingOne() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(stockLotRepository, never()).findByInventoryItemPharmacyId(any(), any());
         }
     }
 }

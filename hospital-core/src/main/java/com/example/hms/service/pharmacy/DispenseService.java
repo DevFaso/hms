@@ -48,6 +48,13 @@ public interface DispenseService {
 
     Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable);
 
+    /**
+     * QA D241: the lots of {@code pharmacyId} that hold the prescribed drug
+     * and still have stock, for the dispense lot picker.
+     */
+    java.util.List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> listDispensableLots(
+            UUID prescriptionId, UUID pharmacyId);
+
     Page<DispenseResponseDTO> listByPatient(UUID patientId, Pageable pageable);
 
     Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);

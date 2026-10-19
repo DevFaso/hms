@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabResult;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -264,6 +263,43 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     """)
     Page<LabResult> findHandledByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
+    /**
+     * QA D211: the staff list as a non-laboratory reader may see it. With
+     * {@code releasedOnly} an unreleased value never leaves the laboratory
+     * (D160 fixed the per-patient read but not this one); with
+     * {@code anyPatient=false} only {@code patientId}'s results are listed.
+     * The patient id is a sentinel when {@code anyPatient} is true, so the
+     * parameter always has a type on Postgres.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE (r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId)
+          AND (:releasedOnly = false OR r.released = true)
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE (r.labOrder.hospital.id = :hospitalId
+           OR r.labOrder.performingHospital.id = :hospitalId)
+          AND (:releasedOnly = false OR r.released = true)
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+    """)
+    Page<LabResult> findHandledByHospitalForReader(@Param("hospitalId") UUID hospitalId,
+                                                   @Param("releasedOnly") boolean releasedOnly,
+                                                   @Param("anyPatient") boolean anyPatient,
+                                                   @Param("patientId") UUID patientId,
+                                                   Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",
@@ -431,9 +467,18 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * orders that nobody has acknowledged yet, no older than the floor. The
      * strip used to count every CRITICAL result ever filed for the staff and
      * show it as the live safety-alert count.
+     *
+     * <p>QA D206: "critical" is what the server paged the doctor for
+     * ({@code criticalNotifiedAt}), or an analyzer's CRITICAL flag. Keyed on
+     * the analyzer flag alone, a hand-entered critical (which never carries
+     * one) was paged and still counted 0 on the tile.
      */
-    long countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-        UUID staffId, AbnormalFlag abnormalFlag, java.time.LocalDateTime floor);
+    @Query("SELECT COUNT(r) FROM LabResult r WHERE r.labOrder.orderingStaff.id = :staffId "
+        + "AND r.acknowledged = false AND r.createdAt > :floor "
+        + "AND (r.criticalNotifiedAt IS NOT NULL "
+        + "OR r.abnormalFlag = com.example.hms.enums.AbnormalFlag.CRITICAL)")
+    long countUnacknowledgedCriticalForOrderingStaff(@Param("staffId") UUID staffId,
+                                                     @Param("floor") java.time.LocalDateTime floor);
 
     /**
      * Hospital-scoped tile count for the super-admin dashboard. LabResult
