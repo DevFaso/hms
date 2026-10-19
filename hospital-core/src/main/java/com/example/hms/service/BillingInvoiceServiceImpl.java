@@ -419,7 +419,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: issuing the visit invoice takes over the check-in copay.
-        creditCheckInCopays(saved != null ? saved : invoice);
+        creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
@@ -500,7 +500,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: a visit invoice issued at 0 and priced later by its lines takes the copay now.
-        creditCheckInCopays(saved != null ? saved : invoice);
+        creditCheckInCopays(saved);
     }
 
     @Override
