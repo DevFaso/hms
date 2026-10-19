@@ -81,6 +81,15 @@ const KNOWN_FLAGS: string[] = ['CRITICAL', ...ABNORMAL_FLAGS, 'NORMAL'];
  * these are, and with no scope at all the category declines to read and points
  * at the chip rather than drawing an error card over an empty table.
  */
+/**
+ * QA D240: a word answer with no number in it ("Positif", "Négatif"). A value
+ * with digits ("<0.5", "9.2 g/dL") is numeric, just not graded.
+ */
+function isQualitativeValue(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim();
+  return v !== '' && !/\d/.test(v);
+}
+
 @Component({
   selector: 'app-lab-results-inbox',
   standalone: true,
@@ -279,6 +288,9 @@ export class LabResultsInboxComponent {
     if (item.abnormalFlag === 'CRITICAL') return 'inBasket.labCritical';
     if (ABNORMAL_FLAGS.includes(item.abnormalFlag)) return 'inBasket.labAbnormal';
     if (item.abnormalFlag === 'NORMAL') return 'inBasket.labNormal';
+    // QA D240: an ungraded non-numeric answer ("Positif") is qualitative,
+    // not "not evaluated".
+    if (isQualitativeValue(item.resultValue)) return 'inBasket.labQualitative';
     // Never "Normal" by default — the same rule the chart's labStatusKey
     // follows. An unrecognised grade says so.
     return 'inBasket.labUnknown';

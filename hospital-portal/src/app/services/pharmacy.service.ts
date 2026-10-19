@@ -717,6 +717,18 @@ export class PharmacyService {
     );
   }
 
+  /** QA D241: the pharmacy's lots of the prescribed drug, with stock left. */
+  listDispensableLots(
+    prescriptionId: string,
+    pharmacyId: string,
+  ): Observable<ApiResponse<StockLotResponse[]>> {
+    const params = new HttpParams().set('pharmacyId', pharmacyId);
+    return this.http.get<ApiResponse<StockLotResponse[]>>(
+      `/pharmacy/dispense/prescription/${prescriptionId}/dispensable-lots`,
+      { params },
+    );
+  }
+
   listLotsByPharmacy(
     pharmacyId: string,
     page = 0,

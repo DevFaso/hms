@@ -167,6 +167,7 @@ class InventoryServiceImplTest {
         @DisplayName("creates item successfully")
         void success() {
             InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
             InventoryItemResponseDTO responseDTO = buildItemResponse();
 
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
@@ -174,6 +175,8 @@ class InventoryServiceImplTest {
             when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
             when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
                     .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
             when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
             when(inventoryItemMapper.toResponseDTO(inventoryItem)).thenReturn(responseDTO);
@@ -184,6 +187,71 @@ class InventoryServiceImplTest {
             assertThat(result.getId()).isEqualTo(inventoryItemId);
             assertThat(result.getPharmacyId()).isEqualTo(pharmacyId);
             verify(inventoryItemRepository).save(inventoryItem);
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("QA D208: an opening quantity is refused; stock enters through a goods receipt")
+        void openingQuantityRefused() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(new BigDecimal("999"));
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(org.springframework.data.domain.Page.empty());
+
+            assertThatThrownBy(() -> service.createInventoryItem(dto)).isInstanceOf(BusinessException.class);
+            verify(inventoryItemRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D208: a catalogue row that names no molecule has no twin to look for")
+        void unnamedMoleculeSkipsTwinScan() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
+            medication.setNameFr(" ");
+            medication.setGenericName(null);
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            when(inventoryItemMapper.toResponseDTO(inventoryItem)).thenReturn(buildItemResponse());
+
+            service.createInventoryItem(dto);
+
+            verify(inventoryItemRepository, never()).findByPharmacyIdAndActiveTrue(any(), any());
+            verify(inventoryItemRepository).save(inventoryItem);
+        }
+
+        @Test
+        @DisplayName("QA D208: the same drug under another catalogue row is a duplicate")
+        void sameDrugUnderAnotherCatalogueRowRefused() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
+            MedicationCatalogItem twin = new MedicationCatalogItem();
+            twin.setId(UUID.randomUUID());
+            twin.setNameFr("PARACETAMOL ");
+            dto.setMedicationCatalogItemId(twin.getId());
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(twin.getId())).thenReturn(Optional.of(twin));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, twin.getId()))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemRepository.findByPharmacyIdAndActiveTrue(eq(pharmacyId), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(inventoryItem)));
+
+            assertThatThrownBy(() -> service.createInventoryItem(dto))
+                    .isInstanceOf(BusinessException.class).hasMessageContaining("already exists");
+            verify(inventoryItemRepository, never()).save(any());
         }
 
         @Test
@@ -368,20 +436,22 @@ class InventoryServiceImplTest {
         }
 
         @Test
-        @DisplayName("#825 round 5: a count correction is an atomic UPDATE; an edit without one leaves the quantity alone")
-        void quantityIsSetAtomically() {
+        @DisplayName("QA D208: an edit cannot move the quantity on hand; that is a ledgered stock transaction")
+        void quantityChangeIsRefused() {
             InventoryItemRequestDTO dto = buildItemRequest();
             dto.setQuantityOnHand(new BigDecimal("42.00"));
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateInventoryItem(inventoryItemId, dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(inventoryItemRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).setOnHand(any(), any(), any());
+
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
-
-            service.updateInventoryItem(inventoryItemId, dto);
-            verify(inventoryItemRepository).setOnHand(eq(inventoryItemId), eq(new BigDecimal("42.00")), any());
-
             dto.setQuantityOnHand(null);
             service.updateInventoryItem(inventoryItemId, dto);
-            verify(inventoryItemRepository, times(1)).setOnHand(any(), any(), any());
+            verify(inventoryItemRepository).save(inventoryItem);
         }
     }
 

@@ -289,13 +289,13 @@ class LabOrderEndToEndIT extends BaseIT {
         String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.labTestName").value("Potassium"))
-            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
+            .andExpect(jsonPath("$.severityFlag").value("CRITICAL")) // QA D206: paged, so labelled critical
             .andReturn().getResponse().getContentAsString();
         String retry = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
             .andExpect(status().isCreated())
             // the second row describes itself as fully as the first
             .andExpect(jsonPath("$.labTestName").value("Potassium"))
-            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
+            .andExpect(jsonPath("$.severityFlag").value("CRITICAL")) // QA D206: paged, so labelled critical
             .andReturn().getResponse().getContentAsString();
 
         assertThat(idOf(retry)).as("a retry is recorded, not swallowed").isNotEqualTo(idOf(first));
@@ -324,7 +324,7 @@ class LabOrderEndToEndIT extends BaseIT {
         collectSpecimen(orderId);
 
         UUID resultId = postResult(scientist, orderId, CRITICAL_VALUE).andExpect(status().isCreated())
-            .andExpect(jsonPath("$.severityFlag").value("HIGH"))
+            .andExpect(jsonPath("$.severityFlag").value("CRITICAL")) // QA D206: paged, so labelled critical
             .andExpect(jsonPath("$.released").value(false))
             .andReturn().getResponse().getContentAsString().transform(this::idOf);
 

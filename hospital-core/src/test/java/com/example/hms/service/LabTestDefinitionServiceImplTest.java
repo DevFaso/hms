@@ -63,6 +63,7 @@ class LabTestDefinitionServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     /** Answers the scope the test's HospitalContext describes, as the real resolver does. */
     @Mock private ActingScopeResolver actingScopeResolver;
+    @Mock private AuditEventLogService auditEventLogService;
 
     @InjectMocks private LabTestDefinitionServiceImpl service;
 
@@ -901,10 +902,97 @@ class LabTestDefinitionServiceImplTest {
             when(repository.save(definition)).thenReturn(definition);
             when(mapper.toDto(definition)).thenReturn(responseDTO);
 
+            definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+                .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+
             service.processApprovalAction(defId, approvalReq("ACTIVATE"));
 
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
             assertThat(definition.isActive()).isTrue();
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> e.getEventDescription().contains("ACTIVATE") && e.getEventDescription().contains("ACTIVE")));
+        }
+    }
+
+    /** QA D213: a failing audit write never undoes the approval step. */
+    @Test
+    void processApproval_activate_auditFailure_doesNotUndoTheStep() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+            .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            org.mockito.Mockito.doThrow(new IllegalStateException("audit down"))
+                .when(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.any());
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+        }
+    }
+
+    /** QA D213: a definition with no reference range is not activated. */
+    @Test
+    void processApproval_activate_withoutReferenceRanges_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("ACTIVATE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+        }
+    }
+
+    /** QA D213: the director who did the QA review cannot also approve. */
+    @Test
+    void processApproval_approve_byTheQaReviewer_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
+    /** QA D213: the submitter cannot complete the QA review of their own submission. */
+    @Test
+    void processApproval_completeQaReview_bySubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
         }
     }
 

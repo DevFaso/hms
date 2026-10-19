@@ -274,16 +274,9 @@
               </select>
             </div>
             <div class="form-row">
-              <div class="field">
-                <label for="ciQty">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}</label>
-                <input
-                  id="ciQty"
-                  type="number"
-                  [(ngModel)]="createForm.quantityOnHand"
-                  name="quantityOnHand"
-                  min="0"
-                />
-              </div>
+              <p class="field hint" data-testid="new-item-starts-at-zero">
+                {{ 'PHARMACY.NEW_ITEM_STARTS_AT_ZERO' | translate }}
+              </p>
               <div class="field">
                 <label for="ciUnit">{{ 'PHARMACY.UNIT' | translate }}</label>
                 <input

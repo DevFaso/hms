@@ -134,6 +134,7 @@ describe('DispensingComponent', () => {
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
       'getDispenseSettings',
@@ -151,6 +152,7 @@ describe('DispensingComponent', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of(mockDispenses as any));
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of(mockInventory as any));
     pharmacySvc.listLotsByPharmacy.and.returnValue(of(mockLots as any));
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: mockLots.data.content } as any));
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({ data: { readyForCollectionEnabled: true } } as any),
     );
@@ -285,10 +287,23 @@ describe('DispensingComponent', () => {
 
   // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────
 
+  it('asks for the lots of the prescribed drug only (QA D241)', () => {
+    expect(component.dispensableLots()).toEqual([]);
+
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+
+    expect(pharmacySvc.listDispensableLots).toHaveBeenCalledWith(
+      mockWorkQueue.data.content[0].id,
+      component.selectedPharmacyId,
+    );
+    expect(pharmacySvc.listLotsByPharmacy).not.toHaveBeenCalled();
+  });
+
   it('offers real stock lots, not inventory items', () => {
     // The defect this replaces: the picker listed inventory items and put
     // their ids into stockLotId, so the backend looked each one up in the
     // stock-lot table and 404'd. Selecting a lot could never succeed.
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     expect(ids).toContain('lot-fresh');
@@ -296,6 +311,7 @@ describe('DispensingComponent', () => {
   });
 
   it('keeps expired and empty lots out of the picker', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     expect(ids).not.toContain('lot-expired');
@@ -303,6 +319,7 @@ describe('DispensingComponent', () => {
   });
 
   it('offers the shortest-dated lot first so stock is used before it expires', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);
 
     // lot-unlabelled expires 2098, lot-fresh 2099.
@@ -310,6 +327,7 @@ describe('DispensingComponent', () => {
   });
 
   it('clears a product scan when the lot changes', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
     // The scan was taken against the previous pack; carrying it over would
     // send the server a value that cannot match the new lot.
     component.form.stockLotId = 'lot-fresh';
@@ -621,6 +639,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
       'getDispenseSettings',
@@ -643,6 +662,7 @@ describe('DispensingComponent — refill context on the work queue', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
 
     const offlineQueueStub: Pick<
       OfflineDispenseQueueService,
@@ -783,6 +803,7 @@ describe('DispensingComponent — clarification control on the work queue', () =
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
       'getDispenseSettings',
@@ -803,6 +824,7 @@ describe('DispensingComponent — clarification control on the work queue', () =
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
 
     const offlineQueueStub: Pick<
       OfflineDispenseQueueService,
@@ -1012,6 +1034,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       'listDispensesByPharmacy',
       'listInventoryByPharmacy',
       'listLotsByPharmacy',
+      'listDispensableLots',
       'createDispense',
       'cancelDispense',
       'getDispenseSettings',
@@ -1045,6 +1068,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     pharmacySvc.listDispensesByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listInventoryByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
     pharmacySvc.listLotsByPharmacy.and.returnValue(of({ data: { content: [] } }) as never);
+    pharmacySvc.listDispensableLots.and.returnValue(of({ data: [] }) as never);
     pharmacySvc.releaseQueueRow.and.returnValue(of({ data: null }) as never);
     toast = jasmine.createSpyObj('ToastService', ['success', 'error']);
 

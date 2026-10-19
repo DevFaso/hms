@@ -16,6 +16,7 @@ import { LabResultPage, LabResultResponse, LabService } from '../../services/lab
 import { RoleContextService } from '../../core/role-context.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { shortOrderCode } from '../../shared/lab/order-code';
 
 /**
  * Release worklist (B14).
@@ -50,6 +51,8 @@ import { ToastService } from '../../core/toast.service';
   styleUrl: './lab-release-worklist.scss',
 })
 export class LabReleaseWorklistComponent implements OnInit {
+  /** QA D227: a readable order code, not the raw id. */
+  readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -315,14 +318,14 @@ export class LabReleaseWorklistComponent implements OnInit {
   }
 
   /**
-   * LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper.determineSeverityFlag
-   * emits them, or UNIT_MISMATCH when no configured range is in the result's
+   * CRITICAL / LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper emits
+   * them (QA D212: CRITICAL used to fall through to "not flagged"), or UNIT_MISMATCH when no configured range is in the result's
    * unit: that row was never graded, which "not flagged" would hide.
    */
   severityKey(r: LabResultResponse): string {
     if (r.unitMismatch) return 'UNIT_MISMATCH';
     const flag = (r.severityFlag ?? '').toUpperCase();
-    return flag === 'LOW' || flag === 'HIGH' || flag === 'NORMAL' ? flag : 'UNSPECIFIED';
+    return ['CRITICAL', 'LOW', 'HIGH', 'NORMAL'].includes(flag) ? flag : 'UNSPECIFIED';
   }
 
   severityClass(r: LabResultResponse): string {

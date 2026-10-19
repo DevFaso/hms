@@ -146,6 +146,32 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalNotifiedAt()).isNull();
     }
 
+    /**
+     * QA D206: K 7.9 on a range with no critical limits is paged (the D107
+     * fail-safe), so every screen must label it CRITICAL, not "Eleve".
+     */
+    @Test
+    void aPagedHighWithoutCriticalLimitsIsLabelledCritical() {
+        gradeWithRealMapper("mmol/L");
+        result.setResultValue("7.9");
+        LabResultMapper mapper = new LabResultMapper();
+
+        service.notifyIfCritical(result);
+
+        assertThat(result.getCriticalNotifiedAt()).isNotNull();
+        assertThat(mapper.toResponseDTO(result).getSeverityFlag()).isEqualTo("CRITICAL");
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("CRITICAL");
+    }
+
+    /** QA D206: once critical limits exist, a value inside them stays HIGH. */
+    @Test
+    void aHighInsideCriticalLimitsIsLabelledHigh() {
+        gradeWithCriticalLimits(2.5, 8.5);
+        result.setResultValue("7.9");
+
+        assertThat(new LabResultMapper().severityFlagOf(result)).isEqualTo("HIGH");
+    }
+
     /** D107: with critical limits set, HIGH is HIGH and only a value beyond them alerts. */
     private void gradeWithCriticalLimits(Double criticalLow, Double criticalHigh) {
         ReflectionTestUtils.setField(service, "labResultMapper", new LabResultMapper());

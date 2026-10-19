@@ -106,7 +106,9 @@
         <tbody>
           @for (order of filtered(); track order.id) {
             <tr class="data-row">
-              <td class="order-code">{{ order.labOrderCode || '—' }}</td>
+              <td class="order-code" [title]="order.labOrderCode || ''">
+                {{ shortOrderCode(order.labOrderCode) }}
+              </td>
               <td>
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
                 <div class="cell-secondary">{{ order.patientEmail || '' }}</div>
@@ -198,7 +200,7 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>{{ 'LAB.ORDER' | translate }} {{ o.labOrderCode }}</h2>
+          <h2>{{ 'LAB.ORDER' | translate }} {{ shortOrderCode(o.labOrderCode) }}</h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
@@ -560,7 +562,7 @@
       <div class="modal-body">
         <p class="delete-warning">
           {{ 'LAB.DELETE_CONFIRM' | translate }}
-          <strong>{{ deletingOrder()?.labOrderCode }}</strong
+          <strong>{{ shortOrderCode(deletingOrder()?.labOrderCode) }}</strong
           >{{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
@@ -591,7 +593,9 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB.SPECIMENS' | translate }} — {{ specimensOrder()?.labOrderCode }}</h2>
+        <h2>
+          {{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specimensOrder()?.labOrderCode) }}
+        </h2>
         <button class="modal-close" (click)="closeSpecimens()">
           <span class="material-symbols-outlined">close</span>
         </button>

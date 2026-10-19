@@ -40,6 +40,7 @@ import { CHART_ROLES } from './chart-access';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
+import { shortOrderCode } from '../../shared/lab/order-code';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -62,6 +63,8 @@ const UNSCOPED_KEY = 'UNSCOPED';
   styleUrl: './patient-chart.component.scss',
 })
 export class PatientChartComponent implements OnInit, OnChanges {
+  /** QA D227: a readable order code, not the raw id. */
+  readonly shortOrderCode = shortOrderCode;
   @Input({ required: true }) patientId = '';
   /**
    * E9 #64 — bumped by the host when a break-the-glass session is declared
@@ -948,6 +951,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'CHART.LAB_STATUS_' + result.status;
       case 'UNKNOWN':
         return 'CHART.LAB_STATUS_NOT_INTERPRETED';
+      // QA D240: a released non-numeric answer ("Positif").
+      case 'QUALITATIVE':
+        return 'CHART.LAB_STATUS_QUALITATIVE';
       default:
         return 'CHART.LAB_STATUS_UNKNOWN';
     }
