@@ -20,6 +20,9 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
     Page<InventoryItem> findByPharmacyIdAndActiveTrue(UUID pharmacyId, Pageable pageable);
 
+    /** QA D138: whether this pharmacy keeps stock here at all, so a fill must name a lot. */
+    boolean existsByPharmacyIdAndActiveTrue(UUID pharmacyId);
+
     Optional<InventoryItem> findByPharmacyIdAndMedicationCatalogItemId(UUID pharmacyId, UUID medicationCatalogItemId);
 
     @Query("SELECT i FROM InventoryItem i WHERE i.pharmacy.id = :pharmacyId "

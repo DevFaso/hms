@@ -41,4 +41,11 @@ public interface InBasketService {
      * Create an in-basket item — used by event listeners when results are filed.
      */
     InBasketItemDTO createItem(CreateInBasketItemRequest request);
+
+    /**
+     * {@link #createItem} in a transaction of its own, for a caller that files
+     * the item after its own transaction committed (QA D178: a released lab
+     * result). A failure here never undoes the caller's clinical write.
+     */
+    InBasketItemDTO createItemInNewTransaction(CreateInBasketItemRequest request);
 }

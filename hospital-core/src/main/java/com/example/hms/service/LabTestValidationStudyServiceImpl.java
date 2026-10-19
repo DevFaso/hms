@@ -9,7 +9,7 @@ import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
 import com.example.hms.utility.RoleValidator;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,8 +23,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class LabTestValidationStudyServiceImpl implements LabTestValidationStudyService {
 
-    private static final String STUDY_NOT_FOUND = "Validation study not found";
-    private static final String DEFINITION_NOT_FOUND = "Lab Test Definition not found";
+    private static final String STUDY_NOT_FOUND = "labvalidationstudy.notfound";
+    private static final String DEFINITION_NOT_FOUND = "labtestdefinition.notfound";
 
     private final LabTestValidationStudyRepository repository;
     private final LabTestDefinitionRepository definitionRepository;
@@ -36,7 +36,7 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     public LabTestValidationStudyResponseDTO create(UUID definitionId,
                                                     LabTestValidationStudyRequestDTO dto) {
         LabTestDefinition definition = definitionRepository.findById(definitionId)
-                .orElseThrow(() -> new EntityNotFoundException(DEFINITION_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(DEFINITION_NOT_FOUND));
 
         LabTestValidationStudy study = mapper.toEntity(dto, definition);
         return mapper.toDto(repository.save(study));
@@ -45,13 +45,13 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     @Override
     public LabTestValidationStudyResponseDTO getById(UUID id) {
         return mapper.toDto(repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException(STUDY_NOT_FOUND)));
+                .orElseThrow(() -> new ResourceNotFoundException(STUDY_NOT_FOUND)));
     }
 
     @Override
     public List<LabTestValidationStudyResponseDTO> getByDefinitionId(UUID definitionId) {
         if (!definitionRepository.existsById(definitionId)) {
-            throw new EntityNotFoundException(DEFINITION_NOT_FOUND);
+            throw new ResourceNotFoundException(DEFINITION_NOT_FOUND);
         }
         return repository.findByLabTestDefinition_IdOrderByStudyDateDesc(definitionId)
                 .stream()
@@ -63,7 +63,7 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     @Transactional
     public LabTestValidationStudyResponseDTO update(UUID id, LabTestValidationStudyRequestDTO dto) {
         LabTestValidationStudy study = repository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException(STUDY_NOT_FOUND));
+                .orElseThrow(() -> new ResourceNotFoundException(STUDY_NOT_FOUND));
         mapper.updateEntityFromDto(dto, study);
         return mapper.toDto(repository.save(study));
     }
@@ -72,7 +72,7 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     @Transactional
     public void delete(UUID id) {
         if (!repository.existsById(id)) {
-            throw new EntityNotFoundException(STUDY_NOT_FOUND);
+            throw new ResourceNotFoundException(STUDY_NOT_FOUND);
         }
         repository.deleteById(id);
     }

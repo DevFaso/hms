@@ -27,6 +27,8 @@ import {
 } from '../services/pharmacy.service';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import { currentLocale } from '../shared/i18n/app-locale';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -149,6 +151,9 @@ export class PrescriptionsComponent implements OnInit {
   private readonly prescriptionService = inject(PrescriptionService);
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
+  private readonly encounterService = inject(EncounterService);
+  /** QA D177: the selected patient's encounters, so the prescription links one by name. */
+  readonly patientEncounters = signal<EncounterResponse[]>([]);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
@@ -395,12 +400,42 @@ export class PrescriptionsComponent implements OnInit {
     this.form.patientId = p.id;
     this.patientDropdownOpen.set(false);
     this.patientQuery.set('');
+    this.loadPatientEncounters(p.id);
   }
 
   clearPatient(): void {
     this.selectedPatient.set(null);
     this.form.patientId = '';
     this.patientQuery.set('');
+    this.form.encounterId = undefined;
+    this.patientEncounters.set([]);
+  }
+
+  /** QA D177: the encounters a prescription may be linked to, newest first. */
+  private loadPatientEncounters(patientId: string): void {
+    this.patientEncounters.set([]);
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.encounterService.list({ patientId, hospitalId }).subscribe({
+      next: (list) => {
+        if (this.form.patientId !== patientId) return;
+        this.patientEncounters.set(
+          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+        );
+      },
+      error: () => this.patientEncounters.set([]),
+    });
+  }
+
+  hasEncounterOption(id: string): boolean {
+    return this.patientEncounters().some((e) => e.id === id);
+  }
+
+  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  encounterLabel(e: EncounterResponse): string {
+    const date = e.encounterDate
+      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      : '';
+    return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
 
   patientInitials(p: PatientResponse): string {
@@ -446,6 +481,8 @@ export class PrescriptionsComponent implements OnInit {
       lastName: p.patientFullName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
     } as PatientResponse);
+    this.patientEncounters.set([]);
+    if (p.patientId) this.loadPatientEncounters(p.patientId);
     this.editing.set(true);
     this.editingId.set(p.id);
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));

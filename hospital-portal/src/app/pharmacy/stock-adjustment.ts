@@ -19,6 +19,7 @@ import {
   StockLotResponse,
   StockTransactionRequest,
   StockTransactionResponse,
+  StockWitnessCandidate,
 } from '../services/pharmacy.service';
 
 /**
@@ -76,6 +77,8 @@ export class StockAdjustmentComponent implements OnInit {
   /** D82: the selected item's lots; a lot-tracked item moves through one of them. */
   itemLots = signal<StockLotResponse[]>([]);
   readonly adjustmentReasonCodes = ADJUSTMENT_REASON_CODES;
+  /** QA D157: colleagues who may witness a controlled-substance movement. */
+  witnessCandidates = signal<StockWitnessCandidate[]>([]);
 
   // Form
   showForm = signal(false);
@@ -162,6 +165,34 @@ export class StockAdjustmentComponent implements OnInit {
     this.form = this.emptyForm();
     this.itemLots.set([]);
     this.showForm.set(true);
+    this.loadWitnessCandidates();
+  }
+
+  private loadWitnessCandidates(): void {
+    this.svc.listWitnessCandidates().subscribe({
+      next: (res) => this.witnessCandidates.set(res?.data ?? []),
+      error: () => this.witnessCandidates.set([]),
+    });
+  }
+
+  /** QA D157: the item chosen in the form. */
+  selectedItem(): InventoryItemResponse | undefined {
+    return this.inventoryItems().find((i) => i.id === this.form.inventoryItemId);
+  }
+
+  /** QA D157: a manual movement of a controlled substance (anything but a receipt) is witnessed. */
+  needsWitness(): boolean {
+    return !!this.txType() && !this.isReceipt() && !!this.selectedItem()?.controlled;
+  }
+
+  /**
+   * QA D143: a quantity is positive, except an adjustment, which is signed
+   * (a negative one writes stock off) but never zero.
+   */
+  quantityValid(): boolean {
+    const q = Number(this.form.quantity);
+    if (!Number.isFinite(q) || q === 0) return false;
+    return this.isAdjustment() || q > 0;
   }
 
   closeForm(): void {
@@ -217,8 +248,18 @@ export class StockAdjustmentComponent implements OnInit {
    * sending to the backend.
    */
   submitForm(): void {
-    if (!this.form.inventoryItemId || !this.txType() || this.form.quantity <= 0) {
+    if (!this.form.inventoryItemId || !this.txType()) {
       this.toast.error(this.translate.instant('PHARMACY.TX_REQUIRED_FIELDS'));
+      return;
+    }
+    if (!this.quantityValid()) {
+      this.toast.error(
+        this.translate.instant(
+          this.isAdjustment()
+            ? 'PHARMACY.ADJUSTMENT_QUANTITY_NONZERO'
+            : 'PHARMACY.TX_QUANTITY_POSITIVE',
+        ),
+      );
       return;
     }
 
@@ -286,6 +327,9 @@ export class StockAdjustmentComponent implements OnInit {
     if (!this.isReceipt() && this.itemLots().length > 0 && !this.form.stockLotId) {
       return 'PHARMACY.LOT_REQUIRED_FOR_MOVEMENT';
     }
+    if (this.needsWitness() && !this.form.witnessedBy) {
+      return 'PHARMACY.WITNESS_REQUIRED';
+    }
     return null;
   }
 
@@ -304,6 +348,9 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.expiryDate = undefined;
     this.form.unitCost = undefined;
     this.form.referenceId = undefined;
+    if (!this.needsWitness()) {
+      this.form.witnessedBy = undefined;
+    }
 
     if (this.isReceipt()) {
       this.form.lotNumber = this.receiptLotNumber.trim();
@@ -334,6 +381,20 @@ export class StockAdjustmentComponent implements OnInit {
     return (
       item.medicationName ?? item.medicationCode ?? this.translate.instant('PHARMACY.UNKNOWN_ITEM')
     );
+  }
+
+  /**
+   * QA D158: the sign a ledger row reads with. Receipts and returns add,
+   * an adjustment carries its own sign, everything else takes stock off.
+   * The old list named types that do not exist (RECEIVE, ADJUSTMENT_IN…),
+   * so every receipt read as negative.
+   */
+  signedQuantity(tx: StockTransactionResponse): string {
+    const q = Number(tx.quantity);
+    const magnitude = Math.abs(q);
+    if (tx.transactionType === 'ADJUSTMENT') return (q < 0 ? '-' : '+') + magnitude;
+    if (tx.transactionType === 'RECEIPT' || tx.transactionType === 'RETURN') return '+' + magnitude;
+    return '-' + magnitude;
   }
 
   getTypeClass(type: string): string {

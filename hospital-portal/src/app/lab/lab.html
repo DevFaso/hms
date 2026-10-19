@@ -419,12 +419,23 @@
           </div>
           <div class="field">
             <label for="lab-encounterId">{{ 'LAB.ENCOUNTER_ID' | translate }}</label>
-            <input
+            <!-- QA D177: pick one of the patient's encounters, never type its id. -->
+            <select
               id="lab-encounterId"
-              type="text"
               [(ngModel)]="form.encounterId"
-              [placeholder]="'COMMON.OPTIONAL' | translate"
-            />
+              name="encounterId"
+              [disabled]="!form.patientId"
+            >
+              <option value="">{{ 'LAB.NO_ENCOUNTER_OPTION' | translate }}</option>
+              @for (e of patientEncounters(); track e.id) {
+                <option [value]="e.id">
+                  {{ encounterLabel(e)
+                  }}{{
+                    e.encounterType ? ' · ' + (e.encounterType | enumLabel: 'encounterType') : ''
+                  }}
+                </option>
+              }
+            </select>
           </div>
         </div>
         <div class="field">

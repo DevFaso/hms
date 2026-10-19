@@ -21,6 +21,7 @@ import {
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -28,6 +29,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { currentLocale } from '../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-lab',
@@ -41,6 +43,9 @@ export class LabComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly encounterService = inject(EncounterService);
+  /** QA D177: the selected patient's encounters, so the order links one by name, not by a typed id. */
+  readonly patientEncounters = signal<EncounterResponse[]>([]);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -301,6 +306,31 @@ export class LabComponent implements OnInit {
     this.form.patientId = p.id;
     this.patientDropdownOpen.set(false);
     this.patientQuery.set('');
+    this.loadPatientEncounters(p.id);
+  }
+
+  /** QA D177: the encounters the order may be linked to, newest first. */
+  private loadPatientEncounters(patientId: string): void {
+    this.patientEncounters.set([]);
+    this.form.encounterId = '';
+    const hospitalId = this.patientSearchHospitalId();
+    this.encounterService.list({ patientId, hospitalId }).subscribe({
+      next: (list) => {
+        if (this.form.patientId !== patientId) return;
+        this.patientEncounters.set(
+          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+        );
+      },
+      error: () => this.patientEncounters.set([]),
+    });
+  }
+
+  /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
+  encounterLabel(e: EncounterResponse): string {
+    const date = e.encounterDate
+      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      : '';
+    return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
 
   onHospitalChange(hospitalId: string): void {
@@ -314,6 +344,8 @@ export class LabComponent implements OnInit {
     this.selectedPatient.set(null);
     this.form.patientId = '';
     this.patientQuery.set('');
+    this.form.encounterId = '';
+    this.patientEncounters.set([]);
   }
 
   patientInitials(p: PatientResponse): string {
@@ -584,9 +616,20 @@ export class LabComponent implements OnInit {
 
   openSpecimens(order: LabOrderResponse): void {
     this.specimensOrder.set(order);
-    this.specimenForm = { specimenType: '', currentLocation: '', notes: '' };
+    // QA D177: the test's own sample type, so the collector confirms it
+    // rather than retyping it (still editable for an unusual specimen).
+    this.specimenForm = {
+      specimenType: this.sampleTypeOf(order),
+      currentLocation: '',
+      notes: '',
+    };
     this.showSpecimensModal.set(true);
     this.loadSpecimens(order.id);
+  }
+
+  private sampleTypeOf(order: LabOrderResponse): string {
+    const def = this.labTestDefs().find((d) => d.testCode === order.labTestCode);
+    return def?.sampleType ?? '';
   }
 
   closeSpecimens(): void {
