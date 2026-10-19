@@ -209,6 +209,29 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D208: a catalogue row that names no molecule has no twin to look for")
+        void unnamedMoleculeSkipsTwinScan() {
+            InventoryItemRequestDTO dto = buildItemRequest();
+            dto.setQuantityOnHand(null);
+            medication.setNameFr(" ");
+            medication.setGenericName(null);
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            stubHospitalScope();
+            when(medicationCatalogItemRepository.findById(medicationId)).thenReturn(Optional.of(medication));
+            when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(pharmacyId, medicationId))
+                    .thenReturn(Optional.empty());
+            when(inventoryItemMapper.toEntity(dto, pharmacy, medication)).thenReturn(inventoryItem);
+            when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
+            when(inventoryItemMapper.toResponseDTO(inventoryItem)).thenReturn(buildItemResponse());
+
+            service.createInventoryItem(dto);
+
+            verify(inventoryItemRepository, never()).findByPharmacyIdAndActiveTrue(any(), any());
+            verify(inventoryItemRepository).save(inventoryItem);
+        }
+
+        @Test
         @DisplayName("QA D208: the same drug under another catalogue row is a duplicate")
         void sameDrugUnderAnotherCatalogueRowRefused() {
             InventoryItemRequestDTO dto = buildItemRequest();

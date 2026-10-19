@@ -2223,6 +2223,15 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        void withoutAnActiveHospitalNothingIsListed() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).findById(any());
+        }
+
+        @Test
         void aPrescriptionOfAnotherHospitalIsRefusedLikeAMissingOne() {
             Hospital other = new Hospital();
             other.setId(UUID.randomUUID());

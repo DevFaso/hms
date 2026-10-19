@@ -153,6 +153,8 @@ public class DispenseServiceImpl implements DispenseService {
     private static final String AUDIT_ENTITY = "DISPENSE";
     private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
     private static final String READY_NOT_PENDING = "dispense.ready.notPending";
+    private static final String PHARMACY_NOT_FOUND = "pharmacy.notfound";
+    private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
 
     /**
      * What the pharmacist may hand medication over against, and therefore
@@ -705,7 +707,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
 
         Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
         requireDispensary(pharmacy);
 
@@ -762,7 +764,7 @@ public class DispenseServiceImpl implements DispenseService {
         // refused — which is what happened before too, as a 500 from the
         // dereference below. Same stance and same 404 as the routing writes.
         if (hospitalId == null) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         // G15 rule 1: the row lock serialises a fill against a preparation,
         // a withdrawal or a routing write of the same order, so the checks
@@ -772,12 +774,12 @@ public class DispenseServiceImpl implements DispenseService {
         // another tenant's prescription is never locked, only refused.
         Prescription prescription = prescriptionRepository
                 .findByIdAndHospitalIdForUpdate(dto.getPrescriptionId(), hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
         // Tenant isolation: prescription must belong to the active hospital
         if (prescription.getHospital() == null
                 || !hospitalId.equals(prescription.getHospital().getId())) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
@@ -1050,13 +1052,13 @@ public class DispenseServiceImpl implements DispenseService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // A fill happens at one hospital's dispensary; there is no global one.
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
                 .filter(rx -> rx.getHospital() != null && hospitalId.equals(rx.getHospital().getId()))
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
         // Only the prescribed drug, by the same rule the DRUG check applies
         // to the lot at the counter: the picker used to list every lot of the
@@ -1083,19 +1085,19 @@ public class DispenseServiceImpl implements DispenseService {
         // .findInScope and the rest of the hospital-scoped read surface.
         // Dereferencing it instead answered that caller with a 500.
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         // Null alone is not the licence: requireActiveHospitalId also returns
         // null from its step-4 fallback on the AUTHORITIES, which RoleValidator
         // warns can be inflated. Only the discrete JWT claim may read across
         // tenants; anyone else without a hospital is refused, as they
         // effectively were by the 500 this replaces.
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         if (hospitalId != null
                 && (prescription.getHospital() == null
                     || !hospitalId.equals(prescription.getHospital().getId()))) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         return dispenseRepository.findByPrescriptionId(prescriptionId, pageable)
                 .map(dispenseMapper::toResponseDTO);
@@ -1117,7 +1119,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable) {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
         return dispenseRepository.findByPharmacyId(pharmacyId, pageable)
                 .map(dispenseMapper::toResponseDTO);
@@ -1721,11 +1723,11 @@ public class DispenseServiceImpl implements DispenseService {
         // Pre-existing null-tolerance, now qualified the same way as the
         // routing reads: an unscoped view belongs to a real super-admin.
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new ResourceNotFoundException("pharmacy.notfound");
+            throw new ResourceNotFoundException(PHARMACY_NOT_FOUND);
         }
         if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("pharmacy.notfound");
+            throw new ResourceNotFoundException(PHARMACY_NOT_FOUND);
         }
     }
 

@@ -914,6 +914,30 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D213: a failing audit write never undoes the approval step. */
+    @Test
+    void processApproval_activate_auditFailure_doesNotUndoTheStep() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+            .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            org.mockito.Mockito.doThrow(new IllegalStateException("audit down"))
+                .when(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.any());
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+        }
+    }
+
     /** QA D213: a definition with no reference range is not activated. */
     @Test
     void processApproval_activate_withoutReferenceRanges_isRefused() {

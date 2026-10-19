@@ -619,12 +619,16 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public LabResultResponseDTO getLabResultById(UUID id, Locale locale) {
-        return getLabResultById(id, locale, true);
+        return readLabResultById(id, true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased) {
+        return readLabResultById(id, includeUnreleased);
+    }
+
+    private LabResultResponseDTO readLabResultById(UUID id, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
             .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
@@ -676,13 +680,18 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
-        return getLabResultsPage(pageable, locale, null, true);
+        return readLabResultsPage(pageable, null, true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
                                                         UUID patientId, boolean includeUnreleased) {
+        return readLabResultsPage(pageable, patientId, includeUnreleased);
+    }
+
+    private Page<LabResultResponseDTO> readLabResultsPage(Pageable pageable, UUID patientId,
+                                                          boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
             // Verified super-admin in global view: return all paged
