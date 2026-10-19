@@ -490,6 +490,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             case STATUS_CRITICAL -> STATUS_CRITICAL;
             case "HIGH" -> STATUS_ABNORMAL_HIGH;
             case "LOW" -> STATUS_ABNORMAL_LOW;
+            // QA D286: a qualitative answer that reads positive.
+            case LabResultMapper.FLAG_ABNORMAL -> STATUS_ABNORMAL;
             default -> STATUS_NORMAL;
         };
     }

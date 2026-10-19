@@ -218,6 +218,7 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
             requirePlausibleResultDate(request.getResultDate(), labOrder);
+            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
 
     UUID currentUserId = authService.getCurrentUserId();
@@ -307,6 +308,11 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingApplication(null);
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
+        }
+        if (!ingested) {
+            // QA D286: a positive qualitative answer is abnormal. An ingested
+            // result keeps the analyzer's own OBX-8 flag.
+            result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
         }
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
@@ -694,8 +700,11 @@ public class LabResultServiceImpl implements LabResultService {
                                                           boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
-            // Verified super-admin in global view: return all paged
-            return labResultRepository.findAll(pageable)
+            // Verified super-admin in global view. QA D211 (round 5): this
+            // branch applied neither the patientId filter nor released-only.
+            return labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
+                    patientId == null ? NO_HOSPITAL : patientId,
+                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE))
                 .map(labResultMapper::toResponseDTO);
         }
         Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
@@ -751,6 +760,7 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ResourceNotFoundException("laborder.notfound");
         }
         requirePlausibleResultDate(request.getResultDate(), labOrder);
+        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
@@ -762,6 +772,8 @@ public class LabResultServiceImpl implements LabResultService {
             || labResult.getLabOrder() == null
             || !Objects.equals(labResult.getLabOrder().getId(), labOrder.getId());
 
+        labResult.setAbnormalFlag(LabResultValueRules.flagFor(
+            request.getResultValue(), labResult.getResultValue(), labResult.getAbnormalFlag()));
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
         labResult.setResultUnit(request.getResultUnit());
@@ -1280,8 +1292,11 @@ public class LabResultServiceImpl implements LabResultService {
         String severity = labResultMapper.severityFlagOf(labResult);
         com.example.hms.enums.InBasketPriority priority = switch (severity) {
             case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
-            case "LOW", "HIGH" -> com.example.hms.enums.InBasketPriority.URGENT;
-            default -> com.example.hms.enums.InBasketPriority.NORMAL;
+            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
+            // QA D286: no range grades a qualitative answer; its recorded flag does.
+            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
+                ? com.example.hms.enums.InBasketPriority.URGENT
+                : com.example.hms.enums.InBasketPriority.NORMAL;
         };
         String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
         com.example.hms.model.Patient patient = order.getPatient();

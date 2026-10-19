@@ -163,6 +163,36 @@ class CriticalValueNotificationServiceTest {
         assertThat(mapper.severityFlagOf(result)).isEqualTo("CRITICAL");
     }
 
+    /**
+     * QA D271: K 2.0 on 3.5-5.0 with no critical limits is as much a panic
+     * value as K 5.5: it is labelled CRITICAL and paged, not left "Bas".
+     */
+    @Test
+    void aLowWithoutCriticalLimitsIsPagedAndLabelledCriticalLikeAHigh() {
+        gradeWithRealMapper("mmol/L");
+        result.setResultValue("2.0");
+        LabResultMapper mapper = new LabResultMapper();
+
+        service.notifyIfCritical(result);
+
+        assertThat(result.getCriticalNotifiedAt()).isNotNull();
+        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("CRITICAL");
+        assertThat(mapper.raisesCriticalAlert(result, "LOW")).isTrue();
+    }
+
+    /** QA D271: once critical limits exist, a value below the range but above them stays LOW. */
+    @Test
+    void aLowInsideCriticalLimitsIsLabelledLowAndNotPaged() {
+        gradeWithCriticalLimits(2.5, 6.5);
+        result.setResultValue("3.0");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(new LabResultMapper().severityFlagOf(result)).isEqualTo("LOW");
+    }
+
     /** QA D206: once critical limits exist, a value inside them stays HIGH. */
     @Test
     void aHighInsideCriticalLimitsIsLabelledHigh() {

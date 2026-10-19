@@ -74,6 +74,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -162,6 +163,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -399,6 +401,13 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "COMPLETE_QA_REVIEW" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                // QA D213 (round 5): a definition submitted before V201 has no
+                // recorded submitter, so the four-eyes check below passed for
+                // anyone, including the submitter. It is sent back (REJECT)
+                // and resubmitted, which records who submitted it.
+                if (definition.getSubmittedById() == null && !isSuperAdmin(currentUser)) {
+                    throw new BusinessException("lab.definition.submitterUnknown");
+                }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
                     "The QA review must be completed by someone other than the person who submitted it.");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
@@ -513,6 +522,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         LabTestDefinitionApprovalStatus.RETIRED);
 
     /**
+     * QA D287: an inverted reference or critical range was saved (bean
+     * validation on a bare list body is not guaranteed to run), and every
+     * value graded against it was wrong. The same rules as the DTO's
+     * constraints, enforced on every write path.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges) {
+        if (ranges == null) {
+            return;
+        }
+        for (LabTestReferenceRangeDTO range : ranges) {
+            if (range == null) {
+                continue;
+            }
+            if (!range.isReferenceRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.inverted");
+            }
+            if (!range.isCriticalRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.criticalInverted");
+            }
+            if (!range.isAgeRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.ageInverted");
+            }
+        }
+    }
+
+    /**
      * QA D159: the reference ranges are what QA and the director approved,
      * and they grade every result. Changing them on a definition under
      * review, approved or live would put unreviewed ranges in front of
@@ -541,6 +576,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to reference range update");

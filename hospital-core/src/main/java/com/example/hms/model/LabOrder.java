@@ -80,6 +80,15 @@ public class LabOrder extends BaseEntity {
     @Column(nullable = false, length = 50)
     private LabOrderStatus status;
 
+    /**
+     * QA D291: the readable order code (LAB-000123), assigned by the
+     * database from lab.lab_order_number_seq on insert (V205). Null on a
+     * schema without that default, where readers fall back to the id.
+     */
+    @Column(name = "order_number", length = 20, insertable = false, updatable = false)
+    @org.hibernate.annotations.Generated
+    private String orderNumber;
+
     /** Clinical priority: ROUTINE, URGENT, STAT. Defaults to ROUTINE. */
     @Column(name = "priority", nullable = false, length = 20)
     @Builder.Default

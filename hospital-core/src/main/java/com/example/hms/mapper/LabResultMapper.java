@@ -29,6 +29,8 @@ public class LabResultMapper {
 
     public static final String FLAG_UNSPECIFIED = "UNSPECIFIED";
     public static final String FLAG_CRITICAL = "CRITICAL";
+    /** A result no range grades (a qualitative answer) that reads abnormal. */
+    public static final String FLAG_ABNORMAL = "ABNORMAL";
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
@@ -150,7 +152,9 @@ public class LabResultMapper {
         if (FLAG_CRITICAL.equalsIgnoreCase(severityFlag)) {
             return true;
         }
-        if (!"HIGH".equalsIgnoreCase(severityFlag) || result == null) {
+        // D271: symmetric - a value below a range with no critical limits is as
+        // much a panic value as one above it (K 2.0 on 3.5-5.0).
+        if (!("HIGH".equalsIgnoreCase(severityFlag) || "LOW".equalsIgnoreCase(severityFlag)) || result == null) {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
@@ -193,11 +197,26 @@ public class LabResultMapper {
         if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
             return FLAG_CRITICAL;
         }
-        if ("HIGH".equals(flag) && graded != null
+        // D271: LOW as well as HIGH - the fail-safe was one-sided, so K 2.0 on a
+        // 3.5-5.0 range with no critical limits stayed "Bas" and never paged.
+        if (("HIGH".equals(flag) || "LOW".equals(flag)) && graded != null
                 && graded.getCriticalLow() == null && graded.getCriticalHigh() == null) {
             return FLAG_CRITICAL;
         }
+        // QA D286: no range grades a qualitative answer, so the range says
+        // UNSPECIFIED ("Non evalue"). The recorded flag, or - for a row stored
+        // before the write-time rule existed - the value itself, says abnormal.
+        // An explicit NORMAL someone recorded is kept.
+        if (FLAG_UNSPECIFIED.equals(flag) && (isAbnormalRecorded(result.getAbnormalFlag())
+                || (result.getAbnormalFlag() == null
+                    && com.example.hms.service.LabResultValueRules.isPositiveQualitative(result.getResultValue())))) {
+            return FLAG_ABNORMAL;
+        }
         return flag;
+    }
+
+    private static boolean isAbnormalRecorded(com.example.hms.enums.AbnormalFlag recorded) {
+        return recorded != null && recorded.severity() == com.example.hms.enums.AbnormalFlag.ABNORMAL;
     }
 
     /**
@@ -366,7 +385,7 @@ public class LabResultMapper {
         String hospitalName = resolveHospitalName(order);
         String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
-        String labOrderCode = order.getId() != null ? order.getId().toString() : null;
+        String labOrderCode = LabOrderMapper.orderCodeOf(order);
         String orderedByName = resolveOrderingStaffName(order);
 
         return new OrderContext(

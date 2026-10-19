@@ -300,6 +300,36 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
                                                    @Param("patientId") UUID patientId,
                                                    Pageable pageable);
 
+    /**
+     * QA D211 (round 5): the verified super-admin global view of GET
+     * /lab-results applied neither the patientId filter nor the
+     * released-only rule. Same filters as {@link #findHandledByHospitalForReader},
+     * no hospital.
+     */
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    @Query(value = """
+        SELECT r FROM LabResult r
+        WHERE (:releasedOnly = false OR r.released = true)
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+    """, countQuery = """
+        SELECT COUNT(r) FROM LabResult r
+        WHERE (:releasedOnly = false OR r.released = true)
+          AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+    """)
+    Page<LabResult> findAllForReader(@Param("releasedOnly") boolean releasedOnly,
+                                     @Param("anyPatient") boolean anyPatient,
+                                     @Param("patientId") UUID patientId,
+                                     Pageable pageable);
+
     @EntityGraph(attributePaths = {
         "labOrder",
         "labOrder.patient",

@@ -360,6 +360,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
         applyRequestedStatus(labOrder, request.getStatus(), isNew);
+        labOrder.setPriority(resolvePriority(request.getPriority(), base));
         labOrder.setClinicalIndication(clinicalIndication);
         labOrder.setMedicalNecessityNote(medicalNecessityNote);
         labOrder.setNotes(notes);
@@ -379,6 +380,25 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
+
+    /**
+     * D266: the requested priority was never copied onto the entity, so URGENT
+     * and STAT orders were stored as ROUTINE. A blank value keeps the existing
+     * order's priority (ROUTINE for a new one); an unknown value is refused
+     * rather than silently downgraded.
+     */
+    static String resolvePriority(String requested, LabOrder base) {
+        if (requested == null || requested.isBlank()) {
+            return base != null && base.getPriority() != null ? base.getPriority() : "ROUTINE";
+        }
+        String normalized = requested.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!LAB_PRIORITIES.contains(normalized)) {
+            throw new BusinessException("lab.order.priority.invalid");
+        }
+        return normalized;
     }
 
     /**

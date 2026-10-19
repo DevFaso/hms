@@ -2923,4 +2923,23 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V205 (QA D291): lab.lab_orders.order_number, a readable order code
+         from lab.lab_order_number_seq, backfilled. Plain statements, no DO block. -->
+    <changeSet id="V205-lab-order-number" author="hms-team" runOnChange="false">
+        <sqlFile path="V205__lab_order_number.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V206 (QA D312): deactivate the EMPTY duplicate inventory items left
+         from before the D208 guard (one per pharmacy and drug is kept; a twin
+         holding stock is left for a person). Plain statement, no DO block. -->
+    <changeSet id="V206-deactivate-empty-duplicate-inventory-items" author="hms-team" runOnChange="false">
+        <sqlFile path="V206__deactivate_empty_duplicate_inventory_items.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

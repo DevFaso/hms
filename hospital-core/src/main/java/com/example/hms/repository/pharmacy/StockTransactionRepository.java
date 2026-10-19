@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.UUID;
 
 @Repository
@@ -18,6 +20,18 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     Page<StockTransaction> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
     Page<StockTransaction> findByStockLotId(UUID stockLotId, Pageable pageable);
+
+    /** QA D270: the total moved through one lot by the given movement types. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.stockLot.id = :lotId AND t.transactionType IN :types")
+    BigDecimal sumQuantityForLot(@Param("lotId") UUID lotId,
+                                 @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D270: the total moved for one item by the given movement types. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id = :itemId AND t.transactionType IN :types")
+    BigDecimal sumQuantityForItem(@Param("itemId") UUID itemId,
+                                  @Param("types") Collection<StockTransactionType> types);
 
     Page<StockTransaction> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
 
