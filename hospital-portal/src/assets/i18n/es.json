@@ -2148,7 +2148,12 @@
     "WRITTEN_OFF": "Cancelada como incobrable",
     "FILTER_BY_DATE": "Filtrar por fecha",
     "FILTER_BY_URGENCY": "Filtrar por urgencia",
-    "FILTER_BY_LOCATION": "Filtrar por ubicación"
+    "FILTER_BY_LOCATION": "Filtrar por ubicación",
+    "AGING_CURRENT": "Al corriente",
+    "AGING_1_30": "1 a 30 días",
+    "AGING_31_60": "31 a 60 días",
+    "AGING_61_90": "61 a 90 días",
+    "AGING_90_PLUS": "Más de 90 días"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "Las credenciales de acceso de un solo uso no pudieron enviarse al paciente.",
@@ -8204,7 +8209,11 @@
     "RECEIPT_EXPIRY_REQUIRED": "Introduzca la fecha de caducidad del lote.",
     "RECEIPT_LOT_EXPIRED": "Este lote está caducado y no puede ingresarse en el stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "Este artículo se controla por lote: elija el lote al que se aplica el movimiento.",
-    "SELECT_LOT_OPTION": "Seleccione un lote"
+    "SELECT_LOT_OPTION": "Seleccione un lote",
+    "UNIT_PRICE": "Precio unitario (XOF)",
+    "PRICE_SAVED": "Precio guardado.",
+    "PRICE_INVALID": "El precio debe ser un número entero de francos, cero o más.",
+    "PRICE_SAVE_FAILED": "No se pudo guardar el precio."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -10788,7 +10797,8 @@
     "SUBMIT": "Confirmar el pago",
     "PRINT": "Imprimir",
     "NEW_PAYMENT": "Nuevo pago",
-    "RECEIPT_NO_PATIENT": "No registrado"
+    "RECEIPT_NO_PATIENT": "No registrado",
+    "NO_PRICE": "La farmacia aún no ha fijado el precio de este medicamento: indique su precio unitario en el inventario antes de cobrar."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",

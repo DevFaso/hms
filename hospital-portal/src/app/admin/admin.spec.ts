@@ -20,7 +20,7 @@ function summary(): HospitalAdminSummary {
   return {
     hospitalId: 'h1',
     asOfDate: '2026-09-14',
-    appointments: { todayTotal: 17 },
+    appointments: { today: 17 },
     admissions: {},
     consultations: {},
     staffing: { activeStaff: 42, onShiftToday: 9 },

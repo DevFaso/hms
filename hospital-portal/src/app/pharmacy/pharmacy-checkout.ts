@@ -50,6 +50,12 @@ export class PharmacyCheckoutComponent {
     { value: 'INSURANCE', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.INSURANCE' },
   ];
 
+  /** QA D264: the server priced this dispense, so the amount is fixed. */
+  hasCharge(): boolean {
+    const charge = this.dispense()?.chargeAmount;
+    return charge !== null && charge !== undefined;
+  }
+
   loadDispense(): void {
     if (!this.dispenseId) {
       this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_ID_REQUIRED'));
@@ -58,7 +64,10 @@ export class PharmacyCheckoutComponent {
     this.loading.set(true);
     this.svc.getDispense(this.dispenseId).subscribe({
       next: (res) => {
-        this.dispense.set(res?.data ?? null);
+        const loaded = res?.data ?? null;
+        this.dispense.set(loaded);
+        // QA D264: the amount is the dispense's charge, never a typed figure.
+        this.amount = loaded?.chargeAmount ?? null;
         this.loading.set(false);
       },
       error: (err) => {

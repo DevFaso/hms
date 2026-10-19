@@ -162,6 +162,11 @@
   color: #1e293b;
 }
 
+.cell-secondary {
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+}
+
 .type-badge {
   display: inline-flex;
   align-items: center;

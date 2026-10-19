@@ -1042,6 +1042,8 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispense.getPharmacy() != null) {
             dto.setPharmacyName(dispense.getPharmacy().getName());
         }
+        // QA D264: the checkout takes the amount from here, not from a typed figure.
+        dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
         return dto;
     }
 

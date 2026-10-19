@@ -986,7 +986,7 @@ describe('Dashboard i18n refactor coverage', () => {
   it('hospitalAdminStatCards returns 14 cards when summary is loaded', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
     c.hospitalAdminSummary.set({
-      appointments: { todayTotal: 10, completed: 5, noShows: 1 },
+      appointments: { today: 10, completed: 5, noShows: 1 },
       admissions: { active: 3, admittedToday: 2, dischargedToday: 1 },
       consultations: { requested: 4, acknowledged: 2, overdue: 1 },
       staffing: { activeStaff: 20, onShiftToday: 12, staffOnLeaveToday: 1 },
@@ -1829,5 +1829,85 @@ describe('Dashboard patient care-team card', () => {
     fixture.componentInstance.myCareTeam.set({ primaryCare: null, primaryCareHistory: [] });
     fixture.detectChanges();
     expect(card(fixture)).toBeNull();
+  });
+});
+
+describe('Dashboard invoice aging (QA D283)', () => {
+  function render(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_HOSPITAL_ADMIN'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'admin',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      active: true,
+    } as any);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => true, hasAnyPermission: () => true },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      DASHBOARD: {
+        AGING_CURRENT: 'À jour',
+        AGING_1_30: '1 à 30 jours',
+        AGING_31_60: '31 à 60 jours',
+        AGING_61_90: '61 à 90 jours',
+        AGING_90_PLUS: 'Plus de 90 jours',
+      },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges(); // run ngOnInit first, then pin the state under test
+    const bucket = (label: string, total: number) => ({ label, count: 1, total });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      invoiceAging: {
+        current: bucket('Current', 15000),
+        days1to30: bucket('1-30 days', 2500),
+        days31to60: bucket('31-60 days', 0),
+        days61to90: bucket('61-90 days', 0),
+        over90: bucket('90+ days', 0),
+      },
+    } as any);
+    fixture.componentInstance.isHospitalAdmin.set(true);
+    fixture.componentInstance.loading.set(false);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('formats amounts in XOF, never in dollars', () => {
+    const c = render().componentInstance;
+    const text = c.formatInvoiceAmount(15000);
+    expect(text).not.toContain('$');
+    expect(text).toContain('F');
+    expect(text.replaceAll(/\D/g, '')).toBe('15000');
+  });
+
+  it('renders the translated bucket label instead of the server English label', () => {
+    const el: HTMLElement = render().nativeElement;
+    const text = el.textContent ?? '';
+    expect(text).toContain('À jour');
+    expect(text).toContain('1 à 30 jours');
+    expect(text).not.toContain('Current');
+    expect(text).not.toContain('$');
   });
 });

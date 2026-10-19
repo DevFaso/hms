@@ -68,6 +68,8 @@ export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
 
 export interface EncounterResponse {
   id: string;
+  /** QA D276: the visit code a billing clerk links an invoice to. */
+  code?: string;
   patientId: string;
   patientName: string;
   patientEmail: string;
