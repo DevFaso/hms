@@ -408,7 +408,9 @@
                   <td>
                     <strong>{{ o.labTestName || '—' }}</strong>
                     @if (o.labOrderCode) {
-                      <span class="lab-code">{{ o.labOrderCode }}</span>
+                      <span class="lab-code" [title]="o.labOrderCode">{{
+                        shortOrderCode(o.labOrderCode)
+                      }}</span>
                     }
                   </td>
                   <td>

@@ -95,7 +95,9 @@
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
                 @if (row.labOrderCode) {
-                  <span class="order-code mono">{{ row.labOrderCode }}</span>
+                  <span class="order-code mono" [title]="row.labOrderCode">{{
+                    shortOrderCode(row.labOrderCode)
+                  }}</span>
                 }
               </td>
               <td class="numeric">

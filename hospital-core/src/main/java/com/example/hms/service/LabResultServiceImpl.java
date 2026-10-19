@@ -619,13 +619,24 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public LabResultResponseDTO getLabResultById(UUID id, Locale locale) {
+        return readLabResultById(id, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased) {
+        return readLabResultById(id, includeUnreleased);
+    }
+
+    private LabResultResponseDTO readLabResultById(UUID id, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
+            .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
 
         // The result and the trend around it are one read, accounted once.
-        List<LabResult> trend = readableTrendFor(labResult);
+        List<LabResult> trend = readableTrendFor(labResult, includeUnreleased);
         recordReadReach(List.of(labResult), trend);
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
@@ -669,13 +680,26 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
+        return readLabResultsPage(pageable, null, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                        UUID patientId, boolean includeUnreleased) {
+        return readLabResultsPage(pageable, patientId, includeUnreleased);
+    }
+
+    private Page<LabResultResponseDTO> readLabResultsPage(Pageable pageable, UUID patientId,
+                                                          boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
             // Verified super-admin in global view: return all paged
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId,
+        Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
+            !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
@@ -733,6 +757,11 @@ public class LabResultServiceImpl implements LabResultService {
         UserRoleHospitalAssignment assignment =
             requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
+        boolean valueChanged = !Objects.equals(labResult.getResultValue(), request.getResultValue())
+            || !Objects.equals(labResult.getResultUnit(), request.getResultUnit())
+            || labResult.getLabOrder() == null
+            || !Objects.equals(labResult.getLabOrder().getId(), labOrder.getId());
+
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
         labResult.setResultUnit(request.getResultUnit());
@@ -740,7 +769,25 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setNotes(request.getNotes());
         labResult.setAssignment(assignment);
 
+        if (valueChanged) {
+            // QA D206 review: the critical stamp describes a page about the
+            // OLD value. Amending an unreleased typo (79 -> 4.2) left it set,
+            // so the corrected result stayed on the critical tile and the
+            // escalation sweep kept chasing it. The chain restarts from the
+            // new value: re-paged below if it is still critical, gone if not.
+            labResult.setCriticalNotifiedAt(null);
+            labResult.setCriticalEscalatedAt(null);
+            labResult.setCriticalEscalationLevel((short) 0);
+            labResult.setCriticalReadBackValue(null);
+            labResult.setCriticalReadBackAt(null);
+            labResult.setCriticalReadBackByUserId(null);
+            labResult.setCriticalReadBackByDisplay(null);
+        }
+
         LabResult updated = labResultRepository.save(labResult);
+        if (valueChanged) {
+            criticalValueNotificationService.notifyIfCritical(updated, severityOf(updated));
+        }
 
         return labResultMapper.toResponseDTO(updated);
     }
@@ -1694,7 +1741,7 @@ public class LabResultServiceImpl implements LabResultService {
      * verified super-admin in global view. Not accounted: the caller accounts
      * the result and its trend together.
      */
-    private List<LabResult> readableTrendFor(LabResult source) {
+    private List<LabResult> readableTrendFor(LabResult source, boolean includeUnreleased) {
         LabOrder labOrder = source.getLabOrder();
         if (labOrder == null
             || labOrder.getPatient() == null
@@ -1704,7 +1751,7 @@ public class LabResultServiceImpl implements LabResultService {
             return List.of();
         }
         return readableTrendRows(labOrder.getPatient().getId(), labOrder.getLabTestDefinition().getId(),
-            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND));
+            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND), includeUnreleased);
     }
 
     private List<LabResultTrendPointDTO> toTrendPoints(List<LabResult> rows) {
@@ -1742,13 +1789,17 @@ public class LabResultServiceImpl implements LabResultService {
      * the same query, with its {@code globalView} flag: there is no unscoped
      * trend finder left to call.
      */
-    private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId) {
+    private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId,
+                                              boolean includeUnreleased) {
         org.springframework.data.domain.PageRequest window =
             org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
         if (actingHospitalId == null) {
             // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
             return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
-                Set.of(NO_HOSPITAL), null, true, window);
+                Set.of(NO_HOSPITAL), null, true, window)
+                .stream()
+                .filter(r -> includeUnreleased || r.isReleased())
+                .toList();
         }
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
@@ -1757,6 +1808,9 @@ public class LabResultServiceImpl implements LabResultService {
                 false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
+            // QA D211: outside the laboratory an unreleased value is not a
+            // result yet, in a trend any more than on its own.
+            .filter(r -> includeUnreleased || r.isReleased())
             .limit(TREND_WINDOW)
             .toList();
     }
@@ -1862,8 +1916,9 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     @Transactional(readOnly = true)
-    public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale) {
+    public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased) {
         LabResult current = labResultRepository.findById(currentResultId)
+            .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         // Hospital scope enforcement: the shared single-row comparison, which
@@ -1878,7 +1933,7 @@ public class LabResultServiceImpl implements LabResultService {
         UUID patientId = labOrder.getPatient().getId();
         UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
 
-        List<LabResult> trendResults = readableTrendFor(current);
+        List<LabResult> trendResults = readableTrendFor(current, includeUnreleased);
         // The compared result is returned with the patient's name, so it is
         // accounted with its trend - it used to be passed as "already
         // accounted" while nothing had accounted it.
@@ -1915,12 +1970,13 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale) {
+    public List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale,
+                                                                 boolean includeUnreleased) {
         // This read had no tenant check at all: the unscoped finder, by the
         // patient id in the URL, returned any hospital's patient's last twelve
         // values with their name to any clinician anywhere.
         UUID actingHospitalId = requireHospitalScopeForPatientRead();
-        List<LabResult> allResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId);
+        List<LabResult> allResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId, includeUnreleased);
 
         // Nothing readable here and no such patient are the same answer.
         if (allResults.isEmpty()) {

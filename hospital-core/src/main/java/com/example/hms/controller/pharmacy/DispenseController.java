@@ -168,6 +168,17 @@ public class DispenseController {
         return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getDispense(id)));
     }
 
+    @GetMapping("/prescription/{prescriptionId}/dispensable-lots")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Lots that can fill this prescription",
+            description = "QA D241: the pharmacy's lots of the prescribed drug only, with stock left")
+    @ApiResponse(responseCode = "200", description = "Lots retrieved")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO>>>
+            listDispensableLots(@PathVariable UUID prescriptionId, @RequestParam UUID pharmacyId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                dispenseService.listDispensableLots(prescriptionId, pharmacyId)));
+    }
+
     @GetMapping("/prescription/{prescriptionId}")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'DOCTOR', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List dispenses by prescription",

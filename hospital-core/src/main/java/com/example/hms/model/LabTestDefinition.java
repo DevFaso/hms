@@ -164,6 +164,10 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
 
+    /** QA D213: who submitted the definition for QA review. */
+    @Column(name = "submitted_by_id")
+    private UUID submittedById;
+
     /** UUID of the Quality Manager who completed QA review. */
     @Column(name = "reviewed_by_id")
     private UUID reviewedById;

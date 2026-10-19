@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.utility.ElapsedTime;
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
@@ -121,8 +120,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         LocalDateTime safetyAlertFloor = LocalDateTime.now(java.time.ZoneId.systemDefault())
                 .minusDays(SAFETY_ALERT_WINDOW_DAYS);
         long criticalLabs = labResultRepository
-                .countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                        staffId, AbnormalFlag.CRITICAL, safetyAlertFloor);
+                .countUnacknowledgedCriticalForOrderingStaff(staffId, safetyAlertFloor);
 
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);

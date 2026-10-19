@@ -327,6 +327,52 @@ class LabResultServiceImplTrendScopeTest {
             .doesNotContain(hospitalA.getId(), hospitalB.getId(), hospitalT.getId());
     }
 
+    @Test
+    void outsideTheLaboratoryAnUnreleasedResultCannotBeCompared_D211() {
+        LabResult unreleased = row(hospitalB, null, 1);
+        unreleased.setReleased(false);
+        when(labResultRepository.findById(unreleased.getId())).thenReturn(Optional.of(unreleased));
+        UUID id = unreleased.getId();
+
+        assertThat(catchThrowable(() -> service.compareLabResults(id, Locale.ENGLISH, false)))
+            .isExactlyInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    void outsideTheLaboratoryTheComparisonTrendCarriesReleasedValuesOnly_D211() {
+        LabResult released = row(hospitalB, null, 1);
+        released.setReleased(true);
+        LabResult pending = row(hospitalB, null, 2);
+        pending.setReleased(false);
+        when(labResultRepository.findById(released.getId())).thenReturn(Optional.of(released));
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(released, pending));
+
+        LabResultComparisonDTO forDoctor = service.compareLabResults(released.getId(), Locale.ENGLISH, false);
+        LabResultComparisonDTO forLab = service.compareLabResults(released.getId(), Locale.ENGLISH, true);
+
+        assertThat(forDoctor.getTrendHistory()).extracting(LabResultTrendPointDTO::getLabResultId)
+            .containsExactly(released.getId().toString());
+        assertThat(forLab.getTrendHistory()).hasSize(2);
+    }
+
+    @Test
+    void outsideTheLaboratoryCompareSequentialLeavesUnreleasedResultsOut_D211() {
+        LabResult released = row(hospitalB, null, 1);
+        released.setReleased(true);
+        LabResult pending = row(hospitalB, null, 2);
+        pending.setReleased(false);
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(pending, released));
+
+        List<LabResultComparisonDTO> forDoctor =
+            service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH, false);
+
+        assertThat(forDoctor).extracting(c -> c.getCurrentResult().getLabResultId())
+            .containsExactly(released.getId().toString());
+        assertThat(service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH, true)).hasSize(2);
+    }
+
     /** A result for the patient and test, ordered at {@code ordering}, sent to {@code performing} when not null. */
     private LabResult row(Hospital ordering, Hospital performing, int daysAgo) {
         LabOrder order = new LabOrder();
