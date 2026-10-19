@@ -44,7 +44,7 @@ import java.util.UUID;
 @Slf4j
 public class PatientDocumentServiceImpl implements PatientDocumentService {
 
-    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_UNABLE_RESOLVE_USER = "document.user.unresolved";
 
     private final ControllerAuthUtils authUtils;
     private final PatientRepository patientRepository;

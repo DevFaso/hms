@@ -2018,7 +2018,7 @@ public class LabResultServiceImpl implements LabResultService {
             return LabResultComparisonDTO.ComparisonMetadata.builder()
                 .trendDirection(LabResultComparisonDTO.TrendDirection.INSUFFICIENT_DATA)
                 .significanceLevel("BASELINE")
-                .interpretation("First recorded measurement - no comparison available")
+                .interpretation(com.example.hms.utility.MessageUtil.resolve("lab.comparison.baseline"))
                 .build();
         }
 
@@ -2050,11 +2050,14 @@ public class LabResultServiceImpl implements LabResultService {
             // Non-numeric comparison
             boolean changed = !currentVal.equalsIgnoreCase(previousVal);
             return LabResultComparisonDTO.ComparisonMetadata.builder()
-                .absoluteChange(changed ? "Changed from " + previousVal + " to " + currentVal : "No change")
+                .absoluteChange(changed
+                    ? com.example.hms.utility.MessageUtil.resolve("lab.comparison.changedFromTo", previousVal, currentVal)
+                    : com.example.hms.utility.MessageUtil.resolve("lab.comparison.noChange"))
                 .trendDirection(changed ? LabResultComparisonDTO.TrendDirection.FLUCTUATING : LabResultComparisonDTO.TrendDirection.STABLE)
                 .daysBetween(daysBetween)
                 .significanceLevel(changed ? "SIGNIFICANT" : "STABLE")
-                .interpretation(changed ? "Qualitative change detected" : "Result unchanged")
+                .interpretation(com.example.hms.utility.MessageUtil.resolve(
+                    changed ? "lab.comparison.qualitativeChange" : "lab.comparison.unchanged"))
                 .build();
         }
     }
@@ -2110,12 +2113,15 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     private String generateInterpretation(double current, double previous, double absoluteChange, double percentageChange, long daysBetween, String unit) {
-        String direction = absoluteChange > 0 ? "increased" : "decreased";
+        // QA D226: the portal shows this sentence as is, so it is composed in the
+        // request locale; numbers are pre-formatted so MessageFormat adds no grouping.
+        String key = absoluteChange > 0 ? "lab.comparison.increased" : "lab.comparison.decreased";
         String unitStr = unit != null ? " " + unit : "";
-
-        return String.format("Value %s by %.2f%s (%.1f%%) over %d days. Previous: %.2f%s, Current: %.2f%s",
-            direction, Math.abs(absoluteChange), unitStr, Math.abs(percentageChange), daysBetween,
-            previous, unitStr, current, unitStr);
+        java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        return com.example.hms.utility.MessageUtil.resolve(key,
+            String.format(locale, "%.2f", Math.abs(absoluteChange)), unitStr,
+            String.format(locale, "%.1f", Math.abs(percentageChange)), String.valueOf(daysBetween),
+            String.format(locale, "%.2f", previous), String.format(locale, "%.2f", current));
     }
 
     private List<LabResultReferenceRangeDTO> extractReferenceRanges(LabOrder labOrder) {

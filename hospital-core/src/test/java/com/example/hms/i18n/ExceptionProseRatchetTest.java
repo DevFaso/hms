@@ -47,7 +47,7 @@ class ExceptionProseRatchetTest {
 
     /** Exception types whose message the global handler writes into the response body. */
     static final Pattern PROSE = Pattern.compile(
-        "new\\s+(?:BusinessException|BusinessRuleException|BusinessValidationException|BadRequestException"
+        "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException|BadRequestException"
             + "|ConflictException|IllegalArgumentException|IllegalStateException|UnauthorizedException"
             + "|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
@@ -55,11 +55,34 @@ class ExceptionProseRatchetTest {
         return literal.indexOf(' ') >= 0;
     }
 
+    /** The same exceptions, built from a constant instead of a literal. */
+    static final Pattern PROSE_CONSTANT = Pattern.compile(
+        "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException"
+            + "|BadRequestException|ConflictException|IllegalArgumentException|IllegalStateException"
+            + "|UnauthorizedException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
+            + "([A-Z][A-Z0-9_]*)\\s*[,)]");
+
+    /** A String constant declared in the same file. */
+    static final Pattern STRING_CONSTANT = Pattern.compile(
+        "static\\s+final\\s+String\\s+([A-Z][A-Z0-9_]*)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*;");
+
     static int countProse(String source) {
         int n = 0;
         Matcher m = PROSE.matcher(source);
         while (m.find()) {
             if (isProse(m.group(1))) {
+                n++;
+            }
+        }
+        Map<String, String> constants = new TreeMap<>();
+        Matcher c = STRING_CONSTANT.matcher(source);
+        while (c.find()) {
+            constants.put(c.group(1), c.group(2));
+        }
+        Matcher k = PROSE_CONSTANT.matcher(source);
+        while (k.find()) {
+            String value = constants.get(k.group(1));
+            if (value != null && isProse(value)) {
                 n++;
             }
         }
@@ -163,5 +186,16 @@ class ExceptionProseRatchetTest {
         assertThat(countProse("throw new IllegalStateException(\n  \"Unknown status: \" + s);")).isEqualTo(1);
         assertThat(countProse("throw new BusinessException(\"billing.invoice.alreadyPaid\");")).isZero();
         assertThat(countProse("throw new ConflictException(\"patient:users.patient.alreadyRegistered\");")).isZero();
+    }
+
+    @Test
+    @DisplayName("a package-qualified exception or a String constant is still seen")
+    void scanSeesQualifiedNamesAndConstants() {
+        assertThat(countProse("throw new com.example.hms.exception.BusinessException(\n"
+            + "    \"Read-back does not match.\");")).isEqualTo(1);
+        assertThat(countProse("private static final String MSG = \"Unable to resolve user.\";\n"
+            + "throw new BusinessException(MSG);")).isEqualTo(1);
+        assertThat(countProse("private static final String MSG = \"nurse.identity.unresolved\";\n"
+            + "throw new BusinessException(MSG);")).isZero();
     }
 }

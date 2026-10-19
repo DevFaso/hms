@@ -170,7 +170,9 @@ class PostpartumCareServiceImplTest {
         assertFalse(response.getAlerts().isEmpty(), "Expected hemorrhage alert to be generated");
         assertEquals(PostpartumAlertType.HEMORRHAGE, response.getAlerts().get(0).getType());
         assertEquals(PostpartumAlertSeverity.URGENT, response.getAlerts().get(0).getSeverity());
-        assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hemorrhage"));
+        assertEquals("postpartum-hemorrhage", response.getAlerts().get(0).getCode());
+        // QA D226: the alert body is the staff-locale (French) text, not English composed in code.
+        assertTrue(response.getAlerts().get(0).getMessage().startsWith("Risque d"));
 
     verify(notificationService, times(1)).createNotification(anyString(), anyString());
 

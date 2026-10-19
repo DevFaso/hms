@@ -413,7 +413,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasHemorrhageIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.URGENT,
                 "postpartum-hemorrhage",
-                "Hemorrhage risk detected. Activate uterotonic protocol and notify provider immediately.",
+                alertText("postpartum-hemorrhage"),
                 "Bleeding Assessment"));
             observation.setHemorrhageProtocolActivated(true);
             escalateMonitoring = true;
@@ -423,7 +423,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasInfectionIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.INFECTION, PostpartumAlertSeverity.URGENT,
                 "postpartum-infection",
-                "Possible postpartum infection. Initiate sepsis screening and contact provider.",
+                alertText("postpartum-infection"),
                 "Infection Screening"));
             escalateMonitoring = true;
             infectionAlert = true;
@@ -432,7 +432,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
             alerts.add(buildAlert(PostpartumAlertType.PAIN, PostpartumAlertSeverity.CAUTION,
                 "postpartum-pain",
-                "Pain score above comfort threshold. Reassess analgesia plan and comfort interventions.",
+                alertText("postpartum-pain"),
                 "Pain Score"));
             observation.setPainManagementReferralSuggested(true);
         }
@@ -441,7 +441,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.isMentalHealthReferralSuggested()) {
             alerts.add(buildAlert(PostpartumAlertType.PSYCHOSOCIAL, PostpartumAlertSeverity.CAUTION,
                 "postpartum-psychosocial",
-                "Psychosocial concern identified. Coordinate mental health or social work referral.",
+                alertText("postpartum-psychosocial"),
                 "Psychosocial Screening"));
         }
 
@@ -478,6 +478,14 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             || observation.isFoulLochiaOdor()
             || observation.isUterineTenderness()
             || observation.isChillsOrRigors();
+    }
+
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
+     * stored and read by staff, so it is never composed in English in code.
+     */
+    private String alertText(String code) {
+        return messageSource.getMessage("postpartum.alert.msg." + code, null, NotificationLocales.STAFF);
     }
 
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
@@ -688,7 +696,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
             .forEach(alert -> {
                 String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    new Object[]{alert.getType() == null ? "" : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());

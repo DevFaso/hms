@@ -804,7 +804,7 @@
                 }
               </p>
               @if (meta.significanceLevel) {
-                <p class="compare-significance">{{ meta.significanceLevel }}</p>
+                <p class="compare-significance">{{ 'LAB_RESULTS.SIGNIFICANCE_' + meta.significanceLevel | translate }}</p>
               }
               @if (meta.interpretation) {
                 <p class="compare-interpretation">{{ meta.interpretation }}</p>

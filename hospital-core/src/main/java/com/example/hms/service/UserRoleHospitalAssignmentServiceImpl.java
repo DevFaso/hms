@@ -112,14 +112,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_USER_NOT_FOUND_PREFIX = "User not found: ";
     private static final String DEFAULT_ROLE_REQUIRED_MESSAGE = "Role must be specified by either ID or name.";
     private static final String DEFAULT_DOCTOR_CONFLICT_MESSAGE = "An active DOCTOR assignment already exists for this user in the given hospital.";
-    private static final String DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE = "SUPER_ADMIN assignments are global and must not include a hospital.";
+    private static final String DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE = "assignment.superAdmin.noHospital";
     private static final String DEFAULT_HOSPITAL_REQUIRED_MESSAGE = "Hospital must be provided for non-SUPER_ADMIN roles.";
     private static final String DEFAULT_INVALID_UUID_MESSAGE = "Invalid UUID value: ";
     private static final String DEFAULT_INVALID_BOOLEAN_MESSAGE = "Invalid boolean value: ";
     private static final String DEFAULT_INVALID_DATE_MESSAGE = "Invalid date value: ";
-    private static final String DEFAULT_ROW_MISSING_USER = "Row missing user identifier";
-    private static final String DEFAULT_ROW_MISSING_ROLE = "Row missing role identifier";
-    private static final String DEFAULT_PROCESSING_ERROR = "Unable to process CSV content";
+    private static final String DEFAULT_ROW_MISSING_USER = "assignment.csv.rowMissingUser";
+    private static final String DEFAULT_ROW_MISSING_ROLE = "assignment.csv.rowMissingRole";
+    private static final String DEFAULT_PROCESSING_ERROR = "assignment.csv.unprocessable";
     private static final String MSG_ASSIGNMENT_INVALID_CODE = "assignment.confirmation.invalid";
     private static final String MSG_ASSIGNMENT_ALREADY_CONFIRMED = "assignment.confirmation.already";
     private static final String MSG_ASSIGNMENT_ACTOR_MISMATCH = "assignment.confirmation.actor-mismatch";
@@ -131,8 +131,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         "This account was disabled by an administrator. Ask them to re-enable it.";
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
-    private static final String DEFAULT_HOLDER_CHANGE =
-        "Only a super-admin can move an assignment to another person. Create a new assignment for that user.";
+    private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE =
         "Only a super-admin can activate an assignment directly. Send the holder a new code "
             + "(regenerate the code); the assignment activates when they confirm it.";
