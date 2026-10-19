@@ -421,8 +421,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
                 // QA D213: a live test with no reference range grades nothing.
                 if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
-                    throw new BusinessException(
-                        "A lab test definition cannot be activated without at least one reference range.");
+                    throw new BusinessException("lab.definition.rangesRequired");
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
