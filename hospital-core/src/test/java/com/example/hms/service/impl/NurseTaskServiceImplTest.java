@@ -408,7 +408,8 @@ class NurseTaskServiceImplTest {
         NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
             .patientId(patientId).direction("anything at all").build();
 
-        assertThatThrownBy(() -> service.createHandoff(UUID.randomUUID(), hospitalId, request))
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
             .isInstanceOf(BusinessException.class);
         verify(nurseHandoffRepository, never()).save(any());
     }

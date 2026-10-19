@@ -131,12 +131,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String VITALS_ROUND_ROUTINE = "ROUTINE";
     private static final String VITALS_ROUND_FULL_SET = "FULL_SET";
     private static final String VITALS_ROUND_NEWS2_HIGH = "NEWS2_HIGH";
-    /** QA D235: the handoff types the nurse station offers. */
-    static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", "PROCEDURE", "BREAK_COVER");
     private static final String VITALS_ROUND_NEWS2_MEDIUM = "NEWS2_MEDIUM";
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
+    /** QA D235: the handoff types the nurse station offers. */
+    static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", ORDER_TYPE_PROCEDURE, "BREAK_COVER");
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -875,11 +875,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** QA D220: the patients with an active (or on-leave) stay at this hospital. */
     Set<UUID> activelyAdmittedPatientIds(UUID hospitalId) {
         if (hospitalId == null) return Set.of();
-        Set<UUID> ids = new HashSet<>();
-        for (Admission a : admissionRepository.findActiveAdmissionsByHospital(hospitalId)) {
-            if (a.getPatient() != null && a.getPatient().getId() != null) ids.add(a.getPatient().getId());
-        }
-        return ids;
+        return admissionRepository.findActiveAdmissionsByHospital(hospitalId).stream()
+            .filter(a -> a.getPatient() != null && a.getPatient().getId() != null)
+            .map(a -> a.getPatient().getId())
+            .collect(java.util.stream.Collectors.toSet());
     }
 
     /** QA D207: a MEDIUM/HIGH NEWS2 round is named as such, ahead of the overdue/routine split. */

@@ -119,7 +119,7 @@ public class AdmissionStayEncounterService {
      */
     @Transactional
     public void recordDischarge(Admission admission) {
-        recordDischarge(admission, null);
+        applyDischarge(admission, null);
     }
 
     /**
@@ -129,6 +129,10 @@ public class AdmissionStayEncounterService {
      */
     @Transactional
     public void recordDischarge(Admission admission, String dischargeDiagnosis) {
+        applyDischarge(admission, dischargeDiagnosis);
+    }
+
+    private void applyDischarge(Admission admission, String dischargeDiagnosis) {
         if (admission.getId() == null) {
             return;
         }
