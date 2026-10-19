@@ -48,6 +48,7 @@ class GeneralReferralServiceImplTest {
     @Mock private GeneralReferralRepository referralRepository;
     @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -75,6 +76,8 @@ class GeneralReferralServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("Jane");
@@ -96,10 +99,15 @@ class GeneralReferralServiceImplTest {
         receivingProvider = new Staff();
         receivingProvider.setId(receivingProviderId);
         receivingProvider.setHospital(hospital);
+        // QA D273: the receiver is a physician, which RoleValidator answers from the user.
+        com.example.hms.model.User receiver = new com.example.hms.model.User();
+        receiver.setId(UUID.randomUUID());
+        receivingProvider.setUser(receiver);
 
         department = new Department();
         department.setId(departmentId);
         department.setName("Cardiology");
+        department.setHospital(hospital);
     }
 
     private GeneralReferralRequestDTO buildRequest() {

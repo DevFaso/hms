@@ -158,8 +158,11 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
             // Null is legitimate: a hospital-wide rota covers no single department.
             return null;
         }
-        return departmentRepository.findById(departmentId)
+        Department department = departmentRepository.findById(departmentId)
             .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", departmentId);
+        return department;
     }
 
     private void validateWindow(OnCallScheduleRequestDTO request) {

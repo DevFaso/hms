@@ -464,6 +464,10 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, id);
         }
         Encounter existing = encounterRepository.findById(id).orElse(null);
+        // QA r5 tenancy sweep: a delete loads under the read's tenant guard.
+        if (existing != null) {
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existing.getHospital(), MSG_ENCOUNTER_NOT_FOUND, id);
+        }
         encounterRepository.deleteById(id);
         if (existing != null) {
             // Record history for deletion
@@ -832,8 +836,11 @@ public class EncounterServiceImpl implements EncounterService {
         if (appointmentId == null) {
             return null;
         }
-        return appointmentRepository.findById(appointmentId)
+        Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(appointment.getHospital(), "appointment.notFound", appointmentId);
+        return appointment;
     }
 
     private Department findDepartmentInHospital(Hospital hospital, UUID departmentId) {

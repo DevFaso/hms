@@ -109,8 +109,11 @@ public class LabInstrumentServiceImpl implements LabInstrumentService {
 
     private Department resolveDepartment(String departmentId) {
         if (departmentId == null || departmentId.isBlank()) return null;
-        return departmentRepository.findById(UUID.fromString(departmentId))
+        Department department = departmentRepository.findById(UUID.fromString(departmentId))
             .orElseThrow(() -> new ResourceNotFoundException("department.notfound", departmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notfound", departmentId);
+        return department;
     }
 
     private boolean hasHospitalAccess(UUID hospitalId) {

@@ -1531,4 +1531,69 @@ class DepartmentServiceImplTest {
 
         verify(departmentRepository, never()).findAll(any(Specification.class), any(Pageable.class));
     }
+
+    // ── QA D281: department names and codes are unique per hospital, on create AND update ──
+
+    @Test
+    void createDepartment_duplicateCode_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("Cardiologie 2");
+        dto.setCode("card");
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Cardiologie 2", hospitalId)).thenReturn(false);
+        // Codes are normalised to upper case before the check.
+        when(departmentRepository.existsByCodeIgnoreCaseAndHospitalId("CARD", hospitalId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.code.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate code");
+
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartment_renameOntoAnotherDepartmentsName_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Pediatrie");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("CARD");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot("Pediatrie", hospitalId, deptId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartment_codeOfAnotherDepartment_throwsConflict_D281() {
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Cardiology");
+        dto.setHospitalId(hospitalId);
+        dto.setCode("ped");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot("PED", hospitalId, deptId)).thenReturn(true);
+        when(messageSource.getMessage(eq("department.code.duplicate"), any(), any(Locale.class))).thenReturn("Duplicate code");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
+            .isInstanceOf(ConflictException.class);
+        verify(departmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateDepartmentHead_ofAnotherHospitalsDepartment_isNotFound() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> departmentService.updateDepartmentHead(deptId, staffId, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(departmentRepository, never()).save(any());
+    }
 }

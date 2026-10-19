@@ -36,6 +36,8 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     public ServiceTranslationResponseDTO createTranslation(ServiceTranslationRequestDTO dto, Locale locale) {
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("treatment.not.found"));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.not.found", dto.getTreatmentId());
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.not.found"));

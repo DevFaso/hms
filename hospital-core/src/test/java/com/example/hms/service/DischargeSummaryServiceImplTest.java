@@ -93,6 +93,9 @@ class DischargeSummaryServiceImplTest {
         patient = new Patient(); patient.setId(patientId);
         encounter = new Encounter(); encounter.setId(encounterId);
         hospital = new Hospital(); hospital.setId(hospitalId);
+        // QA r5 tenancy: the summary's encounter is this patient's, at this hospital.
+        encounter.setPatient(patient);
+        encounter.setHospital(hospital);
         staff = new Staff(); staff.setId(staffId);
         assignment = new UserRoleHospitalAssignment(); assignment.setId(assignmentId);
 

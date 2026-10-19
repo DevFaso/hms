@@ -62,6 +62,8 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
         PatientHospitalRegistration registration = registrationRepository.findById(request.getRegistrationId())
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", request.getRegistrationId()));
+        // QA r5 tenancy sweep: only the registration's own hospital requests its discharge.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), "registration.notFound", request.getRegistrationId());
         if (!registration.isActive()) {
             throw new BusinessException("Registration is inactive and cannot be discharged");
         }
@@ -252,8 +254,11 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     }
 
     private DischargeApproval getApprovalOrThrow(UUID approvalId) {
-        return dischargeApprovalRepository.findById(approvalId)
+        DischargeApproval approval = dischargeApprovalRepository.findById(approvalId)
             .orElseThrow(() -> new ResourceNotFoundException("dischargeApproval.notFound", approvalId));
+        // QA r5 tenancy sweep: another hospital's approval answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(approval.getHospital(), "dischargeApproval.notFound", approvalId);
+        return approval;
     }
 
     private void validateStaffHospitalMatch(Staff staff, PatientHospitalRegistration registration) {

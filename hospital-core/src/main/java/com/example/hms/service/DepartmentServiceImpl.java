@@ -147,6 +147,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponseDTO updateDepartmentHead(UUID departmentId, UUID staffId, Locale locale) {
         Department department = findDepartmentOrThrow(departmentId);
+        // Tenant sweep (QA D262 class): the write loads under the read's guard.
+        enforceHospitalScopeOnEntity(department);
         Staff newHead = staffService.getStaffEntityById(staffId, locale);
 
         if (!newHead.getHospital().getId().equals(department.getHospital().getId())) {
@@ -278,6 +280,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
+        ensureRenameUniqueness(id, dto, hospital, locale);
 
         Staff newHeadOfDepartment = null;
         if (dto.getHeadOfDepartmentEmail() != null && !dto.getHeadOfDepartmentEmail().isBlank()) {
@@ -504,6 +507,26 @@ public class DepartmentServiceImpl implements DepartmentService {
                 new Object[]{dto.getName(), hospital.getName()},
                 locale
             ));
+        }
+        // QA D281: the code is unique per hospital too.
+        if (StringUtils.hasText(dto.getCode())
+                && departmentRepository.existsByCodeIgnoreCaseAndHospitalId(dto.getCode(), hospital.getId())) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
+        }
+    }
+
+    /** QA D281: an update may not take another department's name or code in the same hospital. */
+    private void ensureRenameUniqueness(UUID id, DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
+        if (StringUtils.hasText(dto.getName())
+                && departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot(dto.getName(), hospital.getId(), id)) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.duplicate", new Object[]{dto.getName(), hospital.getName()}, locale));
+        }
+        if (StringUtils.hasText(dto.getCode())
+                && departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot(dto.getCode(), hospital.getId(), id)) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
 

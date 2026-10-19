@@ -288,6 +288,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         log.debug("Deregister by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), REGISTRATION_NOT_FOUND_KEY, id);
         registrationRepository.delete(registration);
         log.info("🗑️ Deregistered Patient Registration ID '{}'", id);
     }
@@ -299,6 +301,8 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         log.debug("Update by registration UUID={}", id);
         PatientHospitalRegistration registration = registrationRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(REGISTRATION_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), REGISTRATION_NOT_FOUND_KEY, id);
         boolean wasActive = registration.isActive();
         applyEditableFields(registration, dto, false);
         requireClinicalOnReactivation(registration, wasActive);

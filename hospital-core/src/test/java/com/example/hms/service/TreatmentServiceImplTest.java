@@ -183,17 +183,18 @@ class TreatmentServiceImplTest {
     @Test
     void deleteTreatment_success() {
         UUID id = UUID.randomUUID();
-        when(treatmentRepository.existsById(id)).thenReturn(true);
+        Treatment treatment = new Treatment();
+        when(treatmentRepository.findById(id)).thenReturn(Optional.of(treatment));
 
         service.deleteTreatment(id);
 
-        verify(treatmentRepository).deleteById(id);
+        verify(treatmentRepository).delete(treatment);
     }
 
     @Test
     void deleteTreatment_notFound() {
         UUID id = UUID.randomUUID();
-        when(treatmentRepository.existsById(id)).thenReturn(false);
+        when(treatmentRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deleteTreatment(id))
             .isInstanceOf(ResourceNotFoundException.class);

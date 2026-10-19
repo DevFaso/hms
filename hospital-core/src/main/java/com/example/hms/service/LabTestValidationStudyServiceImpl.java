@@ -37,6 +37,8 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
                                                     LabTestValidationStudyRequestDTO dto) {
         LabTestDefinition definition = definitionRepository.findById(definitionId)
                 .orElseThrow(() -> new ResourceNotFoundException(DEFINITION_NOT_FOUND));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(definition.getHospital(), DEFINITION_NOT_FOUND, definitionId);
 
         LabTestValidationStudy study = mapper.toEntity(dto, definition);
         return mapper.toDto(repository.save(study));
