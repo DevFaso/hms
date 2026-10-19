@@ -282,9 +282,8 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
     }
 
     private static String primaryRole(Authentication auth) {
-        if (auth.getAuthorities() == null) {
-            return null;
-        }
+        // getAuthorities() is non-null by contract (Spring Security 7 is
+        // @NullMarked); the old null guard was dead code (Sonar S2583).
         return auth.getAuthorities().stream()
             .map(GrantedAuthority::getAuthority)
             .filter(a -> a.startsWith(ROLE_PREFIX))

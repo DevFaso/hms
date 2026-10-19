@@ -52,6 +52,7 @@ class AdmissionServiceImplTest {
     @Mock private AdmissionRepository admissionRepository;
     @Mock private AdmissionOrderSetRepository orderSetRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -87,6 +88,8 @@ class AdmissionServiceImplTest {
         staff.setUser(staffUser);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+        // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
     }
 
     @Test
@@ -441,5 +444,87 @@ class AdmissionServiceImplTest {
         verify(admissionRepository, never()).findByPatientIdOrderByAdmissionDateTimeDesc(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ── QA D262: hospital B may not discharge, edit or cancel hospital A's admission ──
+
+    private Admission activeAdmissionAtHospitalA() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        // The caller (DOCTOR_B) acts at hospital B.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        return admission;
+    }
+
+    @Test
+    void dischargePatient_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+        request.setDischargeSummary("x");
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(encounterAutoCompletion, never()).completeAdmissionEncounters(any());
+    }
+
+    @Test
+    void updateAdmission_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setAcuityLevel(com.example.hms.enums.AcuityLevel.values()[0]);
+
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
+        assertThat(admission.getAcuityLevel()).isNull();
+    }
+
+    @Test
+    void cancelAdmission_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void admitPatient_atAnotherHospitalThanTheCallers_isNotFound_D262() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void admitPatient_notRegisteredAtTheHospital_isNotFound_D262() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
     }
 }

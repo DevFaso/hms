@@ -113,6 +113,13 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA r5 tenancy sweep: the summary is written at the caller's hospital, on that
+        // hospital's encounter of this patient; every id in the body is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", request.getEncounterId());
+        if (encounter.getPatient() == null || !encounter.getPatient().getId().equals(patient.getId())) {
+            throw new ResourceNotFoundException("encounter.notfound", request.getEncounterId());
+        }
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getDischargingProviderId()));

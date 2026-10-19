@@ -49,6 +49,8 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
 
         Hospital hospital = hospitalRepository.findClinicalById(requestDTO.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
+        // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
 
         Staff recordedBy = null;
         if (requestDTO.getRecordedByStaffId() != null) {
@@ -135,6 +137,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
 
         PatientSocialHistory existingHistory = socialHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), SOCIAL_HISTORY_NOT_FOUND_KEY, id);
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
@@ -158,6 +161,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
 
         PatientSocialHistory socialHistory = socialHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(SOCIAL_HISTORY_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(socialHistory.getHospital(), SOCIAL_HISTORY_NOT_FOUND_KEY, id);
 
         socialHistory.setActive(false);
         socialHistoryRepository.save(socialHistory);

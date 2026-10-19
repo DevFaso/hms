@@ -28,6 +28,7 @@ import com.example.hms.service.i18n.NotificationLocales;
 @Service
 @RequiredArgsConstructor
 public class AnnouncementServiceImpl implements AnnouncementService {
+    private static final String ANNOUNCEMENT_NOT_FOUND_KEY = "announcement.notFound";
     private final AnnouncementRepository announcementRepository;
     private final HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
@@ -112,6 +113,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     public AnnouncementResponseDTO updateAnnouncement(UUID id, String text) {
         Announcement announcement = announcementRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Announcement not found"));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
         announcement.setText(text);
         return toDTO(announcementRepository.save(announcement));
     }
@@ -119,7 +122,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional
     public void deleteAnnouncement(UUID id) {
-        announcementRepository.deleteById(id);
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        Announcement announcement = announcementRepository.findById(id)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException(ANNOUNCEMENT_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), ANNOUNCEMENT_NOT_FOUND_KEY, id);
+        announcementRepository.delete(announcement);
     }
 
     private AnnouncementResponseDTO toDTO(Announcement announcement) {

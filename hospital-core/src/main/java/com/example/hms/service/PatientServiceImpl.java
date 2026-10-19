@@ -361,6 +361,10 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId) {
         Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
+        // QA r5 tenancy sweep: only a hospital the patient is registered at restricts their chart.
+        if (hospitalId != null) {
+            ensurePatientRegistered(id, hospitalId);
+        }
         if (request.isRestricted()) {
             String reason = trimToNull(request.getReason());
             if (reason == null) {

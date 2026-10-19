@@ -43,6 +43,8 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         }
 
         LabQcEventLevel level;
+        // QA r5 tenancy sweep: a QC event is recorded at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(request.getHospitalId(), "hospital.notFound", request.getHospitalId());
         try {
             level = LabQcEventLevel.valueOf(request.getQcLevel().trim().toUpperCase(Locale.ROOT));
         } catch (Exception ex) {
