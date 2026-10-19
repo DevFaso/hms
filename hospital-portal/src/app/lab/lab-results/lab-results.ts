@@ -794,6 +794,8 @@ export class LabResultsComponent implements OnInit {
       case 'CRITICAL':
         return 'severity-badge severity-critical';
       case 'HIGH':
+      case 'LOW':
+      case 'ABNORMAL':
         return 'severity-badge severity-high';
       case 'NORMAL':
         return 'severity-badge severity-normal';

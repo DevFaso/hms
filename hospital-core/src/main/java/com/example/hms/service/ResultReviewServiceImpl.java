@@ -478,6 +478,11 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 abnormalFlag = AbnormalFlag.ABNORMAL.name();
                 direction = com.example.hms.enums.AbnormalDirection.valueOf(rangeFlag);
             }
+            case LabResultMapper.FLAG_ABNORMAL -> {
+                // QA D286: a qualitative answer that reads positive.
+                abnormalFlag = AbnormalFlag.ABNORMAL.name();
+                direction = null;
+            }
             case URGENCY_NORMAL -> {
                 abnormalFlag = AbnormalFlag.NORMAL.name();
                 direction = null;

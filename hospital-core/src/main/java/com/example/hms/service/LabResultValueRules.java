@@ -24,12 +24,15 @@ import java.util.regex.Pattern;
  *       patient portal with a green check.</li>
  * </ul>
  */
-final class LabResultValueRules {
+public final class LabResultValueRules {
 
     /** Positive / detected / reactive in EN, FR and ES, as the whole answer or its first word. */
     private static final Pattern POSITIVE = Pattern.compile(
         "^(POSITI(F|VE|VO|VA)|DETECTE|DETECTED|DETECTADO|DETECTADA|REACTIF|REACTIVE|REACTIVO|REACTIVA"
             + "|PRESENT|PRESENTE|PRESENCE|\\+{1,4})(?![A-Z]).*");
+
+    /** The comparator of a censored value, "<", ">", "<=", ">=" or their single-character forms, and the spaces after it. */
+    private static final Pattern CENSOR_PREFIX = Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*");
 
     private LabResultValueRules() {
     }
@@ -45,7 +48,9 @@ final class LabResultValueRules {
         }
         double value;
         try {
-            value = Double.parseDouble(rawValue.trim());
+            // A censored value ("<0.5", ">200", "<=20") is a number with a
+            // comparator: the analyzer's or the method's limit of detection.
+            value = Double.parseDouble(CENSOR_PREFIX.matcher(rawValue.trim()).replaceFirst(""));
         } catch (NumberFormatException ex) {
             throw new BusinessException("lab.result.value.notNumeric");
         }
@@ -58,7 +63,7 @@ final class LabResultValueRules {
     }
 
     /** True when the value is a qualitative answer that reads positive. */
-    static boolean isPositiveQualitative(String rawValue) {
+    public static boolean isPositiveQualitative(String rawValue) {
         if (rawValue == null || rawValue.isBlank()) {
             return false;
         }

@@ -247,6 +247,23 @@ class LabOrderServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
     }
 
+    /** QA D266: URGENT and STAT orders were stored as ROUTINE (the request's priority was never copied). */
+    @Test
+    void createLabOrderStoresTheRequestedPriority() {
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        for (String requested : List.of("URGENT", "STAT")) {
+            labOrderService.createLabOrder(baseRequestBuilder().priority(requested).build(), Locale.ENGLISH);
+        }
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabOrder::getPriority).containsExactly("URGENT", "STAT");
+    }
+
     @Test
     void createLabOrderKeepsAStartStatusTheCallerChose() {
         // SuperAdminLabOrderServiceImpl validates status as a mandatory field

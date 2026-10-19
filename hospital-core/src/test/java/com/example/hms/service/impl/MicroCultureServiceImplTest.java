@@ -167,6 +167,15 @@ class MicroCultureServiceImplTest {
         assertThat(created.getPatientId()).isEqualTo(patient.getId());
     }
 
+    /** QA D291: the culture showed the order's UUID; its code is the readable order number. */
+    @Test
+    void theCultureCarriesTheOrdersReadableNumber() {
+        order.setOrderNumber("LAB-000042");
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+
+        assertThat(service.createCulture(hospitalId, null, request).getLabOrderCode()).isEqualTo("LAB-000042");
+    }
+
     @Test
     void createRefusesWithoutHospitalScope() {
         MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();

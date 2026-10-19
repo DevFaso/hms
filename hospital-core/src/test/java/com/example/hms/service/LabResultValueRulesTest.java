@@ -34,6 +34,21 @@ class LabResultValueRulesTest {
         assertThatCode(() -> LabResultValueRules.requireValidValue("4.2", potassium())).doesNotThrowAnyException();
     }
 
+    /** Review of #903: a censored value is a number with a comparator, not text. */
+    @Test
+    void aNumericTestTakesACensoredValue() {
+        for (String censored : List.of("<0.5", ">200", "<20", "<= 0.1", ">=5", "≤0.5", "≥ 200")) {
+            assertThatCode(() -> LabResultValueRules.requireValidValue(censored, potassium()))
+                .as(censored).doesNotThrowAnyException();
+        }
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<abc", potassium()))
+            .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<-1", potassium()))
+            .isInstanceOf(BusinessException.class).hasFieldOrPropertyWithValue("messageKey", "lab.result.value.negative");
+        assertThatThrownBy(() -> LabResultValueRules.requireValidValue("<<5", potassium()))
+            .isInstanceOf(BusinessException.class);
+    }
+
     @Test
     void aNegativeValueIsAllowedWhenTheTestHasANegativeLimit() {
         LabTestDefinition baseExcess = new LabTestDefinition();

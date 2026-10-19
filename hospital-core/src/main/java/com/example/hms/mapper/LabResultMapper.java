@@ -29,6 +29,8 @@ public class LabResultMapper {
 
     public static final String FLAG_UNSPECIFIED = "UNSPECIFIED";
     public static final String FLAG_CRITICAL = "CRITICAL";
+    /** A result no range grades (a qualitative answer) that reads abnormal. */
+    public static final String FLAG_ABNORMAL = "ABNORMAL";
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
@@ -201,7 +203,20 @@ public class LabResultMapper {
                 && graded.getCriticalLow() == null && graded.getCriticalHigh() == null) {
             return FLAG_CRITICAL;
         }
+        // QA D286: no range grades a qualitative answer, so the range says
+        // UNSPECIFIED ("Non evalue"). The recorded flag, or - for a row stored
+        // before the write-time rule existed - the value itself, says abnormal.
+        // An explicit NORMAL someone recorded is kept.
+        if (FLAG_UNSPECIFIED.equals(flag) && (isAbnormalRecorded(result.getAbnormalFlag())
+                || (result.getAbnormalFlag() == null
+                    && com.example.hms.service.LabResultValueRules.isPositiveQualitative(result.getResultValue())))) {
+            return FLAG_ABNORMAL;
+        }
         return flag;
+    }
+
+    private static boolean isAbnormalRecorded(com.example.hms.enums.AbnormalFlag recorded) {
+        return recorded != null && recorded.severity() == com.example.hms.enums.AbnormalFlag.ABNORMAL;
     }
 
     /**

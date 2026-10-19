@@ -700,8 +700,11 @@ public class LabResultServiceImpl implements LabResultService {
                                                           boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
-            // Verified super-admin in global view: return all paged
-            return labResultRepository.findAll(pageable)
+            // Verified super-admin in global view. QA D211 (round 5): this
+            // branch applied neither the patientId filter nor released-only.
+            return labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
+                    patientId == null ? NO_HOSPITAL : patientId,
+                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE))
                 .map(labResultMapper::toResponseDTO);
         }
         Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
@@ -1289,7 +1292,7 @@ public class LabResultServiceImpl implements LabResultService {
         String severity = labResultMapper.severityFlagOf(labResult);
         com.example.hms.enums.InBasketPriority priority = switch (severity) {
             case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
-            case "LOW", "HIGH" -> com.example.hms.enums.InBasketPriority.URGENT;
+            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
             // QA D286: no range grades a qualitative answer; its recorded flag does.
             default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
                 ? com.example.hms.enums.InBasketPriority.URGENT

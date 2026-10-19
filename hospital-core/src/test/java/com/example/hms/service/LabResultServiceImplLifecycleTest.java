@@ -192,12 +192,15 @@ class LabResultServiceImplLifecycleTest {
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(roleValidator.hasRole(actorId, hospitalId, "ROLE_LAB_SCIENTIST")).thenReturn(true);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
-        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> resultOn(inv.getArgument(1), false));
+        // lenient: an amendment (updateLabResult) builds no new entity
+        org.mockito.Mockito.lenient().when(labResultMapper.toEntity(any(), any(), any()))
+            .thenAnswer(inv -> resultOn(inv.getArgument(1), false));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
         // lenient: the out-of-range test overrides this with HIGH
         org.mockito.Mockito.lenient().when(labResultMapper.toResponseDTO(any(LabResult.class)))
             .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
-        when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
+        org.mockito.Mockito.lenient()
+            .when(labReflexRuleRepository.findByTriggerTestDefinition_IdAndActiveTrue(testDefinition.getId()))
             .thenReturn(List.of());
     }
 
@@ -517,6 +520,37 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("QA D286 — a released positive answer is filed URGENT, not NORMAL")
+    void aReleasedPositiveAnswerIsFiledUrgent() {
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        com.example.hms.model.Staff orderingStaff = new com.example.hms.model.Staff();
+        orderingStaff.setUser(doctor);
+        order.setOrderingStaff(orderingStaff);
+        order.setStatus(LabOrderStatus.RESULTED);
+        LabResult last = resultOn(order, false);
+        last.setResultValue("Positif");
+        when(labResultRepository.findById(last.getId())).thenReturn(Optional.of(last));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(labOrderRepository.findStatusById(order.getId())).thenReturn(LabOrderStatus.RESULTED);
+        when(labOrderRepository.updateStatusFrom(
+                org.mockito.ArgumentMatchers.eq(order.getId()), any(), any())).thenReturn(1);
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(last));
+        when(labResultMapper.severityFlagOf(last)).thenReturn(LabResultMapper.FLAG_ABNORMAL);
+        when(labResultMapper.toResponseDTO(last)).thenReturn(LabResultResponseDTO.builder().build());
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> filed =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+
+        service.releaseLabResult(last.getId(), true, Locale.ENGLISH);
+
+        verify(inBasketService).createItemInNewTransaction(filed.capture());
+        assertThat(filed.getValue().getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.URGENT);
+    }
+
+    @Test
     @DisplayName("a preliminary the final has superseded no longer holds the order open")
     void aSupersededPreliminaryDoesNotBlockCompletion() {
         // What an analyzer leaves behind: two rows for one analyte, the
@@ -622,6 +656,64 @@ class LabResultServiceImplLifecycleTest {
     }
 
     // ── B5: auto-verification is opt-in ────────────────────────────────────
+
+    // ── Review of #903: the D286 / D288 rules are wired on every write path ──
+
+    @Test
+    @DisplayName("QA D286 — a hand-entered positive answer is stored ABNORMAL")
+    void aPositiveAnswerIsStoredAbnormalOnEntry() {
+        stubEntryPath();
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> {
+            LabResult entered = resultOn(inv.getArgument(1), false);
+            entered.setResultValue(((LabResultRequestDTO) inv.getArgument(0)).getResultValue());
+            return entered;
+        });
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("Positif");
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.ABNORMAL);
+    }
+
+    @Test
+    @DisplayName("QA D288 — a numeric test refuses text on entry and on amendment")
+    void aNumericTestRefusesTextOnEntryAndAmendment() {
+        // the refusal comes before the author, assignment and save steps
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        testDefinition.setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(3.5).maxValue(5.0).build())));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("abc");
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric");
+
+        LabResult existing = resultOn(order, false);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        assertThatThrownBy(() -> service.updateLabResult(existing.getId(), request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric");
+        verify(labResultRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D286 — amending a value to a positive answer flags it ABNORMAL")
+    void amendingToAPositiveAnswerFlagsItAbnormal() {
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("Positif");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getAbnormalFlag()).isEqualTo(com.example.hms.enums.AbnormalFlag.ABNORMAL);
+    }
 
     @Test
     @DisplayName("B5 — a normal result is NOT released on entry unless auto-verification is switched on")

@@ -813,6 +813,7 @@ class LabTestDefinitionServiceImplTest {
     @Test
     void processApproval_completeQaReview_success() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(UUID.randomUUID());
         User qm = userWithRole("ROLE_QUALITY_MANAGER");
         holdsRolesAtHospital(qm);
 
@@ -828,6 +829,26 @@ class LabTestDefinitionServiceImplTest {
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
             assertThat(definition.getReviewedById()).isEqualTo(qm.getId());
             assertThat(definition.getReviewedAt()).isNotNull();
+        }
+    }
+
+    /** QA D213 (round 5): a pre-V201 submission has no recorded submitter, so four-eyes could not hold. */
+    @Test
+    void processApproval_completeQaReview_unknownSubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(null);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("COMPLETE_QA_REVIEW")))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.submitterUnknown");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
         }
     }
 

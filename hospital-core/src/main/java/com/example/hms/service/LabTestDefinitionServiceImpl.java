@@ -401,6 +401,13 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "COMPLETE_QA_REVIEW" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                // QA D213 (round 5): a definition submitted before V201 has no
+                // recorded submitter, so the four-eyes check below passed for
+                // anyone, including the submitter. It is sent back (REJECT)
+                // and resubmitted, which records who submitted it.
+                if (definition.getSubmittedById() == null && !isSuperAdmin(currentUser)) {
+                    throw new BusinessException("lab.definition.submitterUnknown");
+                }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
                     "The QA review must be completed by someone other than the person who submitted it.");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
