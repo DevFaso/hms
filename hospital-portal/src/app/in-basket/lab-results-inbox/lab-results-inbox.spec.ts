@@ -99,6 +99,15 @@ describe('LabResultsInboxComponent', () => {
     expect(rendered).toEqual(['Potassium', 'Hémoglobine', 'Glycémie']);
   });
 
+  it('labels an ungraded non-numeric answer "qualitative", not "not evaluated" (QA D240)', () => {
+    expect(component.flagKey(item({ abnormalFlag: 'UNSPECIFIED', resultValue: 'Positif' }))).toBe(
+      'inBasket.labQualitative',
+    );
+    expect(component.flagKey(item({ abnormalFlag: 'UNSPECIFIED', resultValue: '14.2' }))).toBe(
+      'inBasket.labUnknown',
+    );
+  });
+
   it('never labels an unrecognised grade "Normal"', () => {
     // AbnormalFlag.severity() cannot produce this today, but a second
     // producer of DoctorResultQueueItemDTO could — and an out-of-range

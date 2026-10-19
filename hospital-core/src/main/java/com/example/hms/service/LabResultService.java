@@ -49,6 +49,16 @@ public interface LabResultService {
 
     Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale);
 
+    /**
+     * QA D211: the staff list. {@code includeUnreleased} is true only for
+     * laboratory staff; {@code patientId} (nullable) narrows to one patient.
+     */
+    Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                 UUID patientId, boolean includeUnreleased);
+
+    /** QA D211: an unreleased result is not found for a non-laboratory reader. */
+    LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased);
+
     LabResultResponseDTO updateLabResult(UUID id, LabResultRequestDTO requestDTO, Locale locale);
 
     void deleteLabResult(UUID id, Locale locale);

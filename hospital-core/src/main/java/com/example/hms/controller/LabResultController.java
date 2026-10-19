@@ -89,8 +89,10 @@ public class LabResultController {
     @Operation(summary = "Get Lab Result by ID", description = "Fetches a lab result by its ID.")
     public ResponseEntity<LabResultResponseDTO> getLabResultById(
             @PathVariable UUID id,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.getLabResultById(id, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        return ResponseEntity.ok(labResultService.getLabResultById(id, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping
@@ -98,8 +100,13 @@ public class LabResultController {
     @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated list of lab results. Hospital-scoped for tenant roles; SUPER_ADMIN sees results across all hospitals.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
+            @RequestParam(name = "patientId", required = false) UUID patientId,
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        // QA D211: the patientId filter was ignored, and a non-laboratory
+        // reader saw unreleased values here (D160 only fixed the per-patient read).
+        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(
+            pageable, locale, patientId, PatientLabResultController.isLaboratoryStaff(auth))));
     }
 
     @GetMapping("/pending-release")

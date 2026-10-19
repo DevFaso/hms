@@ -82,10 +82,54 @@ public class InventoryServiceImpl implements InventoryService {
             .ifPresent(existing -> {
                 throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
             });
+        // QA D208: the same drug under another catalogue row (same molecule,
+        // strength and form) is the same stock item; a second one splits the
+        // count and doubles every picker.
+        String key = sameDrugKey(medication);
+        if (key != null) {
+            boolean twin = inventoryItemRepository.findByPharmacyIdAndActiveTrue(pharmacy.getId(),
+                    org.springframework.data.domain.Pageable.unpaged()).stream()
+                .anyMatch(existing -> key.equals(sameDrugKey(existing.getMedicationCatalogItem())));
+            if (twin) {
+                throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
+            }
+        }
+        // QA D208: stock enters through a goods receipt (lot + ledger), never
+        // as an opening number typed on the item.
+        if (dto.getQuantityOnHand() != null && dto.getQuantityOnHand().signum() != 0) {
+            throw new BusinessException(
+                "A new inventory item starts at zero; receive stock through a goods receipt with a lot.");
+        }
 
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
+        entity.setQuantityOnHand(java.math.BigDecimal.ZERO);
         InventoryItem saved = inventoryItemRepository.save(entity);
         return inventoryItemMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D208: molecule + strength + form, accent- and case-insensitive, or
+     * null when the catalogue row does not name its molecule.
+     */
+    private static String sameDrugKey(MedicationCatalogItem medication) {
+        if (medication == null) {
+            return null;
+        }
+        String molecule = medication.getGenericName() != null && !medication.getGenericName().isBlank()
+            ? medication.getGenericName() : medication.getNameFr();
+        if (molecule == null || molecule.isBlank()) {
+            return null;
+        }
+        return fold(molecule) + "|" + fold(medication.getStrength()) + "|" + fold(medication.getStrengthUnit())
+            + "|" + fold(medication.getForm());
+    }
+
+    private static String fold(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "").trim().toLowerCase(java.util.Locale.ROOT).replaceAll("\\s+", " ");
     }
 
     @Override
@@ -122,13 +166,16 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryItemResponseDTO updateInventoryItem(UUID id, InventoryItemRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(id);
         enforceHospitalScope(item.getPharmacy());
+        // QA D208: a quantity typed on the item moved stock with no ledger
+        // row. A count correction is an ADJUSTMENT transaction (stock
+        // adjustment screen), which writes the ledger and needs a reason.
+        if (dto.getQuantityOnHand() != null && (item.getQuantityOnHand() == null
+                || dto.getQuantityOnHand().compareTo(item.getQuantityOnHand()) != 0)) {
+            throw new BusinessException(
+                "The quantity on hand changes only through a stock transaction (receipt or adjustment).");
+        }
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
-        if (dto.getQuantityOnHand() != null) {
-            // A count correction, applied atomically (#825 round 5).
-            inventoryItemRepository.setOnHand(saved.getId(), dto.getQuantityOnHand(), LocalDateTime.now(ZoneId.systemDefault()));
-            refreshIfManaged(saved);
-        }
         return inventoryItemMapper.toResponseDTO(saved);
     }
 

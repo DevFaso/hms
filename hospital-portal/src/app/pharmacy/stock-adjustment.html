@@ -199,7 +199,7 @@
               >
                 <option value="">{{ 'PHARMACY.SELECT_REASON_OPTION' | translate }}</option>
                 @for (code of adjustmentReasonCodes; track code) {
-                  <option [value]="code">{{ code }}</option>
+                  <option [value]="code">{{ 'PHARMACY.ADJ_REASON_' + code | translate }}</option>
                 }
               </select>
             </div>
@@ -324,7 +324,7 @@
                   —
                 }
               </td>
-              <td class="reason-cell">{{ tx.reason ?? '—' }}</td>
+              <td class="reason-cell">{{ reasonLabel(tx) }}</td>
               <td>{{ tx.createdAt | date: 'medium' }}</td>
               <td>
                 {{ tx.performedByName ?? '—' }}

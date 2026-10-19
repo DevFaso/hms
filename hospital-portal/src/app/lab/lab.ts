@@ -30,6 +30,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
+import { shortOrderCode } from '../shared/lab/order-code';
 
 @Component({
   selector: 'app-lab',
@@ -40,6 +41,8 @@ import { currentLocale } from '../shared/i18n/app-locale';
   styleUrl: './lab.scss',
 })
 export class LabComponent implements OnInit {
+  /** QA D227: a readable order code, not the raw id. */
+  readonly shortOrderCode = shortOrderCode;
   private readonly labService = inject(LabService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);

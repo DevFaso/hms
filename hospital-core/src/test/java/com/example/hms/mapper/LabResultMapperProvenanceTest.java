@@ -32,8 +32,15 @@ class LabResultMapperProvenanceTest {
         return result;
     }
 
+    /**
+     * Critical limits far outside the range: these tests are about which
+     * range grades a value, and QA D206 labels an above-range value on a
+     * range with NO critical limits CRITICAL (that value is paged).
+     */
     private static LabTestReferenceRange range(double min, double max, String unit) {
-        return LabTestReferenceRange.builder().minValue(min).maxValue(max).unit(unit).build();
+        double span = max - min;
+        return LabTestReferenceRange.builder().minValue(min).maxValue(max).unit(unit)
+            .criticalLow(min - 10 * span).criticalHigh(max + 10 * span).build();
     }
 
     @Test

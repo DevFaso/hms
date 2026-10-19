@@ -2881,4 +2881,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V201: lab.lab_test_definitions.submitted_by_id - who submitted the
+         definition for QA (QA D213: distinct reviewer and approver).
+         Single nullable ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V201-lab-test-definition-submitted-by" author="hms-team" runOnChange="false">
+        <sqlFile path="V201__lab_test_definition_submitted_by.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

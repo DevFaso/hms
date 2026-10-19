@@ -434,6 +434,18 @@ describe('LabReleaseWorklistComponent', () => {
     expect(component.severityKey(component.rows()[0])).toBe('HIGH');
   });
 
+  it('labels a CRITICAL result "critical", not "not flagged" (QA D212)', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'CRITICAL', unitMismatch: false })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('CRITICAL');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_CRITICAL');
+    expect(row?.querySelector('.flag-critical')).not.toBeNull();
+  });
+
   it('flags a critical result on the queue', () => {
     setup(['ROLE_LAB_DIRECTOR']);
     fixture.detectChanges();

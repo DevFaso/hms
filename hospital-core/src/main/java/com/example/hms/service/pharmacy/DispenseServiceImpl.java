@@ -82,6 +82,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final PatientRepository patientRepository;
     private final PharmacyRepository pharmacyRepository;
     private final StockLotRepository stockLotRepository;
+    /** QA D241: the dispense lot picker's rows. */
+    private final com.example.hms.mapper.pharmacy.StockLotMapper stockLotMapper;
     private final InventoryItemRepository inventoryItemRepository;
     private final StockTransactionRepository stockTransactionRepository;
     private final UserRepository userRepository;
@@ -1039,6 +1041,34 @@ public class DispenseServiceImpl implements DispenseService {
             dto.setPharmacyName(dispense.getPharmacy().getName());
         }
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> listDispensableLots(
+            UUID prescriptionId, UUID pharmacyId) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // A fill happens at one hospital's dispensary; there is no global one.
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .filter(rx -> rx.getHospital() != null && hospitalId.equals(rx.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+        enforceHospitalScope(pharmacy);
+        // Only the prescribed drug, by the same rule the DRUG check applies
+        // to the lot at the counter: the picker used to list every lot of the
+        // pharmacy, morphine included, for a paracetamol order.
+        return stockLotRepository.findByInventoryItemPharmacyId(pharmacy.getId(), Pageable.unpaged()).stream()
+                .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity().signum() > 0)
+                .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
+                        && lot.getInventoryItem().getMedicationCatalogItem() != null
+                        && dispenseVerificationService.matchesPrescribedDrug(prescription,
+                                lot.getInventoryItem().getMedicationCatalogItem()))
+                .map(stockLotMapper::toResponseDTO)
+                .toList();
     }
 
     @Override

@@ -189,6 +189,11 @@
   background: var(--color-surface-alt, #f3f4f6);
   color: #374151;
 
+  &.flag-critical {
+    background: #991b1b;
+    color: #ffffff;
+  }
+
   &.flag-high {
     background: #fee2e2;
     color: #991b1b;

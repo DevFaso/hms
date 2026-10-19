@@ -619,7 +619,14 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public LabResultResponseDTO getLabResultById(UUID id, Locale locale) {
+        return getLabResultById(id, locale, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
+            .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
@@ -669,13 +676,21 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
+        return getLabResultsPage(pageable, locale, null, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                        UUID patientId, boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
             // Verified super-admin in global view: return all paged
             return labResultRepository.findAll(pageable)
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId,
+        Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
+            !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);

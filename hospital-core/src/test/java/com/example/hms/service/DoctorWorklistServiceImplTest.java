@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ConsultationStatus;
@@ -140,8 +139,8 @@ class DoctorWorklistServiceImplTest {
         // Critical labs (B15): CRITICAL, unacknowledged, filed inside the
         // window — the all-time count is gone from the repository, so the stub
         // IS the proof.
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), eq(AbnormalFlag.CRITICAL), any(LocalDateTime.class))).thenReturn(5L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(5L);
 
         // Waiting long: 2 encounters, 1 > 30 min
         Encounter longWait = mock(Encounter.class);
@@ -181,8 +180,8 @@ class DoctorWorklistServiceImplTest {
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
         org.mockito.ArgumentCaptor<LocalDateTime> floor = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), eq(AbnormalFlag.CRITICAL), floor.capture())).thenReturn(2L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), floor.capture())).thenReturn(2L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
@@ -220,8 +219,8 @@ class DoctorWorklistServiceImplTest {
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<java.util.Collection<LabOrderStatus>> statuses =
                 org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(0L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), statuses.capture())).thenReturn(4L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
@@ -252,8 +251,8 @@ class DoctorWorklistServiceImplTest {
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(0L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());

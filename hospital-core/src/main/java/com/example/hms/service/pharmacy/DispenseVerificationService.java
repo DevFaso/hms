@@ -197,7 +197,7 @@ public class DispenseVerificationService {
      * prescription written through the catalogue carries one and a
      * prescription imported over HL7 may carry the other.
      */
-    private boolean matchesPrescribedDrug(Prescription rx, MedicationCatalogItem item) {
+    public boolean matchesPrescribedDrug(Prescription rx, MedicationCatalogItem item) {
         String prescribedCode = normalize(rx.getMedicationCode());
         if (!prescribedCode.isEmpty()) {
             return prescribedCode.equals(normalize(item.getCode()))
