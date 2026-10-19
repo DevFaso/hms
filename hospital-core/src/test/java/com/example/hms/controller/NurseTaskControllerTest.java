@@ -223,7 +223,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.administerMedication(taskId, request, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve nurse assignment");
+            .extracting("messageKey").isEqualTo("nurse.assignment.unresolvedForAdministration");
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -290,7 +290,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.verifyMedication(taskId, request, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve nurse identity");
+            .extracting("messageKey").isEqualTo("nurse.identity.unresolved");
     }
 
     @Test
@@ -503,7 +503,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.getDueVitals(null, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Hospital context required");
+            .extracting("messageKey").isEqualTo("nurse.hospital.required");
     }
 
     @Test
@@ -540,7 +540,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.getDueVitals(null, "me", null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve user identity");
+            .extracting("messageKey").isEqualTo("nurse.assignee.meUnresolved");
     }
 
     @Test
@@ -548,6 +548,6 @@ class NurseTaskControllerTest {
         // Random string — not "me", "all", or blank → throws BusinessException
         assertThatThrownBy(() -> controller.getDueVitals(null, "nurse123", null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Invalid assignee value");
+            .extracting("messageKey").isEqualTo("nurse.assignee.invalid");
     }
 }

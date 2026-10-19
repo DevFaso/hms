@@ -45,6 +45,7 @@ import java.util.Map;
 import java.util.Set;
 import com.example.hms.enums.SensitivityCategory;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class AdmissionServiceImplTest {
 
@@ -102,7 +103,7 @@ class AdmissionServiceImplTest {
 
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessageContaining("admission.provider.physician.required");
+            .hasMessageContaining("The admitting and attending providers must be physicians at this hospital.");
         verify(admissionRepository, never()).save(any());
     }
 

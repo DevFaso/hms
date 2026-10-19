@@ -167,6 +167,7 @@
     "LAB_RELEASE.FLAG_NORMAL": "Normal",
     "LAB_RESULTS.SIGNATURE": "Signature",
     "LAB_RESULTS.SIGNATURE_NOTES": "Notes",
+    "LAB_RESULTS.SIGNIFICANCE_STABLE": "Stable",
     "LAB_STAFF.ACTIONS": "Actions",
     "LAB_TEST_CONFIG.ACTIONS": "Actions",
     "LAB_TEST_CONFIG.DESCRIPTION": "Description",

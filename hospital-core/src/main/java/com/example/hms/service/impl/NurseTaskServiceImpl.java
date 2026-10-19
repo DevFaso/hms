@@ -341,7 +341,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         NurseMedicationAdministrationRequestDTO request
     ) {
         if (medicationTaskId == null) {
-            throw new BusinessException("Medication task identifier is required.");
+            throw new BusinessException("nurse.medicationTask.idRequired");
         }
         String normalizedStatus = normalizeAdministrationStatus(request);
         MedicationAdministrationStatus marStatus = MedicationAdministrationStatus.valueOf(normalizedStatus);
@@ -410,10 +410,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         UUID marId, UUID nurseUserId, UUID hospitalId, MarVerificationRequestDTO request
     ) {
         if (marId == null) {
-            throw new BusinessException("MAR identifier is required for verification.");
+            throw new BusinessException("nurse.mar.idRequiredForVerification");
         }
         if (request == null) {
-            throw new BusinessException("Verification request body is required.");
+            throw new BusinessException("nurse.mar.verificationBodyRequired");
         }
 
         MedicationAdministrationRecord mar = loadOrMaterializeMar(marId, nurseUserId, hospitalId);
@@ -695,7 +695,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // silently returning [] for a typo would read as "no handoffs".
         String effectiveStatus = status == null || status.isBlank() ? STATUS_PENDING : status.trim().toUpperCase();
         if (!STATUS_PENDING.equals(effectiveStatus) && !STATUS_COMPLETED.equals(effectiveStatus)) {
-            throw new BusinessException("Unknown handoff status: " + status);
+            throw new BusinessException("nurse.handoff.unknownStatus", String.valueOf(status));
         }
 
         // Scan page is larger than the display limit so the assignee filter
@@ -719,7 +719,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("nurse.patient.notRegisteredHere");
         }
 
         // QA D235: a handoff type from the fixed list, not free text.
@@ -747,10 +747,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId) {
         if (handoffId == null) {
-            throw new BusinessException("Handoff identifier is required.");
+            throw new BusinessException("nurse.handoff.idRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context required to complete handoff.");
+            throw new BusinessException("nurse.handoff.hospitalRequired");
         }
         // ── Tenant isolation: id + hospital lookup — a handoff from another
         // hospital reads as not-found. ──
@@ -1256,7 +1256,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String normalized = request.getStatus().trim().toUpperCase(Locale.ROOT);
         if (normalized.isBlank()) return DEFAULT_ADMINISTRATION_STATUS;
         if (!SUPPORTED_ADMINISTRATION_STATUSES.contains(normalized)) {
-            throw new BusinessException("Unsupported medication administration status: " + request.getStatus());
+            throw new BusinessException("nurse.mar.unsupportedStatus", String.valueOf(request.getStatus()));
         }
         return normalized;
     }
@@ -1273,7 +1273,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (scopedHospitalId == null || entityHospital == null) return;
         if (!scopedHospitalId.equals(entityHospital.getId())) {
             throw new BusinessException(
-                "Resource does not belong to the scoped hospital.");
+                "nurse.resource.otherHospital");
         }
     }
 
@@ -1419,9 +1419,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public void captureVitals(UUID patientId, UUID nurseUserId, UUID hospitalId,
                               NurseVitalCaptureRequestDTO request) {
-        if (patientId == null) throw new BusinessException("Patient ID required.");
-        if (hospitalId == null) throw new BusinessException("Hospital context required.");
-        if (request == null) throw new BusinessException("Vital sign data required.");
+        if (patientId == null) throw new BusinessException("nurse.patient.idRequired");
+        if (hospitalId == null) throw new BusinessException("nurse.hospital.required");
+        if (request == null) throw new BusinessException("nurse.vitals.required");
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
@@ -1429,7 +1429,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("nurse.patient.notRegisteredHere");
         }
 
         PatientVitalSign vital = PatientVitalSign.builder()
@@ -1622,7 +1622,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, request.getPatientId()));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("nurse.patient.notRegisteredHere");
         }
 
         String createdByName = resolveNurseName(nurseUserId);
@@ -1685,7 +1685,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Notification notification = notificationRepository.findById(itemId)
             .orElseThrow(() -> new ResourceNotFoundException("notification.notFound", itemId));
         if (!notification.getRecipientUsername().equals(nurseUsername)) {
-            throw new BusinessException("Access denied: notification does not belong to this nurse.");
+            throw new BusinessException("nurse.notification.otherNurse");
         }
         notification.setRead(true);
         notificationRepository.save(notification);
@@ -1701,7 +1701,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("nurse.patient.notRegisteredHere");
         }
 
         User author = userRepository.findById(nurseUserId)

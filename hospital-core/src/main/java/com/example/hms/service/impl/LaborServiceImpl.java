@@ -122,7 +122,7 @@ public class LaborServiceImpl implements LaborService {
     public LaborEpisodeResponseDTO startEpisode(UUID patientId, UUID recorderUserId, LaborEpisodeRequestDTO request) {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (request == null) {
-            throw new BusinessException("Labor episode payload is required.");
+            throw new BusinessException("maternity.labor.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -131,7 +131,7 @@ public class LaborServiceImpl implements LaborService {
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
 
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
-            throw new BusinessException("An active labor episode already exists for this patient at this hospital.");
+            throw new BusinessException("maternity.labor.alreadyActive");
         }
 
         String riskNotes = resolveRecentDeliveryOverride(patientId, request);
@@ -189,7 +189,7 @@ public class LaborServiceImpl implements LaborService {
     public List<LaborEpisodeResponseDTO> getEpisodes(UUID patientId, UUID hospitalId, int limit) {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context required to list labor episodes.");
+            throw new BusinessException("maternity.labor.hospitalRequiredToList");
         }
         int effectiveLimit = Math.clamp(limit <= 0 ? 10 : limit, 1, 50);
         // E9 #59d — labour episodes follow the patient across the readable
@@ -217,11 +217,11 @@ public class LaborServiceImpl implements LaborService {
     public PartographEntryResponseDTO addEntry(UUID patientId, UUID episodeId, UUID recorderUserId,
                                                PartographEntryRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Partograph entry payload is required.");
+            throw new BusinessException("maternity.partograph.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("Partograph entries can only be added to an active labor episode.");
+            throw new BusinessException("maternity.partograph.laborNotActive");
         }
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
@@ -281,14 +281,14 @@ public class LaborServiceImpl implements LaborService {
     public DeliveryRecordResponseDTO recordDelivery(UUID patientId, UUID episodeId, UUID recorderUserId,
                                                     DeliveryRecordRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Delivery record payload is required.");
+            throw new BusinessException("maternity.delivery.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("Delivery can only be recorded for an active labor episode.");
+            throw new BusinessException("maternity.delivery.laborNotActive");
         }
         if (deliveryRecordRepository.existsByEpisode_Id(episode.getId())) {
-            throw new BusinessException("A delivery record already exists for this labor episode.");
+            throw new BusinessException("maternity.delivery.alreadyRecorded");
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
@@ -576,7 +576,7 @@ public class LaborServiceImpl implements LaborService {
         if (registration != null && registration.getHospital() != null) {
             return registration.getHospital();
         }
-        throw new BusinessException("Hospital context required to record labor data.");
+        throw new BusinessException("maternity.labor.hospitalRequiredToRecord");
     }
 
     private Staff resolveStaff(UUID staffId, Hospital hospital) {
@@ -587,7 +587,7 @@ public class LaborServiceImpl implements LaborService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !hospital.getId().equals(staff.getHospital().getId())) {
-            throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+            throw new BusinessException("maternity.recorder.hospitalMismatch");
         }
         return staff;
     }

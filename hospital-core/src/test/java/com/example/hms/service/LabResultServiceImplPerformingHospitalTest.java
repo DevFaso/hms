@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
  * signs the result of an order sent to it — judged by its roles THERE — and
  * the ordering hospital reads it; a third hospital gets 404 throughout.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplPerformingHospitalTest {
 

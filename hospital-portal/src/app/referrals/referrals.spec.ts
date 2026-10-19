@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -315,5 +315,32 @@ describe('ReferralsComponent', () => {
         .withContext(`badge count for ${tab} tab must equal filtered row count`)
         .toBe(component.filtered().length);
     }
+  });
+
+  it('QA D243: the urgency options are translated, not raw enum names', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          REFERRAL_URGENCY: {
+            ROUTINE: 'Routine',
+            PRIORITY: 'Prioritaire',
+            URGENT: 'Urgente',
+            EMERGENCY: 'Urgence',
+          },
+        },
+      },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    flushInitRequests();
+    component.openCreate();
+    fixture.detectChanges();
+    httpMock.match(() => true).forEach((r) => r.flush([]));
+    fixture.detectChanges();
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#ref-urgency option'),
+    ).map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Routine', 'Prioritaire', 'Urgente', 'Urgence']);
   });
 });

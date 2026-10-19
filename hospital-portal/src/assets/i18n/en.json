@@ -3048,6 +3048,11 @@
     "CURRENT_RESULT": "Current result",
     "PREVIOUS_RESULT": "Previous result",
     "BASELINE": "Baseline (no previous result)",
+    "SIGNIFICANCE_BASELINE": "Baseline",
+    "SIGNIFICANCE_STABLE": "Stable",
+    "SIGNIFICANCE_MINOR": "Minor change",
+    "SIGNIFICANCE_SIGNIFICANT": "Significant change",
+    "SIGNIFICANCE_CRITICAL": "Critical change",
     "DAYS_BETWEEN": "days between",
     "READ_BACK": "Read back",
     "READ_BACK_PROMPT": "Repeat the critical value you were given for",
@@ -6353,6 +6358,7 @@
     "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Day shown",
     "ACCEPT_OFFER": "Accept",
     "ACCEPT_OFFER_FAILED": "Failed to accept the offer",
     "ACTIVE_COVERAGE": "Active Coverage",

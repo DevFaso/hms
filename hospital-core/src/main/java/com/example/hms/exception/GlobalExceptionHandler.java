@@ -558,6 +558,30 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * {@link UnauthorizedAccessException} carries {@code @ResponseStatus(FORBIDDEN)},
+     * but the {@code RuntimeException} catch-all below wins over the annotation,
+     * so every one of them answered a 500 "unexpected error" (QA D226). A keyed
+     * refusal is resolved in the request locale; a free sentence stays in the
+     * log only, since it can carry a username or an id.
+     */
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Object> handleUnauthorizedAccess(UnauthorizedAccessException ex, WebRequest req) {
+        String raw = ex.getMessage();
+        if (com.example.hms.utility.MessageUtil.isMessageKey(raw)) {
+            log.warn("Access refused: {}", raw);
+            return buildErrorResponse(HttpStatus.FORBIDDEN,
+                com.example.hms.utility.MessageUtil.resolveOrRaw(raw, ex.getArgs()), req);
+        }
+        if (log.isWarnEnabled()) {
+            log.warn("Access refused at path {}", req.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            localized("error.access.denied", "Access denied"), req);
+        body.put(FIELD_CODE, CODE_ACCESS_DENIED);
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
      * 403. The message is the literal "Access denied" unless the thrower opted
      * in with {@link ClientSafeAccessDeniedException}, whose contract is that
      * its message is written for the caller and discloses nothing across

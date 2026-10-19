@@ -64,6 +64,7 @@ import static org.mockito.Mockito.when;
  * laboratory, and the 404-not-403 scope predicate that admits the ordering
  * hospital and the performing hospital while a third hospital sees nothing.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabOrderServiceImplPerformingHospitalTest {
 

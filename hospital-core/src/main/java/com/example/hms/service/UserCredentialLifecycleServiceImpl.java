@@ -150,12 +150,12 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             return;
         }
         if (payload.stream().filter(dto -> dto != null && dto.getMethod() == MfaMethodType.TOTP).count() > 1) {
-            throw new IllegalArgumentException("At most one TOTP authenticator can be listed.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.mfa.totpOnce"));
         }
         Set<String> keys = new java.util.HashSet<>();
         for (UserMfaEnrollmentRequestDTO dto : payload) {
             if (dto != null && dto.getMethod() != null && !keys.add(mfaKey(dto))) {
-                throw new IllegalArgumentException("An MFA method and channel can be listed only once.");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.mfa.methodOnce"));
             }
         }
     }
@@ -304,7 +304,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         if (contact.isVerified()) {
-            throw new IllegalStateException("Recovery contact is already verified");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.alreadyVerified"));
         }
 
         // Generate 6-digit code
@@ -337,11 +337,11 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         }
 
         if (contact.isVerified()) {
-            throw new IllegalStateException("Recovery contact is already verified");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.recovery.alreadyVerified"));
         }
 
         if (contact.getVerificationCodeHash() == null) {
-            throw new IllegalStateException("No verification code has been sent. Please request a new code.");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.verification.noCodeSent"));
         }
 
         if (contact.getVerificationAttempts() >= MAX_VERIFICATION_ATTEMPTS) {
@@ -350,7 +350,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             contact.setVerificationCodeExpiresAt(null);
             contact.setVerificationAttempts(0);
             recoveryContactRepository.save(contact);
-            throw new IllegalStateException("Too many failed attempts. Please request a new verification code.");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.verification.tooManyAttempts"));
         }
 
         if (contact.getVerificationCodeExpiresAt() != null
@@ -359,7 +359,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             contact.setVerificationCodeExpiresAt(null);
             contact.setVerificationAttempts(0);
             recoveryContactRepository.save(contact);
-            throw new IllegalStateException("Verification code has expired. Please request a new code.");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.verification.expired"));
         }
 
         contact.setVerificationAttempts(contact.getVerificationAttempts() + 1);
@@ -367,7 +367,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
         if (!passwordEncoder.matches(code, contact.getVerificationCodeHash())) {
             recoveryContactRepository.save(contact);
             int remaining = MAX_VERIFICATION_ATTEMPTS - contact.getVerificationAttempts();
-            throw new IllegalArgumentException("Invalid verification code. " + remaining + " attempts remaining.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.verification.invalidCode", remaining));
         }
 
         // Code matches — mark as verified

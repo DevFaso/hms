@@ -80,7 +80,7 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
                 pharmacy.getId(), medication.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
+                throw new BusinessException("stock.inventory.duplicate");
             });
         // QA D208: the same drug under another catalogue row (same molecule,
         // strength and form) is the same stock item; a second one splits the
@@ -91,14 +91,13 @@ public class InventoryServiceImpl implements InventoryService {
                     org.springframework.data.domain.Pageable.unpaged()).stream()
                 .anyMatch(existing -> key.equals(sameDrugKey(existing.getMedicationCatalogItem())));
             if (twin) {
-                throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
+                throw new BusinessException("stock.inventory.duplicate");
             }
         }
         // QA D208: stock enters through a goods receipt (lot + ledger), never
         // as an opening number typed on the item.
         if (dto.getQuantityOnHand() != null && dto.getQuantityOnHand().signum() != 0) {
-            throw new BusinessException(
-                "A new inventory item starts at zero; receive stock through a goods receipt with a lot.");
+            throw new BusinessException("stock.inventory.openingQuantity");
         }
 
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
@@ -171,8 +170,7 @@ public class InventoryServiceImpl implements InventoryService {
         // adjustment screen), which writes the ledger and needs a reason.
         if (dto.getQuantityOnHand() != null && (item.getQuantityOnHand() == null
                 || dto.getQuantityOnHand().compareTo(item.getQuantityOnHand()) != 0)) {
-            throw new BusinessException(
-                "The quantity on hand changes only through a stock transaction (receipt or adjustment).");
+            throw new BusinessException("stock.inventory.quantityViaTransaction");
         }
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
@@ -386,7 +384,7 @@ public class InventoryServiceImpl implements InventoryService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("stock.user.unknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

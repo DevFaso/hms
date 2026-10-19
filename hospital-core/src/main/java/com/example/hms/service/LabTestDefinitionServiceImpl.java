@@ -94,7 +94,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertOwnAssignment(currentUser, assignment);
             hospital = assignment.getHospital();
             if (hospital == null) {
-                throw new IllegalStateException("Assignment is not linked to a hospital");
+                throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.assignmentNoHospital"));
             }
             assertWithinActiveScope(currentUser, hospital.getId());
             assertUserCanManageHospitalId(currentUser, hospital.getId());
@@ -199,7 +199,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         // definition off, never on (QA D159, same bypass as the ranges).
         if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
             throw new IllegalStateException(
-                "A lab test definition is activated through its approval workflow, not by editing it.");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.activateViaApproval"));
         }
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
@@ -421,8 +421,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
                 // QA D213: a live test with no reference range grades nothing.
                 if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
-                    throw new BusinessException(
-                        "A lab test definition cannot be activated without at least one reference range.");
+                    throw new BusinessException("lab.definition.rangesRequired");
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
@@ -433,7 +432,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
                     LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
                 if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
-                    throw new IllegalArgumentException("A rejection reason is required.");
+                    throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.rejectionReasonRequired"));
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
                 definition.setRejectionReason(dto.getRejectionReason());
@@ -445,7 +444,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
                 definition.setActive(false);
             }
-            default -> throw new IllegalArgumentException("Unknown approval action: " + dto.getAction());
+            default -> throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.unknownAction", String.valueOf(dto.getAction())));
         }
 
         LabTestDefinition saved = repository.save(definition);
@@ -528,17 +527,15 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             ? List.of() : definition.getReferenceRanges();
         List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
         if (!current.equals(next)) {
-            throw new IllegalStateException(
-                "The reference ranges of a definition that is " + definition.getApprovalStatus()
-                + " cannot be changed without a new approval: retire it and submit a new definition for review.");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.rangesLocked", String.valueOf(definition.getApprovalStatus())));
         }
     }
 
     private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
         if (!allowed.contains(definition.getApprovalStatus())) {
-            throw new IllegalStateException(
-                "Action not allowed from status: " + definition.getApprovalStatus()
-                + ". Allowed: " + allowed);
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.actionNotAllowed", String.valueOf(definition.getApprovalStatus()), String.valueOf(allowed)));
         }
     }
 
