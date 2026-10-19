@@ -2479,6 +2479,7 @@
     "LOAD_FAILED": "Failed to load feature flags",
     "NEW_FLAG": "New Flag",
     "NO_FLAGS": "No feature flags found",
+    "NO_FLAGS_MATCHING": "No feature flag matches “{{query}}”",
     "OFF": "OFF",
     "ON": "ON",
     "OVERRIDE_REMOVED": "Override removed for {{key}}",

@@ -51,7 +51,8 @@ class HospitalLifecycleProviderRestoreTest {
 
     private HospitalLifecycleServiceImpl service() {
         return new HospitalLifecycleServiceImpl(hospitalRepository, auditEventLogService, lifecycleStatusService,
-            mfaService, Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), ZoneOffset.UTC), verificationRepository);
+            mfaService, Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), ZoneOffset.UTC), verificationRepository,
+            org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class));
     }
 
     @ParameterizedTest(name = "an ARCHIVED provider whose verification is {0} comes back SUSPENDED and inactive, never ACTIVE")

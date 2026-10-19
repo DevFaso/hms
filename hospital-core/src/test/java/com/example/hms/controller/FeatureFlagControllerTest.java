@@ -56,4 +56,17 @@ class FeatureFlagControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.hospitalPortfolio").value(false));
     }
+
+    @Test
+    void refusesAnUnknownFlagKey_D245() throws Exception {
+        when(featureFlagService.isKnownFlagKey("typo-flag")).thenReturn(false);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .put("/feature-flags/typo-flag")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"enabled\":true}"))
+            .andExpect(status().isBadRequest());
+        org.mockito.Mockito.verify(featureFlagService, org.mockito.Mockito.never())
+            .upsertOverride(any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any(), any(), any());
+    }
 }

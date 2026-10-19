@@ -37,7 +37,7 @@ class ChargebackReportControllerIT {
     private TestRestTemplate restTemplate;
 
     @Test
-    @DisplayName("GET /api/super-admin/cost/per-tenant returns 401 or 404 when flag off")
+    @DisplayName("GET /api/super-admin/cost/per-tenant returns 401 or 204 when flag off")
     void perTenantRejectedWhenFlagOff() {
         HttpHeaders headers = new HttpHeaders();
         headers.set("Accept", "application/json");
@@ -49,8 +49,8 @@ class ChargebackReportControllerIT {
         );
         // Unauthenticated callers stop at Spring Security with 401; an
         // authenticated SUPER_ADMIN would land on the controller and
-        // receive 404 because the flag is off. Either proves the
+        // receive 204 because the flag is off (D248). Either proves the
         // chargeback rollup is not surfacing data.
-        assertThat(response.getStatusCode().value()).isIn(401, 404);
+        assertThat(response.getStatusCode().value()).isIn(401, 204);
     }
 }

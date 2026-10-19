@@ -65,4 +65,7 @@ public interface FeatureFlagService {
      * console, ordered by flag key.
      */
     List<FeatureFlagOverrideResponseDTO> listOverrides();
+
+    /** True when {@code flagKey} names a flag the platform knows (D245). */
+    boolean isKnownFlagKey(String flagKey);
 }

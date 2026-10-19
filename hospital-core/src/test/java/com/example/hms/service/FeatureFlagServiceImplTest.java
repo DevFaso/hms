@@ -45,7 +45,8 @@ class FeatureFlagServiceImplTest {
             .thenReturn(true);
         auditEventLogService = mock(AuditEventLogService.class);
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService,
+            org.mockito.Mockito.mock(com.example.hms.repository.SubscriptionPlanRepository.class));
     }
 
     @Test
@@ -191,5 +192,17 @@ class FeatureFlagServiceImplTest {
 
         verify(overrideRepository).delete(existing);
         assertThat(flags).doesNotContainKey("beta-feature");
+    }
+
+    @Test
+    void knowsConfiguredAndOverriddenKeysOnly_D245() {
+        properties.getDefaults().put("departmentGovernance", true);
+        FeatureFlagOverride row = FeatureFlagOverride.builder().flagKey("legacy-row").build();
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(row));
+
+        assertThat(service.isKnownFlagKey(" departmentGovernance ")).isTrue();
+        assertThat(service.isKnownFlagKey("LEGACY-ROW")).isTrue();
+        assertThat(service.isKnownFlagKey("anything-at-all")).isFalse();
+        assertThat(service.isKnownFlagKey("  ")).isFalse();
     }
 }

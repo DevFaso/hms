@@ -31,10 +31,12 @@ public class HospitalLifecycleResponseDTO {
 
     private Instant suspendedAt;
     private UUID suspendedBy;
+    private String suspendedByName;
     private String suspensionReason;
 
     private Instant archivedAt;
     private UUID archivedBy;
+    private String archivedByName;
     private String archiveReason;
 
     private Instant purgeScheduledFor;

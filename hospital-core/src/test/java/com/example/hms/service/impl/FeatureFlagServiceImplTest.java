@@ -63,7 +63,8 @@ class FeatureFlagServiceImplTest {
         lenient().when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
 
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService,
+            org.mockito.Mockito.mock(com.example.hms.repository.SubscriptionPlanRepository.class));
 
         // Default: no tenant context → gate is a no-op (matches the
         // legacy behaviour the existing tests expect). Individual

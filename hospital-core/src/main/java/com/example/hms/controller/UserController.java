@@ -130,6 +130,12 @@ public class UserController {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    /**
+     * A staff registration with no hospital id: by name when one is given,
+     * otherwise the hospital the caller acts at (a hospital admin onboards
+     * into their own hospital, D201). With neither, a translated 400 body
+     * instead of an empty one.
+     */
     private ResponseEntity<UserResponseDTO> resolveHospitalFromName(AdminSignupRequest request) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
             // By NAME a hospital only: a provider facility is named by id (the
@@ -139,13 +145,18 @@ public class UserController {
                 .orElse(null);
             if (hospital == null) {
                 log.warn("[ADMIN REGISTER] Hospital not found for provided hospital name.");
-                return ResponseEntity.badRequest().build();
+                throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalNotFound");
             }
             request.setHospitalId(hospital.getId());
             return null;
         }
+        UUID acting = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (acting != null) {
+            request.setHospitalId(acting);
+            return null;
+        }
         log.warn("[ADMIN REGISTER] Missing hospital for non-patient staff/admin registration.");
-        return ResponseEntity.badRequest().build();
+        throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalRequired");
     }
 
     // Who may read, edit, delete and restore which account, and who may use the
