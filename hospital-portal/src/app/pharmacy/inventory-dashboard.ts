@@ -211,7 +211,8 @@ export class InventoryDashboardComponent implements OnInit {
       .updateInventoryItem(item.id, {
         pharmacyId: item.pharmacyId,
         medicationCatalogItemId: item.medicationCatalogItemId,
-        quantityOnHand: item.quantityOnHand,
+        // No quantityOnHand: the server refuses any value that differs from the live stock,
+        // and the row's value is stale after any movement since the page loaded.
         reorderThreshold: item.reorderThreshold,
         reorderQuantity: item.reorderQuantity,
         unit: item.unit,

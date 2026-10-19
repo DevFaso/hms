@@ -92,7 +92,8 @@ export interface PharmacyResponse {
 export interface InventoryItemRequest {
   pharmacyId: string;
   medicationCatalogItemId: string;
-  quantityOnHand: number;
+  /** Optional on update: the server refuses a value that differs from the live stock. */
+  quantityOnHand?: number;
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
