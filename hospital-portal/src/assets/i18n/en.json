@@ -1549,7 +1549,8 @@
     "VOICE_MEMO_EMPTY": "Voice memo was empty — please try again.",
     "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
     "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo.",
-    "ATTACHMENT": "Chat attachment"
+    "ATTACHMENT": "Chat attachment",
+    "SUBTITLE_PATIENT": "Write to your care team"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -6333,7 +6334,8 @@
     "PASSWORD_CHANGE_FAILED": "The password could not be changed. Please try again.",
     "PASSWORD_MANAGED_BY_SSO": "Your password is managed by your single sign-on provider.",
     "SAVE_NEW_PASSWORD": "Save new password",
-    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link."
+    "FORGOT_PASSWORD_DESC": "Forgot your current password? We can email you a reset link.",
+    "FORGOT_PASSWORD_DESC_SMS": "Forgot your current password? We can text you a reset link."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accept",
@@ -6954,7 +6956,9 @@
     "TOGGLE_VISIBILITY": "Show or hide the password",
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3 to 50 characters: letters, digits, dots, hyphens, underscores",
-    "USERNAME_PLACEHOLDER": "e.g. john.doe"
+    "USERNAME_PLACEHOLDER": "e.g. john.doe",
+    "CURRENT_HINT_SMS": "The temporary password you received by SMS",
+    "CURRENT_HINT_GENERIC": "The temporary password you were given"
   },
   "SETTINGS_HUB": {
     "ACCOUNT_DESC": "Update your name, contact details, photo, and other personal information.",

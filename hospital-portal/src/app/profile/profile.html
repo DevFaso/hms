@@ -562,7 +562,12 @@
                 <div class="security-action-info">
                   <p class="security-action-title">{{ 'PROFILE.CHANGE_PASSWORD' | translate }}</p>
                   <p class="security-action-desc">
-                    {{ 'PROFILE.FORGOT_PASSWORD_DESC' | translate }}
+                    {{
+                      (user()?.email
+                        ? 'PROFILE.FORGOT_PASSWORD_DESC'
+                        : 'PROFILE.FORGOT_PASSWORD_DESC_SMS'
+                      ) | translate
+                    }}
                     @if (credentials()?.forcePasswordChange) {
                       <span class="force-change-badge"
                         >⚠ {{ 'PROFILE.PASSWORD_CHANGE_REQUIRED' | translate }}</span

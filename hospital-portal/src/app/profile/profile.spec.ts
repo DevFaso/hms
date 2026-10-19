@@ -47,6 +47,8 @@ describe('ProfileComponent — editing the profile', () => {
       'changeOwnEmail',
       'confirmOwnEmailChange',
       'changePassword',
+      'requestPasswordReset',
+      'requestPasswordResetByPhone',
     ]);
     profiles.getUserProfile.and.returnValue(of(profile('old@example.test')));
     profiles.getCredentialHealth.and.returnValue(throwError(() => new Error('n/a')));
@@ -379,6 +381,50 @@ describe('ProfileComponent — editing the profile', () => {
 
     expect(component.emailChangePassword()).toBe('');
     expect(component.emailChanged()).toBeFalse();
+  });
+
+  describe('password reset link (D256)', () => {
+    const asUser = (email: string, phoneNumber: string): void => {
+      component.user.set({ ...profile(email), phoneNumber });
+    };
+
+    it('an e-mail account gets the link by e-mail', () => {
+      profiles.requestPasswordReset.and.returnValue(of(undefined));
+      asUser('awa@example.test', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordReset).toHaveBeenCalledWith('awa@example.test');
+      expect(profiles.requestPasswordResetByPhone).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.RESET_LINK_SENT');
+    });
+
+    it('a phone-only account gets the link by SMS, not "no e-mail on file"', () => {
+      profiles.requestPasswordResetByPhone.and.returnValue(of(undefined));
+      asUser('', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordResetByPhone).toHaveBeenCalledWith('+22670000000');
+      expect(profiles.requestPasswordReset).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('PROFILE.RESET_LINK_SENT');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('an SMS failure says the request failed', () => {
+      profiles.requestPasswordResetByPhone.and.returnValue(throwError(() => ({ status: 500 })));
+      asUser('', '+22670000000');
+      component.requestPasswordReset();
+
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.RESET_REQUEST_FAILED');
+    });
+
+    it('an account with neither e-mail nor phone calls nothing and says so', () => {
+      asUser('', '');
+      component.requestPasswordReset();
+
+      expect(profiles.requestPasswordReset).not.toHaveBeenCalled();
+      expect(profiles.requestPasswordResetByPhone).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('PROFILE.NO_EMAIL_ON_FILE');
+    });
   });
 
   describe('self-service password change (D38)', () => {

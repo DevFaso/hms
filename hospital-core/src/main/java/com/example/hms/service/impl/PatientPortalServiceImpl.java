@@ -1060,6 +1060,21 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     .map(h -> h.getName())
                     .orElse(null);
         }
+        // QA D244: the MRN was never mapped, so every profile read null. It lives on
+        // the per-hospital registration: the current hospital's, plus the full list.
+        List<PatientProfileDTO.HospitalRecord> records = registrationRepository.findByPatientId(p.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> PatientProfileDTO.HospitalRecord.builder()
+                        .hospitalId(reg.getHospital().getId())
+                        .hospitalName(reg.getHospital().getName())
+                        .mrn(reg.getMrn())
+                        .build())
+                .toList();
+        String mrn = records.stream()
+                .filter(r -> r.getHospitalId().equals(hospId))
+                .map(PatientProfileDTO.HospitalRecord::getMrn)
+                .findFirst()
+                .orElse(records.size() == 1 ? records.get(0).getMrn() : null);
 
         return PatientProfileDTO.builder()
                 .id(p.getId())
@@ -1089,6 +1104,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .profileImageUrl(p.getUser() != null ? p.getUser().getProfileImageUrl() : null)
                 .hospitalId(hospId)
                 .hospitalName(hospName)
+                .mrn(mrn)
+                .hospitalRecords(records)
                 .build();
     }
 

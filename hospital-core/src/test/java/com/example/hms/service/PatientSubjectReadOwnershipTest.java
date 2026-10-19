@@ -67,6 +67,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -791,6 +792,23 @@ class PatientSubjectReadOwnershipTest {
 
             assertThat(service.getAppointmentById(appointmentId, Locale.ENGLISH, CALLER)).isNotNull();
             assertThat(service.getAppointmentsByPatientId(otherPatientId, Locale.ENGLISH, CALLER)).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("QA D259: staff of another hospital get the same 404 as an unknown id, on read, status change and delete")
+        void crossHospitalAnswersAsMissing() {
+            passwordLogin("ROLE_RECEPTIONIST");
+            Appointment foreign = appointmentOf(patientRow(otherPatientId, otherUser()));
+            foreign.setHospital(hospital(UUID.randomUUID()));
+            when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(foreign));
+
+            assertThatThrownBy(() -> service.getAppointmentById(appointmentId, Locale.ENGLISH, CALLER))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.confirmOrCancelAppointment(appointmentId, "CONFIRM", Locale.ENGLISH, CALLER))
+                .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.deleteAppointment(appointmentId, Locale.ENGLISH, CALLER))
+                .isInstanceOf(ResourceNotFoundException.class);
+            verify(appointmentRepository, never()).delete(any(Appointment.class));
         }
     }
 }
