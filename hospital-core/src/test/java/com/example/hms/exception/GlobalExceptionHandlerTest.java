@@ -384,7 +384,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("uses the request locale through the MessageSource")
         void translatesThroughMessageSource() {
             var source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
-            source.setBasenames("classpath:messages");
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
             source.setDefaultEncoding("UTF-8");
             source.setFallbackToSystemLocale(false);
             source.setAlwaysUseMessageFormat(true);
@@ -735,7 +735,7 @@ class GlobalExceptionHandlerTest {
         @BeforeEach
         void french() {
             source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
-            source.setBasenames("classpath:messages");
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
             source.setDefaultEncoding("UTF-8");
             source.setFallbackToSystemLocale(false);
             source.setAlwaysUseMessageFormat(true);

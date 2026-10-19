@@ -148,9 +148,9 @@ class ExceptionProseRatchetTest {
     @Test
     @DisplayName("QA D226: the converted messages are really translated, not copied")
     void convertedKeysAreTranslated() throws IOException {
-        Map<String, String> en = d226Block("messages.properties");
-        Map<String, String> fr = d226Block("messages_fr.properties");
-        Map<String, String> es = d226Block("messages_es.properties");
+        Map<String, String> en = d226Block("");
+        Map<String, String> fr = d226Block("_fr");
+        Map<String, String> es = d226Block("_es");
         assertThat(en).hasSizeGreaterThan(100);
         assertThat(fr.keySet()).isEqualTo(en.keySet());
         assertThat(es.keySet()).isEqualTo(en.keySet());
@@ -163,17 +163,22 @@ class ExceptionProseRatchetTest {
         assertThat(copied).as("French or Spanish identical to English").isEmpty();
     }
 
-    private static Map<String, String> d226Block(String bundle) throws IOException {
-        List<String> lines = Files.readAllLines(Paths.get("src/main/resources", bundle), StandardCharsets.UTF_8);
+    /** The D226 block of one locale, gathered across every area file (see MessageBundles). */
+    private static Map<String, String> d226Block(String suffix) throws IOException {
         Map<String, String> out = new TreeMap<>();
-        boolean in = false;
-        for (String line : lines) {
-            if (line.startsWith("# QA round 4 (D226)")) {
-                in = true;
-            } else if (in && line.startsWith("#")) {
-                break;
-            } else if (in && line.contains("=")) {
-                out.put(line.substring(0, line.indexOf('=')), line.substring(line.indexOf('=') + 1));
+        for (String area : com.example.hms.config.MessageBundles.AREAS) {
+            List<String> lines = Files.readAllLines(
+                Paths.get("src/main/resources", com.example.hms.config.MessageBundles.resource(area, suffix)),
+                StandardCharsets.UTF_8);
+            boolean in = false;
+            for (String line : lines) {
+                if (line.startsWith("# QA round 4 (D226)")) {
+                    in = true;
+                } else if (in && line.startsWith("#")) {
+                    break;
+                } else if (in && line.contains("=")) {
+                    out.put(line.substring(0, line.indexOf('=')), line.substring(line.indexOf('=') + 1));
+                }
             }
         }
         return out;

@@ -36,7 +36,7 @@ class StaffFacingTextFrenchTest {
     @BeforeEach
     void setUp() {
         messageSource = new ReloadableResourceBundleMessageSource();
-        messageSource.setBasename("classpath:messages");
+        messageSource.setBasenames(com.example.hms.config.MessageBundles.basenames());
         messageSource.setDefaultEncoding("UTF-8");
         messageSource.setFallbackToSystemLocale(false);
         MessageUtil.setMessageSource(messageSource);
