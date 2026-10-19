@@ -5,6 +5,9 @@ on:
     branches: [main, develop]
   push:
     branches: [main, develop]
+  # GitHub merge queue (docs/runbooks/merging.md): the queue runs the
+  # required checks on its temporary merge_group branch before merging.
+  merge_group:
 
 # SonarCloud row 11 / Sonar S6396: permissions declared at the workflow
 # level inherit to every job (and to every callable workflow this file
@@ -18,6 +21,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which halves of the repo a pull request touches. A PR that changes only
+  # the portal skips the ~10-minute backend suite (and the Sonar job that
+  # needs its coverage); a PR that changes nothing under hospital-portal/
+  # skips the portal job. Pushes to main/develop and merge-queue runs always
+  # run everything. When in doubt (a workflow file, the root build, an
+  # unknown path) both halves run.
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE...$HEAD")
+          echo "$files"
+          # Backend runs unless EVERY changed file is portal-only or docs.
+          if echo "$files" | grep -qvE '^(hospital-portal/|docs/)|\.md$'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Frontend runs when the portal or any workflow changed.
+          if echo "$files" | grep -qE '^(hospital-portal/|\.github/)'; then
+            echo "frontend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "frontend=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # A caller job's `permissions` is the CEILING for the token handed to the
   # reusable workflow — the callee's own block cannot raise it, and omitting
   # one here leaves the job on the repository default rather than
@@ -25,6 +72,8 @@ jobs:
   # ceiling. (CodeQL actions/missing-workflow-permissions.)
   backend-tests:
     name: Backend (JUnit, Jacoco)
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     uses: ./.github/workflows/backend-ci.yml
     permissions:
       contents: read
@@ -119,6 +168,8 @@ jobs:
 
   frontend-tests:
     name: Frontend (Jest, Playwright)
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     uses: ./.github/workflows/frontend-ci.yml
     permissions:
       contents: read
@@ -158,11 +209,33 @@ jobs:
     # need repository or write access, so explicitly disable all
     # GITHUB_TOKEN permissions for least privilege.
     permissions: {}
+    # always(): a job skipped by the path filter would otherwise skip this
+    # one too, and a skipped required check reads as passing even when a
+    # sibling failed. Instead it runs every time and fails unless each
+    # needed job either succeeded or was skipped BY THE FILTER.
+    if: always()
     needs:
+      - changes
       - backend-tests
       - frontend-tests
       - agent-lint
       - lint-docker-yaml
     steps:
       - name: All jobs passed
-        run: echo "All required jobs passed. Ready to merge!"
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          BACKEND: ${{ needs.backend-tests.result }}
+          BACKEND_WANTED: ${{ needs.changes.outputs.backend }}
+          FRONTEND: ${{ needs.frontend-tests.result }}
+          FRONTEND_WANTED: ${{ needs.changes.outputs.frontend }}
+          AGENT_LINT: ${{ needs.agent-lint.result }}
+          LINT: ${{ needs.lint-docker-yaml.result }}
+        run: |
+          ok() { [ "$1" = success ] || { [ "$1" = skipped ] && [ "$2" = false ]; }; }
+          fail=0
+          [ "$CHANGES" = success ] || { echo "changes: $CHANGES"; fail=1; }
+          ok "$BACKEND" "$BACKEND_WANTED" || { echo "backend-tests: $BACKEND"; fail=1; }
+          ok "$FRONTEND" "$FRONTEND_WANTED" || { echo "frontend-tests: $FRONTEND"; fail=1; }
+          [ "$AGENT_LINT" = success ] || { echo "agent-lint: $AGENT_LINT"; fail=1; }
+          [ "$LINT" = success ] || { echo "lint-docker-yaml: $LINT"; fail=1; }
+          [ "$fail" = 0 ] && echo "All required jobs passed. Ready to merge!"

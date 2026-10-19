@@ -228,16 +228,8 @@ class NotFoundMessageKeyTest {
 
     private static Properties load(String suffix) throws IOException {
         // java.util.Properties, not a hand-rolled split: it is the parser Spring
-        // uses, so it agrees about ":" and " " separators, "!" comments,
-        // backslash continuations and duplicate keys — each of which a line
-        // scanner silently skips.
-        Properties bundle = new Properties();
-        try (Reader reader = Files.newBufferedReader(
-                Paths.get("src/main/resources/messages" + suffix + ".properties"),
-                StandardCharsets.UTF_8)) {
-            bundle.load(reader);
-        }
-        return bundle;
+        // uses. A locale's bundle is the merge of its area files.
+        return MessageBundleParityTest.load(suffix);
     }
 
     private static boolean hasUnpairedApostrophe(String value) {
