@@ -9234,7 +9234,8 @@
     "DELETED": "Asignación eliminada",
     "DELETE_CONFLICT": "No se puede eliminar: un registro de personal aún referencia esta asignación. Desactívela en su lugar.",
     "IMPORT_FILE_REQUIRED": "Elija primero un archivo CSV",
-    "IMPORT_ERROR": "La importación falló"
+    "IMPORT_ERROR": "La importación falló",
+    "PATIENT_ACTIVATES_ITSELF": "Una asignación de paciente se activa con la verificación del propio paciente, no aquí."
   },
   "ADMIN_GOV": {
     "TITLE": "Consola de Gobernanza",

@@ -279,7 +279,8 @@ class WriteAuditInterceptorTest {
         Hospital deadProxy = mock(Hospital.class);
         when(deadProxy.getName()).thenThrow(new LazyInitializationException("could not initialize proxy - no session"));
         Role role = new Role();
-        role.setName("ROLE_MIDWIFE");
+        role.setName("Sage-femme");
+        role.setCode("ROLE_MIDWIFE");
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setId(UUID.randomUUID());
         assignment.setHospital(deadProxy);
@@ -294,7 +295,8 @@ class WriteAuditInterceptorTest {
 
         AuditEventRequestDTO row = emitted();
         assertThat(row.getAssignmentId()).isEqualTo(assignment.getId());
-        // Same bare form as the fallback and the read-side interceptor.
+        // Same bare form as the fallback and the read-side interceptor: the
+        // CODE, never the display name (QA D187).
         assertThat(row.getRoleName()).isEqualTo("MIDWIFE");
         assertThat(row.getHospitalName()).isNull();
         verify(deadProxy, never()).getName();

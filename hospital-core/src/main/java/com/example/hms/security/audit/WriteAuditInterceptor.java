@@ -320,11 +320,13 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
      * {@code ROLE_DOCTOR}), so one actor's rows group under one role name.
      */
     private static String roleNameOf(UserRoleHospitalAssignment assignment, Authentication auth) {
-        if (assignment == null || assignment.getRole() == null || assignment.getRole().getName() == null) {
+        // The role CODE, not its display name: names are mixed ("HOSPITAL_ADMIN",
+        // "ROLE_SUPER_ADMIN", ...) and the read side files the code (QA D187).
+        if (assignment == null || assignment.getRole() == null || assignment.getRole().getCode() == null) {
             return primaryRole(auth);
         }
-        String name = assignment.getRole().getName();
-        return name.startsWith(ROLE_PREFIX) ? name.substring(ROLE_PREFIX.length()) : name;
+        String code = assignment.getRole().getCode();
+        return code.startsWith(ROLE_PREFIX) ? code.substring(ROLE_PREFIX.length()) : code;
     }
 
     private static String primaryRole(Authentication auth) {

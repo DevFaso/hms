@@ -14,6 +14,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.security.EffectiveRoles;
 import com.example.hms.security.context.ImpersonationContext;
 import com.example.hms.security.context.ImpersonationContextHolder;
 import tools.jackson.core.JacksonException;
@@ -31,6 +32,9 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.utility.RoleNames;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -207,7 +211,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
         ActorContext actor = resolveActorContext(requestDTO, user);
         String hospitalName = resolveHospitalName(requestDTO, assignment);
-        String roleName = resolveRoleName(requestDTO, assignment, user);
+        String roleName = resolveRoleName(requestDTO, assignment, user, hospitalName);
         String detailsStr = convertDetailsToString(requestDTO.getDetails());
 
         String resourceId = requestDTO.getResourceId();
@@ -322,18 +326,46 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         return hospitalName;
     }
 
-    private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment, User user) {
+    private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment,
+                                   User user, String hospitalName) {
         String roleName = requestDTO.getRoleName();
         if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
-            roleName = assignment.getRole().getName();
+            roleName = assignment.getRole().getCode();
         }
-        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-            roleName = user.getUserRoles().iterator().next().getRole().getName();
+        if ((roleName == null || roleName.isBlank()) && user != null) {
+            roleName = effectiveRoleOf(user, hospitalName);
         }
-        if (roleName == null || roleName.isBlank()) {
-            roleName = RoleNames.UNKNOWN_ROLE;
+        // One format for every writer (QA D187): the bare code, DOCTOR not
+        // ROLE_DOCTOR, whichever path supplied it.
+        String bare = RoleNames.bareRole(roleName);
+        return bare == null ? RoleNames.UNKNOWN_ROLE : bare;
+    }
+
+    /**
+     * The role an event with no assignment is filed under: the actor's ACTIVE
+     * role at the event's hospital, else a role they effectively hold
+     * (EffectiveRoles). The first raw {@code user_roles} link used to be taken,
+     * which filed a break-glass at hospital B under ROLE_NURSE from an
+     * inactive assignment at hospital A (QA D110, D165) and a receptionist's
+     * check-in under a leftover ROLE_PATIENT (QA D132).
+     */
+    private String effectiveRoleOf(User user, String hospitalName) {
+        List<UserRoleHospitalAssignment> rows = assignmentRepository.findAllByUserId(user.getId());
+        if (hospitalName != null && !hospitalName.isBlank()) {
+            Optional<String> atHospital = rows.stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .filter(a -> a.getHospital() != null && hospitalName.equals(a.getHospital().getName()))
+                .map(UserRoleHospitalAssignment::getRole)
+                .filter(Objects::nonNull)
+                .map(com.example.hms.model.Role::getCode)
+                .filter(Objects::nonNull)
+                .sorted()
+                .findFirst();
+            if (atHospital.isPresent()) {
+                return atHospital.get();
+            }
         }
-        return roleName;
+        return EffectiveRoles.codes(user, rows).stream().sorted().findFirst().orElse(null);
     }
 
     private String resolvePatientResourceId(String resourceId, String resourceName) {

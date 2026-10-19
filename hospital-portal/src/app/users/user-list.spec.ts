@@ -151,3 +151,71 @@ describe('UserListComponent registration', () => {
     expect(fixture.debugElement.query(By.css('[data-test="issued-credentials"]'))).toBeNull();
   });
 });
+
+describe('UserListComponent create modal as a hospital admin (QA D189, D195)', () => {
+  let fixture: ComponentFixture<UserListComponent>;
+  let component: UserListComponent;
+  const page = { content: [], number: 0, totalPages: 0, totalElements: 0 };
+  const roles = [
+    { id: 'r1', code: 'ROLE_SUPER_ADMIN', name: 'ROLE_SUPER_ADMIN' },
+    { id: 'r2', code: 'ROLE_HOSPITAL_ADMIN', name: 'HOSPITAL_ADMIN' },
+    { id: 'r3', code: 'ROLE_PATIENT', name: 'PATIENT' },
+    { id: 'r4', code: 'ROLE_NURSE', name: 'NURSE' },
+    { id: 'r5', code: 'ROLE_RECEPTIONIST', name: 'RECEPTIONIST' },
+    { id: 'r6', code: 'ROLE_ADMIN', name: 'ADMIN' },
+  ];
+
+  beforeEach(() => {
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of(roles) } },
+        {
+          provide: HospitalService,
+          useValue: {
+            list: () => of({ content: [] }),
+            getMyHospitalAsResponse: () => of({ id: 'h1', name: 'A' }),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'warning',
+          ]),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    fixture = TestBed.createComponent(UserListComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+  });
+
+  it('offers staff roles only: no super-admin, admin or patient', () => {
+    expect(component.grantableRoles().map((r) => r.code)).toEqual([
+      'ROLE_NURSE',
+      'ROLE_RECEPTIONIST',
+    ]);
+  });
+
+  it('asks a medical specialization for a doctor, not for a nurse', () => {
+    component.openCreate();
+    component.onRoleToggle('ROLE_NURSE', true);
+    fixture.detectChanges();
+    expect(component.specializationApplicable).toBeFalse();
+    expect(fixture.debugElement.query(By.css('#specialization'))).toBeNull();
+
+    component.onRoleToggle('ROLE_DOCTOR', true);
+    fixture.detectChanges();
+    expect(component.specializationApplicable).toBeTrue();
+    expect(fixture.debugElement.query(By.css('#specialization'))).not.toBeNull();
+  });
+});

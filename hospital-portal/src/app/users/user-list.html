@@ -406,7 +406,7 @@
             <fieldset class="field">
               <legend>{{ 'USERS.ROLES' | translate }} *</legend>
               <div class="role-checkbox-group">
-                @for (role of availableRoles(); track role.id) {
+                @for (role of grantableRoles(); track role.id) {
                   <label class="role-checkbox">
                     <input
                       type="checkbox"
@@ -488,20 +488,22 @@
               </div>
             </div>
 
-            <!-- Specialization -->
-            <div class="field">
-              <label for="specialization">{{ 'USERS.SPECIALIZATION' | translate }}</label>
-              <select
-                id="specialization"
-                [(ngModel)]="createForm.specialization"
-                name="specialization"
-              >
-                <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
-                @for (sp of specializations; track sp) {
-                  <option [value]="sp">{{ sp | enumLabel: 'specialization' }}</option>
-                }
-              </select>
-            </div>
+            <!-- Specialization: physicians only (QA D195) -->
+            @if (specializationApplicable) {
+              <div class="field">
+                <label for="specialization">{{ 'USERS.SPECIALIZATION' | translate }}</label>
+                <select
+                  id="specialization"
+                  [(ngModel)]="createForm.specialization"
+                  name="specialization"
+                >
+                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
+                  @for (sp of specializations; track sp) {
+                    <option [value]="sp">{{ sp | enumLabel: 'specialization' }}</option>
+                  }
+                </select>
+              </div>
+            }
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">

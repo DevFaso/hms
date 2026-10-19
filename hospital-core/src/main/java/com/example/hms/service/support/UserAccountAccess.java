@@ -172,7 +172,26 @@ public class UserAccountAccess {
             return false;
         }
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(target.getId());
-        return !holdsAny(target, assignments, Set.of(SUPER_ADMIN))
+        if (holdsAny(target, assignments, Set.of(SUPER_ADMIN))) {
+            return false;
+        }
+        // An ACTIVE assignment here always counts. An inactive one counts
+        // only while the account is active nowhere else: a pending invitation
+        // or a former employee stays visible to the hospital that holds it,
+        // but someone now working at hospital B is B's to read, not A's
+        // through a stale row left at A (QA D190).
+        boolean activeHere = assignments.stream()
+            .filter(a -> Boolean.TRUE.equals(a.getActive()))
+            .map(UserAccountAccess::hospitalIdOf)
+            .anyMatch(administered::contains);
+        if (activeHere) {
+            return true;
+        }
+        boolean activeElsewhere = assignments.stream()
+            .filter(a -> Boolean.TRUE.equals(a.getActive()))
+            .map(UserAccountAccess::hospitalIdOf)
+            .anyMatch(hospitalId -> hospitalId == null || !administered.contains(hospitalId));
+        return !activeElsewhere
             && assignments.stream().map(UserAccountAccess::hospitalIdOf).anyMatch(administered::contains);
     }
 

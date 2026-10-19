@@ -9234,7 +9234,8 @@
     "DELETED": "Assignment deleted",
     "DELETE_CONFLICT": "Cannot delete: a staff record still references this assignment. Deactivate it instead.",
     "IMPORT_FILE_REQUIRED": "Choose a CSV file first",
-    "IMPORT_ERROR": "The import failed"
+    "IMPORT_ERROR": "The import failed",
+    "PATIENT_ACTIVATES_ITSELF": "A patient assignment is activated by the patient's own verification, not here."
   },
   "ADMIN_GOV": {
     "TITLE": "Governance Console",
