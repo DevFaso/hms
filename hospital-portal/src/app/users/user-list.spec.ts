@@ -219,3 +219,54 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
     expect(fixture.debugElement.query(By.css('#specialization'))).not.toBeNull();
   });
 });
+
+describe('UserListComponent onboarding as a hospital admin (D201)', () => {
+  it('sends the admin hospital after the modal resets the form', () => {
+    const users = jasmine.createSpyObj<UserService>('UserService', [
+      'list',
+      'search',
+      'adminRegister',
+      'update',
+      'getById',
+    ]);
+    const page = { content: [], number: 0, totalPages: 0, totalElements: 0 };
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    users.adminRegister.and.returnValue(of({ id: 'u1' } as UserDetail));
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: {
+            list: () => of([]),
+            getMyHospitalAsResponse: () => of({ id: 'h-a', name: 'QA Hôpital A' }),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(UserListComponent);
+    const component = fixture.componentInstance;
+    fixture.detectChanges();
+
+    component.openCreate();
+    component.selectedRoles = ['ROLE_NURSE'];
+    component.createForm.firstName = 'Awa';
+    component.createForm.lastName = 'Traoré';
+    component.createForm.email = 'awa@hopital.bf';
+    component.createForm.phoneNumber = '70202020';
+    component.submitCreate();
+
+    expect(users.adminRegister).toHaveBeenCalled();
+    expect(users.adminRegister.calls.mostRecent().args[0].hospitalId).toBe('h-a');
+  });
+});

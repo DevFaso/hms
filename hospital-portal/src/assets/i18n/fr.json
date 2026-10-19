@@ -2485,6 +2485,7 @@
     "LOAD_FAILED": "Échec du chargement des drapeaux de fonctionnalité",
     "NEW_FLAG": "Nouveau Drapeau",
     "NO_FLAGS": "Aucun drapeau trouvé",
+    "NO_FLAGS_MATCHING": "Aucun drapeau ne correspond à « {{query}} »",
     "OFF": "DÉSACTIVÉ",
     "ON": "ACTIVÉ",
     "OVERRIDE_REMOVED": "Remplacement supprimé pour {{key}}",

@@ -38,4 +38,15 @@ describe('FeatureFlagsComponent', () => {
     component.removeOverride(flag);
     httpMock.expectOne((r) => r.method === 'DELETE' && r.url === '/feature-flags/beta.x');
   });
+
+  it('says "no flags" with no empty quoted query when nothing is searched (D247)', () => {
+    const fixture = TestBed.createComponent(FeatureFlagsComponent);
+    fixture.detectChanges();
+    httpMock.expectOne('/feature-flags').flush({});
+    httpMock.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector('.empty-state')?.textContent;
+    expect(text).toContain('FLAGS.NO_FLAGS');
+    expect(text).not.toContain('""');
+  });
 });

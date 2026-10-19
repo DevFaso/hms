@@ -41,7 +41,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Locale;
@@ -422,15 +421,22 @@ class RequireClinicalHospitalTest {
 
         @Test
         void aProviderNamedByNameIsAnUnknownHospital() {
+            // findClinicalByName excludes provider facilities; a plain name
+            // lookup would have found it, so it must not be consulted.
             when(hospitalRepository.findByName("Pharmacie du Centre")).thenReturn(Optional.of(pharmacy()));
+            when(hospitalRepository.findClinicalByName("Pharmacie du Centre")).thenReturn(Optional.empty());
             AdminSignupRequest request = new AdminSignupRequest();
             request.setHospitalName("Pharmacie du Centre");
 
-            ResponseEntity<?> answer = ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request);
+            Throwable thrown = catchThrowable(() ->
+                ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request));
 
-            assertThat(answer).isNotNull();
-            assertThat(answer.getStatusCode().value()).isEqualTo(400);
+            // A translated 400 (BusinessException) naming an unknown hospital.
+            assertThat(thrown).isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(((com.example.hms.exception.BusinessException) thrown).getMessageKey())
+                .isEqualTo("user.adminRegister.hospitalNotFound");
             assertThat(request.getHospitalId()).isNull();
+            verify(hospitalRepository, never()).findByName(anyString());
         }
 
         @Test

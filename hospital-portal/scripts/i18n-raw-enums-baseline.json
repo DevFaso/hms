@@ -38,7 +38,6 @@
     "src/app/dashboard/dashboard.html::alert.severity",
     "src/app/dashboard/dashboard.html::appt.reason",
     "src/app/dashboard/dashboard.html::appt.status",
-    "src/app/dashboard/dashboard.html::evt.entityType",
     "src/app/dashboard/dashboard.html::item.source",
     "src/app/dashboard/dashboard.html::lab.result",
     "src/app/dashboard/dashboard.html::med.frequency",

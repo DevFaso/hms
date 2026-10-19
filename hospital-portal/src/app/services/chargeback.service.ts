@@ -28,12 +28,15 @@ export class ChargebackService {
   /**
    * GET /api/super-admin/cost/per-tenant/chargeback?from&to. Inclusive
    * date window; absent params default server-side to the trailing 30
-   * days. Server caps the window at 92 days.
+   * days. Server caps the window at 92 days. null (204) when the cost
+   * flag is off.
    */
-  perTenant(from?: string, to?: string): Observable<ChargebackRow[]> {
+  perTenant(from?: string, to?: string): Observable<ChargebackRow[] | null> {
     let params = new HttpParams();
     if (from) params = params.set('from', from);
     if (to) params = params.set('to', to);
-    return this.http.get<ChargebackRow[]>('/super-admin/cost/per-tenant/chargeback', { params });
+    return this.http.get<ChargebackRow[] | null>('/super-admin/cost/per-tenant/chargeback', {
+      params,
+    });
   }
 }

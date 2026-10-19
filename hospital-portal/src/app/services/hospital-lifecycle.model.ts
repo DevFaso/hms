@@ -17,9 +17,12 @@ export interface HospitalLifecycleResponse {
   lifecycleState: HospitalLifecycleState;
   suspendedAt: string | null;
   suspendedBy: string | null;
+  /** The actor's name; the id alone means nothing to a reader (D246). */
+  suspendedByName?: string | null;
   suspensionReason: string | null;
   archivedAt: string | null;
   archivedBy: string | null;
+  archivedByName?: string | null;
   purgeScheduledFor: string | null;
   purgedAt: string | null;
   updatedAt: string;

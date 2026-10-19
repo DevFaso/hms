@@ -51,7 +51,9 @@ public class StaffMapper {
         dto.setLicenseExpiryDate(staff.getLicenseExpiryDate());
         dto.setStartDate(staff.getStartDate());
         dto.setEndDate(staff.getEndDate());
-        dto.setActive(staff.isActive());
+        // Active means working AND able to sign in: an account that was never
+        // activated (users.is_active = false) is not active staff (D221).
+        dto.setActive(staff.isActive() && (staff.getUser() == null || staff.getUser().isActive()));
         dto.setCreatedAt(staff.getCreatedAt());
         dto.setUpdatedAt(staff.getUpdatedAt());
 

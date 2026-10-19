@@ -17,6 +17,7 @@ import { IsolationPrecautionResponse, IsolationService } from '../services/isola
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
@@ -126,6 +127,7 @@ describe('BedBoardComponent', () => {
   let transferSpy: jasmine.SpyObj<TransferService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
   let roleCtx: RoleContextStub;
+  let authSpy: jasmine.SpyObj<AuthService>;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -149,6 +151,8 @@ describe('BedBoardComponent', () => {
     transferSpy.getPending.and.returnValue(of([]));
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getRoles']);
+    authSpy.getRoles.and.returnValue(['ROLE_NURSE', 'ROLE_DOCTOR']);
     roleCtx = roleContextStub({
       superAdmin: false,
       hospitalId: 'h1',
@@ -166,6 +170,7 @@ describe('BedBoardComponent', () => {
         { provide: TransferService, useValue: transferSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: RoleContextService, useValue: roleCtx },
+        { provide: AuthService, useValue: authSpy },
       ],
     }).compileComponents();
 
@@ -358,6 +363,27 @@ describe('BedBoardComponent', () => {
     expect(transferSpy.getPending).not.toHaveBeenCalled();
     expect(admin.canTransfer).toBeFalse();
     expect(admin.canManagePrecautions).toBeFalse();
+  });
+
+  it('a multi-role session acting as hospital admin never asks for the worklist (D229)', () => {
+    // The session lists every held role, but the token from the role picker
+    // carries only ROLE_HOSPITAL_ADMIN, which /transfers/pending refuses.
+    roleCtx.set({ roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE'], activeRole: null });
+    authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
+    const admin = TestBed.createComponent(BedBoardComponent).componentInstance;
+    admin.ngOnInit();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
+    expect(admin.canTransfer).toBeFalse();
+  });
+
+  it('a multi-role session pinned to hospital admin never asks for the worklist (D229)', () => {
+    roleCtx.set({
+      roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE'],
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+    });
+    authSpy.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN', 'ROLE_NURSE']);
+    TestBed.createComponent(BedBoardComponent).componentInstance.ngOnInit();
+    expect(transferSpy.getPending).not.toHaveBeenCalled();
   });
 
   it('a refused worklist read is not reported as a load failure (D188)', () => {

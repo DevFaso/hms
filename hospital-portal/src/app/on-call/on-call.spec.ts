@@ -113,10 +113,7 @@ describe('OnCallComponent', () => {
     translate.setTranslation('fr', { PORTAL: { ENUM: { JOB_TITLE: { MIDWIFE: 'Sage-femme' } } } });
     translate.use('fr');
     (TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>).list.and.returnValue(
-      of([
-        { id: 's-1', name: 'Dr. Awa Traoré', jobTitle: 'MIDWIFE' } as StaffResponse,
-        { id: 's-2', name: 'Kofi Mensah' } as StaffResponse,
-      ]),
+      of([{ id: 's-1', name: 'Dr. Awa Traoré', jobTitle: 'MIDWIFE' } as StaffResponse]),
     );
 
     component.openCreate();
@@ -126,8 +123,21 @@ describe('OnCallComponent', () => {
       fixture.nativeElement.querySelectorAll('#oncall-staff option') as NodeListOf<HTMLElement>,
     ).map((o) => (o.textContent ?? '').trim());
     expect(options).toContain('Dr. Awa Traoré — Sage-femme');
-    expect(options).toContain('Kofi Mensah');
     expect(options.join(' ')).not.toContain('MIDWIFE');
+  });
+
+  it('offers only staff the server will roster (D242)', () => {
+    setup(['ROLE_HOSPITAL_ADMIN'], []);
+    (TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>).list.and.returnValue(
+      of([
+        { id: 's-1', name: 'Awa', jobTitle: 'NURSE', active: true } as StaffResponse,
+        { id: 's-2', name: 'Kofi', jobTitle: 'RECEPTIONIST', active: true } as StaffResponse,
+        { id: 's-3', name: 'Ali', jobTitle: 'DOCTOR', active: false } as StaffResponse,
+        { id: 's-4', name: 'Sali', active: true } as StaffResponse,
+      ]),
+    );
+    component.openCreate();
+    expect(component.staffOptions().map((s) => s.id)).toEqual(['s-1']);
   });
 
   it('gates on the role picked at login, and re-renders when it changes', () => {
