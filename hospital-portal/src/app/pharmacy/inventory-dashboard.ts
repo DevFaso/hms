@@ -200,6 +200,42 @@ export class InventoryDashboardComponent implements OnInit {
     });
   }
 
+  /** QA D264: the checkout charges quantity x this price, so the pharmacy sets it here. */
+  savePrice(item: InventoryItemResponse, raw: string): void {
+    const price = Number(raw);
+    if (raw === '' || !Number.isInteger(price) || price < 0) {
+      this.toast.error(this.translate.instant('PHARMACY.PRICE_INVALID'));
+      return;
+    }
+    this.svc
+      .updateInventoryItem(item.id, {
+        pharmacyId: item.pharmacyId,
+        medicationCatalogItemId: item.medicationCatalogItemId,
+        quantityOnHand: item.quantityOnHand,
+        reorderThreshold: item.reorderThreshold,
+        reorderQuantity: item.reorderQuantity,
+        unit: item.unit,
+        unitPrice: price,
+        active: item.active,
+      })
+      .subscribe({
+        next: (res) => {
+          const saved = res?.data;
+          this.inventoryItems.update((rows) =>
+            rows.map((r) =>
+              r.id === item.id ? { ...r, unitPrice: saved?.unitPrice ?? price } : r,
+            ),
+          );
+          this.toast.success(this.translate.instant('PHARMACY.PRICE_SAVED'));
+        },
+        error: (err) => {
+          this.toast.error(
+            err?.error?.message ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
   getStockStatusClass(item: InventoryItemResponse): string {
     if (item.quantityOnHand <= 0) return 'stock-out';
     if (item.quantityOnHand <= item.reorderThreshold) return 'stock-low';

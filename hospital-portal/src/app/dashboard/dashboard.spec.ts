@@ -986,7 +986,7 @@ describe('Dashboard i18n refactor coverage', () => {
   it('hospitalAdminStatCards returns 14 cards when summary is loaded', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
     c.hospitalAdminSummary.set({
-      appointments: { todayTotal: 10, completed: 5, noShows: 1 },
+      appointments: { today: 10, completed: 5, noShows: 1 },
       admissions: { active: 3, admittedToday: 2, dischargedToday: 1 },
       consultations: { requested: 4, acknowledged: 2, overdue: 1 },
       staffing: { activeStaff: 20, onShiftToday: 12, staffOnLeaveToday: 1 },

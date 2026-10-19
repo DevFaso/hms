@@ -2913,4 +2913,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V204 (QA D264): the selling price per unit on a pharmacy inventory
+         item, so a dispense payment is checked against what it costs.
+         Single ALTER, no DO block. -->
+    <changeSet id="V204-inventory-item-unit-price" author="hms-team" runOnChange="false">
+        <sqlFile path="V204__inventory_item_unit_price.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

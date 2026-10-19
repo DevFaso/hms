@@ -27,6 +27,7 @@ public class InventoryItemResponseDTO {
     private BigDecimal quantityOnHand;
     private BigDecimal reorderThreshold;
     private BigDecimal reorderQuantity;
+    private BigDecimal unitPrice;
     private String unit;
     private boolean active;
     /** QA D157: a controlled substance; a manual movement of it needs a witness. */

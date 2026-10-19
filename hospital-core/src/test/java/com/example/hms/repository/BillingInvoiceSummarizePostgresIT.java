@@ -137,6 +137,55 @@ class BillingInvoiceSummarizePostgresIT {
         assertThat(rows.get(0)[5]).isNull();
     }
 
+    @Test
+    void searchFindsTheInvoiceByThePatientsMrnAtThatHospitalOnly_D276() {
+        UUID patientId = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
+            BillingInvoice invoice = new BillingInvoice();
+            invoice.setHospital(entityManager.getReference(Hospital.class, hospitalA));
+            invoice.setPatient(entityManager.getReference(Patient.class, patientId));
+            invoice.setInvoiceNumber("IT-" + UUID.randomUUID().toString().substring(0, 12));
+            invoice.setInvoiceDate(TODAY);
+            invoice.setDueDate(TODAY);
+            invoice.setTotalAmount(new BigDecimal("100"));
+            invoice.setAmountPaid(BigDecimal.ZERO);
+            invoice.setStatus(InvoiceStatus.SENT);
+            saved.add(repository.saveAndFlush(invoice).getId());
+            // The same patient's MRN at another hospital must not match here.
+            registration(patientId, hospitalA, "MRN-QA-R5-A");
+            registration(patientId, hospitalB, "MRN-QA-R5-B");
+        });
+        try {
+            // A page past the end: no rows are loaded (this test writes no hospital
+            // or patient rows for the fetch joins) and the total comes from the count query.
+            var page = org.springframework.data.domain.PageRequest.of(1000, 1);
+            assertThat(repository.findAllWithFilters(null, null, null, null, null, "%mrn-qa-r5-a%", page)
+                .getTotalElements()).isEqualTo(1);
+            assertThat(repository.findAllWithFilters(null, null, null, null, null, "%mrn-qa-r5-b%", page)
+                .getTotalElements()).isZero();
+            // (No hospital rows exist here, so the scope is left open; the MRN is still
+            // matched only at the invoice's own hospital.)
+            // Invoices with no encounter still match on their number (the encounter join is outer).
+            assertThat(repository.findAllWithFilters(null, null, null, null, null, "%it-%", page)
+                .getTotalElements()).isEqualTo(33);
+        } finally {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> entityManager
+                .createNativeQuery("DELETE FROM clinical.patient_hospital_registrations WHERE patient_id = :p")
+                .setParameter("p", patientId).executeUpdate());
+        }
+    }
+
+    private void registration(UUID patientId, UUID hospitalId, String mrn) {
+        entityManager.createNativeQuery("""
+            INSERT INTO clinical.patient_hospital_registrations
+                (id, mrn, patient_id, hospital_id, registration_date, is_active, stay_status, created_at, updated_at)
+            VALUES (:id, :mrn, :p, :h, CURRENT_DATE, true, 'ADMITTED', now(), now())
+            """)
+            .setParameter("id", UUID.randomUUID()).setParameter("mrn", mrn)
+            .setParameter("p", patientId).setParameter("h", hospitalId).executeUpdate();
+    }
+
     private void insert(UUID hospitalId, InvoiceStatus status, String total, String paid, LocalDate due) {
         BillingInvoice invoice = new BillingInvoice();
         invoice.setHospital(entityManager.getReference(Hospital.class, hospitalId));

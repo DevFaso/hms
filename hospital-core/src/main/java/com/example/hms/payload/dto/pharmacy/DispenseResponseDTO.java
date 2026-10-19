@@ -42,6 +42,8 @@ public class DispenseResponseDTO {
     private String medicationName;
     private BigDecimal quantityRequested;
     private BigDecimal quantityDispensed;
+    /** QA D264: what the dispense costs (quantity x the item's unit price), or null when no price is set. */
+    private BigDecimal chargeAmount;
     private String unit;
     private boolean substitution;
     private String substitutionReason;

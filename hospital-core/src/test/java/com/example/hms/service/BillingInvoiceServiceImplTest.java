@@ -1291,4 +1291,93 @@ class BillingInvoiceServiceImplTest {
         assertEquals(InvoiceStatus.PARTIALLY_PAID, visit.getStatus());
         assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
     }
+
+    /** A visit invoice of 7 450 and its paid 2 500 check-in copay on one encounter (QA D272). */
+    private BillingInvoice[] visitAndCopay(InvoiceStatus visitStatus, BigDecimal visitPaid) {
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        BillingInvoice visit = BillingInvoice.builder().patient(patient).encounter(encounter)
+            .totalAmount(new BigDecimal("7450")).amountPaid(visitPaid).status(visitStatus).build();
+        visit.setId(UUID.randomUUID());
+        BillingInvoice copay = BillingInvoice.builder().patient(patient).encounter(encounter)
+            .totalAmount(new BigDecimal("2500")).amountPaid(new BigDecimal("2500"))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        when(invoiceRepository.findById(visit.getId())).thenReturn(Optional.of(visit));
+        when(invoiceRepository.findById(copay.getId())).thenReturn(Optional.of(copay));
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        return new BillingInvoice[] {visit, copay};
+    }
+
+    @Test
+    void recordStaffPayment_theCopayPaidAfterTheInvoiceWasIssuedIsNotChargedAgain_D272() {
+        BillingInvoice[] pair = visitAndCopay(InvoiceStatus.SENT, BigDecimal.ZERO);
+        BillingInvoice visit = pair[0];
+        com.example.hms.payload.dto.StaffPaymentRequestDTO full =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("7450"), "cash", null, null);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(visit.getId(), full, UUID.randomUUID(), Locale.ENGLISH));
+
+        assertEquals("billing.payment.exceedsBalance", refused.getMessageKey());
+    }
+
+    @Test
+    void recordStaffPayment_takesTheCopayThenTheBalanceSettlesTheVisit_D272() {
+        BillingInvoice[] pair = visitAndCopay(InvoiceStatus.SENT, BigDecimal.ZERO);
+        BillingInvoice visit = pair[0];
+        BillingInvoice copay = pair[1];
+
+        billingInvoiceService.recordStaffPayment(visit.getId(),
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("4950"), "cash", null, null),
+            UUID.randomUUID(), Locale.ENGLISH);
+
+        assertEquals(InvoiceStatus.PAID, visit.getStatus());
+        assertEquals(0, new BigDecimal("7450").compareTo(visit.getAmountPaid()));
+        assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
+    }
+
+    @Test
+    void creditCheckInCopays_aPartPaidVisitInvoiceStillTakesTheCopay_D272() {
+        BillingInvoice[] pair = visitAndCopay(InvoiceStatus.PARTIALLY_PAID, new BigDecimal("1000"));
+
+        billingInvoiceService.creditCheckInCopays(pair[0].getId());
+
+        assertEquals(0, new BigDecimal("3500").compareTo(pair[0].getAmountPaid()));
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+    }
+
+    @Test
+    void createInvoice_legacyKeyTakesThePatientId_D269() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+
+        BillingInvoiceResponseDTO response = billingInvoiceService.createInvoice(BillingInvoiceRequestDTO.builder()
+            .patientEmail(patient.getId().toString()).build(), Locale.ENGLISH);
+
+        assertEquals(patient.getId().toString(), response.getPatientId());
+        verify(patientRepository, never()).findByUsernameOrEmail(any());
+    }
+
+    @Test
+    void createInvoice_legacyKeyTakesTheMrnAtThisHospital_D269() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setPatient(patient);
+        registration.setMrn("MRN-A5");
+        when(registrationRepository.findActiveByHospitalIdAndIdentifier(HOSPITAL_ID, "mrn-a5"))
+            .thenReturn(List.of(registration));
+
+        BillingInvoiceResponseDTO response = billingInvoiceService.createInvoice(BillingInvoiceRequestDTO.builder()
+            .patientEmail(" mrn-a5 ").build(), Locale.ENGLISH);
+
+        assertEquals(patient.getId().toString(), response.getPatientId());
+    }
 }

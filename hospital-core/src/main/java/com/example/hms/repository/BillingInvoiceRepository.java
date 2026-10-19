@@ -112,6 +112,7 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            SELECT bi FROM BillingInvoice bi
            LEFT JOIN FETCH bi.patient p
            LEFT JOIN FETCH bi.hospital h
+           LEFT JOIN bi.encounter enc
            WHERE (:patientId IS NULL OR bi.patient.id = :patientId)
            AND (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
            AND (:statuses IS NULL OR bi.status IN :statuses)
@@ -121,11 +122,15 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                 OR LOWER(bi.invoiceNumber) LIKE :query
                 OR LOWER(p.firstName) LIKE :query
                 OR LOWER(p.lastName) LIKE :query
-                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query)
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
+                OR LOWER(enc.code) LIKE :query
+                OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
+                           WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))
            """,
            countQuery = """
            SELECT COUNT(bi) FROM BillingInvoice bi
            LEFT JOIN bi.patient p
+           LEFT JOIN bi.encounter enc
            WHERE (:patientId IS NULL OR bi.patient.id = :patientId)
            AND (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
            AND (:statuses IS NULL OR bi.status IN :statuses)
@@ -135,7 +140,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                 OR LOWER(bi.invoiceNumber) LIKE :query
                 OR LOWER(p.firstName) LIKE :query
                 OR LOWER(p.lastName) LIKE :query
-                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query)
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
+                OR LOWER(enc.code) LIKE :query
+                OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
+                           WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))
            """)
     Page<BillingInvoice> findAllWithFilters(
         @Param("patientId") UUID patientId,

@@ -39,6 +39,7 @@ public class EncounterMapper {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         UUID encounterId = e.getId();
         dto.setId(encounterId);
+        dto.setCode(e.getCode());
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());

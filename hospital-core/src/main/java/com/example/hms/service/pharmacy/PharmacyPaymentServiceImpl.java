@@ -16,6 +16,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.service.pharmacy.payment.MobileMoneyGateway;
 import com.example.hms.utility.RoleValidator;
@@ -50,6 +51,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final MobileMoneyGateway mobileMoneyGateway;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final InventoryItemRepository inventoryItemRepository;
 
     private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
@@ -98,6 +100,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (replay.isPresent()) {
             return paymentMapper.toResponseDTO(replay.get());
         }
+        requireAmountMatchesCharge(dispense, dto.getAmount());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -200,6 +203,21 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
         return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+    }
+
+    /**
+     * QA D264 (D204 did not hold): the D204 fix stopped a second payment and
+     * fractional or non-positive amounts, but nothing in the system said what
+     * a dispense costs, so any first amount was taken. The charge now comes
+     * from the inventory item's unit price; a dispense is paid once, for
+     * exactly that charge, and an unpriced one cannot be paid at all.
+     */
+    private void requireAmountMatchesCharge(Dispense dispense, BigDecimal amount) {
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
+                .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
+        if (charge.compareTo(amount) != 0) {
+            throw new BusinessException("pharmacy.payment.amountMismatch", charge.toPlainString());
+        }
     }
 
     private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {

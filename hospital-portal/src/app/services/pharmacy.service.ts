@@ -96,6 +96,8 @@ export interface InventoryItemRequest {
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  /** QA D264: selling price of one unit, whole XOF. */
+  unitPrice?: number | null;
   active?: boolean;
 }
 
@@ -109,6 +111,7 @@ export interface InventoryItemResponse {
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  unitPrice?: number | null;
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
@@ -295,6 +298,8 @@ export interface DispenseResponse {
   medicationName: string;
   quantityRequested: number;
   quantityDispensed: number;
+  /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
+  chargeAmount?: number | null;
   unit?: string;
   substitution: boolean;
   substitutionReason?: string;

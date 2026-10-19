@@ -143,6 +143,9 @@
                 <div class="cell-primary">
                   {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
                 </div>
+                @if (enc.code) {
+                  <div class="cell-secondary">{{ enc.code }}</div>
+                }
               </td>
               <td>{{ enc.staffName || '—' }}</td>
               <td>{{ enc.departmentName || '—' }}</td>
@@ -218,6 +221,10 @@
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
+              ><span class="field-value">{{ enc.code || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span

@@ -2148,7 +2148,12 @@
     "WRITTEN_OFF": "Written Off",
     "FILTER_BY_DATE": "Filter by date",
     "FILTER_BY_URGENCY": "Filter by urgency",
-    "FILTER_BY_LOCATION": "Filter by location"
+    "FILTER_BY_LOCATION": "Filter by location",
+    "AGING_CURRENT": "Current",
+    "AGING_1_30": "1–30 days",
+    "AGING_31_60": "31–60 days",
+    "AGING_61_90": "61–90 days",
+    "AGING_90_PLUS": "90+ days"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "The one-time login credentials could not be sent to the patient.",
@@ -8204,7 +8209,11 @@
     "RECEIPT_EXPIRY_REQUIRED": "Enter the lot's expiry date.",
     "RECEIPT_LOT_EXPIRED": "This lot is past its expiry date and cannot be received into stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "This item is tracked by lot: choose the lot the movement applies to.",
-    "SELECT_LOT_OPTION": "Select a lot"
+    "SELECT_LOT_OPTION": "Select a lot",
+    "UNIT_PRICE": "Unit price (XOF)",
+    "PRICE_SAVED": "Price saved.",
+    "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
+    "PRICE_SAVE_FAILED": "The price could not be saved."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -10788,7 +10797,8 @@
     "SUBMIT": "Confirm payment",
     "PRINT": "Print",
     "NEW_PAYMENT": "New payment",
-    "RECEIPT_NO_PATIENT": "Not on file"
+    "RECEIPT_NO_PATIENT": "Not on file",
+    "NO_PRICE": "The pharmacy has not priced this medication yet: set its unit price in the inventory before taking payment."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

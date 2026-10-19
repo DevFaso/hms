@@ -64,6 +64,7 @@
               <th>{{ 'PHARMACY.REORDER_THRESHOLD' | translate }}</th>
               <th>{{ 'PHARMACY.REORDER_QTY_COLUMN' | translate }}</th>
               <th>{{ 'PHARMACY.UNIT' | translate }}</th>
+              <th>{{ 'PHARMACY.UNIT_PRICE' | translate }}</th>
               <th>{{ 'COMMON.STATUS' | translate }}</th>
             </tr>
           </thead>
@@ -79,6 +80,17 @@
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
                 <td>{{ item.unit ?? '—' }}</td>
+                <td>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    class="price-input"
+                    [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
+                    [value]="item.unitPrice ?? ''"
+                    (change)="savePrice(item, $any($event.target).value)"
+                  />
+                </td>
                 <td>
                   <span class="stock-badge" [class]="getStockStatusClass(item)">
                     {{ getStockStatusLabel(item) }}
@@ -307,6 +319,17 @@
                   [(ngModel)]="createForm.reorderQuantity"
                   name="reorderQuantity"
                   min="0"
+                />
+              </div>
+              <div class="field">
+                <label for="ciUnitPrice">{{ 'PHARMACY.UNIT_PRICE' | translate }}</label>
+                <input
+                  id="ciUnitPrice"
+                  type="number"
+                  [(ngModel)]="createForm.unitPrice"
+                  name="unitPrice"
+                  min="0"
+                  step="1"
                 />
               </div>
             </div>

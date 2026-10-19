@@ -16,6 +16,9 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.service.pharmacy.payment.MobileMoneyGateway;
 import com.example.hms.utility.RoleValidator;
@@ -35,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -56,6 +60,7 @@ class PharmacyPaymentServiceImplTest {
     @Mock private MobileMoneyGateway mobileMoneyGateway;
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
+    @Mock private InventoryItemRepository inventoryItemRepository;
 
     @InjectMocks private PharmacyPaymentServiceImpl service;
 
@@ -68,6 +73,8 @@ class PharmacyPaymentServiceImplTest {
     private Pharmacy pharmacy;
     private Dispense dispense;
     private User user;
+    private MedicationCatalogItem catalogItem;
+    private InventoryItem inventoryItem;
 
     @BeforeEach
     void setUp() {
@@ -93,6 +100,15 @@ class PharmacyPaymentServiceImplTest {
         dispense.setPatient(patient);
         dispense.setPharmacy(pharmacy);
         dispense.setMedicationName("Amoxicilline 500mg");
+        catalogItem = new MedicationCatalogItem();
+        catalogItem.setId(UUID.randomUUID());
+        dispense.setMedicationCatalogItem(catalogItem);
+        dispense.setQuantityDispensed(new BigDecimal("10"));
+        // QA D264: 10 units at 250 XOF, so the dispense costs 2 500.
+        inventoryItem = new InventoryItem();
+        inventoryItem.setUnitPrice(new BigDecimal("250.00"));
+        lenient().when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
+                pharmacy.getId(), catalogItem.getId())).thenReturn(Optional.of(inventoryItem));
 
         user = new User();
         user.setId(userId);
@@ -633,6 +649,52 @@ class PharmacyPaymentServiceImplTest {
         when(paymentMapper.toResponseDTO(prior)).thenReturn(priorDto);
 
         assertThat(service.createPayment(dto)).isSameAs(priorDto);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: 999 999 XOF on a 9-tablet dispense is refused; the amount must be the charge")
+    void overpaymentOnNineTabletsIsRefused() {
+        dispense.setQuantityDispensed(new BigDecimal("9"));
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("999999"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.amountMismatch"));
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: an underpayment is refused too")
+    void underpaymentIsRefused() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("1"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.amountMismatch"));
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: a dispense whose medication has no price cannot be paid")
+    void unpricedDispenseIsRefused() {
+        inventoryItem.setUnitPrice(null);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.noPrice"));
         verify(paymentRepository, never()).save(any());
     }
 }

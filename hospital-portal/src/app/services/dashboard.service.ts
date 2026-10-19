@@ -287,7 +287,7 @@ export interface HospitalAdminSummary {
 }
 
 export interface HospitalAdminAppointmentMetrics {
-  todayTotal: number;
+  today: number;
   completed: number;
   noShows: number;
   cancelled: number;
