@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsLink;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -36,6 +37,7 @@ import java.util.Optional;
 public class SepsisQsofaProtocolRule implements BpaRule {
 
     public static final String PROTOCOL_CODE = "SEPSIS_QSOFA";
+    private static final String BULLET = "\n  • ";
     private static final Duration LOOKBACK = Duration.ofHours(6);
 
     private static final int RR_THRESHOLD = 22;
@@ -53,9 +55,18 @@ public class SepsisQsofaProtocolRule implements BpaRule {
     );
 
     private final BpaProtocolRepository protocolRepository;
+    private final CdsCardText text;
 
+    /** English-only, for rules built outside Spring. */
     public SepsisQsofaProtocolRule(BpaProtocolRepository protocolRepository) {
+        this(protocolRepository, CdsCardText.ENGLISH);
+    }
+
+    /** QA D217: the card is written in the caller's language, like the D61 rules. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public SepsisQsofaProtocolRule(BpaProtocolRepository protocolRepository, CdsCardText text) {
         this.protocolRepository = protocolRepository;
+        this.text = text;
     }
 
     @Override
@@ -104,24 +115,24 @@ public class SepsisQsofaProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private static CdsCard buildCard(BpaProtocol protocol, QsofaScore score) {
-        String detail = protocol.getSummary()
-            + "\n\nqSOFA criteria currently met: " + score.total() + "/3"
-            + "\n  • RR ≥ 22: " + (score.rrHigh() ? "yes" : "no")
-            + "\n  • sBP ≤ 100: " + (score.sbpLow() ? "yes" : "no")
-            + "\n  • Altered mental status: " + (score.ams() ? "yes" : "no");
+    private CdsCard buildCard(BpaProtocol protocol, QsofaScore score) {
+        String detail = BpaCardText.summary(text, protocol)
+            + "\n\n" + text.get("cds.bpa.qsofa.met", "qSOFA criteria currently met: {0}/3", String.valueOf(score.total()))
+            + BULLET + text.get("cds.bpa.qsofa.rr", "RR ≥ 22: {0}", BpaCardText.yesNo(text, score.rrHigh()))
+            + BULLET + text.get("cds.bpa.qsofa.sbp", "sBP ≤ 100: {0}", BpaCardText.yesNo(text, score.sbpLow()))
+            + BULLET + text.get("cds.bpa.qsofa.ams", "Altered mental status: {0}", BpaCardText.yesNo(text, score.ams()));
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(
-                "Surviving Sepsis Campaign — Hour-1 bundle",
+                text.get("cds.bpa.qsofa.link", "Surviving Sepsis Campaign — Hour-1 bundle"),
                 protocol.getProtocolUrl(),
                 "absolute",
                 null));
         return new CdsCard(
-            protocol.getName(),
+            BpaCardText.name(text, protocol),
             detail,
             CdsCard.Indicator.WARNING,
-            new Source("HMS Best-Practice Advisory", null, null),
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             links,
             null,
             null,

@@ -1,0 +1,112 @@
+package com.example.hms.service.vitals;
+
+import com.example.hms.model.Admission;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.model.Staff;
+import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.service.NotificationService;
+import com.example.hms.utility.NewsScoreCalculator;
+import com.example.hms.utility.NewsScoreCalculator.NewsScoreResult;
+import com.example.hms.utility.NewsScoreCalculator.RiskBand;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.stereotype.Service;
+
+import java.time.Duration;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+/**
+ * QA D207: a NEWS2 score in the MEDIUM or HIGH band (RCP NEWS2 escalation
+ * matrix) must reach the responsible clinicians and tighten the observation
+ * interval. Before this, the score was stored and nothing acted on it: no
+ * alert, and the next vitals check stayed routine.
+ *
+ * <p>The alert goes to the recording nurse and to the stay's attending
+ * physician (or the admitting provider when no attending is named). It runs
+ * in the caller's transaction, like the critical-lab alert: if the vitals row
+ * commits, so does the alert.
+ */
+@Service
+@RequiredArgsConstructor
+public class News2EscalationService {
+
+    public static final String NOTIFICATION_TYPE = "NEWS2_ESCALATION";
+
+    /** RCP NEWS2: HIGH = continuous monitoring; recorded here as a 15-minute round. */
+    static final Duration HIGH_INTERVAL = Duration.ofMinutes(15);
+    /** RCP NEWS2: MEDIUM, or a single parameter scoring 3 = at least hourly. */
+    static final Duration MEDIUM_INTERVAL = Duration.ofHours(1);
+    /** RCP NEWS2: a total of 1-4 = at least every 4-6 hours. */
+    static final Duration LOW_INTERVAL = Duration.ofHours(4);
+
+    private final AdmissionRepository admissionRepository;
+    private final NotificationService notificationService;
+    private final MessageSource messageSource;
+
+    /** The minimum interval to the next set of observations for this NEWS2 result. */
+    public static Duration observationInterval(NewsScoreResult score, Duration routine) {
+        if (score == null) {
+            return routine;
+        }
+        Duration band = switch (score.riskBand()) {
+            case HIGH -> HIGH_INTERVAL;
+            case MEDIUM, LOW_MEDIUM -> MEDIUM_INTERVAL;
+            case LOW -> score.total() > 0 ? LOW_INTERVAL : routine;
+        };
+        return band.compareTo(routine) < 0 ? band : routine;
+    }
+
+    /** True for the bands the RCP matrix says need an urgent clinical response. */
+    public static boolean needsEscalation(NewsScoreResult score) {
+        return score != null && (score.riskBand() == RiskBand.HIGH
+            || score.riskBand() == RiskBand.MEDIUM || score.riskBand() == RiskBand.LOW_MEDIUM);
+    }
+
+    /**
+     * Alerts the recording nurse and the responsible physician when the vital
+     * set scores MEDIUM or HIGH. Returns the NEWS2 result so a caller can
+     * report it.
+     */
+    public NewsScoreResult escalateIfNeeded(PatientVitalSign vital, UUID patientId, UUID hospitalId,
+                                            String recorderUsername) {
+        NewsScoreResult score = NewsScoreCalculator.score(vital);
+        if (!needsEscalation(score) || patientId == null || hospitalId == null) {
+            return score;
+        }
+        Set<String> recipients = new LinkedHashSet<>();
+        if (recorderUsername != null && !recorderUsername.isBlank()) {
+            recipients.add(recorderUsername);
+        }
+        responsiblePhysicianUsername(patientId, hospitalId).ifPresent(recipients::add);
+        if (recipients.isEmpty()) {
+            return score;
+        }
+        String patientName = vital.getPatient() != null ? vital.getPatient().getFullName() : null;
+        String message = messageSource.getMessage(
+            score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium",
+            new Object[]{score.total(), patientName != null ? patientName : "-",
+                observationInterval(score, Duration.ofHours(12)).toMinutes()},
+            LocaleContextHolder.getLocale());
+        for (String recipient : recipients) {
+            notificationService.createNotification(message, recipient, NOTIFICATION_TYPE);
+        }
+        return score;
+    }
+
+    private Optional<String> responsiblePhysicianUsername(UUID patientId, UUID hospitalId) {
+        return admissionRepository.findCurrentAdmissionByPatient(patientId)
+            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+            .map(News2EscalationService::responsibleOf)
+            .filter(s -> s.getUser() != null && s.getUser().getUsername() != null)
+            .map(s -> s.getUser().getUsername());
+    }
+
+    private static Staff responsibleOf(Admission admission) {
+        return admission.getAttendingPhysician() != null
+            ? admission.getAttendingPhysician() : admission.getAdmittingProvider();
+    }
+}

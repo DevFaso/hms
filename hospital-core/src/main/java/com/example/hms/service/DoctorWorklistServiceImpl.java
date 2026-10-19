@@ -324,13 +324,29 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .bed(roomBed[1])
                 .location(location)
                 .latestVitalsSummary(latestVitalsSummary)
-                .chiefComplaint(enc.getNotes())
+                .chiefComplaint(chiefComplaintOf(enc))
                 .urgency(enc.getUrgency() != null ? enc.getUrgency().name() : URGENCY_ROUTINE)
                 .encounterStatus(mappedStatus)
                 .waitMinutes(waitMinutes)
                 .updatedAt(enc.getUpdatedAt() != null ? enc.getUpdatedAt() : enc.getCreatedAt())
                 .alerts(Collections.emptyList())
                 .build();
+    }
+
+    /**
+     * QA D238: the encounter's own chief complaint (triage writes it there), else
+     * the reason the visit was booked for. It used to read the free-text notes,
+     * which are blank on a fresh encounter, so the column was always null.
+     */
+    static String chiefComplaintOf(Encounter enc) {
+        if (enc.getChiefComplaint() != null && !enc.getChiefComplaint().isBlank()) {
+            return enc.getChiefComplaint();
+        }
+        if (enc.getAppointment() != null && enc.getAppointment().getReason() != null
+                && !enc.getAppointment().getReason().isBlank()) {
+            return enc.getAppointment().getReason();
+        }
+        return null;
     }
 
     private String[] parseRoomBed(String rawRoomBed) {

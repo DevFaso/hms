@@ -97,6 +97,11 @@ public class BedAssignmentService {
         // Keep the legacy free-text field in the "room/bed" shape the
         // worklists parse (DoctorWorklistServiceImpl splits on '/').
         admission.setRoomBed(bedLabel(bed));
+        // QA D237: a bed in another department's ward moves the stay there; the
+        // admission kept the first department and every worklist kept showing it.
+        if (bed.getWard() != null && bed.getWard().getDepartment() != null) {
+            admission.setDepartment(bed.getWard().getDepartment());
+        }
         log.info("Bed {} assigned to admission {}", bedLabel(bed), admission.getId());
     }
 

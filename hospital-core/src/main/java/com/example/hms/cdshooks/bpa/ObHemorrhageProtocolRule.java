@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsLink;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -53,9 +54,18 @@ public class ObHemorrhageProtocolRule implements BpaRule {
     );
 
     private final BpaProtocolRepository protocolRepository;
+    private final CdsCardText text;
 
+    /** English-only, for rules built outside Spring. */
     public ObHemorrhageProtocolRule(BpaProtocolRepository protocolRepository) {
+        this(protocolRepository, CdsCardText.ENGLISH);
+    }
+
+    /** QA D217: the card is written in the caller's language, like the D61 rules. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public ObHemorrhageProtocolRule(BpaProtocolRepository protocolRepository, CdsCardText text) {
         this.protocolRepository = protocolRepository;
+        this.text = text;
     }
 
     @Override
@@ -109,29 +119,27 @@ public class ObHemorrhageProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private static CdsCard buildCard(BpaProtocol protocol, HemorrhageSignal signal) {
-        StringBuilder detail = new StringBuilder(protocol.getSummary());
-        detail.append("\n\nMost recent triggering vitals at ")
-            .append(signal.recordedAt())
-            .append(": HR=")
-            .append(signal.hr() == null ? "—" : signal.hr())
-            .append(" bpm, sBP=")
-            .append(signal.sbp() == null ? "—" : signal.sbp())
-            .append(" mmHg.");
-        if (signal.tachy()) detail.append(" Tachycardia.");
-        if (signal.hypo()) detail.append(" Hypotension.");
+    private CdsCard buildCard(BpaProtocol protocol, HemorrhageSignal signal) {
+        StringBuilder detail = new StringBuilder(BpaCardText.summary(text, protocol));
+        detail.append("\n\n").append(text.get("cds.bpa.pph.vitals",
+            "Most recent triggering vitals at {0}: HR={1} bpm, sBP={2} mmHg.",
+            BpaCardText.when(signal.recordedAt()),
+            signal.hr() == null ? "—" : String.valueOf(signal.hr()),
+            signal.sbp() == null ? "—" : String.valueOf(signal.sbp())));
+        if (signal.tachy()) detail.append(' ').append(text.get("cds.bpa.pph.tachycardia", "Tachycardia."));
+        if (signal.hypo()) detail.append(' ').append(text.get("cds.bpa.pph.hypotension", "Hypotension."));
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(
-                "FIGO PPH initiative",
+                text.get("cds.bpa.pph.link", "FIGO PPH initiative"),
                 protocol.getProtocolUrl(),
                 "absolute",
                 null));
         return new CdsCard(
-            protocol.getName(),
+            BpaCardText.name(text, protocol),
             detail.toString(),
             CdsCard.Indicator.WARNING,
-            new Source("HMS Best-Practice Advisory", null, null),
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             links,
             null,
             null,

@@ -27,6 +27,13 @@ public class AdmissionDischargeRequestDTO {
 
     private String dischargeInstructions;
 
+    /**
+     * QA D218: the diagnosis at discharge, carried onto the stay's encounter so
+     * the discharge summary states it instead of "not specified".
+     */
+    @jakarta.validation.constraints.Size(max = 2000, message = "{dischargeSummary.dischargeDiagnosis.size}")
+    private String dischargeDiagnosis;
+
     @NotNull(message = "{admissionDischarge.dischargingProviderId.required}")
     private UUID dischargingProviderId;
 

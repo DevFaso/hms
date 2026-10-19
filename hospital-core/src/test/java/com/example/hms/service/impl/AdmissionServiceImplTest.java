@@ -333,7 +333,7 @@ class AdmissionServiceImplTest {
         service.dischargePatient(admissionId, request);
 
         // QA D134: the stay's own encounters, never the patient-wide sweep.
-        verify(stayEncounters).recordDischarge(admission);
+        verify(stayEncounters).recordDischarge(admission, null);
         verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
     }
 

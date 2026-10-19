@@ -81,6 +81,8 @@ export interface PatientStoryboard {
   allergies: StoryboardAllergy[];
   problems: StoryboardProblem[];
   activeEncounter?: StoryboardActiveEncounter | null;
+  /** QA D252: the latest finished visit, sent only when none is open. */
+  lastEncounter?: StoryboardActiveEncounter | null;
   codeStatus?: StoryboardCodeStatus | null;
   hasHighSeverityAllergy: boolean;
   hasChronicProblem: boolean;

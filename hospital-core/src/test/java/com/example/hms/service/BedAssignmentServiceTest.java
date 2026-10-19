@@ -77,6 +77,21 @@ class BedAssignmentServiceTest {
     }
 
     @Test
+    void aBedInAnotherDepartmentsWardMovesTheStayThere_D237() {
+        com.example.hms.model.Department surgery = new com.example.hms.model.Department();
+        surgery.setId(UUID.randomUUID());
+        Ward surgicalWard = Ward.builder().hospital(ward.getHospital()).name("Surgery").code("CHI01")
+            .department(surgery).build();
+        Bed bed = Bed.builder().ward(surgicalWard).bedNumber("C01").status(BedStatus.AVAILABLE).build();
+        bed.setId(UUID.randomUUID());
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        service.assignBed(admission, bed.getId());
+
+        assertThat(admission.getDepartment()).isSameAs(surgery);
+    }
+
+    @Test
     void assignBedReleasesPreviousBed() {
         Bed previous = bed("B01", BedStatus.OCCUPIED);
         admission.setBed(previous);

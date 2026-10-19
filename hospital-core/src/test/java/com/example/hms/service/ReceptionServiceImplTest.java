@@ -321,6 +321,28 @@ class ReceptionServiceImplTest {
     class GetQueue {
 
         @Test
+        @DisplayName("QA D239: the queue carries the MRN at this hospital and the booked reason")
+        void queueCarriesMrnAndReason_D239() {
+            com.example.hms.model.PatientHospitalRegistration reg = new com.example.hms.model.PatientHospitalRegistration();
+            reg.setHospital(hospital);
+            reg.setMrn("MRN-A-0042");
+            patient.setHospitalRegistrations(new java.util.HashSet<>(java.util.Set.of(reg)));
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            when(appt.getReason()).thenReturn("Contrôle");
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(Collections.emptyList());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            ReceptionQueueItemDTO item = service.getQueue(today, hospitalId, "ALL", null, null).get(0);
+
+            assertThat(item.getMrn()).isEqualTo("MRN-A-0042");
+            assertThat(item.getAppointmentReason()).isEqualTo("Contrôle");
+        }
+
+        @Test
         @DisplayName("returns queue items for all appointments")
         void returnsQueueItems() {
             Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);

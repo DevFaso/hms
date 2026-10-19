@@ -56,6 +56,7 @@ import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
 import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.utility.NewsScoreCalculator;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.ImagingOrderRepository;
@@ -129,9 +130,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     // PRIORITY_ROUTINE below holds the same wire value for a different vocabulary.
     private static final String VITALS_ROUND_ROUTINE = "ROUTINE";
     private static final String VITALS_ROUND_FULL_SET = "FULL_SET";
+    private static final String VITALS_ROUND_NEWS2_HIGH = "NEWS2_HIGH";
+    private static final String VITALS_ROUND_NEWS2_MEDIUM = "NEWS2_MEDIUM";
     private static final String ORDER_TYPE_LAB = "LAB";
     private static final String ORDER_TYPE_IMAGING = "IMAGING";
     private static final String ORDER_TYPE_PROCEDURE = "PROCEDURE";
+    /** QA D235: the handoff types the nurse station offers. */
+    static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", ORDER_TYPE_PROCEDURE, "BREAK_COVER");
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
@@ -196,6 +201,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final ProcedureOrderRepository procedureOrderRepository;
     private final FiveRightsVerificationService fiveRightsVerificationService;
     private final ObjectMapper objectMapper;
+    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -211,25 +217,31 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
         Duration effectiveWindow = normalizeWindow(window);
         LocalDateTime now = LocalDateTime.now();
+        // QA D220: vitals rounds are for patients in a bed here — not for a
+        // discharged stay or an outpatient the nurse's list also carries.
+        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
 
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null) continue;
+            if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
 
             // Find the most recent vital sign for this patient at this hospital
-            Optional<LocalDateTime> lastRecorded = vitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId)
-                .map(v -> v.getRecordedAt());
+            Optional<PatientVitalSign> last = vitalSignRepository
+                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
 
             // Compute when the next vitals check is due
             LocalDateTime dueTime;
             boolean overdue;
-            if (lastRecorded.isEmpty()) {
+            NewsScoreCalculator.NewsScoreResult news = null;
+            if (last.isEmpty() || last.get().getRecordedAt() == null) {
                 // No vitals ever recorded — overdue now
                 dueTime = now.minusMinutes(30);
                 overdue = true;
             } else {
-                dueTime = lastRecorded.get().plus(effectiveWindow);
+                // QA D207: the NEWS2 band of the last set shortens the interval.
+                news = NewsScoreCalculator.score(last.get());
+                dueTime = last.get().getRecordedAt().plus(
+                    com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
                 overdue = dueTime.isBefore(now);
             }
 
@@ -239,9 +251,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
-                    .type(overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE)
+                    .type(vitalsRoundType(news, overdue))
                     .dueTime(dueTime)
                     .overdue(overdue)
+                    .news2Score(news != null ? news.total() : null)
                     .build());
             }
         }
@@ -709,10 +722,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("nurse.patient.notRegisteredHere");
         }
 
+        // QA D235: a handoff type from the fixed list, not free text.
+        String direction = request.getDirection() == null ? ""
+            : request.getDirection().trim().toUpperCase(Locale.ROOT);
+        if (!HANDOFF_DIRECTIONS.contains(direction)) {
+            throw new BusinessException("nurse.handoff.direction.invalid");
+        }
+
         NurseHandoff handoff = NurseHandoff.builder()
             .hospital(hospital)
             .patient(patient)
-            .direction(request.getDirection().trim())
+            .direction(direction)
             .situation(trimToNull(request.getSituation()))
             .background(trimToNull(request.getBackground()))
             .assessment(trimToNull(request.getAssessment()))
@@ -847,11 +867,34 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .count();
     }
 
+    private String usernameOf(UUID userId) {
+        if (userId == null) return null;
+        return userRepository.findById(userId).map(com.example.hms.model.User::getUsername).orElse(null);
+    }
+
+    /** QA D220: the patients with an active (or on-leave) stay at this hospital. */
+    Set<UUID> activelyAdmittedPatientIds(UUID hospitalId) {
+        if (hospitalId == null) return Set.of();
+        return admissionRepository.findActiveAdmissionsByHospital(hospitalId).stream()
+            .filter(a -> a.getPatient() != null && a.getPatient().getId() != null)
+            .map(a -> a.getPatient().getId())
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** QA D207: a MEDIUM/HIGH NEWS2 round is named as such, ahead of the overdue/routine split. */
+    static String vitalsRoundType(NewsScoreCalculator.NewsScoreResult news, boolean overdue) {
+        if (news != null && news.riskBand() == NewsScoreCalculator.RiskBand.HIGH) return VITALS_ROUND_NEWS2_HIGH;
+        if (news != null && (news.riskBand() == NewsScoreCalculator.RiskBand.MEDIUM
+            || news.riskBand() == NewsScoreCalculator.RiskBand.LOW_MEDIUM)) return VITALS_ROUND_NEWS2_MEDIUM;
+        return overdue ? VITALS_ROUND_FULL_SET : VITALS_ROUND_ROUTINE;
+    }
+
     /** Count patients whose vitals are overdue (no vitals or last recording before threshold). */
     private long countVitalsDue(List<PatientContext> patients, UUID hospitalId, LocalDateTime overdueThreshold) {
         long count = 0;
+        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
         for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null) continue;
+            if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
             Optional<LocalDateTime> lastRecorded = vitalSignRepository
                 .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId)
                 .map(v -> v.getRecordedAt());
@@ -1427,6 +1470,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         });
         vitalSignRepository.save(vital);
+        // QA D207: MEDIUM/HIGH NEWS2 alerts the nurse and the responsible physician.
+        news2EscalationService.escalateIfNeeded(vital, patientId, hospitalId, usernameOf(nurseUserId));
 
         // Advance encounter status after vitals are captured.
         // ARRIVED → WAITING_FOR_PHYSICIAN  (vitals captured = triage complete)

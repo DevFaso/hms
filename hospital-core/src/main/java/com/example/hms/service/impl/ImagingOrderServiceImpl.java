@@ -75,6 +75,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireActingHospital(request.getHospitalId());
         requirePatientRegisteredAtActingHospital(request.getPatientId());
 
+        requireNotInThePast(request.getScheduledDate(), null);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
         if (orderingUserId != null) {
@@ -116,6 +117,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             order.setHospital(hospital);
         }
 
+        requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         imagingOrderMapper.updateEntityFromRequest(order, request);
 
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
@@ -140,6 +142,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
 
+        requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
         order.setScheduledDate(request.getScheduledDate());
         order.setScheduledTime(request.getScheduledTime());
@@ -159,6 +162,17 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D253: an exam cannot be booked for a day that has passed. A date the
+     * order already carries is left alone, so a status change on a past
+     * appointment (completing it, say) is not refused.
+     */
+    static void requireNotInThePast(java.time.LocalDate requested, java.time.LocalDate current) {
+        if (requested != null && !requested.equals(current) && requested.isBefore(java.time.LocalDate.now())) {
+            throw new com.example.hms.exception.BusinessException("imaging.scheduledDate.past");
+        }
     }
 
     @Override

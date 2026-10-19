@@ -255,7 +255,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // The stay's encounter carries the discharge (D151), then it and only
         // it is completed (D134).
-        stayEncounters.recordDischarge(admission);
+        stayEncounters.recordDischarge(admission, request.getDischargeDiagnosis());
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)

@@ -54,6 +54,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private final PatientChartAccess patientChartAccess;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     @Override
     public PatientVitalSignResponseDTO recordVital(UUID patientId,
@@ -94,6 +95,10 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         }
 
         PatientVitalSign saved = vitalSignRepository.save(entity);
+        // QA D207: the same NEWS2 escalation as the nurse station's capture.
+        String recorderUsername = staff != null && staff.getUser() != null ? staff.getUser().getUsername() : null;
+        news2EscalationService.escalateIfNeeded(saved, patientId, hospital != null ? hospital.getId() : null,
+            recorderUsername);
         return vitalSignMapper.toResponse(saved);
     }
 

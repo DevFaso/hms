@@ -331,7 +331,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(appt.getId())
                 .patientId(pid)
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .mrn(p.getMrnForHospital(appt.getHospital() != null ? appt.getHospital().getId() : null))
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .issueType(issueType)
                 .clinicianName(providerName(appt))
@@ -404,12 +404,14 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(appt.getId())
                 .patientId(pid)
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                // QA D239: the MRN at this hospital, and the booked reason
+                // (else what triage recorded); both were hard-wired to null.
+                .mrn(p.getMrnForHospital(hospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .providerName(providerName(appt))
                 .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
-                .appointmentReason(appt.getReason())
+                .appointmentReason(visitReason(appt, encounter))
                 .status(computedStatus)
                 .waitMinutes(computeWaitMinutes(encounter))
                 .encounterId(encounter != null ? encounter.getId() : null)
@@ -431,7 +433,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(null)
                 .patientId(p.getId())
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .mrn(p.getMrnForHospital(walkInHospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(walkIn.getEncounterDate() != null
                         ? walkIn.getEncounterDate().toLocalTime().format(TIME_FMT) : null)
@@ -439,13 +441,24 @@ public class ReceptionServiceImpl implements ReceptionService {
                         ? walkIn.getStaff().getUser().getFirstName() + " " + walkIn.getStaff().getUser().getLastName()
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
-                .appointmentReason("Walk-in")
+                .appointmentReason(notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : "Walk-in")
                 .status(computedStatus)
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
                 .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
                 .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
+    }
+
+    /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */
+    static String visitReason(Appointment appt, Encounter encounter) {
+        if (notBlank(appt.getReason())) return appt.getReason();
+        if (encounter != null && notBlank(encounter.getChiefComplaint())) return encounter.getChiefComplaint();
+        return notBlank(appt.getNotes()) ? appt.getNotes() : null;
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String providerName(Appointment appt) {

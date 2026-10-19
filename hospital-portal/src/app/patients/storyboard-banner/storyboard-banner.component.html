@@ -154,6 +154,18 @@
                 </div>
               }
             </dl>
+          } @else if (s.lastEncounter; as last) {
+            <p class="storyboard__empty" data-testid="storyboard-last-visit">
+              {{ 'STORYBOARD.NO_ACTIVE_ENCOUNTER' | translate }}
+              {{
+                'STORYBOARD.LAST_VISIT'
+                  | translate
+                    : {
+                        date: (last.encounterDate | date: 'dd/MM/yyyy') ?? '—',
+                        department: last.departmentName ?? '—',
+                      }
+              }}
+            </p>
           } @else {
             <p class="storyboard__empty">{{ 'STORYBOARD.NO_ACTIVE_ENCOUNTER' | translate }}</p>
           }

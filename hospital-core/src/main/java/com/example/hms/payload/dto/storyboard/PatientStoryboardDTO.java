@@ -34,6 +34,8 @@ public class PatientStoryboardDTO {
     private List<AllergySummaryDTO> allergies;
     private List<ProblemSummaryDTO> problems;
     private ActiveEncounterDTO activeEncounter;
+    /** QA D252: the most recent finished visit, filled only when none is open. */
+    private ActiveEncounterDTO lastEncounter;
     private CodeStatusDTO codeStatus;
     /**
      * E9 #64 — problems this read withheld under decision D3, per recording

@@ -929,6 +929,7 @@
     "NO_KNOWN_ALLERGIES": "No known allergies on file.",
     "NO_ACTIVE_PROBLEMS": "No active problems on file.",
     "NO_ACTIVE_ENCOUNTER": "No active encounter.",
+    "LAST_VISIT": "Last visit: {{date}} ({{department}}).",
     "NO_CODE_STATUS": "Code status not documented.",
     "TYPE": "Type",
     "STATUS": "Status",
@@ -1130,6 +1131,8 @@
     "DISCHARGE_SUCCESS": "Patient discharged successfully",
     "DISCHARGE_SUMMARY": "Discharge Summary",
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Brief summary of hospital stay and outcome...",
+    "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
+    "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Final diagnosis at discharge",
     "DISCHARGING": "Discharging",
     "DISCHARGING_BTN": "Discharging...",
     "DISCHARGING_PROVIDER": "Discharging Provider",
@@ -3563,8 +3566,8 @@
     "HANDOFFS": "Handoffs",
     "HANDOFF_ASSESSMENT": "Assessment",
     "HANDOFF_BACKGROUND": "Background",
-    "HANDOFF_DIRECTION": "Direction",
-    "HANDOFF_DIRECTION_PLACEHOLDER": "e.g. Shift change, Transfer to Radiology",
+    "HANDOFF_DIRECTION": "Type",
+    "HANDOFF_DIRECTION_PLACEHOLDER": "— Select the handoff type —",
     "HANDOFF_NOTES": "Handoff Notes",
     "HANDOFF_PLACEHOLDER": "Enter handoff notes...",
     "HANDOFF_RECOMMENDATION": "Recommendation",
@@ -5641,8 +5644,16 @@
         "PAIN": "Pain",
         "PSYCHOSOCIAL": "Psychosocial"
       },
+      "HANDOFF_DIRECTION": {
+        "BREAK_COVER": "Break cover",
+        "PROCEDURE": "To a procedure or exam",
+        "SHIFT_CHANGE": "Shift change",
+        "WARD_TRANSFER": "Ward transfer"
+      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Full Set",
+        "NEWS2_HIGH": "NEWS2 high: every 15 min",
+        "NEWS2_MEDIUM": "NEWS2 medium: hourly",
         "ROUTINE": "Routine"
       },
       "NEWBORN_ALERT_TYPE": {
@@ -5825,7 +5836,8 @@
         "PATHOLOGY_REPORT": "Pathology report",
         "ED_NOTE": "Emergency department note",
         "MEDICATION_ORDER": "Medication order",
-        "CARE_PLAN": "Care plan"
+        "CARE_PLAN": "Care plan",
+        "GENERIC_REPORT": "Other report"
       },
       "ADMISSION_TYPE": {
         "EMERGENCY": "Emergency",

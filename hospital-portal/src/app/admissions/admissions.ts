@@ -126,6 +126,7 @@ export class AdmissionsComponent implements OnInit {
   dischargeForm = {
     dischargeDisposition: 'HOME' as string,
     dischargeSummary: '',
+    dischargeDiagnosis: '',
     dischargeInstructions: '',
     dischargingProviderId: '',
   };
@@ -473,6 +474,7 @@ export class AdmissionsComponent implements OnInit {
     this.dischargeForm = {
       dischargeDisposition: 'HOME',
       dischargeSummary: '',
+      dischargeDiagnosis: '',
       dischargeInstructions: '',
       dischargingProviderId: '',
     };
@@ -491,6 +493,7 @@ export class AdmissionsComponent implements OnInit {
       .discharge(adm.id, {
         dischargeDisposition: this.dischargeForm.dischargeDisposition,
         dischargeSummary: this.dischargeForm.dischargeSummary,
+        dischargeDiagnosis: this.dischargeForm.dischargeDiagnosis.trim(),
         dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
         dischargingProviderId: this.dischargeForm.dischargingProviderId,
       })

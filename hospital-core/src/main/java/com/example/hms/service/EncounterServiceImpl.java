@@ -2103,6 +2103,13 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setDisposition(DischargeDisposition.HOME);
         summary.setDischargeDiagnosis(buildDischargeDiagnosisText(encounter, request));
         summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
+        // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
+        // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
+        if (request != null) {
+            keepIfGiven(request.getPrescriptionSummary(), 3000, summary::setPrescriptionSummary);
+            keepIfGiven(request.getReferralSummary(), 3000, summary::setReferralSummary);
+            keepIfGiven(request.getPatientEducationMaterials(), 2000, summary::setPatientEducationProvided);
+        }
 
         // Encounter notes → hospitalCourse (visit summary)
         if (encounter.getNotes() != null && !encounter.getNotes().isBlank()) {
@@ -2220,7 +2227,23 @@ public class EncounterServiceImpl implements EncounterService {
             throw new BusinessException("Encounter has not been checked out yet.");
         }
 
-        return checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
+            checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        // QA D224: a later read used to lose the prescription summary and the
+        // education text, which lived only on the checkout request.
+        dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
+            avs.setPrescriptionSummary(summary.getPrescriptionSummary());
+            avs.setReferralSummary(summary.getReferralSummary());
+            avs.setPatientEducationMaterials(summary.getPatientEducationProvided());
+        });
+        return avs;
+    }
+
+    private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {
+        if (value != null && !value.isBlank()) {
+            String trimmed = value.trim();
+            setter.accept(trimmed.length() <= max ? trimmed : trimmed.substring(0, max));
+        }
     }
 
     /**

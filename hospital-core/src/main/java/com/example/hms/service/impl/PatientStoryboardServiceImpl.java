@@ -98,6 +98,9 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         WithheldRows withheld = new WithheldRows();
         List<ProblemSummaryDTO> problems = loadProblems(patientId, hospitalId, readable, unlocked, withheld);
         ActiveEncounterDTO activeEncounter = loadActiveEncounter(patientId, hospitalId);
+        // QA D252: with no open visit the banner said "no visit" although the
+        // patient had finished ones; it now names the last one.
+        ActiveEncounterDTO lastEncounter = activeEncounter == null ? loadLastEncounter(patientId, hospitalId) : null;
         CodeStatusDTO codeStatus = loadCodeStatus(patient, readable);
         // E9 #60 — the storyboard surfaces foreign allergies (#56), problems and
         // directives (#59a); every one of them is accounted, once per source
@@ -126,6 +129,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             .allergies(allergies)
             .problems(problems)
             .activeEncounter(activeEncounter)
+            .lastEncounter(lastEncounter)
             .codeStatus(codeStatus)
             .hasHighSeverityAllergy(highSeverityAllergy)
             .hasChronicProblem(chronicProblem)
@@ -224,6 +228,20 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         List<Encounter> active = encounterRepository
             .findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId, TERMINAL_ENCOUNTER_STATUSES);
         return active.stream()
+            .max(Comparator.comparing(Encounter::getEncounterDate,
+                Comparator.nullsFirst(Comparator.naturalOrder())))
+            .map(this::toEncounterDto)
+            .orElse(null);
+    }
+
+    /** QA D252: the latest COMPLETED visit at this hospital (any hospital in global view). */
+    private ActiveEncounterDTO loadLastEncounter(UUID patientId, UUID hospitalId) {
+        java.util.stream.Stream<Encounter> completed = hospitalId == null
+            ? encounterRepository.findByPatient_Id(patientId).stream()
+                .filter(e -> e.getStatus() == EncounterStatus.COMPLETED)
+            : encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
+                java.util.EnumSet.complementOf(java.util.EnumSet.of(EncounterStatus.COMPLETED))).stream();
+        return completed
             .max(Comparator.comparing(Encounter::getEncounterDate,
                 Comparator.nullsFirst(Comparator.naturalOrder())))
             .map(this::toEncounterDto)

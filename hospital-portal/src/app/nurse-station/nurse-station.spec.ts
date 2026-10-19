@@ -291,7 +291,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       id: 'h9',
       patientId: 'p1',
       patientName: 'Bea Ward',
-      direction: 'Shift change',
+      direction: 'SHIFT_CHANGE',
       updatedAt: '2026-08-20T10:00:00',
       note: 'Stable.',
       background: null,
@@ -304,14 +304,14 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     component.openHandoffCreate();
     component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
-    component.updateHandoffField('direction', 'Shift change');
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
     component.updateHandoffField('situation', 'Stable.');
     component.submitCreateHandoff();
 
     expect(nurseServiceSpy.createHandoff).toHaveBeenCalledWith(
       jasmine.objectContaining({
         patientId: 'p1',
-        direction: 'Shift change',
+        direction: 'SHIFT_CHANGE',
         situation: 'Stable.',
       }),
     );

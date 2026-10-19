@@ -202,6 +202,8 @@ class RequireClinicalHospitalTest {
         @Mock private HospitalRepository hospitalRepository;
         @Mock private PatientRepository patientRepository;
         @Mock private StaffRepository staffRepository;
+        /** Unstubbed, it answers null: a global (unscoped) caller, so the D205 scope check stands aside and the lookup under test runs. */
+        @Mock private RoleValidator roleValidator;
         @InjectMocks private GeneralReferralServiceImpl service;
 
         private GeneralReferralRequestDTO request(UUID hospitalId, UUID receivingHospitalId) {
