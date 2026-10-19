@@ -705,6 +705,56 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(assignmentRepository).deleteById(id);
     }
 
+    @Test
+    void deletingTheLastAssignmentOfARoleDropsItsUserLevelLink() {
+        // QA D132: deleting the stray patient assignment left the user_roles
+        // link behind, which then counted as a global role at sign-in.
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).isEmpty();
+        verify(userRepository).save(assignee);
+    }
+
+    @Test
+    void deletingOneOfTwoAssignmentsOfARoleKeepsItsUserLevelLink() {
+        UUID id = assignment.getId();
+        assignee.addRole(role);
+        UserRoleHospitalAssignment sibling = new UserRoleHospitalAssignment();
+        sibling.setId(UUID.randomUUID());
+        sibling.setUser(assignee);
+        sibling.setRole(role);
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(encounterRepository.existsByAssignment_Id(id)).thenReturn(false);
+        when(assignmentRepository.findAllByUserId(assignee.getId())).thenReturn(java.util.List.of(assignment, sibling));
+
+        service.deleteAssignment(id);
+
+        assertThat(assignee.getUserRoles()).hasSize(1);
+        verify(userRepository, never()).save(assignee);
+    }
+
+    @Test
+    void anActivePatientAssignmentIsRefusedWithATranslatedKey() {
+        // QA D194: the refusal was an English sentence.
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(Boolean.TRUE);
+
+        assertThatThrownBy(() -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+                service, "enforceRoleScopeConstraints", dto, "ROLE_PATIENT", false))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("assignment.patient.mustStartInactive");
+    }
+
     @org.junit.jupiter.api.Test
     @org.junit.jupiter.api.DisplayName("D21: a restored invitee's unconfirmed invitations get fresh codes, mailed; confirmed rows are left alone")
     void reissuesOnlyTheUnconfirmedInvitations() {

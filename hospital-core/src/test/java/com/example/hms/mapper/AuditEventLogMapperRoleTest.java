@@ -2,6 +2,8 @@ package com.example.hms.mapper;
 
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Role;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.PatientRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -55,5 +57,19 @@ class AuditEventLogMapperRoleTest {
         event.setAssignment(assignment);
 
         assertThat(mapper.toDtoLite(event).getRoleName()).isEqualTo("MIDWIFE");
+    }
+
+    @Test
+    @DisplayName("a row with no recorded role does not borrow the account's first raw role link (QA D132)")
+    void noFallbackToRawUserRoles() {
+        Role patient = new Role();
+        patient.setName("ROLE_PATIENT");
+        User user = new User();
+        user.getUserRoles().add(UserRole.builder().user(user).role(patient).build());
+        AuditEventLog event = new AuditEventLog();
+        event.setUser(user);
+
+        assertThat(mapper.toDtoLite(event).getRoleName()).isNull();
+        assertThat(mapper.toDto(event).getRoleName()).isNull();
     }
 }

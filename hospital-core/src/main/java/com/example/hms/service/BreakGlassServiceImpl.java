@@ -360,9 +360,19 @@ public class BreakGlassServiceImpl implements BreakGlassService {
 
     private void emitAudit(AuditEventType type, User user, Hospital hospital, Patient patient,
                            String description, UUID sessionId, AuditStatus status) {
+        // The actor's ACTIVE assignment at the session's hospital: without it
+        // the audit service took the first user_roles link, and a nurse role
+        // from an inactive assignment at another hospital was filed against
+        // a doctor's break-glass (QA D110, D165).
+        UUID actingAssignmentId = user != null && user.getId() != null && hospital != null && hospital.getId() != null
+            ? assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+                .map(com.example.hms.model.UserRoleHospitalAssignment::getId)
+                .orElse(null)
+            : null;
         AuditEventRequestDTO dto = AuditEventRequestDTO.builder()
             .eventType(type)
             .eventDescription(description)
+            .assignmentId(actingAssignmentId)
             .userId(user != null ? user.getId() : null)
             .userName(user != null ? user.getUsername() : null)
             .hospitalName(hospital != null ? hospital.getName() : null)

@@ -266,6 +266,29 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void dischargePatient_refusesANurseAsDischargingProvider() {
+        // QA D176: the discharge picker offered nurses and the server took them.
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(false);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("admission.dischargingProvider.physician.required");
+        verify(admissionRepository, never()).save(any());
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+    }
+
+    @Test
     void dischargePatient_success() {
         Admission admission = new Admission();
         admission.setId(admissionId);

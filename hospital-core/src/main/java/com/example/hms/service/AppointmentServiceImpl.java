@@ -10,10 +10,9 @@ import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
-import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.model.UserRole;
+import com.example.hms.security.EffectiveRoles;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentFilterDTO;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
@@ -232,31 +231,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             return false;
         }
 
-        // Same rule as CustomUserDetailsService: a role that has ANY assignment
-        // row is governed by those rows, and only an ACTIVE row grants it. The
-        // user_roles link is a fallback for legacy roles with no assignment at
-        // all - honouring it for a governed role let an inactive ROLE_PATIENT
-        // (attached to a staff account by a patient registration) narrow a
-        // receptionist's appointment search to their own patient appointments.
-        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findAllByUserId(user.getId());
-        boolean governed = assignments.stream()
-            .map(UserRoleHospitalAssignment::getRole)
-            .filter(Objects::nonNull)
-            .map(Role::getCode)
-            .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
-        if (governed) {
-            return assignments.stream()
-                .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
-                .map(UserRoleHospitalAssignment::getRole)
-                .filter(Objects::nonNull)
-                .map(Role::getCode)
-                .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
-        }
-        return user.getUserRoles() != null && user.getUserRoles().stream()
-            .map(UserRole::getRole)
-            .filter(Objects::nonNull)
-            .map(Role::getCode)
-            .anyMatch(code -> code != null && code.equalsIgnoreCase(roleCode));
+        // Same rule as sign-in (EffectiveRoles): only an ACTIVE assignment
+        // grants a governed role, and a leftover user-level ROLE_PATIENT on a
+        // staff account never narrows a receptionist's search to their own
+        // patient appointments (QA D74, D132).
+        return EffectiveRoles.holds(user, assignmentRepository.findAllByUserId(user.getId()), roleCode);
     }
 
     /* =======================

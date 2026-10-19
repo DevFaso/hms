@@ -122,8 +122,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      *
      * Scope (UserAccountAccess.requireDirectoryAccess): with :scoped = false
      * (the super-admin) every account, the deleted view included on request.
-     * With :scoped = true only LIVE accounts holding an assignment, any role,
-     * active or not, at one of :hospitalIds; EXISTS, not a join, so an
+     * With :scoped = true only LIVE accounts holding an ACTIVE assignment at
+     * one of :hospitalIds, or an inactive one there while active nowhere
+     * else (a pending invitation or a former employee), the same rule as
+     * UserAccountAccess.canView: someone now working at B is not listed by
+     * A through a stale row left at A (QA D190). EXISTS, not a join, so an
      * account assigned at two of those hospitals is one row. The scope is in
      * the query: filtering a global page in memory would load other tenants'
      * rows and break the paging. An unscoped call passes DIRECTORY_UNSCOPED,
@@ -134,10 +137,21 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            OR (:onlyDeleted = false AND (:includeDeleted = true OR u.isDeleted = false)))
           AND (:scoped = false
                OR (u.isDeleted = false
-                   AND EXISTS (
-                       SELECT 1 FROM UserRoleHospitalAssignment ha
-                       WHERE ha.user = u
-                         AND ha.hospital.id IN :hospitalIds)))
+                   AND (EXISTS (
+                           SELECT 1 FROM UserRoleHospitalAssignment ha
+                           WHERE ha.user = u
+                             AND ha.active = true
+                             AND ha.hospital.id IN :hospitalIds)
+                        OR (EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment hi
+                               WHERE hi.user = u
+                                 AND hi.hospital.id IN :hospitalIds)
+                            AND NOT EXISTS (
+                               SELECT 1 FROM UserRoleHospitalAssignment ho
+                               LEFT JOIN ho.hospital hoh
+                               WHERE ho.user = u
+                                 AND ho.active = true
+                                 AND (hoh IS NULL OR hoh.id NOT IN :hospitalIds))))))
         """;
 
     /*

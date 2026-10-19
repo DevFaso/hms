@@ -219,6 +219,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         Department department = resolveDepartment(dto.departmentId(), staff, hospital, effectiveLocale);
 
         ensureStaffBelongsToHospital(staff, hospital, effectiveLocale);
+        ensureStaffActive(staff, effectiveLocale);
         ensureSchedulerPermissions(staff, hospital.getId(), department, effectiveLocale);
 
         validateShiftWindow(dto, staff, effectiveLocale, existing.getId());
@@ -633,8 +634,17 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
     }
 
+    /**
+     * Only someone who can actually work may be rostered (QA D117, D166): the
+     * staff row, the account and the assignment behind it must all be live.
+     * A staff row stays active while its account is switched off or its
+     * invitation was never verified, and such a member was being given shifts.
+     */
     private void ensureStaffActive(Staff staff, Locale locale) {
-        if (!staff.isActive()) {
+        boolean accountLive = staff.getUser() != null && staff.getUser().isActive() && !staff.getUser().isDeleted();
+        boolean assignmentLive = staff.getAssignment() == null
+            || Boolean.TRUE.equals(staff.getAssignment().getActive());
+        if (!staff.isActive() || !accountLive || !assignmentLive) {
             throw new BusinessRuleException(message("schedule.staff.inactive", locale));
         }
     }

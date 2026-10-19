@@ -89,13 +89,17 @@ public class AdmissionServiceImpl implements AdmissionService {
      * physician role at the admission's hospital — a nurse is not one.
      */
     private void requirePhysician(Staff staff, UUID hospitalId) {
+        requirePhysician(staff, hospitalId, "admission.provider.physician.required");
+    }
+
+    private void requirePhysician(Staff staff, UUID hospitalId, String refusalKey) {
         UUID userId = staff.getUser() != null ? staff.getUser().getId() : null;
         boolean physician = userId != null
             && (roleValidator.isDoctor(userId, hospitalId)
                 || roleValidator.isPhysician(userId, hospitalId)
                 || roleValidator.isSurgeon(userId, hospitalId));
         if (!physician) {
-            throw new BusinessException("admission.provider.physician.required");
+            throw new BusinessException(refusalKey);
         }
     }
 
@@ -231,6 +235,10 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.dischargingProvider.notFound", request.getDischargingProviderId()));
+        // QA D84/D176: the discharging provider, like the admitting one, is a
+        // physician at the admission's hospital - a nurse is not one.
+        requirePhysician(dischargingProvider, admission.getHospital().getId(),
+            "admission.dischargingProvider.physician.required");
 
         admission.discharge(
             request.getDischargeDisposition(),

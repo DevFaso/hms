@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
+  computed,
   inject,
   OnDestroy,
   OnInit,
@@ -34,6 +35,27 @@ const MEDICAL_ROLE_CODES = new Set([
   'ROLE_NURSE',
   'ROLE_LAB_SCIENTIST',
   'ROLE_PHARMACIST',
+]);
+
+/** Roles a non-super-admin is never offered in the create modal (QA D189). Bare codes. */
+const STAFF_MODAL_EXCLUDED_ROLES = new Set([
+  'SUPER_ADMIN',
+  'ADMIN',
+  'HOSPITAL_ADMIN',
+  'PROVIDER_ADMIN',
+  'PATIENT',
+]);
+
+function bareRoleCode(code: string | undefined | null): string {
+  return (code ?? '').toUpperCase().replace(/^ROLE_/, '');
+}
+
+/** Roles whose holders have a medical specialty (QA D195): not nurses, pharmacists or lab staff. */
+const SPECIALTY_ROLE_CODES = new Set([
+  'ROLE_DOCTOR',
+  'ROLE_PHYSICIAN',
+  'ROLE_SURGEON',
+  'ROLE_RADIOLOGIST',
 ]);
 
 const JOB_TITLES = [
@@ -146,6 +168,18 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
+
+  /**
+   * The roles the create modal offers (QA D189). Only a super-admin grants an
+   * admin role (the server refuses anyone else with a 403), and a patient is
+   * registered from the patient form, not here, so a hospital admin is
+   * offered staff roles only.
+   */
+  readonly grantableRoles = computed(() => {
+    const roles = this.availableRoles();
+    if (this.roleContext.isSuperAdmin()) return roles;
+    return roles.filter((r) => !STAFF_MODAL_EXCLUDED_ROLES.has(bareRoleCode(r.code)));
+  });
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields
@@ -166,6 +200,11 @@ export class UserListComponent implements OnInit, OnDestroy {
    */
   get licenseApplicable(): boolean {
     return this.selectedRoles.some((r) => MEDICAL_ROLE_CODES.has(r));
+  }
+
+  /** True when a selected role is a physician's: only then is a medical specialization asked. */
+  get specializationApplicable(): boolean {
+    return this.selectedRoles.some((r) => SPECIALTY_ROLE_CODES.has(r));
   }
 
   /** E-mail is optional only for a patient-only registration (phone-first). */
@@ -382,6 +421,9 @@ export class UserListComponent implements OnInit, OnDestroy {
     // Clear licenseNumber when no medical role selected
     if (!this.licenseApplicable) {
       this.createForm.licenseNumber = undefined;
+    }
+    if (!this.specializationApplicable) {
+      this.createForm.specialization = undefined;
     }
   }
 

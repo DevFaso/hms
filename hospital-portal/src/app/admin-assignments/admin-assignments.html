@@ -275,11 +275,15 @@
         <label class="check-field">
           <input
             type="checkbox"
-            [ngModel]="formActive()"
+            [ngModel]="formActive() && !patientRoleSelected()"
+            [disabled]="patientRoleSelected()"
             (ngModelChange)="formActive.set($event)"
           />
           <span>{{ 'COMMON.ACTIVE' | translate }}</span>
         </label>
+        @if (patientRoleSelected()) {
+          <p class="hint-text">{{ 'ASSIGN_ADMIN.PATIENT_ACTIVATES_ITSELF' | translate }}</p>
+        }
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="closeModal()">
             {{ 'COMMON.CANCEL' | translate }}
