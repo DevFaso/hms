@@ -36,7 +36,7 @@ class BpaCardLocalizationTest {
     @BeforeEach
     void setUp() {
         ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
-        source.setBasenames("classpath:messages");
+        source.setBasenames(com.example.hms.config.MessageBundles.basenames());
         source.setDefaultEncoding("UTF-8");
         source.setFallbackToSystemLocale(false);
         source.setAlwaysUseMessageFormat(true);

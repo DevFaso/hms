@@ -327,6 +327,14 @@ locally is seconds; the cost of fixing them via Copilot review +
 re-push cycles is hours of reviewer attention. This is the single
 highest-leverage discipline on the project.
 
+Backend message keys live in per-area bundles,
+`hospital-core/src/main/resources/i18n/messages-<area>{,_en,_fr,_es}.properties`
+(areas in `config/MessageBundles.AREAS`; a key with no clear area goes to
+`common`). Add a new key to its area's four files, never to a root
+`messages.properties` (it no longer exists). `MessageBundleSplitTest` fails on
+a key in two areas or a locale missing a key; a new area needs its four files
+AND an entry in `MessageBundles.AREAS`.
+
 **Frontend (`hospital-portal/`):**
 
 ```bash
