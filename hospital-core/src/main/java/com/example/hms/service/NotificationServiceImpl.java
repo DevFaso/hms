@@ -44,11 +44,29 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
-            return notificationRepository.findByRecipientUsername(username, Pageable.unpaged()).getContent();
+            return notificationRepository.findByRecipientUsername(username, Pageable.unpaged(NEWEST_FIRST)).getContent();
+    }
+
+    /**
+     * QA D278: the list came back in storage order, so today's urgent alert was
+     * on the last page. Every reader gets newest first (id breaks a tie so
+     * paging is stable), whatever order the caller asked for.
+     */
+    static final org.springframework.data.domain.Sort NEWEST_FIRST = org.springframework.data.domain.Sort.by(
+        org.springframework.data.domain.Sort.Order.desc("createdAt"),
+        org.springframework.data.domain.Sort.Order.desc("id"));
+
+    static Pageable newestFirst(Pageable requested) {
+        if (requested == null || requested.isUnpaged()) {
+            return Pageable.unpaged(NEWEST_FIRST);
+        }
+        return org.springframework.data.domain.PageRequest.of(
+            requested.getPageNumber(), requested.getPageSize(), NEWEST_FIRST);
     }
 
     @Override
-        public Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable pageable) {
+        public Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable requested) {
+            Pageable pageable = newestFirst(requested);
             if (read != null && search != null && !search.isEmpty()) {
                 return notificationRepository.findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(username, read, search, pageable);
             } else if (read != null) {

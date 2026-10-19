@@ -221,6 +221,12 @@ class StaffSchedulingServiceImplTest {
         StaffShiftResponseDTO response = service.scheduleShift(dto, Locale.ENGLISH);
 
         assertThat(response).isNotNull();
+        // QA D282: the overlap check runs under the staff row lock, so a second
+        // concurrent submit waits and then sees this shift.
+        org.mockito.InOrder lockFirst = org.mockito.Mockito.inOrder(staffRepository, shiftRepository);
+        lockFirst.verify(staffRepository).findLockedById(staffId);
+        lockFirst.verify(shiftRepository).existsOverlappingShift(staffId, shiftDate, startTime, endTime, null);
+        lockFirst.verify(shiftRepository).save(any(StaffShift.class));
         ArgumentCaptor<StaffAvailability> availabilityCaptor = ArgumentCaptor.forClass(StaffAvailability.class);
         verify(staffAvailabilityRepository).save(availabilityCaptor.capture());
         StaffAvailability savedAvailability = availabilityCaptor.getValue();

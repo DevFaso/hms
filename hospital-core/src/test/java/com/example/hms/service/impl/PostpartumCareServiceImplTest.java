@@ -54,6 +54,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import com.example.hms.i18n.TestMessageSources;
@@ -352,6 +353,68 @@ class PostpartumCareServiceImplTest {
 
         assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
         assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
+    }
+
+    /* ── QA D268 (round 5) ────────────────────────────────────────────── */
+
+    @Test
+    void aFutureDatedObservationIsRefusedAndTheScheduleIsUntouched_D268() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime nextDue = LocalDateTime.now().plusMinutes(10);
+        plan.setNextDueAt(nextDue);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().plusHours(24))
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .build();
+
+        assertThatThrownBy(() -> service.recordObservation(patientId, request, recorderId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.postpartum.observationTime.future");
+        verify(observationRepository, never()).save(any());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(nextDue, plan.getNextDueAt());
+    }
+
+    @Test
+    void afterAHaemorrhageTheFifteenMinuteChecksOutliveTheTwoHourWindow_D268() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(3));
+        plan.setImmediateObservationsCompleted(2);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+        when(observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()))
+            .thenReturn(true);
+
+        LocalDateTime observationTime = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(observationTime)
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        service.recordObservation(patientId, request, recorderId);
+
+        assertFalse(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(observationTime.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), plan.getNextDueAt());
+    }
+
+    @Test
+    void aSystolicOf900IsRefusedByValidation_D277() {
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId).systolicBpMmHg(900).build();
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(request))
+                .extracting(v -> v.getPropertyPath().toString())
+                .containsExactly("systolicBpMmHg");
+        }
     }
 
     /* ── QA D215 / D216 (round 4) ─────────────────────────────────────── */

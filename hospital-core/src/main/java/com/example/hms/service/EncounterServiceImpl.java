@@ -289,6 +289,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     private final PatientTrackerEventPublisher trackerEventPublisher;
+    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
@@ -1702,6 +1703,13 @@ public class EncounterServiceImpl implements EncounterService {
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
         com.example.hms.model.PatientVitalSign savedVital = patientVitalSignRepository.save(vital);
+        // QA D265 (D207 on the triage path): a triage set scoring MEDIUM/HIGH
+        // alerts the triage nurse and the visit's clinician, through the same
+        // escalation every other vitals path uses.
+        news2EscalationService.escalateIfNeeded(vital,
+                encounter.getPatient() != null ? encounter.getPatient().getId() : null,
+                encounter.getHospital() != null ? encounter.getHospital().getId() : null,
+                actorUsername, visitPhysicianUsername(encounter));
 
         // (b) Update chief complaint on encounter (override with triage value if provided)
         if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
@@ -1742,6 +1750,11 @@ public class EncounterServiceImpl implements EncounterService {
                 .chiefComplaint(saved.getChiefComplaint())
                 .vitalSignId(savedVital.getId())
                 .build();
+    }
+
+    private static String visitPhysicianUsername(Encounter encounter) {
+        Staff provider = encounter.getStaff();
+        return provider != null && provider.getUser() != null ? provider.getUser().getUsername() : null;
     }
 
     /**

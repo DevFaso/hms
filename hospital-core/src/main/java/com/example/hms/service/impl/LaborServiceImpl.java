@@ -124,6 +124,13 @@ public class LaborServiceImpl implements LaborService {
         if (request == null) {
             throw new BusinessException("maternity.labor.payloadRequired");
         }
+        // QA D295: an episode with no onset time has no partograph clock.
+        if (request.getLaborOnsetAt() == null) {
+            throw new BusinessException("maternity.labor.onset.required");
+        }
+        if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
+            throw new BusinessException("maternity.labor.onset.future");
+        }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         ObstetricEligibility.requireObstetricEligible(patient);

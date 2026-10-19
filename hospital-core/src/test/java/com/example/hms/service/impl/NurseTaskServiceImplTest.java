@@ -2023,6 +2023,32 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void createNursingTaskRefusesATaskDueInThePast_D294() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        Patient pat = Patient.builder().firstName("Task").lastName("Pat").build();
+        pat.setId(patientId);
+        registerPatientAtHospital(pat, hosp);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+
+        NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
+        req.setPatientId(patientId);
+        req.setCategory("assessment");
+        req.setDescription("QA");
+        req.setDueAt(LocalDateTime.of(2020, 1, 1, 8, 0));
+
+        assertThatThrownBy(() -> service.createNursingTask(nurseId, hospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("nurse.task.dueAt.past");
+        verify(nursingTaskRepository, never()).save(any());
+    }
+
+    @Test
     void createNursingTaskThrowsWhenHospitalNotFound() {
         UUID hospitalId = UUID.randomUUID();
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());

@@ -469,6 +469,19 @@ class HospitalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D285: a name with stray blanks is checked and stored trimmed")
+        void blankPaddedDuplicateIsRefused() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("  existing   hospital ");
+            stubMessage("hospital.exists");
+
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode("existing hospital", "10001")).thenReturn(true);
+
+            assertThrows(ConflictException.class,
+                    () -> hospitalService.createHospital(dto, Locale.ENGLISH));
+        }
+
+        @Test
         @DisplayName("throws AccessDeniedException when not super admin")
         void notSuperAdmin() {
             when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);

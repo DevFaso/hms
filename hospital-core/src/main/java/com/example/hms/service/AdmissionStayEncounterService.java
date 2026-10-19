@@ -38,6 +38,7 @@ public class AdmissionStayEncounterService {
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    private final com.example.hms.repository.NursingTaskRepository nursingTaskRepository;
     private final org.springframework.context.MessageSource messageSource;
 
     /**
@@ -152,6 +153,31 @@ public class AdmissionStayEncounterService {
             encounterRepository.save(enc);
         });
         closePendingHandoffs(admission);
+        closePendingNursingTasks(admission);
+    }
+
+    /**
+     * QA D294: the same for the nurse's ad-hoc tasks — a PENDING task for a
+     * patient who has gone home stayed on the worklist, and turned overdue.
+     */
+    private void closePendingNursingTasks(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        var pending = nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), admission.getHospital().getId(), "PENDING");
+        if (pending.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(java.time.ZoneId.systemDefault());
+        String closedBy = messageSource.getMessage("nurse.handoff.closedByDischarge", null,
+            "Closed at discharge", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        for (var task : pending) {
+            task.setStatus("COMPLETED");
+            task.setCompletedAt(now);
+            task.setCompletedByName(closedBy);
+        }
+        nursingTaskRepository.saveAll(pending);
     }
 
     /**

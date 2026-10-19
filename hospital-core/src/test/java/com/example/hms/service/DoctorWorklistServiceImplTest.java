@@ -312,6 +312,27 @@ class DoctorWorklistServiceImplTest {
     }
 
     @Test
+    void getWorklist_carriesTheTriageRoomOfAnOutpatient_D292() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient patient = stubPatient(UUID.randomUUID(), "Awa", "Traore");
+        Encounter enc = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.WAITING_FOR_PHYSICIAN,
+                LocalDateTime.now().minusMinutes(5));
+        when(enc.getRoomAssignment()).thenReturn(" Box 3 ");
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenAnswer(inv -> inv.getArgument(1) == EncounterStatus.WAITING_FOR_PHYSICIAN
+                        ? List.of(enc) : Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("Box 3", result.get(0).getRoom());
+    }
+
+    @Test
     void getWorklist_deduplicatesPatients() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
@@ -933,8 +954,9 @@ class DoctorWorklistServiceImplTest {
 
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
                 .thenReturn(Collections.emptyList());
-        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.WAITING_FOR_PHYSICIAN))
-                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenAnswer(inv -> inv.getArgument(1) == EncounterStatus.WAITING_FOR_PHYSICIAN
+                        ? List.of(enc) : Collections.emptyList());
         when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
