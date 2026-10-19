@@ -183,6 +183,13 @@ describe('Dashboard navigation & RBAC', () => {
     }
   });
 
+  it('recent activity shows no placeholder resource name (D260)', () => {
+    const admin = createComponent(['ROLE_HOSPITAL_ADMIN'], []);
+    expect(admin.auditResourceLabel('Unknown Resource')).toBeNull();
+    expect(admin.auditResourceLabel('  ')).toBeNull();
+    expect(admin.auditResourceLabel('Cardiologie')).toBe('Cardiologie');
+  });
+
   // ── Doctor quick actions include Lab and Referrals ───────────
 
   it('doctor quick actions should include Lab Orders', () => {

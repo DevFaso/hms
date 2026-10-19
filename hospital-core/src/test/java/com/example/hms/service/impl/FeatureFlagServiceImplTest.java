@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.config.FeatureFlagProperties;
@@ -63,7 +64,8 @@ class FeatureFlagServiceImplTest {
         lenient().when(environment.getActiveProfiles()).thenReturn(new String[] {"staging"});
 
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService,
+            mock(com.example.hms.repository.SubscriptionPlanRepository.class));
 
         // Default: no tenant context → gate is a no-op (matches the
         // legacy behaviour the existing tests expect). Individual

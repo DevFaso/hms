@@ -2482,6 +2482,7 @@
     "LOAD_FAILED": "Error al cargar los indicadores de funcionalidad",
     "NEW_FLAG": "Nuevo indicador",
     "NO_FLAGS": "No se encontraron indicadores de funciones",
+    "NO_FLAGS_MATCHING": "Ningún indicador coincide con «{{query}}»",
     "OFF": "NO",
     "ON": "SÍ",
     "OVERRIDE_REMOVED": "Anulación eliminada para {{key}}",

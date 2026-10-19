@@ -68,6 +68,10 @@ class HospitalAdminOffChartTest {
         assertOffChart(DischargeSummaryController.class);
         assertOffChart(DischargeApprovalController.class);
         assertOffChart(TransferController.class);
+        // D88/D188/D229: GET /transfers/pending (the exact QA call) inherits
+        // the class guard above. The worklist names patients and the reason
+        // for their move; decision D5 keeps it from the role, and the bed
+        // board does not ask for it in a hospital-admin session.
         assertOffChart(IsolationController.class);
     }
 
