@@ -176,7 +176,8 @@ public class LabResultMapper {
      * QA D206 / D212: the ONE severity every screen shows. It is the range
      * grade, except that a result the server treats as critical is labelled
      * CRITICAL: a value above a range that declares no critical limits (the
-     * D107 fail-safe that pages it), or a result already critically notified.
+     * D107 fail-safe that pages it), or an analyzer's CRITICAL flag. Never
+     * the notification stamp: that describes a page, not the current value.
      * Before this, K 7.9 on such a range was paged as a critical value and
      * shown as "Eleve" with a critical tile of 0.
      */
@@ -185,7 +186,11 @@ public class LabResultMapper {
         if (FLAG_CRITICAL.equals(flag)) {
             return flag;
         }
-        if (result.getCriticalNotifiedAt() != null) {
+        // From the value only: an analyzer's CRITICAL flag is part of the
+        // result. The criticalNotifiedAt stamp is NOT - it records a page
+        // about a value that may since have been amended (79 -> 4.2), and
+        // keying the label on it kept a corrected typo CRITICAL for good.
+        if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
             return FLAG_CRITICAL;
         }
         if ("HIGH".equals(flag) && graded != null

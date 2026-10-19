@@ -217,8 +217,11 @@ public class LabResultController {
     @Operation(summary = "Compare Lab Result with Previous", description = "Compares current lab result with the previous measurement to identify trends and significant changes.")
     public ResponseEntity<LabResultComparisonDTO> compareLabResult(
             @PathVariable UUID id,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.compareLabResults(id, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        // QA D211: the same released-only rule as GET /{id}.
+        return ResponseEntity.ok(labResultService.compareLabResults(id, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping("/patient/{patientId}/test/{testDefinitionId}/compare-sequential")
@@ -227,8 +230,10 @@ public class LabResultController {
     public ResponseEntity<List<LabResultComparisonDTO>> compareSequentialResults(
             @PathVariable UUID patientId,
             @PathVariable UUID testDefinitionId,
-            @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.compareSequentialResults(patientId, testDefinitionId, locale));
+            @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+            org.springframework.security.core.Authentication auth) {
+        return ResponseEntity.ok(labResultService.compareSequentialResults(patientId, testDefinitionId, locale,
+            PatientLabResultController.isLaboratoryStaff(auth)));
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")

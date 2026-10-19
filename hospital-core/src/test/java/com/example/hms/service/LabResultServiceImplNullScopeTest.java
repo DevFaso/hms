@@ -42,6 +42,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -276,6 +277,46 @@ class LabResultServiceImplNullScopeTest {
             verify(labResultRepository).deleteById(result.getId());
             // A pinned caller never needed the super-admin flag.
             verify(roleValidator, never()).isSuperAdminFromJwtClaim();
+        }
+
+        @Test
+        void amendingAPagedTypoRestartsTheCriticalChainFromTheNewValue() {
+            // Review of #901: 79 was entered, paged, then corrected to 4.2
+            // before release. The stamp described the page about 79 and kept
+            // the corrected result CRITICAL on the tile for good.
+            when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+            when(authService.hasRole(any())).thenReturn(true);
+            when(assignmentRepository.findById(labAssignment.getId())).thenReturn(Optional.of(labAssignment));
+            when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+            result.setResultValue("79");
+            result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(5));
+            result.setCriticalEscalationLevel((short) 1);
+            result.setCriticalReadBackValue("79");
+            LabResultRequestDTO amended = request();
+            amended.setResultValue("4.2");
+
+            service.updateLabResult(result.getId(), amended, Locale.ENGLISH);
+
+            assertThat(result.getCriticalNotifiedAt()).isNull();
+            assertThat(result.getCriticalEscalationLevel()).isZero();
+            assertThat(result.getCriticalReadBackValue()).isNull();
+            // Re-evaluated on the new value: re-paged only if still critical.
+            verify(criticalValueNotificationService).notifyIfCritical(eq(result), any());
+        }
+
+        @Test
+        void savingAnUnchangedValueKeepsTheCriticalStamp() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+            when(authService.hasRole(any())).thenReturn(true);
+            when(assignmentRepository.findById(labAssignment.getId())).thenReturn(Optional.of(labAssignment));
+            when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
+            LocalDateTime paged = LocalDateTime.now().minusMinutes(5);
+            result.setCriticalNotifiedAt(paged);
+
+            service.updateLabResult(result.getId(), request(), Locale.ENGLISH);
+
+            assertThat(result.getCriticalNotifiedAt()).isEqualTo(paged);
+            verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
         }
 
         @Test

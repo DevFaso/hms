@@ -98,9 +98,24 @@ public interface LabResultService {
     LabResultResponseDTO signLabResult(UUID id, LabResultSignatureRequestDTO request, Locale locale);
 
     // Enhanced trending and comparison methods (Story #5)
-    LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale);
+    default LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale) {
+        return compareLabResults(currentResultId, locale, true);
+    }
 
-    List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale);
+    /**
+     * QA D211: {@code includeUnreleased} is false for a reader outside the
+     * laboratory, who then gets neither an unreleased compared result (404)
+     * nor unreleased points in its trend.
+     */
+    LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased);
+
+    default List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale) {
+        return compareSequentialResults(patientId, testDefinitionId, locale, true);
+    }
+
+    /** QA D211: unreleased results are left out unless {@code includeUnreleased}. */
+    List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale,
+                                                          boolean includeUnreleased);
 
     List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale);
 

@@ -593,7 +593,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB.SPECIMENS' | translate }} — {{ specimensOrder()?.labOrderCode }}</h2>
+        <h2>{{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specimensOrder()?.labOrderCode) }}</h2>
         <button class="modal-close" (click)="closeSpecimens()">
           <span class="material-symbols-outlined">close</span>
         </button>
