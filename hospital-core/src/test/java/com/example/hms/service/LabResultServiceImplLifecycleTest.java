@@ -698,7 +698,7 @@ class LabResultServiceImplLifecycleTest {
         assertThatThrownBy(() -> service.updateLabResult(existing.getId(), request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "lab.result.value.notNumeric");
-        verify(labResultRepository, org.mockito.Mockito.never()).save(any());
+        verify(labResultRepository, never()).save(any());
     }
 
     @Test
