@@ -83,6 +83,8 @@ class PostpartumCareServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
     private com.example.hms.service.pro.ProResponseService proResponseService;
+    @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     private PostpartumCareServiceImpl service;
     private UUID patientId;
@@ -106,7 +108,8 @@ class PostpartumCareServiceImplTest {
             proResponseService,
             recordAccessPolicy,
             reachRecorder,
-            TestMessageSources.bundles()
+            TestMessageSources.bundles(),
+            deliveryRecordRepository
         );
 
         patientId = UUID.randomUUID();
@@ -170,7 +173,7 @@ class PostpartumCareServiceImplTest {
         assertFalse(response.getAlerts().isEmpty(), "Expected hemorrhage alert to be generated");
         assertEquals(PostpartumAlertType.HEMORRHAGE, response.getAlerts().get(0).getType());
         assertEquals(PostpartumAlertSeverity.URGENT, response.getAlerts().get(0).getSeverity());
-        assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hemorrhage"));
+        assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hémorragie"));
 
     verify(notificationService, times(1)).createNotification(anyString(), anyString());
 

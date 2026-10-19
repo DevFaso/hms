@@ -78,6 +78,19 @@
         <label for="labor-risk">{{ 'LABOR.RISK_NOTES' | translate }}</label>
         <textarea id="labor-risk" rows="2" [(ngModel)]="startForm.riskNotes"></textarea>
       </div>
+      <div class="field">
+        <label for="labor-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+        <textarea
+          id="labor-override"
+          rows="2"
+          maxlength="500"
+          aria-describedby="labor-override-hint"
+          [(ngModel)]="startForm.recentDeliveryOverrideReason"
+        ></textarea>
+        <p id="labor-override-hint" class="muted">
+          {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+        </p>
+      </div>
       <p class="muted">{{ 'LABOR.SNAPSHOT_HINT' | translate }}</p>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelStart()" [disabled]="saving()">

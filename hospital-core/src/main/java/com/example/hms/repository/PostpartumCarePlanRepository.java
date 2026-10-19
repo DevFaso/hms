@@ -21,4 +21,6 @@ public interface PostpartumCarePlanRepository extends JpaRepository<PostpartumCa
     Optional<PostpartumCarePlan> findByIdAndPatient_IdAndHospital_Id(UUID carePlanId, UUID patientId, UUID hospitalId);
 
     List<PostpartumCarePlan> findByPatient_IdAndActiveTrue(UUID patientId);
+
+    List<PostpartumCarePlan> findByPatient_IdAndHospital_IdAndActiveTrue(UUID patientId, UUID hospitalId);
 }

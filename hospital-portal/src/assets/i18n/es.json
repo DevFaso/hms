@@ -215,6 +215,8 @@
     "PULSE": "Pulso",
     "RECORD_DELIVERY": "Registrar parto",
     "RISK_NOTES": "Notas de riesgo",
+    "RECENT_DELIVERY_OVERRIDE": "Motivo de excepción (parto reciente)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Obligatorio solo si se registró un nacimiento para esta paciente en las últimas 20 semanas.",
     "SAVE_DELIVERY": "Guardar registro de parto",
     "SAVE_ENTRY": "Guardar registro",
     "SEX_FEMALE": "Femenino",

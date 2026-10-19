@@ -39,6 +39,8 @@ export interface LaborEpisodeRequest {
   gravida?: number;
   para?: number;
   riskNotes?: string;
+  /** QA D214: required by the server when a birth was recorded recently. */
+  recentDeliveryOverrideReason?: string;
 }
 
 export interface LaborEpisodeResponse {

@@ -72,6 +72,7 @@ class LaborServiceImplTest {
     @Mock private NotificationService notificationService;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
+    @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
 
     private LaborServiceImpl service;
 
@@ -91,7 +92,7 @@ class LaborServiceImplTest {
             patientRepository, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles());
+            TestMessageSources.bundles(), postpartumCarePlanRepository);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();

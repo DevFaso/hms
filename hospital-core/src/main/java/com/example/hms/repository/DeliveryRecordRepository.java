@@ -12,6 +12,9 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
 
     boolean existsByEpisode_Id(UUID episodeId);
 
+    /** The mother's latest birth at this hospital (QA D215: a new delivery starts a new postpartum plan). */
+    Optional<DeliveryRecord> findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(UUID patientId, UUID hospitalId);
+
     /** A birth on or after {@code since} for this mother (QA D164: no antenatal plan after delivery). */
     boolean existsByPatient_IdAndBirthDateTimeGreaterThanEqual(UUID patientId, java.time.LocalDateTime since);
 }
