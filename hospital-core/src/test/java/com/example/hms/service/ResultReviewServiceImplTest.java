@@ -83,6 +83,8 @@ class ResultReviewServiceImplTest {
     @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+    /** QA D178: the queue grades a result the way the lab-results screen does. */
+    @Mock private com.example.hms.mapper.LabResultMapper labResultMapper;
 
     @InjectMocks
     private ResultReviewServiceImpl service;
@@ -385,7 +387,8 @@ class ResultReviewServiceImplTest {
         when(labResult.getId()).thenReturn(UUID.randomUUID());
         when(labResult.getResultValue()).thenReturn("Normal");
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now());
-        when(labResult.isAcknowledged()).thenReturn(true);
+        lenient().when(labResult.isAcknowledged()).thenReturn(true);
+        when(labResultMapper.severityFlagOf(labResult)).thenReturn("NORMAL");
 
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(labResult));
@@ -1137,10 +1140,13 @@ class ResultReviewServiceImplTest {
 
         lenient().when(result.isReleased()).thenReturn(true);
         when(result.getId()).thenReturn(UUID.randomUUID());
-        when(result.getAbnormalFlag()).thenReturn(null);
-        when(result.isAcknowledged()).thenReturn(false);
+        lenient().when(result.getAbnormalFlag()).thenReturn(null);
+        lenient().when(result.isAcknowledged()).thenReturn(false);
         when(result.getResultValue()).thenReturn("5.0");
         when(result.getResultDate()).thenReturn(LocalDateTime.now());
+        // QA D178: a 5.0 glucose inside its range reads NORMAL, as on the
+        // lab-results screen, not "Anormal" because nobody acknowledged it.
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
 
         when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
         when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
@@ -1148,7 +1154,38 @@ class ResultReviewServiceImplTest {
         List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals(1, queue.size());
-        assertEquals("ABNORMAL", queue.get(0).getAbnormalFlag());
+        assertEquals("NORMAL", queue.get(0).getAbnormalFlag());
+    }
+
+    @Test
+    void getResultReviewQueue_qaD178_anUngradedResultIsNotGradedAbnormal() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        LabOrder order = mock(LabOrder.class);
+        Patient p = mock(Patient.class);
+        when(p.getFirstName()).thenReturn("Test");
+        when(p.getLastName()).thenReturn("Pat");
+        when(p.getId()).thenReturn(UUID.randomUUID());
+        when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        when(order.getPatient()).thenReturn(p);
+        when(order.getId()).thenReturn(UUID.randomUUID());
+
+        LabResult result = mock(LabResult.class);
+        lenient().when(result.isReleased()).thenReturn(true);
+        when(result.getId()).thenReturn(UUID.randomUUID());
+        when(result.getAbnormalFlag()).thenReturn(null);
+        when(result.getResultValue()).thenReturn("14.2");
+        when(result.getResultDate()).thenReturn(LocalDateTime.now());
+        when(labResultMapper.severityFlagOf(result)).thenReturn("UNSPECIFIED");
+
+        when(labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, ACTING_HOSPITAL_ID)).thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result));
+
+        List<DoctorResultQueueItemDTO> queue = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
+
+        assertEquals("UNSPECIFIED", queue.get(0).getAbnormalFlag());
     }
 
     @Test

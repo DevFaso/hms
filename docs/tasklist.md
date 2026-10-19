@@ -209,6 +209,8 @@ Task 13 is complete using Option A. The doctor board now merges encounter-backed
 
 ## Standing platform debt
 
+- **D177 (QA round 3), human lab order number.** A lab order has no accession number: the UI shows the first 8 hex digits of its UUID (`#8EC14E3D`). A real per-hospital numbering scheme (sequence, format, backfill of existing orders, label and HL7 OBR-2 use) is a feature. The raw encounter-id inputs and the empty specimen type from the same defect are fixed.
+- **D156 (QA round 3), universal pharmacist verification.** The counter now refuses a fill only for the prescriptions the verification step covers (controlled substances and co-sign orders, `PharmacistVerificationService.requiresVerification`). Requiring verification before every fill is a policy change across the inpatient MAR as well, not a defect fix.
 - **D121 (QA round 2), backend-composed English.** CDS Hooks card text and server error `message` strings are written in English by hospital-core; the portal shows them verbatim. Localizing them needs per-request message bundles on the server (Accept-Language), which is a feature, not a template fix. The check-in toast no longer echoes the server's English sentence.
 - **D121, remaining raw enum renders.** 211 sites stay pinned in `hospital-portal/scripts/i18n-raw-enums-baseline.json`; the pin list may only shrink. Many are free text (frequency, route, reason fields) and need a per-field decision.
 - **D129, patient notice on a new hospital link.** Telling the patient (SMS/portal) that a second hospital registered them is a new notification flow. Staff already get a toast when they link a patient.

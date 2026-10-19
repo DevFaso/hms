@@ -61,7 +61,17 @@ public class PatientLabResultController {
 
         log.info("GET /api/patients/{}/lab-results - hospital: {}", patientId, resolvedHospitalId);
         List<PatientLabResultResponseDTO> results = patientLabResultService
-            .getLabResultsForPatient(patientId, resolvedHospitalId, safeLimit);
+            .getLabResultsForPatient(patientId, resolvedHospitalId, safeLimit, isLaboratoryStaff(auth));
         return ResponseEntity.ok(results);
+    }
+
+    /** QA D160: only the laboratory sees a value before it is released. */
+    static final java.util.Set<String> LAB_AUTHORITIES = java.util.Set.of(
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER",
+        "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
+
+    private static boolean isLaboratoryStaff(Authentication auth) {
+        return auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
+            .anyMatch(a -> LAB_AUTHORITIES.contains(a.getAuthority()));
     }
 }

@@ -110,6 +110,11 @@ class DispenseServiceImplTest {
     @org.mockito.Spy
     private java.time.Clock clock = FIXED_CLOCK;
 
+    /** QA D156: real, so the tests exercise the rule and not a stub of it. */
+    @org.mockito.Spy
+    private PharmacistVerificationService pharmacistVerificationService =
+        new PharmacistVerificationService(null, null, null, FIXED_CLOCK);
+
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
@@ -393,6 +398,40 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).save(any(Dispense.class));
             verify(prescriptionRepository).save(any(Prescription.class));
             verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D138: a pharmacy that keeps lots refuses a fill that names none, and nothing moves")
+        void aFillWithNoLotIsRefusedWhereThePharmacyKeepsLots() {
+            DispenseRequestDTO dto = buildRequest();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacyId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("dispense.lot.required") || e.getMessage().contains("keeps stock in lots"));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D156: a controlled prescription nobody verified is not filled")
+        void anUnverifiedControlledPrescriptionIsRefusedAtTheCounter() {
+            prescription.setControlledSubstance(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            DispenseRequestDTO dto = buildRequest();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("dispense.verification.required") || e.getMessage().contains("verified by a pharmacist"));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
         @Test

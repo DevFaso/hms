@@ -81,11 +81,34 @@
               type="number"
               [(ngModel)]="form.quantity"
               name="quantity"
-              min="1"
+              [attr.min]="isAdjustment() ? null : 1"
               required
             />
+            @if (isAdjustment()) {
+              <small class="field-hint">{{ 'PHARMACY.ADJUSTMENT_SIGN_HINT' | translate }}</small>
+            }
           </div>
         </div>
+
+        <!-- QA D157: a controlled substance moves only in front of a witness -->
+        @if (needsWitness()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="txWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select id="txWitness" [(ngModel)]="form.witnessedBy" name="witnessedBy" required>
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+              @if (witnessCandidates().length === 0) {
+                <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
+              }
+            </div>
+          </div>
+        }
 
         <!-- D82: a lot-tracked item moves through one of its lots -->
         @if (!isReceipt() && txType() && itemLots().length > 0) {
@@ -291,25 +314,26 @@
               </td>
               <td>
                 <span class="tx-qty" [class]="getTypeClass(tx.transactionType)">
-                  {{
-                    ['RECEIVE', 'ADJUSTMENT_IN', 'RETURN', 'TRANSFER_IN'].includes(
-                      tx.transactionType
-                    )
-                      ? '+'
-                      : '-'
-                  }}{{ tx.quantity }}
+                  {{ signedQuantity(tx) }}
                 </span>
               </td>
               <td>
-                @if (tx.stockLotId) {
-                  <span class="code-chip">{{ tx.stockLotId }}</span>
+                @if (tx.stockLotNumber || tx.lotNumber) {
+                  <span class="code-chip">{{ tx.stockLotNumber ?? tx.lotNumber }}</span>
                 } @else {
                   —
                 }
               </td>
               <td class="reason-cell">{{ tx.reason ?? '—' }}</td>
               <td>{{ tx.createdAt | date: 'medium' }}</td>
-              <td>{{ tx.performedBy ?? '—' }}</td>
+              <td>
+                {{ tx.performedByName ?? '—' }}
+                @if (tx.witnessedByName) {
+                  <small class="witness-note">{{
+                    'PHARMACY.WITNESSED_BY' | translate: { name: tx.witnessedByName }
+                  }}</small>
+                }
+              </td>
             </tr>
           }
         </tbody>

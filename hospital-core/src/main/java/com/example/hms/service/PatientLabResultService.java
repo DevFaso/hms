@@ -13,6 +13,15 @@ public interface PatientLabResultService {
     List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit);
 
     /**
+     * QA D160: the staff view for a caller outside the laboratory. A value
+     * the lab has not released is the lab's: the care team sees that a
+     * result is pending, not the preliminary number, exactly as the patient
+     * does. {@code includeUnreleasedValues} is true only for laboratory staff.
+     */
+    List<PatientLabResultResponseDTO> getLabResultsForPatient(UUID patientId, UUID hospitalId, int limit,
+                                                              boolean includeUnreleasedValues);
+
+    /**
      * B3 — the patient's own view (portal, proxy, dashboard). Unreleased rows
      * are kept so the patient knows a result is expected, but they carry only
      * the test identity and {@code PENDING}: no value, unit, reference range,

@@ -157,6 +157,8 @@ class PreparedFillConcurrencyPostgresIT {
     @MockitoBean private PrescriberPharmacyNotifier prescriberNotifier;
     @MockitoBean private PartnerNotificationChannel partnerChannel;
     @MockitoBean private WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** QA D156: the verification gate; a mock answers false, so it never blocks these fills. */
+    @MockitoBean private PharmacistVerificationService pharmacistVerificationService;
     @MockitoBean private com.example.hms.service.AuditEventLogService auditEventLogService;
 
     @Autowired private DispenseService dispenseService;

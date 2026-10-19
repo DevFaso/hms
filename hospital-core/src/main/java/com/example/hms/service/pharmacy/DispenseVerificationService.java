@@ -212,9 +212,34 @@ public class DispenseVerificationService {
             // unevaluated rather than passed, which is the honest answer.
             return true;
         }
-        return prescribedName.equals(normalize(item.getGenericName()))
-            || prescribedName.equals(normalize(item.getBrandName()))
-            || prescribedName.equals(normalize(item.getNameFr()));
+        // QA D138: a free-text order names the drug the way people write it,
+        // "Paracétamol 500 mg comprimé", while the catalogue says
+        // "paracetamol". Compare without accents, and accept the catalogue
+        // name when it is the whole first part of the prescribed text,
+        // ending on a word boundary ("paracetamol 500 mg" matches, a longer
+        // word that merely starts with the name does not).
+        String folded = fold(prescribedName);
+        return namesDrug(folded, item.getGenericName())
+            || namesDrug(folded, item.getBrandName())
+            || namesDrug(folded, item.getNameFr());
+    }
+
+    private static boolean namesDrug(String foldedPrescribed, String catalogName) {
+        String name = fold(normalize(catalogName));
+        if (name.isEmpty() || !foldedPrescribed.startsWith(name)) {
+            return false;
+        }
+        if (foldedPrescribed.length() == name.length()) {
+            return true;
+        }
+        char next = foldedPrescribed.charAt(name.length());
+        return Character.isWhitespace(next) || next == ',' || next == '(' || next == '/';
+    }
+
+    /** Lower-case text with its accents removed and its spaces collapsed. */
+    private static String fold(String s) {
+        String decomposed = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD);
+        return decomposed.replaceAll("\\p{M}+", "").replaceAll("\\s+", " ").trim();
     }
 
     /**

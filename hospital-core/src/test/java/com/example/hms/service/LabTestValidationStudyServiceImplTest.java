@@ -10,7 +10,7 @@ import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
 import com.example.hms.utility.RoleValidator;
-import jakarta.persistence.EntityNotFoundException;
+import com.example.hms.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -106,8 +106,8 @@ class LabTestValidationStudyServiceImplTest {
 
         var req = requestDto();
         assertThatThrownBy(() -> service.create(DEF_ID, req))
-                .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Lab Test Definition not found");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("labtestdefinition.notfound");
 
         verify(repository, never()).save(any());
     }
@@ -132,8 +132,8 @@ class LabTestValidationStudyServiceImplTest {
         when(repository.findById(STUDY_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.getById(STUDY_ID))
-                .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Validation study not found");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("labvalidationstudy.notfound");
     }
 
     // ── getByDefinitionId ─────────────────────────────────────────────────────
@@ -160,8 +160,8 @@ class LabTestValidationStudyServiceImplTest {
         when(definitionRepository.existsById(DEF_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.getByDefinitionId(DEF_ID))
-                .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Lab Test Definition not found");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("labtestdefinition.notfound");
     }
 
     @Test
@@ -208,8 +208,8 @@ class LabTestValidationStudyServiceImplTest {
 
         var req = requestDto();
         assertThatThrownBy(() -> service.update(STUDY_ID, req))
-                .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Validation study not found");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("labvalidationstudy.notfound");
     }
 
     // ── delete ────────────────────────────────────────────────────────────────
@@ -228,8 +228,8 @@ class LabTestValidationStudyServiceImplTest {
         when(repository.existsById(STUDY_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.delete(STUDY_ID))
-                .isInstanceOf(EntityNotFoundException.class)
-                .hasMessageContaining("Validation study not found");
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("labvalidationstudy.notfound");
 
         verify(repository, never()).deleteById(any());
     }
