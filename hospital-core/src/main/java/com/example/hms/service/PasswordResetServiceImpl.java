@@ -103,7 +103,15 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         final UUID requesterId = user.getId();
         final String to = user.getPhoneNumber();
         TransactionCallbacks.afterCommit(() -> {
-            smsService.send(to, body);
+            // QA D222: a provider failure must not reach the caller — a 400 for a known
+            // phone against a 204 for an unknown one enumerates accounts. Log it only,
+            // with the user id and the failure type (never the number or the link).
+            try {
+                smsService.send(to, body);
+            } catch (RuntimeException ex) {
+                log.warn("🔑 Password reset SMS for user {} failed: {}", requesterId, ex.getClass().getSimpleName());
+                return;
+            }
             audit(AuditEventType.PASSWORD_RESET_REQUEST, "Password reset link issued by SMS", requesterId);
         });
         log.info("🔑 Password reset link issued by SMS for user {}", requesterId);
@@ -133,7 +141,12 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         tokenRepository.save(resetToken);
 
         String resetLink = frontendBaseUrl + "/reset-password?token=" + rawToken;
-        emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
+        try {
+            emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
+        } catch (RuntimeException ex) {
+            // QA D222 sibling: a mail failure must look like any other request.
+            log.warn("🔑 Password reset email for user {} failed: {}", user.getId(), ex.getClass().getSimpleName());
+        }
 
         if (log.isDebugEnabled() && shouldLogRawToken()) {
             log.debug("🔑 [DEV ONLY] Raw password reset token for {}: {}", user.getEmail(), rawToken);

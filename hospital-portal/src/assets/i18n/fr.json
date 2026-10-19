@@ -1547,7 +1547,8 @@
     "VOICE_MEMO_EMPTY": "Le mémo vocal était vide — veuillez réessayer.",
     "VOICE_MEMO_NOT_SUPPORTED": "L'enregistrement de mémo vocal n'est pas pris en charge dans ce navigateur.",
     "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal.",
-    "ATTACHMENT": "Pièce jointe"
+    "ATTACHMENT": "Pièce jointe",
+    "SUBTITLE_PATIENT": "Écrire à votre équipe soignante"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -3379,7 +3380,7 @@
     "MEDICATION_HISTORY": "Historique Médicamenteux",
     "PROCEDURE_ORDERS": "Ordres de Procédure",
     "REGISTRATIONS": "Enregistrements",
-    "MY_EDUCATION": "Mes documents",
+    "MY_EDUCATION": "Mon éducation santé",
     "REFILLS": "Demandes de renouvellement",
     "LAB_OUTBOX": "Boîte d’envoi instruments",
     "MICROBIOLOGY": "Microbiologie",
@@ -5924,7 +5925,7 @@
       "SAVED": "Enregistré.",
       "SAVE_FAILED": "Impossible d'enregistrer. Veuillez réessayer.",
       "SEND_QUESTION": "Envoyer la question",
-      "TITLE": "Mes documents",
+      "TITLE": "Mon éducation santé",
       "WARNING_DESC": "Votre équipe soignante a partagé un document sur les signes d'alerte. Veuillez le lire.",
       "WARNING_TITLE": "Informations de sécurité importantes",
       "WATCH_VIDEO": "Regarder la vidéo",
@@ -6331,7 +6332,8 @@
     "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",
     "PASSWORD_MANAGED_BY_SSO": "Votre mot de passe est géré par votre fournisseur d’authentification unique.",
     "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
-    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail."
+    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail.",
+    "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Accepter",
@@ -6952,7 +6954,9 @@
     "TOGGLE_VISIBILITY": "Afficher ou masquer le mot de passe",
     "USERNAME_DESC": "Choisissez un nom d'utilisateur unique",
     "USERNAME_HINT": "3 à 50 caractères : lettres, chiffres, points, tirets, tirets bas",
-    "USERNAME_PLACEHOLDER": "ex. jean.dupont"
+    "USERNAME_PLACEHOLDER": "ex. jean.dupont",
+    "CURRENT_HINT_SMS": "Le mot de passe temporaire reçu par SMS",
+    "CURRENT_HINT_GENERIC": "Le mot de passe temporaire qui vous a été remis"
   },
   "SETTINGS_HUB": {
     "ACCOUNT_DESC": "Mettez à jour votre nom, vos coordonnées, votre photo et vos autres informations personnelles.",

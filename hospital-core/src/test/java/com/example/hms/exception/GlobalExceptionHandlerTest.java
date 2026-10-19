@@ -751,4 +751,45 @@ class GlobalExceptionHandlerTest {
             assertThat(messageOf(response)).isEqualTo("Accès refusé");
         }
     }
+
+    @Nested
+    @DisplayName("QA D258: the hospital-scope refusal speaks the caller's language")
+    class HospitalScopeRefusalLocale {
+
+        @Test
+        @DisplayName("the 403 body from the handler is French for a French caller")
+        void handlerBodyIsLocalized() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleHospitalScopeRefused(
+                    new HospitalScopeRefusedException("Select a hospital"), request);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message",
+                    "Sélectionnez un hôpital : cette action est impossible en vue globale.");
+                assertThat(body).containsEntry("code", HospitalScopeRefusedException.CODE);
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("the 403 written by the auth filter is French for a French caller")
+        void filterBodyIsLocalized() throws Exception {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                org.springframework.mock.web.MockHttpServletResponse response =
+                    new org.springframework.mock.web.MockHttpServletResponse();
+                com.example.hms.security.HospitalScopeResponses.writeRefusal(response,
+                    com.example.hms.security.tenant.ActingScope.Reason.NOT_PERMITTED);
+                String json = response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                assertThat(new tools.jackson.databind.ObjectMapper().readTree(json).get("message").asString())
+                    .isEqualTo("Accès refusé : vous n'avez pas de rôle actif dans l'hôpital demandé.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
 }

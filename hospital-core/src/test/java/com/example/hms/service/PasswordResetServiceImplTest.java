@@ -101,6 +101,32 @@ class PasswordResetServiceImplTest {
     }
 
     @Test
+    void qaD222_aProviderFailureNeverReachesTheCaller() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        when(smsService.deliversRealSms()).thenReturn(true);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+        org.mockito.Mockito.doThrow(new IllegalStateException("IKODDI SMS send request failed with status 400"))
+            .when(smsService).send(any(), any());
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+            () -> service.requestResetByPhone("70202020", Locale.FRENCH, null));
+    }
+
+    @Test
+    void qaD222_aMailFailureNeverReachesTheCaller() {
+        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        org.mockito.Mockito.doThrow(new IllegalStateException("smtp down"))
+            .when(emailService).sendPasswordResetEmail(any(), any());
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+            () -> service.requestReset("test@test.com", Locale.ENGLISH, null));
+    }
+
+    @Test
     void qaD171_noTokenIsIssuedWithoutARealSmsTransport() {
         user.setPhoneNumber("+22670202020");
         when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
