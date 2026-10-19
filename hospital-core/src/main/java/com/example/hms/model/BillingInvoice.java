@@ -123,6 +123,11 @@ public class BillingInvoice extends BaseEntity {
     @Column(name = "client_request_id")
     private java.util.UUID clientRequestId;
 
+    /** QA D210: the paid copay taken at check-in, credited to the visit invoice once it is issued (V200). */
+    @Builder.Default
+    @Column(name = "check_in_copay", nullable = false)
+    private boolean checkInCopay = false;
+
     /* ---------- Helpers ---------- */
 
     public void addItem(InvoiceItem item) {

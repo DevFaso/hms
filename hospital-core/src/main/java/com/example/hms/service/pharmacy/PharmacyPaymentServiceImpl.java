@@ -58,7 +58,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         validateCreateRequest(dto, hospitalId);
 
-        Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
+        Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
@@ -68,6 +68,20 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 || dispense.getPharmacy().getHospital() == null
                 || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
             throw new ResourceNotFoundException("dispense.notfound");
+        }
+
+        // QA D204: a dispense is paid once. The same payment sent again (a retry,
+        // a double click) answers with the one already recorded; a different
+        // one is refused instead of being added on top.
+        java.util.Optional<PharmacyPayment> existing =
+                paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId());
+        if (existing.isPresent()) {
+            PharmacyPayment prior = existing.get();
+            if (prior.getAmount() != null && prior.getAmount().compareTo(dto.getAmount()) == 0
+                    && prior.getPaymentMethod() == dto.getPaymentMethod()) {
+                return paymentMapper.toResponseDTO(prior);
+            }
+            throw new BusinessException("pharmacy.payment.alreadyPaid");
         }
 
         Patient patient = patientRepository.findById(dto.getPatientId())
@@ -179,6 +193,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("Payment amount must be positive");
+        }
+        // QA D204 (D184): the franc CFA has no minor unit.
+        if (dto.getAmount().stripTrailingZeros().scale() > 0) {
+            throw new BusinessException("billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
             throw new BusinessException("Payment method is required");

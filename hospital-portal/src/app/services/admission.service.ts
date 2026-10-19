@@ -40,6 +40,8 @@ export interface AdmissionResponse {
   currentEncounterId?: string | null;
   /** The stay's own INPATIENT encounter, open or closed (D135). */
   encounterId?: string | null;
+  /** QA D219: the stay's encounter code, which billing links an invoice by. */
+  encounterCode?: string | null;
   attendingPhysicianId: string;
   attendingPhysicianName: string;
   roomBed: string;

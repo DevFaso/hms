@@ -436,7 +436,13 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     dueDate: api.dueDate ?? '',
     amount: total,
     paid,
-    balance: api.balanceDue != null ? Number(api.balanceDue) : Math.max(total - paid, 0),
+    // QA D202: a cancelled invoice is owed by nobody.
+    balance:
+      api.status === 'CANCELLED'
+        ? 0
+        : api.balanceDue != null
+          ? Number(api.balanceDue)
+          : Math.max(total - paid, 0),
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
     description: api.encounterDescription ?? '',

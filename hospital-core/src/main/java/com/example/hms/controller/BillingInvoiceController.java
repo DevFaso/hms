@@ -147,6 +147,14 @@ public class BillingInvoiceController {
                 .body(safeMessage);
     }
 
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Billing KPIs over every invoice in scope")
+    public ResponseEntity<com.example.hms.payload.dto.BillingSummaryDTO> summary(
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(invoiceService.summarize(locale));
+    }
+
     @PostMapping("/search")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Search Billing Invoices")

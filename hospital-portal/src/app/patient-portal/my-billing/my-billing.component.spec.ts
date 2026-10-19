@@ -93,6 +93,20 @@ describe('MyBillingComponent', () => {
     expect(text('.pay-btn')).toContain('Payer');
   });
 
+  it('QA D202: a cancelled invoice is neither owed nor payable', () => {
+    create([
+      invoice({ id: 'a', balance: 7900 }),
+      invoice({ id: 'b', balance: 5000, status: 'CANCELLED' }),
+    ]);
+    expect(component.totalBalance()).toBe(7900);
+    expect(host().querySelectorAll('.pay-btn').length).toBe(1);
+  });
+
+  it('QA D254: a paid invoice shows its total, not 0', () => {
+    create([invoice({ id: 'c', amount: 2500, paid: 2500, balance: 0, status: 'PAID' })]);
+    expect(text('.pli-amount').replace(/\D/g, '')).toBe('2500');
+  });
+
   it('opens the dialog prefilled with the balance', () => {
     create([invoice({ balance: 75 })]);
     openDialog();

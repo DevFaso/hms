@@ -77,4 +77,6 @@ public interface BillingInvoiceService {
      * check-in transaction.
      */
     void recordCheckInCopay(com.example.hms.model.Encounter encounter, java.math.BigDecimal amount, UUID recordedBy);
+    /** QA D209: KPI totals over every invoice in the caller's scope. */
+    com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
 }

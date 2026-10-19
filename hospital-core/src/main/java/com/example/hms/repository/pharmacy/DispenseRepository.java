@@ -23,6 +23,12 @@ import java.util.UUID;
 @Repository
 public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
+    /** QA D204: the dispense row locked, so two checkouts of one dispense are serialised. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Dispense d WHERE d.id = :id")
+    Optional<Dispense> findLockedById(@Param("id") UUID id);
+
+
     Page<Dispense> findByPrescriptionId(UUID prescriptionId, Pageable pageable);
 
     /**

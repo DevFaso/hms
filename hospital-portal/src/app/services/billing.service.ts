@@ -144,6 +144,18 @@ export interface InvoiceSearchFilters {
   statuses?: InvoiceStatus[];
   fromDate?: string;
   toDate?: string;
+  /** QA D203: matched server-side against the invoice number and the patient's name. */
+  query?: string;
+}
+
+/** QA D209: the billing KPIs over every invoice in scope, not one page. */
+export interface BillingSummary {
+  total: number;
+  paid: number;
+  outstanding: number;
+  overdue: number;
+  totalRevenue: number;
+  balance: number;
 }
 
 export interface InvoicePage {
@@ -167,7 +179,13 @@ export class BillingService {
     if (filters.statuses?.length) body['statuses'] = filters.statuses;
     if (filters.fromDate) body['fromDate'] = filters.fromDate;
     if (filters.toDate) body['toDate'] = filters.toDate;
+    const query = filters.query?.trim();
+    if (query) body['query'] = query;
     return this.http.post<InvoicePage>('/billing-invoices/search', body, { params });
+  }
+
+  getSummary(): Observable<BillingSummary> {
+    return this.http.get<BillingSummary>('/billing-invoices/summary');
   }
 
   getInvoice(id: string): Observable<BillingInvoiceResponse> {

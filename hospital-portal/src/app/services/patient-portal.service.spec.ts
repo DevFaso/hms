@@ -386,5 +386,10 @@ describe('PatientPortalService invoices', () => {
 
   it('derives the balance when the API leaves balanceDue out', () => {
     expect(mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 300 }).balance).toBe(600);
+    // QA D202: a cancelled invoice owes nothing, whatever the API sent.
+    expect(
+      mapPortalInvoice({ id: 'y', totalAmount: 5000, balanceDue: 5000, status: 'CANCELLED' })
+        .balance,
+    ).toBe(0);
   });
 });
