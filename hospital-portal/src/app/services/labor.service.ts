@@ -139,6 +139,7 @@ export interface DeliveryRecordRequest {
   estimatedBloodLossMl?: number;
   perinealTear?: PerinealTear;
   notes?: string;
+  recentDeliveryOverrideReason?: string;
 }
 
 export interface DeliveryRecordResponse {

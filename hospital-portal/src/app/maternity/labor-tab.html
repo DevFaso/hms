@@ -617,6 +617,19 @@
           <label for="dl-notes">{{ 'LABOR.NOTES' | translate }}</label>
           <textarea id="dl-notes" rows="2" [(ngModel)]="deliveryForm.notes"></textarea>
         </div>
+        <div class="field">
+          <label for="dl-override">{{ 'LABOR.RECENT_DELIVERY_OVERRIDE' | translate }}</label>
+          <textarea
+            id="dl-override"
+            rows="2"
+            maxlength="500"
+            aria-describedby="dl-override-hint"
+            [(ngModel)]="deliveryForm.recentDeliveryOverrideReason"
+          ></textarea>
+          <p id="dl-override-hint" class="muted">
+            {{ 'LABOR.RECENT_DELIVERY_OVERRIDE_HINT' | translate }}
+          </p>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelivery()" [disabled]="saving()">

@@ -365,6 +365,58 @@ class LaborServiceImplTest {
             .hasMessageContaining("already exists");
     }
 
+    /* ── QA D214 (#896 review): two episodes at two hospitals ─────────── */
+
+    @Test
+    void recordDeliveryRefusesASecondBirthHoursAfterOneFiledOnAnotherEpisode() {
+        // The mother had an episode opened here before giving birth at another
+        // hospital; that birth is on a different episode, so startEpisode's
+        // guard never ran for this one.
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("labor.delivery.recentDelivery");
+        verify(deliveryRecordRepository, never()).save(any());
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+    }
+
+    @Test
+    void recordDeliveryAcceptsAnOverrideAndKeepsTheReasonOnTheRecord() {
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            any(LocalDateTime.class), any(LocalDateTime.class))).thenReturn(true);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setRecentDeliveryOverrideReason("Second twin, delayed interval delivery");
+        request.setNotes("Stable");
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getNotes())
+            .contains("Dérogation (accouchement récent) : Second twin, delayed interval delivery")
+            .contains("Stable");
+    }
+
+    @Test
+    void recordDeliveryLooksTwentyWeeksEitherSideOfTheBirth() {
+        LocalDateTime birth = LocalDateTime.of(2026, 10, 1, 8, 0);
+        org.mockito.ArgumentCaptor<LocalDateTime> from = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> to = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        when(deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            org.mockito.ArgumentMatchers.eq(patientId), org.mockito.ArgumentMatchers.eq(episodeId),
+            from.capture(), to.capture())).thenReturn(false);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(birth);
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(from.getValue()).isEqualTo(birth.minusDays(140));
+        assertThat(to.getValue()).isEqualTo(birth.plusDays(140));
+    }
+
     @Test
     void bloodLossAtThresholdRaisesPphAlertAndNotifies() {
         DeliveryRecordRequestDTO request = deliveryRequest();
