@@ -33,6 +33,9 @@ public interface BillingInvoiceService {
     // helper used by InvoiceItemService to keep totals in sync
     void recomputeAndPersistTotals(UUID invoiceId);
 
+    /** QA D210: every issue path moves a paid check-in copay of the same visit onto the issued invoice. */
+    void creditCheckInCopays(UUID invoiceId);
+
     InvoicePdfResponseDTO getInvoicePdf(UUID invoiceId, Locale locale);
 
     Page<BillingInvoiceResponseDTO> searchInvoices(BillingInvoiceSearchRequest searchRequest, Pageable pageable, Locale locale);

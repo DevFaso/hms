@@ -1188,4 +1188,107 @@ class BillingInvoiceServiceImplTest {
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(first), eq("GH-2026-000019-R1"),
             eq(new BigDecimal("30")), any());
     }
+
+    @Test
+    void receipt_ignoresAPaymentReversedBeforeThisOne_D228() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        invoice.setInvoiceNumber("GH-2026-000020");
+        invoice.setAmountPaid(new BigDecimal("70"));
+        com.example.hms.model.PaymentTransaction reversed = com.example.hms.model.PaymentTransaction.builder()
+            .invoice(invoice).amount(new BigDecimal("30")).status(com.example.hms.enums.PaymentStatus.REVERSED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 10, 1, 9, 0))
+            .reversedAt(java.time.LocalDateTime.of(2026, 10, 1, 12, 0)).build();
+        reversed.setId(UUID.randomUUID());
+        com.example.hms.model.PaymentTransaction later = com.example.hms.model.PaymentTransaction.builder()
+            .invoice(invoice).amount(new BigDecimal("70")).status(com.example.hms.enums.PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 10, 2, 9, 0)).build();
+        later.setId(UUID.randomUUID());
+        when(invoiceRepository.findByIdWithRefs(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
+            .thenReturn(List.of(reversed, later));
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any()))
+            .thenReturn(new byte[] {1});
+
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
+
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000020-R2"),
+            eq(new BigDecimal("70")), any());
+    }
+
+    @Test
+    void receipt_stillCountsAPaymentReversedAfterThisOne_D228() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        invoice.setInvoiceNumber("GH-2026-000021");
+        invoice.setAmountPaid(new BigDecimal("70"));
+        com.example.hms.model.PaymentTransaction reversed = com.example.hms.model.PaymentTransaction.builder()
+            .invoice(invoice).amount(new BigDecimal("30")).status(com.example.hms.enums.PaymentStatus.REVERSED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 10, 1, 9, 0))
+            .reversedAt(java.time.LocalDateTime.of(2026, 10, 3, 12, 0)).build();
+        reversed.setId(UUID.randomUUID());
+        com.example.hms.model.PaymentTransaction later = com.example.hms.model.PaymentTransaction.builder()
+            .invoice(invoice).amount(new BigDecimal("70")).status(com.example.hms.enums.PaymentStatus.CONFIRMED)
+            .confirmedAt(java.time.LocalDateTime.of(2026, 10, 2, 9, 0)).build();
+        later.setId(UUID.randomUUID());
+        when(invoiceRepository.findByIdWithRefs(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
+            .thenReturn(List.of(reversed, later));
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any()))
+            .thenReturn(new byte[] {1});
+
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
+
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000021-R2"),
+            eq(new BigDecimal("100")), any());
+    }
+
+    @Test
+    void summarize_withNoRow_isAllZeros_D209() {
+        when(invoiceRepository.summarize(any(), any())).thenReturn(List.of());
+
+        com.example.hms.payload.dto.BillingSummaryDTO sum = billingInvoiceService.summarize(Locale.ENGLISH);
+
+        assertEquals(0L, sum.getTotal());
+        assertEquals(0L, sum.getOverdue());
+        assertEquals(0, BigDecimal.ZERO.compareTo(sum.getBalance()));
+    }
+
+    @Test
+    void summarize_withNullAggregates_isAllZeros_D209() {
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(new Object[6]);
+        when(invoiceRepository.summarize(any(), any())).thenReturn(rows);
+
+        com.example.hms.payload.dto.BillingSummaryDTO sum = billingInvoiceService.summarize(Locale.ENGLISH);
+
+        assertEquals(0L, sum.getPaid());
+        assertEquals(0, BigDecimal.ZERO.compareTo(sum.getTotalRevenue()));
+    }
+
+    @Test
+    void recompute_aVisitInvoiceIssuedAtZeroAndPricedLater_takesOverTheCopay_D210() {
+        BillingInvoice visit = existingInvoice(InvoiceStatus.SENT, "0");
+        visit.setTotalAmount(BigDecimal.ZERO);
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        visit.setEncounter(encounter);
+        BillingInvoice copay = BillingInvoice.builder().patient(visit.getPatient()).encounter(encounter)
+            .totalAmount(new BigDecimal("2500")).amountPaid(new BigDecimal("2500"))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        when(invoiceRepository.sumItemsByInvoiceId(visit.getId())).thenReturn(new BigDecimal("7450"));
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findLockedById(copay.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())).thenReturn(List.of());
+
+        billingInvoiceService.recomputeAndPersistTotals(visit.getId());
+
+        assertEquals(0, new BigDecimal("2500").compareTo(visit.getAmountPaid()));
+        assertEquals(InvoiceStatus.PARTIALLY_PAID, visit.getStatus());
+        assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
+    }
 }

@@ -484,7 +484,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (paid.signum() > 0) {
             invoice.setStatus(paid.compareTo(total) >= 0 ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
         }
-        invoiceRepository.save(invoice);
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        // QA D210: a visit invoice issued at 0 and priced later by its lines takes the copay now.
+        creditCheckInCopays(saved != null ? saved : invoice);
+    }
+
+    @Override
+    @Transactional
+    public void creditCheckInCopays(UUID invoiceId) {
+        invoiceRepository.findById(invoiceId).ifPresent(this::creditCheckInCopays);
     }
 
     @Override
@@ -541,7 +549,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal paidThen = BigDecimal.ZERO;
         for (PaymentTransaction p : received) {
             rank++;
-            paidThen = paidThen.add(p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO);
+            // A row reversed before this payment was received no longer counted as paid then.
+            boolean countedThen = p.getStatus() != PaymentStatus.REVERSED || p.getReversedAt() == null
+                || receivedAt(row) == null || p.getReversedAt().isAfter(receivedAt(row));
+            if (countedThen && p.getAmount() != null) {
+                paidThen = paidThen.add(p.getAmount());
+            }
             if (p.getId() != null && p.getId().equals(row.getId())) {
                 break;
             }
