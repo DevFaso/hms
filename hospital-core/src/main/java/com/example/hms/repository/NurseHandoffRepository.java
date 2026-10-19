@@ -17,4 +17,7 @@ public interface NurseHandoffRepository extends JpaRepository<NurseHandoff, UUID
     Optional<NurseHandoff> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
     long countByHospital_IdAndStatus(UUID hospitalId, String status);
+
+    /** QA D234: a patient's open handoffs at one hospital, closed when the stay ends. */
+    List<NurseHandoff> findByPatient_IdAndHospital_IdAndStatus(UUID patientId, UUID hospitalId, String status);
 }

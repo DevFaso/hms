@@ -871,9 +871,19 @@ export class EnumLabelService implements OnDestroy {
       SCHEDULED: 'Scheduled',
     },
 
+    /* ── Nurse handoff direction (QA D235) ─────────────────── */
+    handoffDirection: {
+      BREAK_COVER: 'Break cover',
+      PROCEDURE: 'To a procedure or exam',
+      SHIFT_CHANGE: 'Shift change',
+      WARD_TRANSFER: 'Ward transfer',
+    },
+
     /* ── Vitals round type ─────────────────────────────────── */
     vitalTaskType: {
       FULL_SET: 'Full Set',
+      NEWS2_HIGH: 'NEWS2 high: every 15 min',
+      NEWS2_MEDIUM: 'NEWS2 medium: hourly',
       ROUTINE: 'Routine',
     },
 

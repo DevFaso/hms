@@ -70,6 +70,8 @@ class PatientVitalSignServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private PatientVitalSignServiceImpl service;
+    @org.mockito.Mock
+    private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     private final PatientVitalSignMapper mapper = new PatientVitalSignMapper();
 
@@ -85,8 +87,8 @@ class PatientVitalSignServiceImplTest {
             mapper,
             patientChartAccess,
             recordAccessPolicy,
-            reachRecorder
-        );
+            reachRecorder,
+            news2EscalationService);
     }
 
     @Test

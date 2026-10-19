@@ -2,7 +2,6 @@ package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.nurse.MarVerificationRequestDTO;
 import com.example.hms.payload.dto.nurse.MarVerificationResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
@@ -196,11 +195,10 @@ public class NurseTaskController {
         // list-filter assignee param this endpoint historically accepted.
         UUID nurseId = authUtils.resolveUserId(auth).orElse(null);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
-        try {
-            nurseTaskService.completeHandoff(handoffId, nurseId, scopedHospital);
-        } catch (ResourceNotFoundException ignored) {
-            // Treat missing handoffs as already completed to keep the operation idempotent.
-        }
+        // QA D235: an unknown id, or another hospital's handoff, is a 404 — the old
+        // catch turned it into a 204 that told the caller it had worked.
+        // Completing an already completed handoff stays idempotent (the service).
+        nurseTaskService.completeHandoff(handoffId, nurseId, scopedHospital);
         return ResponseEntity.noContent().build();
     }
 

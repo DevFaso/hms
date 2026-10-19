@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -251,10 +252,12 @@ export class EmarComponent implements OnInit, OnDestroy {
             );
           }
         },
-        error: () => {
+        error: (err: HttpErrorResponse) => {
           if (this.activeTask()?.id !== taskIdAtCall) return;
           this.verifyInFlight.set(false);
-          this.toast.error(this.translate.instant('EMAR.TOAST.VERIFY_FAILED'));
+          this.toast.error(
+            this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.VERIFY_FAILED'),
+          );
         },
       });
   }
@@ -284,11 +287,21 @@ export class EmarComponent implements OnInit, OnDestroy {
           this.closeTask();
           this.loadTasks();
         },
-        error: () => {
+        error: (err: HttpErrorResponse) => {
           this.administerInFlight.set(false);
-          this.toast.error(this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'));
+          // QA D233: a five-rights refusal carries its reason; show it.
+          this.toast.error(
+            this.serverReason(err) ?? this.translate.instant('EMAR.TOAST.ADMINISTER_FAILED'),
+          );
         },
       });
+  }
+
+  /** The server's own refusal message (a 4xx body), when it sent one. */
+  private serverReason(err: HttpErrorResponse | null | undefined): string | null {
+    if (!err || err.status < 400 || err.status >= 500) return null;
+    const message = (err.error as { message?: unknown } | null)?.message;
+    return typeof message === 'string' && message.trim() ? message.trim() : null;
   }
 
   /* ── Camera scanner (BarcodeDetector) ────────────────────────────────── */

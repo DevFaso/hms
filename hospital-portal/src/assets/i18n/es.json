@@ -927,6 +927,7 @@
     "NO_KNOWN_ALLERGIES": "Sin alergias conocidas en el expediente.",
     "NO_ACTIVE_PROBLEMS": "Sin problemas activos en el expediente.",
     "NO_ACTIVE_ENCOUNTER": "Sin encuentro activo.",
+    "LAST_VISIT": "Última visita: {{date}} ({{department}}).",
     "NO_CODE_STATUS": "Estado de RCP no documentado.",
     "TYPE": "Tipo",
     "STATUS": "Estado",
@@ -1128,6 +1129,8 @@
     "DISCHARGE_SUCCESS": "Paciente dado de alta exitosamente",
     "DISCHARGE_SUMMARY": "Resumen del Alta",
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Resumen breve de la estancia y el resultado...",
+    "DISCHARGE_DIAGNOSIS": "Diagnóstico de alta",
+    "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Diagnóstico final al alta",
     "DISCHARGING": "Dando de alta a",
     "DISCHARGING_BTN": "Dando de alta...",
     "DISCHARGING_PROVIDER": "Médico que da el Alta",
@@ -3553,8 +3556,8 @@
     "HANDOFFS": "Traspasos",
     "HANDOFF_ASSESSMENT": "Evaluación",
     "HANDOFF_BACKGROUND": "Antecedentes",
-    "HANDOFF_DIRECTION": "Dirección",
-    "HANDOFF_DIRECTION_PLACEHOLDER": "ej. Cambio de turno, Traslado a radiología",
+    "HANDOFF_DIRECTION": "Tipo",
+    "HANDOFF_DIRECTION_PLACEHOLDER": "— Seleccione el tipo de traspaso —",
     "HANDOFF_NOTES": "Notas de traspaso",
     "HANDOFF_PLACEHOLDER": "Ingrese las notas del traspaso...",
     "HANDOFF_RECOMMENDATION": "Recomendación",
@@ -5630,8 +5633,16 @@
         "PAIN": "Dolor",
         "PSYCHOSOCIAL": "Psicosocial"
       },
+      "HANDOFF_DIRECTION": {
+        "BREAK_COVER": "Cobertura de descanso",
+        "PROCEDURE": "A un procedimiento o examen",
+        "SHIFT_CHANGE": "Cambio de turno",
+        "WARD_TRANSFER": "Traslado de servicio"
+      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Conjunto completo",
+        "NEWS2_HIGH": "NEWS2 alto: cada 15 min",
+        "NEWS2_MEDIUM": "NEWS2 medio: cada hora",
         "ROUTINE": "Rutina"
       },
       "NEWBORN_ALERT_TYPE": {
@@ -5814,7 +5825,8 @@
         "PATHOLOGY_REPORT": "Informe de anatomía patológica",
         "ED_NOTE": "Nota de urgencias",
         "MEDICATION_ORDER": "Orden de medicación",
-        "CARE_PLAN": "Plan de cuidados"
+        "CARE_PLAN": "Plan de cuidados",
+        "GENERIC_REPORT": "Otro informe"
       },
       "ADMISSION_TYPE": {
         "EMERGENCY": "Urgencia",

@@ -411,7 +411,7 @@
                   } @else {
                     <span class="cell-primary">{{ h.patientName }}</span>
                   }
-                  <span class="handoff-dir">{{ h.direction }}</span>
+                  <span class="handoff-dir">{{ h.direction | enumLabel: 'handoffDirection' }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
                 @if (h.background) {
@@ -1374,14 +1374,17 @@
         </div>
         <div class="form-row">
           <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>
-          <input
+          <select
             id="ho-direction"
-            type="text"
             class="reason-input"
-            [placeholder]="'NURSE.HANDOFF_DIRECTION_PLACEHOLDER' | translate"
             [value]="handoffForm().direction ?? ''"
-            (input)="updateHandoffField('direction', $any($event.target).value)"
-          />
+            (change)="updateHandoffField('direction', $any($event.target).value)"
+          >
+            <option value="">{{ 'NURSE.HANDOFF_DIRECTION_PLACEHOLDER' | translate }}</option>
+            @for (d of handoffDirections; track d) {
+              <option [value]="d">{{ d | enumLabel: 'handoffDirection' }}</option>
+            }
+          </select>
         </div>
         <div class="form-row">
           <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }}</label>

@@ -5072,7 +5072,9 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   the lab result entry form (`toServerDateTime` / `toLocalInputValue` in
   `lab-results.ts`) and added a server-side refusal of a result timed before its order
   or in the future. The general fix (send instants with an offset, or one portal-wide
-  conversion) touches every date the portal renders, so it is its own PR. Open.
+  conversion) touches every date the portal renders, so it is its own PR. The QA
+  rounds' D182 and D236 (zone-less `datetime-local` inputs) are this item; deferred
+  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Open.
 - **A one-person laboratory cannot activate its own test definitions.** Since D48 only
   an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
   SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded

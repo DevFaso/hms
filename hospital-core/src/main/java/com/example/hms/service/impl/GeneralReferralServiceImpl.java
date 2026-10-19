@@ -6,6 +6,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
 import com.example.hms.model.GeneralReferral;
 import com.example.hms.model.GeneralReferralAttachment;
+import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
@@ -74,6 +75,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         // Both hospitals of a referral are clinical: a provider facility answers
         // as an unknown one (provider plan AC-11).
+        // QA D205: the sending hospital is the caller's acting scope; the body's id is a claim.
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(request.getHospitalId())) {
+            throw new ResourceNotFoundException("hospital.notFound", request.getHospitalId());
+        }
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
 
@@ -96,6 +102,16 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         if (request.getReceivingHospitalId() != null) {
             receivingHospital = hospitalRepository.findClinicalById(request.getReceivingHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("generalReferral.receivingHospital.notFound", request.getReceivingHospitalId()));
+        }
+
+        // QA D205: the referrer is the signed-in clinician of the sending hospital,
+        // and a named receiver works at the hospital the referral is addressed to.
+        requireReferrerIsCaller(referringProvider, hospital.getId());
+        if (receivingProvider != null) {
+            UUID addressedTo = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
+            if (!worksAt(receivingProvider, addressedTo)) {
+                throw BusinessRuleException.ofKey("generalReferral.receivingProvider.wrongHospital");
+            }
         }
 
         Department sourceDepartment = null;
@@ -620,5 +636,20 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             builder.append(patient.getLastName().trim());
         }
         return builder.isEmpty() ? null : builder.toString();
+    }
+
+    /** QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer. */
+    private void requireReferrerIsCaller(Staff referringProvider, UUID sendingHospitalId) {
+        UUID callerId = roleValidator.getCurrentUserId();
+        boolean isCaller = callerId != null && referringProvider.getUser() != null
+            && callerId.equals(referringProvider.getUser().getId());
+        if (!isCaller || !worksAt(referringProvider, sendingHospitalId)) {
+            throw BusinessRuleException.ofKey("generalReferral.referringProvider.notCaller");
+        }
+    }
+
+    private static boolean worksAt(Staff staff, UUID hospitalId) {
+        return staff.getHospital() != null && staff.getHospital().getId() != null
+            && staff.getHospital().getId().equals(hospitalId);
     }
 }

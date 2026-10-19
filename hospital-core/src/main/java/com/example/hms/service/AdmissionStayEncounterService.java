@@ -37,6 +37,8 @@ public class AdmissionStayEncounterService {
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    private final org.springframework.context.MessageSource messageSource;
 
     /**
      * The attending physician runs the stay; the admitting provider stands in
@@ -117,10 +119,23 @@ public class AdmissionStayEncounterService {
      */
     @Transactional
     public void recordDischarge(Admission admission) {
+        recordDischarge(admission, null);
+    }
+
+    /**
+     * QA D218: as {@link #recordDischarge(Admission)}, with the diagnosis the
+     * discharging physician stated. A stated diagnosis wins over the admission's
+     * working diagnosis, which only fills a blank.
+     */
+    @Transactional
+    public void recordDischarge(Admission admission, String dischargeDiagnosis) {
         if (admission.getId() == null) {
             return;
         }
         encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).ifPresent(enc -> {
+            if (!isBlank(dischargeDiagnosis)) {
+                enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
+            }
             if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
                 enc.setFollowUpInstructions(admission.getDischargeInstructions());
             }
@@ -132,6 +147,32 @@ public class AdmissionStayEncounterService {
             }
             encounterRepository.save(enc);
         });
+        closePendingHandoffs(admission);
+    }
+
+    /**
+     * QA D234: once the patient has left, a pending handoff for them has no one
+     * to hand over to; it stayed PENDING on the nurse's list for ever. Every
+     * discharge path (direct, and the approval flow) comes through here.
+     */
+    private void closePendingHandoffs(Admission admission) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        var pending = nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), admission.getHospital().getId(), "PENDING");
+        if (pending.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String closedBy = messageSource.getMessage("nurse.handoff.closedByDischarge", null,
+            "Closed at discharge", org.springframework.context.i18n.LocaleContextHolder.getLocale());
+        for (var handoff : pending) {
+            handoff.setStatus("COMPLETED");
+            handoff.setCompletedAt(now);
+            handoff.setCompletedByName(closedBy);
+        }
+        nurseHandoffRepository.saveAll(pending);
     }
 
     private static boolean isBlank(String value) {

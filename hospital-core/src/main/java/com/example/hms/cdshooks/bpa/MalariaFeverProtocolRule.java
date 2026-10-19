@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsLink;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -52,9 +53,18 @@ public class MalariaFeverProtocolRule implements BpaRule {
     );
 
     private final BpaProtocolRepository protocolRepository;
+    private final CdsCardText text;
 
+    /** English-only, for rules built outside Spring. */
     public MalariaFeverProtocolRule(BpaProtocolRepository protocolRepository) {
+        this(protocolRepository, CdsCardText.ENGLISH);
+    }
+
+    /** QA D217: the card is written in the caller's language, like the D61 rules. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public MalariaFeverProtocolRule(BpaProtocolRepository protocolRepository, CdsCardText text) {
         this.protocolRepository = protocolRepository;
+        this.text = text;
     }
 
     @Override
@@ -104,24 +114,23 @@ public class MalariaFeverProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private static CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent) {
-        String detail = protocol.getSummary()
-            + "\n\nMost recent temperature: "
-            + String.format(Locale.ROOT, "%.1f", feverEvent.getTemperatureCelsius())
-            + "°C at "
-            + feverEvent.getRecordedAt() + ".";
+    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent) {
+        String detail = BpaCardText.summary(text, protocol) + "\n\n" + text.get("cds.bpa.malaria.temperature",
+            "Most recent temperature: {0}°C at {1}.",
+            String.format(Locale.ROOT, "%.1f", feverEvent.getTemperatureCelsius()),
+            BpaCardText.when(feverEvent.getRecordedAt()));
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(
-                "WHO malaria guideline",
+                text.get("cds.bpa.malaria.link", "WHO malaria guideline"),
                 protocol.getProtocolUrl(),
                 "absolute",
                 null));
         return new CdsCard(
-            protocol.getName(),
+            BpaCardText.name(text, protocol),
             detail,
             CdsCard.Indicator.WARNING,
-            new Source("HMS Best-Practice Advisory", null, null),
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             links,
             null,
             null,

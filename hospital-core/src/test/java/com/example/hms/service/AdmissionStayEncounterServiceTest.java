@@ -23,10 +23,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +40,8 @@ class AdmissionStayEncounterServiceTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    @Mock private org.springframework.context.MessageSource messageSource;
 
     @InjectMocks private AdmissionStayEncounterService service;
 
@@ -118,6 +122,40 @@ class AdmissionStayEncounterServiceTest {
 
         assertThat(service.openStayEncounter(admission)).isNull();
         verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void aStatedDischargeDiagnosisWinsOverTheWorkingDiagnosis_D218() {
+        Encounter stay = new Encounter();
+        stay.setAdmissionId(admission.getId());
+        admission.setPrimaryDiagnosisDescription("Fièvre");
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        service.recordDischarge(admission, "Paludisme grave");
+
+        ArgumentCaptor<Encounter> saved = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(saved.capture());
+        assertThat(saved.getValue().getDischargeDiagnoses()).isEqualTo("[\"Paludisme grave\"]");
+    }
+
+    @Test
+    void theDischargeClosesThePatientsPendingHandoffs_D234() {
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.empty());
+        com.example.hms.model.NurseHandoff open = new com.example.hms.model.NurseHandoff();
+        open.setStatus("PENDING");
+        when(nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(open));
+        when(messageSource.getMessage(eq("nurse.handoff.closedByDischarge"), any(), any(), any()))
+            .thenReturn("Clôturée à la sortie");
+
+        service.recordDischarge(admission);
+
+        assertThat(open.getStatus()).isEqualTo("COMPLETED");
+        assertThat(open.getCompletedAt()).isNotNull();
+        assertThat(open.getCompletedByName()).isEqualTo("Clôturée à la sortie");
+        verify(nurseHandoffRepository).saveAll(List.of(open));
     }
 
     @Test

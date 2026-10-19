@@ -509,6 +509,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.vitalsForm.update((f) => ({ ...f, notes: value || undefined }));
   }
 
+  /** QA D235: the handoff types the server accepts. */
+  readonly handoffDirections: string[] = [
+    'SHIFT_CHANGE',
+    'WARD_TRANSFER',
+    'PROCEDURE',
+    'BREAK_COVER',
+  ];
+
   /* ── NEWS2 parameters (P3 #25b) ──────────────────────────────── */
 
   readonly consciousnessOptions: NonNullable<NurseVitalCaptureRequest['consciousnessLevel']>[] = [

@@ -82,6 +82,7 @@ class EncounterServiceImplReadAccessControlTest {
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.mapper.CheckOutMapper checkOutMapper;
+    @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private com.example.hms.repository.EncounterNoteHistoryRepository encounterNoteHistoryRepository;
 
     /**
@@ -293,6 +294,24 @@ class EncounterServiceImplReadAccessControlTest {
             Encounter mine = encounterAt(hospital, callerPatient, true);
 
             assertThat(service.getAfterVisitSummary(mine.getId())).isNotNull();
+        }
+
+        @Test
+        @DisplayName("QA D224: a later read keeps the prescription summary and the education text")
+        void laterReadKeepsTheCheckoutTexts() {
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+            com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+            summary.setPrescriptionSummary("Amoxicilline 500 mg x3/j 7 jours");
+            summary.setReferralSummary("Cardiologie");
+            summary.setPatientEducationProvided("Boire beaucoup d'eau");
+            lenient().when(dischargeSummaryRepository.findByEncounter_Id(mine.getId())).thenReturn(Optional.of(summary));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
+
+            assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 500 mg x3/j 7 jours");
+            assertThat(avs.getReferralSummary()).isEqualTo("Cardiologie");
+            assertThat(avs.getPatientEducationMaterials()).isEqualTo("Boire beaucoup d'eau");
         }
 
         @Test

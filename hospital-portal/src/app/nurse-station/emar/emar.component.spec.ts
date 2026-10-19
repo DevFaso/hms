@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of, Subject, throwError } from 'rxjs';
@@ -130,6 +131,27 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       status: 'GIVEN',
       overrideReason: 'Pharmacy confirmed verbal substitution.',
     });
+  });
+
+  it('QA D233: a refused administration shows the server reason', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { message: 'Les cinq vérifications ont échoué : motif de dérogation requis.' },
+          }),
+      ) as Observable<NurseMedicationTask>,
+    );
+
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['administer']('REFUSED');
+
+    expect(toastSpy.error).toHaveBeenCalledOnceWith(
+      'Les cinq vérifications ont échoué : motif de dérogation requis.',
+    );
   });
 
   it('does not call administer when GIVEN is requested without verification or override', () => {

@@ -880,6 +880,40 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void checkOut_keepsThePrescriptionSummaryAndEducationOnTheDischargeSummary_D224() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .dischargeDiagnoses(List.of("Paludisme simple"))
+            .prescriptionSummary("Artéméther-luméfantrine 3 jours")
+            .referralSummary("Aucune")
+            .patientEducationMaterials("Moustiquaire imprégnée chaque nuit")
+            .build();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+            .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        service.checkOut(encounterId, request, "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        assertThat(saved.getValue().getPrescriptionSummary()).isEqualTo("Artéméther-luméfantrine 3 jours");
+        assertThat(saved.getValue().getReferralSummary()).isEqualTo("Aucune");
+        assertThat(saved.getValue().getPatientEducationProvided()).isEqualTo("Moustiquaire imprégnée chaque nuit");
+    }
+
+    @Test
     void checkOut_notificationOrEmailFailure_doesNotRollback() {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();

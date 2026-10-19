@@ -86,6 +86,12 @@ class GeneralReferralServiceImplTest {
 
         referringProvider = new Staff();
         referringProvider.setId(referringProviderId);
+        // QA D205: the referrer is the signed-in clinician, at the sending hospital.
+        com.example.hms.model.User caller = new com.example.hms.model.User();
+        caller.setId(UUID.randomUUID());
+        referringProvider.setUser(caller);
+        referringProvider.setHospital(hospital);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(caller.getId());
 
         receivingProvider = new Staff();
         receivingProvider.setId(receivingProviderId);

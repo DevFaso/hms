@@ -2881,4 +2881,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V202 (QA D224): the after-visit summary's prescription and referral
+         summaries are kept on the discharge summary. Single ALTER, no DO block. -->
+    <changeSet id="V202-discharge-summary-avs-texts" author="hms-team" runOnChange="false">
+        <sqlFile path="V202__discharge_summary_avs_texts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
