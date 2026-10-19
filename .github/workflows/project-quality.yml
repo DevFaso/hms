@@ -22,8 +22,8 @@ concurrency:
 
 jobs:
   # Which halves of the repo a pull request touches. A PR that changes only
-  # the portal skips the ~10-minute backend suite (and the Sonar job that
-  # needs its coverage); a PR that changes nothing under hospital-portal/
+  # the portal skips the ~10-minute backend suite (the Sonar job still runs,
+  # without fresh backend coverage); a PR that changes nothing under hospital-portal/
   # skips the portal job. Pushes to main/develop and merge-queue runs always
   # run everything. When in doubt (a workflow file, the root build, an
   # unknown path) both halves run.
@@ -89,9 +89,22 @@ jobs:
   # gate passed. Same two analyses as before: a branch analysis on push to
   # main/develop and a PR analysis (with GitHub decoration) on pull requests.
   # Without SONAR_TOKEN (fork PRs) the analysis steps skip, as before.
+  #
+  # It runs on EVERY pull request, including one the path filter kept away
+  # from the backend suite (portal/docs only): the ready bar is 0 new Sonar
+  # issues on every PR, so every PR needs an analysis on its head. With no
+  # backend run there is no coverage artifact; the analysis then goes ahead
+  # without a JaCoCo report. That cannot fail the gate falsely: such a PR has
+  # no new Java lines, and the PR gate only measures coverage on new code.
+  # It never runs after a FAILED backend suite (coverage would be partial).
   sonar-analysis:
     name: SonarQube analysis
-    needs: backend-tests
+    needs: [changes, backend-tests]
+    if: >-
+      always() && needs.changes.result == 'success' &&
+      (needs.backend-tests.result == 'success' ||
+      (needs.backend-tests.result == 'skipped' &&
+      needs.changes.outputs.backend == 'false'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -127,13 +140,21 @@ jobs:
           restore-keys: ${{ runner.os }}-gradle-
 
       - name: Download the backend job's coverage and test results
+        if: needs.backend-tests.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: sonar-inputs
           path: hospital-core/build
 
       - name: Check the coverage report arrived
+        if: needs.backend-tests.result == 'success'
         run: test -s hospital-core/build/reports/jacoco/test/jacocoTestReport.xml
+
+      - name: Note the analysis runs without backend coverage
+        if: needs.backend-tests.result != 'success'
+        run: >-
+          echo "::notice::Backend suite skipped by the path filter (no backend
+          change): SonarCloud analyses this head without a JaCoCo report."
 
       - name: Grant execute permission
         run: chmod +x gradlew
