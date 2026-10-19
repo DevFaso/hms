@@ -42,6 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -79,7 +80,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
-        EducationResource resource = resourceMapper.toEntity(requestDTO);
+        // The mapper returns null for a null DTO; fail loudly instead of an NPE below.
+        EducationResource resource = Objects.requireNonNull(resourceMapper.toEntity(requestDTO),
+            "education resource request is required");
         resource.setHospitalId(hospital.getId());
         if (resource.getOrganizationId() == null && hospital.getOrganization() != null) {
             resource.setOrganizationId(hospital.getOrganization().getId());
@@ -375,7 +378,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
 
-        VisitEducationDocumentation documentation = documentationMapper.toEntity(requestDTO);
+        VisitEducationDocumentation documentation = Objects.requireNonNull(
+            documentationMapper.toEntity(requestDTO), "visit education request is required");
         documentation.setStaffId(staffId);
         documentation.setPatientId(requestDTO.getPatientId());
         documentation.setEncounterId(requestDTO.getEncounterId());

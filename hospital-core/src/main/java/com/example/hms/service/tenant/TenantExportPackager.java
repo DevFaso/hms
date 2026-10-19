@@ -100,25 +100,20 @@ public class TenantExportPackager {
             // packages, encrypts, then DELETES the tenant: the archive was the
             // only surviving copy and it held none of the data.
             List<UUID> hospitalIds = hospitalIdsOf(org);
-            if (hospitalIds.isEmpty()) {
-                // No hospitals means no rows to scope to. Still write the
-                // entries so the archive shape stays stable for consumers.
-                for (String name : TABLE_ENTRIES) {
-                    writeEmptyEntry(zip, name);
-                    counts.putIfAbsent(name, 0L);
-                }
-            } else {
-                counts.put("patients.ndjson", writeTable(zip, "patients.ndjson", hospitalIds,
-                    exportRepository::exportPatients, TenantExportPackager::patientRow));
-                counts.put("staff.ndjson", writeTable(zip, "staff.ndjson", hospitalIds,
-                    exportRepository::exportStaff, TenantExportPackager::staffRow));
-                counts.put("encounters.ndjson", writeTable(zip, "encounters.ndjson", hospitalIds,
-                    exportRepository::exportEncounters, TenantExportPackager::encounterRow));
-                counts.put("appointments.ndjson", writeTable(zip, "appointments.ndjson", hospitalIds,
-                    exportRepository::exportAppointments, TenantExportPackager::appointmentRow));
-                counts.put("audit_events.ndjson", writeTable(zip, "audit_events.ndjson", hospitalIds,
-                    exportRepository::exportAuditEvents, TenantExportPackager::auditEventRow));
-            }
+            // No hospitals means no rows to scope to (and no empty IN () query).
+            // Every entry still goes through writeTable, so the archive shape is
+            // stable and there is exactly one code path that writes an entry.
+            boolean noHospitals = hospitalIds.isEmpty();
+            counts.put("patients.ndjson", writeTable(zip, "patients.ndjson", hospitalIds,
+                noHospitals ? NO_ROWS : exportRepository::exportPatients, TenantExportPackager::patientRow));
+            counts.put("staff.ndjson", writeTable(zip, "staff.ndjson", hospitalIds,
+                noHospitals ? NO_ROWS : exportRepository::exportStaff, TenantExportPackager::staffRow));
+            counts.put("encounters.ndjson", writeTable(zip, "encounters.ndjson", hospitalIds,
+                noHospitals ? NO_ROWS : exportRepository::exportEncounters, TenantExportPackager::encounterRow));
+            counts.put("appointments.ndjson", writeTable(zip, "appointments.ndjson", hospitalIds,
+                noHospitals ? NO_ROWS : exportRepository::exportAppointments, TenantExportPackager::appointmentRow));
+            counts.put("audit_events.ndjson", writeTable(zip, "audit_events.ndjson", hospitalIds,
+                noHospitals ? NO_ROWS : exportRepository::exportAuditEvents, TenantExportPackager::auditEventRow));
 
             // 5. Manifest LAST so record_counts_by_table reflects what's
             //    actually in the archive (Copilot review fix — earlier
@@ -210,10 +205,8 @@ public class TenantExportPackager {
     }
 
     /** The per-table NDJSON entries, in the order they are written. */
-    private static final String[] TABLE_ENTRIES = {
-        "patients.ndjson", "staff.ndjson",
-        "encounters.ndjson", "appointments.ndjson", "audit_events.ndjson"
-    };
+    /** The fetcher for a tenant with no hospitals: there is nothing to scope rows to. */
+    private static final PageFetcher NO_ROWS = (ids, pageable) -> List.of();
 
     /**
      * Rows per query. The archive is written to a stream, so nothing
@@ -340,12 +333,6 @@ public class TenantExportPackager {
         row.put("patient_id", text(t[7]));
         row.put("status", text(t[8]));
         return row;
-    }
-
-    private void writeEmptyEntry(ZipOutputStream zip, String name) throws IOException {
-        zip.putNextEntry(new ZipEntry(name));
-        // Empty NDJSON — no rows.
-        zip.closeEntry();
     }
 
     /** Result of packaging — surface for the caller's audit description. */

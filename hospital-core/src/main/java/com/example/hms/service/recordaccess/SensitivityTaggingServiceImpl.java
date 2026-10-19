@@ -110,8 +110,9 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
 
     private SensitivityTagResponseDTO describe(Encounter encounter) {
         SensitivityCategory effective = classifier.effectiveCategory(encounter);
-        SensitivityCategory deptDefault = encounter.getDepartment() == null
-            ? null : encounter.getDepartment().getDefaultSensitivityCategory();
+        Department department = encounter.getDepartment();
+        SensitivityCategory deptDefault = department == null
+            ? null : department.getDefaultSensitivityCategory();
         return new SensitivityTagResponseDTO(encounter.getId(), encounter.getSensitivityCategory(),
             effective, deptDefault, classifier.travelsCrossHospital(effective));
     }
