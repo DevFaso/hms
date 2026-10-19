@@ -350,4 +350,66 @@ class PostpartumCareServiceImplTest {
         assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
         assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
     }
+
+    /* ── QA D215 / D216 (round 4) ─────────────────────────────────────── */
+
+    @Test
+    void anObservationAfterANewDeliveryStartsAFreshPlanInsteadOfReusingTheOldOne() {
+        LocalDateTime firstBirth = LocalDateTime.now().minusDays(2);
+        LocalDateTime secondBirth = LocalDateTime.now().minusMinutes(30);
+        PostpartumCarePlan oldPlan = PostpartumCarePlan.builder()
+            .patient(patient)
+            .hospital(hospital)
+            .deliveryOccurredAt(firstBirth)
+            .build();
+        oldPlan.setId(UUID.randomUUID());
+        oldPlan.setActive(true);
+        oldPlan.setImmediateWindowCompleted(true);
+        oldPlan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+        oldPlan.setShiftFrequencyMinutes(240);
+        oldPlan.setOverdueSince(LocalDateTime.now().minusHours(5));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(oldPlan));
+        com.example.hms.model.labor.DeliveryRecord latest = com.example.hms.model.labor.DeliveryRecord.builder()
+            .birthDateTime(secondBirth).build();
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(latest));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now())
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertFalse(oldPlan.isActive(), "the earlier delivery's plan must be closed");
+        ArgumentCaptor<PostpartumCarePlan> saved = ArgumentCaptor.forClass(PostpartumCarePlan.class);
+        verify(carePlanRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        PostpartumCarePlan fresh = saved.getAllValues().stream().filter(p -> p != oldPlan).findFirst().orElseThrow();
+        assertEquals(secondBirth, fresh.getDeliveryOccurredAt());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, fresh.getActivePhase());
+        assertFalse(fresh.isImmediateWindowCompleted());
+        assertFalse(response.getSchedule().isOverdue(), "a check due in the future is not overdue");
+    }
+
+    @Test
+    void urgentPostpartumNotificationsAreFrenchWithATranslatedType() {
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .excessiveBleeding(true)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString());
+        assertTrue(message.getValue().startsWith("Alerte post-partum (hémorragie)"), message.getValue());
+        assertFalse(message.getValue().contains("HEMORRHAGE"), message.getValue());
+        assertEquals("Évaluation des saignements", response.getAlerts().get(0).getTriggeredBy());
+    }
 }

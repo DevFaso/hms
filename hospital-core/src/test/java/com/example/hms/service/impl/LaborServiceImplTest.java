@@ -572,4 +572,94 @@ class LaborServiceImplTest {
 
         assertThat(created.getGestationalAgeWeeks()).isNull();
     }
+
+    /* ── QA D214: second labour 24 h after a birth ──────────────────────── */
+
+    @Test
+    void startEpisodeRefusesANewLabourSoonAfterARecordedBirthWithoutAnOverride() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("labor.episode.recentDelivery");
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void startEpisodeAcceptsAnExplicitOverrideAndKeepsTheReasonOnTheChart() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .recentDeliveryOverrideReason("Second twin retained").riskNotes("Anaemia").build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getRiskNotes())
+            .contains("Dérogation (accouchement récent) : Second twin retained")
+            .contains("Anaemia");
+    }
+
+    @Test
+    void startEpisodeLooksBackTwentyWeeksForAPriorBirth() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.ArgumentCaptor<LocalDateTime> since = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), since.capture())).thenReturn(false);
+
+        service.startEpisode(patientId, recorderUserId,
+            LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).build());
+
+        assertThat(since.getValue()).isBetween(
+            LocalDateTime.now().minusDays(141), LocalDateTime.now().minusDays(139));
+    }
+
+    @Test
+    void aBirthAtTwentyFourWeeksRaisesAnUrgentFrenchPretermAlert() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setGestationalAgeWeeksAtBirth(24);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).anySatisfy(alert -> {
+            assertThat(alert.getCode()).isEqualTo("labor-preterm");
+            assertThat(String.valueOf(alert.getSeverity())).isEqualTo("URGENT");
+            assertThat(alert.getMessage()).contains("prématurée à 24 semaines");
+        });
+    }
+
+    @Test
+    void aTermBirthRaisesNoPretermAlert() {
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setGestationalAgeWeeksAtBirth(39);
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getAlerts()).noneSatisfy(alert ->
+            assertThat(alert.getCode()).isEqualTo("labor-preterm"));
+    }
+
+    /* ── QA D215: a new delivery closes the earlier postpartum plan ─────── */
+
+    @Test
+    void recordDeliveryClosesThePostpartumPlanOfAnEarlierBirth() {
+        com.example.hms.model.postpartum.PostpartumCarePlan old = new com.example.hms.model.postpartum.PostpartumCarePlan();
+        old.setDeliveryOccurredAt(LocalDateTime.now().minusDays(1));
+        old.setActive(true);
+        when(postpartumCarePlanRepository.findByPatient_IdAndHospital_IdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(java.util.List.of(old));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(old.isActive()).isFalse();
+        verify(postpartumCarePlanRepository).save(old);
+    }
 }
