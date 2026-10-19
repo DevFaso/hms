@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InBasketItemRepository;
 import com.example.hms.repository.InstrumentOutboxRepository;
@@ -56,6 +57,10 @@ final class SharedClinicalRowsCleanup {
         context.getBean(PatientProblemRepository.class).deleteAllInBatch();
         context.getBean(PatientRepository.class).deleteAll();
         context.getBean(StaffRepository.class).deleteAll();
+        // DepartmentControllerIT (and anything that creates a department)
+        // leaves departments behind; a department pins its head's assignment
+        // through fk_department_assignment. Only the CI shard order exposed it.
+        context.getBean(DepartmentRepository.class).deleteAll();
         context.getBean(UserRoleHospitalAssignmentRepository.class).deleteAll();
         context.getBean(UserRepository.class).deleteAll();
         context.getBean(RoleRepository.class).deleteAll();

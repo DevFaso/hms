@@ -19,7 +19,9 @@ the whole ~10,000-test backend suite in one job.
   touches nothing under `hospital-portal/` or `.github/`. `Require All Jobs
   Pass` treats a filtered-out job as passing and anything else that is not
   `success` as a failure. Pushes to main/develop and merge-queue runs always run
-  everything.
+  everything. The SonarCloud analysis is NOT filtered: it runs on every PR (a
+  portal- or docs-only PR is analysed without a JaCoCo report, which cannot
+  fail the new-code coverage condition because such a PR adds no Java lines).
 
 ## Enabling the GitHub merge queue (repository admin)
 
