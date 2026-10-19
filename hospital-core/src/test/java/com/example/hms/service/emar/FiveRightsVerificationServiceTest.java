@@ -69,12 +69,10 @@ class FiveRightsVerificationServiceTest {
             FiveRightsVerificationResult result = service.verify(
                 mar(scheduled), null, "AMOX-500", "250 mg", "PO", scheduled.plusHours(3));
 
-            assertThat(result.getFailureReasons().get(FiveRightsCheck.PATIENT))
-                .isEqualTo("Le bracelet du patient n'a pas été scanné.");
-            assertThat(result.getFailureReasons().get(FiveRightsCheck.DOSE))
-                .isEqualTo("La dose saisie ne correspond pas à la dose prescrite.");
-            assertThat(result.getFailureReasons().get(FiveRightsCheck.TIME))
-                .isEqualTo("L'administration est hors de la fenêtre de 60 minutes.");
+            assertThat(result.getFailureReasons())
+                .containsEntry(FiveRightsCheck.PATIENT, "Le bracelet du patient n'a pas été scanné.")
+                .containsEntry(FiveRightsCheck.DOSE, "La dose saisie ne correspond pas à la dose prescrite.")
+                .containsEntry(FiveRightsCheck.TIME, "L'administration est hors de la fenêtre de 60 minutes.");
         } finally {
             org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }

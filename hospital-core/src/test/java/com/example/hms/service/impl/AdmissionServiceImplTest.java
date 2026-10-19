@@ -41,6 +41,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import java.util.Map;
 import java.util.Set;
 import com.example.hms.enums.SensitivityCategory;
@@ -318,7 +319,7 @@ class AdmissionServiceImplTest {
         assertThat(admission.getDischargeSummary()).isEqualTo("Full summary");
         assertThat(admission.getDischargeInstructions()).isEqualTo("Rest");
         assertThat(admission.getActualDischargeDateTime()).isEqualTo(dischargedAt);
-        verify(admissionRepository, org.mockito.Mockito.times(1)).save(admission);
+        verify(admissionRepository, times(1)).save(admission);
     }
 
     @Test
