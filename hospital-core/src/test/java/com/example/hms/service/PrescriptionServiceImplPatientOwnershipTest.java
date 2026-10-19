@@ -50,26 +50,11 @@ import static org.mockito.Mockito.when;
  * exist": {@link ResourceNotFoundException} carrying the same
  * {@code prescription.notfound} key, never a 403.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("PrescriptionServiceImpl: a patient reads only their own prescription")
 class PrescriptionServiceImplPatientOwnershipTest {
-
-    /**
-     * The services throw message keys (QA D226); render them through the real
-     * bundles in English so the assertions do not depend on which test last set
-     * the static MessageUtil source.
-     */
-    @org.junit.jupiter.api.BeforeEach
-    void englishMessageBundles() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void resetMessageLocale() {
-        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
-    }
 
     private static final String NOT_FOUND_KEY = "Prescription not found";
 

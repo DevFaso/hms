@@ -555,13 +555,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 403. The message is the literal "Access denied" unless the thrower opted
-     * in with {@link ClientSafeAccessDeniedException}, whose contract is that
-     * its message is written for the caller and discloses nothing across
-     * tenants. Every other message — a {@code @PreAuthorize} refusal, or a
-     * sentence composed deep in a service — stays in the log.
-     */
-    /**
      * {@link UnauthorizedAccessException} carries {@code @ResponseStatus(FORBIDDEN)},
      * but the {@code RuntimeException} catch-all below wins over the annotation,
      * so every one of them answered a 500 "unexpected error" (QA D226). A keyed
@@ -576,13 +569,22 @@ public class GlobalExceptionHandler {
             return buildErrorResponse(HttpStatus.FORBIDDEN,
                 com.example.hms.utility.MessageUtil.resolveOrRaw(raw, ex.getArgs()), req);
         }
-        log.warn("Access refused at path {}", req.getDescription(false));
+        if (log.isWarnEnabled()) {
+            log.warn("Access refused at path {}", req.getDescription(false));
+        }
         Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
             localized("error.access.denied", "Access denied"), req);
         body.put(FIELD_CODE, CODE_ACCESS_DENIED);
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * 403. The message is the literal "Access denied" unless the thrower opted
+     * in with {@link ClientSafeAccessDeniedException}, whose contract is that
+     * its message is written for the caller and discloses nothing across
+     * tenants. Every other message — a {@code @PreAuthorize} refusal, or a
+     * sentence composed deep in a service — stays in the log.
+     */
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());

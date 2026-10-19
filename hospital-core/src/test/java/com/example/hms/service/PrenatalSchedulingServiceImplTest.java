@@ -51,23 +51,9 @@ import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import static org.mockito.Mockito.lenient;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
-
-    /**
-     * The services throw message keys (QA D226); render them through the real
-     * bundles in English so the assertions read the words a user sees.
-     */
-    @org.junit.jupiter.api.BeforeEach
-    void englishMessageBundles() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void resetMessageLocale() {
-        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
-    }
 
     @Mock
     private AppointmentRepository appointmentRepository;

@@ -103,23 +103,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class NurseTaskServiceImplTest {
-
-    /**
-     * The services throw message keys (QA D226); render them through the real
-     * bundles in English so the assertions read the words a user sees.
-     */
-    @org.junit.jupiter.api.BeforeEach
-    void englishMessageBundles() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void resetMessageLocale() {
-        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
-    }
 
     @Mock private NurseDashboardService nurseDashboardService;
     @Mock private PrescriptionRepository prescriptionRepository;

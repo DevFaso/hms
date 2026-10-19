@@ -50,23 +50,9 @@ import static org.mockito.Mockito.when;
  * signs the result of an order sent to it — judged by its roles THERE — and
  * the ordering hospital reads it; a third hospital gets 404 throughout.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplPerformingHospitalTest {
-
-    /**
-     * The services throw message keys (QA D226); render them through the real
-     * bundles in English so the assertions read the words a user sees.
-     */
-    @org.junit.jupiter.api.BeforeEach
-    void englishMessageBundles() {
-        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
-        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void resetMessageLocale() {
-        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
-    }
 
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
