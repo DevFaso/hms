@@ -522,13 +522,6 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         LabTestDefinitionApprovalStatus.RETIRED);
 
     /**
-     * QA D159: the reference ranges are what QA and the director approved,
-     * and they grade every result. Changing them on a definition under
-     * review, approved or live would put unreviewed ranges in front of
-     * clinicians, so only a draft or a rejected definition takes new ones.
-     * Re-sending the same ranges (an edit of the name, say) is not a change.
-     */
-    /**
      * QA D287: an inverted reference or critical range was saved (bean
      * validation on a bare list body is not guaranteed to run), and every
      * value graded against it was wrong. The same rules as the DTO's
@@ -554,6 +547,13 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
+    /**
+     * QA D159: the reference ranges are what QA and the director approved,
+     * and they grade every result. Changing them on a definition under
+     * review, approved or live would put unreviewed ranges in front of
+     * clinicians, so only a draft or a rejected definition takes new ones.
+     * Re-sending the same ranges (an edit of the name, say) is not a change.
+     */
     private void assertRangesEditable(LabTestDefinition definition, List<LabTestReferenceRange> proposed) {
         if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
             return;

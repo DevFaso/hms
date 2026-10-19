@@ -22,24 +22,29 @@ class LabReferenceRangeOrderTest {
 
     @Test
     void anInvertedReferenceRangeIsRefusedOnEveryWritePath() {
-        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(List.of(range(5.0, 3.5, null, null))))
+        List<LabTestReferenceRangeDTO> inverted = List.of(range(5.0, 3.5, null, null));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(inverted))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.inverted");
     }
 
     @Test
     void invertedOrInsideCriticalLimitsAreRefused() {
-        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(List.of(range(3.5, 5.0, 6.5, 2.5))))
+        List<LabTestReferenceRangeDTO> ranges1 = List.of(range(3.5, 5.0, 6.5, 2.5));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges1))
             .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalInverted");
-        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(List.of(range(3.5, 5.0, 4.0, 6.5))))
+        List<LabTestReferenceRangeDTO> ranges2 = List.of(range(3.5, 5.0, 4.0, 6.5));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges2))
             .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalInverted");
     }
 
     @Test
     void anOrderedRangeIsAccepted() {
-        assertThatCode(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(List.of(range(3.5, 5.0, 2.5, 6.5))))
+        List<LabTestReferenceRangeDTO> ranges3 = List.of(range(3.5, 5.0, 2.5, 6.5));
+        assertThatCode(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges3))
             .doesNotThrowAnyException();
-        assertThatCode(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(List.of(range(3.5, null, null, null))))
+        List<LabTestReferenceRangeDTO> ranges4 = List.of(range(3.5, null, null, null));
+        assertThatCode(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges4))
             .doesNotThrowAnyException();
     }
 

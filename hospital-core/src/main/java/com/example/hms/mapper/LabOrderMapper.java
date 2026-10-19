@@ -49,8 +49,7 @@ public class LabOrderMapper {
         String patientEmail = patient != null ? patient.getEmail() : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
         String labTestName = labTestDefinition != null ? labTestDefinition.getName() : null;
-        String labOrderCode = labOrder.getOrderNumber() != null ? labOrder.getOrderNumber()
-            : labOrderId != null ? labOrderId.toString() : null;
+        String labOrderCode = orderCodeOf(labOrder);
         String status = labOrder.getStatus() != null ? labOrder.getStatus().name() : null;
 
     return LabOrderResponseDTO.builder()
@@ -142,5 +141,19 @@ public class LabOrderMapper {
         String l = last == null ? "" : last.trim();
         String full = (f + " " + l).trim();
         return full.isEmpty() ? null : full;
+    }
+
+    /**
+     * QA D291: the code a person reads for an order - its number (LAB-000123)
+     * when the database assigned one, else its id. Null for no order.
+     */
+    public static String orderCodeOf(LabOrder order) {
+        if (order == null) {
+            return null;
+        }
+        if (order.getOrderNumber() != null) {
+            return order.getOrderNumber();
+        }
+        return order.getId() != null ? order.getId().toString() : null;
     }
 }

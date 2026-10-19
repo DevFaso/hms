@@ -385,8 +385,7 @@ public class LabResultMapper {
         String hospitalName = resolveHospitalName(order);
         String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
-        String labOrderCode = order.getOrderNumber() != null ? order.getOrderNumber()
-            : order.getId() != null ? order.getId().toString() : null;
+        String labOrderCode = LabOrderMapper.orderCodeOf(order);
         String orderedByName = resolveOrderingStaffName(order);
 
         return new OrderContext(

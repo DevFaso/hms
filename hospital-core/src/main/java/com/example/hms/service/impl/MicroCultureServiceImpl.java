@@ -401,9 +401,7 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         return MicroCultureResponseDTO.builder()
             .id(culture.getId())
             .labOrderId(order != null ? order.getId() : null)
-            .labOrderCode(order == null ? null
-                : order.getOrderNumber() != null ? order.getOrderNumber()
-                : order.getId() != null ? order.getId().toString() : null)
+            .labOrderCode(com.example.hms.mapper.LabOrderMapper.orderCodeOf(order))
             .labTestName(order != null && order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName() : null)
             .patientId(culture.getPatient() != null ? culture.getPatient().getId() : null)

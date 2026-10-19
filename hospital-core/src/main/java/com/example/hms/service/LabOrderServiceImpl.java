@@ -382,16 +382,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         return labOrder;
     }
 
-    /**
-     * On an edit that leaves the ordering clinician as it is, that clinician
-     * stays - whoever is editing. The caller rule in {@link #resolveOrderingStaff}
-     * is about who may PLACE an order in someone's name; applied to edits it
-     * refused a nurse correcting a doctor's order (404) and forced every edit
-     * to re-attribute the order to the editor. Kept only while the existing
-     * row still belongs to the order's hospital; otherwise the edit goes
-     * through the placing rule like a new order. Null when there is nothing
-     * to keep.
-     */
     private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
 
     /**
@@ -411,6 +401,16 @@ public class LabOrderServiceImpl implements LabOrderService {
         return normalized;
     }
 
+    /**
+     * On an edit that leaves the ordering clinician as it is, that clinician
+     * stays - whoever is editing. The caller rule in {@link #resolveOrderingStaff}
+     * is about who may PLACE an order in someone's name; applied to edits it
+     * refused a nurse correcting a doctor's order (404) and forced every edit
+     * to re-attribute the order to the editor. Kept only while the existing
+     * row still belongs to the order's hospital; otherwise the edit goes
+     * through the placing rule like a new order. Null when there is nothing
+     * to keep.
+     */
     private static Staff keptOrderingStaff(LabOrder base, UUID requestedStaffId, Hospital hospital) {
         if (base == null || requestedStaffId == null) {
             return null;

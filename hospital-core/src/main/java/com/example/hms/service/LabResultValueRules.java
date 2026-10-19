@@ -27,9 +27,15 @@ import java.util.regex.Pattern;
 public final class LabResultValueRules {
 
     /** Positive / detected / reactive in EN, FR and ES, as the whole answer or its first word. */
-    private static final Pattern POSITIVE = Pattern.compile(
-        "^(POSITI(F|VE|VO|VA)|DETECTE|DETECTED|DETECTADO|DETECTADA|REACTIF|REACTIVE|REACTIVO|REACTIVA"
-            + "|PRESENT|PRESENTE|PRESENCE|\\+{1,4})(?![A-Z]).*");
+    private static final java.util.Set<String> POSITIVE_WORDS = java.util.Set.of(
+        "POSITIF", "POSITIVE", "POSITIVO", "POSITIVA",
+        "DETECTE", "DETECTED", "DETECTADO", "DETECTADA",
+        "REACTIF", "REACTIVE", "REACTIVO", "REACTIVA",
+        "PRESENT", "PRESENTE", "PRESENCE",
+        "+", "++", "+++", "++++");
+
+    /** The first word of a folded answer: a run of letters, or a run of plus signs. */
+    private static final Pattern FIRST_WORD = Pattern.compile("^([A-Z]+|\\++)");
 
     /** The comparator of a censored value, "<", ">", "<=", ">=" or their single-character forms, and the spaces after it. */
     private static final Pattern CENSOR_PREFIX = Pattern.compile("^(<=|>=|<|>|\u2264|\u2265)\\s*");
@@ -77,7 +83,8 @@ public final class LabResultValueRules {
         String folded = Normalizer.normalize(trimmed, Normalizer.Form.NFD)
             .replaceAll("\\p{M}", "")
             .toUpperCase(Locale.ROOT);
-        return POSITIVE.matcher(folded).matches();
+        java.util.regex.Matcher word = FIRST_WORD.matcher(folded);
+        return word.find() && POSITIVE_WORDS.contains(word.group(1));
     }
 
     /**
