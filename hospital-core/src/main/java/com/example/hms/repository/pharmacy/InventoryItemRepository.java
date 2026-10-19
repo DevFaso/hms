@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -22,6 +23,14 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
     /** QA D138: whether this pharmacy keeps stock here at all, so a fill must name a lot. */
     boolean existsByPharmacyIdAndActiveTrue(UUID pharmacyId);
+
+    /**
+     * QA D270: the item row, locked for the rest of the transaction, so two
+     * manual returns cannot both fit under the same not-yet-returned total.
+     */
+    @Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM InventoryItem i WHERE i.id = :id")
+    Optional<InventoryItem> lockById(@Param("id") UUID id);
 
     Optional<InventoryItem> findByPharmacyIdAndMedicationCatalogItemId(UUID pharmacyId, UUID medicationCatalogItemId);
 

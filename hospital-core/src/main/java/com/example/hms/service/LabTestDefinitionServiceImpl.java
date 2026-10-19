@@ -74,6 +74,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -162,6 +163,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -519,6 +521,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
      * clinicians, so only a draft or a rejected definition takes new ones.
      * Re-sending the same ranges (an edit of the name, say) is not a change.
      */
+    /**
+     * QA D287: an inverted reference or critical range was saved (bean
+     * validation on a bare list body is not guaranteed to run), and every
+     * value graded against it was wrong. The same rules as the DTO's
+     * constraints, enforced on every write path.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges) {
+        if (ranges == null) {
+            return;
+        }
+        for (LabTestReferenceRangeDTO range : ranges) {
+            if (range == null) {
+                continue;
+            }
+            if (!range.isReferenceRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.inverted");
+            }
+            if (!range.isCriticalRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.criticalInverted");
+            }
+            if (!range.isAgeRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.ageInverted");
+            }
+        }
+    }
+
     private void assertRangesEditable(LabTestDefinition definition, List<LabTestReferenceRange> proposed) {
         if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
             return;
@@ -541,6 +569,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to reference range update");

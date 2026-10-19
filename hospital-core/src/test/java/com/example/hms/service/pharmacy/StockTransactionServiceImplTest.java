@@ -561,6 +561,7 @@ class StockTransactionServiceImplTest {
             BigDecimal qty = new BigDecimal("8.00");
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, qty);
             stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
 
             service.recordTransaction(dto);
 
@@ -568,6 +569,50 @@ class StockTransactionServiceImplTest {
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("58.00"));
             verify(stockLotRepository, never()).save(any(StockLot.class));
             verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
+        }
+
+        private void stubLotMovements(BigDecimal issued, BigDecimal returned) {
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
+                    StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))).thenReturn(issued);
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
+                    StockTransactionType.RETURN))).thenReturn(returned);
+        }
+
+        /**
+         * QA D270: RETURN of 100 000 on lot QA-PARA-L1 (received at 200) was
+         * accepted and the lot held 100 186. A return is bounded by what left
+         * the lot and was not returned yet: here 10 out, 2 back, so 9 is refused.
+         */
+        @Test
+        @DisplayName("refuses a return above what left the lot and was not returned yet")
+        void refusesAReturnAboveWhatWasIssued() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("9.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsIssued");
+
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
+        }
+
+        @Test
+        @DisplayName("refuses any return on a lot nothing left")
+        void refusesAReturnOnALotNothingLeft() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("100000"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            stubLotMovements(BigDecimal.ZERO, BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.recordTransaction(dto)).isInstanceOf(BusinessException.class);
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
         }
     }
 

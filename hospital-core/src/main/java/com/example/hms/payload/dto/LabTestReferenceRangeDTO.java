@@ -1,5 +1,7 @@
 package com.example.hms.payload.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -50,4 +52,27 @@ public class LabTestReferenceRangeDTO implements Serializable {
     private Double criticalLow;
 
     private Double criticalHigh;
+
+    /** QA D287: an inverted range (min above max) was saved and graded every value wrongly. */
+    @JsonIgnore
+    @AssertTrue(message = "{lab.referenceRange.inverted}")
+    public boolean isReferenceRangeOrdered() {
+        return minValue == null || maxValue == null || minValue <= maxValue;
+    }
+
+    /** QA D287: critical limits must be ordered and lie outside the reference range. */
+    @JsonIgnore
+    @AssertTrue(message = "{lab.referenceRange.criticalInverted}")
+    public boolean isCriticalRangeOrdered() {
+        boolean ordered = criticalLow == null || criticalHigh == null || criticalLow <= criticalHigh;
+        boolean lowOutside = criticalLow == null || minValue == null || criticalLow <= minValue;
+        boolean highOutside = criticalHigh == null || maxValue == null || criticalHigh >= maxValue;
+        return ordered && lowOutside && highOutside;
+    }
+
+    @JsonIgnore
+    @AssertTrue(message = "{lab.referenceRange.ageInverted}")
+    public boolean isAgeRangeOrdered() {
+        return ageMin == null || ageMax == null || ageMin <= ageMax;
+    }
 }

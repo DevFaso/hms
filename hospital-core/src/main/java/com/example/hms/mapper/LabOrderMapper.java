@@ -49,7 +49,8 @@ public class LabOrderMapper {
         String patientEmail = patient != null ? patient.getEmail() : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
         String labTestName = labTestDefinition != null ? labTestDefinition.getName() : null;
-        String labOrderCode = labOrderId != null ? labOrderId.toString() : null;
+        String labOrderCode = labOrder.getOrderNumber() != null ? labOrder.getOrderNumber()
+            : labOrderId != null ? labOrderId.toString() : null;
         String status = labOrder.getStatus() != null ? labOrder.getStatus().name() : null;
 
     return LabOrderResponseDTO.builder()

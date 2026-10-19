@@ -2913,4 +2913,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V205 (QA D291): lab.lab_orders.order_number, a readable order code
+         from lab.lab_order_number_seq, backfilled. Plain statements, no DO block. -->
+    <changeSet id="V205-lab-order-number" author="hms-team" runOnChange="false">
+        <sqlFile path="V205__lab_order_number.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

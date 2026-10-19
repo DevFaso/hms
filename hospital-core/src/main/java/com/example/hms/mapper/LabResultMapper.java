@@ -150,7 +150,9 @@ public class LabResultMapper {
         if (FLAG_CRITICAL.equalsIgnoreCase(severityFlag)) {
             return true;
         }
-        if (!"HIGH".equalsIgnoreCase(severityFlag) || result == null) {
+        // D271: symmetric - a value below a range with no critical limits is as
+        // much a panic value as one above it (K 2.0 on 3.5-5.0).
+        if (!("HIGH".equalsIgnoreCase(severityFlag) || "LOW".equalsIgnoreCase(severityFlag)) || result == null) {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
@@ -193,7 +195,9 @@ public class LabResultMapper {
         if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
             return FLAG_CRITICAL;
         }
-        if ("HIGH".equals(flag) && graded != null
+        // D271: LOW as well as HIGH - the fail-safe was one-sided, so K 2.0 on a
+        // 3.5-5.0 range with no critical limits stayed "Bas" and never paged.
+        if (("HIGH".equals(flag) || "LOW".equals(flag)) && graded != null
                 && graded.getCriticalLow() == null && graded.getCriticalHigh() == null) {
             return FLAG_CRITICAL;
         }
@@ -366,7 +370,8 @@ public class LabResultMapper {
         String hospitalName = resolveHospitalName(order);
         String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
-        String labOrderCode = order.getId() != null ? order.getId().toString() : null;
+        String labOrderCode = order.getOrderNumber() != null ? order.getOrderNumber()
+            : order.getId() != null ? order.getId().toString() : null;
         String orderedByName = resolveOrderingStaffName(order);
 
         return new OrderContext(
