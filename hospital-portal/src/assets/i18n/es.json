@@ -3045,6 +3045,11 @@
     "CURRENT_RESULT": "Resultado actual",
     "PREVIOUS_RESULT": "Resultado anterior",
     "BASELINE": "Referencia (sin resultado anterior)",
+    "SIGNIFICANCE_BASELINE": "Referencia",
+    "SIGNIFICANCE_STABLE": "Estable",
+    "SIGNIFICANCE_MINOR": "Cambio menor",
+    "SIGNIFICANCE_SIGNIFICANT": "Cambio significativo",
+    "SIGNIFICANCE_CRITICAL": "Cambio crítico",
     "DAYS_BETWEEN": "días de diferencia",
     "READ_BACK": "Relectura",
     "READ_BACK_PROMPT": "Repita el valor crítico que le comunicaron para",
@@ -6341,6 +6346,7 @@
     "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Día mostrado",
     "ACCEPT_OFFER": "Aceptar",
     "ACCEPT_OFFER_FAILED": "Error al aceptar la oferta",
     "ACTIVE_COVERAGE": "Cobertura activa",

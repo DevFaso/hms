@@ -252,7 +252,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         checkProviderReviewAccess(user);
 
         if (hospitalId == null) {
-            throw new BusinessException("Hospital ID is required to view pending reviews");
+            throw new BusinessException("maternity.birthPlan.hospitalRequiredForReviews");
         }
 
         Page<BirthPlan> pendingPlans = birthPlanRepository.findPendingReviewByHospital(hospitalId, pageable);
@@ -390,7 +390,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             return patient.getHospitalRegistrations().iterator().next().getHospital();
         }
 
-        throw new BusinessException("No hospital specified and patient has no hospital registrations");
+        throw new BusinessException("maternity.birthPlan.noHospital");
     }
 
     @SuppressWarnings("java:S1172") // user will be used when HospitalContext is implemented

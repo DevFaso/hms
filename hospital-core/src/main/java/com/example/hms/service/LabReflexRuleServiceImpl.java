@@ -75,13 +75,13 @@ public class LabReflexRuleServiceImpl implements LabReflexRuleService {
 
     private void validateRequest(LabReflexRuleRequestDTO request) {
         if (request.getTriggerTestDefinitionId() == null) {
-            throw new BusinessException("triggerTestDefinitionId is required.");
+            throw new BusinessException("lab.reflex.triggerRequired");
         }
         if (request.getReflexTestDefinitionId() == null) {
-            throw new BusinessException("reflexTestDefinitionId is required.");
+            throw new BusinessException("lab.reflex.reflexRequired");
         }
         if (request.getCondition() == null || request.getCondition().isBlank()) {
-            throw new BusinessException("condition JSON is required.");
+            throw new BusinessException("lab.reflex.conditionRequired");
         }
     }
 

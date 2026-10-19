@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Set;
 import com.example.hms.i18n.TestMessageSources;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LaborServiceImplTest {
 
@@ -379,7 +380,7 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("labor.delivery.recentDelivery");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.delivery.recentDelivery");
         verify(deliveryRecordRepository, never()).save(any());
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
     }
@@ -625,6 +626,29 @@ class LaborServiceImplTest {
         assertThat(created.getGestationalAgeWeeks()).isNull();
     }
 
+    @Test
+    void nullPayloadsAreRejectedInPlainText() {
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageNotContaining("maternity.");
+    }
+
+    @Test
+    void recordDeliveryRejectsClosedEpisode() {
+        episode.setStatus(LaborStatus.DELIVERED);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("active labor episode");
+    }
+
     /* ── QA D214: second labour 24 h after a birth ──────────────────────── */
 
     @Test
@@ -638,7 +662,7 @@ class LaborServiceImplTest {
 
         assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessage("labor.episode.recentDelivery");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("labor.episode.recentDelivery");
         verify(episodeRepository, never()).save(any());
     }
 

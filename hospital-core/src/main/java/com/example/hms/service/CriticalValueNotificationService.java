@@ -359,9 +359,7 @@ public class CriticalValueNotificationService {
                 }));
             log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
                 result.getId(), result.getResultValue(), repeatedValue);
-            throw new com.example.hms.exception.BusinessException(
-                "Read-back does not match the reported result. Confirm the value with the laboratory "
-                    + "before acting on it.");
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.mismatch");
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.

@@ -85,7 +85,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                                                               UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Postpartum observation request payload is required.");
+            throw new BusinessException("maternity.postpartum.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -222,7 +222,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new BusinessException("maternity.registration.otherPatient");
             }
             return registration;
         }
@@ -257,7 +257,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
             return staff;
         }
@@ -342,7 +342,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return null;
         }
         return observationRepository.findByIdAndPatient_IdAndHospital_Id(observationId, patientId, hospitalId)
-            .orElseThrow(() -> new BusinessException("Unable to record correction; original observation not located."));
+            .orElseThrow(() -> new BusinessException("maternity.postpartum.originalNotFound"));
     }
 
     @SuppressWarnings("java:S107") // builder method needs all domain objects to construct observation
@@ -427,7 +427,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasHemorrhageIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.URGENT,
                 "postpartum-hemorrhage",
-                "Hemorrhage risk detected. Activate uterotonic protocol and notify provider immediately.",
+                alertText("postpartum-hemorrhage"),
                 "Bleeding Assessment"));
             observation.setHemorrhageProtocolActivated(true);
             escalateMonitoring = true;
@@ -437,7 +437,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasInfectionIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.INFECTION, PostpartumAlertSeverity.URGENT,
                 "postpartum-infection",
-                "Possible postpartum infection. Initiate sepsis screening and contact provider.",
+                alertText("postpartum-infection"),
                 "Infection Screening"));
             escalateMonitoring = true;
             infectionAlert = true;
@@ -446,7 +446,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
             alerts.add(buildAlert(PostpartumAlertType.PAIN, PostpartumAlertSeverity.CAUTION,
                 "postpartum-pain",
-                "Pain score above comfort threshold. Reassess analgesia plan and comfort interventions.",
+                alertText("postpartum-pain"),
                 "Pain Score"));
             observation.setPainManagementReferralSuggested(true);
         }
@@ -455,7 +455,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.isMentalHealthReferralSuggested()) {
             alerts.add(buildAlert(PostpartumAlertType.PSYCHOSOCIAL, PostpartumAlertSeverity.CAUTION,
                 "postpartum-psychosocial",
-                "Psychosocial concern identified. Coordinate mental health or social work referral.",
+                alertText("postpartum-psychosocial"),
                 "Psychosocial Screening"));
         }
 
@@ -492,6 +492,14 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             || observation.isFoulLochiaOdor()
             || observation.isUterineTenderness()
             || observation.isChillsOrRigors();
+    }
+
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
+     * stored and read by staff, so it is never composed in English in code.
+     */
+    private String alertText(String code) {
+        return messageSource.getMessage("postpartum.alert.msg." + code, null, NotificationLocales.STAFF);
     }
 
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,

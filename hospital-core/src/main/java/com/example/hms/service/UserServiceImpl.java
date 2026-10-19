@@ -285,7 +285,7 @@ public class UserServiceImpl implements UserService {
         // Determine roles early so patient-specific logic can relax duplicate checks.
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
                 .filter(s -> !s.isEmpty())
-                .orElseThrow(() -> new IllegalArgumentException("At least one role must be provided."));
+                .orElseThrow(() -> new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.roles.required")));
 
         final boolean isPatient = roleNames.stream()
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
@@ -315,7 +315,7 @@ public class UserServiceImpl implements UserService {
             // Phone-first relaxation applies to PATIENTS only — staff and admin
             // accounts still need an email (welcome mail, credential delivery).
             if (email == null || email.isBlank()) {
-                throw new IllegalArgumentException("Email is required for staff and admin accounts.");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.email.requiredForStaff"));
             }
             // Non-patient roles: strict global uniqueness.
             // Each identifier can be held by a SOFT-DELETED account: the row
@@ -631,7 +631,7 @@ public class UserServiceImpl implements UserService {
                 // Only two KNOWN numbers can disagree: a licence is optional.
                 if (lic != null && !existingLic.isBlank() && !existingLic.equalsIgnoreCase(lic)) {
                     throw new ConflictException(
-                        "License number mismatch for this user in this hospital; expected " + existingLic);
+                        com.example.hms.utility.MessageUtil.resolveOrRaw("users.license.mismatch", existingLic));
                 }
             });
 
@@ -986,7 +986,7 @@ public class UserServiceImpl implements UserService {
         }
         Role patientRole = getRoleByCode(ROLE_PATIENT);
         if (assignmentService.isRoleAlreadyAssigned(existing.get().getId(), targetHospitalId, patientRole.getId())) {
-            throw new ConflictException("patient:Patient is already registered at this hospital.");
+            throw new ConflictException("patient:" + com.example.hms.utility.MessageUtil.resolveOrRaw("users.patient.alreadyRegistered"));
         }
     }
 
@@ -1020,7 +1020,7 @@ public class UserServiceImpl implements UserService {
 
         UUID provided = request.getHospitalId();
         if (provided == null) {
-            throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
+            throw new BusinessException("users.hospital.requiredForStaff");
         }
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
@@ -1933,7 +1933,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
-            throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.username.taken", newUsername));
         }
         user.setUsername(newUsername);
         user.setForceUsernameChange(false);

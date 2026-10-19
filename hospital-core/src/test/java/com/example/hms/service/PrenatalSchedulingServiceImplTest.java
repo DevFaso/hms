@@ -51,6 +51,7 @@ import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import static org.mockito.Mockito.lenient;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
 
@@ -375,7 +376,8 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.lmp.implausible");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.lmp.implausible"));
     }
 
     @Test
@@ -393,7 +395,8 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.pregnancy.delivered");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.delivered"));
     }
 
     /* ── QA D249: schedule recommendations in the caller's language ─────── */

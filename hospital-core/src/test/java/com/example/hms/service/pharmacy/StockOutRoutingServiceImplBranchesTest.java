@@ -52,6 +52,7 @@ import static org.mockito.Mockito.when;
  * null restock date, null/blank medication code, null quantityOnHand entries,
  * and the best-effort partner SMS error-handling paths.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class StockOutRoutingServiceImplBranchesTest {
 

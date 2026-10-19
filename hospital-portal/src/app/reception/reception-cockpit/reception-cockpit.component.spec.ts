@@ -57,6 +57,21 @@ describe('ReceptionCockpitComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('QA D261: every input rendered on the cockpit has an accessible name', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const inputs = Array.from(root.querySelectorAll('input, select, textarea'));
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const el of inputs) {
+      const id = el.getAttribute('id');
+      const labelled =
+        !!el.getAttribute('aria-label') ||
+        !!el.getAttribute('aria-labelledby') ||
+        !!el.closest('label') ||
+        (!!id && !!root.querySelector(`label[for="${id}"]`));
+      expect(labelled).withContext(el.outerHTML.slice(0, 120)).toBeTrue();
+    }
+  });
+
   it('should load all data on init', () => {
     expect(component.summary()).toBeTruthy();
     expect(component.queueItems()).toEqual([]);

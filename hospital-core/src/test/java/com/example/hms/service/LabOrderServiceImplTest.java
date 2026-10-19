@@ -59,6 +59,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import java.util.Map;
 import java.util.Set;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabOrderServiceImplTest {
 

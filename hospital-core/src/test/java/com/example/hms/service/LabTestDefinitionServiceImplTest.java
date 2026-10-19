@@ -53,6 +53,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabTestDefinitionServiceImplTest {
 
@@ -258,7 +259,8 @@ class LabTestDefinitionServiceImplTest {
 
             assertThatThrownBy(() -> service.create(requestDTO))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("assignment.notfound");
+                    .satisfies(e -> assertThat(((ResourceNotFoundException) e).getMessageKey())
+                        .contains("assignment.notfound"));
         }
     }
 

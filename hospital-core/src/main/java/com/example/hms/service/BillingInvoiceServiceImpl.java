@@ -282,7 +282,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new BusinessException("billing.invoice.encounterNotFound"));
         // QA D70: an encounter code is a claim; one of another hospital is refused, not dropped.
         if (!hospitalId.equals(encounter.getHospital().getId())) {
-            throw new BusinessException("The encounter does not belong to this hospital.");
+            throw new BusinessException("billing.encounter.otherHospital");
         }
         return encounter;
     }
@@ -419,7 +419,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: issuing the visit invoice takes over the check-in copay.
-        creditCheckInCopays(saved != null ? saved : invoice);
+        creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
@@ -500,7 +500,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: a visit invoice issued at 0 and priced later by its lines takes the copay now.
-        creditCheckInCopays(saved != null ? saved : invoice);
+        creditCheckInCopays(saved);
     }
 
     @Override
@@ -749,7 +749,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 }
             }
         }
-        throw new BusinessException("Unsupported payment method.");
+        throw new BusinessException("billing.payment.methodUnsupported");
     }
 
     private static String blankToNull(String value) {
@@ -774,20 +774,20 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         // ── Validate the invoice is payable ──
         if (invoice.getStatus() == InvoiceStatus.PAID) {
-            throw new BusinessException("This invoice is already fully paid.");
+            throw new BusinessException("billing.invoice.alreadyPaid");
         }
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
-            throw new BusinessException("Cannot make a payment on a cancelled invoice.");
+            throw new BusinessException("billing.invoice.paymentOnCancelled");
         }
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {
-            throw new BusinessException("This invoice has not been issued yet.");
+            throw new BusinessException("billing.invoice.notIssued");
         }
 
         BigDecimal currentPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
 
         if (amount.compareTo(balanceDue) > 0) {
-            throw new BusinessException("Payment amount (" + amount + ") exceeds balance due (" + balanceDue + ").");
+            throw new BusinessException("billing.payment.exceedsBalance", amount, balanceDue);
         }
         return invoice;
     }

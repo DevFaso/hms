@@ -173,13 +173,13 @@ public class LabOrderController {
 
         String rawStatus = request == null ? null : request.getStatus();
         if (rawStatus == null || rawStatus.isBlank()) {
-            throw new com.example.hms.exception.BusinessException("Request body must include a 'status' field.");
+            throw new com.example.hms.exception.BusinessException("lab.order.statusFieldRequired");
         }
         LabOrderStatus toStatus;
         try {
             toStatus = LabOrderStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new com.example.hms.exception.BusinessException("Unknown lab order status: " + rawStatus);
+            throw new com.example.hms.exception.BusinessException("lab.order.unknownStatus", rawStatus);
         }
         LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));

@@ -53,7 +53,7 @@ import java.util.UUID;
 @Tag(name = "Nurse Workflow", description = "Operational queues powering the nurse dashboard")
 public class NurseTaskController {
 
-    private static final String NURSE_IDENTITY_ERROR = "Unable to resolve nurse identity.";
+    private static final String NURSE_IDENTITY_ERROR = "nurse.identity.unresolved";
 
     private final NurseTaskService nurseTaskService;
     private final ControllerAuthUtils authUtils;
@@ -126,7 +126,7 @@ public class NurseTaskController {
         UUID nurseId = resolveAssignee(auth, assignee);
         if (nurseId == null) {
             nurseId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve nurse assignment for administration."));
+                .orElseThrow(() -> new BusinessException("nurse.assignment.unresolvedForAdministration"));
         }
         NurseMedicationTaskResponseDTO response = nurseTaskService.recordMedicationAdministration(taskId, nurseId, scopedHospital, request);
         return ResponseEntity.ok(response);
@@ -385,7 +385,7 @@ public class NurseTaskController {
     private UUID ensureHospitalScope(Authentication auth, UUID requestedHospital) {
         UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospital, false);
         if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context required for nurse workflow data.");
+            throw new BusinessException("nurse.hospital.required");
         }
         return resolved;
     }
@@ -396,9 +396,9 @@ public class NurseTaskController {
         }
         if ("me".equalsIgnoreCase(assignee.trim())) {
             return authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user identity for 'me' filter."));
+                .orElseThrow(() -> new BusinessException("nurse.assignee.meUnresolved"));
         }
-        throw new BusinessException("Invalid assignee value '" + assignee + "'. Use 'me' or 'all'.");
+        throw new BusinessException("nurse.assignee.invalid", assignee);
     }
 
     private Duration parseWindow(String raw) {
