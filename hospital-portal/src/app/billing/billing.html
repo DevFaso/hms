@@ -100,7 +100,7 @@
       type="text"
       [placeholder]="'BILLING.SEARCH' | translate"
       [(ngModel)]="searchTerm"
-      (input)="applyFilter()"
+      (input)="onSearchInput()"
     />
   </div>
 
@@ -304,6 +304,10 @@
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ inv.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
+              ><span class="field-value">{{ inv.encounterCode || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span

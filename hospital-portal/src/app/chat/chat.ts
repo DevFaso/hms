@@ -553,6 +553,11 @@ export class ChatComponent implements OnInit, OnDestroy {
    * so a patient cannot pick from it. Acting as a patient — the role picked at
    * sign-in, or the only role held — means the patient picker.
    */
+  /** QA D257: a patient writes to their care team, not to "colleagues". */
+  get subtitleKey(): string {
+    return this.isPatientCaller() ? 'CHAT.SUBTITLE_PATIENT' : 'CHAT.SUBTITLE';
+  }
+
   private isPatientCaller(): boolean {
     if (this.roleContext.activeRole === 'ROLE_PATIENT') return true;
     const roles = this.auth.getRoles();

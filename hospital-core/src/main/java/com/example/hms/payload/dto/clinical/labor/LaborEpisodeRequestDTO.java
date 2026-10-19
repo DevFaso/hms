@@ -34,4 +34,11 @@ public class LaborEpisodeRequestDTO {
     private Integer para;
 
     private String riskNotes;
+
+    /**
+     * QA D214: required when a birth was recorded for this mother recently;
+     * the clinician's reason for opening a new labour episode anyway.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String recentDeliveryOverrideReason;
 }

@@ -138,6 +138,16 @@ public class PdfInvoiceService {
 
     /** QA D141: a receipt for one confirmed payment. */
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, Locale locale) {
+        return generateReceiptPdf(invoice, payment, String.valueOf(payment.getId()), nz(invoice.getAmountPaid()), locale);
+    }
+
+    /**
+     * QA D228: {@code receiptNumber} is the readable number printed on the
+     * receipt and {@code paidAsOfPayment} the invoice's amount paid right
+     * after this payment, so a reprint shows the balance at that moment.
+     */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -146,7 +156,7 @@ public class PdfInvoiceService {
             w.down(20);
             w.text(BODY, 11, MARGIN, t.get(HOSPITAL, hospitalName(invoice)));
             w.down(15);
-            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", String.valueOf(payment.getId())));
+            w.text(BODY, 11, MARGIN, t.get("pdf.receipt.number", safe(receiptNumber)));
             w.down(15);
             w.text(BODY, 11, MARGIN, t.get("pdf.receipt.invoice", safe(invoice.getInvoiceNumber())));
             w.down(15);
@@ -162,7 +172,7 @@ public class PdfInvoiceService {
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
             BigDecimal total = nz(invoice.getTotalAmount());
-            BigDecimal paid = nz(invoice.getAmountPaid());
+            BigDecimal paid = nz(paidAsOfPayment);
             w.down(24);
             w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));
             w.down(15);

@@ -6,6 +6,7 @@ import {
   LabResultSummary,
   PatientPortalService,
   PortalInvoice,
+  formatTime,
   mapPortalInvoice,
 } from './patient-portal.service';
 
@@ -386,5 +387,27 @@ describe('PatientPortalService invoices', () => {
 
   it('derives the balance when the API leaves balanceDue out', () => {
     expect(mapPortalInvoice({ id: 'x', totalAmount: 900, amountPaid: 300 }).balance).toBe(600);
+    // QA D202: a cancelled invoice owes nothing, whatever the API sent.
+    expect(
+      mapPortalInvoice({ id: 'y', totalAmount: 5000, balanceDue: 5000, status: 'CANCELLED' })
+        .balance,
+    ).toBe(0);
+  });
+});
+
+describe('formatTime (QA D255)', () => {
+  it('writes a French time on the 24-hour clock, never "AM/PM"', () => {
+    const fr = formatTime('09:00:00', 'fr-FR');
+    expect(fr).toBe('09:00');
+    expect(formatTime('14:30', 'fr-FR')).toBe('14:30');
+  });
+
+  it('keeps the 12-hour clock for English', () => {
+    expect(formatTime('14:30', 'en-US')).toMatch(/2:30\sPM/);
+  });
+
+  it('passes through what it cannot parse', () => {
+    expect(formatTime('', 'fr-FR')).toBe('');
+    expect(formatTime('later', 'fr-FR')).toBe('later');
   });
 });

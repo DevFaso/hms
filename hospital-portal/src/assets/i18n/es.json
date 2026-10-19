@@ -215,6 +215,8 @@
     "PULSE": "Pulso",
     "RECORD_DELIVERY": "Registrar parto",
     "RISK_NOTES": "Notas de riesgo",
+    "RECENT_DELIVERY_OVERRIDE": "Motivo de excepción (parto reciente)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Obligatorio solo si se registró un nacimiento para esta paciente en las últimas 20 semanas.",
     "SAVE_DELIVERY": "Guardar registro de parto",
     "SAVE_ENTRY": "Guardar registro",
     "SEX_FEMALE": "Femenino",
@@ -1547,7 +1549,8 @@
     "VOICE_MEMO_EMPTY": "La nota de voz estaba vacía — inténtelo de nuevo.",
     "VOICE_MEMO_NOT_SUPPORTED": "Este navegador no admite la grabación de notas de voz.",
     "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz.",
-    "ATTACHMENT": "Archivo adjunto"
+    "ATTACHMENT": "Archivo adjunto",
+    "SUBTITLE_PATIENT": "Escriba a su equipo de atención"
   },
   "COMMON": {
     "ACTION": "Acción",
@@ -6333,7 +6336,8 @@
     "PASSWORD_CHANGE_FAILED": "No se pudo cambiar la contraseña. Inténtelo de nuevo.",
     "PASSWORD_MANAGED_BY_SSO": "Su contraseña la gestiona su proveedor de inicio de sesión único.",
     "SAVE_NEW_PASSWORD": "Guardar la nueva contraseña",
-    "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico."
+    "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico.",
+    "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS."
   },
   "RECEPTION": {
     "ACCEPT_OFFER": "Aceptar",
@@ -6954,7 +6958,9 @@
     "TOGGLE_VISIBILITY": "Mostrar u ocultar la contraseña",
     "USERNAME_DESC": "Elija un nombre de usuario único",
     "USERNAME_HINT": "De 3 a 50 caracteres: letras, dígitos, puntos, guiones, guiones bajos",
-    "USERNAME_PLACEHOLDER": "ej. juan.perez"
+    "USERNAME_PLACEHOLDER": "ej. juan.perez",
+    "CURRENT_HINT_SMS": "La contraseña temporal que recibió por SMS",
+    "CURRENT_HINT_GENERIC": "La contraseña temporal que se le entregó"
   },
   "SETTINGS_HUB": {
     "ACCOUNT_DESC": "Actualice su nombre, datos de contacto, foto y otra información personal.",
@@ -10749,14 +10755,14 @@
     "SUBTITLE": "Buscar una dispensación y registrar el pago",
     "STEP_LOOKUP": "1. Buscar una dispensación",
     "DISPENSE_ID": "Identificador de la dispensación",
-    "DISPENSE_ID_PLACEHOLDER": "UUID de la dispensación",
+    "DISPENSE_ID_PLACEHOLDER": "Identificador de la dispensación",
     "LOAD": "Cargar",
     "MEDICATION": "Medicamento",
     "QTY_DISPENSED": "Cantidad dispensada",
     "PATIENT": "Paciente",
     "PHARMACY": "Farmacia",
     "STEP_PAYMENT": "2. Registrar el pago",
-    "AMOUNT_XOF": "Importe (XOF)",
+    "AMOUNT_XOF": "Importe (F CFA)",
     "PAYMENT_METHOD": "Método de pago",
     "REFERENCE": "Referencia",
     "REFERENCE_PLACEHOLDER": "Transacción / póliza",

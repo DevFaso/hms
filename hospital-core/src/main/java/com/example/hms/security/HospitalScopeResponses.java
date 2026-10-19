@@ -51,10 +51,30 @@ public final class HospitalScopeResponses {
                 + "\"code\":\"" + HospitalScopeRefusedException.CODE + "\","
                 + "\"reason\":\"" + effective.name() + "\","
                 + hospital
-                + "\"message\":\"" + ActingScopeResolver.refusalMessage(effective) + "\"}");
+                + "\"message\":\"" + jsonEscape(ActingScopeResolver.localizedRefusalMessage(
+                    effective.name(), ActingScopeResolver.refusalMessage(effective))) + "\"}");
         } catch (IOException ex) {
             log.warn("[AUTH] Failed to write the hospital-scope refusal body", ex);
         }
+    }
+
+    /** The message comes from a bundle: escape what JSON needs. */
+    private static String jsonEscape(String text) {
+        StringBuilder out = new StringBuilder(text.length());
+        for (char c : text.toCharArray()) {
+            switch (c) {
+                case '"' -> out.append("\\\"");
+                case '\\' -> out.append("\\\\");
+                default -> {
+                    if (c < 0x20) {
+                        out.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        out.append(c);
+                    }
+                }
+            }
+        }
+        return out.toString();
     }
 
     /**

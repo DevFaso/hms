@@ -100,7 +100,7 @@ class BillingInvoiceTest {
                 patient, hospital, encounter,
                 "INV-001", invoiceDate, dueDate,
                 total, paid, InvoiceStatus.SENT,
-                "Some notes", items, createdBy, updatedBy, null
+                "Some notes", items, createdBy, updatedBy, null, false
             );
 
             assertAll(

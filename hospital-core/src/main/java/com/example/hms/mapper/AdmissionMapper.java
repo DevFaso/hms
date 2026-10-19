@@ -227,6 +227,7 @@ public class AdmissionMapper {
                 return;
             }
             dto.setEncounterId(stay.getId());
+            dto.setEncounterCode(stay.getCode());
             dto.setCurrentEncounterId(TERMINAL_ENCOUNTER_STATUSES.contains(stay.getStatus()) ? null : stay.getId());
         }
 

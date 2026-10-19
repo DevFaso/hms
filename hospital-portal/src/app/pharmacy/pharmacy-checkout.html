@@ -43,7 +43,7 @@
       <h3>{{ 'PHARMACY_CHECKOUT.STEP_PAYMENT' | translate }}</h3>
       <div class="form-row">
         <label for="amount">{{ 'PHARMACY_CHECKOUT.AMOUNT_XOF' | translate }}</label>
-        <input id="amount" type="number" min="0" [(ngModel)]="amount" />
+        <input id="amount" type="number" min="1" step="1" [(ngModel)]="amount" />
       </div>
       <div class="form-row">
         <span class="form-label">{{ 'PHARMACY_CHECKOUT.PAYMENT_METHOD' | translate }}</span>

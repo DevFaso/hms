@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -62,8 +62,12 @@ describe('BillingComponent', () => {
       'rejectPayment',
       'reversePayment',
       'getReceiptPdf',
+      'getSummary',
     ]);
     billingSpy.listPayments.and.returnValue(of([]));
+    billingSpy.getSummary.and.returnValue(
+      of({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 }),
+    );
     billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
     billingSpy.getInvoiceItems.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -132,14 +136,27 @@ describe('BillingComponent', () => {
     expect(component.invoices()[0].id).toBe('inv-2');
   });
 
-  it('applies the client-side search filter', () => {
+  it('QA D203: the search term goes to the server, not a filter over the loaded page', fakeAsync(() => {
     fixture.detectChanges();
-    component.searchTerm = 'nobody';
-    component.applyFilter();
-    expect(component.filtered().length).toBe(0);
-    component.searchTerm = 'john';
-    component.applyFilter();
+    billingSpy.searchInvoices.calls.reset();
+    component.searchTerm = ' GH-2026-000024 ';
+    component.onSearchInput();
+    tick(300);
+    expect(billingSpy.searchInvoices).toHaveBeenCalledTimes(1);
+    const [filters, page] = billingSpy.searchInvoices.calls.mostRecent().args;
+    expect(filters.query).toBe('GH-2026-000024');
+    expect(page).toBe(0);
+    // The server's rows are shown as they are: no second, page-local filter.
     expect(component.filtered().length).toBe(1);
+  }));
+
+  it('filters the whole overdue worklist locally', () => {
+    billingSpy.getOverdue.and.returnValue(of([mockInvoice({ id: 'o1' })]));
+    fixture.detectChanges();
+    component.setTab('overdue');
+    component.searchTerm = 'nobody';
+    component.onSearchInput();
+    expect(component.filtered().length).toBe(0);
   });
 
   it('clearServerFilters resets filters and reloads', () => {
@@ -217,21 +234,6 @@ describe('BillingComponent', () => {
     component.recordPayment();
     expect(billingSpy.recordPayment).not.toHaveBeenCalled();
     expect(toastSpy.error).toHaveBeenCalled();
-  });
-
-  it('QA D150: the outstanding total counts issued invoices only, never drafts', () => {
-    billingSpy.searchInvoices.and.returnValue(
-      of(
-        mockPage([
-          mockInvoice({ id: 'a', status: 'DRAFT', balanceDue: 9000 }),
-          mockInvoice({ id: 'b', status: 'SENT', balanceDue: 1000 }),
-          mockInvoice({ id: 'c', status: 'PARTIALLY_PAID', balanceDue: 500 }),
-          mockInvoice({ id: 'd', status: 'CANCELLED', balanceDue: 700 }),
-        ]),
-      ),
-    );
-    fixture.detectChanges();
-    expect(component.stats().balance).toBe(1500);
   });
 
   it('QA D147: a paid invoice takes no line changes', () => {
@@ -368,21 +370,19 @@ describe('BillingComponent', () => {
     expect(component.showDeleteConfirm()).toBeFalse();
   });
 
-  it('computes stats from the loaded page', () => {
+  it('QA D209: the KPIs come from the server summary, not the loaded page', () => {
+    billingSpy.getSummary.and.returnValue(
+      of({ total: 32, paid: 20, outstanding: 9, overdue: 2, totalRevenue: 157200, balance: 12900 }),
+    );
     billingSpy.searchInvoices.and.returnValue(
-      of(
-        mockPage([
-          mockInvoice({ id: 'a', status: 'PAID', amountPaid: 500, balanceDue: 0 }),
-          mockInvoice({ id: 'b', status: 'SENT', amountPaid: 0, balanceDue: 300 }),
-        ]),
-      ),
+      of(mockPage([mockInvoice({ id: 'a', status: 'PAID', amountPaid: 500, balanceDue: 0 })])),
     );
     fixture.detectChanges();
     const stats = component.stats();
-    expect(stats.paid).toBe(1);
-    expect(stats.outstanding).toBe(1);
-    expect(stats.totalRevenue).toBe(500);
-    expect(stats.balance).toBe(300);
+    expect(billingSpy.getSummary).toHaveBeenCalled();
+    expect(stats.total).toBe(32);
+    expect(stats.totalRevenue).toBe(157200);
+    expect(stats.balance).toBe(12900);
   });
 
   it('maps statuses to badge classes', () => {

@@ -60,6 +60,7 @@ class AdmissionMapperStayEncounterTest {
     @Test
     void anOpenStay_isBothTheEncounterAndTheCurrentEncounter() {
         Encounter stay = stay(EncounterStatus.IN_PROGRESS);
+        stay.setCode("ENC-STAY-1");
         when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
             .thenReturn(Optional.of(stay));
 
@@ -67,6 +68,8 @@ class AdmissionMapperStayEncounterTest {
 
         assertThat(dto.getEncounterId()).isEqualTo(stay.getId());
         assertThat(dto.getCurrentEncounterId()).isEqualTo(stay.getId());
+        // QA D219: the stay's readable code travels with the admission.
+        assertThat(dto.getEncounterCode()).isEqualTo("ENC-STAY-1");
         verify(encounterRepository, never()).findByPatient_IdAndHospital_IdAndStatusNotIn(any(), any(), any());
     }
 

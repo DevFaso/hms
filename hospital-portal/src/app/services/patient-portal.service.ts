@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { currentLocale } from '../shared/i18n/app-locale';
 import { HttpClient } from '@angular/common/http';
 import { Observable, map, catchError, of } from 'rxjs';
 
@@ -270,17 +271,24 @@ interface AppointmentApiResponse {
   preCheckinTimestamp: string | null;
 }
 
-/** Format "HH:mm:ss" or "HH:mm" → "h:mm AM/PM" */
-function formatTime(raw: string | null | undefined): string {
+/**
+ * Format "HH:mm:ss" or "HH:mm" in the page's locale (QA D255: a French patient
+ * saw "9:00 AM"). `currentLocale()` is LOCALE_ID's source; switching language
+ * reloads the page, so the mapped value never goes stale.
+ */
+export function formatTime(
+  raw: string | null | undefined,
+  locale: string = currentLocale(),
+): string {
   if (!raw) return '';
   const parts = raw.split(':');
   if (parts.length < 2) return raw;
-  let h = Number.parseInt(parts[0], 10);
-  const m = parts[1];
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  if (h === 0) h = 12;
-  else if (h > 12) h -= 12;
-  return `${h}:${m} ${ampm}`;
+  const h = Number.parseInt(parts[0], 10);
+  const m = Number.parseInt(parts[1], 10);
+  if (Number.isNaN(h) || Number.isNaN(m)) return raw;
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(
+    new Date(2000, 0, 1, h, m),
+  );
 }
 
 /** Truncate "HH:mm:ss" → "HH:mm" (the shape `<input type="time">` expects). */
@@ -436,7 +444,13 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     dueDate: api.dueDate ?? '',
     amount: total,
     paid,
-    balance: api.balanceDue != null ? Number(api.balanceDue) : Math.max(total - paid, 0),
+    // QA D202: a cancelled invoice is owed by nobody.
+    balance:
+      api.status === 'CANCELLED'
+        ? 0
+        : api.balanceDue != null
+          ? Number(api.balanceDue)
+          : Math.max(total - paid, 0),
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
     description: api.encounterDescription ?? '',

@@ -142,6 +142,24 @@ describe('LaborTabComponent', () => {
     expect(component.startFormOpen()).toBeFalse();
   });
 
+  it('D214: a refused start shows the server reason and sends the override', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    laborSpy.startEpisode.and.returnValue(
+      throwError(() => ({ error: { message: 'Naissance récente : motif requis' } })),
+    );
+
+    component.openStartForm();
+    component.startForm.recentDeliveryOverrideReason = 'Second jumeau';
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).toHaveBeenCalledWith(
+      'p1',
+      jasmine.objectContaining({ recentDeliveryOverrideReason: 'Second jumeau' }),
+    );
+    expect(toastSpy.error).toHaveBeenCalledWith('Naissance récente : motif requis');
+    expect(component.startFormOpen()).toBeTrue();
+  });
+
   it('submitEntry rejects an all-empty form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);
