@@ -2,6 +2,8 @@ package com.example.hms.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -66,7 +68,7 @@ class FeatureFlagControllerTest {
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .content("{\"enabled\":true}"))
             .andExpect(status().isBadRequest());
-        org.mockito.Mockito.verify(featureFlagService, org.mockito.Mockito.never())
+        verify(featureFlagService, never())
             .upsertOverride(any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any(), any(), any(), any());
     }
 }

@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -52,7 +53,7 @@ class HospitalLifecycleProviderRestoreTest {
     private HospitalLifecycleServiceImpl service() {
         return new HospitalLifecycleServiceImpl(hospitalRepository, auditEventLogService, lifecycleStatusService,
             mfaService, Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), ZoneOffset.UTC), verificationRepository,
-            org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class));
+            mock(com.example.hms.repository.UserRepository.class));
     }
 
     @ParameterizedTest(name = "an ARCHIVED provider whose verification is {0} comes back SUSPENDED and inactive, never ACTIVE")

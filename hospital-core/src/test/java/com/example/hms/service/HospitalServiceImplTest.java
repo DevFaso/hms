@@ -564,7 +564,7 @@ class HospitalServiceImplTest {
 
             assertThrows(com.example.hms.exception.ConflictException.class,
                     () -> hospitalService.updateHospital(id, dto, Locale.ENGLISH));
-            verify(hospitalRepository, org.mockito.Mockito.never()).save(any(Hospital.class));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
         }
     }
 

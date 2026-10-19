@@ -56,11 +56,9 @@ public class PermissionMatrixController {
     ) {
         // D248: an environment with no snapshot yet is an empty state, not a
         // missing page — 204, which the governance matrix tab shows as such.
-        try {
-            return ResponseEntity.ok(permissionMatrixService.getLatestSnapshot(environment, locale));
-        } catch (com.example.hms.exception.ResourceNotFoundException ex) {
-            return ResponseEntity.noContent().build();
-        }
+        return permissionMatrixService.findLatestSnapshot(environment, locale)
+            .map(ResponseEntity::ok)
+            .orElseGet(() -> ResponseEntity.noContent().build());
     }
 
     @GetMapping("/snapshots")

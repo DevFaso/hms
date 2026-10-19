@@ -1,7 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.PermissionMatrixEnvironment;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.PermissionMatrixSnapshotResponseDTO;
 import com.example.hms.service.PermissionMatrixService;
 import org.junit.jupiter.api.AfterEach;
@@ -21,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -50,8 +50,8 @@ class PermissionMatrixControllerTest {
     @WithMockUser
     @DisplayName("no snapshot for the environment answers 204 with no body")
     void missingSnapshotIsNoContent() throws Exception {
-        when(service.getLatestSnapshot(eq(PermissionMatrixEnvironment.CURRENT), any()))
-            .thenThrow(new ResourceNotFoundException("permission.matrix.snapshot.notfound"));
+        when(service.findLatestSnapshot(eq(PermissionMatrixEnvironment.CURRENT), any()))
+            .thenReturn(java.util.Optional.empty());
 
         mockMvc.perform(get("/permissions/matrix/snapshots/latest").param("environment", "CURRENT"))
             .andExpect(status().isNoContent())
@@ -62,8 +62,8 @@ class PermissionMatrixControllerTest {
     @WithMockUser
     @DisplayName("an existing snapshot is still served with 200")
     void existingSnapshotIsOk() throws Exception {
-        when(service.getLatestSnapshot(eq(PermissionMatrixEnvironment.CURRENT), any()))
-            .thenReturn(new PermissionMatrixSnapshotResponseDTO());
+        when(service.findLatestSnapshot(eq(PermissionMatrixEnvironment.CURRENT), any()))
+            .thenReturn(java.util.Optional.of(new PermissionMatrixSnapshotResponseDTO()));
 
         mockMvc.perform(get("/permissions/matrix/snapshots/latest").param("environment", "CURRENT"))
             .andExpect(status().isOk());
@@ -73,7 +73,7 @@ class PermissionMatrixControllerTest {
     static class Config {
         @Bean
         PermissionMatrixService permissionMatrixService() {
-            return Mockito.mock(PermissionMatrixService.class);
+            return mock(PermissionMatrixService.class);
         }
     }
 }
