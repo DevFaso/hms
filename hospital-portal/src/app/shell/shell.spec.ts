@@ -23,10 +23,14 @@ import { ProviderSettings } from '../services/provider.model';
 import { WritableSignal } from '@angular/core';
 import { routes } from '../app.routes';
 import { roleSatisfies } from '../core/role-equivalence';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 interface NavItem {
   route: string;
   label: string;
+  translationKey?: string;
 }
 
 /**
@@ -144,6 +148,26 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
       wildcardPermission: false,
     });
     expect(component.sidebarCollapsed()).toBeFalse();
+  });
+
+  it('gives every patient nav entry a distinct label in EN, FR and ES (D257)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_PATIENT',
+      roles: ['ROLE_PATIENT'],
+      wildcardPermission: false,
+    });
+    const locales: Record<string, { NAV: Record<string, unknown> }> = { en, fr, es };
+    for (const [lang, bundle] of Object.entries(locales)) {
+      const labels = items.map((i) => {
+        const key = (i.translationKey ?? '').replace(/^NAV\./, '');
+        const raw = bundle.NAV[key];
+        const label = typeof raw === 'string' ? raw : undefined;
+        expect(label).withContext(`${lang} ${i.translationKey}`).toBeTruthy();
+        return (label ?? '').trim().toLocaleLowerCase(lang);
+      });
+      const dupes = labels.filter((l, idx) => labels.indexOf(l) !== idx);
+      expect(dupes).withContext(lang).toEqual([]);
+    }
   });
 
   it('omits Dashboard and Administration when activeRole is ROLE_SUPER_ADMIN', () => {
