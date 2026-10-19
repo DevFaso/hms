@@ -18,4 +18,7 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
     Page<PharmacyPayment> findByDispenseIdAndHospital_Id(UUID dispenseId, UUID hospitalId, Pageable pageable);
 
     Page<PharmacyPayment> findByPatientIdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /** QA D204: the payment already recorded for a dispense, if any (a dispense is paid once). */
+    java.util.Optional<PharmacyPayment> findFirstByDispense_IdOrderByCreatedAtAsc(UUID dispenseId);
 }

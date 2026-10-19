@@ -39,11 +39,11 @@
           <div class="portal-list-item">
             <div
               class="pli-icon"
-              [style.background]="inv.balance > 0 ? '#fef3c7' : '#d1fae5'"
-              [style.color]="inv.balance > 0 ? '#d97706' : '#059669'"
+              [style.background]="isPayable(inv) ? '#fef3c7' : '#d1fae5'"
+              [style.color]="isPayable(inv) ? '#d97706' : '#059669'"
             >
               <span class="material-symbols-outlined">{{
-                inv.balance > 0 ? 'pending' : 'check_circle'
+                isPayable(inv) ? 'pending' : 'check_circle'
               }}</span>
             </div>
             <div class="pli-body">
@@ -59,13 +59,20 @@
               >
             </div>
             <div class="pli-end">
-              <span class="pli-amount" [class.has-balance]="inv.balance > 0">{{
-                inv.balance | currency: 'XOF' : 'symbol' : '1.0-0'
+              <!-- QA D254: the invoice total, with what is left to pay when anything is -->
+              <span class="pli-amount" [class.has-balance]="isPayable(inv)">{{
+                inv.amount | currency: 'XOF' : 'symbol' : '1.0-0'
               }}</span>
+              @if (isPayable(inv)) {
+                <span class="pli-meta"
+                  >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}
+                  {{ inv.balance | currency: 'XOF' : 'symbol' : '1.0-0' }}</span
+                >
+              }
               <span class="pli-status" [attr.data-status]="inv.status">{{
                 inv.status | enumLabel: 'invoiceStatus'
               }}</span>
-              @if (inv.balance > 0 && inv.status !== 'DRAFT') {
+              @if (isPayable(inv)) {
                 <button class="pay-btn" (click)="openPayDialog(inv)">
                   <span class="material-symbols-outlined">payment</span>
                   {{ 'PORTAL.BILLING.PAY_NOW' | translate }}

@@ -2881,4 +2881,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V200 - QA D210: flag the check-in copay invoice so the visit
+         invoice credits it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V200-billing-invoice-check-in-copay" author="hms-team" runOnChange="false">
+        <sqlFile path="V200__billing_invoice_check_in_copay.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

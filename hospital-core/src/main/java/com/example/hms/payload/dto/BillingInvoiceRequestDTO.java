@@ -40,6 +40,9 @@ public class BillingInvoiceRequestDTO {
      */
     private String hospitalName;
 
+    /** QA D230: optional; when sent it must be the acting hospital, or the request is refused. */
+    private UUID hospitalId;
+
     private String encounterReference;
 
     /** Ignored: the server allocates the number per hospital (QA D94). */

@@ -48,6 +48,9 @@ public class AdmissionResponseDTO {
     /** The stay's own INPATIENT encounter, open or closed (QA D135, V193). */
     private UUID encounterId;
 
+    /** QA D219: that encounter's code, which an invoice is linked by. */
+    private String encounterCode;
+
     private UUID departmentId;
     private String departmentName;
 

@@ -81,6 +81,11 @@ export class PharmacyCheckoutComponent {
       this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_INVALID_AMOUNT'));
       return;
     }
+    // QA D204: the franc CFA has no minor unit.
+    if (!Number.isInteger(this.amount)) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+      return;
+    }
     const hospitalId = this.auth.getHospitalId();
     const userId = this.auth.getUserId();
     if (!hospitalId || !userId) {

@@ -100,10 +100,18 @@ class JavaTimeParameterBindingIT {
     @Test
     void aLocalDateRangeAcceptsEmptyBounds() {
         assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
-                null, null, List.of(InvoiceStatus.PAID), null, null, PageRequest.of(0, 5)))
+                null, null, List.of(InvoiceStatus.PAID), null, null, null, PageRequest.of(0, 5)))
             .doesNotThrowAnyException();
         assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
-                null, null, List.of(InvoiceStatus.PAID), LocalDate.of(2026, 1, 1), null, PageRequest.of(0, 5)))
+                null, null, List.of(InvoiceStatus.PAID), LocalDate.of(2026, 1, 1), null, null, PageRequest.of(0, 5)))
+            .doesNotThrowAnyException();
+        // QA D203: the server-side search term, empty and set, and a sort with an id tiebreaker.
+        assertThatCode(() -> billingInvoiceRepository.findAllWithFilters(
+                null, null, null, null, null, "%gh-2026%", PageRequest.of(0, 5,
+                    org.springframework.data.domain.Sort.by("invoiceDate", "createdAt", "id").descending())))
+            .doesNotThrowAnyException();
+        // QA D209: the KPI aggregate binds a null hospital (global view) and a date.
+        assertThatCode(() -> billingInvoiceRepository.summarize(null, LocalDate.of(2026, 1, 1)))
             .doesNotThrowAnyException();
     }
 }
