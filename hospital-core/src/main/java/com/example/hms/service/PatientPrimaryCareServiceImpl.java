@@ -109,6 +109,8 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         if (endDate == null) endDate = LocalDate.now();
         PatientPrimaryCare entity = pcpRepo.findById(pcpId)
             .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), "primaryCare.link.notFound", pcpId);
 
         if (entity.getStartDate() != null && endDate.isBefore(entity.getStartDate())) {
             throw new BusinessException("PCP endDate cannot be before startDate");
@@ -134,9 +136,10 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
     @Override
     @Transactional
     public void deletePrimaryCare(UUID pcpId) {
-        if (!pcpRepo.existsById(pcpId)) {
-            throw new ResourceNotFoundException("primaryCare.link.notFound", pcpId);
-        }
-        pcpRepo.deleteById(pcpId);
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        PatientPrimaryCare entity = pcpRepo.findById(pcpId)
+            .orElseThrow(() -> new ResourceNotFoundException("primaryCare.link.notFound", pcpId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(entity.getHospital(), "primaryCare.link.notFound", pcpId);
+        pcpRepo.delete(entity);
     }
 }

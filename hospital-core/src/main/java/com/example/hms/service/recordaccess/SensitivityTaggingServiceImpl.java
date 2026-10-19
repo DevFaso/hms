@@ -117,13 +117,19 @@ public class SensitivityTaggingServiceImpl implements SensitivityTaggingService 
     }
 
     private Encounter requireEncounter(UUID id) {
-        return encounterRepository.findById(id)
+        Encounter encounter = encounterRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, id));
+        // QA r5 tenancy sweep: another hospital's encounter answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), MSG_ENCOUNTER_NOT_FOUND, id);
+        return encounter;
     }
 
     private Department requireDepartment(UUID id) {
-        return departmentRepository.findById(id)
+        Department department = departmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_DEPARTMENT_NOT_FOUND, id));
+        // QA r5 tenancy sweep: another hospital's department answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), MSG_DEPARTMENT_NOT_FOUND, id);
+        return department;
     }
 
     /**

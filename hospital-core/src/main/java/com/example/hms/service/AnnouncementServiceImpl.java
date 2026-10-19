@@ -112,6 +112,8 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     public AnnouncementResponseDTO updateAnnouncement(UUID id, String text) {
         Announcement announcement = announcementRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Announcement not found"));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), "announcement.notFound", id);
         announcement.setText(text);
         return toDTO(announcementRepository.save(announcement));
     }
@@ -119,7 +121,11 @@ public class AnnouncementServiceImpl implements AnnouncementService {
     @Override
     @Transactional
     public void deleteAnnouncement(UUID id) {
-        announcementRepository.deleteById(id);
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        Announcement announcement = announcementRepository.findById(id)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("announcement.notFound", id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(announcement.getHospital(), "announcement.notFound", id);
+        announcementRepository.delete(announcement);
     }
 
     private AnnouncementResponseDTO toDTO(Announcement announcement) {

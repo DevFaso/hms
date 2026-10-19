@@ -307,14 +307,37 @@ class AnnouncementServiceImplTest {
     class DeleteAnnouncement {
 
         @Test
-        @DisplayName("delegates to repository deleteById")
+        @DisplayName("loads the announcement, then deletes it")
         void deletesById() {
             UUID id = UUID.randomUUID();
-            doNothing().when(announcementRepository).deleteById(id);
+            Announcement announcement = new Announcement();
+            when(announcementRepository.findById(id)).thenReturn(Optional.of(announcement));
 
             service.deleteAnnouncement(id);
 
-            verify(announcementRepository).deleteById(id);
+            verify(announcementRepository).delete(announcement);
+        }
+
+        @Test
+        @DisplayName("QA r5 tenancy: another hospital's announcement answers as unknown and is kept")
+        void refusesAnotherHospitalsAnnouncement() {
+            UUID id = UUID.randomUUID();
+            com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+            hospitalA.setId(UUID.randomUUID());
+            Announcement announcement = new Announcement();
+            announcement.setHospital(hospitalA);
+            when(announcementRepository.findById(id)).thenReturn(Optional.of(announcement));
+            UUID hospitalB = UUID.randomUUID();
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .activeHospitalId(hospitalB).permittedHospitalIds(java.util.Set.of(hospitalB)).build());
+            try {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.deleteAnnouncement(id))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+                verify(announcementRepository, org.mockito.Mockito.never()).delete(any(Announcement.class));
+            } finally {
+                com.example.hms.security.context.HospitalContextHolder.clear();
+            }
         }
     }
 }

@@ -225,6 +225,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
 
         DigitalSignature signature = signatureRepository.findById(signatureId)
             .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(signature.getHospital(), SIGNATURE_NOT_FOUND_KEY, signatureId);
 
         if (!signature.canRevoke()) {
             throw new BusinessException("Signature cannot be revoked. Current status: " + signature.getStatus());

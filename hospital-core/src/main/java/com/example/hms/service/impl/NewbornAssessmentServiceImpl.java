@@ -449,6 +449,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             if (!registration.getPatient().getId().equals(patient.getId())) {
                 throw new BusinessException("maternity.registration.otherPatient");
             }
+            // QA r5 tenancy sweep: a registration of another hospital answers as unknown.
+            if (hospitalId != null && (registration.getHospital() == null
+                    || !hospitalId.equals(registration.getHospital().getId()))) {
+                throw new ResourceNotFoundException("registration.notFound", registrationId);
+            }
             return registration;
         }
         if (hospitalId != null) {

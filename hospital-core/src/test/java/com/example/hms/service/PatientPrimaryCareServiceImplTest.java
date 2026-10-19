@@ -551,7 +551,7 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void notFoundThrows() {
-            when(pcpRepo.existsById(pcpId)).thenReturn(false);
+            when(pcpRepo.findById(pcpId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.deletePrimaryCare(pcpId))
                     .isInstanceOf(ResourceNotFoundException.class)
@@ -560,12 +560,12 @@ class PatientPrimaryCareServiceImplTest {
 
         @Test
         void deletesWhenExists() {
-            when(pcpRepo.existsById(pcpId)).thenReturn(true);
-            doNothing().when(pcpRepo).deleteById(pcpId);
+            PatientPrimaryCare link = new PatientPrimaryCare();
+            when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(link));
 
             service.deletePrimaryCare(pcpId);
 
-            verify(pcpRepo).deleteById(pcpId);
+            verify(pcpRepo).delete(link);
         }
     }
 }

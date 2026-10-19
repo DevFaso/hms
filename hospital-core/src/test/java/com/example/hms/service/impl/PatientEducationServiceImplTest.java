@@ -860,6 +860,7 @@ class PatientEducationServiceImplTest {
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        encounter.setHospital(hospital);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(documentationRepository.save(any(VisitEducationDocumentation.class))).thenAnswer(invocation -> {

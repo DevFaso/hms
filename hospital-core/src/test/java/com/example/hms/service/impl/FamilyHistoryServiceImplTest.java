@@ -190,4 +190,26 @@ class FamilyHistoryServiceImplTest {
         when(familyHistoryRepository.findById(historyId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteFamilyHistory(historyId)).isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ── QA r5 tenancy sweep: the D262 shape on a history row ──
+
+    @Test
+    void deleteFamilyHistory_ofAnotherHospital_isNotFoundAndKept() {
+        PatientFamilyHistory entity = new PatientFamilyHistory();
+        entity.setId(historyId);
+        entity.setActive(true);
+        entity.setHospital(hospital);
+        when(familyHistoryRepository.findById(historyId)).thenReturn(Optional.of(entity));
+        UUID hospitalB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalB).permittedHospitalIds(java.util.Set.of(hospitalB)).build());
+        try {
+            assertThatThrownBy(() -> service.deleteFamilyHistory(historyId)).isInstanceOf(ResourceNotFoundException.class);
+            assertThat(entity.getActive()).isTrue();
+            org.mockito.Mockito.verify(familyHistoryRepository, org.mockito.Mockito.never()).save(any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
 }

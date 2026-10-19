@@ -58,6 +58,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final GeneralReferralRepository referralRepository;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
@@ -82,6 +83,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA D263: the referred patient is one the sending hospital registered. Any
+        // other patient answers as unknown, so the response cannot carry their name.
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+        }
 
         Staff referringProvider = staffRepository.findById(request.getReferringProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("generalReferral.referringProvider.notFound", request.getReferringProviderId()));
@@ -112,12 +118,24 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             if (!worksAt(receivingProvider, addressedTo)) {
                 throw BusinessRuleException.ofKey("generalReferral.receivingProvider.wrongHospital");
             }
+            // QA D273: only a physician acts on a received referral (acknowledge, schedule,
+            // start, complete are doctor-only), so a nurse cannot be the one it is addressed to.
+            requirePhysicianAt(receivingProvider, addressedTo);
         }
 
         Department sourceDepartment = null;
         if (request.getSourceDepartmentId() != null) {
             sourceDepartment = departmentRepository.findById(request.getSourceDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", request.getSourceDepartmentId()));
+            // A source department is one of the sending hospital's.
+            if (!belongsTo(sourceDepartment, hospital.getId())) {
+                throw new ResourceNotFoundException("generalReferral.sourceDepartment.notFound", request.getSourceDepartmentId());
+            }
+        }
+        // A target department is one of the hospital the referral is addressed to.
+        UUID targetHospitalId = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
+        if (targetDepartment != null && !belongsTo(targetDepartment, targetHospitalId)) {
+            throw new ResourceNotFoundException("generalReferral.targetDepartment.notFound", request.getTargetDepartmentId());
         }
 
         GeneralReferral referral = new GeneralReferral();
@@ -176,6 +194,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 || !receivingProvider.getHospital().getId().equals(receivingHospitalId)) {
             throw new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId);
         }
+        requirePhysicianAt(receivingProvider, receivingHospitalId);
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
@@ -646,6 +665,22 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         if (!isCaller || !worksAt(referringProvider, sendingHospitalId)) {
             throw BusinessRuleException.ofKey("generalReferral.referringProvider.notCaller");
         }
+    }
+
+    /** QA D273: the receiving provider holds a physician role at the hospital the referral is addressed to. */
+    private void requirePhysicianAt(Staff provider, UUID hospitalId) {
+        UUID userId = provider.getUser() != null ? provider.getUser().getId() : null;
+        boolean physician = userId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId));
+        if (!physician) {
+            throw BusinessRuleException.ofKey("generalReferral.receivingProvider.physician.required");
+        }
+    }
+
+    private static boolean belongsTo(Department department, UUID hospitalId) {
+        return department.getHospital() != null && department.getHospital().getId() != null
+            && department.getHospital().getId().equals(hospitalId);
     }
 
     private static boolean worksAt(Staff staff, UUID hospitalId) {

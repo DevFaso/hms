@@ -102,6 +102,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         EducationResource resource = resourceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(resource.getHospitalId(), EDUCATION_RESOURCE_NOT_FOUND_KEY, id);
 
         resourceMapper.updateEntityFromDTO(requestDTO, resource);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -187,6 +189,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         EducationResource resource = resourceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_RESOURCE_NOT_FOUND_KEY, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(resource.getHospitalId(), EDUCATION_RESOURCE_NOT_FOUND_KEY, id);
 
         resource.setIsActive(false);
         resource.setUpdatedAt(LocalDateTime.now());
@@ -279,6 +283,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         PatientEducationProgress progress = progressRepository.findById(progressId)
             .orElseThrow(() -> new ResourceNotFoundException("education.progress.notFound", progressId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(progress.getHospitalId(), "education.progress.notFound", progressId);
 
         progressMapper.updateEntityFromDTO(requestDTO, progress);
         progress.setLastAccessedAt(LocalDateTime.now());
@@ -369,8 +375,12 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         patientRepository.findById(requestDTO.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, requestDTO.getPatientId()));
 
-        encounterRepository.findById(requestDTO.getEncounterId())
+        Encounter encounter = encounterRepository.findById(requestDTO.getEncounterId())
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId()));
+        // QA r5 tenancy sweep: the documented encounter is one of this hospital's.
+        if (encounter.getHospital() == null || !encounter.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", requestDTO.getEncounterId());
+        }
 
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -394,6 +404,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         VisitEducationDocumentation documentation = documentationRepository.findById(documentationId)
             .orElseThrow(() -> new ResourceNotFoundException("education.documentation.notFound", documentationId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(documentation.getHospitalId(), "education.documentation.notFound", documentationId);
 
         documentationMapper.updateEntityFromDTO(requestDTO, documentation);
 
@@ -476,6 +488,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         PatientEducationQuestion question = questionRepository.findById(questionId)
             .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_QUESTION_NOT_FOUND_KEY, questionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(question.getHospitalId(), EDUCATION_QUESTION_NOT_FOUND_KEY, questionId);
 
         staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
@@ -498,6 +512,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         PatientEducationQuestion question = questionRepository.findById(questionId)
             .orElseThrow(() -> new ResourceNotFoundException(EDUCATION_QUESTION_NOT_FOUND_KEY, questionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(question.getHospitalId(), EDUCATION_QUESTION_NOT_FOUND_KEY, questionId);
 
         questionMapper.updateEntityFromDTO(requestDTO, question);
         question.setUpdatedAt(LocalDateTime.now());

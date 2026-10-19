@@ -54,6 +54,9 @@ public class TreatmentServiceImpl implements TreatmentService {
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
+        // QA r5 tenancy sweep: a service is created at the caller's acting hospital, in one of its departments.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", dto.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", dto.getDepartmentId());
 
         UUID currentUserId = authService.getCurrentUserId();
         String token = authService.getCurrentUserToken();
@@ -98,6 +101,10 @@ public class TreatmentServiceImpl implements TreatmentService {
 
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", dto.getHospitalId()));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), TREATMENT_NOT_FOUND_KEY, id);
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", dto.getHospitalId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", dto.getDepartmentId());
 
         treatmentMapper.updateTreatmentFromDto(dto, treatment, department, hospital);
         Treatment updatedTreatment = treatmentRepository.save(treatment);
@@ -108,10 +115,11 @@ public class TreatmentServiceImpl implements TreatmentService {
     @Override
     @Transactional
     public void deleteTreatment(UUID id) {
-        if (!treatmentRepository.existsById(id)) {
-            throw new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id);
-        }
-        treatmentRepository.deleteById(id);
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        Treatment treatment = treatmentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(TREATMENT_NOT_FOUND_KEY, id));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), TREATMENT_NOT_FOUND_KEY, id);
+        treatmentRepository.delete(treatment);
     }
 
     @Override

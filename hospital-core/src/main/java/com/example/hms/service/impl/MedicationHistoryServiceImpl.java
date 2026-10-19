@@ -152,12 +152,15 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA r5 tenancy sweep: the fill is recorded at the caller's acting hospital.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
 
         // Optional prescription link
         Prescription prescription = null;
         if (request.getPrescriptionId() != null) {
             prescription = prescriptionRepository.findById(request.getPrescriptionId())
-                .orElse(null); // Don't fail if prescription not found, just leave unlinked
+                .filter(rx -> rx.getHospital() != null && rx.getHospital().getId().equals(hospital.getId()))
+                .orElse(null); // Unknown or another hospital's prescription: leave unlinked
         }
 
         // Convert and save
@@ -199,6 +202,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
         PharmacyFill fill = pharmacyFillRepository.findById(fillId)
             .orElseThrow(() -> new ResourceNotFoundException("pharmacyFill.notFound", fillId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(fill.getHospital(), "pharmacyFill.notFound", fillId);
 
         pharmacyFillMapper.updateEntity(fill, request);
         PharmacyFill updated = pharmacyFillRepository.save(fill);
@@ -213,11 +217,12 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     public void deletePharmacyFill(UUID fillId, Locale locale) {
         log.info("Deleting pharmacy fill: {}", fillId);
 
-        if (!pharmacyFillRepository.existsById(fillId)) {
-            throw new ResourceNotFoundException("pharmacyFill.notFound", fillId);
-        }
+        PharmacyFill fill = pharmacyFillRepository.findById(fillId)
+            .orElseThrow(() -> new ResourceNotFoundException("pharmacyFill.notFound", fillId));
+        // QA r5 tenancy sweep: a delete loads under the tenant guard first.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(fill.getHospital(), "pharmacyFill.notFound", fillId);
 
-        pharmacyFillRepository.deleteById(fillId);
+        pharmacyFillRepository.delete(fill);
         log.info("Pharmacy fill deleted: {}", fillId);
     }
 

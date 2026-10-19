@@ -103,9 +103,14 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     public AdmissionOrderSetResponseDTO create(AdmissionOrderSetRequestDTO request) {
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA r5 tenancy sweep: an order set is created at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+            if (department != null) {
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", request.getDepartmentId());
+            }
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, request.getCreatedByStaffId()));
 
@@ -144,6 +149,9 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
         Department department = request.getDepartmentId() == null ? null
             : departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("department.notFound", request.getDepartmentId()));
+            if (department != null) {
+                com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(department.getHospital(), "department.notFound", request.getDepartmentId());
+            }
 
         // Freeze the parent: keep the row but flip active off so the picker
         // only surfaces the head of the version chain.
@@ -192,6 +200,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
 
         Admission admission = admissionRepository.findById(admissionId)
             .orElseThrow(() -> new ResourceNotFoundException("admission.notFound", admissionId));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(admission.getHospital(), "admission.notFound", admissionId);
 
         // Resolve the ordering staff's active hospital assignment so the lab
         // fan-out can populate LabOrderRequestDTO.assignmentId (@NotNull).
@@ -257,8 +267,12 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     }
 
     private AdmissionOrderSet loadOrderSet(UUID id) {
-        return orderSetRepository.findById(id)
+        AdmissionOrderSet orderSet = orderSetRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("orderSet.notFound", id));
+        // QA r5 tenancy sweep: another hospital's order set answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            orderSet.getHospital(), "orderSet.notFound", id);
+        return orderSet;
     }
 
     /**

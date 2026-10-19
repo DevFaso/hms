@@ -204,6 +204,7 @@ class RequireClinicalHospitalTest {
         @Mock private StaffRepository staffRepository;
         /** Unstubbed, it answers null: a global (unscoped) caller, so the D205 scope check stands aside and the lookup under test runs. */
         @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
         @InjectMocks private GeneralReferralServiceImpl service;
 
         private GeneralReferralRequestDTO request(UUID hospitalId, UUID receivingHospitalId) {
@@ -217,6 +218,7 @@ class RequireClinicalHospitalTest {
 
         @BeforeEach
         void stubs() {
+            org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
             when(patientRepository.findByIdUnscoped(any())).thenReturn(Optional.of(patient()));
             when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
             when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));

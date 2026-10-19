@@ -37,6 +37,9 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", dto.getEncounterId()));
         Treatment treatment = treatmentRepository.findById(dto.getTreatmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("treatment.notfound", dto.getTreatmentId()));
+        // QA r5 tenancy sweep: the encounter is the caller's hospital's, and so is the treatment.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), "encounter.notfound", dto.getEncounterId());
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
         Staff staff = null;
         if (dto.getStaffId() != null) {
             staff = staffRepository.findById(dto.getStaffId())
