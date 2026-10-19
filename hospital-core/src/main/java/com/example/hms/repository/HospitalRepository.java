@@ -37,6 +37,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     List<UUID> findIdsByLifecycleStateIn(@Param("states") Collection<HospitalLifecycleState> states);
 
     boolean existsByNameIgnoreCaseAndZipCode(String name, String zipCode);
+
     /**
      * Hospital search backing the super-admin scope-chip typeahead and the
      * legacy "search hospitals" admin pages. The {@code name} clause uses
