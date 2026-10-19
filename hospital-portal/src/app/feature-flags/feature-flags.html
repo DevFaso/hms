@@ -93,7 +93,11 @@
       @if (filteredFlags().length === 0) {
         <div class="empty-state">
           <span class="material-icons">search_off</span>
-          <p>{{ 'FLAGS.NO_FLAGS' | translate }} "{{ search() }}"</p>
+          @if (search().trim()) {
+            <p>{{ 'FLAGS.NO_FLAGS_MATCHING' | translate: { query: search().trim() } }}</p>
+          } @else {
+            <p>{{ 'FLAGS.NO_FLAGS' | translate }}</p>
+          }
         </div>
       }
     </div>

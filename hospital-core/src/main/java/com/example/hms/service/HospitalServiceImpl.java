@@ -36,6 +36,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -188,6 +189,18 @@ public class HospitalServiceImpl implements HospitalService {
         validateSuperAdminOrThrow(locale);
         Hospital hospital = getClinicalHospitalOrThrow(id);
         validateAddressFields(dto, locale);
+        // The create rule holds on update too: renaming onto another
+        // hospital's name and zip code is a 409, not a silent duplicate (D223).
+        String name = dto.getName() != null ? dto.getName() : hospital.getName();
+        String zipCode = dto.getZipCode() != null ? dto.getZipCode() : hospital.getZipCode();
+        boolean identityChanged = name != null
+            && (!name.equalsIgnoreCase(hospital.getName()) || !Objects.equals(zipCode, hospital.getZipCode()));
+        // Unchanged, the only match is this hospital itself.
+        if (identityChanged && hospitalRepository.existsByNameIgnoreCaseAndZipCode(name, zipCode)) {
+            String message = messageSource.getMessage("hospital.exists",
+                    new Object[]{name}, "Hospital already exists.", locale);
+            throw new ConflictException("name:" + message);
+        }
         hospitalMapper.updateHospitalFromDto(dto, hospital);
         if (dto.getOrganizationId() != null) {
             Organization organization = getOrganizationOrThrow(dto.getOrganizationId());

@@ -31,6 +31,7 @@ class FeatureFlagServiceImplTest {
     private SubscriptionFeatureGateService subscriptionFeatureGate;
     private AuditEventLogService auditEventLogService;
     private FeatureFlagServiceImpl service;
+    private com.example.hms.repository.SubscriptionPlanRepository planRepository;
 
     @BeforeEach
     void setUp() {
@@ -45,7 +46,8 @@ class FeatureFlagServiceImplTest {
             .thenReturn(true);
         auditEventLogService = mock(AuditEventLogService.class);
         service = new FeatureFlagServiceImpl(
-            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService);
+            properties, environment, overrideRepository, subscriptionFeatureGate, auditEventLogService,
+            planRepository = mock(com.example.hms.repository.SubscriptionPlanRepository.class));
     }
 
     @Test
@@ -191,5 +193,35 @@ class FeatureFlagServiceImplTest {
 
         verify(overrideRepository).delete(existing);
         assertThat(flags).doesNotContainKey("beta-feature");
+    }
+
+    @Test
+    void knowsConfiguredAndOverriddenKeysOnly_D245() {
+        properties.getDefaults().put("departmentGovernance", true);
+        FeatureFlagOverride row = FeatureFlagOverride.builder().flagKey("legacy-row").build();
+        when(overrideRepository.findAllByOrderByFlagKeyAsc()).thenReturn(List.of(row));
+
+        assertThat(service.isKnownFlagKey(" departmentGovernance ")).isTrue();
+        assertThat(service.isKnownFlagKey("LEGACY-ROW")).isTrue();
+        assertThat(service.isKnownFlagKey("anything-at-all")).isFalse();
+        assertThat(service.isKnownFlagKey("  ")).isFalse();
+    }
+
+    @Test
+    void knowsKeysFromOverridesEnvironmentsAndPlans_D245() {
+        properties.getOverrides().put("overriddenKey", true);
+        Map<String, Boolean> staging = new LinkedHashMap<>();
+        staging.put("stagingOnly", true);
+        properties.getEnvironments().put("staging", staging);
+        properties.getEnvironments().put("empty", null);
+        when(planRepository.findAll()).thenReturn(List.of(
+            com.example.hms.model.platform.SubscriptionPlan.builder().featureKeys(null).build(),
+            com.example.hms.model.platform.SubscriptionPlan.builder().featureKeys("telehealth, pharmacy").build()));
+
+        assertThat(service.isKnownFlagKey("overriddenkey")).isTrue();
+        assertThat(service.isKnownFlagKey("STAGINGONLY")).isTrue();
+        assertThat(service.isKnownFlagKey("pharmacy")).isTrue();
+        assertThat(service.isKnownFlagKey("not-a-flag")).isFalse();
+        assertThat(service.isKnownFlagKey(null)).isFalse();
     }
 }

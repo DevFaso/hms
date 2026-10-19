@@ -94,6 +94,14 @@ public class PermissionMatrixServiceImpl implements PermissionMatrixService {
 
     @Override
     @Transactional(readOnly = true)
+    public java.util.Optional<PermissionMatrixSnapshotResponseDTO> findLatestSnapshot(PermissionMatrixEnvironment environment, Locale locale) {
+        return snapshotRepository
+            .findFirstByEnvironmentOrderByVersionNumberDesc(environment)
+            .map(this::mapSnapshot);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PermissionMatrixSnapshotResponseDTO> listSnapshots(PermissionMatrixEnvironment environment, Locale locale) {
         List<PermissionMatrixSnapshot> snapshots;
         if (environment == null) {

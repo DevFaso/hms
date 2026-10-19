@@ -79,7 +79,9 @@ export class MatrixTabComponent implements OnInit {
     this.latest.set(null);
     this.service.latestSnapshot(this.environment()).subscribe({
       next: (snap) => {
-        this.latest.set(snap);
+        // 204 (no body): no snapshot yet for this environment (D248).
+        this.latest.set(snap ?? null);
+        this.latestEmpty.set(!snap);
         this.latestLoading.set(false);
       },
       error: (err: HttpErrorResponse) => {

@@ -56,6 +56,8 @@ class HospitalLifecycleServiceImplTest {
     private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
     @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
 
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+
     @InjectMocks private HospitalLifecycleServiceImpl service;
 
     private UUID hospitalId;
@@ -147,6 +149,23 @@ class HospitalLifecycleServiceImplTest {
         assertThat(result.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
         assertThat(hospital.isActive()).isTrue();
         verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        // D246: no stale suspension block once the hospital is back
+        assertThat(result.getSuspendedAt()).isNull();
+        assertThat(result.getSuspendedBy()).isNull();
+    }
+
+    @Test
+    void namesTheActorInsteadOfAnId_D246() {
+        hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+        hospital.setSuspendedAt(NOW);
+        hospital.setSuspendedBy(actorId);
+        com.example.hms.model.User actor = new com.example.hms.model.User();
+        actor.setFirstName("Awa");
+        actor.setLastName("Traore");
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(service.getLifecycle(hospitalId).getSuspendedByName()).isEqualTo("Awa Traore");
     }
 
     @Test
