@@ -178,32 +178,46 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         for (BillingInvoice candidate : copays) {
-            if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
-                continue;
+            BillingInvoice copay = lockCreditableCopay(candidate, target);
+            if (copay != null) {
+                moveCopayOnto(copay, target);
             }
-            // Locked and re-read: two invoices issued at once must not both take the same copay.
-            BillingInvoice copay = invoiceRepository.findLockedById(candidate.getId()).orElse(null);
-            if (copay == null || copay.getStatus() != InvoiceStatus.PAID || copay.getPatient() == null
-                    || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
-                continue;
-            }
-            BigDecimal credit = copay.getAmountPaid() != null ? copay.getAmountPaid() : BigDecimal.ZERO;
-            BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
-            BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid);
-            if (credit.signum() <= 0 || credit.compareTo(owed) > 0) {
-                continue;
-            }
-            for (PaymentTransaction row : paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())) {
-                if (row.getStatus() == PaymentStatus.CONFIRMED) {
-                    row.setInvoice(target);
-                    paymentTransactionRepository.save(row);
-                }
-            }
-            copay.setAmountPaid(BigDecimal.ZERO);
-            copay.setStatus(InvoiceStatus.CANCELLED);
-            invoiceRepository.save(copay);
-            settle(target, credit);
         }
+    }
+
+    /** The copay, locked and re-read, when it may be credited to the target; else null. */
+    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target) {
+        if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
+            return null;
+        }
+        // Locked and re-read: two invoices issued at once must not both take the same copay.
+        BillingInvoice copay = invoiceRepository.findLockedById(candidate.getId()).orElse(null);
+        if (copay == null || copay.getStatus() != InvoiceStatus.PAID || copay.getPatient() == null
+                || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
+            return null;
+        }
+        BigDecimal credit = copayCredit(copay);
+        BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid);
+        return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
+    }
+
+    private static BigDecimal copayCredit(BillingInvoice copay) {
+        return copay.getAmountPaid() != null ? copay.getAmountPaid() : BigDecimal.ZERO;
+    }
+
+    private void moveCopayOnto(BillingInvoice copay, BillingInvoice target) {
+        BigDecimal credit = copayCredit(copay);
+        for (PaymentTransaction row : paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())) {
+            if (row.getStatus() == PaymentStatus.CONFIRMED) {
+                row.setInvoice(target);
+                paymentTransactionRepository.save(row);
+            }
+        }
+        copay.setAmountPaid(BigDecimal.ZERO);
+        copay.setStatus(InvoiceStatus.CANCELLED);
+        invoiceRepository.save(copay);
+        settle(target, credit);
     }
 
     /** QA D183: the hospital never moves; one named in the body must be the invoice's own. */
@@ -545,6 +559,18 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                     java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
                 .thenComparing(p -> String.valueOf(p.getId())))
             .toList();
+        ReceiptPosition position = receiptPosition(received, row);
+        int rank = position.rank();
+        BigDecimal paidThen = position.paidThen();
+        String receiptNumber = invoice.getInvoiceNumber() + "-R" + rank;
+        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
+        return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
+    }
+
+    private record ReceiptPosition(int rank, BigDecimal paidThen) { }
+
+    /** QA D228: the payment's rank among the money received, and the amount paid as of it. */
+    private static ReceiptPosition receiptPosition(List<PaymentTransaction> received, PaymentTransaction row) {
         int rank = 0;
         BigDecimal paidThen = BigDecimal.ZERO;
         for (PaymentTransaction p : received) {
@@ -563,9 +589,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             rank = received.size() + 1;
             paidThen = paidThen.add(row.getAmount() != null ? row.getAmount() : BigDecimal.ZERO);
         }
-        String receiptNumber = invoice.getInvoiceNumber() + "-R" + rank;
-        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
-        return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
+        return new ReceiptPosition(rank, paidThen);
     }
 
     @Override

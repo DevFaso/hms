@@ -51,13 +51,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
 
-    @Override
-    @Transactional
-    public PharmacyPaymentResponseDTO createPayment(PharmacyPaymentRequestDTO dto) {
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-
-        validateCreateRequest(dto, hospitalId);
-
+    private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
@@ -69,19 +63,40 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
             throw new ResourceNotFoundException("dispense.notfound");
         }
+        return dispense;
+    }
 
-        // QA D204: a dispense is paid once. The same payment sent again (a retry,
-        // a double click) answers with the one already recorded; a different
-        // one is refused instead of being added on top.
+    /**
+     * QA D204: a dispense is paid once. The same payment sent again (a retry,
+     * a double click) answers with the one already recorded; a different
+     * one is refused instead of being added on top.
+     */
+    private java.util.Optional<PharmacyPayment> findReplayedPayment(Dispense dispense, PharmacyPaymentRequestDTO dto) {
         java.util.Optional<PharmacyPayment> existing =
                 paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId());
-        if (existing.isPresent()) {
-            PharmacyPayment prior = existing.get();
-            if (prior.getAmount() != null && prior.getAmount().compareTo(dto.getAmount()) == 0
-                    && prior.getPaymentMethod() == dto.getPaymentMethod()) {
-                return paymentMapper.toResponseDTO(prior);
-            }
-            throw new BusinessException("pharmacy.payment.alreadyPaid");
+        if (existing.isEmpty()) {
+            return existing;
+        }
+        PharmacyPayment prior = existing.get();
+        if (prior.getAmount() != null && prior.getAmount().compareTo(dto.getAmount()) == 0
+                && prior.getPaymentMethod() == dto.getPaymentMethod()) {
+            return existing;
+        }
+        throw new BusinessException("pharmacy.payment.alreadyPaid");
+    }
+
+    @Override
+    @Transactional
+    public PharmacyPaymentResponseDTO createPayment(PharmacyPaymentRequestDTO dto) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+
+        validateCreateRequest(dto, hospitalId);
+
+        Dispense dispense = loadDispenseForPayment(dto, hospitalId);
+
+        java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
+        if (replay.isPresent()) {
+            return paymentMapper.toResponseDTO(replay.get());
         }
 
         Patient patient = patientRepository.findById(dto.getPatientId())
