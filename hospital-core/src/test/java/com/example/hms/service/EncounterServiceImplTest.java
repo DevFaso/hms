@@ -1081,8 +1081,10 @@ class EncounterServiceImplTest {
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
             .thenReturn("Votre résumé de visite est disponible.");
-        service.checkOut(encounterId, request, "doctor1", true, null);
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, request, "doctor1", true, null);
 
+        // QA D321: the checkout's own AVS shows the follow-up it filed.
+        assertThat(returned.getFollowUpAppointmentDate()).isEqualTo(preferred.toString());
         org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
         verify(patientRecallRepository).save(captor.capture());

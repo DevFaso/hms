@@ -53,6 +53,8 @@ class LabResultServiceImplWorkflowTest {
 
     private static final String SIGNER_FULL_NAME = "Seema Signer";
 
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+
     @Mock
     private LabResultRepository labResultRepository;
     @Mock

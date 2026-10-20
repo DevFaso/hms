@@ -71,6 +71,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabResultRepository labResultRepository;
     private final com.example.hms.service.lab.LabResultEntryGuard labResultEntryGuard;
     private final LabOrderRepository labOrderRepository;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final LabResultMapper labResultMapper;
     private final RoleValidator roleValidator;
@@ -217,7 +218,7 @@ public class LabResultServiceImpl implements LabResultService {
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
-            requirePlausibleResultDate(request.getResultDate(), labOrder);
+            request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
             LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
 
@@ -759,7 +760,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (!labOrder.isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
-        requirePlausibleResultDate(request.getResultDate(), labOrder);
+        request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
         LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
@@ -832,10 +833,19 @@ public class LabResultServiceImpl implements LabResultService {
      * workstation behind UTC was recorded hours BEFORE the order it answers.
      * The portal now sends the instant; this refuses whatever still arrives
      * impossible. Ingested results keep the analyzer's own time.
+     *
+     * <p>QA D339: the clock-skew tolerance let a result timed one minute before
+     * its order be STORED that way, and the specimen's collection time was not
+     * checked at all. The floor is now the later of the order time and the
+     * earliest collection; a time beyond the tolerance is refused, and one
+     * inside it is moved up to the floor, so no stored result precedes its
+     * order or its specimen.
+     *
+     * @return the result time to store
      */
-    private static void requirePlausibleResultDate(LocalDateTime resultDate, LabOrder labOrder) {
+    private LocalDateTime plausibleResultDate(LocalDateTime resultDate, LabOrder labOrder) {
         if (resultDate == null) {
-            return;
+            return null;
         }
         LocalDateTime now = LocalDateTime.now();
         if (resultDate.isAfter(now.plus(RESULT_DATE_SKEW))) {
@@ -845,6 +855,20 @@ public class LabResultServiceImpl implements LabResultService {
         if (orderedAt != null && resultDate.isBefore(orderedAt.minus(RESULT_DATE_SKEW))) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeOrder"));
         }
+        LocalDateTime collectedAt = labOrder.getId() == null ? null
+            : labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
+                .map(com.example.hms.model.LabSpecimen::getCollectedAt)
+                .filter(java.util.Objects::nonNull)
+                .min(java.util.Comparator.naturalOrder())
+                .orElse(null);
+        if (collectedAt != null && resultDate.isBefore(collectedAt.minus(RESULT_DATE_SKEW))) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeCollection"));
+        }
+        LocalDateTime floor = orderedAt;
+        if (collectedAt != null && (floor == null || collectedAt.isAfter(floor))) {
+            floor = collectedAt;
+        }
+        return floor != null && resultDate.isBefore(floor) ? floor : resultDate;
     }
 
     @Override
@@ -2071,7 +2095,7 @@ public class LabResultServiceImpl implements LabResultService {
         for (LabResult result : candidates) {
             if (queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-                if (dto != null && labResultMapper.raisesCriticalAlert(result, dto.getSeverityFlag())) {
+                if (dto != null && labResultMapper.raisesCriticalAlert(dto.getSeverityFlag())) {
                     surfaced.add(result);
                     answer.add(dto);
                 }

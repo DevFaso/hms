@@ -82,6 +82,7 @@ class EncounterServiceImplReadAccessControlTest {
     @Mock private MessageSource messageSource;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.mapper.CheckOutMapper checkOutMapper;
+    @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
     @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private com.example.hms.repository.EncounterNoteHistoryRepository encounterNoteHistoryRepository;
 
@@ -312,6 +313,45 @@ class EncounterServiceImplReadAccessControlTest {
             assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 500 mg x3/j 7 jours");
             assertThat(avs.getReferralSummary()).isEqualTo("Cardiologie");
             assertThat(avs.getPatientEducationMaterials()).isEqualTo("Boire beaucoup d'eau");
+        }
+
+        @Test
+        @DisplayName("QA D322: an inpatient AVS lists the discharge medicines and the follow-up")
+        void inpatientSummaryShowsMedicinesAndFollowUp() {
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+            com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+            summary.setFollowUpInstructions("Revenir si fièvre");
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Amoxicilline").dosage("500 mg").frequency("3x/j").continueAtDischarge(true)
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.NEW_STARTED).build());
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Heparine").continueAtDischarge(false)
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.DISCONTINUED).build());
+            summary.getFollowUpAppointments().add(com.example.hms.model.discharge.FollowUpAppointmentEntry.builder()
+                .appointmentType("POST_OP_CHECK").providerName("Dr B").appointmentDate(java.time.LocalDate.of(2026, 11, 2)).build());
+            lenient().when(dischargeSummaryRepository.findByEncounter_Id(mine.getId())).thenReturn(Optional.of(summary));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
+
+            assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 500 mg 3x/j");
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Revenir si fièvre");
+            assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-11-02");
+        }
+
+        @Test
+        @DisplayName("QA D321: a later read shows the follow-up requested at checkout (filed as a recall)")
+        void laterReadShowsTheCheckoutFollowUp() {
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+            com.example.hms.model.scheduling.PatientRecall recall = new com.example.hms.model.scheduling.PatientRecall();
+            recall.setDueDate(java.time.LocalDate.of(2026, 11, 16));
+            lenient().when(patientRecallRepository.findFirstByEncounter_IdAndSourceOrderByDueDateAsc(
+                    mine.getId(), com.example.hms.enums.RecallSource.CHECKOUT)).thenReturn(Optional.of(recall));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
+
+            assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-11-16");
         }
 
         @Test
