@@ -63,6 +63,20 @@ class ImagingOrderServiceImplTest {
     private com.example.hms.utility.RoleValidator roleValidator;
     @Mock
     private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+    @Mock
+    private com.example.hms.repository.UserRepository userRepository;
+    @Mock
+    private com.example.hms.repository.StaffRepository staffRepository;
+
+    private com.example.hms.model.User signer(UUID id, String first, String last) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(id);
+        user.setFirstName(first);
+        user.setLastName(last);
+        user.setUsername("u-" + id);
+        when(userRepository.findById(id)).thenReturn(Optional.of(user));
+        return user;
+    }
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
@@ -147,7 +161,9 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, duplicates)).thenReturn(responseDTO);
 
+        signer(orderingUserId, "Ada", "Order");
         ImagingOrderResponseDTO result = imagingOrderService.createOrder(request, orderingUserId);
+        assertThat(order.getOrderingProviderName()).isEqualTo("Ada Order");
 
         assertThat(order.getOrderingProviderUserId()).isEqualTo(orderingUserId);
         assertThat(order.getDuplicateOfRecentOrder()).isTrue();
@@ -259,10 +275,12 @@ class ImagingOrderServiceImplTest {
         order.setStatus(ImagingOrderStatus.DRAFT);
 
         LocalDateTime signedAt = LocalDateTime.now().minusMinutes(5);
+        UUID signerId = UUID.randomUUID();
+        signer(signerId, "Stephen", "Strange");
         ImagingOrderSignatureRequestDTO request = ImagingOrderSignatureRequestDTO.builder()
             .providerName("Dr. Strange")
             .providerNpi("5555")
-            .providerUserId(UUID.randomUUID())
+            .providerUserId(signerId)
             .signatureStatement("Electronically signed")
             .signedAt(signedAt)
             .attestationConfirmed(Boolean.TRUE)
@@ -274,13 +292,14 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
 
-        ImagingOrderResponseDTO result = imagingOrderService.captureProviderSignature(orderId, request);
+        ImagingOrderResponseDTO result = imagingOrderService.captureProviderSignature(orderId, request, signerId);
 
-        assertThat(order.getOrderingProviderName()).isEqualTo("Dr. Strange");
+        assertThat(order.getOrderingProviderName()).isEqualTo("Stephen Strange");
         assertThat(order.getOrderingProviderNpi()).isEqualTo("5555");
         assertThat(order.getOrderingProviderUserId()).isEqualTo(request.getProviderUserId());
         assertThat(order.getProviderSignatureStatement()).isEqualTo("Electronically signed");
-        assertThat(order.getProviderSignedAt()).isEqualTo(signedAt);
+        // QA D302: a body-supplied time is ignored; the server clock signs.
+        assertThat(order.getProviderSignedAt()).isAfter(signedAt);
         assertThat(order.getAttestationConfirmed()).isTrue();
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
         assertThat(result).isSameAs(responseDTO);
@@ -397,7 +416,6 @@ class ImagingOrderServiceImplTest {
 
         ImagingOrderSignatureRequestDTO request = ImagingOrderSignatureRequestDTO.builder()
             .providerName("Dr. House")
-            .providerUserId(UUID.randomUUID())
             .signatureStatement("Signed")
             .signedAt(null)
             .build();
@@ -408,9 +426,12 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
 
-        imagingOrderService.captureProviderSignature(orderId, request);
+        UUID houseId = UUID.randomUUID();
+        signer(houseId, "Greg", "House");
+        imagingOrderService.captureProviderSignature(orderId, request, houseId);
 
         assertThat(order.getProviderSignedAt()).isNotNull();
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(houseId);
     }
 
     @Test
@@ -439,8 +460,11 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
 
+        order.setOrderingProviderName("Dr. Somebody Else");
         imagingOrderService.createOrder(request, null);
 
+        // QA D302: a free-text name with no resolved user never poses as the orderer.
+        assertThat(order.getOrderingProviderName()).isNull();
         assertThat(order.getDuplicateOfRecentOrder()).isFalse();
         assertThat(order.getDuplicateReferenceOrderId()).isNull();
         assertThat(order.getOrderingProviderUserId()).isNull();
@@ -639,7 +663,7 @@ class ImagingOrderServiceImplTest {
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, status))
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(orderId, signature))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(orderId, signature, UUID.randomUUID()))
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
         org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
     }
@@ -704,7 +728,9 @@ class ImagingOrderServiceImplTest {
 
         ImagingOrderSignatureRequestDTO signature = new ImagingOrderSignatureRequestDTO();
         signature.setProviderName("Admin");
-        imagingOrderService.captureProviderSignature(orderId, signature);
+        UUID adminId = UUID.randomUUID();
+        signer(adminId, "Super", "Admin");
+        imagingOrderService.captureProviderSignature(orderId, signature, adminId);
         assertThat(order.getProviderSignedAt()).isNotNull();
     }
 
@@ -770,5 +796,40 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.updateOrder(orderId, repoint);
         assertThat(order.getPatient()).isSameAs(any);
         org.mockito.Mockito.verifyNoInteractions(registrationRepository);
+    }
+
+    @Test
+    void qaD302_signingInAnotherDoctorsNameIsRefused() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.DRAFT);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID doctorA = UUID.randomUUID();
+        signer(doctorA, "Doc", "A");
+
+        ImagingOrderSignatureRequestDTO request = ImagingOrderSignatureRequestDTO.builder()
+            .providerName("Doctor Two")
+            .providerUserId(UUID.randomUUID())
+            .signatureStatement("Signed")
+            .signedAt(LocalDateTime.of(2026, 1, 1, 8, 0))
+            .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> imagingOrderService.captureProviderSignature(orderId, request, doctorA))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(order.getOrderingProviderUserId()).isNull();
+        assertThat(order.getProviderSignedAt()).isNull();
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void qaD302_signatureWithoutAResolvedSessionUserIsRefused() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> imagingOrderService.captureProviderSignature(orderId, new ImagingOrderSignatureRequestDTO(), null))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
 }

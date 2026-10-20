@@ -682,4 +682,92 @@ class ChatMessageServiceImplTest {
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
             () -> chatMessageService.downloadAttachment(id, "alice"));
     }
+
+    // --- QA D301 / D343 / D352: chat content is readable by its two participants only ---
+
+    @Test
+    void qaD301_aNonParticipantCannotReadHistorySearchMessagesOrConversations() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID outsider = UUID.randomUUID();
+        UUID patientA2 = UUID.randomUUID();
+        UUID doctor2A = UUID.randomUUID();
+        doReturn(outsider).when(service).getCurrentUserId();
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getChatHistory(patientA2, doctor2A, 0, 20, Locale.ENGLISH));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.searchMessages(patientA2, doctor2A, "docteur", 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getAllMessagesForUser(patientA2, null, 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getUserConversations(patientA2, 0, 20));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.markMessagesAsRead(doctor2A, patientA2, Locale.ENGLISH));
+        verify(chatMessageRepository, never()).findChatBetweenUsers(any(), any(), any());
+        verify(chatMessageRepository, never()).searchMessagesBetweenUsers(any(), any(), any(), any());
+        verify(chatMessageRepository, never()).findAllMessagesForUser(any(), any());
+        verify(chatMessageRepository, never()).findLatestConversations(any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void qaD301_aParticipantStillReadsTheirOwnThread() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        doReturn(me).when(service).getCurrentUserId();
+        when(chatMessageRepository.searchMessagesBetweenUsers(any(), any(), any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+        when(chatMessageRepository.findAllMessagesForUser(any(), any()))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertTrue(service.searchMessages(other, me, "x", 0, 20).isEmpty());
+        assertTrue(service.getAllMessagesForUser(me, null, 0, 20).isEmpty());
+    }
+
+    @Test
+    void qaD343_byEmailAndUsernameAnswerForTheCallerOnly() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        User caller = new User();
+        caller.setId(me);
+        caller.setEmail("me@example.test");
+        caller.setUsername("me");
+        doReturn(me).when(service).getCurrentUserId();
+        when(userRepository.findById(me)).thenReturn(Optional.of(caller));
+        when(chatMessageRepository.findBySenderEmail("ME@example.test")).thenReturn(List.of());
+        when(chatMessageRepository.findByRecipientUsername("me")).thenReturn(List.of());
+
+        assertTrue(service.getMessagesBySenderEmail("ME@example.test").isEmpty());
+        assertTrue(service.getMessagesByRecipientUsername("me").isEmpty());
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesBySenderEmail("doctor@example.test"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesByRecipientUsername("doctor"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesByRecipientEmail("doctor@example.test"));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> service.getMessagesBySenderUsername("doctor"));
+        verify(chatMessageRepository, never()).findBySenderEmail("doctor@example.test");
+    }
+
+    @Test
+    void qaD352_conversationNameFallsBackToUsernameWhenNamesAreMissing() {
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        UUID me = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        User self = new User();
+        self.setId(me);
+        User peer = new User();
+        peer.setId(other);
+        peer.setUsername("peer.user");
+        doReturn(me).when(service).getCurrentUserId();
+        when(userRepository.findById(me)).thenReturn(Optional.of(self));
+        when(userRepository.findById(other)).thenReturn(Optional.of(peer));
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(new Object[] {UUID.randomUUID(), other, me, "hello", java.time.LocalDateTime.now(), false});
+        when(chatMessageRepository.findLatestConversations(me, 20, 0)).thenReturn(rows);
+
+        var conversations = service.getUserConversations(me, 0, 20);
+        assertEquals("peer.user", conversations.get(0).getConversationUserName());
+    }
 }

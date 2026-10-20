@@ -52,6 +52,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         if (dto.getBillingInvoiceId() == null) {
             throw new BusinessException("invoiceitem.invoiceRequired");
         }
+        requireWholePrice(dto.getUnitPrice());
         BillingInvoice invoice = writableInvoice(dto.getBillingInvoiceId());
         UserRoleHospitalAssignment assignment = resolveAssignment(dto.getAssignmentId(), invoice);
         Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
@@ -100,6 +101,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Override
     @Transactional
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
+        requireWholePrice(dto.getUnitPrice());
         InvoiceItem item = invoiceItemRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         // A line stays on its invoice: moving it would leave the old total stale.
@@ -204,5 +206,15 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             throw new ResourceNotFoundException("treatment.notfound", relatedServiceId);
         }
         return related;
+    }
+
+    /**
+     * QA D307: the franc CFA has no minor unit; a payment is refused with
+     * decimals (D184), so a line priced with them could never be settled.
+     */
+    private static void requireWholePrice(java.math.BigDecimal price) {
+        if (price != null && price.stripTrailingZeros().scale() > 0) {
+            throw new BusinessException("billing.payment.wholeAmountOnly");
+        }
     }
 }

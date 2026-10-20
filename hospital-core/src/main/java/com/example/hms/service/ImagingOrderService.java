@@ -19,7 +19,7 @@ public interface ImagingOrderService {
 
     ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request);
 
-    ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request);
+    ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request, UUID signerUserId);
 
     ImagingOrderResponseDTO getOrder(UUID orderId);
 
