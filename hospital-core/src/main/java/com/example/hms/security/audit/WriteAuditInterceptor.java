@@ -21,6 +21,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 
 import java.util.Locale;
 import java.util.Map;
@@ -80,6 +82,8 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
     static final Set<String> READ_ONLY_POST_TAILS = Set.of(
         "search", "filter", "candidates", "check", "calculate-risk", "lookup", "query", "preview", "validate");
     private static final String PATIENT_ID_VAR = "patientId";
+    static final String RESOURCE_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".resourceId";
+    static final String PATIENT_ID_ATTRIBUTE = WriteAuditInterceptor.class.getName() + ".patientId";
     private static final String ID_VAR = "id";
     private static final String ROLE_PREFIX = "ROLE_";
 
@@ -143,11 +147,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
         Map<String, String> pathVariables = uriTemplateVariables(request);
         UUID resourceId = resolveResourceId(pathVariables, annotation);
+        if (resourceId == null) {
+            resourceId = attributeUuid(request, RESOURCE_ID_ATTRIBUTE);
+        }
         UUID patientId = resolvePatientId(request, pathVariables, annotation);
         UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
 
         auditService.logEvent(AuditEventRequestDTO.builder()
-            .eventType(eventTypeFor(request.getMethod()))
+            .eventType(eventTypeFor(request.getMethod(), annotation))
             .status(AuditStatus.SUCCESS)
             .entityType(entityTypeFor(pattern, annotation))
             .resourceId(resourceId != null ? resourceId.toString() : null)
@@ -230,6 +237,33 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         return repository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId).orElse(null);
     }
 
+    static AuditEventType eventTypeFor(String method, WriteAudited annotation) {
+        if (annotation != null && annotation.eventType().length > 0) {
+            return annotation.eventType()[0];
+        }
+        return eventTypeFor(method);
+    }
+
+    /**
+     * QA D429: a create has no {@code {id}} or {@code {patientId}} in its
+     * route, so its row named neither the record nor the patient. The
+     * handler calls this with what it just created; the row then carries
+     * both. Ids only. Outside a request (a direct call in a unit test, a
+     * job) there is nothing to annotate and it does nothing.
+     */
+    public static void describeWrite(String resourceId, String patientId) {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes == null) {
+            return;
+        }
+        if (resourceId != null) {
+            attributes.setAttribute(RESOURCE_ID_ATTRIBUTE, resourceId, RequestAttributes.SCOPE_REQUEST);
+        }
+        if (patientId != null) {
+            attributes.setAttribute(PATIENT_ID_ATTRIBUTE, patientId, RequestAttributes.SCOPE_REQUEST);
+        }
+    }
+
     static AuditEventType eventTypeFor(String method) {
         return switch (method.toUpperCase(Locale.ROOT)) {
             case "POST" -> AuditEventType.DATA_CREATE;
@@ -289,7 +323,13 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         String name = annotation != null && !annotation.patientIdVar().isBlank()
             ? annotation.patientIdVar() : PATIENT_ID_VAR;
         String fromPath = pathVariables.get(name);
-        return parseUuid(fromPath != null ? fromPath : request.getParameter(name));
+        UUID declared = parseUuid(fromPath != null ? fromPath : request.getParameter(name));
+        return declared != null ? declared : attributeUuid(request, PATIENT_ID_ATTRIBUTE);
+    }
+
+    private static UUID attributeUuid(HttpServletRequest request, String name) {
+        Object value = request.getAttribute(name);
+        return value != null ? parseUuid(value.toString()) : null;
     }
 
     private static String matchedPattern(HttpServletRequest request) {
