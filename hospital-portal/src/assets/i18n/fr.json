@@ -4501,7 +4501,9 @@
       "RECORDED": "Enregistré",
       "SOURCE": "Origine",
       "NORMAL_PREFIX": "Normal",
-      "NORMAL_RANGE": "Plage normale"
+      "NORMAL_RANGE": "Plage normale",
+      "UNIT_BREATHS_MIN": "cycles/min",
+      "FASTING": "à jeun"
     },
     "APPOINTMENTS": {
       "TITLE": "Mes rendez-vous",
@@ -4893,7 +4895,11 @@
         "HOME": "Mesure à domicile",
         "SELF_REPORTED": "Auto-déclaré",
         "DEVICE": "Appareil connecté",
-        "TRIAGE": "Triage"
+        "TRIAGE": "Triage",
+        "OTHER": "Autre",
+        "DELIVERY": "Salle d’accouchement",
+        "PATIENT_REPORTED": "Déclaré par le patient",
+        "MANUAL": "Saisie manuelle"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",

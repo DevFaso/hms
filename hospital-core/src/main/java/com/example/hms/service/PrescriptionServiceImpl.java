@@ -1379,8 +1379,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!Boolean.TRUE.equals(forceOverride) || reason.isEmpty()) {
             // Sent as a critical CDS card so the prescribing screen shows the
             // alert and offers the override (with its mandatory reason).
+            // QA D333: the severity is shown in the reader's language, never as the enum constant.
+            String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + severityStr);
             String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
-                allergy.getAllergenDisplay(), severityStr, medicationName);
+                allergy.getAllergenDisplay(), severityLabel, medicationName);
             CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
                 new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
                 null, null, null, UUID.randomUUID().toString());

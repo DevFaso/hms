@@ -610,7 +610,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .map(Map.Entry::getValue)
                 .collect(Collectors.joining("; "));
         if (!reasons.isEmpty()) {
-            throw new BusinessException("Hand-over refused — " + reasons);
+            throw new BusinessException("pharmacy.dispense.handOverRefused", reasons);
         }
     }
 
@@ -722,8 +722,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
         if (cdsResult.requiresOverride()
                 && (dto.getCdsOverrideReason() == null || dto.getCdsOverrideReason().isBlank())) {
-            throw new BusinessException("CDS_CRITICAL: pharmacist override reason required — "
-                    + String.join(" | ", cdsResult.alerts()));
+            throw new BusinessException("pharmacy.dispense.cdsOverrideRequired", String.join(" | ", cdsResult.alerts()));
         }
 
         ActorPair actors = resolveActors(dto);
@@ -783,13 +782,13 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("Prescription is not in a dispensable state: " + prescription.getStatus());
+            throw new BusinessException("pharmacy.dispense.notDispensable", String.valueOf(prescription.getStatus()));
         }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation
         if (prescription.getPatient() == null
                 || !prescription.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("Patient does not match prescription");
+            throw new BusinessException("pharmacy.dispense.patientMismatch");
         }
 
         controlledSubstanceGuard.requireDispensable(prescription);
@@ -820,13 +819,13 @@ public class DispenseServiceImpl implements DispenseService {
         // Actor identity comes from the authenticated principal, not the request body.
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
 
         // If the client supplies dispensedBy, it must match the authenticated user.
         // This prevents one staff member from recording a dispense under another's identity.
         if (dto.getDispensedBy() != null && !currentUserId.equals(dto.getDispensedBy())) {
-            throw new BusinessException("dispensedBy must match the authenticated user");
+            throw new BusinessException("pharmacy.dispense.dispensedByMismatch");
         }
 
         User dispensedByUser = userRepository.findById(currentUserId)
@@ -836,7 +835,7 @@ public class DispenseServiceImpl implements DispenseService {
         User verifiedByUser = null;
         if (dto.getVerifiedBy() != null) {
             if (!currentUserId.equals(dto.getVerifiedBy())) {
-                throw new BusinessException("verifiedBy must match the authenticated user");
+                throw new BusinessException("pharmacy.dispense.verifiedByMismatch");
             }
             verifiedByUser = dispensedByUser;
         }
@@ -871,7 +870,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (inventoryItem == null
                 || inventoryItem.getPharmacy() == null
                 || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
-            throw new BusinessException("Stock lot does not belong to the selected pharmacy");
+            throw new BusinessException("pharmacy.dispense.lotOtherPharmacy");
         }
         return stockLot;
     }
@@ -891,11 +890,10 @@ public class DispenseServiceImpl implements DispenseService {
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the
             // atomic UPDATE and can be stale under concurrency.
-            throw new BusinessException("Insufficient lot stock: the lot does not hold the requested "
-                    + requested);
+            throw new BusinessException("pharmacy.dispense.lotInsufficient", String.valueOf(requested));
         }
         if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
-            throw new BusinessException("Insufficient inventory stock");
+            throw new BusinessException("pharmacy.dispense.stockInsufficient");
         }
         refreshIfManaged(stockLot);
         refreshIfManaged(inventoryItem);
@@ -956,7 +954,7 @@ public class DispenseServiceImpl implements DispenseService {
             return;
         }
 
-        throw new BusinessException("Dispense refused — " + verification.failureSummary());
+        throw new BusinessException("pharmacy.dispense.refused", verification.failureSummary());
     }
 
     /**
@@ -1154,10 +1152,10 @@ public class DispenseServiceImpl implements DispenseService {
         dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
-            throw new BusinessException("Dispense is already cancelled");
+            throw new BusinessException("pharmacy.dispense.alreadyCancelled");
         }
         if (dispense.getStatus() != DispenseStatus.COMPLETED && dispense.getStatus() != DispenseStatus.PARTIAL) {
-            throw new BusinessException("Only completed or partial dispenses can be cancelled");
+            throw new BusinessException("pharmacy.dispense.cancelWrongStatus");
         }
 
         dispense.setStatus(DispenseStatus.CANCELLED);
@@ -1254,7 +1252,7 @@ public class DispenseServiceImpl implements DispenseService {
             case MINE -> {
                 UUID callerId = roleValidator.getCurrentUserId();
                 if (callerId == null) {
-                    throw new BusinessException("Unable to determine current user");
+                    throw new BusinessException("pharmacy.currentUserUnknown");
                 }
                 yield prescriptionRepository.findWorkQueueClaimedBy(hospitalId, statuses, callerId,
                         queueClaimService.activeAfter(), pageable);
@@ -1407,13 +1405,13 @@ public class DispenseServiceImpl implements DispenseService {
 
     private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
         if (requested == null || requested.signum() <= 0) {
-            throw new BusinessException("Quantity requested must be greater than zero");
+            throw new BusinessException("pharmacy.dispense.requestedPositive");
         }
         if (dispensed == null || dispensed.signum() <= 0) {
-            throw new BusinessException("Quantity dispensed must be greater than zero");
+            throw new BusinessException("pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
-            throw new BusinessException("Quantity dispensed cannot exceed quantity requested");
+            throw new BusinessException("pharmacy.dispense.exceedsRequested");
         }
     }
 
@@ -1720,10 +1718,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private static void requireDispensary(Pharmacy pharmacy) {
         if (pharmacy.getPharmacyType() != PharmacyType.HOSPITAL_DISPENSARY) {
-            throw new BusinessException(
-                    "In-house dispenses can only be recorded against a HOSPITAL_DISPENSARY pharmacy; a "
-                            + pharmacy.getPharmacyType()
-                            + " pharmacy is served by partner routing or SMS dispatch.");
+            throw new BusinessException("pharmacy.dispense.notDispensary", String.valueOf(pharmacy.getPharmacyType()));
         }
     }
 
@@ -1742,7 +1737,7 @@ public class DispenseServiceImpl implements DispenseService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

@@ -41,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class HospitalLifecycleServiceImplTest {
 
     @Mock private HospitalRepository hospitalRepository;
@@ -133,7 +134,7 @@ class HospitalLifecycleServiceImplTest {
         TenantLifecycleActionRequestDTO req = withReason("ops");
         assertThatThrownBy(() -> service.suspend(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot suspend");
+            .hasMessageContaining("Suspension is not allowed");
     }
 
     @Test
@@ -190,7 +191,7 @@ class HospitalLifecycleServiceImplTest {
         TenantLifecycleActionRequestDTO req = withReason("nope");
         assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot schedule purge");
+            .hasMessageContaining("Scheduling the purge is not allowed");
     }
 
     @Test

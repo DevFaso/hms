@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
  * <p>Fixed clock throughout: an expiry check that reads the wall clock is a
  * test that passes until the date it was written stops being true.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class DispenseVerificationServiceTest {
 
     private static final ZoneId ZONE = ZoneId.of("Africa/Ouagadougou");

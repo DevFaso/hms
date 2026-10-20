@@ -225,6 +225,16 @@ function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<u
   return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
 }
 
+/**
+ * Whether the bearer the request carried had already expired (QA D342). With
+ * no token in storage the session lives in the refresh cookie, so the 401 can
+ * only be the session's: treated as expired.
+ */
+function sentAnExpiredBearer(auth: AuthService): boolean {
+  const token = auth.getToken();
+  return !token || auth.isExpired(token);
+}
+
 /** Wraps the retried credential-check error so it bypasses the refresh-failure sign-out. */
 class CredentialRetryError {
   constructor(readonly error: unknown) {}
@@ -339,6 +349,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         if (impersonation.isActive() && !isRefreshCall) {
           impersonation.forceStop();
           void router.navigate(['/super-admin']);
+          return throwError(() => error);
+        }
+
+        // QA D342: a credential check sent with a live access token was
+        // refused for the password typed, not for the session. Refreshing and
+        // retrying sent the wrong password a second time (and spent a second
+        // attempt against the lockout); only an expired bearer is retried.
+        if (isVerifyPassword && !sentAnExpiredBearer(auth)) {
           return throwError(() => error);
         }
 

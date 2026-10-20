@@ -102,6 +102,10 @@ export class EnumLabelService implements OnDestroy {
       SELF_REPORTED: 'Self-Reported',
       DEVICE: 'Connected Device',
       TRIAGE: 'Triage',
+      OTHER: 'Other',
+      DELIVERY: 'Delivery room',
+      PATIENT_REPORTED: 'Reported by the patient',
+      MANUAL: 'Manual entry',
     },
 
     /* ── Encounter / visit types ──────────────────────────── */

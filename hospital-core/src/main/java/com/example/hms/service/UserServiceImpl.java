@@ -338,17 +338,17 @@ public class UserServiceImpl implements UserService {
             // button in the user list are the way out.
             if (username != null) {
                 userRepository.findByUsername(username).ifPresent(existing -> {
-                    throw conflictFor("username", "Username '" + username + "'", existing);
+                    throw conflictFor("username", username, existing);
                 });
             }
             if (email != null) {
                 userRepository.findByEmail(email).ifPresent(existing -> {
-                    throw conflictFor("email", "Email '" + email + "'", existing);
+                    throw conflictFor("email", email, existing);
                 });
             }
             if (phone != null && !phone.isBlank()) {
                 findByPhoneInAnyForm(phone).ifPresent(existing -> {
-                    throw conflictFor("phone", "Phone number '" + phone + "'", existing);
+                    throw conflictFor("phone", phone, existing);
                 });
             }
         }
@@ -573,14 +573,13 @@ public class UserServiceImpl implements UserService {
      */
     private static ConflictException conflictFor(String field, String identifier, User existing) {
         if (existing.isDeleted()) {
-            return new ConflictException(field + ":" + identifier
-                + " belongs to a deleted account. Use the user list's Deleted filter to "
-                + "restore it, or register with a different " + field + ".");
+            return new ConflictException(field + ":" + com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "users.identifier.deletedAccount." + field, identifier));
         }
         // "taken" for usernames, "registered" for contact identifiers - the
         // wording each field always had.
-        String suffix = "username".equals(field) ? " is already taken." : " is already registered.";
-        return new ConflictException(field + ":" + identifier + suffix);
+        return new ConflictException(field + ":" + com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "users.identifier.taken." + field, identifier));
     }
 
     /** Record audit + emit creation event only for brand-new users. */
@@ -934,8 +933,8 @@ public class UserServiceImpl implements UserService {
         }
         boolean byEmail = email != null && email.equalsIgnoreCase(existing.getEmail());
         throw new ConflictException(byEmail
-                ? "email:This email belongs to a staff account and cannot be used for a patient."
-                : "phone:This phone number belongs to a staff account and cannot be used for a patient.");
+                ? "email:users.staffEmail.notForPatient"
+                : "phone:users.staffPhone.notForPatient");
     }
 
     /**

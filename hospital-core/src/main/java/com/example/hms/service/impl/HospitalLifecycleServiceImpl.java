@@ -193,7 +193,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
         if (scheduledFor.isBefore(Instant.now(clock))) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            throw BusinessRuleException.ofKey("hospital.lifecycle.purgeInPast");
         }
         // Checked before the step-up, which would otherwise spend a backup code
         // on a request that cannot run.
@@ -279,16 +279,21 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {
         if (!allowed.contains(hospital.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " hospital in state " + hospital.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.notAllowed",
+                actionLabel(action), String.valueOf(hospital.getLifecycleState()), String.valueOf(allowed)));
         }
+    }
+
+    /** QA D317: the action named in a refusal, in the caller's language (e.g. "schedule purge"). */
+    private static String actionLabel(String action) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "hospital.lifecycle.action." + action.replace(' ', '-'));
     }
 
     private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " a hospital.");
+            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.reasonRequired", actionLabel(action)));
         }
         return reason.trim();
     }

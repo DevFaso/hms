@@ -148,23 +148,33 @@ class ExceptionProseRatchetTest {
     @Test
     @DisplayName("QA D226: the converted messages are really translated, not copied")
     void convertedKeysAreTranslated() throws IOException {
-        Map<String, String> en = d226Block("");
-        Map<String, String> fr = d226Block("_fr");
-        Map<String, String> es = d226Block("_es");
-        assertThat(en).hasSizeGreaterThan(100);
+        assertTranslated("# QA round 4 (D226)", 100);
+    }
+
+    @Test
+    @DisplayName("QA D317: the round-6 messages are really translated, not copied")
+    void roundSixKeysAreTranslated() throws IOException {
+        assertTranslated("# QA round 6 (D317)", 90);
+    }
+
+    private static void assertTranslated(String header, int atLeast) throws IOException {
+        Map<String, String> en = block(header, "");
+        Map<String, String> fr = block(header, "_fr");
+        Map<String, String> es = block(header, "_es");
+        assertThat(en).hasSizeGreaterThan(atLeast);
         assertThat(fr.keySet()).isEqualTo(en.keySet());
         assertThat(es.keySet()).isEqualTo(en.keySet());
         List<String> copied = new ArrayList<>();
         en.forEach((k, v) -> {
-            if (v.equals(fr.get(k)) || v.equals(es.get(k))) {
+            if (!IDENTICAL_BY_DESIGN.contains(k) && (v.equals(fr.get(k)) || v.equals(es.get(k)))) {
                 copied.add(k);
             }
         });
         assertThat(copied).as("French or Spanish identical to English").isEmpty();
     }
 
-    /** The D226 block of one locale, gathered across every area file (see MessageBundles). */
-    private static Map<String, String> d226Block(String suffix) throws IOException {
+    /** One QA block of one locale, gathered across every area file (see MessageBundles). */
+    private static Map<String, String> block(String header, String suffix) throws IOException {
         Map<String, String> out = new TreeMap<>();
         for (String area : com.example.hms.config.MessageBundles.AREAS) {
             List<String> lines = Files.readAllLines(
@@ -172,7 +182,7 @@ class ExceptionProseRatchetTest {
                 StandardCharsets.UTF_8);
             boolean in = false;
             for (String line : lines) {
-                if (line.startsWith("# QA round 4 (D226)")) {
+                if (line.startsWith(header)) {
                     in = true;
                 } else if (in && line.startsWith("#")) {
                     break;
@@ -202,5 +212,73 @@ class ExceptionProseRatchetTest {
             + "throw new BusinessException(MSG);")).isEqualTo(1);
         assertThat(countProse("private static final String MSG = \"nurse.identity.unresolved\";\n"
             + "throw new BusinessException(MSG);")).isZero();
+    }
+
+    /** Keys whose French or Spanish value is legitimately the English word (e.g. "Suspension"). */
+    private static final java.util.Set<String> IDENTICAL_BY_DESIGN = java.util.Set.of(
+        "hospital.lifecycle.action.suspend");
+
+    /**
+     * QA D317 (D226 regression): the screens QA re-tested in round 6 (check-in,
+     * checkout, triage, pharmacy payment and dispense, hospital lifecycle,
+     * wards and beds, on-call, duplicate email or phone, lab approval, expired
+     * lot) still answered in English, because their sentences never reached an
+     * exception constructor as a literal: they went through a helper
+     * ({@code assertNotSameUser(user, id, "The director's ...")}), a dispense
+     * check reason ({@code b.fail(EXPIRY, "lot %s expired on %s")}) or were
+     * sitting under the per-file allowance. These files must hold none, under
+     * the wider scan below as well as the constructor scan.
+     */
+    static final List<String> ROUND_SIX_FILES = List.of(
+        "com/example/hms/service/ReceptionServiceImpl.java",
+        "com/example/hms/service/EncounterServiceImpl.java",
+        "com/example/hms/service/BedManagementServiceImpl.java",
+        "com/example/hms/service/UserServiceImpl.java",
+        "com/example/hms/service/LabTestDefinitionServiceImpl.java",
+        "com/example/hms/service/impl/HospitalLifecycleServiceImpl.java",
+        "com/example/hms/service/impl/OnCallScheduleServiceImpl.java",
+        "com/example/hms/service/pharmacy/PharmacyPaymentServiceImpl.java",
+        "com/example/hms/service/pharmacy/DispenseServiceImpl.java",
+        "com/example/hms/service/pharmacy/DispenseVerificationService.java");
+
+    /** A literal handed to a refusal helper ({@code assert*}, {@code require*}) or a dispense check ({@code .fail}). */
+    static final Pattern HELPER_PROSE = Pattern.compile(
+        "(\\bassert\\w*|\\brequire\\w*|\\.fail)\\s*\\((?:[^;\"]|\"(?:[^\"\\\\]|\\\\.)*\")*?\"((?:[^\"\\\\]|\\\\.)*)\"");
+
+    static int countHelperProse(String source) {
+        int n = 0;
+        Matcher m = HELPER_PROSE.matcher(source);
+        while (m.find()) {
+            String literal = m.group(2);
+            boolean sentence = ".fail".equals(m.group(1)) ? isProse(literal) : isProse(literal) && literal.endsWith(".");
+            if (sentence) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    @Test
+    @DisplayName("QA D317: the round-6 screens throw keys only, helpers and dispense checks included")
+    void roundSixFilesHoldNoProse() throws IOException {
+        Map<String, Integer> base = baseline();
+        List<String> found = new ArrayList<>();
+        for (String file : ROUND_SIX_FILES) {
+            String source = Files.readString(MAIN_JAVA.resolve(file), StandardCharsets.UTF_8);
+            int n = countProse(source) + countHelperProse(source);
+            if (n > base.getOrDefault(file, 0)) {
+                found.add(file + ": " + n);
+            }
+        }
+        assertThat(found).as("English sentences in a QA D317 file").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the wider scan sees a helper sentence and a dispense check reason")
+    void helperScanRecognisesProse() {
+        assertThat(countHelperProse("assertNotSameUser(user, id,\n  \"The approval must come from someone else.\");")).isEqualTo(1);
+        assertThat(countHelperProse("b.fail(DispenseCheck.EXPIRY, \"lot %s expired on %s\".formatted(a, b));")).isEqualTo(1);
+        assertThat(countHelperProse("assertNotSameUser(user, id, \"lab.definition.fourEyes.qaNotSubmitter\");")).isZero();
+        assertThat(countHelperProse("requireAtLeastOne(\"patientId or patientIdentifier\", a, b);")).isZero();
     }
 }

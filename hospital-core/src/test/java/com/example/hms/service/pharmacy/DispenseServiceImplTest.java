@@ -66,6 +66,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class DispenseServiceImplTest {
 
     @Mock private DispenseRepository dispenseRepository;
@@ -1300,7 +1301,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Quantity requested");
+                    .hasMessageContaining("quantity requested");
         }
 
         @Test
@@ -1312,7 +1313,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Quantity dispensed must");
+                    .hasMessageContaining("quantity dispensed must");
         }
 
         @Test
@@ -1354,7 +1355,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Patient does not match");
+                    .hasMessageContaining("patient does not match");
         }
 
         @Test
@@ -1372,7 +1373,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("verifiedBy");
+                    .hasMessageContaining("verifier must be the signed-in user");
         }
 
         @Test
@@ -2154,7 +2155,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("HOSPITAL_DISPENSARY")
+                    .hasMessageContaining("hospital dispensary")
                     .hasMessageContaining("COMMUNITY_PHARMACY");
 
             verify(dispenseRepository, never()).save(any());

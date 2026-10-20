@@ -410,7 +410,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     throw new BusinessException("lab.definition.submitterUnknown");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "lab.definition.fourEyes.reviewerIsSubmitter");
+                    "lab.definition.fourEyes.qaNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
@@ -425,10 +425,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 singleDirectorException = isSoleDirectorWhoReviewed(currentUser, definition);
                 if (!singleDirectorException) {
                     assertNotSameUser(currentUser, definition.getReviewedById(),
-                        "lab.definition.fourEyes.approverIsReviewer");
+                        "lab.definition.fourEyes.approverNotReviewer");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "lab.definition.fourEyes.approverIsSubmitter");
+                    "lab.definition.fourEyes.approverNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());

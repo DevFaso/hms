@@ -4501,7 +4501,9 @@
       "RECORDED": "Recorded",
       "SOURCE": "Source",
       "NORMAL_PREFIX": "Normal",
-      "NORMAL_RANGE": "Normal Range"
+      "NORMAL_RANGE": "Normal Range",
+      "UNIT_BREATHS_MIN": "breaths/min",
+      "FASTING": "fasting"
     },
     "APPOINTMENTS": {
       "TITLE": "My Appointments",
@@ -4927,7 +4929,11 @@
         "HOME": "Home Reading",
         "SELF_REPORTED": "Self-Reported",
         "DEVICE": "Connected Device",
-        "TRIAGE": "Triage"
+        "TRIAGE": "Triage",
+        "OTHER": "Other",
+        "DELIVERY": "Delivery room",
+        "PATIENT_REPORTED": "Reported by the patient",
+        "MANUAL": "Manual entry"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",

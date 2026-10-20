@@ -578,9 +578,7 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = loadNoteScoped(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
-            throw new BusinessException(
-                "This note has already been signed. A signature cannot be reissued; "
-                    + "append an addendum instead.");
+            throw new BusinessException("encounter.note.alreadySigned");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -623,14 +621,13 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = loadNoteScoped(encounterId);
 
         if (!note.isRequiresCosign()) {
-            throw new BusinessException("This note does not declare a co-signature requirement.");
+            throw new BusinessException("encounter.note.noCosignRequirement");
         }
         if (note.getCosignedAt() != null || note.getCosignedBy() != null) {
-            throw new BusinessException("This note has already been co-signed.");
+            throw new BusinessException("encounter.note.alreadyCosigned");
         }
         if (!note.isSigned()) {
-            throw new BusinessException(
-                "The author must sign the note before it can be co-signed.");
+            throw new BusinessException("encounter.note.authorSignFirst");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -645,9 +642,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         UUID authorUserId = note.getAuthor() != null ? note.getAuthor().getId() : null;
         if (authorUserId != null && authorUserId.equals(currentUserId)) {
-            throw new BusinessException(
-                "A note cannot be co-signed by its own author; the co-signature exists to put "
-                    + "a second clinician's judgment on record.");
+            throw new BusinessException("encounter.note.selfCosign");
         }
 
         note.setCosignedBy(cosigner);
@@ -733,8 +728,7 @@ public class EncounterServiceImpl implements EncounterService {
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
         if (!isNew && note.isSigned()) {
-            throw new BusinessException(
-                "This note is signed and can no longer be edited. Append an addendum instead.");
+            throw new BusinessException("encounter.note.signedLocked");
         }
         if (isNew) {
             note.setEncounter(encounter);
@@ -978,9 +972,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (request.getSignedAt() != null
             || trimToNull(request.getSignedByName()) != null
             || trimToNull(request.getSignedByCredentials()) != null) {
-            throw new BusinessException(
-                "Note signatures are recorded by POST /encounters/{id}/notes/sign; "
-                    + "they cannot be asserted in the note body.");
+            throw new BusinessException("encounter.note.signatureViaEndpoint");
         }
         // Set-only, the prescription idiom: declaring the co-sign requirement
         // is documentation; withdrawing it would be an attestation decision no
@@ -1674,7 +1666,7 @@ public class EncounterServiceImpl implements EncounterService {
                 return;
             }
         }
-        throw new BusinessException("Provide " + label + ".");
+        throw new BusinessException("encounter.provideOneOf", label);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -1695,9 +1687,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
-            throw new BusinessException(
-                    "Cannot submit triage for encounter in status " + current
-                            + ". Expected ARRIVED or TRIAGE.");
+            throw new BusinessException("encounter.triage.submitWrongStatus", String.valueOf(current));
         }
 
         // (a) Record vital signs as PatientVitalSign
@@ -1836,9 +1826,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
                 && current != EncounterStatus.TRIAGE
                 && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot submit nursing intake for encounter in status " + current
-                            + ". Expected WAITING_FOR_PHYSICIAN, TRIAGE, or IN_PROGRESS.");
+            throw new BusinessException("encounter.intake.wrongStatus", String.valueOf(current));
         }
 
         // Resolve recorder staff
@@ -2014,8 +2002,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
         if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
-            throw new BusinessException("Encounter is already " + current.name()
-                + " and cannot be checked out.");
+            throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -2290,7 +2277,7 @@ public class EncounterServiceImpl implements EncounterService {
         requireEncounterReadable(encounter, scope);
 
         if (encounter.getCheckoutTimestamp() == null) {
-            throw new BusinessException("Encounter has not been checked out yet.");
+            throw new BusinessException("encounter.checkout.notYet");
         }
 
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
@@ -2407,8 +2394,7 @@ public class EncounterServiceImpl implements EncounterService {
             if (user != null && encounterStaff != null
                     && encounterStaff.getUser() != null
                     && !encounterStaff.getUser().getId().equals(user.getId())) {
-                throw new BusinessException(
-                        "You are not the assigned physician for this encounter.");
+                throw new BusinessException("encounter.notAssignedPhysician");
             }
         }
 
@@ -2418,9 +2404,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            throw new BusinessException(
-                    "Cannot start encounter in status " + current
-                            + ". Expected WAITING_FOR_PHYSICIAN.");
+            throw new BusinessException("encounter.start.wrongStatus", String.valueOf(current));
         }
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
@@ -2442,9 +2426,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
-            throw new BusinessException(
-                    "Cannot complete triage for encounter in status " + current
-                            + ". Expected ARRIVED or TRIAGE.");
+            throw new BusinessException("encounter.triage.completeWrongStatus", String.valueOf(current));
         }
 
         requireTriageRecorded(encounter);
@@ -2508,9 +2490,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot complete examination in status " + current
-                            + ". Expected IN_PROGRESS.");
+            throw new BusinessException("encounter.exam.wrongStatus", String.valueOf(current));
         }
 
         boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
@@ -2540,9 +2520,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot mark ready for discharge in status " + current
-                            + ". Expected AWAITING_RESULTS or IN_PROGRESS.");
+            throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
