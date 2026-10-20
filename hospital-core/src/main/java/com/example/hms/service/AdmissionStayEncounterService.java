@@ -230,7 +230,7 @@ public class AdmissionStayEncounterService {
             return;
         }
         LocalDateTime when = admission.getActualDischargeDateTime() != null
-            ? admission.getActualDischargeDateTime() : LocalDateTime.now();
+            ? admission.getActualDischargeDateTime() : LocalDateTime.now(java.time.ZoneId.systemDefault());
         com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
         summary.setEncounter(enc);
         summary.setPatient(enc.getPatient());

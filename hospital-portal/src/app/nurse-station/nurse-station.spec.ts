@@ -298,8 +298,11 @@ describe('NurseStationComponent — two-tier polling', () => {
     it('a nurse sees ARRIVED/TRIAGE outpatients and opens the triage form on one', () => {
       authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
       component.loadFlow$().subscribe();
-      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED' });
-      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE' });
+      const d = new Date();
+      const p = (n: number) => String(n).padStart(2, '0');
+      const fromDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T00:00:00`;
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate, size: 100 });
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate, size: 100 });
       expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);
 
       component.activeSection.set('workboard');

@@ -880,8 +880,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /** Outpatient visits waiting to be triaged in the active hospital (D408). */
   loadAwaitingTriage$(): Observable<EncounterResponse[]> {
     if (!this.canTriage()) return of([]);
+    // Today's visits only (stale ARRIVED rows from earlier days are not a
+    // queue), and one page large enough that a busy clinic hides no one.
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00:00`;
     const byStatus = (status: 'ARRIVED' | 'TRIAGE') =>
-      this.encounterService.list({ status }).pipe(catchError(() => of([] as EncounterResponse[])));
+      this.encounterService
+        .list({ status, fromDate, size: 100 })
+        .pipe(catchError(() => of([] as EncounterResponse[])));
     return forkJoin([byStatus('ARRIVED'), byStatus('TRIAGE')]).pipe(
       map(([arrived, triage]) =>
         [...arrived, ...triage].filter((e) => e.encounterType !== 'INPATIENT'),

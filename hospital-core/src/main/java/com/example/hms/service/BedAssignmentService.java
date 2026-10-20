@@ -117,7 +117,7 @@ public class BedAssignmentService {
             return;
         }
         Integer age = patient.getDateOfBirth() == null ? null
-            : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now()).getYears();
+            : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
         com.example.hms.enums.WardType type = bed.getWard().getWardType();
         boolean mismatch = switch (type) {
             case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
