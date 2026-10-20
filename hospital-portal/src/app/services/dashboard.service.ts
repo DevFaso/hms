@@ -239,6 +239,8 @@ export interface PatientSnapshot {
   sex: string;
   mrn: string;
   allergies: string[];
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
   codeStatus?: string;
   activeDiagnoses: string[];
   activeMedications: { name: string; dose: string; frequency: string }[];

@@ -180,6 +180,29 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
+    void d504_withoutBreakGlassTheSnapshotSaysItsAllergyListIsNarrowed() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.getAllergenDisplay()).thenReturn("Peanuts");
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        when(patientAllergyRepository.findVisibleAt(patientId, HOSPITAL_ID)).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertTrue(result.getAllergies().contains("Peanuts"));
+        assertTrue(result.isAllergiesWithheld());
+    }
+
+    @Test
     void d504_breakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
         UUID patientId = UUID.randomUUID();
         UUID doctorB = UUID.randomUUID();
@@ -209,6 +232,7 @@ class PatientSnapshotServiceImplTest {
             PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
             assertTrue(result.getAllergies().contains("Penicillin"));
+            assertFalse(result.isAllergiesWithheld());
             verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();

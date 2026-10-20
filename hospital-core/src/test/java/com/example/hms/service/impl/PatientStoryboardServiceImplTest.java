@@ -346,6 +346,24 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
+    void d504WithoutBreakGlassTheStoryboardSaysItsAllergyListIsNarrowed() {
+        PatientAllergy local = allergy("Sulfa", AllergySeverity.MILD, true);
+        when(allergyRepo.hasActiveSharingOptOut(PATIENT_ID)).thenReturn(true);
+        when(allergyRepo.findVisibleAt(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of(local));
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getAllergies())
+            .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+            .containsExactly("Sulfa");
+        assertThat(sb.isAllergiesWithheld()).isTrue();
+    }
+
+    @Test
     void d504BreakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
         UUID doctorB = UUID.randomUUID();
         com.example.hms.security.context.HospitalContextHolder.setContext(
@@ -374,6 +392,7 @@ class PatientStoryboardServiceImplTest {
             assertThat(sb.getAllergies())
                 .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
                 .containsExactly("Penicillin");
+            assertThat(sb.isAllergiesWithheld()).isFalse();
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();
         }

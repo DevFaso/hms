@@ -63,6 +63,11 @@
           } @else {
             <p class="storyboard__empty">{{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}</p>
           }
+          @if (s.allergiesWithheld) {
+            <p class="storyboard__empty" role="note">
+              {{ 'CHART.ALLERGIES_WITHHELD' | translate }}
+            </p>
+          }
         </div>
         <!-- Problems -->
         <div class="storyboard__section" data-testid="storyboard-problems">

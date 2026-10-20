@@ -14,6 +14,8 @@ export interface PatientAddressHistoryEntry {
 
 export interface PatientResponse {
   id: string;
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
   firstName: string;
   lastName: string;
   middleName?: string;
@@ -323,6 +325,8 @@ export interface PatientTimeline {
   generatedAt: string;
   /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
   restrictedRows?: RestrictedRows[];
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
 }
 
 /** SMS OTP challenge issued by POST /patients/phone-verification. */

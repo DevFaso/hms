@@ -59,6 +59,27 @@ describe('StoryboardBannerComponent', () => {
     ).not.toBeNull();
   });
 
+  it('QA D504 — says when the opt-out held other hospitals’ allergies back', () => {
+    storyboardSpy.getStoryboard.and.returnValue(
+      of({ ...populatedSummary(), allergiesWithheld: true }),
+    );
+    setPatient('p-123');
+    const allergies: HTMLElement = fixture.nativeElement.querySelector(
+      '[data-testid="storyboard-allergies"]',
+    );
+    expect(allergies.querySelector('[role="note"]')?.textContent).toContain(
+      'CHART.ALLERGIES_WITHHELD',
+    );
+  });
+
+  it('QA D504 — no notice when nothing is withheld', () => {
+    storyboardSpy.getStoryboard.and.returnValue(of(populatedSummary()));
+    setPatient('p-123');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="storyboard-allergies"] [role="note"]'),
+    ).toBeNull();
+  });
+
   it('forwards the hospital scope when supplied', () => {
     storyboardSpy.getStoryboard.and.returnValue(of(emptySummary()));
     setPatient('p-1', 'h-99');

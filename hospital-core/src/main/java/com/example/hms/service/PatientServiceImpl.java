@@ -901,6 +901,10 @@ public class PatientServiceImpl implements PatientService {
             .entries(entries)
             .sensitiveCategories(sensitiveCategories)
             .containsSensitiveData(!sensitiveCategories.isEmpty())
+            // QA D504 (round 2): the allergy entries above omit other hospitals' rows; say so.
+            .allergiesWithheld(shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId))
             .totalEntries(entries.size())
             .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
@@ -2755,9 +2759,13 @@ public class PatientServiceImpl implements PatientService {
         // QA D110: the allergy summary column covers every hospital's rows. For a patient
         // who opted out of record sharing, a reader elsewhere sees only this hospital's.
         // QA D504: unless a break-the-glass session overrides the opt-out.
-        if (hospitalId != null && dto.getAllergies() != null
+        // QA D504 (round 2): and the row says so, so the column never looks complete.
+        if (hospitalId != null
                 && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                     patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patient.getId(), hospitalId)) {
+            dto.setAllergiesWithheld(true);
+        }
+        if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
                 patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }

@@ -45,6 +45,8 @@ public class PatientResponseDTO {
     private String emergencyContactRelationship;
     private String bloodType;
     private String allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
     private String medicalHistorySummary;
     private String preferredPharmacy;
     private String careTeamNotes;

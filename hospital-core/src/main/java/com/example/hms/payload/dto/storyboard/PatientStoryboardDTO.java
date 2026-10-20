@@ -32,6 +32,8 @@ public class PatientStoryboardDTO {
 
     private PatientHeaderDTO patient;
     private List<AllergySummaryDTO> allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
     private List<ProblemSummaryDTO> problems;
     private ActiveEncounterDTO activeEncounter;
     /** QA D252: the most recent finished visit, filled only when none is open. */

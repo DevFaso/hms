@@ -502,6 +502,9 @@
                 p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
               }}</span>
             </div>
+            @if (p.allergiesWithheld) {
+              <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+            }
           </div>
         </div>
         <div class="info-card">

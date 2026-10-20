@@ -60,6 +60,9 @@
                 }
               </div>
             }
+            @if (pt.allergiesWithheld) {
+              <p class="no-data" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+            }
           </div>
         }
       </div>

@@ -127,6 +127,9 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         return PatientStoryboardDTO.builder()
             .patient(buildHeader(patient, hospitalId))
             .allergies(allergies)
+            // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
+            .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                allergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
             .problems(problems)
             .activeEncounter(activeEncounter)
             .lastEncounter(lastEncounter)

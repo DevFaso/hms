@@ -23,6 +23,8 @@ public class PatientSnapshotDTO {
     private String sex;
     private String mrn;
     private List<String> allergies;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
     private String codeStatus;
     private List<String> activeDiagnoses;
     private List<MedicationItem> activeMedications;

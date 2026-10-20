@@ -280,8 +280,10 @@ class PatientServiceImplTest {
         PatientAllergy local = PatientAllergy.builder().allergenDisplay("Peanuts").active(true).build();
         when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(local));
 
-        assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getAllergies())
-            .isEqualTo("Peanuts");
+        PatientResponseDTO read = patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH);
+        assertThat(read.getAllergies()).isEqualTo("Peanuts");
+        // QA D504 (round 2): the narrowed column says it was narrowed.
+        assertThat(read.isAllergiesWithheld()).isTrue();
     }
 
     // QA D504: break-the-glass overrides the opt-out on the allergy reads too.
@@ -1015,6 +1017,9 @@ class PatientServiceImplTest {
         when(sensitivityClassifier.effectiveCategory(withheld))
             .thenReturn(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
         when(auditEventLogService.logEvent(any())).thenReturn(null);
+        // QA D504 (round 2): an opt-out with no break-glass narrows the allergy
+        // entries, and the timeline says so instead of looking complete.
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
 
         PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
             patientId, hospitalId, doctorId, assignment,
@@ -1029,6 +1034,7 @@ class PatientServiceImplTest {
             assertThat(r.getDepartmentName()).isEqualTo("Psychiatrie");
             assertThat(r.getCount()).isEqualTo(1L);
         });
+        assertThat(response.isAllergiesWithheld()).isTrue();
     }
 
     @Test
