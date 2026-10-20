@@ -55,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -467,9 +468,9 @@ class PatientDocumentServiceImplTest {
             assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
             assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
 
-            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> rows =
-                    org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(rows.capture());
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> rows =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, times(2)).logEvent(rows.capture());
             assertThat(rows.getAllValues()).allSatisfy(row -> {
                 assertThat(row.getEventDescription()).contains(sessionId.toString());
                 assertThat(row.getPatientId()).isEqualTo(patientId);
