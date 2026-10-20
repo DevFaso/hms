@@ -465,6 +465,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospitalId);
 
         PatientEducationQuestion question = questionMapper.toEntity(requestDTO);
         if (question == null) {

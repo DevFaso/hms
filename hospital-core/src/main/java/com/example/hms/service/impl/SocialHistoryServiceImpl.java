@@ -28,6 +28,9 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class SocialHistoryServiceImpl implements SocialHistoryService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     private static final String SOCIAL_HISTORY_NOT_FOUND_KEY = "socialHistory.notFound";
 
 
@@ -51,6 +54,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
         // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         Staff recordedBy = null;
         if (requestDTO.getRecordedByStaffId() != null) {

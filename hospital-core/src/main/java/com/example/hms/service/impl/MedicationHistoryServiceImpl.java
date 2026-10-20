@@ -42,6 +42,9 @@ import com.example.hms.security.context.HospitalContextHolder;
 @RequiredArgsConstructor
 @Slf4j
 public class MedicationHistoryServiceImpl implements MedicationHistoryService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     private static final String PHARMACY_FILL_NOT_FOUND_KEY = "pharmacyFill.notFound";
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String NON_DIGIT_REGEX = "\\D";
@@ -156,6 +159,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
         // QA r5 tenancy sweep: the fill is recorded at the caller's acting hospital.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         // Optional prescription link
         Prescription prescription = null;
