@@ -122,6 +122,21 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                                         @Param("roleCodes") Set<String> roleCodes);
 
     /**
+     * QA D314: how many distinct people hold a role at a hospital. A lab with
+     * a single director cannot have its QA review and its director approval
+     * done by two different directors.
+     */
+    @Query("""
+        SELECT COUNT(DISTINCT a.user.id)
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.hospital.id = :hospitalId
+          AND UPPER(a.role.code) = :roleCode
+    """)
+    long countActiveUsersWithRoleCodeAtHospital(@Param("hospitalId") UUID hospitalId,
+                                                @Param("roleCode") String roleCode);
+
+    /**
      * QA D157 (#891 review): a controlled-substance witness must be an active,
      * undeleted account as well as hold an active assignment.
      */

@@ -1387,9 +1387,11 @@
           </select>
         </div>
         <div class="form-row">
-          <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }}</label>
+          <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }} *</label>
           <textarea
             id="ho-situation"
+            required
+            aria-required="true"
             class="reason-input"
             rows="2"
             [value]="handoffForm().situation ?? ''"

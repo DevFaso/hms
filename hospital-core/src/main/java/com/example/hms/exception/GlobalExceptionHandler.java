@@ -387,6 +387,23 @@ public class GlobalExceptionHandler {
      * and surface as 500 — exactly what happened when a stale backend
      * received {@code sources=PLATFORM_CONFIG} on the aggregated audit search.
      */
+    /**
+     * QA D332: a required query parameter left out (a referral completed with
+     * no {@code summary}) answered 400 with Spring's empty body, so the portal
+     * had nothing to show. The caller is told which value is missing, in its
+     * own language.
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<Object> handleMissingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
+        String message = localized("error.request.missingParameter",
+            "A required value is missing: \"{0}\".", ex.getParameterName());
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        body.put("field", ex.getParameterName());
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Object> handleTypeMismatch(
             MethodArgumentTypeMismatchException ex, WebRequest request) {

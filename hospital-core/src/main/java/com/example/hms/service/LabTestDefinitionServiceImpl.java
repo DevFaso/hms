@@ -387,6 +387,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         String action = dto.getAction() == null ? "" : dto.getAction().trim().toUpperCase(Locale.ROOT);
+        boolean singleDirectorException = false;
 
         switch (action) {
             case "SUBMIT_FOR_QA" -> {
@@ -409,7 +410,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     throw new BusinessException("lab.definition.submitterUnknown");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "The QA review must be completed by someone other than the person who submitted it.");
+                    "lab.definition.fourEyes.reviewerIsSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
@@ -417,10 +418,17 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "APPROVE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
-                assertNotSameUser(currentUser, definition.getReviewedById(),
-                    "The director's approval must come from someone other than the QA reviewer.");
+                // QA D314: the director may also have done the QA review when
+                // the hospital has only one director: otherwise a lab with a
+                // single director could never activate a test. The exception
+                // is recorded in the audit row. The submitter rule still holds.
+                singleDirectorException = isSoleDirectorWhoReviewed(currentUser, definition);
+                if (!singleDirectorException) {
+                    assertNotSameUser(currentUser, definition.getReviewedById(),
+                        "lab.definition.fourEyes.approverIsReviewer");
+                }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "The director's approval must come from someone other than the person who submitted it.");
+                    "lab.definition.fourEyes.approverIsSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());
@@ -457,15 +465,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
 
         LabTestDefinition saved = repository.save(definition);
-        auditApprovalStep(currentUser, saved, action);
+        auditApprovalStep(currentUser, saved, action, singleDirectorException);
         return mapper.toDto(saved);
+    }
+
+    /**
+     * QA D314: true when the approver is the same person who completed the QA
+     * review AND is the only active lab director of the definition's
+     * hospital. A super-admin never needs it (assertNotSameUser exempts them).
+     */
+    private boolean isSoleDirectorWhoReviewed(User user, LabTestDefinition definition) {
+        if (isGlobalDefinition(definition) || isSuperAdmin(user)
+            || definition.getReviewedById() == null || !definition.getReviewedById().equals(user.getId())) {
+            return false;
+        }
+        UUID hospitalId = definition.getHospital().getId();
+        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), hospitalId, Set.of(ROLE_LAB_DIRECTOR))
+            && assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, ROLE_LAB_DIRECTOR) == 1;
     }
 
     /**
      * QA D213: the four steps were four identical generic audit rows. This
      * one names the step and the status it led to. Ids only, no PHI.
      */
-    private void auditApprovalStep(User actor, LabTestDefinition definition, String action) {
+    private void auditApprovalStep(User actor, LabTestDefinition definition, String action,
+                                   boolean singleDirectorException) {
         if (auditEventLogService == null) {
             return;
         }
@@ -476,7 +501,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 .userId(actor.getId())
                 .hospitalName(definition.getHospital() != null ? definition.getHospital().getName() : null)
                 .eventDescription("Lab test definition approval step " + action + " -> "
-                    + definition.getApprovalStatus())
+                    + definition.getApprovalStatus()
+                    + (singleDirectorException
+                        ? " (single-director exception: the sole lab director also completed the QA review)"
+                        : ""))
                 .entityType("LabTestDefinition")
                 .resourceId(definition.getId() != null ? definition.getId().toString() : null)
                 .build());
@@ -567,10 +595,18 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
+    /** QA D314 / D318 (round 5): a status the reader can read, not the enum name. */
+    private static String statusLabel(LabTestDefinitionApprovalStatus status) {
+        return status == null ? "" : com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "lab.definition.status." + status.name());
+    }
+
     private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
         if (!allowed.contains(definition.getApprovalStatus())) {
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
-                "lab.definition.actionNotAllowed", String.valueOf(definition.getApprovalStatus()), String.valueOf(allowed)));
+                "lab.definition.actionNotAllowed", statusLabel(definition.getApprovalStatus()),
+                allowed.stream().map(LabTestDefinitionServiceImpl::statusLabel)
+                    .collect(java.util.stream.Collectors.joining(", "))));
         }
     }
 

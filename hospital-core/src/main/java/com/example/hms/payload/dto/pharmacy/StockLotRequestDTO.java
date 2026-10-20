@@ -35,8 +35,10 @@ public class StockLotRequestDTO {
     private LocalDate expiryDate;
 
     @NotNull(message = "{stockLot.initialQuantity.required}")
+    @jakarta.validation.constraints.Positive(message = "{stockLot.quantity.positive}")
     private BigDecimal initialQuantity;
 
+    @jakarta.validation.constraints.PositiveOrZero(message = "{stockLot.quantity.negative}")
     private BigDecimal remainingQuantity;
 
     @Size(max = 255)

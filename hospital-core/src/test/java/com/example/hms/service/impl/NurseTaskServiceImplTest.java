@@ -416,6 +416,24 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void createHandoff_refusesAnEmptySituation_D331() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
+        Patient patientEntity = mock(Patient.class);
+        when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
+
+        NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId).direction("SHIFT_CHANGE").situation("   ").build();
+
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class);
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    @Test
     void getDueVitals_skipsPatientsWithoutAnActiveStay_D220() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();

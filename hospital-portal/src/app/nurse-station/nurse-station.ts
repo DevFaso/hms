@@ -641,6 +641,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_REQUIRED'));
       return;
     }
+    // QA D331: the S of SBAR is required; the server refuses a blank one too.
+    if (!form.situation?.trim()) {
+      this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED'));
+      return;
+    }
     this.handoffCreating.set(true);
     this.nurseService.createHandoff(form as NurseHandoffCreateRequest).subscribe({
       next: (handoff) => {

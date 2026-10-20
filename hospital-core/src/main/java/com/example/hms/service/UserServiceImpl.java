@@ -290,6 +290,18 @@ public class UserServiceImpl implements UserService {
         final boolean isPatient = roleNames.stream()
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
+        // QA D329: staff onboarding accepted the patient role next to staff
+        // roles. The account was then handled as a patient: no welcome mail,
+        // no staff record. A patient is registered on its own from the
+        // patient form; a staff member who is also a patient gets a separate
+        // patient registration.
+        if (isPatient && roleNames.stream()
+                .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT).replaceFirst("^ROLE_", ""))
+                .filter(r -> !r.isEmpty())
+                .distinct()
+                .anyMatch(r -> !r.equals("PATIENT"))) {
+            throw new BusinessException("users.roles.patientWithStaffRoles");
+        }
 
         // ---- 0) Who may grant these roles, before anything about the request
         // is looked up, so a refused caller learns nothing from a duplicate
@@ -1379,15 +1391,18 @@ public class UserServiceImpl implements UserService {
         if (!accountAccess.canDelete(user)) {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
+        // QA D327: a second delete of a deleted account changed nothing yet
+        // answered success and wrote a second USER_DELETE audit row.
+        if (user.isDeleted()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.alreadyDeleted"));
+        }
 
         // Read before anything is switched off: the restore puts back this
         // answer, since afterwards nothing on the account or its rows can
         // tell a verified account from a pending invitee (D21).
-        // A repeat delete keeps the first answer: by then the account is
-        // already switched off and would be recorded as never activated.
-        if (!user.isDeleted()) {
-            user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
-        }
+        // A repeat delete is refused above (QA D327), so the first answer is
+        // never overwritten by an already switched-off account.
+        user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
@@ -1421,6 +1436,12 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_RESTORE, "restore", id);
+        }
+        // QA D327: restoring an account that is not deleted re-ran the
+        // restore (and could switch a never-activated account's state) and
+        // wrote another USER_RESTORE audit row.
+        if (!user.isDeleted()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.notDeleted"));
         }
 
         // Restore the state before the delete, not "active". A pending invitee

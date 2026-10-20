@@ -620,6 +620,48 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D341: a negative received quantity is refused with a readable message")
+        void negativeQuantityIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("-5"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D334: a reception date in the future is refused")
+        void futureReceptionDateIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedDate(LocalDate.now().plusDays(3));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D315: the same lot number with another expiry date is refused")
+        void sameLotOtherExpiryIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.existsOtherExpiryForLot(inventoryItemId, "LOT-001", dto.getExpiryDate()))
+                    .thenReturn(true);
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("D82: a receipt booked in a colleague's name is refused")
         void receiverMustBeTheCaller() {
             StockLotRequestDTO dto = buildLotRequest();
@@ -776,14 +818,14 @@ class InventoryServiceImplTest {
             lot.setId(stockLotId);
             StockLotRequestDTO dto = StockLotRequestDTO.builder()
                     .inventoryItemId(inventoryItemId)
-                    .lotNumber("LOT-001-UPDATED")
-                    .expiryDate(LocalDate.now().plusYears(2))
+                    .lotNumber("LOT-001")
+                    .supplier("New supplier")
                     .initialQuantity(new BigDecimal("100.00"))
                     .receivedDate(LocalDate.now())
                     .build();
             StockLotResponseDTO responseDTO = StockLotResponseDTO.builder()
                     .id(stockLotId)
-                    .lotNumber("LOT-001-UPDATED")
+                    .lotNumber("LOT-001")
                     .build();
 
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
@@ -794,9 +836,42 @@ class InventoryServiceImplTest {
             StockLotResponseDTO result = service.updateStockLot(stockLotId, dto);
 
             assertThat(result).isNotNull();
-            assertThat(result.getLotNumber()).isEqualTo("LOT-001-UPDATED");
+            assertThat(result.getLotNumber()).isEqualTo("LOT-001");
             verify(stockLotMapper).updateEntity(lot, dto);
             verify(stockLotRepository).save(lot);
+            verify(stockLotRepository, never()).setRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D334: the expiry date cannot be changed after receipt")
+        void expiryIsImmutable() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .expiryDate(LocalDate.now().plusYears(1)).remainingQuantity(new BigDecimal("50.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001")
+                    .expiryDate(LocalDate.of(2024, 1, 1)).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotMapper, never()).updateEntity(any(), any());
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D341: a negative count correction is refused before the database")
+        void negativeRemainingIsRefused() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001").build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).remainingQuantity(new BigDecimal("-3")).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
             verify(stockLotRepository, never()).setRemaining(any(), any(), any());
         }
 

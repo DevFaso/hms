@@ -147,6 +147,11 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     );
     expect(label('CONTROLLED_DISCREPANCY')).toBe('PHARMACY.ADJ_REASON_CONTROLLED_DISCREPANCY');
     expect(label('Broken bottle')).toBe('Broken bottle');
+    // QA D337: the API's DAMAGED / EXPIRED spellings are translated too.
+    expect(label('DAMAGED: QA R6 ampoule cassée')).toBe(
+      'PHARMACY.ADJ_REASON_DAMAGE : QA R6 ampoule cassée',
+    );
+    expect(label('EXPIRED: QA R6')).toBe('PHARMACY.ADJ_REASON_EXPIRY_WRITE_OFF : QA R6');
     expect(c.reasonLabel({ reason: null } as never)).toBe('—');
   });
 

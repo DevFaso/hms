@@ -731,6 +731,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("nurse.handoff.direction.invalid");
         }
 
+        // QA D331: an SBAR handoff with no Situation tells the next nurse
+        // nothing about why the patient is being handed over.
+        if (trimToNull(request.getSituation()) == null) {
+            throw new BusinessException("nurse.handoff.situation.required");
+        }
+
         NurseHandoff handoff = NurseHandoff.builder()
             .hospital(hospital)
             .patient(patient)

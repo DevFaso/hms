@@ -1067,10 +1067,16 @@ public class DispenseServiceImpl implements DispenseService {
         // pharmacy, morphine included, for a paracetamol order.
         return stockLotRepository.findByInventoryItemPharmacyId(pharmacy.getId(), Pageable.unpaged()).stream()
                 .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity().signum() > 0)
+                // QA D335: an expired lot is not dispensable (the fill refuses
+                // it), so it is not offered; shortest-dated first (FEFO).
+                .filter(lot -> lot.getExpiryDate() != null
+                        && !lot.getExpiryDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
                 .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
                         && lot.getInventoryItem().getMedicationCatalogItem() != null
                         && dispenseVerificationService.matchesPrescribedDrug(prescription,
                                 lot.getInventoryItem().getMedicationCatalogItem()))
+                .sorted(java.util.Comparator.comparing(StockLot::getExpiryDate)
+                        .thenComparing(StockLot::getLotNumber, java.util.Comparator.nullsLast(String::compareTo)))
                 .map(stockLotMapper::toResponseDTO)
                 .toList();
     }

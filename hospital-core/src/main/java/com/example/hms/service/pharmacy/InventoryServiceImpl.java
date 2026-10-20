@@ -202,6 +202,29 @@ public class InventoryServiceImpl implements InventoryService {
                 com.example.hms.utility.MessageUtil.resolve("stockLot.expired"));
         }
 
+        // QA D341: a receipt adds stock; a zero or negative quantity reached
+        // the database CHECK and came back as a generic constraint error.
+        if (dto.getInitialQuantity() == null || dto.getInitialQuantity().signum() <= 0
+            || (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0)) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.positive"));
+        }
+        // QA D334: a delivery cannot have been received in the future.
+        if (dto.getReceivedDate() != null
+            && dto.getReceivedDate().isAfter(LocalDate.now(ZoneId.systemDefault()))) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
+        }
+        // QA D315: a lot number identifies one manufacturing batch, which has
+        // one expiry date. A second delivery of the same lot is fine; the same
+        // lot number with another expiry is a typing error or a false label.
+        if (dto.getLotNumber() != null && dto.getExpiryDate() != null
+            && stockLotRepository.existsOtherExpiryForLot(item.getId(), dto.getLotNumber().trim(),
+                dto.getExpiryDate())) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.lotNumber.expiryMismatch"));
+        }
+
         // The receipt is recorded against the signed-in user (D82): a
         // caller-supplied receiver let one user book a delivery in a
         // colleague's name.
@@ -274,6 +297,20 @@ public class InventoryServiceImpl implements InventoryService {
         StockLot lot = resolveStockLot(id);
         enforceHospitalScope(lot.getInventoryItem().getPharmacy());
         BigDecimal remainingBefore = lot.getRemainingQuantity();
+        // QA D334: the lot number and expiry are what was received and what
+        // the FEFO pick and the expiry write-off run on. Changing them after
+        // receipt left no ledger entry; a wrong lot is corrected by a
+        // write-off and a new receipt, which the ledger records.
+        if ((dto.getLotNumber() != null && !dto.getLotNumber().equals(lot.getLotNumber()))
+            || (dto.getExpiryDate() != null && !dto.getExpiryDate().equals(lot.getExpiryDate()))) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.identity.immutable"));
+        }
+        // QA D341: a count cannot go below zero.
+        if (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.negative"));
+        }
         stockLotMapper.updateEntity(lot, dto);
         StockLot saved = stockLotRepository.save(lot);
         if (dto.getRemainingQuantity() != null) {
