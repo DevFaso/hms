@@ -94,10 +94,10 @@ class InvoiceItemServiceImplTest {
     void aDecimalXofPriceIsRefusedButZeroCentsAreWhole_D307() {
         InvoiceItemRequestDTO decimal = line();
         decimal.setUnitPrice(new BigDecimal("1500.50"));
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createInvoiceItem(decimal, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.createInvoiceItem(decimal, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "billing.payment.wholeAmountOnly");
-        org.mockito.Mockito.verify(itemRepository, org.mockito.Mockito.never()).save(any(InvoiceItem.class));
+        verify(itemRepository, never()).save(any(InvoiceItem.class));
 
         InvoiceItemRequestDTO zeroCents = line();
         zeroCents.setUnitPrice(new BigDecimal("1500.00"));
