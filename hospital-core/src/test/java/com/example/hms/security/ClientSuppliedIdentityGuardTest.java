@@ -249,14 +249,30 @@ class ClientSuppliedIdentityGuardTest {
     }
 
     static class Fixture {
-        @PostMapping("/a") void nested(@RequestBody OuterDto body) { }
-        @PostMapping("/b") void bodyList(@RequestBody List<ItemDto> body) { }
-        @PostMapping("/c") void cyclic(@RequestBody NodeDto body) { }
-        @RequestMapping(value = "/d", method = RequestMethod.POST) void legacy(@RequestBody ItemDto body) { }
-        @RequestMapping(value = "/e", method = RequestMethod.GET) void legacyRead(@RequestBody ItemDto body) { }
-        @PostMapping("/f") void model(@ModelAttribute FormDto form) { }
-        @PostMapping("/g") void unannotated(FormDto form) { }
-        @PostMapping("/h") void simple(String staffId) { }
+        @PostMapping("/a") void nested(@RequestBody OuterDto body) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @PostMapping("/b") void bodyList(@RequestBody List<ItemDto> body) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @PostMapping("/c") void cyclic(@RequestBody NodeDto body) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @RequestMapping(value = "/d", method = RequestMethod.POST) void legacy(@RequestBody ItemDto body) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @RequestMapping(value = "/e", method = RequestMethod.GET) void legacyRead(@RequestBody ItemDto body) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @PostMapping("/f") void model(@ModelAttribute FormDto form) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @PostMapping("/g") void unannotated(FormDto form) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
+        @PostMapping("/h") void simple(String staffId) {
+            // Intentionally empty: the guard reads only this signature, never calls it.
+        }
     }
 
     @Test
@@ -278,7 +294,7 @@ class ClientSuppliedIdentityGuardTest {
         assertThat(found).contains(
             "Fixture#legacy{performedByStaffId}",
             "Fixture#model{authorStaffId}",
-            "Fixture#unannotated{authorStaffId}");
-        assertThat(found).noneMatch(f -> f.startsWith("Fixture#legacyRead") || f.startsWith("Fixture#simple"));
+            "Fixture#unannotated{authorStaffId}")
+            .noneMatch(f -> f.startsWith("Fixture#legacyRead") || f.startsWith("Fixture#simple"));
     }
 }
