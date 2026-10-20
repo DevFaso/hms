@@ -61,6 +61,14 @@ public enum AuditEventType {
     PRESCRIPTION_UPDATED,
     PRESCRIPTION_DISCONTINUED,
     LAB_ORDER_CREATED,
+    /** QA D429: a lab order edited or moved through its lifecycle. */
+    LAB_ORDER_UPDATED,
+    /** QA D429: a specimen collected or received. */
+    LAB_SPECIMEN_UPDATED,
+    /** QA D429: a lab result entered. */
+    LAB_RESULT_CREATED,
+    /** QA D429: a lab result acknowledged or its critical value read back. */
+    LAB_RESULT_ACKNOWLEDGED,
     LAB_RESULT_UPDATED,
     LAB_RESULT_RELEASED,
     IMAGING_ORDER_CREATED,

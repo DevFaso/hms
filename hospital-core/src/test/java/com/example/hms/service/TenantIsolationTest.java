@@ -52,6 +52,9 @@ class TenantIsolationTest {
     @Nested
     @DisplayName("ProcedureOrderService — Tenant Isolation")
     class ProcedureOrderIsolation {
+        @Mock
+        private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
         @Mock private ProcedureOrderRepository procedureOrderRepository;
         @Mock private PatientRepository patientRepository;
         @Mock private HospitalRepository hospitalRepository;

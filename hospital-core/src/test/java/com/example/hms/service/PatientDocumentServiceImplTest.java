@@ -152,6 +152,23 @@ class PatientDocumentServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D433: refuses a collection date in the future with a 400, before storing")
+        void refusesFutureCollectionDate() throws IOException {
+            MockMultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1});
+            PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
+                    .documentType(PatientDocumentType.LAB_RESULT)
+                    .collectionDate(java.time.LocalDate.now().plusDays(30))
+                    .build();
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.uploadDocument(auth, file, request))
+                    .isInstanceOf(IllegalArgumentException.class);
+            verify(fileUploadService, never()).uploadPatientDocument(any(), any());
+            verify(documentRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("refuses a note longer than the 2048-character column with a 400, before storing")
         void refusesOverLongNotes() throws IOException {
             MockMultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1});

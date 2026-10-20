@@ -69,6 +69,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientAllergyRepository patientAllergyRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
@@ -128,6 +129,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
             throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
         }
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
@@ -912,6 +917,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
             throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
         }
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");

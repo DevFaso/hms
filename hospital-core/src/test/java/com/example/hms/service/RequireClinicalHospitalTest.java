@@ -112,6 +112,9 @@ class RequireClinicalHospitalTest {
     @MockitoSettings(strictness = Strictness.LENIENT)
     @DisplayName("patient pharmacy directory")
     class PharmacyDirectory {
+        @Mock
+        private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
         @Mock private PatientRepository patientRepository;
         @Mock private HospitalRepository hospitalRepository;
         @Mock private PatientHospitalRegistrationRepository registrationRepository;

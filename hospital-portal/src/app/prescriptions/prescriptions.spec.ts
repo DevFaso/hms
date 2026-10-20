@@ -578,6 +578,16 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     fixture.detectChanges();
   });
 
+  it('QA D427: a pharmacist is offered no New, Edit or Delete, which the API refuses', () => {
+    prescriptionService.list.and.returnValue(of([verifiable()]));
+    component.ngOnInit();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.page-actions .btn-primary')).toBeNull();
+    expect(host.querySelector('.edit-link')).toBeNull();
+    expect(host.querySelector('.delete-link')).toBeNull();
+  });
+
   it('offers verification only for an in-scope prescription that reached SIGNED', () => {
     expect(component.canPharmacistVerify(verifiable())).toBeTrue();
     expect(

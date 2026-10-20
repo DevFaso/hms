@@ -8,9 +8,11 @@
       <!-- Cross-tenant scope chip — super-admin only
            (docs/super-admin-cross-tenant-design.md). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'PRESCRIPTIONS.NEW' | translate }}
-      </button>
+      @if (canWrite()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> {{ 'PRESCRIPTIONS.NEW' | translate }}
+        </button>
+      }
     </div>
   </div>
   <!-- Every card counts a TAB, not a status. Counting DRAFT, SIGNED and
@@ -181,13 +183,15 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link edit-link"
-                    (click)="openEdit(p)"
-                    [title]="'COMMON.EDIT' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  @if (canWrite()) {
+                    <button
+                      class="action-link edit-link"
+                      (click)="openEdit(p)"
+                      [title]="'COMMON.EDIT' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                   @if (canSign(p)) {
                     <button
                       class="action-link sign-link"
@@ -245,13 +249,15 @@
                       <span class="material-symbols-outlined">sms</span>
                     </button>
                   }
-                  <button
-                    class="action-link delete-link"
-                    (click)="confirmDelete(p)"
-                    [title]="'COMMON.DELETE' | translate"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (canHardDelete()) {
+                    <button
+                      class="action-link delete-link"
+                      (click)="confirmDelete(p)"
+                      [title]="'COMMON.DELETE' | translate"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

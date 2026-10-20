@@ -210,6 +210,17 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         if (request.getProviderUserId() != null && !request.getProviderUserId().equals(signer.getId())) {
             throw new org.springframework.security.access.AccessDeniedException("imaging.signature.otherSigner");
         }
+        // QA D407: a signed order keeps its signer. A second doctor's signature
+        // used to overwrite the ordering provider and the signing time; the
+        // signer's own repeat is a no-op, anyone else is refused. The order was
+        // resolved in the caller's scope above, so the refusal leaks nothing.
+        if (order.getProviderSignedAt() != null) {
+            if (signer.getId().equals(order.getOrderingProviderUserId())) {
+                return imagingOrderMapper.toResponseDTO(order);
+            }
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.signature.alreadySigned"));
+        }
         order.setOrderingProviderName(displayName(signer));
         order.setOrderingProviderNpi(request.getProviderNpi());
         order.setOrderingProviderUserId(signer.getId());

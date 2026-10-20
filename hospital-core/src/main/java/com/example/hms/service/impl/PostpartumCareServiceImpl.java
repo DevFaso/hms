@@ -57,6 +57,8 @@ import java.util.Locale;
 @Transactional
 public class PostpartumCareServiceImpl implements PostpartumCareService {
 
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private static final double FEVER_THRESHOLD_C = 38.0;
     private static final int TACHYCARDIA_THRESHOLD = 100;
     private static final int HYPOTENSION_SYSTOLIC_THRESHOLD = 90;
@@ -69,6 +71,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final PostpartumObservationRepository observationRepository;
     private final PostpartumCarePlanRepository carePlanRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
@@ -97,6 +100,10 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         requireNotInFuture(request);
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
         PostpartumCarePlan carePlan = resolveCarePlan(patient, hospital, registration, request);
@@ -246,11 +253,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         if (requestedHospitalId != null) {
             return hospitalRepository.findClinicalById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, patient.getHospitalId()));
         }
         throw new BusinessException("postpartum.hospital.required");
     }

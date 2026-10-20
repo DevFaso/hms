@@ -55,6 +55,9 @@ import org.junit.jupiter.api.AfterEach;
 class MaternalHistoryServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private MaternalHistoryRepository maternalHistoryRepository;
 
     @Mock

@@ -55,6 +55,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 public class ChatMessageServiceImpl implements ChatMessageService {
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
+    private static final String CONVERSATION_NOT_FOUND_KEY = "chat.conversation.notFound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
     /**
@@ -355,7 +356,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         // QA D197: a refusal is a 403, not a raw SecurityException (which answered 500).
         if (!allowed) {
-            throw new AccessDeniedException("Your role does not permit messaging this user.");
+            // QA D433: a refusal the sender can read, in their language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.roleNotPermitted"));
         }
 
         // QA D170: the patient boundary is also a relationship. A patient reaches a
@@ -378,7 +381,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .anyMatch(hospitalId -> userRoleHospitalAssignmentRepository
                 .existsByUserIdAndHospitalIdAndActiveTrue(staffUserId, hospitalId));
         if (!shared) {
-            throw new AccessDeniedException("You can only message your care team at a hospital where you are registered.");
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.careTeamOnly"));
         }
     }
 
@@ -553,7 +557,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private void requireCallerIsOneOf(UUID first, UUID second) {
         UUID caller = getCurrentUserId();
         if (!caller.equals(first) && !caller.equals(second)) {
-            throw new ResourceNotFoundException(USER_NOT_FOUND_KEY, first);
+            // QA D433: still a 404 (no oracle), but it names the conversation,
+            // not "user not found" with an id the caller never asked about.
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
         }
     }
 
@@ -562,7 +568,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         UUID caller = getCurrentUserId();
         String own = userRepository.findById(caller).map(attribute).orElse(null);
         if (requested == null || own == null || !own.equalsIgnoreCase(requested.trim())) {
-            throw new ResourceNotFoundException(USER_NOT_FOUND_KEY, caller);
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
         }
     }
 

@@ -53,6 +53,9 @@ import static org.mockito.Mockito.when;
 @DisplayName("MtmReviewServiceImpl")
 class MtmReviewServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private MtmReviewRepository reviewRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;

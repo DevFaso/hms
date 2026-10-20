@@ -44,6 +44,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AppointmentStatusTransitionTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private StaffRepository staffRepository;

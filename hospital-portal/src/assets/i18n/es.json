@@ -3451,6 +3451,7 @@
     "PROVIDER_AUDIT": "Registro de auditoría"
   },
   "NOTIFICATIONS": {
+    "CRITICAL_ALERT": "Alerta crítica",
     "ALL": "Todo",
     "ALL_CAUGHT_UP": "¡Todo al día!",
     "ALL_MARKED_READ": "Todas las notificaciones marcadas como leídas",
@@ -4655,6 +4656,7 @@
       "PAYMENT_METHOD": "Método de pago",
       "REFERENCE": "Referencia / ID de transacción (opcional)",
       "REFERENCE_PLACEHOLDER": "p. ej. TXN-123456",
+      "REFERENCE_REQUIRED": "Indique la referencia del pago con tarjeta, transferencia o dinero móvil.",
       "ENTER_AMOUNT": "Introducir importe",
       "CANCEL": "Cancelar",
       "PROCESSING": "Procesando…",
@@ -5417,6 +5419,10 @@
         "INVOICE_CREATED": "Factura creada",
         "INVOICE_UPDATED": "Factura actualizada",
         "LAB_ORDER_CREATED": "Orden de laboratorio creada",
+        "LAB_ORDER_UPDATED": "Orden de laboratorio actualizada",
+        "LAB_SPECIMEN_UPDATED": "Muestra de laboratorio actualizada",
+        "LAB_RESULT_CREATED": "Resultado de laboratorio registrado",
+        "LAB_RESULT_ACKNOWLEDGED": "Resultado de laboratorio reconocido",
         "LAB_RESULT_RELEASED": "Resultado de laboratorio liberado",
         "LAB_RESULT_UPDATED": "Resultado de laboratorio actualizado",
         "LOGIN": "Inicio de sesión",
@@ -8329,7 +8335,8 @@
       "DRAFT": "Borrador",
       "PENDING_QA": "Pendiente de revisión de QA",
       "PENDING_DIRECTOR": "Pendiente de aprobación del director",
-      "APPROVED": "Aprobados, pendientes de activación"
+      "APPROVED": "Aprobados, pendientes de activación",
+      "REJECTED": "Rechazados, para corregir y reenviar"
     },
     "SEARCH_PLACEHOLDER": "Buscar por nombre, código o categoría…",
     "LOADING": "Cargando cola…",

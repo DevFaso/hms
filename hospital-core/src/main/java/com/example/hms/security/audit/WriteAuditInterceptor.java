@@ -114,6 +114,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
     }
 
+    private static AuditEventType firstNonNull(AuditEventType stated, AuditEventType implied) {
+        return stated != null ? stated : implied;
+    }
+
+    private static UUID firstNonNull(UUID stated, UUID implied) {
+        return stated != null ? stated : implied;
+    }
+
     private void recordIfSuccessfulWrite(HttpServletRequest request, HttpServletResponse response,
                                          Object handler, Exception ex) {
         if (ex != null || !isSuccessfulWrite(request, response)) {
@@ -144,10 +152,18 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         Map<String, String> pathVariables = uriTemplateVariables(request);
         UUID resourceId = resolveResourceId(pathVariables, annotation);
         UUID patientId = resolvePatientId(request, pathVariables, annotation);
+        // QA D429: what the handler stated about the write wins over what the route implies.
+        WriteAuditDetail.Detail detail = WriteAuditDetail.of(request);
+        AuditEventType eventType = eventTypeFor(request.getMethod());
+        if (detail != null) {
+            eventType = firstNonNull(detail.eventType(), eventType);
+            resourceId = firstNonNull(detail.resourceId(), resourceId);
+            patientId = firstNonNull(detail.patientId(), patientId);
+        }
         UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
 
         auditService.logEvent(AuditEventRequestDTO.builder()
-            .eventType(eventTypeFor(request.getMethod()))
+            .eventType(eventType)
             .status(AuditStatus.SUCCESS)
             .entityType(entityTypeFor(pattern, annotation))
             .resourceId(resourceId != null ? resourceId.toString() : null)

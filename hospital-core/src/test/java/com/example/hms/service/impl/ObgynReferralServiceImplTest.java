@@ -59,6 +59,9 @@ import static org.mockito.Mockito.lenient;
 @ExtendWith(MockitoExtension.class)
 class ObgynReferralServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private ObgynReferralRepository referralRepository;
     @Mock private ObgynReferralMessageRepository messageRepository;
     @Mock private PatientRepository patientRepository;

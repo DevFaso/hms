@@ -54,6 +54,9 @@ import com.example.hms.i18n.TestMessageSources;
 class NewbornAssessmentServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private NewbornAssessmentRepository assessmentRepository;
     @Mock
     private PatientRepository patientRepository;
@@ -85,7 +88,7 @@ class NewbornAssessmentServiceImplTest {
     void setUp() {
         service = new NewbornAssessmentServiceImpl(
             assessmentRepository,
-            patientRepository,
+            patientRepository, patientRegistrationGuard,
             registrationRepository,
             hospitalRepository,
             deliveryRecordRepository,
