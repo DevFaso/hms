@@ -21,6 +21,11 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     Optional<Organization> findByNameIgnoreCase(String name);
 
+    /** QA D435: names are not unique in the table (duplicates exist from before the guard). */
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(String name, UUID id);
+
     List<Organization> findByActiveTrue();
 
     long countByActiveTrue();

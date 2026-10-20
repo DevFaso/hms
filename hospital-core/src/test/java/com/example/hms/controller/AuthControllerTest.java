@@ -1428,6 +1428,30 @@ class AuthControllerTest {
     }
 
     @Test
+    void resendVerification_secondRequestWithinCooldown_sendsNothing_D418() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("patient2").phoneNumber("+22670000001").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID pendingId = java.util.UUID.randomUUID();
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId))
+                .thenReturn(java.util.List.of(pendingAssignment(pendingId)));
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/auth/resend-verification").param("phone", "+22670000001"))
+                    .andExpect(status().isOk());
+        }
+
+        // One SMS, however often an anonymous caller asks within the cooldown.
+        verify(notifier, org.mockito.Mockito.times(1)).sendNotifications(pendingId);
+    }
+
+    @Test
     void resendVerification_unknownPhone_answersTheSameWithoutSending_D418() throws Exception {
         com.example.hms.service.UserRoleHospitalAssignmentService notifier =
                 org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);

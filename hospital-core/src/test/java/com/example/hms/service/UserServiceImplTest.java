@@ -2474,6 +2474,35 @@ class UserServiceImplTest {
             verify(userRepository, never()).saveAndFlush(any());
         }
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({
+            "ROLE_BILLING_SPECIALIST, BILLING_SPECIALIST",
+            "ROLE_LAB_TECHNICIAN, LAB_TECHNICIAN",
+            "ROLE_LAB_DIRECTOR, LAB_DIRECTOR",
+            "ROLE_ACCOUNTANT, ADMINISTRATIVE_STAFF"
+        })
+        @DisplayName("QA D435: lab and billing staff onboarded at a hospital get a staff row")
+        void billingStaffGetAStaffRow(String roleCode, String expectedTitle) {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode(roleCode);
+            stubCreation(role);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            AdminSignupRequest req = request(roleCode, "staff.d435@example.com", "70202021");
+            req.setHospitalId(hospitalId);
+
+            userService.createUserWithRolesAndHospital(req);
+
+            org.mockito.ArgumentCaptor<Staff> staff = org.mockito.ArgumentCaptor.forClass(Staff.class);
+            verify(staffRepository).save(staff.capture());
+            assertThat(staff.getValue().getHospital()).isSameAs(hospital);
+            assertThat(staff.getValue().getJobTitle())
+                .isEqualTo(com.example.hms.enums.JobTitle.valueOf(expectedTitle));
+        }
+
         @Test
         @DisplayName("a patient registration carrying a clinician's licence creates a new user, never resolves the clinician")
         void patientCarryingStaffLicenceCreatesNewUser() {

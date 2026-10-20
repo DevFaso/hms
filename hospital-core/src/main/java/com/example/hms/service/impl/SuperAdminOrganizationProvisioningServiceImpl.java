@@ -55,7 +55,7 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
         // QA D435: a second organisation with the same name was accepted.
         String name = normalizedRequest.getName();
         if (name != null && !name.isBlank()
-                && organizationRepository.findByNameIgnoreCase(name.trim()).isPresent()) {
+                && organizationRepository.existsByNameIgnoreCase(name.trim())) {
             throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", name.trim());
         }
 

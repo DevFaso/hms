@@ -89,8 +89,7 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
             .build();
 
         when(organizationRepository.existsByCode("ACME2")).thenReturn(false);
-        when(organizationRepository.findByNameIgnoreCase("acme health"))
-            .thenReturn(java.util.Optional.of(new com.example.hms.model.Organization()));
+        when(organizationRepository.existsByNameIgnoreCase("acme health")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createOrganization(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)

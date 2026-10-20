@@ -263,6 +263,19 @@ describe('BillingComponent', () => {
     expect(component.reversingPayment()).toBeNull();
   });
 
+  it('QA D436: a new invoice is dated today and due 30 days later', () => {
+    const form = component.emptyForm();
+    const today = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    expect(form.invoiceDate).toBe(
+      `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`,
+    );
+    const due = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
+    expect(form.dueDate).toBe(
+      `${due.getFullYear()}-${pad(due.getMonth() + 1)}-${pad(due.getDate())}`,
+    );
+  });
+
   it('sendEmail requires at least one recipient', () => {
     component.emailInv.set(mockInvoice());
     component.emailTo.set('  ');

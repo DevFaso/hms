@@ -159,7 +159,10 @@ public class OrganizationController {
             organizationRepository.existsByCode(requestDTO.getCode())) {
             throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
         }
-        requireNameFree(requestDTO.getName(), organization.getId());
+        // Only a rename is checked: a twin stored before the D435 guard must stay editable.
+        if (isRename(organization.getName(), requestDTO.getName())) {
+            requireNameFree(requestDTO.getName(), organization.getId());
+        }
 
         organizationMapper.updateEntity(organization, requestDTO);
         organization = organizationRepository.save(organization);
@@ -225,10 +228,19 @@ public class OrganizationController {
         if (name == null || name.isBlank()) {
             return;
         }
-        organizationRepository.findByNameIgnoreCase(name.trim())
-            .filter(other -> self == null || !self.equals(other.getId()))
-            .ifPresent(other -> {
-                throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", name.trim());
-            });
+        String trimmed = name.trim();
+        boolean taken = self == null
+            ? organizationRepository.existsByNameIgnoreCase(trimmed)
+            : organizationRepository.existsByNameIgnoreCaseAndIdNot(trimmed, self);
+        if (taken) {
+            throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", trimmed);
+        }
+    }
+
+    private static boolean isRename(String current, String requested) {
+        if (requested == null || requested.isBlank()) {
+            return false;
+        }
+        return current == null || !current.trim().equalsIgnoreCase(requested.trim());
     }
 }
