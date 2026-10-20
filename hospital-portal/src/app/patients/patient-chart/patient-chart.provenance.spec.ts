@@ -54,8 +54,10 @@ describe('PatientChartComponent — timeline provenance', () => {
     ]);
     patientService.getDoctorTimeline.and.returnValue(of(timeline));
     patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
 
     TestBed.configureTestingModule({
       imports: [PatientChartComponent, TranslateModule.forRoot()],
@@ -189,8 +191,10 @@ describe('PatientChartComponent — timeline category label (QA D434)', () => {
     };
     patientService.getDoctorTimeline.and.returnValue(of(timeline));
     patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
     TestBed.configureTestingModule({
       imports: [PatientChartComponent, TranslateModule.forRoot()],
       providers: [

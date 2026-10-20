@@ -26,7 +26,8 @@ class PatientLabResultControllerUnreleasedTest {
 
     private final PatientLabResultService service = mock(PatientLabResultService.class);
     private final ControllerAuthUtils authUtils = mock(ControllerAuthUtils.class);
-    private final PatientLabResultController controller = new PatientLabResultController(service, authUtils);
+    private final PatientLabResultController controller = new PatientLabResultController(service, authUtils,
+        mock(com.example.hms.controller.support.RecordsWithheldHeaders.class));
     private final UUID patientId = UUID.randomUUID();
     private final UUID hospitalId = UUID.randomUUID();
 

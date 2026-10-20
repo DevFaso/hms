@@ -543,6 +543,11 @@
       </div>
     }
     @if (activeTab() === 'vitals' && canViewVitals() && vitalsScoped()) {
+      @if (vitalsWithheld()) {
+        <p class="info-row" role="note" data-testid="vitals-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
@@ -696,6 +701,11 @@
 
     <!-- ═══ Encounters Tab ═══ -->
     @if (activeTab() === 'encounters' && canViewEncounters()) {
+      @if (encountersWithheld()) {
+        <p class="info-row" role="note" data-testid="encounters-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (encountersLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>

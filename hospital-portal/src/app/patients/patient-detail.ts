@@ -109,8 +109,12 @@ export class PatientDetailComponent implements OnInit {
   /* Sub-tab data */
   vitals = signal<VitalSignResponse[]>([]);
   vitalsLoading = signal(false);
+  /** QA D504 — other hospitals' vitals are held back by the patient's opt-out. */
+  vitalsWithheld = signal(false);
   encounters = signal<EncounterResponse[]>([]);
   encountersLoading = signal(false);
+  /** QA D504 — other hospitals' encounters are held back by the patient's opt-out. */
+  encountersWithheld = signal(false);
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
 
@@ -541,8 +545,9 @@ export class PatientDetailComponent implements OnInit {
   private loadVitals(): void {
     this.vitalsLoading.set(true);
     this.vitalService.getRecent(this.patientId).subscribe({
-      next: (v) => {
-        this.vitals.set(v);
+      next: (result) => {
+        this.vitals.set(result.items);
+        this.vitalsWithheld.set(result.withheld);
         this.vitalsLoading.set(false);
       },
       error: () => {
@@ -554,9 +559,10 @@ export class PatientDetailComponent implements OnInit {
 
   private loadEncounters(): void {
     this.encountersLoading.set(true);
-    this.encounterService.list({ patientId: this.patientId }).subscribe({
-      next: (e) => {
-        this.encounters.set(e);
+    this.encounterService.listForPatient(this.patientId).subscribe({
+      next: (result) => {
+        this.encounters.set(result.items);
+        this.encountersWithheld.set(result.withheld);
         this.encountersLoading.set(false);
       },
       error: () => {

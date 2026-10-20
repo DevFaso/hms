@@ -156,6 +156,11 @@
         </button>
       }
     </div>
+    @if (problemsWithheld()) {
+      <p class="labs-hint" role="note" data-testid="problems-withheld">
+        {{ 'CHART.LIST_WITHHELD' | translate }}
+      </p>
+    }
     @if (problemsLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (problems().length === 0) {
@@ -240,6 +245,11 @@
         </button>
       }
     </div>
+    @if (updatesWithheld()) {
+      <p class="labs-hint" role="note" data-testid="updates-withheld">
+        {{ 'CHART.LIST_WITHHELD' | translate }}
+      </p>
+    }
     @if (updatesLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (updates().length === 0) {
@@ -451,6 +461,11 @@
         inferring one from release state or recency is wrong, so the section
         states what it is showing rather than guessing which row to hide.
       -->
+      @if (labResultsWithheld()) {
+        <p class="labs-hint" role="note" data-testid="labs-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (labResultsLoading() && labResults().length === 0) {
         <div class="loading-state"><div class="spinner"></div></div>
       } @else if (labResultsError() && labResults().length === 0) {

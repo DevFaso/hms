@@ -156,6 +156,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Problems ── */
   problems = signal<PatientProblem[]>([]);
   problemsLoading = signal(false);
+  /** QA D504 — other hospitals' problems are held back by the patient's opt-out. */
+  problemsWithheld = signal(false);
   includeHistorical = signal(false);
   showProblemModal = signal(false);
   editingProblemId = signal<string | null>(null);
@@ -177,6 +179,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Chart updates ── */
   updates = signal<ChartUpdate[]>([]);
   updatesLoading = signal(false);
+  /** QA D504 — other hospitals' chart updates are held back by the patient's opt-out. */
+  updatesWithheld = signal(false);
   expandedUpdateId = signal<string | null>(null);
   showUpdateModal = signal(false);
   updateSaving = signal(false);
@@ -207,6 +211,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   labResults = signal<PatientLabResult[]>([]);
   labResultsLoading = signal(false);
   labResultsError = signal(false);
+  /** QA D504 — other hospitals' lab results are held back by the patient's opt-out. */
+  labResultsWithheld = signal(false);
   labOrders = signal<LabOrderResponse[]>([]);
   labOrdersLoading = signal(false);
   labOrdersError = signal(false);
@@ -607,8 +613,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         includeHistorical: this.includeHistorical(),
       })
       .subscribe({
-        next: (list) => {
-          this.problems.set(list ?? []);
+        next: (result) => {
+          this.problems.set(result?.items ?? []);
+          this.problemsWithheld.set(result?.withheld ?? false);
           this.problemsLoading.set(false);
         },
         error: () => {
@@ -730,8 +737,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.patientService
       .listChartUpdates(this.patientId, { hospitalId: this.hospitalId() || undefined, size: 20 })
       .subscribe({
-        next: (page) => {
-          this.updates.set(page?.content ?? []);
+        next: (result) => {
+          this.updates.set(result?.items?.content ?? []);
+          this.updatesWithheld.set(result?.withheld ?? false);
           this.updatesLoading.set(false);
         },
         error: () => {
@@ -859,9 +867,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
         limit: LAB_PAGE_SIZE,
       })
       .subscribe({
-        next: (list) => {
+        next: (result) => {
           if (!isCurrent()) return;
-          this.labResults.set(list ?? []);
+          this.labResults.set(result?.items ?? []);
+          this.labResultsWithheld.set(result?.withheld ?? false);
           this.labResultsLoading.set(false);
         },
         error: () => {
