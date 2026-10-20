@@ -1,14 +1,16 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-notification-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule],
   templateUrl: './notification-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-list.scss',
@@ -86,23 +88,17 @@ export class NotificationListComponent implements OnInit {
   }
 
   getTypeIcon(type: string): string {
-    switch (type) {
-      case 'APPOINTMENT':
-        return 'calendar_month';
-      case 'LAB_RESULT':
-        return 'science';
-      case 'BILLING':
-        return 'receipt_long';
-      case 'ALERT':
-        return 'warning';
-      case 'SYSTEM':
-        return 'settings';
-      default:
-        return 'notifications';
-    }
+    return notificationIcon(type);
+  }
+
+  isCritical(type: string): boolean {
+    return isCriticalNotification(type);
   }
 
   getTypeClass(type: string): string {
+    if (isCriticalNotification(type)) {
+      return 'notif-icon-wrap type-critical';
+    }
     switch (type) {
       case 'APPOINTMENT':
         return 'notif-icon-wrap type-appointment';

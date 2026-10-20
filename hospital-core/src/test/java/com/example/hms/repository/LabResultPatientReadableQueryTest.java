@@ -245,6 +245,43 @@ class LabResultPatientReadableQueryTest {
     }
 
     @Test
+    @DisplayName("QA D211: a non-laboratory staff list is released-only and honours patientId")
+    void staffListForANonLaboratoryReader() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        orderedAtB.setReleased(true);
+        labResultRepository.save(orderedAtB);
+        otherPatientAtB.setReleased(true);
+        labResultRepository.save(otherPatientAtB);
+        HospitalContextHolder.clear();
+        UUID sentinel = new UUID(0L, 0L);
+
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, true, sentinel,
+            Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactlyInAnyOrder(orderedAtB.getId(), otherPatientAtB.getId());
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, false,
+            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactly(orderedAtB.getId());
+        // The laboratory still reads its unreleased rows, filtered by patient.
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, false,
+            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactlyInAnyOrder(orderedAtB.getId(), performedAtBForA.getId(), otherTestAtB.getId());
+    }
+
+    @Test
+    @DisplayName("QA D206: a hand-entered result the server paged as critical counts on the doctor's tile")
+    void criticallyNotifiedResultCountsOnTheTile() {
+        LocalDateTime floor = LocalDateTime.now().minusDays(7);
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isZero();
+
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        orderedAndRunAtA.setCriticalNotifiedAt(LocalDateTime.now());
+        labResultRepository.save(orderedAndRunAtA);
+        HospitalContextHolder.clear();
+
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("an unknown patient reads as nothing, like a patient with nothing readable")
     void unknownPatient() {
         assertThat(labResultRepository.findPatientResultsReadableAt(UUID.randomUUID(),

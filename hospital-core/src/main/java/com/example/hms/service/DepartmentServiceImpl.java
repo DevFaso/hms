@@ -147,6 +147,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponseDTO updateDepartmentHead(UUID departmentId, UUID staffId, Locale locale) {
         Department department = findDepartmentOrThrow(departmentId);
+        // Tenant sweep (QA D262 class): the write loads under the read's guard.
+        enforceHospitalScopeOnEntity(department);
         Staff newHead = staffService.getStaffEntityById(staffId, locale);
 
         if (!newHead.getHospital().getId().equals(department.getHospital().getId())) {
@@ -278,6 +280,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         Hospital hospital = resolveHospital(dto);
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
+        ensureRenameUniqueness(id, dto, hospital, locale);
 
         Staff newHeadOfDepartment = null;
         if (dto.getHeadOfDepartmentEmail() != null && !dto.getHeadOfDepartmentEmail().isBlank()) {
@@ -384,7 +387,16 @@ public class DepartmentServiceImpl implements DepartmentService {
             );
         }
 
-        departmentRepository.delete(department);
+        // QA D435: a department still referenced elsewhere (wards, beds,
+        // encounters, appointments...) failed on the foreign key at commit and
+        // the admin read a generic error. Flush here so the refusal says why.
+        try {
+            departmentRepository.delete(department);
+            departmentRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException inUse) {
+            throw new BusinessRuleException(
+                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+        }
     }
 
     private Locale determineEffectiveLocale(Locale locale) {
@@ -504,6 +516,26 @@ public class DepartmentServiceImpl implements DepartmentService {
                 new Object[]{dto.getName(), hospital.getName()},
                 locale
             ));
+        }
+        // QA D281: the code is unique per hospital too.
+        if (StringUtils.hasText(dto.getCode())
+                && departmentRepository.existsByCodeIgnoreCaseAndHospitalId(dto.getCode(), hospital.getId())) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
+        }
+    }
+
+    /** QA D281: an update may not take another department's name or code in the same hospital. */
+    private void ensureRenameUniqueness(UUID id, DepartmentRequestDTO dto, Hospital hospital, Locale locale) {
+        if (StringUtils.hasText(dto.getName())
+                && departmentRepository.existsByNameIgnoreCaseAndHospitalIdAndIdNot(dto.getName(), hospital.getId(), id)) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.duplicate", new Object[]{dto.getName(), hospital.getName()}, locale));
+        }
+        if (StringUtils.hasText(dto.getCode())
+                && departmentRepository.existsByCodeIgnoreCaseAndHospitalIdAndIdNot(dto.getCode(), hospital.getId(), id)) {
+            throw new ConflictException(messageSource.getMessage(
+                "department.code.duplicate", new Object[]{dto.getCode(), hospital.getName()}, locale));
         }
     }
 

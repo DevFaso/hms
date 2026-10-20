@@ -43,6 +43,9 @@ import org.springframework.data.domain.PageRequest;
 class PatientVitalSignServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private PatientRepository patientRepository;
 
     @Mock
@@ -70,6 +73,8 @@ class PatientVitalSignServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
     private PatientVitalSignServiceImpl service;
+    @org.mockito.Mock
+    private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     private final PatientVitalSignMapper mapper = new PatientVitalSignMapper();
 
@@ -83,10 +88,11 @@ class PatientVitalSignServiceImplTest {
             assignmentRepository,
             vitalSignRepository,
             mapper,
+            patientRegistrationGuard,
             patientChartAccess,
             recordAccessPolicy,
-            reachRecorder
-        );
+            reachRecorder,
+            news2EscalationService);
     }
 
     @Test

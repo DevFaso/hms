@@ -49,7 +49,9 @@ describe('EncountersComponent', () => {
     activeHospitalId: string | null;
     permittedHospitalIds: string[];
     effectiveHospitalIdForRequest: () => string | null;
+    hasAnyActiveRole: (roles: string[]) => boolean;
   };
+  let activeRoles: string[];
 
   beforeEach(async () => {
     encounterSpy = jasmine.createSpyObj('EncounterService', [
@@ -117,12 +119,14 @@ describe('EncountersComponent', () => {
     const authSpy = jasmine.createSpyObj('AuthService', ['hasAnyRole', 'getHospitalId']);
     authSpy.hasAnyRole.and.returnValue(false);
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
+    activeRoles = ['ROLE_DOCTOR'];
     roleCtx = {
       isSuperAdmin: () => false,
       globalView: () => false,
       activeHospitalId: 'h1',
       permittedHospitalIds: ['h1'],
       effectiveHospitalIdForRequest: () => 'h1',
+      hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
     };
 
     await TestBed.configureTestingModule({
@@ -144,6 +148,21 @@ describe('EncountersComponent', () => {
     }).compileComponents();
 
     component = TestBed.createComponent(EncountersComponent).componentInstance;
+  });
+
+  it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {
+    activeRoles = ['ROLE_PHARMACIST'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.page-actions .btn-primary')).toBeNull();
+    const cmp = fixture.componentInstance;
+    expect(cmp['canEditEncounter']()).toBeFalse();
+    expect(cmp['canDeleteEncounter']()).toBeFalse();
+    activeRoles = ['ROLE_NURSE'];
+    const nurseView = TestBed.createComponent(EncountersComponent).componentInstance;
+    expect(nurseView['canCreateEncounter']()).toBeTrue();
+    expect(nurseView['canEditEncounter']()).toBeTrue();
   });
 
   it('opens the encounter named by an /encounters/:id deep link (D96)', () => {

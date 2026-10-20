@@ -194,7 +194,7 @@
                 <span>·</span>
                 <span>{{ event.hospitalName || '—' }}</span>
                 <span>·</span>
-                <span>{{ event.eventTimestamp | date: 'short' }}</span>
+                <span>{{ event.eventTimestamp | serverTime | date: 'short' }}</span>
               </div>
             </div>
           </div>

@@ -190,7 +190,7 @@ public class UserServiceImpl implements UserService {
         if (existing > 0) {
             return BootstrapSignupResponse.builder()
                     .success(false)
-                    .message("Bootstrap not allowed; users already exist")
+                    .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"))
                     .username(null)
                     .email(null)
                     .build();
@@ -255,7 +255,7 @@ public class UserServiceImpl implements UserService {
 
         return BootstrapSignupResponse.builder()
                 .success(true)
-                .message("Bootstrap Super Admin created — account is active, you can sign in now")
+                .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapCreated"))
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();
@@ -285,11 +285,23 @@ public class UserServiceImpl implements UserService {
         // Determine roles early so patient-specific logic can relax duplicate checks.
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
                 .filter(s -> !s.isEmpty())
-                .orElseThrow(() -> new IllegalArgumentException("At least one role must be provided."));
+                .orElseThrow(() -> new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.roles.required")));
 
         final boolean isPatient = roleNames.stream()
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
+        // QA D329: staff onboarding accepted the patient role next to staff
+        // roles. The account was then handled as a patient: no welcome mail,
+        // no staff record. A patient is registered on its own from the
+        // patient form; a staff member who is also a patient gets a separate
+        // patient registration.
+        if (isPatient && roleNames.stream()
+                .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT).replaceFirst("^ROLE_", ""))
+                .filter(r -> !r.isEmpty())
+                .distinct()
+                .anyMatch(r -> !r.equals("PATIENT"))) {
+            throw new BusinessException("users.roles.patientWithStaffRoles");
+        }
 
         // ---- 0) Who may grant these roles, before anything about the request
         // is looked up, so a refused caller learns nothing from a duplicate
@@ -315,7 +327,7 @@ public class UserServiceImpl implements UserService {
             // Phone-first relaxation applies to PATIENTS only — staff and admin
             // accounts still need an email (welcome mail, credential delivery).
             if (email == null || email.isBlank()) {
-                throw new IllegalArgumentException("Email is required for staff and admin accounts.");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.email.requiredForStaff"));
             }
             // Non-patient roles: strict global uniqueness.
             // Each identifier can be held by a SOFT-DELETED account: the row
@@ -326,17 +338,17 @@ public class UserServiceImpl implements UserService {
             // button in the user list are the way out.
             if (username != null) {
                 userRepository.findByUsername(username).ifPresent(existing -> {
-                    throw conflictFor("username", "Username '" + username + "'", existing);
+                    throw conflictFor("username", username, existing);
                 });
             }
             if (email != null) {
                 userRepository.findByEmail(email).ifPresent(existing -> {
-                    throw conflictFor("email", "Email '" + email + "'", existing);
+                    throw conflictFor("email", email, existing);
                 });
             }
             if (phone != null && !phone.isBlank()) {
                 findByPhoneInAnyForm(phone).ifPresent(existing -> {
-                    throw conflictFor("phone", "Phone number '" + phone + "'", existing);
+                    throw conflictFor("phone", phone, existing);
                 });
             }
         }
@@ -361,7 +373,14 @@ public class UserServiceImpl implements UserService {
 
         final boolean requiresStaff = roles.stream().anyMatch(role -> switch (role.getCode()) {
             case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_HOSPITAL_ADMIN,
-                 "ROLE_RECEPTIONIST", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST", "ROLE_SURGEON", "ROLE_PHYSICIAN" -> true;
+                 "ROLE_RECEPTIONIST", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST", "ROLE_SURGEON", "ROLE_PHYSICIAN",
+                 // QA D435 (and the round-4 note): lab and billing staff onboarded
+                 // through the same form got no staff row, so they were missing
+                 // from every staff and department picker.
+                 "ROLE_LAB_TECHNICIAN", "ROLE_LAB_DIRECTOR", "ROLE_LAB_MANAGER", "ROLE_BILLING_SPECIALIST",
+                 "ROLE_ACCOUNTANT", "ROLE_CLAIMS_REVIEWER", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST",
+                 "ROLE_PHARMACY_VERIFIER", "ROLE_QUALITY_MANAGER", "ROLE_INVENTORY_CLERK",
+                 "ROLE_STORE_MANAGER" -> true;
             default -> false;
         });
 
@@ -561,14 +580,13 @@ public class UserServiceImpl implements UserService {
      */
     private static ConflictException conflictFor(String field, String identifier, User existing) {
         if (existing.isDeleted()) {
-            return new ConflictException(field + ":" + identifier
-                + " belongs to a deleted account. Use the user list's Deleted filter to "
-                + "restore it, or register with a different " + field + ".");
+            return new ConflictException(field + ":" + com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "users.identifier.deletedAccount." + field, identifier));
         }
         // "taken" for usernames, "registered" for contact identifiers - the
         // wording each field always had.
-        String suffix = "username".equals(field) ? " is already taken." : " is already registered.";
-        return new ConflictException(field + ":" + identifier + suffix);
+        return new ConflictException(field + ":" + com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "users.identifier.taken." + field, identifier));
     }
 
     /** Record audit + emit creation event only for brand-new users. */
@@ -631,7 +649,7 @@ public class UserServiceImpl implements UserService {
                 // Only two KNOWN numbers can disagree: a licence is optional.
                 if (lic != null && !existingLic.isBlank() && !existingLic.equalsIgnoreCase(lic)) {
                     throw new ConflictException(
-                        "License number mismatch for this user in this hospital; expected " + existingLic);
+                        com.example.hms.utility.MessageUtil.resolveOrRaw("users.license.mismatch", existingLic));
                 }
             });
 
@@ -922,8 +940,8 @@ public class UserServiceImpl implements UserService {
         }
         boolean byEmail = email != null && email.equalsIgnoreCase(existing.getEmail());
         throw new ConflictException(byEmail
-                ? "email:This email belongs to a staff account and cannot be used for a patient."
-                : "phone:This phone number belongs to a staff account and cannot be used for a patient.");
+                ? "email:users.staffEmail.notForPatient"
+                : "phone:users.staffPhone.notForPatient");
     }
 
     /**
@@ -986,7 +1004,7 @@ public class UserServiceImpl implements UserService {
         }
         Role patientRole = getRoleByCode(ROLE_PATIENT);
         if (assignmentService.isRoleAlreadyAssigned(existing.get().getId(), targetHospitalId, patientRole.getId())) {
-            throw new ConflictException("patient:Patient is already registered at this hospital.");
+            throw new ConflictException("patient:" + com.example.hms.utility.MessageUtil.resolveOrRaw("users.patient.alreadyRegistered"));
         }
     }
 
@@ -1020,7 +1038,7 @@ public class UserServiceImpl implements UserService {
 
         UUID provided = request.getHospitalId();
         if (provided == null) {
-            throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
+            throw new BusinessException("users.hospital.requiredForStaff");
         }
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, provided))
@@ -1275,6 +1293,12 @@ public class UserServiceImpl implements UserService {
                 return JobTitle.LAB_DIRECTOR;
             case "ROLE_BILLING_SPECIALIST":
                 return JobTitle.BILLING_SPECIALIST;
+            case "ROLE_ANESTHESIOLOGIST":
+                return JobTitle.ANESTHESIOLOGIST;
+            case "ROLE_PHYSIOTHERAPIST":
+                return JobTitle.PHYSIOTHERAPIST;
+            case "ROLE_QUALITY_MANAGER":
+                return JobTitle.QUALITY_MANAGER;
             default:
                 return null;
         }
@@ -1307,8 +1331,12 @@ public class UserServiceImpl implements UserService {
         }
         // The deleted view is the super-admin's: a scoped call never asks for it.
         boolean scoped = !scope.everyone();
-        Page<User> users = userRepository.findAllPaged(
-            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
+        // QA D430: a non-administrator lists colleagues only, never patient accounts.
+        Page<User> users = scope.seesPatientContacts()
+            ? userRepository.findAllPaged(
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
+            : userRepository.findStaffDirectoryPaged(
+                scoped, directoryHospitals(scope), !scoped && includeDeleted, !scoped && onlyDeleted, pageable);
         return users.map(u -> directoryRow(u, scope));
     }
 
@@ -1325,22 +1353,25 @@ public class UserServiceImpl implements UserService {
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
         // QA D198: a caller who cannot read contact details cannot search on them either.
-        Page<User> users = userRepository.searchUsers(name, phoneDigits(name), role, email,
-            scope.seesPatientContacts(),
-            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
+        // QA D430: a non-administrator searches colleagues only, never patient accounts.
+        Page<User> users = scope.seesPatientContacts()
+            ? userRepository.searchUsers(name, phoneDigits(name), role, email, true,
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
+            : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(u -> directoryRow(u, scope));
     }
 
     /**
-     * QA D125/D198: a non-administrator sees a patient account in the directory (chat
-     * still needs its id, name and role) but never its e-mail or its username, which for
-     * a patient is commonly the e-mail address too. An account holding a patient profile
-     * is a patient's even when it also holds a staff record, so it is masked too.
+     * QA D125/D198/D347: a non-administrator gets the minimal directory row (chat
+     * needs the id, the name and the role) and never an e-mail or a username, on any
+     * account: the earlier patient-only mask keyed on the profile links, which an
+     * account without a loaded profile slipped past, and staff addresses are no
+     * business of a nurse's directory either. Administrators keep the full row.
      */
     private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
-        if (dto != null && !scope.seesPatientContacts()
-                && (user.getStaffProfile() == null || user.getPatientProfile() != null)) {
+        if (dto != null && !scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
         }
@@ -1379,15 +1410,18 @@ public class UserServiceImpl implements UserService {
         if (!accountAccess.canDelete(user)) {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
+        // QA D327: a second delete of a deleted account changed nothing yet
+        // answered success and wrote a second USER_DELETE audit row.
+        if (user.isDeleted()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.alreadyDeleted"));
+        }
 
         // Read before anything is switched off: the restore puts back this
         // answer, since afterwards nothing on the account or its rows can
         // tell a verified account from a pending invitee (D21).
-        // A repeat delete keeps the first answer: by then the account is
-        // already switched off and would be recorded as never activated.
-        if (!user.isDeleted()) {
-            user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
-        }
+        // A repeat delete is refused above (QA D327), so the first answer is
+        // never overwritten by an already switched-off account.
+        user.setActivatedBeforeDelete(user.isActive() || hasSignedInOrConfirmed(user));
         user.setDeleted(true);
         user.setActive(false);
         // An administrator's disable: no invitation code or provider re-invite undoes it.
@@ -1421,6 +1455,12 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_RESTORE, "restore", id);
+        }
+        // QA D327: restoring an account that is not deleted re-ran the
+        // restore (and could switch a never-activated account's state) and
+        // wrote another USER_RESTORE audit row.
+        if (!user.isDeleted()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.notDeleted"));
         }
 
         // Restore the state before the delete, not "active". A pending invitee
@@ -1933,7 +1973,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
         if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
-            throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.username.taken", newUsername));
         }
         user.setUsername(newUsername);
         user.setForceUsernameChange(false);

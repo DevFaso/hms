@@ -80,12 +80,55 @@ public class InventoryServiceImpl implements InventoryService {
         inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
                 pharmacy.getId(), medication.getId())
             .ifPresent(existing -> {
-                throw new BusinessException("Inventory item already exists for this medication at this pharmacy");
+                throw new BusinessException("stock.inventory.duplicate");
             });
+        // QA D208: the same drug under another catalogue row (same molecule,
+        // strength and form) is the same stock item; a second one splits the
+        // count and doubles every picker.
+        String key = sameDrugKey(medication);
+        if (key != null) {
+            boolean twin = inventoryItemRepository.findByPharmacyIdAndActiveTrue(pharmacy.getId(),
+                    org.springframework.data.domain.Pageable.unpaged()).stream()
+                .anyMatch(existing -> key.equals(sameDrugKey(existing.getMedicationCatalogItem())));
+            if (twin) {
+                throw new BusinessException("stock.inventory.duplicate");
+            }
+        }
+        // QA D208: stock enters through a goods receipt (lot + ledger), never
+        // as an opening number typed on the item.
+        if (dto.getQuantityOnHand() != null && dto.getQuantityOnHand().signum() != 0) {
+            throw new BusinessException("stock.inventory.openingQuantity");
+        }
 
         InventoryItem entity = inventoryItemMapper.toEntity(dto, pharmacy, medication);
+        entity.setQuantityOnHand(java.math.BigDecimal.ZERO);
         InventoryItem saved = inventoryItemRepository.save(entity);
         return inventoryItemMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D208: molecule + strength + form, accent- and case-insensitive, or
+     * null when the catalogue row does not name its molecule.
+     */
+    private static String sameDrugKey(MedicationCatalogItem medication) {
+        if (medication == null) {
+            return null;
+        }
+        String molecule = medication.getGenericName() != null && !medication.getGenericName().isBlank()
+            ? medication.getGenericName() : medication.getNameFr();
+        if (molecule == null || molecule.isBlank()) {
+            return null;
+        }
+        return fold(molecule) + "|" + fold(medication.getStrength()) + "|" + fold(medication.getStrengthUnit())
+            + "|" + fold(medication.getForm());
+    }
+
+    private static String fold(String value) {
+        if (value == null) {
+            return "";
+        }
+        return java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "").trim().toLowerCase(java.util.Locale.ROOT).replaceAll("\\s+", " ");
     }
 
     @Override
@@ -122,13 +165,15 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryItemResponseDTO updateInventoryItem(UUID id, InventoryItemRequestDTO dto) {
         InventoryItem item = resolveInventoryItem(id);
         enforceHospitalScope(item.getPharmacy());
+        // QA D208: a quantity typed on the item moved stock with no ledger
+        // row. A count correction is an ADJUSTMENT transaction (stock
+        // adjustment screen), which writes the ledger and needs a reason.
+        if (dto.getQuantityOnHand() != null && (item.getQuantityOnHand() == null
+                || dto.getQuantityOnHand().compareTo(item.getQuantityOnHand()) != 0)) {
+            throw new BusinessException("stock.inventory.quantityViaTransaction");
+        }
         inventoryItemMapper.updateEntity(item, dto);
         InventoryItem saved = inventoryItemRepository.save(item);
-        if (dto.getQuantityOnHand() != null) {
-            // A count correction, applied atomically (#825 round 5).
-            inventoryItemRepository.setOnHand(saved.getId(), dto.getQuantityOnHand(), LocalDateTime.now(ZoneId.systemDefault()));
-            refreshIfManaged(saved);
-        }
         return inventoryItemMapper.toResponseDTO(saved);
     }
 
@@ -155,6 +200,35 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getExpiryDate() != null && dto.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.expired"));
+        }
+
+        // QA D341: a receipt adds stock; a zero or negative quantity reached
+        // the database CHECK and came back as a generic constraint error.
+        if (dto.getInitialQuantity() == null || dto.getInitialQuantity().signum() <= 0
+            || (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0)) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.positive"));
+        }
+        // QA D334: a delivery cannot have been received in the future.
+        if (dto.getReceivedDate() != null
+            && dto.getReceivedDate().isAfter(LocalDate.now(ZoneId.systemDefault()))) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
+        }
+        // QA D405: a lot cannot be received holding more than was received.
+        if (dto.getRemainingQuantity() != null && dto.getInitialQuantity() != null
+            && dto.getRemainingQuantity().compareTo(dto.getInitialQuantity()) > 0) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+        // QA D315: a lot number identifies one manufacturing batch, which has
+        // one expiry date. A second delivery of the same lot is fine; the same
+        // lot number with another expiry is a typing error or a false label.
+        if (dto.getLotNumber() != null && dto.getExpiryDate() != null
+            && stockLotRepository.existsOtherExpiryForLot(item.getId(), dto.getLotNumber().trim(),
+                dto.getExpiryDate())) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.lotNumber.expiryMismatch"));
         }
 
         // The receipt is recorded against the signed-in user (D82): a
@@ -229,26 +303,29 @@ public class InventoryServiceImpl implements InventoryService {
         StockLot lot = resolveStockLot(id);
         enforceHospitalScope(lot.getInventoryItem().getPharmacy());
         BigDecimal remainingBefore = lot.getRemainingQuantity();
+        // QA D334: the lot number and expiry are what was received and what
+        // the FEFO pick and the expiry write-off run on. Changing them after
+        // receipt left no ledger entry; a wrong lot is corrected by a
+        // write-off and a new receipt, which the ledger records.
+        if ((dto.getLotNumber() != null && !dto.getLotNumber().equals(lot.getLotNumber()))
+            || (dto.getExpiryDate() != null && !dto.getExpiryDate().equals(lot.getExpiryDate()))) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.identity.immutable"));
+        }
+        // QA D405 (D82, D341 did not hold): the lot edit set any count, above
+        // what was received, with no reason and no witness even for a
+        // controlled substance. A count now moves only through a stock
+        // transaction (ADJUSTMENT), which requires a reason, a witness for a
+        // controlled substance, and stays within what the lot received. The
+        // count the lot already has is accepted, so a form that echoes it
+        // back still saves its other fields.
+        if (dto.getRemainingQuantity() != null
+                && (remainingBefore == null || dto.getRemainingQuantity().compareTo(remainingBefore) != 0)) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.useAdjustment"));
+        }
         stockLotMapper.updateEntity(lot, dto);
         StockLot saved = stockLotRepository.save(lot);
-        if (dto.getRemainingQuantity() != null) {
-            // A count correction, applied atomically (#825 round 5).
-            LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
-            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), now);
-            refreshIfManaged(saved);
-            // D82: the item total moves with the lot, and the correction is a
-            // recorded ADJUSTMENT. It used to change the lot alone, silently,
-            // so the lots and the item total drifted apart.
-            BigDecimal delta = remainingBefore != null
-                    ? dto.getRemainingQuantity().subtract(remainingBefore) : BigDecimal.ZERO;
-            if (delta.signum() != 0) {
-                InventoryItem item = lot.getInventoryItem();
-                inventoryItemRepository.incrementOnHand(item.getId(), delta, now);
-                refreshIfManaged(item);
-                recordStockTransaction(item, saved, StockTransactionType.ADJUSTMENT, delta,
-                        "Lot count correction: lot " + saved.getLotNumber());
-            }
-        }
         return stockLotMapper.toResponseDTO(saved);
     }
 
@@ -339,7 +416,7 @@ public class InventoryServiceImpl implements InventoryService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("stock.user.unknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

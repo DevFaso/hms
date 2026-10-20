@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ConsultationStatus;
@@ -140,8 +139,8 @@ class DoctorWorklistServiceImplTest {
         // Critical labs (B15): CRITICAL, unacknowledged, filed inside the
         // window — the all-time count is gone from the repository, so the stub
         // IS the proof.
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), eq(AbnormalFlag.CRITICAL), any(LocalDateTime.class))).thenReturn(5L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(5L);
 
         // Waiting long: 2 encounters, 1 > 30 min
         Encounter longWait = mock(Encounter.class);
@@ -181,8 +180,8 @@ class DoctorWorklistServiceImplTest {
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
         org.mockito.ArgumentCaptor<LocalDateTime> floor = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), eq(AbnormalFlag.CRITICAL), floor.capture())).thenReturn(2L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), floor.capture())).thenReturn(2L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
@@ -220,8 +219,8 @@ class DoctorWorklistServiceImplTest {
         @SuppressWarnings("unchecked")
         org.mockito.ArgumentCaptor<java.util.Collection<LabOrderStatus>> statuses =
                 org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(0L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), statuses.capture())).thenReturn(4L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
@@ -252,8 +251,8 @@ class DoctorWorklistServiceImplTest {
         Staff staff = stubStaff(staffId);
         givenStaffFor(userId, staff);
 
-        when(labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                eq(staffId), any(), any(LocalDateTime.class))).thenReturn(0L);
+        when(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+                eq(staffId), any(LocalDateTime.class))).thenReturn(0L);
         when(labOrderRepository.countByOrderingStaff_IdAndStatusIn(eq(staffId), any())).thenReturn(0L);
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(Collections.emptyList());
@@ -313,7 +312,28 @@ class DoctorWorklistServiceImplTest {
     }
 
     @Test
-    void getWorklist_deduplicatesPatients() {
+    void getWorklist_carriesTheTriageRoomOfAnOutpatient_D292() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient patient = stubPatient(UUID.randomUUID(), "Awa", "Traore");
+        Encounter enc = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.WAITING_FOR_PHYSICIAN,
+                LocalDateTime.now().minusMinutes(5));
+        when(enc.getRoomAssignment()).thenReturn(" Box 3 ");
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenAnswer(inv -> inv.getArgument(1) == EncounterStatus.WAITING_FOR_PHYSICIAN
+                        ? List.of(enc) : Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("Box 3", result.get(0).getRoom());
+    }
+
+    @Test
+    void getWorklist_anOlderOpenEncounterDoesNotHideTodaysVisit_D306() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         Staff staff = stubStaff(staffId);
@@ -322,8 +342,10 @@ class DoctorWorklistServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId, "Bob", "Smith");
 
-        Encounter enc1 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        Encounter enc2 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.ARRIVED, LocalDateTime.now());
+        // QA D306: an encounter left IN_PROGRESS days ago hid the visit of today.
+        Encounter enc1 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusDays(3));
+        UUID todayId = UUID.randomUUID();
+        Encounter enc2 = stubEncounter(todayId, patient, EncounterStatus.ARRIVED, LocalDateTime.now());
 
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc1));
@@ -338,7 +360,34 @@ class DoctorWorklistServiceImplTest {
 
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
 
-        assertEquals(1, result.size(), "Same patient should appear only once");
+        assertEquals(2, result.size(), "One row per open encounter");
+        assertTrue(result.stream().anyMatch(i -> todayId.equals(i.getEncounterId())), "Today's visit is listed");
+    }
+
+    @Test
+    void getWorklist_todaysAppointmentIsNotHiddenByAnOlderEncounter_D306() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+        Patient patient = stubPatient(UUID.randomUUID(), "Bob", "Smith");
+        Encounter old = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusDays(3));
+        Appointment appt = mock(Appointment.class);
+        when(appt.getId()).thenReturn(UUID.randomUUID());
+        when(appt.getPatient()).thenReturn(patient);
+        when(appt.getReason()).thenReturn("Visit today");
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS)).thenReturn(List.of(old));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(i -> "Visit today".equals(i.getChiefComplaint())));
     }
 
     @Test
@@ -934,8 +983,9 @@ class DoctorWorklistServiceImplTest {
 
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
                 .thenReturn(Collections.emptyList());
-        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.WAITING_FOR_PHYSICIAN))
-                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenAnswer(inv -> inv.getArgument(1) == EncounterStatus.WAITING_FOR_PHYSICIAN
+                        ? List.of(enc) : Collections.emptyList());
         when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
         when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))

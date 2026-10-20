@@ -91,11 +91,20 @@ public class LaborServiceImpl implements LaborService {
     static final int APGAR_LOW = 7;
     static final int APGAR_CRITICAL = 4;
     static final int TERM_WEEKS = 40;
+    static final int PRETERM_WEEKS = 37;
+    static final int VERY_PRETERM_WEEKS = 32;
+    /**
+     * QA D214: a new labour this soon after a recorded birth cannot be a new
+     * pregnancy reaching labour (20 weeks is the floor of a birth). It is a
+     * charting error unless the clinician states why (e.g. a retained twin).
+     */
+    static final int MIN_DAYS_BETWEEN_DELIVERIES = 140;
 
     private final LaborEpisodeRepository episodeRepository;
     private final LaborPartographEntryRepository entryRepository;
     private final DeliveryRecordRepository deliveryRecordRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final MaternalHistoryRepository maternalHistoryRepository;
@@ -106,6 +115,7 @@ public class LaborServiceImpl implements LaborService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
+    private final com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -113,17 +123,30 @@ public class LaborServiceImpl implements LaborService {
     public LaborEpisodeResponseDTO startEpisode(UUID patientId, UUID recorderUserId, LaborEpisodeRequestDTO request) {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (request == null) {
-            throw new BusinessException("Labor episode payload is required.");
+            throw new BusinessException("maternity.labor.payloadRequired");
+        }
+        // QA D295: an episode with no onset time has no partograph clock.
+        if (request.getLaborOnsetAt() == null) {
+            throw new BusinessException("maternity.labor.onset.required");
+        }
+        if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
+            throw new BusinessException("maternity.labor.onset.future");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         ObstetricEligibility.requireObstetricEligible(patient);
         PatientHospitalRegistration registration = resolveRegistration(request.getRegistrationId());
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
-            throw new BusinessException("An active labor episode already exists for this patient at this hospital.");
+            throw new BusinessException("maternity.labor.alreadyActive");
         }
+
+        String riskNotes = resolveRecentDeliveryOverride(patientId, request);
 
         Staff admittedBy = resolveStaff(request.getAdmittedByStaffId(), hospital);
         User documentedBy = resolveUser(recorderUserId);
@@ -145,11 +168,32 @@ public class LaborServiceImpl implements LaborService {
                 : history != null ? history.getGravida() : null)
             .para(request.getPara() != null ? request.getPara()
                 : history != null ? history.getPara() : null)
-            .riskNotes(request.getRiskNotes())
+            .riskNotes(riskNotes)
             .build();
 
         LaborEpisode saved = episodeRepository.save(episode);
         return laborMapper.toEpisodeResponse(saved, 0, false);
+    }
+
+    /**
+     * QA D214: a birth was recorded for this mother less than
+     * {@value #MIN_DAYS_BETWEEN_DELIVERIES} days ago. Refuse, unless the
+     * clinician gives an explicit override reason, which is kept on the
+     * episode's risk notes so the chart shows why it was accepted.
+     */
+    private String resolveRecentDeliveryOverride(UUID patientId, LaborEpisodeRequestDTO request) {
+        LocalDateTime since = LocalDateTime.now().minusDays(MIN_DAYS_BETWEEN_DELIVERIES);
+        if (!deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId, since)) {
+            return request.getRiskNotes();
+        }
+        String reason = request.getRecentDeliveryOverrideReason();
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("labor.episode.recentDelivery");
+        }
+        String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
+            new Object[]{reason.trim()}, NotificationLocales.STAFF);
+        String existing = request.getRiskNotes();
+        return existing == null || existing.isBlank() ? note : note + "\n" + existing;
     }
 
     @Override
@@ -157,7 +201,7 @@ public class LaborServiceImpl implements LaborService {
     public List<LaborEpisodeResponseDTO> getEpisodes(UUID patientId, UUID hospitalId, int limit) {
         Objects.requireNonNull(patientId, PATIENT_ID_REQUIRED);
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context required to list labor episodes.");
+            throw new BusinessException("maternity.labor.hospitalRequiredToList");
         }
         int effectiveLimit = Math.clamp(limit <= 0 ? 10 : limit, 1, 50);
         // E9 #59d — labour episodes follow the patient across the readable
@@ -185,11 +229,11 @@ public class LaborServiceImpl implements LaborService {
     public PartographEntryResponseDTO addEntry(UUID patientId, UUID episodeId, UUID recorderUserId,
                                                PartographEntryRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Partograph entry payload is required.");
+            throw new BusinessException("maternity.partograph.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("Partograph entries can only be added to an active labor episode.");
+            throw new BusinessException("maternity.partograph.laborNotActive");
         }
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
@@ -249,14 +293,14 @@ public class LaborServiceImpl implements LaborService {
     public DeliveryRecordResponseDTO recordDelivery(UUID patientId, UUID episodeId, UUID recorderUserId,
                                                     DeliveryRecordRequestDTO request) {
         if (request == null) {
-            throw new BusinessException("Delivery record payload is required.");
+            throw new BusinessException("maternity.delivery.payloadRequired");
         }
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
-            throw new BusinessException("Delivery can only be recorded for an active labor episode.");
+            throw new BusinessException("maternity.delivery.laborNotActive");
         }
         if (deliveryRecordRepository.existsByEpisode_Id(episode.getId())) {
-            throw new BusinessException("A delivery record already exists for this labor episode.");
+            throw new BusinessException("maternity.delivery.alreadyRecorded");
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
@@ -264,6 +308,7 @@ public class LaborServiceImpl implements LaborService {
         if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
             throw new BusinessException("labor.delivery.beforeOnset");
         }
+        String notes = resolveRecentDeliveryOverride(episode, birthAt, request);
         Staff deliveredBy = resolveStaff(request.getDeliveredByStaffId(), episode.getHospital());
         User documentedBy = resolveUser(recorderUserId);
 
@@ -288,7 +333,7 @@ public class LaborServiceImpl implements LaborService {
             .uterotonicGiven(request.getUterotonicGiven())
             .estimatedBloodLossMl(request.getEstimatedBloodLossMl())
             .perinealTear(request.getPerinealTear())
-            .notes(request.getNotes())
+            .notes(notes)
             .build();
 
         evaluateDelivery(record);
@@ -298,8 +343,35 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
+        closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy);
         return laborMapper.toDeliveryResponse(saved);
+    }
+
+    /**
+     * QA D214 (#896 review): the episode guard alone is not enough — an
+     * episode opened at another hospital before the first birth can still
+     * file a second delivery hours later. Any other birth for this mother
+     * within {@value #MIN_DAYS_BETWEEN_DELIVERIES} days either side of this
+     * one is refused unless an explicit override reason is given, which is
+     * kept on the record notes.
+     */
+    private String resolveRecentDeliveryOverride(LaborEpisode episode, LocalDateTime birthAt,
+                                                 DeliveryRecordRequestDTO request) {
+        boolean conflict = deliveryRecordRepository.existsByPatient_IdAndEpisode_IdNotAndBirthDateTimeBetween(
+            episode.getPatient().getId(), episode.getId(),
+            birthAt.minusDays(MIN_DAYS_BETWEEN_DELIVERIES), birthAt.plusDays(MIN_DAYS_BETWEEN_DELIVERIES));
+        if (!conflict) {
+            return request.getNotes();
+        }
+        String reason = request.getRecentDeliveryOverrideReason();
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException("labor.delivery.recentDelivery");
+        }
+        String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
+            new Object[]{reason.trim()}, NotificationLocales.STAFF);
+        String existing = request.getNotes();
+        return existing == null || existing.isBlank() ? note : note + "\n" + existing;
     }
 
     @Override
@@ -405,7 +477,36 @@ public class LaborServiceImpl implements LaborService {
         }
     }
 
+    /**
+     * QA D215 (D162): a new birth starts a new postpartum course. Any active
+     * plan from an earlier delivery at this hospital is closed, so the next
+     * observation opens a fresh plan in immediate recovery instead of
+     * inheriting the old one's phase, cadence and overdue state.
+     */
+    private void closeEarlierPostpartumPlans(LaborEpisode episode, LocalDateTime birthAt) {
+        if (episode.getPatient() == null || episode.getHospital() == null) {
+            return;
+        }
+        postpartumCarePlanRepository
+            .findByPatient_IdAndHospital_IdAndActiveTrue(episode.getPatient().getId(), episode.getHospital().getId())
+            .stream()
+            .filter(plan -> plan.getDeliveryOccurredAt() == null || plan.getDeliveryOccurredAt().isBefore(birthAt))
+            .forEach(plan -> {
+                plan.markClosed(birthAt);
+                postpartumCarePlanRepository.save(plan);
+            });
+    }
+
     private void evaluateDelivery(DeliveryRecord record) {
+        // QA D214: a preterm birth is flagged, not silently recorded.
+        Integer ga = record.getGestationalAgeWeeksAtBirth();
+        if (ga != null && ga < PRETERM_WEEKS) {
+            record.addAlert(LaborAlertType.GENERAL,
+                ga < VERY_PRETERM_WEEKS ? LaborAlertSeverity.URGENT : LaborAlertSeverity.CAUTION,
+                "labor-preterm",
+                alertText("labor-preterm", ga),
+                "gestationalAgeWeeksAtBirth");
+        }
         Integer ebl = record.getEstimatedBloodLossMl();
         if (ebl != null && ebl >= PPH_BLOOD_LOSS_ML) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
@@ -475,8 +576,11 @@ public class LaborServiceImpl implements LaborService {
         if (registrationId == null) {
             return null;
         }
-        return registrationRepository.findById(registrationId)
+        PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(registration.getHospital(), "registration.notFound", registrationId);
+        return registration;
     }
 
     private Hospital resolveHospital(PatientHospitalRegistration registration, UUID requestedHospitalId) {
@@ -487,7 +591,7 @@ public class LaborServiceImpl implements LaborService {
         if (registration != null && registration.getHospital() != null) {
             return registration.getHospital();
         }
-        throw new BusinessException("Hospital context required to record labor data.");
+        throw new BusinessException("maternity.labor.hospitalRequiredToRecord");
     }
 
     private Staff resolveStaff(UUID staffId, Hospital hospital) {
@@ -498,7 +602,7 @@ public class LaborServiceImpl implements LaborService {
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
         if (hospital != null && staff.getHospital() != null
             && !hospital.getId().equals(staff.getHospital().getId())) {
-            throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+            throw new BusinessException("maternity.recorder.hospitalMismatch");
         }
         return staff;
     }

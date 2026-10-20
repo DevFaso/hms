@@ -204,4 +204,36 @@ class PdfInvoiceServiceTest {
             "pdf.receipt.invoice INV-2042", "pdf.receipt.amount 1 000 F CFA", "pdf.receipt.reference MM-42",
             "pdf.receipt.method pdf.payment.method.MOBILE_MONEY", "pdf.invoice.balanceDue 500 F CFA");
     }
+
+    /** QA D228: a readable number and the balance as of that payment, not as of today. */
+    @Test
+    void receiptShowsItsNumberAndTheBalanceAtThatPayment_D228() throws Exception {
+        invoice.setAmountPaid(new BigDecimal("1500.00")); // fully paid today
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("1000.00"),
+            Locale.ENGLISH));
+
+        assertThat(text).contains("pdf.receipt.number INV-2042-R1", "pdf.invoice.balanceDue 500 F CFA")
+            .doesNotContain(payment.getId().toString());
+    }
+
+    /** QA D228 (not fixed in round 4): the total printed is the one when the money came in. */
+    @Test
+    void receiptKeepsTheTotalOfItsTimeAfterTheInvoiceGrows_D228() throws Exception {
+        invoice.setTotalAmount(new BigDecimal("7450.00")); // lines added after the payment
+        PaymentTransaction payment = PaymentTransaction.builder()
+            .amount(new BigDecimal("1000.00")).paymentDate(LocalDate.of(2026, 9, 15))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .invoiceTotalAtReceipt(new BigDecimal("1500.00")).build();
+        payment.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, payment, "INV-2042-R1", new BigDecimal("1000.00"),
+            Locale.ENGLISH));
+
+        assertThat(text).contains("pdf.invoice.balanceDue 500 F CFA").doesNotContain("7 450");
+    }
 }

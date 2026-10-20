@@ -10,9 +10,11 @@
            the "Hospital" column shows the *referring* hospital — not the
            receiving one (which is already a column on the table). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'REFERRALS.NEW' | translate }}
-      </button>
+      @if (canWriteReferral()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> {{ 'REFERRALS.NEW' | translate }}
+        </button>
+      }
     </div>
   </div>
   <div class="summary-cards">
@@ -144,7 +146,7 @@
               <td>{{ r.receivingProviderName || ('REFERRALS.UNASSIGNED' | translate) }}</td>
               <td>
                 <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{
-                  r.urgency | enumLabel: 'consultationUrgency'
+                  r.urgency | enumLabel: 'referralUrgency'
                 }}</span>
               </td>
               <td>
@@ -161,7 +163,7 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (r.status === 'DRAFT') {
+                  @if (isMyDraft(r)) {
                     <button
                       class="action-link submit"
                       (click)="submitReferral(r)"
@@ -379,7 +381,7 @@
 
           <!-- Detail Panel Actions -->
           <div class="detail-actions">
-            @if (ref.status === 'DRAFT') {
+            @if (isMyDraft(ref)) {
               <button
                 class="btn-primary"
                 (click)="submitReferral(ref)"
@@ -624,7 +626,7 @@
               [title]="'REFERRALS.URGENCY' | translate"
             >
               @for (u of urgencies; track u) {
-                <option [value]="u">{{ u }}</option>
+                <option [value]="u">{{ u | enumLabel: 'referralUrgency' }}</option>
               }
             </select>
           </div>

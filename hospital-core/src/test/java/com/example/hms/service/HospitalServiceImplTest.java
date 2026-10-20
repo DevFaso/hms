@@ -469,6 +469,19 @@ class HospitalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D285: a name with stray blanks is checked and stored trimmed")
+        void blankPaddedDuplicateIsRefused() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("  existing   hospital ");
+            stubMessage("hospital.exists");
+
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode("existing hospital", "10001")).thenReturn(true);
+
+            assertThrows(ConflictException.class,
+                    () -> hospitalService.createHospital(dto, Locale.ENGLISH));
+        }
+
+        @Test
         @DisplayName("throws AccessDeniedException when not super admin")
         void notSuperAdmin() {
             when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
@@ -549,6 +562,22 @@ class HospitalServiceImplTest {
 
             assertThrows(ResourceNotFoundException.class,
                     () -> hospitalService.updateHospital(id, request, Locale.ENGLISH));
+        }
+
+        @Test
+        @DisplayName("refuses a rename onto another hospital's name (D223)")
+        void duplicateNameIsAConflict() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital hospital = buildHospital(id, "Old Name", "OLD-01");
+            HospitalRequestDTO dto = buildUSRequest("QA Hôpital B");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(
+                    "QA Hôpital B", dto.getZipCode())).thenReturn(true);
+
+            assertThrows(com.example.hms.exception.ConflictException.class,
+                    () -> hospitalService.updateHospital(id, dto, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
         }
     }
 

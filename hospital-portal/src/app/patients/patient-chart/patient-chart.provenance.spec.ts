@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { PatientChartComponent } from './patient-chart.component';
@@ -159,5 +159,89 @@ describe('PatientChartComponent — timeline provenance', () => {
   it('treats a row with no hospital id as local rather than foreign', () => {
     setup([]);
     expect(component.isForeignRow({})).toBeFalse();
+  });
+});
+
+// QA D434: the timeline printed its raw category enum ("LAB_RESULT · ...").
+describe('PatientChartComponent — timeline category label (QA D434)', () => {
+  it('shows the category in the reader language, never the raw enum', () => {
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', [
+      'getDoctorTimeline',
+      'listAllergies',
+      'listDiagnoses',
+      'listChartUpdates',
+    ]);
+    const timeline: PatientTimeline = {
+      patientId: 'p-1',
+      patientName: 'Awa Traoré',
+      accessReason: 'Suivi clinique',
+      entries: [
+        {
+          entryId: 'e-1',
+          category: 'LAB_RESULT',
+          occurredAt: '2026-03-12T09:00:00Z',
+          summary: 'NFS',
+          sensitive: false,
+        },
+      ],
+      totalEntries: 1,
+      generatedAt: '2026-03-12T10:00:00Z',
+    };
+    patientService.getDoctorTimeline.and.returnValue(of(timeline));
+    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listDiagnoses.and.returnValue(of([]));
+    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    TestBed.configureTestingModule({
+      imports: [PatientChartComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientService, useValue: patientService },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h-1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            isAuthenticated: () => true,
+            getRoles: () => ['ROLE_DOCTOR'],
+            getHospitalId: () => 'h-1',
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'info',
+          ]),
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { TIMELINE_CATEGORY: { LAB_RESULT: 'Résultat de laboratoire' } } } },
+      true,
+    );
+    translate.use('fr');
+    const fixture = TestBed.createComponent(PatientChartComponent);
+    const component = fixture.componentInstance;
+    component.patientId = 'p-1';
+    fixture.detectChanges();
+    component.section.set('timeline');
+    component.timelineReason = 'Suivi clinique';
+    component.submitTimelineReason();
+    fixture.detectChanges();
+
+    const date = (fixture.nativeElement as HTMLElement).querySelector('.timeline-date');
+    expect(date?.textContent).toContain('Résultat de laboratoire');
+    expect(date?.textContent).not.toContain('LAB_RESULT');
   });
 });

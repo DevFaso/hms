@@ -284,6 +284,45 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         assertThat(saved.getProviderSignedAt()).isNotNull();
     }
 
+    @Test
+    @DisplayName("QA D302: a doctor cannot sign in another doctor's name, nor backdate the signature")
+    void signatureInAnotherDoctorsNameIsRefused() throws Exception {
+        User doctorTwo = doctorAt(hospitalA);
+        ImagingOrderSignatureRequestDTO forged = signatureRequest();
+        forged.setProviderUserId(doctorTwo.getId());
+        forged.setSignedAt(java.time.LocalDateTime.of(2026, 1, 1, 8, 0));
+        mockMvc.perform(post(API + "/imaging/orders/{id}/signature", orderAtA.getId())
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(forged)))
+            .andExpect(status().isForbidden());
+        assertThat(reload(orderAtA).getProviderSignedAt()).isNull();
+
+        ImagingOrderSignatureRequestDTO backdated = signatureRequest();
+        backdated.setProviderName("Doctor Two");
+        backdated.setSignedAt(java.time.LocalDateTime.of(2026, 1, 1, 8, 0));
+        mockMvc.perform(post(API + "/imaging/orders/{id}/signature", orderAtA.getId())
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(backdated)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.orderingProviderUserId", is(doctorA.getId().toString())));
+        ImagingOrder signed = reload(orderAtA);
+        assertThat(signed.getOrderingProviderUserId()).isEqualTo(doctorA.getId());
+        assertThat(signed.getOrderingProviderName()).isEqualTo(doctorA.getFirstName() + " " + doctorA.getLastName());
+        assertThat(signed.getProviderSignedAt()).isAfter(java.time.LocalDateTime.of(2026, 1, 1, 8, 0));
+    }
+
+    @Test
+    @DisplayName("QA D312: a midwife who may create an imaging order may also open it")
+    void midwifeOpensAnImagingOrder() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .get(API + "/imaging/orders/{id}", orderAtA.getId())
+                .with(acting(doctorA, hospitalA, "ROLE_MIDWIFE")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id", is(orderAtA.getId().toString())));
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────
 
     @FunctionalInterface
@@ -364,8 +403,12 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     }
 
     private RequestPostProcessor acting(User user, Hospital hospital) {
+        return acting(user, hospital, ROLE_DOCTOR);
+    }
+
+    private RequestPostProcessor acting(User user, Hospital hospital, String role) {
         return request -> {
-            Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_DOCTOR));
+            Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(role));
             CustomUserDetails principal = new CustomUserDetails(
                 user.getId(), user.getUsername(), user.getPasswordHash(), true, authorities);
             Authentication auth = new UsernamePasswordAuthenticationToken(principal, user.getPasswordHash(), authorities);

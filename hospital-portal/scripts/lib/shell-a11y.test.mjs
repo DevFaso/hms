@@ -28,9 +28,12 @@ test('D173: every Material icon in the shell is aria-hidden, so link names are t
   assert.deepEqual(bare, []);
 });
 
-test('D173: a collapsed sidebar link still has an accessible name', () => {
+test('D173/D436: every sidebar link is named after its translated label, collapsed or not', () => {
   const html = read(join(appDir, 'shell', 'shell.html'));
-  assert.match(html, /class="nav-item"[\s\S]*?\[attr\.aria-label\]="\s*sidebarCollapsed\(\)/);
+  assert.match(
+    html,
+    /class="nav-item"[\s\S]*?\[attr\.aria-label\]="\s*entry\.item\.translationKey\s*\?\s*\(entry\.item\.translationKey \| translate\)\s*:\s*entry\.item\.label\s*"/,
+  );
 });
 
 test('D200: the dark sidebar uses no text colour below WCAG AA', () => {

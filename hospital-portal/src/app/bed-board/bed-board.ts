@@ -27,6 +27,8 @@ import {
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
+import { roleSatisfies } from '../core/role-equivalence';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -59,6 +61,7 @@ export class BedBoardComponent implements OnInit {
   private readonly transfers = inject(TransferService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly translate = inject(TranslateService);
@@ -96,7 +99,7 @@ export class BedBoardComponent implements OnInit {
    * TransferController keep the hospital admin off the chart, so offering the
    * buttons to that role only produced 403s (D88).
    */
-  readonly canManagePrecautions = this.roleContext.hasAnyActiveRole([
+  readonly canManagePrecautions = this.actsAsAnyOf([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
@@ -107,13 +110,27 @@ export class BedBoardComponent implements OnInit {
   readonly canTransfer = this.canManagePrecautions;
 
   /** TransferController.WARD_TEAM: the clinical roles plus the front desk. */
-  readonly canReadTransfers = this.roleContext.hasAnyActiveRole([
+  readonly canReadTransfers = this.actsAsAnyOf([
     'ROLE_DOCTOR',
     'ROLE_NURSE',
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_SUPER_ADMIN',
   ]);
+
+  /**
+   * QA D229 (D88/D188 again): the session lists every role the account holds,
+   * but a token minted after the login role picker carries only the picked
+   * one, and `hasRole` on the server reads the token. A multi-role user acting
+   * as hospital admin passed the session-only gate and got a 403 on
+   * /transfers/pending. The gate therefore needs both: the role context (the
+   * picked role, when one is pinned) and the token's own roles.
+   */
+  private actsAsAnyOf(roles: string[]): boolean {
+    if (!this.roleContext.hasAnyActiveRole(roles)) return false;
+    const tokenRoles = this.auth.getRoles();
+    return tokenRoles.length === 0 || tokenRoles.some((r) => roleSatisfies(roles, r));
+  }
 
   /** Transfer modal state. */
   showTransferModal = signal(false);
@@ -217,10 +234,8 @@ export class BedBoardComponent implements OnInit {
       .subscribe({
         next: (list) => this.pendingTransfers.set(list),
         error: (err: unknown) => {
-          // QA D188: the role gate reads the roles the session listed, which
-          // can be wider than what the server grants this token (a multi-role
-          // user acting as hospital admin). The worklist only marks held beds;
-          // a refusal is the server applying decision D5, not a load failure.
+          // The worklist only marks held beds; a refusal (D188) is the server
+          // applying decision D5, not a load failure.
           this.pendingTransfers.set([]);
           if ((err as { status?: number } | null)?.status === 403) return;
           this.toast.error(this.translate.instant('BED_BOARD.TRANSFERS_LOAD_ERROR'));

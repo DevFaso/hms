@@ -20,6 +20,13 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** QA D315: whether this lot number was already received for the item with another expiry. */
+    @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+         + "AND UPPER(s.lotNumber) = UPPER(:lotNumber) AND s.expiryDate <> :expiryDate")
+    boolean existsOtherExpiryForLot(@Param("inventoryItemId") UUID inventoryItemId,
+                                    @Param("lotNumber") String lotNumber,
+                                    @Param("expiryDate") LocalDate expiryDate);
+
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
 
@@ -53,14 +60,15 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
                            @Param("now") LocalDateTime now);
 
     /**
-     * Sets the remaining quantity outright: a count correction from the lot
-     * edit endpoint. Last write wins, as a stock count does; it never rides
-     * along with an unrelated edit of a stale copy.
+     * QA D405: a positive count ADJUSTMENT, only while the lot stays within
+     * what it received; 0 rows otherwise. Returns of dispensed stock use
+     * {@link #incrementRemaining} (they put back what left).
      */
     @Modifying(flushAutomatically = true, clearAutomatically = false)
-    @Query("UPDATE StockLot l SET l.remainingQuantity = :quantity, l.updatedAt = :now WHERE l.id = :id")
-    int setRemaining(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
-                     @Param("now") LocalDateTime now);
+    @Query("UPDATE StockLot l SET l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now "
+         + "WHERE l.id = :id AND l.remainingQuantity + :quantity <= l.initialQuantity")
+    int incrementRemainingWithinReceived(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                                         @Param("now") LocalDateTime now);
 
     /** Puts {@code quantity} back on the lot. */
     @Modifying(flushAutomatically = true, clearAutomatically = false)

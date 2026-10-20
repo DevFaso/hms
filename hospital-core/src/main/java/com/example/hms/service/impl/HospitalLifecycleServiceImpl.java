@@ -81,6 +81,8 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
     private final Clock clock;
     /** A provider facility comes back ACTIVE only on a VERIFIED verification (provider plan AC-4). */
     private final ProviderVerificationRepository providerVerificationRepository;
+    /** Resolves the actor ids on the panel to names (D246). */
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Value("${hms.hospital-lifecycle.require-mfa:true}")
     private boolean requireMfa;
@@ -135,6 +137,15 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
         hospital.setLifecycleState(target);
         if (target == HospitalLifecycleState.ACTIVE) {
             hospital.setActive(true);
+            // Back in service: the suspension/archive block described the
+            // state just left, and the panel kept showing it (D246). The
+            // audit trail keeps the history.
+            hospital.setSuspendedAt(null);
+            hospital.setSuspendedBy(null);
+            hospital.setSuspensionReason(null);
+            hospital.setArchivedAt(null);
+            hospital.setArchivedBy(null);
+            hospital.setArchiveReason(null);
         } else {
             // An unverified provider comes back to where onboarding left it:
             // SUSPENDED and inactive, waiting for VERIFY.
@@ -182,7 +193,7 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
         if (scheduledFor.isBefore(Instant.now(clock))) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            throw BusinessRuleException.ofKey("hospital.lifecycle.purgeInPast");
         }
         // Checked before the step-up, which would otherwise spend a backup code
         // on a request that cannot run.
@@ -268,16 +279,21 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
 
     private void requireTransition(Hospital hospital, Set<HospitalLifecycleState> allowed, String action) {
         if (!allowed.contains(hospital.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " hospital in state " + hospital.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.notAllowed",
+                actionLabel(action), String.valueOf(hospital.getLifecycleState()), String.valueOf(allowed)));
         }
+    }
+
+    /** QA D317: the action named in a refusal, in the caller's language (e.g. "schedule purge"). */
+    private static String actionLabel(String action) {
+        return com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "hospital.lifecycle.action." + action.replace(' ', '-'));
     }
 
     private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " a hospital.");
+            throw new BusinessRuleException(com.example.hms.utility.MessageUtil.resolveOrRaw("hospital.lifecycle.reasonRequired", actionLabel(action)));
         }
         return reason.trim();
     }
@@ -358,9 +374,11 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             .lifecycleState(state)
             .suspendedAt(hospital.getSuspendedAt())
             .suspendedBy(hospital.getSuspendedBy())
+            .suspendedByName(actorName(hospital.getSuspendedBy()))
             .suspensionReason(hospital.getSuspensionReason())
             .archivedAt(hospital.getArchivedAt())
             .archivedBy(hospital.getArchivedBy())
+            .archivedByName(actorName(hospital.getArchivedBy()))
             .archiveReason(hospital.getArchiveReason())
             .purgeScheduledFor(hospital.getPurgeScheduledFor())
             .purgeScheduledBy(hospital.getPurgeScheduledBy())
@@ -372,5 +390,19 @@ public class HospitalLifecycleServiceImpl implements HospitalLifecycleService {
             .canSchedulePurge(PURGE_SCHEDULABLE.contains(state))
             .canCancelPurge(PURGE_CANCELLABLE.contains(state))
             .build();
+    }
+
+    /** The actor's display name, or {@code null} when unknown (the panel then shows nothing). */
+    private String actorName(UUID actorId) {
+        if (actorId == null) {
+            return null;
+        }
+        return userRepository.findById(actorId)
+            .map(u -> {
+                String full = ((u.getFirstName() == null ? "" : u.getFirstName()) + " "
+                    + (u.getLastName() == null ? "" : u.getLastName())).trim();
+                return full.isEmpty() ? u.getUsername() : full;
+            })
+            .orElse(null);
     }
 }

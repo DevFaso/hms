@@ -1,4 +1,4 @@
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import {
   Component,
   OnInit,
@@ -30,7 +30,7 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CurrencyPipe],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',

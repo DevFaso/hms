@@ -408,7 +408,9 @@
                   <td>
                     <strong>{{ o.labTestName || '—' }}</strong>
                     @if (o.labOrderCode) {
-                      <span class="lab-code">{{ o.labOrderCode }}</span>
+                      <span class="lab-code" [title]="o.labOrderCode">{{
+                        shortOrderCode(o.labOrderCode)
+                      }}</span>
                     }
                   </td>
                   <td>
@@ -557,7 +559,8 @@
             <div>
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
-                {{ e.category }} · {{ e.occurredAt | date: 'medium' }}
+                {{ e.category | enumLabel: 'timelineCategory' }} ·
+                {{ e.occurredAt | date: 'medium' }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never

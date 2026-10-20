@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 import { of } from 'rxjs';
 import { MyVitalsComponent } from './my-vitals.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
@@ -86,5 +87,32 @@ describe('MyVitalsComponent', () => {
   it('should return normal range for known types', () => {
     expect(component.getNormalRange('BLOOD_PRESSURE')).toContain('120/80');
     expect(component.getNormalRange('UNKNOWN')).toBe('');
+  });
+
+  describe('QA D344: French patient vitals', () => {
+    beforeEach(() => {
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PORTAL: { VITALS: { UNIT_BREATHS_MIN: 'cycles/min', FASTING: 'à jeun' } },
+      });
+      translate.use('fr');
+    });
+
+    afterEach(() => {
+      localStorage.removeItem('lang');
+      resetStoredLangForTests();
+    });
+
+    it('writes decimals with a comma and translates the word units', () => {
+      expect(component.displayValue('37.9')).toBe('37,9');
+      expect(component.displayValue('120/80')).toBe('120/80');
+      expect(component.unitLabel('breaths/min')).toBe('cycles/min');
+      expect(component.unitLabel('mmHg')).toBe('mmHg');
+      expect(component.getNormalRange('TEMPERATURE')).toBe('36,1 – 37,2 °C');
+      expect(component.getNormalRange('RESPIRATORY_RATE')).toBe('12 – 20 cycles/min');
+      expect(component.getNormalRange('BLOOD_GLUCOSE')).toContain('à jeun');
+    });
   });
 });

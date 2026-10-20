@@ -119,8 +119,10 @@ public class OrganizationController {
         
         // Check if organization code already exists
         if (organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
         }
+        // QA D435: two organisations with the same name cannot be told apart in any picker.
+        requireNameFree(requestDTO.getName(), null);
 
         Organization organization = organizationMapper.toEntity(requestDTO);
         organization = organizationRepository.save(organization);
@@ -155,7 +157,11 @@ public class OrganizationController {
         // Check if new code conflicts with existing organization (excluding current one)
         if (!organization.getCode().equals(requestDTO.getCode()) && 
             organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
+        }
+        // Only a rename is checked: a twin stored before the D435 guard must stay editable.
+        if (isRename(organization.getName(), requestDTO.getName())) {
+            requireNameFree(requestDTO.getName(), organization.getId());
         }
 
         organizationMapper.updateEntity(organization, requestDTO);
@@ -215,5 +221,26 @@ public class OrganizationController {
         
         log.info("Applied default security policies to organization: {}", organization.getCode());
         return ResponseEntity.ok(new MessageResponse("Default security policies applied successfully"));
+    }
+
+    /** QA D435: an organisation name is unique, ignoring case and surrounding spaces. */
+    private void requireNameFree(String name, UUID self) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        String trimmed = name.trim();
+        boolean taken = self == null
+            ? organizationRepository.existsByNameIgnoreCase(trimmed)
+            : organizationRepository.existsByNameIgnoreCaseAndIdNot(trimmed, self);
+        if (taken) {
+            throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", trimmed);
+        }
+    }
+
+    private static boolean isRename(String current, String requested) {
+        if (requested == null || requested.isBlank()) {
+            return false;
+        }
+        return current == null || !current.trim().equalsIgnoreCase(requested.trim());
     }
 }

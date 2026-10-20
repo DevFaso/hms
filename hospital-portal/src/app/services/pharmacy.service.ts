@@ -92,10 +92,13 @@ export interface PharmacyResponse {
 export interface InventoryItemRequest {
   pharmacyId: string;
   medicationCatalogItemId: string;
-  quantityOnHand: number;
+  /** Optional on update: the server refuses a value that differs from the live stock. */
+  quantityOnHand?: number;
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  /** QA D264: selling price of one unit, whole XOF. */
+  unitPrice?: number | null;
   active?: boolean;
 }
 
@@ -109,6 +112,7 @@ export interface InventoryItemResponse {
   reorderThreshold: number;
   reorderQuantity: number;
   unit?: string;
+  unitPrice?: number | null;
   active: boolean;
   /** QA D157: a controlled substance; a manual movement of it needs a witness. */
   controlled?: boolean;
@@ -295,6 +299,8 @@ export interface DispenseResponse {
   medicationName: string;
   quantityRequested: number;
   quantityDispensed: number;
+  /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
+  chargeAmount?: number | null;
   unit?: string;
   substitution: boolean;
   substitutionReason?: string;
@@ -545,6 +551,10 @@ export interface PharmacyPaymentResponse {
   referenceNumber?: string;
   receivedBy: string;
   notes?: string;
+  /** QA D404: POSTED, or VOIDED once the dispense it paid for was cancelled. */
+  status?: 'POSTED' | 'VOIDED';
+  voidedAt?: string | null;
+  voidReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -713,6 +723,18 @@ export class PharmacyService {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.get<ApiResponse<Page<StockLotResponse>>>(
       `/pharmacy/inventory/lots/item/${inventoryItemId}`,
+      { params },
+    );
+  }
+
+  /** QA D241: the pharmacy's lots of the prescribed drug, with stock left. */
+  listDispensableLots(
+    prescriptionId: string,
+    pharmacyId: string,
+  ): Observable<ApiResponse<StockLotResponse[]>> {
+    const params = new HttpParams().set('pharmacyId', pharmacyId);
+    return this.http.get<ApiResponse<StockLotResponse[]>>(
+      `/pharmacy/dispense/prescription/${prescriptionId}/dispensable-lots`,
       { params },
     );
   }

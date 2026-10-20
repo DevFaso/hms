@@ -5,6 +5,8 @@ import { of, throwError } from 'rxjs';
 import { BedManagementComponent } from './bed-management';
 import { BedService, WardResponse, BedResponse } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
+import { DepartmentLookupService } from '../services/department-lookup.service';
+import { RoleContextService } from '../core/role-context.service';
 
 function ward(id: string, code: string, totalBeds = 0): WardResponse {
   return {
@@ -49,6 +51,7 @@ describe('BedManagementComponent', () => {
   let component: BedManagementComponent;
   let bedServiceSpy: jasmine.SpyObj<BedService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
+  let deptSpy: jasmine.SpyObj<DepartmentLookupService>;
 
   beforeEach(async () => {
     bedServiceSpy = jasmine.createSpyObj('BedService', [
@@ -66,12 +69,16 @@ describe('BedManagementComponent', () => {
     bedServiceSpy.getWards.and.returnValue(of([]));
     bedServiceSpy.getBeds.and.returnValue(of([]));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warn']);
+    deptSpy = jasmine.createSpyObj('DepartmentLookupService', ['getActiveDepartments']);
+    deptSpy.getActiveDepartments.and.returnValue(of([{ id: 'd1', name: 'Médecine' }]));
 
     await TestBed.configureTestingModule({
       imports: [BedManagementComponent, TranslateModule.forRoot()],
       providers: [
         { provide: BedService, useValue: bedServiceSpy },
         { provide: ToastService, useValue: toastSpy },
+        { provide: DepartmentLookupService, useValue: deptSpy },
+        { provide: RoleContextService, useValue: { activeHospitalId: 'h1' } },
       ],
     }).compileComponents();
 
@@ -83,6 +90,12 @@ describe('BedManagementComponent', () => {
     component.ngOnInit();
     expect(component.wards().length).toBe(1);
     expect(bedServiceSpy.getWards).toHaveBeenCalledWith(false);
+  });
+
+  it('the ward form offers the hospital departments (D431)', () => {
+    component.openCreateWard();
+    expect(deptSpy.getActiveDepartments).toHaveBeenCalledWith('h1');
+    expect(component.departments()).toEqual([{ id: 'd1', name: 'Médecine' }]);
   });
 
   it('selecting a ward loads its beds', () => {

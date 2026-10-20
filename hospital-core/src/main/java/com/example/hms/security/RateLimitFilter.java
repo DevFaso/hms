@@ -53,7 +53,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
             // replacement, and rewriting the MFA records. MfaService also locks
             // the step-up per user after repeated wrong codes.
             "/api/auth/mfa/enroll",
-            "/api/auth/credentials/mfa"
+            "/api/auth/credentials/mfa",
+            // Anonymous and able to send an SMS or an e-mail (QA D418): per IP
+            // here, per assignment in AuthController.
+            "/api/auth/resend-verification"
     );
 
     private final int requestsPerMinute;

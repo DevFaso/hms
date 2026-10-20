@@ -82,6 +82,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final PatientRepository patientRepository;
     private final PharmacyRepository pharmacyRepository;
     private final StockLotRepository stockLotRepository;
+    /** QA D241: the dispense lot picker's rows. */
+    private final com.example.hms.mapper.pharmacy.StockLotMapper stockLotMapper;
     private final InventoryItemRepository inventoryItemRepository;
     private final StockTransactionRepository stockTransactionRepository;
     private final UserRepository userRepository;
@@ -103,6 +105,7 @@ public class DispenseServiceImpl implements DispenseService {
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     /** G15: the one owner of cancelling a prepared fill (rule 8). */
     private final PreparedFillVoider preparedFillVoider;
+    private final PharmacyPaymentVoider paymentVoider;
     /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
@@ -151,6 +154,8 @@ public class DispenseServiceImpl implements DispenseService {
     private static final String AUDIT_ENTITY = "DISPENSE";
     private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
     private static final String READY_NOT_PENDING = "dispense.ready.notPending";
+    private static final String PHARMACY_NOT_FOUND = "pharmacy.notfound";
+    private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
 
     /**
      * What the pharmacist may hand medication over against, and therefore
@@ -606,7 +611,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .map(Map.Entry::getValue)
                 .collect(Collectors.joining("; "));
         if (!reasons.isEmpty()) {
-            throw new BusinessException("Hand-over refused — " + reasons);
+            throw new BusinessException("pharmacy.dispense.handOverRefused", reasons);
         }
     }
 
@@ -703,7 +708,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
 
         Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
         requireDispensary(pharmacy);
 
@@ -718,18 +723,16 @@ public class DispenseServiceImpl implements DispenseService {
         }
         if (cdsResult.requiresOverride()
                 && (dto.getCdsOverrideReason() == null || dto.getCdsOverrideReason().isBlank())) {
-            throw new BusinessException("CDS_CRITICAL: pharmacist override reason required — "
-                    + String.join(" | ", cdsResult.alerts()));
+            throw new BusinessException("pharmacy.dispense.cdsOverrideRequired", String.join(" | ", cdsResult.alerts()));
         }
 
         ActorPair actors = resolveActors(dto);
-
-        MedicationCatalogItem catalogItem = resolveCatalogItem(dto);
 
         // Tier 2 item 34: verify BEFORE any stock moves. The lot is loaded
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
         // fill with no lot used to be accepted as DISPENSED with no stock
         // movement at all, so the shelf and the ledger drifted apart.
@@ -760,7 +763,7 @@ public class DispenseServiceImpl implements DispenseService {
         // refused — which is what happened before too, as a 500 from the
         // dereference below. Same stance and same 404 as the routing writes.
         if (hospitalId == null) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         // G15 rule 1: the row lock serialises a fill against a preparation,
         // a withdrawal or a routing write of the same order, so the checks
@@ -770,22 +773,22 @@ public class DispenseServiceImpl implements DispenseService {
         // another tenant's prescription is never locked, only refused.
         Prescription prescription = prescriptionRepository
                 .findByIdAndHospitalIdForUpdate(dto.getPrescriptionId(), hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
         // Tenant isolation: prescription must belong to the active hospital
         if (prescription.getHospital() == null
                 || !hospitalId.equals(prescription.getHospital().getId())) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("Prescription is not in a dispensable state: " + prescription.getStatus());
+            throw new BusinessException("pharmacy.dispense.notDispensable", String.valueOf(prescription.getStatus()));
         }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation
         if (prescription.getPatient() == null
                 || !prescription.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("Patient does not match prescription");
+            throw new BusinessException("pharmacy.dispense.patientMismatch");
         }
 
         controlledSubstanceGuard.requireDispensable(prescription);
@@ -816,13 +819,13 @@ public class DispenseServiceImpl implements DispenseService {
         // Actor identity comes from the authenticated principal, not the request body.
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
 
         // If the client supplies dispensedBy, it must match the authenticated user.
         // This prevents one staff member from recording a dispense under another's identity.
         if (dto.getDispensedBy() != null && !currentUserId.equals(dto.getDispensedBy())) {
-            throw new BusinessException("dispensedBy must match the authenticated user");
+            throw new BusinessException("pharmacy.dispense.dispensedByMismatch");
         }
 
         User dispensedByUser = userRepository.findById(currentUserId)
@@ -832,11 +835,29 @@ public class DispenseServiceImpl implements DispenseService {
         User verifiedByUser = null;
         if (dto.getVerifiedBy() != null) {
             if (!currentUserId.equals(dto.getVerifiedBy())) {
-                throw new BusinessException("verifiedBy must match the authenticated user");
+                throw new BusinessException("pharmacy.dispense.verifiedByMismatch");
             }
             verifiedByUser = dispensedByUser;
         }
         return new ActorPair(dispensedByUser, verifiedByUser);
+    }
+
+    /**
+     * QA D416: the dispensing screen sends the lot, not the catalog id, so
+     * its fills were saved with no medication, had no price and could never
+     * be paid. The medication of a fill from a lot is the lot's; a body that
+     * names another one is refused rather than priced on the wrong item.
+     */
+    private static MedicationCatalogItem catalogItemOfFill(MedicationCatalogItem named, StockLot stockLot) {
+        MedicationCatalogItem ofLot = stockLot != null && stockLot.getInventoryItem() != null
+                ? stockLot.getInventoryItem().getMedicationCatalogItem() : null;
+        if (ofLot == null) {
+            return named;
+        }
+        if (named != null && named.getId() != null && !named.getId().equals(ofLot.getId())) {
+            throw new BusinessException("pharmacy.dispense.catalogLotMismatch");
+        }
+        return ofLot;
     }
 
     private MedicationCatalogItem resolveCatalogItem(DispenseRequestDTO dto) {
@@ -867,7 +888,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (inventoryItem == null
                 || inventoryItem.getPharmacy() == null
                 || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
-            throw new BusinessException("Stock lot does not belong to the selected pharmacy");
+            throw new BusinessException("pharmacy.dispense.lotOtherPharmacy");
         }
         return stockLot;
     }
@@ -887,11 +908,10 @@ public class DispenseServiceImpl implements DispenseService {
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the
             // atomic UPDATE and can be stale under concurrency.
-            throw new BusinessException("Insufficient lot stock: the lot does not hold the requested "
-                    + requested);
+            throw new BusinessException("pharmacy.dispense.lotInsufficient", String.valueOf(requested));
         }
         if (inventoryItemRepository.decrementOnHand(inventoryItem.getId(), requested, now) == 0) {
-            throw new BusinessException("Insufficient inventory stock");
+            throw new BusinessException("pharmacy.dispense.stockInsufficient");
         }
         refreshIfManaged(stockLot);
         refreshIfManaged(inventoryItem);
@@ -952,7 +972,7 @@ public class DispenseServiceImpl implements DispenseService {
             return;
         }
 
-        throw new BusinessException("Dispense refused — " + verification.failureSummary());
+        throw new BusinessException("pharmacy.dispense.refused", verification.failureSummary());
     }
 
     /**
@@ -1038,7 +1058,43 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispense.getPharmacy() != null) {
             dto.setPharmacyName(dispense.getPharmacy().getName());
         }
+        // QA D264: the checkout takes the amount from here, not from a typed figure.
+        dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
         return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public java.util.List<com.example.hms.payload.dto.pharmacy.StockLotResponseDTO> listDispensableLots(
+            UUID prescriptionId, UUID pharmacyId) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // A fill happens at one hospital's dispensary; there is no global one.
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .filter(rx -> rx.getHospital() != null && hospitalId.equals(rx.getHospital().getId()))
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
+        enforceHospitalScope(pharmacy);
+        // Only the prescribed drug, by the same rule the DRUG check applies
+        // to the lot at the counter: the picker used to list every lot of the
+        // pharmacy, morphine included, for a paracetamol order.
+        return stockLotRepository.findByInventoryItemPharmacyId(pharmacy.getId(), Pageable.unpaged()).stream()
+                .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity().signum() > 0)
+                // QA D335: an expired lot is not dispensable (the fill refuses
+                // it), so it is not offered; shortest-dated first (FEFO).
+                .filter(lot -> lot.getExpiryDate() != null
+                        && !lot.getExpiryDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
+                .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
+                        && lot.getInventoryItem().getMedicationCatalogItem() != null
+                        && dispenseVerificationService.matchesPrescribedDrug(prescription,
+                                lot.getInventoryItem().getMedicationCatalogItem()))
+                .sorted(java.util.Comparator.comparing(StockLot::getExpiryDate)
+                        .thenComparing(StockLot::getLotNumber, java.util.Comparator.nullsLast(String::compareTo)))
+                .map(stockLotMapper::toResponseDTO)
+                .toList();
     }
 
     @Override
@@ -1053,19 +1109,19 @@ public class DispenseServiceImpl implements DispenseService {
         // .findInScope and the rest of the hospital-scoped read surface.
         // Dereferencing it instead answered that caller with a 500.
         Prescription prescription = prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
         // Null alone is not the licence: requireActiveHospitalId also returns
         // null from its step-4 fallback on the AUTHORITIES, which RoleValidator
         // warns can be inflated. Only the discrete JWT claim may read across
         // tenants; anyone else without a hospital is refused, as they
         // effectively were by the 500 this replaces.
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         if (hospitalId != null
                 && (prescription.getHospital() == null
                     || !hospitalId.equals(prescription.getHospital().getId()))) {
-            throw new ResourceNotFoundException("prescription.notfound");
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
         return dispenseRepository.findByPrescriptionId(prescriptionId, pageable)
                 .map(dispenseMapper::toResponseDTO);
@@ -1087,7 +1143,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable) {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
         return dispenseRepository.findByPharmacyId(pharmacyId, pageable)
                 .map(dispenseMapper::toResponseDTO);
@@ -1111,13 +1167,17 @@ public class DispenseServiceImpl implements DispenseService {
         // as it is under that lock.
         prescriptionRepository.findByIdForUpdate(dispense.getPrescription().getId())
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
+        // QA D404: then the dispense row, the lock a payment takes, so a
+        // payment cannot land between the cancel and the void below.
+        dispenseRepository.findLockedById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
-            throw new BusinessException("Dispense is already cancelled");
+            throw new BusinessException("pharmacy.dispense.alreadyCancelled");
         }
         if (dispense.getStatus() != DispenseStatus.COMPLETED && dispense.getStatus() != DispenseStatus.PARTIAL) {
-            throw new BusinessException("Only completed or partial dispenses can be cancelled");
+            throw new BusinessException("pharmacy.dispense.cancelWrongStatus");
         }
 
         dispense.setStatus(DispenseStatus.CANCELLED);
@@ -1146,6 +1206,8 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         Dispense saved = dispenseRepository.save(dispense);
+        // QA D404: the money follows the stock back, in this transaction.
+        paymentVoider.voidForCancelledDispense(saved, "Dispense cancelled");
 
         // Recompute the prescription status from remaining non-cancelled
         // dispenses — but only from a fill state. A cancellation never
@@ -1214,7 +1276,7 @@ public class DispenseServiceImpl implements DispenseService {
             case MINE -> {
                 UUID callerId = roleValidator.getCurrentUserId();
                 if (callerId == null) {
-                    throw new BusinessException("Unable to determine current user");
+                    throw new BusinessException("pharmacy.currentUserUnknown");
                 }
                 yield prescriptionRepository.findWorkQueueClaimedBy(hospitalId, statuses, callerId,
                         queueClaimService.activeAfter(), pageable);
@@ -1367,13 +1429,13 @@ public class DispenseServiceImpl implements DispenseService {
 
     private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
         if (requested == null || requested.signum() <= 0) {
-            throw new BusinessException("Quantity requested must be greater than zero");
+            throw new BusinessException("pharmacy.dispense.requestedPositive");
         }
         if (dispensed == null || dispensed.signum() <= 0) {
-            throw new BusinessException("Quantity dispensed must be greater than zero");
+            throw new BusinessException("pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
-            throw new BusinessException("Quantity dispensed cannot exceed quantity requested");
+            throw new BusinessException("pharmacy.dispense.exceedsRequested");
         }
     }
 
@@ -1680,10 +1742,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private static void requireDispensary(Pharmacy pharmacy) {
         if (pharmacy.getPharmacyType() != PharmacyType.HOSPITAL_DISPENSARY) {
-            throw new BusinessException(
-                    "In-house dispenses can only be recorded against a HOSPITAL_DISPENSARY pharmacy; a "
-                            + pharmacy.getPharmacyType()
-                            + " pharmacy is served by partner routing or SMS dispatch.");
+            throw new BusinessException("pharmacy.dispense.notDispensary", String.valueOf(pharmacy.getPharmacyType()));
         }
     }
 
@@ -1691,18 +1750,18 @@ public class DispenseServiceImpl implements DispenseService {
         // Pre-existing null-tolerance, now qualified the same way as the
         // routing reads: an unscoped view belongs to a real super-admin.
         if (hospitalId == null && !roleValidator.isSuperAdminFromJwtClaim()) {
-            throw new ResourceNotFoundException("pharmacy.notfound");
+            throw new ResourceNotFoundException(PHARMACY_NOT_FOUND);
         }
         if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("pharmacy.notfound");
+            throw new ResourceNotFoundException(PHARMACY_NOT_FOUND);
         }
     }
 
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

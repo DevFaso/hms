@@ -16,6 +16,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.service.pharmacy.payment.MobileMoneyGateway;
 import com.example.hms.utility.RoleValidator;
@@ -50,6 +51,45 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final MobileMoneyGateway mobileMoneyGateway;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final InventoryItemRepository inventoryItemRepository;
+
+    private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
+        Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
+                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
+        if (dispense.getPatient() == null
+                || !dispense.getPatient().getId().equals(dto.getPatientId())) {
+            throw new BusinessException("pharmacy.payment.patientMismatch");
+        }
+        if (dispense.getPharmacy() == null
+                || dispense.getPharmacy().getHospital() == null
+                || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
+            throw new ResourceNotFoundException("dispense.notfound");
+        }
+        // QA D404: a cancelled dispense has nothing left to pay for.
+        if (dispense.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
+            throw new BusinessException("pharmacy.payment.dispenseCancelled");
+        }
+        return dispense;
+    }
+
+    /**
+     * QA D204: a dispense is paid once. The same payment sent again (a retry,
+     * a double click) answers with the one already recorded; a different
+     * one is refused instead of being added on top.
+     */
+    private java.util.Optional<PharmacyPayment> findReplayedPayment(Dispense dispense, PharmacyPaymentRequestDTO dto) {
+        java.util.Optional<PharmacyPayment> existing =
+                paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispense.getId());
+        if (existing.isEmpty()) {
+            return existing;
+        }
+        PharmacyPayment prior = existing.get();
+        if (prior.getAmount() != null && prior.getAmount().compareTo(dto.getAmount()) == 0
+                && prior.getPaymentMethod() == dto.getPaymentMethod()) {
+            return existing;
+        }
+        throw new BusinessException("pharmacy.payment.alreadyPaid");
+    }
 
     @Override
     @Transactional
@@ -58,17 +98,13 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         validateCreateRequest(dto, hospitalId);
 
-        Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
-                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
-        if (dispense.getPatient() == null
-                || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("Patient does not match the dispense record");
+        Dispense dispense = loadDispenseForPayment(dto, hospitalId);
+
+        java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
+        if (replay.isPresent()) {
+            return paymentMapper.toResponseDTO(replay.get());
         }
-        if (dispense.getPharmacy() == null
-                || dispense.getPharmacy().getHospital() == null
-                || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
-            throw new ResourceNotFoundException("dispense.notfound");
-        }
+        requireAmountMatchesCharge(dispense, dto.getAmount());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -79,10 +115,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         // The payer of record is the authenticated cashier/pharmacist.
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         if (dto.getReceivedBy() != null && !currentUserId.equals(dto.getReceivedBy())) {
-            throw new BusinessException("receivedBy must match the authenticated user");
+            throw new BusinessException("pharmacy.payment.receivedByMismatch");
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -93,7 +129,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
             String phone = patient.getPhoneNumberPrimary();
             if (phone == null || phone.isBlank()) {
-                throw new BusinessException("Patient has no mobile-money phone number on file");
+                throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
             }
             try {
                 MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
@@ -106,7 +142,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 providerReference = charge.providerReference();
             } catch (MobileMoneyGateway.MobileMoneyException e) {
                 log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
-                throw new BusinessException("Mobile-money charge failed: " + e.getMessage());
+                throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
             }
         }
 
@@ -173,22 +209,41 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
     }
 
+    /**
+     * QA D264 (D204 did not hold): the D204 fix stopped a second payment and
+     * fractional or non-positive amounts, but nothing in the system said what
+     * a dispense costs, so any first amount was taken. The charge now comes
+     * from the inventory item's unit price; a dispense is paid once, for
+     * exactly that charge, and an unpriced one cannot be paid at all.
+     */
+    private void requireAmountMatchesCharge(Dispense dispense, BigDecimal amount) {
+        BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
+                .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
+        if (charge.compareTo(amount) != 0) {
+            throw new BusinessException("pharmacy.payment.amountMismatch", charge.toPlainString());
+        }
+    }
+
     private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         if (dto == null) {
-            throw new BusinessException("Payment request is required");
+            throw new BusinessException("pharmacy.payment.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("Payment amount must be positive");
+            throw new BusinessException("pharmacy.payment.amountPositive");
+        }
+        // QA D204 (D184): the franc CFA has no minor unit.
+        if (dto.getAmount().stripTrailingZeros().scale() > 0) {
+            throw new BusinessException("billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
-            throw new BusinessException("Payment method is required");
+            throw new BusinessException("pharmacy.payment.methodRequired");
         }
         // SUPER_ADMIN may have no active hospital; require one for payment creation.
         if (hospitalId == null) {
-            throw new BusinessException("Active hospital context is required to record payments");
+            throw new BusinessException("pharmacy.payment.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Payment hospital does not match the active hospital");
+            throw new BusinessException("pharmacy.payment.hospitalMismatch");
         }
     }
 }

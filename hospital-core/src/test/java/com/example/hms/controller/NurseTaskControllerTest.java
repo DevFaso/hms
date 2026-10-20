@@ -223,7 +223,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.administerMedication(taskId, request, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve nurse assignment");
+            .extracting("messageKey").isEqualTo("nurse.assignment.unresolvedForAdministration");
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -290,7 +290,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.verifyMedication(taskId, request, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve nurse identity");
+            .extracting("messageKey").isEqualTo("nurse.identity.unresolved");
     }
 
     @Test
@@ -385,16 +385,14 @@ class NurseTaskControllerTest {
     }
 
     @Test
-    void completeHandoffSwallowsNotFoundException() {
+    void completeHandoffPropagatesNotFound_D235() {
+        // QA D235: another hospital's (or an unknown) handoff is a 404, not a no-op 204.
         UUID handoffId = UUID.randomUUID();
         doThrow(new ResourceNotFoundException("Not found"))
             .when(nurseTaskService).completeHandoff(handoffId, NURSE_ID, HOSPITAL_ID);
 
-        // Should not throw — controller catches ResourceNotFoundException
-        ResponseEntity<Void> response =
-            controller.completeHandoff(handoffId, null, null, auth);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+        assertThatThrownBy(() -> controller.completeHandoff(handoffId, null, null, auth))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -406,12 +404,12 @@ class NurseTaskControllerTest {
         UUID patientId = UUID.randomUUID();
         NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
             .patientId(patientId)
-            .direction("Shift change")
+            .direction("SHIFT_CHANGE")
             .situation("Post-op day 1, stable.")
             .build();
         NurseHandoffSummaryDTO created = NurseHandoffSummaryDTO.builder()
             .id(UUID.randomUUID()).patientId(patientId).patientName("Alice Doe")
-            .direction("Shift change").note("Post-op day 1, stable.")
+            .direction("SHIFT_CHANGE").note("Post-op day 1, stable.")
             .status("PENDING").updatedAt(LocalDateTime.now()).build();
         when(nurseTaskService.createHandoff(NURSE_ID, HOSPITAL_ID, request)).thenReturn(created);
 
@@ -505,7 +503,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.getDueVitals(null, null, null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Hospital context required");
+            .extracting("messageKey").isEqualTo("nurse.hospital.required");
     }
 
     @Test
@@ -542,7 +540,7 @@ class NurseTaskControllerTest {
 
         assertThatThrownBy(() -> controller.getDueVitals(null, "me", null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Unable to resolve user identity");
+            .extracting("messageKey").isEqualTo("nurse.assignee.meUnresolved");
     }
 
     @Test
@@ -550,6 +548,6 @@ class NurseTaskControllerTest {
         // Random string — not "me", "all", or blank → throws BusinessException
         assertThatThrownBy(() -> controller.getDueVitals(null, "nurse123", null, auth))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Invalid assignee value");
+            .extracting("messageKey").isEqualTo("nurse.assignee.invalid");
     }
 }

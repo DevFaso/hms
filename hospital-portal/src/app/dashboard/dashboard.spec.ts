@@ -3,7 +3,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DashboardComponent } from './dashboard';
+import { DashboardComponent, currentMedications } from './dashboard';
+import type { MedicationSummary, PortalInvoice } from '../services/patient-portal.service';
 import { routes as appRoutes } from '../app.routes';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -181,6 +182,13 @@ describe('Dashboard navigation & RBAC', () => {
         );
       }
     }
+  });
+
+  it('recent activity shows no placeholder resource name (D260)', () => {
+    const admin = createComponent(['ROLE_HOSPITAL_ADMIN'], []);
+    expect(admin.auditResourceLabel('Unknown Resource')).toBeNull();
+    expect(admin.auditResourceLabel('  ')).toBeNull();
+    expect(admin.auditResourceLabel('Cardiologie')).toBe('Cardiologie');
   });
 
   // ── Doctor quick actions include Lab and Referrals ───────────
@@ -979,7 +987,7 @@ describe('Dashboard i18n refactor coverage', () => {
   it('hospitalAdminStatCards returns 14 cards when summary is loaded', () => {
     const c = createComponent(['ROLE_HOSPITAL_ADMIN']);
     c.hospitalAdminSummary.set({
-      appointments: { todayTotal: 10, completed: 5, noShows: 1 },
+      appointments: { today: 10, completed: 5, noShows: 1 },
       admissions: { active: 3, admittedToday: 2, dischargedToday: 1 },
       consultations: { requested: 4, acknowledged: 2, overdue: 1 },
       staffing: { activeStaff: 20, onShiftToday: 12, staffOnLeaveToday: 1 },
@@ -1822,5 +1830,214 @@ describe('Dashboard patient care-team card', () => {
     fixture.componentInstance.myCareTeam.set({ primaryCare: null, primaryCareHistory: [] });
     fixture.detectChanges();
     expect(card(fixture)).toBeNull();
+  });
+});
+
+describe('Dashboard invoice aging (QA D283)', () => {
+  function render(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_HOSPITAL_ADMIN']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_HOSPITAL_ADMIN'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'admin',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      active: true,
+    } as any);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => true, hasAnyPermission: () => true },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      DASHBOARD: {
+        AGING_CURRENT: 'À jour',
+        AGING_1_30: '1 à 30 jours',
+        AGING_31_60: '31 à 60 jours',
+        AGING_61_90: '61 à 90 jours',
+        AGING_90_PLUS: 'Plus de 90 jours',
+      },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges(); // run ngOnInit first, then pin the state under test
+    const bucket = (label: string, total: number) => ({ label, count: 1, total });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      invoiceAging: {
+        current: bucket('Current', 15000),
+        days1to30: bucket('1-30 days', 2500),
+        days31to60: bucket('31-60 days', 0),
+        days61to90: bucket('61-90 days', 0),
+        over90: bucket('90+ days', 0),
+      },
+    } as any);
+    fixture.componentInstance.isHospitalAdmin.set(true);
+    fixture.componentInstance.loading.set(false);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('formats amounts in XOF, never in dollars', () => {
+    const c = render().componentInstance;
+    const text = c.formatInvoiceAmount(15000);
+    expect(text).not.toContain('$');
+    expect(text).toContain('F');
+    expect(text.replaceAll(/\D/g, '')).toBe('15000');
+  });
+
+  it('renders the translated bucket label instead of the server English label', () => {
+    const el: HTMLElement = render().nativeElement;
+    const text = el.textContent ?? '';
+    expect(text).toContain('À jour');
+    expect(text).toContain('1 à 30 jours');
+    expect(text).not.toContain('Current');
+    expect(text).not.toContain('$');
+  });
+});
+
+describe('QA D316: dashboard current medications', () => {
+  it('keeps only the courses still running', () => {
+    const med = (id: string, status: string) => ({ id, status }) as unknown as MedicationSummary;
+    const out = currentMedications([
+      med('a', 'ACTIVE'),
+      med('b', 'COMPLETED'),
+      med('c', 'DISCONTINUED'),
+      med('d', 'ON_HOLD'),
+    ]);
+    expect(out.map((m) => m.id)).toEqual(['a']);
+  });
+});
+
+describe('QA D254: dashboard billing widget', () => {
+  function renderPatient(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_PATIENT']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_PATIENT'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'awa',
+      email: 'awa@example.org',
+      roles: ['ROLE_PATIENT'],
+      active: true,
+    } as never);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter(appRoutes),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('en');
+    translate.use('en');
+    translate.setTranslation('en', {
+      PORTAL: { BILLING: { BALANCE_DUE: 'Balance due', CREDITED_TO: 'Credited to {{number}}' } },
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const invoice = (over: Partial<PortalInvoice>): PortalInvoice => ({
+    id: 'inv-1',
+    invoiceNumber: 'INV-1',
+    date: '2026-10-01',
+    dueDate: '2026-10-31',
+    amount: 5000,
+    paid: 5000,
+    balance: 0,
+    status: 'PAID',
+    facility: 'Clinic',
+    description: 'Consultation',
+    ...over,
+  });
+
+  const rows = (f: ComponentFixture<DashboardComponent>): HTMLElement[] =>
+    Array.from(
+      (f.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="dashboard-billing"] .patient-bill-row',
+      ),
+    );
+
+  it('shows the total of a paid invoice, not its zero balance', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({})]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row).toBeDefined();
+    const amount = row.querySelector('.bill-amount')?.textContent?.trim();
+    expect(amount).toBe(c.formatInvoiceAmount(5000));
+    expect(amount).not.toBe(c.formatInvoiceAmount(0));
+    expect(row.textContent).not.toContain('Balance due');
+    expect(row.querySelector('.bill-status')?.getAttribute('data-status')).toBe('PAID');
+  });
+
+  it('marks a folded copay as credited to the invoice it moved to', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([
+      invoice({
+        id: 'inv-2',
+        amount: 2000,
+        paid: 0,
+        balance: 0,
+        status: 'CANCELLED',
+        creditedTo: 'INV-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.textContent?.trim()).toBe(
+      c.formatInvoiceAmount(2000),
+    );
+    const chip = row.querySelector('.bill-status');
+    expect(chip?.getAttribute('data-status')).toBe('CREDITED');
+    expect(chip?.textContent?.trim()).toBe('Credited to INV-9');
+  });
+
+  it('shows what is left on a part-paid invoice', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({ paid: 2000, balance: 3000, status: 'PARTIALLY_PAID' })]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.classList).toContain('bill-due');
+    expect(row.textContent).toContain('Balance due');
+    expect(row.textContent).toContain(c.formatInvoiceAmount(3000));
   });
 });

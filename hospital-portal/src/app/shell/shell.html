@@ -97,11 +97,9 @@
               [attr.aria-grabbed]="dragIndex() === entry.flatIndex"
               aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
               [attr.aria-label]="
-                sidebarCollapsed()
-                  ? entry.item.translationKey
-                    ? (entry.item.translationKey | translate)
-                    : entry.item.label
-                  : null
+                entry.item.translationKey
+                  ? (entry.item.translationKey | translate)
+                  : entry.item.label
               "
               (click)="closeOverlays()"
               (keydown)="onNavKeydown($event, entry.flatIndex)"
@@ -323,14 +321,18 @@
               (click)="onNotifItemClick(n)"
               type="button"
             >
-              <span class="material-symbols-outlined notif-icon" aria-hidden="true">
-                {{
-                  n.type === 'ALERT' ? 'warning' : n.type === 'SUCCESS' ? 'check_circle' : 'info'
-                }}
-              </span>
+              <span
+                class="material-symbols-outlined notif-icon"
+                [class.notif-icon-critical]="isCriticalNotification(n.type)"
+                aria-hidden="true"
+                [textContent]="notificationIcon(n.type)"
+              ></span>
+              @if (isCriticalNotification(n.type)) {
+                <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
+              }
               <div class="notif-content">
                 <p class="notif-msg">{{ n.message }}</p>
-                <span class="notif-time">{{ n.createdAt | date: 'short' }}</span>
+                <span class="notif-time">{{ n.createdAt | serverTime | date: 'short' }}</span>
               </div>
               @if (!n.read) {
                 <span class="notif-unread-dot"></span>

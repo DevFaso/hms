@@ -411,7 +411,7 @@
                   } @else {
                     <span class="cell-primary">{{ h.patientName }}</span>
                   }
-                  <span class="handoff-dir">{{ h.direction }}</span>
+                  <span class="handoff-dir">{{ h.direction | enumLabel: 'handoffDirection' }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
                 @if (h.background) {
@@ -468,6 +468,37 @@
 
       <!-- ═══════════ WORKBOARD TAB ═══════════ -->
       @if (!loading() && activeSection() === 'workboard') {
+        @if (canTriage() && awaitingTriage().length > 0) {
+          <section class="awaiting-triage" data-testid="awaiting-triage">
+            <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
+            <div class="workboard-grid">
+              @for (e of awaitingTriage(); track e.id) {
+                <div class="workboard-card">
+                  <div class="workboard-card-header">
+                    <span class="patient-name">{{ e.patientName }}</span>
+                  </div>
+                  <div class="workboard-card-meta">
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">schedule</span>
+                      {{ e.encounterDate | date: 'shortTime' }}
+                    </span>
+                  </div>
+                  <div class="workboard-card-actions">
+                    <button
+                      class="action-btn action-triage"
+                      data-testid="awaiting-triage-open"
+                      (click)="openTriageForEncounter(e)"
+                      [title]="'TRIAGE.TITLE' | translate"
+                    >
+                      <span class="material-symbols-outlined">emergency</span>
+                      {{ 'TRIAGE.TITLE' | translate }}
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
         @if (workboard().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">grid_view</span>
@@ -1374,19 +1405,24 @@
         </div>
         <div class="form-row">
           <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>
-          <input
+          <select
             id="ho-direction"
-            type="text"
             class="reason-input"
-            [placeholder]="'NURSE.HANDOFF_DIRECTION_PLACEHOLDER' | translate"
             [value]="handoffForm().direction ?? ''"
-            (input)="updateHandoffField('direction', $any($event.target).value)"
-          />
+            (change)="updateHandoffField('direction', $any($event.target).value)"
+          >
+            <option value="">{{ 'NURSE.HANDOFF_DIRECTION_PLACEHOLDER' | translate }}</option>
+            @for (d of handoffDirections; track d) {
+              <option [value]="d">{{ d | enumLabel: 'handoffDirection' }}</option>
+            }
+          </select>
         </div>
         <div class="form-row">
-          <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }}</label>
+          <label for="ho-situation">{{ 'NURSE.HANDOFF_SITUATION' | translate }} *</label>
           <textarea
             id="ho-situation"
+            required
+            aria-required="true"
             class="reason-input"
             rows="2"
             [value]="handoffForm().situation ?? ''"

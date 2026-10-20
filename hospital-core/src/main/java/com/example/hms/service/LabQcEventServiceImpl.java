@@ -36,18 +36,19 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     @Transactional
     public LabQcEventResponseDTO recordQcEvent(LabQcEventRequestDTO request, Locale locale) {
         if (request.getHospitalId() == null) {
-            throw new BusinessException("hospitalId is required when recording a QC event.");
+            throw new BusinessException("lab.qc.hospitalRequired");
         }
         if (request.getMeasuredValue() == null || request.getExpectedValue() == null) {
-            throw new BusinessException("measuredValue and expectedValue are required.");
+            throw new BusinessException("lab.qc.valuesRequired");
         }
 
         LabQcEventLevel level;
+        // QA r5 tenancy sweep: a QC event is recorded at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(request.getHospitalId(), "hospital.notFound", request.getHospitalId());
         try {
             level = LabQcEventLevel.valueOf(request.getQcLevel().trim().toUpperCase(Locale.ROOT));
         } catch (Exception ex) {
-            throw new BusinessException("Unknown QC level: " + request.getQcLevel() +
-                ". Accepted values: LOW_CONTROL, HIGH_CONTROL");
+            throw new BusinessException("lab.qc.unknownLevel", String.valueOf(request.getQcLevel()));
         }
 
         LabTestDefinition testDef = null;

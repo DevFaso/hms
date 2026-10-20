@@ -54,6 +54,9 @@ import com.example.hms.i18n.TestMessageSources;
 class NewbornAssessmentServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private NewbornAssessmentRepository assessmentRepository;
     @Mock
     private PatientRepository patientRepository;
@@ -85,7 +88,7 @@ class NewbornAssessmentServiceImplTest {
     void setUp() {
         service = new NewbornAssessmentServiceImpl(
             assessmentRepository,
-            patientRepository,
+            patientRepository, patientRegistrationGuard,
             registrationRepository,
             hospitalRepository,
             deliveryRecordRepository,
@@ -305,7 +308,7 @@ class NewbornAssessmentServiceImplTest {
 
         BusinessException ex = assertThrows(BusinessException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        assertEquals("maternity.patient.male", ex.getMessage());
+        assertEquals("maternity.patient.male", ex.getMessageKey());
         verify(assessmentRepository, never()).save(any());
     }
 
@@ -350,5 +353,24 @@ class NewbornAssessmentServiceImplTest {
         verify(assessmentRepository).save(captor.capture());
         assertTrue(!captor.getValue().getAlerts().isEmpty());
         captor.getValue().getAlerts().forEach(alert -> assertNotNull(alert.getCreatedAt()));
+    }
+
+    /* ── QA D216 (D172/D61): newborn alerts in French, no raw enum ──────── */
+
+    @Test
+    void urgentNewbornNotificationsAreFrenchWithATranslatedType() {
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .glucoseMgDl(20)
+            .build();
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString());
+        assertTrue(message.getValue().startsWith("Alerte nouveau-né (glycémie)"), message.getValue());
+        assertTrue(message.getValue().contains("Hypoglycémie critique"), message.getValue());
+        org.junit.jupiter.api.Assertions.assertFalse(message.getValue().contains("GLUCOSE"), message.getValue());
+        assertEquals("Glycémie", response.getAlerts().get(0).getTriggeredBy());
     }
 }

@@ -18,4 +18,25 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
     Page<PharmacyPayment> findByDispenseIdAndHospital_Id(UUID dispenseId, UUID hospitalId, Pageable pageable);
 
     Page<PharmacyPayment> findByPatientIdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    /** QA D204: the payment already recorded for a dispense, if any (a dispense is paid once). */
+    java.util.Optional<PharmacyPayment> findFirstByDispense_IdOrderByCreatedAtAsc(UUID dispenseId);
+
+    /** QA D404: the payments still counted on a dispense. */
+    java.util.List<PharmacyPayment> findByDispense_IdAndStatus(UUID dispenseId,
+            com.example.hms.enums.PharmacyPaymentStatus status);
+
+    /**
+     * QA D404: void every POSTED payment of a dispense in one conditional
+     * UPDATE, in the cancelling transaction. Returns the rows voided.
+     */
+    @org.springframework.data.jpa.repository.Modifying(flushAutomatically = true, clearAutomatically = false)
+    @org.springframework.data.jpa.repository.Query("UPDATE PharmacyPayment p SET "
+         + "p.status = com.example.hms.enums.PharmacyPaymentStatus.VOIDED, p.voidedAt = :now, "
+         + "p.voidedBy = :voidedBy, p.voidReason = :reason, p.updatedAt = :now "
+         + "WHERE p.dispense.id = :dispenseId AND p.status = com.example.hms.enums.PharmacyPaymentStatus.POSTED")
+    int voidPostedForDispense(@org.springframework.data.repository.query.Param("dispenseId") UUID dispenseId,
+                              @org.springframework.data.repository.query.Param("voidedBy") UUID voidedBy,
+                              @org.springframework.data.repository.query.Param("reason") String reason,
+                              @org.springframework.data.repository.query.Param("now") java.time.LocalDateTime now);
 }

@@ -64,6 +64,7 @@ class PreparedFillVoiderTest {
     @Mock private StockTransactionRepository stockTransactionRepository;
     @Mock private PharmacyServiceSupport support;
     @Mock private EntityManager entityManager;
+    @Mock private PharmacyPaymentVoider paymentVoider;
 
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-07T09:00:00Z"), ZoneOffset.UTC);
 
@@ -80,7 +81,7 @@ class PreparedFillVoiderTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         voider = new PreparedFillVoider(dispenseRepository, stockLotRepository, inventoryItemRepository,
-                stockTransactionRepository, support, entityManager, CLOCK);
+                stockTransactionRepository, support, entityManager, CLOCK, paymentVoider);
 
         prescription = new Prescription();
         prescription.setId(UUID.randomUUID());
@@ -152,6 +153,8 @@ class PreparedFillVoiderTest {
                 argThat(d -> d.contains(reason.name()) && !d.contains("Amoxicillin")),
                 eq(prepared.getId().toString()), eq("DISPENSE"));
         verify(support).notifyReadyCancelled(patient, pharmacy, "Amoxicillin");
+        // QA D404: a preparation paid at the till is voided with it, every reason.
+        verify(paymentVoider).voidForCancelledDispense(eq(prepared), argThat(r -> r.contains(reason.name())));
     }
 
     @Test

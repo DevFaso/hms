@@ -16,6 +16,9 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.InventoryItemRepository;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
 import com.example.hms.service.pharmacy.payment.MobileMoneyGateway;
 import com.example.hms.utility.RoleValidator;
@@ -35,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +49,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PharmacyPaymentServiceImpl")
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class PharmacyPaymentServiceImplTest {
 
     @Mock private PharmacyPaymentRepository paymentRepository;
@@ -56,6 +61,7 @@ class PharmacyPaymentServiceImplTest {
     @Mock private MobileMoneyGateway mobileMoneyGateway;
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
+    @Mock private InventoryItemRepository inventoryItemRepository;
 
     @InjectMocks private PharmacyPaymentServiceImpl service;
 
@@ -68,6 +74,8 @@ class PharmacyPaymentServiceImplTest {
     private Pharmacy pharmacy;
     private Dispense dispense;
     private User user;
+    private MedicationCatalogItem catalogItem;
+    private InventoryItem inventoryItem;
 
     @BeforeEach
     void setUp() {
@@ -93,6 +101,15 @@ class PharmacyPaymentServiceImplTest {
         dispense.setPatient(patient);
         dispense.setPharmacy(pharmacy);
         dispense.setMedicationName("Amoxicilline 500mg");
+        catalogItem = new MedicationCatalogItem();
+        catalogItem.setId(UUID.randomUUID());
+        dispense.setMedicationCatalogItem(catalogItem);
+        dispense.setQuantityDispensed(new BigDecimal("10"));
+        // QA D264: 10 units at 250 XOF, so the dispense costs 2 500.
+        inventoryItem = new InventoryItem();
+        inventoryItem.setUnitPrice(new BigDecimal("250.00"));
+        lenient().when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(
+                pharmacy.getId(), catalogItem.getId())).thenReturn(Optional.of(inventoryItem));
 
         user = new User();
         user.setId(userId);
@@ -117,7 +134,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -145,7 +162,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -176,7 +193,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -185,7 +202,7 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("declined");
+                .hasMessageContaining("mobile-money charge failed");
 
         verify(paymentRepository, never()).save(any());
     }
@@ -198,7 +215,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -236,10 +253,24 @@ class PharmacyPaymentServiceImplTest {
 
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("QA D404: a cancelled dispense cannot be paid")
+    void rejectsACancelledDispense() {
+        dispense.setStatus(com.example.hms.enums.DispenseStatus.CANCELLED);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cancelled");
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test
@@ -251,11 +282,11 @@ class PharmacyPaymentServiceImplTest {
         dispense.setPatient(other);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Patient");
+                .hasMessageContaining("patient does not match");
     }
 
     @Test
@@ -318,7 +349,7 @@ class PharmacyPaymentServiceImplTest {
     @DisplayName("rejects when dispense is not found")
     void rejectsDispenseNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.empty());
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.empty());
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
         assertThatThrownBy(() -> service.createPayment(dto))
@@ -330,12 +361,12 @@ class PharmacyPaymentServiceImplTest {
     void rejectsDispenseWithNullPatient() {
         dispense.setPatient(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Patient");
+                .hasMessageContaining("patient does not match");
     }
 
     @Test
@@ -343,7 +374,7 @@ class PharmacyPaymentServiceImplTest {
     void rejectsDispenseWithNullPharmacy() {
         dispense.setPharmacy(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
         assertThatThrownBy(() -> service.createPayment(dto))
@@ -355,7 +386,7 @@ class PharmacyPaymentServiceImplTest {
     void rejectsDispenseWithNullHospitalOnPharmacy() {
         pharmacy.setHospital(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
         assertThatThrownBy(() -> service.createPayment(dto))
@@ -366,7 +397,7 @@ class PharmacyPaymentServiceImplTest {
     @DisplayName("rejects when patient is not found in repository")
     void rejectsPatientNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
@@ -378,7 +409,7 @@ class PharmacyPaymentServiceImplTest {
     @DisplayName("rejects when hospital is not found in repository")
     void rejectsHospitalNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
@@ -391,7 +422,7 @@ class PharmacyPaymentServiceImplTest {
     @DisplayName("rejects when current user id is null")
     void rejectsNullCurrentUserId() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.getCurrentUserId()).thenReturn(null);
@@ -406,7 +437,7 @@ class PharmacyPaymentServiceImplTest {
     @DisplayName("rejects when receivedBy does not match the authenticated user")
     void rejectsReceivedByMismatch() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -416,14 +447,14 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("receivedBy");
+                .hasMessageContaining("receiver must be the signed-in user");
     }
 
     @Test
     @DisplayName("rejects when current user record is missing")
     void rejectsCurrentUserNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -442,7 +473,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -460,7 +491,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -488,7 +519,7 @@ class PharmacyPaymentServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
-        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -586,5 +617,99 @@ class PharmacyPaymentServiceImplTest {
 
         assertThat(service.listByPatient(id, org.springframework.data.domain.PageRequest.of(0, 10)))
                 .isNotNull();
+    }
+
+    @Test
+    @DisplayName("QA D204: a fractional franc amount is refused before anything is read")
+    void fractionalAmountIsRefused() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("0.5"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D204: a second, different payment on a paid dispense is refused")
+    void secondDifferentPaymentIsRefused() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("999999"));
+        PharmacyPayment prior = new PharmacyPayment();
+        prior.setAmount(new BigDecimal("2500"));
+        prior.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispenseId)).thenReturn(Optional.of(prior));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.alreadyPaid"));
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D204: the same payment sent twice answers with the first one")
+    void repeatedPaymentIsIdempotent() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        PharmacyPayment prior = new PharmacyPayment();
+        prior.setAmount(new BigDecimal("2500.00"));
+        prior.setPaymentMethod(PharmacyPaymentMethod.CASH);
+        PharmacyPaymentResponseDTO priorDto = PharmacyPaymentResponseDTO.builder().build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(paymentRepository.findFirstByDispense_IdOrderByCreatedAtAsc(dispenseId)).thenReturn(Optional.of(prior));
+        when(paymentMapper.toResponseDTO(prior)).thenReturn(priorDto);
+
+        assertThat(service.createPayment(dto)).isSameAs(priorDto);
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: 999 999 XOF on a 9-tablet dispense is refused; the amount must be the charge")
+    void overpaymentOnNineTabletsIsRefused() {
+        dispense.setQuantityDispensed(new BigDecimal("9"));
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("999999"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.amountMismatch"));
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: an underpayment is refused too")
+    void underpaymentIsRefused() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("1"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.amountMismatch"));
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D264: a dispense whose medication has no price cannot be paid")
+    void unpricedDispenseIsRefused() {
+        inventoryItem.setUnitPrice(null);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                        .isEqualTo("pharmacy.payment.noPrice"));
+        verify(paymentRepository, never()).save(any());
     }
 }

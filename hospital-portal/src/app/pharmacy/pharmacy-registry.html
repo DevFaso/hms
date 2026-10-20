@@ -4,10 +4,12 @@
       <h1 class="page-title">{{ 'PHARMACY.REGISTRY_TITLE' | translate }}</h1>
       <p class="page-subtitle">{{ 'PHARMACY.REGISTRY_SUBTITLE' | translate }}</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      {{ 'PHARMACY.NEW_PHARMACY' | translate }}
-    </button>
+    @if (canManage()) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'PHARMACY.NEW_PHARMACY' | translate }}
+      </button>
+    }
   </div>
 
   <div class="search-bar">
@@ -65,18 +67,24 @@
             <span class="status-badge" [class.active]="p.active">
               {{ p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
-            <div class="action-group">
-              <button class="action-link" [title]="'COMMON.EDIT' | translate" (click)="openEdit(p)">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
-              <button
-                class="action-link danger"
-                [title]="'COMMON.DELETE' | translate"
-                (click)="confirmDelete(p)"
-              >
-                <span class="material-symbols-outlined">delete</span>
-              </button>
-            </div>
+            @if (canManage()) {
+              <div class="action-group">
+                <button
+                  class="action-link"
+                  [title]="'COMMON.EDIT' | translate"
+                  (click)="openEdit(p)"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  class="action-link danger"
+                  [title]="'COMMON.DELETE' | translate"
+                  (click)="confirmDelete(p)"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            }
           </div>
         </div>
       }

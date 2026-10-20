@@ -188,6 +188,20 @@ describe('CheckoutDialogComponent', () => {
     expect(callArgs.followUpAppointment).toBeUndefined();
   });
 
+  it('keeps a follow-up date entered without a reason (D426/D321)', () => {
+    encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+
+    component.followUpReason.set('');
+    component.followUpDate.set('2026-11-03');
+    component.submit();
+
+    const callArgs = encounterSpy.checkOut.calls.mostRecent().args[1];
+    expect(callArgs.followUpAppointment).toEqual({
+      reason: undefined,
+      preferredDate: '2026-11-03',
+    });
+  });
+
   it('should display AVS preview after successful checkout', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
     component.submit();

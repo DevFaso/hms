@@ -242,7 +242,7 @@ public class PatientServiceImpl implements PatientService {
         // (caller must have already verified role). Sonar S1066 — merged nested if.
         if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
             throw new com.example.hms.exception.BusinessException(
-                "Hospital context required to list patients. Please select an active hospital.");
+                "patient.r7.listNeedsHospital");
         }
 
         List<Patient> patients = (hospitalId != null)
@@ -285,7 +285,7 @@ public class PatientServiceImpl implements PatientService {
             }
         } else if (hospitalId == null && !isSuperAdmin) {
             throw new com.example.hms.exception.BusinessException(
-                "Hospital context required to view patient details.");
+                "patient.r7.detailsNeedHospital");
         }
 
         // Super-admin with a non-matching hospitalId: fall back to unscoped view.
@@ -361,10 +361,14 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO setChartRestriction(UUID id, ChartRestrictionRequestDTO request, UUID actorUserId, UUID hospitalId) {
         Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
+        // QA r5 tenancy sweep: only a hospital the patient is registered at restricts their chart.
+        if (hospitalId != null) {
+            ensurePatientRegistered(id, hospitalId);
+        }
         if (request.isRestricted()) {
             String reason = trimToNull(request.getReason());
             if (reason == null) {
-                throw new BusinessException("A reason is required to restrict a chart.");
+                throw new BusinessException("patient.r7.restrictReasonRequired");
             }
             patient.setChartRestricted(true);
             patient.setChartRestrictionReason(reason);
@@ -405,7 +409,7 @@ public class PatientServiceImpl implements PatientService {
     @Transactional
     public PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, UUID hospitalId, Locale locale) {
         if (request == null) {
-            throw new BusinessException("Update payload is required.");
+            throw new BusinessException("patient.r7.updatePayloadRequired");
         }
         Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id));
@@ -590,7 +594,7 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO createPatientByStaff(PatientRequestDTO dto, Locale locale) {
         UUID hospitalId = dto.getHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("Hospital must be resolved from context for staff-created patients.");
+            throw new BusinessException("patient.r7.staffCreateNeedsHospital");
         }
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -808,31 +812,31 @@ public class PatientServiceImpl implements PatientService {
         PatientTimelineAccessRequestDTO request
     ) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required for timeline access.");
+            throw new BusinessException("patient.r7.timelinePatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required for timeline access.");
+            throw new BusinessException("patient.r7.timelineHospitalRequired");
         }
         if (assignment == null || assignment.getId() == null) {
-            throw new BusinessException("Valid hospital assignment is required for auditing.");
+            throw new BusinessException("patient.r7.assignmentRequired");
         }
         if (assignment.getHospital() == null || !Objects.equals(assignment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("Assignment hospital does not match the requested context.");
+            throw new BusinessException("patient.r7.assignmentHospitalMismatch");
         }
         if (request == null) {
-            throw new BusinessException("Timeline request payload is required.");
+            throw new BusinessException("patient.r7.timelinePayloadRequired");
         }
 
         String reason = normalizeAccessReason(request.getAccessReason());
         if (reason == null) {
-            throw new BusinessException("Access reason must be provided.");
+            throw new BusinessException("patient.r7.accessReasonRequired");
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital.");
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
 
         boolean includeSensitive = Boolean.TRUE.equals(request.getIncludeSensitiveData());
@@ -917,36 +921,36 @@ public class PatientServiceImpl implements PatientService {
         DoctorPatientRecordRequestDTO request
     ) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required for doctor record access.");
+            throw new BusinessException("patient.r7.doctorRecordPatientRequired");
         }
         if (request == null) {
-            throw new BusinessException("Doctor record request payload is required.");
+            throw new BusinessException("patient.r7.doctorRecordPayloadRequired");
         }
 
         UUID resolvedHospitalId = hospitalId != null ? hospitalId : request.getHospitalId();
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required for doctor record access.");
+            throw new BusinessException("patient.r7.doctorRecordHospitalRequired");
         }
         if (request.getHospitalId() != null && !Objects.equals(request.getHospitalId(), resolvedHospitalId)) {
-            throw new BusinessException("Hospital mismatch between request payload and context.");
+            throw new BusinessException("patient.r7.requestHospitalMismatch");
         }
         if (assignment == null || assignment.getId() == null) {
-            throw new BusinessException("Valid hospital assignment is required for auditing.");
+            throw new BusinessException("patient.r7.assignmentRequired");
         }
         if (assignment.getHospital() == null || !Objects.equals(assignment.getHospital().getId(), resolvedHospitalId)) {
-            throw new BusinessException("Assignment hospital does not match the requested context.");
+            throw new BusinessException("patient.r7.assignmentHospitalMismatch");
         }
 
         String reason = normalizeAccessReason(request.getAccessReason());
         if (reason == null) {
-            throw new BusinessException("Access reason must be provided.");
+            throw new BusinessException("patient.r7.accessReasonRequired");
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, resolvedHospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital.");
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
 
         boolean includeSensitive = Boolean.TRUE.equals(request.getIncludeSensitiveData());
@@ -1083,19 +1087,19 @@ public class PatientServiceImpl implements PatientService {
     @Transactional(readOnly = true)
     public List<PatientAllergyResponseDTO> getPatientAllergies(UUID patientId, UUID hospitalId, UUID requesterUserId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to load allergies.");
+            throw new BusinessException("patient.r7.allergyListPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required to load patient allergies.");
+            throw new BusinessException("patient.r7.allergyListHospitalRequired");
         }
         if (requesterUserId == null) {
-            throw new BusinessException("Requester context is required to load patient allergies.");
+            throw new BusinessException("patient.r7.allergyListRequesterRequired");
         }
         Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital.");
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
 
         LinkedHashSet<String> sensitiveSections = new LinkedHashSet<>();
@@ -1125,11 +1129,11 @@ public class PatientServiceImpl implements PatientService {
         PatientAllergyRequestDTO request
     ) {
         if (request == null) {
-            throw new BusinessException("Allergy payload is required.");
+            throw new BusinessException("patient.r7.allergyPayloadRequired");
         }
         UUID effectiveHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (effectiveHospitalId == null) {
-            throw new BusinessException("Hospital context is required to add allergies.");
+            throw new BusinessException("patient.r7.allergyAddHospitalRequired");
         }
 
         Patient patient = fetchPatient(patientId);
@@ -1166,11 +1170,11 @@ public class PatientServiceImpl implements PatientService {
         PatientAllergyRequestDTO request
     ) {
         if (request == null) {
-            throw new BusinessException("Allergy payload is required.");
+            throw new BusinessException("patient.r7.allergyPayloadRequired");
         }
         UUID effectiveHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (effectiveHospitalId == null) {
-            throw new BusinessException("Hospital context is required to update allergies.");
+            throw new BusinessException("patient.r7.allergyUpdateHospitalRequired");
         }
         PatientAllergy allergy = loadPatientAllergy(patientId, effectiveHospitalId, allergyId);
         Staff staff = resolveStaffContext(requesterUserId, effectiveHospitalId);
@@ -1199,11 +1203,11 @@ public class PatientServiceImpl implements PatientService {
     ) {
         UUID effectiveHospitalId = hospitalId;
         if (effectiveHospitalId == null) {
-            throw new BusinessException("Hospital context is required to deactivate allergies.");
+            throw new BusinessException("patient.r7.allergyDeactivateHospitalRequired");
         }
         String normalizedReason = normalizeChangeReason(reason);
         if (normalizedReason == null) {
-            throw new BusinessException("A justification is required to deactivate allergies.");
+            throw new BusinessException("patient.r7.allergyDeactivateReasonRequired");
         }
         PatientAllergy allergy = loadPatientAllergy(patientId, effectiveHospitalId, allergyId);
         resolveStaffContext(requesterUserId, effectiveHospitalId);
@@ -1217,10 +1221,10 @@ public class PatientServiceImpl implements PatientService {
     @Transactional(readOnly = true)
     public List<PatientProblemResponseDTO> listPatientDiagnoses(UUID patientId, UUID hospitalId, boolean includeHistorical) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to list diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisListPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required to list diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisListHospitalRequired");
         }
 
         Patient patient = fetchPatient(patientId);
@@ -1260,14 +1264,14 @@ public class PatientServiceImpl implements PatientService {
         PatientDiagnosisRequestDTO request
     ) {
         if (requesterUserId == null) {
-            throw new BusinessException("Requester context is required to add diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisAddRequesterRequired");
         }
         if (request == null) {
-            throw new BusinessException("Diagnosis payload is required.");
+            throw new BusinessException("patient.r7.diagnosisPayloadRequired");
         }
         UUID targetHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (targetHospitalId == null) {
-            throw new BusinessException("Hospital context is required to add diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisAddHospitalRequired");
         }
 
         Patient patient = fetchPatient(patientId);
@@ -1326,14 +1330,14 @@ public class PatientServiceImpl implements PatientService {
         PatientDiagnosisUpdateRequestDTO request
     ) {
         if (requesterUserId == null) {
-            throw new BusinessException("Requester context is required to update diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisUpdateRequesterRequired");
         }
         if (request == null) {
-            throw new BusinessException("Diagnosis update payload is required.");
+            throw new BusinessException("patient.r7.diagnosisUpdatePayloadRequired");
         }
         UUID targetHospitalId = request.getHospitalId() != null ? request.getHospitalId() : hospitalId;
         if (targetHospitalId == null) {
-            throw new BusinessException("Hospital context is required to update diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisUpdateHospitalRequired");
         }
 
         PatientProblem problem = loadPatientProblem(patientId, targetHospitalId, diagnosisId);
@@ -1385,14 +1389,14 @@ public class PatientServiceImpl implements PatientService {
         String reason
     ) {
         if (requesterUserId == null) {
-            throw new BusinessException("Requester context is required to remove diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisRemoveRequesterRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required to remove diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisRemoveHospitalRequired");
         }
         String normalizedReason = normalizeChangeReason(reason);
         if (normalizedReason == null) {
-            throw new BusinessException("A justification is required to remove a diagnosis.");
+            throw new BusinessException("patient.r7.diagnosisRemoveReasonRequired");
         }
 
         PatientProblem problem = loadPatientProblem(patientId, hospitalId, diagnosisId);
@@ -1481,7 +1485,7 @@ public class PatientServiceImpl implements PatientService {
             return false;
         }
         if (normalizedReason == null) {
-            throw new BusinessException("A reason is required when changing diagnosis status.");
+            throw new BusinessException("patient.r7.diagnosisStatusReasonRequired");
         }
         problem.setStatus(requestedStatus);
         problem.setStatusChangeReason(normalizedReason);
@@ -1504,7 +1508,7 @@ public class PatientServiceImpl implements PatientService {
             return false;
         }
         if (normalizedReason == null) {
-            throw new BusinessException("A reason is required when changing chronic designation.");
+            throw new BusinessException("patient.r7.diagnosisChronicReasonRequired");
         }
         problem.setChronic(request.getChronic());
         problem.setStatusChangeReason(normalizedReason);
@@ -1523,7 +1527,7 @@ public class PatientServiceImpl implements PatientService {
 
     private Patient fetchPatient(UUID patientId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required.");
+            throw new BusinessException("patient.r7.patientRequired");
         }
         return patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId));
@@ -1531,7 +1535,7 @@ public class PatientServiceImpl implements PatientService {
 
     private Hospital fetchHospital(UUID hospitalId) {
         if (hospitalId == null) {
-            throw new BusinessException("Hospital identifier is required.");
+            throw new BusinessException("patient.r7.hospitalRequired");
         }
         return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -1539,19 +1543,19 @@ public class PatientServiceImpl implements PatientService {
 
     private void ensurePatientRegistered(UUID patientId, UUID hospitalId) {
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital.");
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
     }
 
     private PatientProblem loadPatientProblem(UUID patientId, UUID hospitalId, UUID diagnosisId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required for diagnosis operations.");
+            throw new BusinessException("patient.r7.diagnosisPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital identifier is required for diagnosis operations.");
+            throw new BusinessException("patient.r7.diagnosisHospitalRequired");
         }
         if (diagnosisId == null) {
-            throw new BusinessException("Diagnosis identifier is required.");
+            throw new BusinessException("patient.r7.diagnosisIdRequired");
         }
         PatientProblem problem = patientProblemRepository.findById(diagnosisId)
             .orElseThrow(() -> new ResourceNotFoundException("diagnosis.notFound", diagnosisId));
@@ -1559,7 +1563,7 @@ public class PatientServiceImpl implements PatientService {
             || !problem.getPatient().getId().equals(patientId)
             || problem.getHospital() == null || problem.getHospital().getId() == null
             || !problem.getHospital().getId().equals(hospitalId)) {
-            throw new BusinessException("Diagnosis does not belong to the specified patient or hospital.");
+            throw new BusinessException("patient.r7.diagnosisNotInScope");
         }
         ensurePatientRegistered(patientId, hospitalId);
         return problem;
@@ -1567,13 +1571,13 @@ public class PatientServiceImpl implements PatientService {
 
     private PatientAllergy loadPatientAllergy(UUID patientId, UUID hospitalId, UUID allergyId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required for allergy operations.");
+            throw new BusinessException("patient.r7.allergyPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital identifier is required for allergy operations.");
+            throw new BusinessException("patient.r7.allergyHospitalRequired");
         }
         if (allergyId == null) {
-            throw new BusinessException("Allergy identifier is required.");
+            throw new BusinessException("patient.r7.allergyIdRequired");
         }
         PatientAllergy allergy = patientAllergyRepository
             .findByIdAndPatient_IdAndHospital_Id(allergyId, patientId, hospitalId)
@@ -1584,10 +1588,10 @@ public class PatientServiceImpl implements PatientService {
 
     private Staff resolveStaffContext(UUID requesterUserId, UUID hospitalId) {
         if (requesterUserId == null) {
-            throw new BusinessException("Requester identifier is required.");
+            throw new BusinessException("patient.r7.requesterRequired");
         }
         return staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)
-            .orElseThrow(() -> new BusinessException("Requester is not authorized for this hospital."));
+            .orElseThrow(() -> new BusinessException("patient.r7.requesterNotInHospital"));
     }
 
     private void updateProblemCoreFields(PatientProblem problem, String display, String code, String icdVersion) {
@@ -1599,7 +1603,7 @@ public class PatientServiceImpl implements PatientService {
     private String requireDiagnosisDisplay(String display) {
         String normalized = trimToNull(display);
         if (normalized == null) {
-            throw new BusinessException("Diagnosis display is required.");
+            throw new BusinessException("patient.r7.diagnosisDisplayRequired");
         }
         return normalized;
     }
@@ -1611,10 +1615,10 @@ public class PatientServiceImpl implements PatientService {
         }
         IcdValidation validation = pickIcdValidation(icdVersion);
         if (validation == IcdValidation.ICD10 && !DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("Diagnosis code must be a valid ICD-10 value.");
+            throw new BusinessException("patient.r7.diagnosisIcd10Invalid");
         }
         if (validation == IcdValidation.ICD11 && !DiagnosisCodeValidator.isValidIcd11(normalized)) {
-            throw new BusinessException("Diagnosis code must be a valid ICD-11 MMS value.");
+            throw new BusinessException("patient.r7.diagnosisIcd11Invalid");
         }
         return normalized;
     }
@@ -1756,7 +1760,7 @@ public class PatientServiceImpl implements PatientService {
 
     private void enforceAllergyDisplay(String display) {
         if (display == null || display.isBlank()) {
-            throw new BusinessException("Allergen display name is required.");
+            throw new BusinessException("patient.r7.allergenRequired");
         }
     }
 
@@ -2510,7 +2514,9 @@ public class PatientServiceImpl implements PatientService {
 
     private String formatAllergySummary(PatientAllergy allergy) {
         String allergen = Optional.ofNullable(allergy.getAllergenDisplay()).orElse("Allergy");
-    String severity = allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN;
+        // QA D333: the severity in the reader's language, not the enum constant.
+        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum."
+            + (allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN));
         return allergen + " (" + severity + ")";
     }
 
@@ -2762,7 +2768,7 @@ public class PatientServiceImpl implements PatientService {
 
     private String generateMrn(Hospital hospital) {
         if (hospital == null || hospital.getId() == null) {
-            throw new IllegalArgumentException("Hospital context required to generate MRN");
+            throw new IllegalArgumentException("patient.r7.mrnNeedsHospital");
         }
 
         String prefix = deriveHospitalPrefix(hospital);
@@ -2775,7 +2781,7 @@ public class PatientServiceImpl implements PatientService {
             }
         }
 
-        throw new IllegalStateException("Unable to generate unique MRN for hospital " + hospitalId);
+        throw new BusinessException("patient.r7.mrnExhausted");
     }
 
     private String deriveHospitalPrefix(Hospital hospital) {

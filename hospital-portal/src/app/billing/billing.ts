@@ -144,11 +144,17 @@ export class BillingComponent implements OnInit {
     this.loadInvoices();
   }
 
+  /**
+   * QA D436: the new-invoice form opened with both required dates empty.
+   * The invoice is dated today and due in 30 days, both editable.
+   */
   emptyForm(): BillingInvoiceRequest {
+    const today = new Date();
+    const due = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
     return {
       patientId: '',
-      invoiceDate: '',
-      dueDate: '',
+      invoiceDate: this.isoDay(today),
+      dueDate: this.isoDay(due),
       totalAmount: 0,
       status: 'DRAFT',
     };
@@ -278,7 +284,7 @@ export class BillingComponent implements OnInit {
           this.page.set(0);
           this.totalPages.set(1);
           this.totalElements.set(list?.length ?? 0);
-          this.computeStats(list ?? []);
+          this.refreshStats();
           this.applyFilter();
           this.loading.set(false);
         },
@@ -304,6 +310,7 @@ export class BillingComponent implements OnInit {
           statuses,
           fromDate: this.filterFromDate() || undefined,
           toDate: this.filterToDate() || undefined,
+          query: this.searchTerm.trim() || undefined,
         },
         page,
         this.pageSize,
@@ -315,7 +322,7 @@ export class BillingComponent implements OnInit {
           this.page.set(res?.number ?? page);
           this.totalPages.set(res?.totalPages ?? 0);
           this.totalElements.set(res?.totalElements ?? list.length);
-          this.computeStats(list);
+          this.refreshStats();
           this.applyFilter();
           this.loading.set(false);
         },
@@ -326,23 +333,22 @@ export class BillingComponent implements OnInit {
       });
   }
 
-  private computeStats(list: BillingInvoiceResponse[]): void {
-    const today = new Date();
-    this.stats.set({
-      total: this.totalElements(),
-      paid: list.filter((i) => i.status === 'PAID').length,
-      outstanding: list.filter((i) => i.status === 'SENT' || i.status === 'PARTIALLY_PAID').length,
-      overdue: list.filter(
-        (i) =>
-          (i.status === 'SENT' || i.status === 'PARTIALLY_PAID') &&
-          !!i.dueDate &&
-          new Date(i.dueDate) < today,
-      ).length,
-      totalRevenue: list.reduce((sum, i) => sum + (i.amountPaid ?? 0), 0),
-      // QA D150: a draft is not yet owed and a cancelled invoice never is.
-      balance: list
-        .filter((i) => i.status === 'SENT' || i.status === 'PARTIALLY_PAID')
-        .reduce((sum, i) => sum + (i.balanceDue ?? 0), 0),
+  /**
+   * QA D209: the KPIs come from the server over every invoice in scope; a
+   * page of 20 rows undercounted revenue and money owed.
+   */
+  private refreshStats(): void {
+    this.billingService.getSummary().subscribe({
+      next: (summary) =>
+        this.stats.set({
+          total: Number(summary?.total ?? 0),
+          paid: Number(summary?.paid ?? 0),
+          outstanding: Number(summary?.outstanding ?? 0),
+          overdue: Number(summary?.overdue ?? 0),
+          totalRevenue: Number(summary?.totalRevenue ?? 0),
+          balance: Number(summary?.balance ?? 0),
+        }),
+      error: () => undefined,
     });
   }
 
@@ -362,10 +368,27 @@ export class BillingComponent implements OnInit {
     this.loadInvoices(0);
   }
 
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** QA D203: the search runs on the server over every invoice, not the loaded page. */
+  onSearchInput(): void {
+    if (this.activeTab() === 'overdue') {
+      this.applyFilter();
+      return;
+    }
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = null;
+      this.loadInvoices(0);
+    }, 300);
+  }
+
   applyFilter(): void {
     let list = this.invoices();
     const term = this.searchTerm.toLowerCase().trim();
-    if (term) {
+    // The overdue worklist is loaded whole, so it is filtered here; the other
+    // tabs were already searched by the server.
+    if (term && this.activeTab() === 'overdue') {
       list = list.filter(
         (inv) =>
           (inv.invoiceNumber ?? '').toLowerCase().includes(term) ||
@@ -485,7 +508,7 @@ export class BillingComponent implements OnInit {
       next: (updated) => {
         if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
         this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-        this.computeStats(this.invoices());
+        this.refreshStats();
         this.applyFilter();
       },
       error: () => this.toast.error(this.translate.instant('BILLING.LOAD_FAILED')),
@@ -506,7 +529,7 @@ export class BillingComponent implements OnInit {
   private applyUpdated(updated: BillingInvoiceResponse): void {
     if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
     this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-    this.computeStats(this.invoices());
+    this.refreshStats();
     this.applyFilter();
     this.loadPayments(updated.id);
   }
@@ -707,7 +730,7 @@ export class BillingComponent implements OnInit {
         this.toast.success(this.translate.instant('BILLING.PAYMENT_RECORDED'));
         this.closePayment();
         this.invoices.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
-        this.computeStats(this.invoices());
+        this.refreshStats();
         this.applyFilter();
         if (this.selectedInvoice()?.id === updated.id) {
           this.selectedInvoice.set(updated);
@@ -736,6 +759,13 @@ export class BillingComponent implements OnInit {
       default:
         return 'status-badge';
     }
+  }
+
+  /** A local calendar day as yyyy-MM-dd, the value an input[type=date] takes. */
+  private isoDay(day: Date): string {
+    const mm = String(day.getMonth() + 1).padStart(2, '0');
+    const dd = String(day.getDate()).padStart(2, '0');
+    return `${day.getFullYear()}-${mm}-${dd}`;
   }
 
   formatCurrency(amount: number): string {

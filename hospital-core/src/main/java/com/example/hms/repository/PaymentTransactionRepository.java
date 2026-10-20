@@ -79,4 +79,30 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
         @Param("from") LocalDate from,
         @Param("to") LocalDate to
     );
+
+    /** QA D231: the total of an invoice's ledger rows in one status (null when none). */
+    @Query("""
+           SELECT SUM(pt.amount)
+             FROM PaymentTransaction pt
+            WHERE pt.invoice.id = :invoiceId
+              AND pt.status = :status
+           """)
+    java.math.BigDecimal sumAmountByInvoiceAndStatus(@Param("invoiceId") UUID invoiceId,
+                                                     @Param("status") com.example.hms.enums.PaymentStatus status);
+
+    /**
+     * QA D345: whether a provider reference is already on a pending or
+     * confirmed row of the same hospital, compared without case or spaces.
+     */
+    @Query("""
+           SELECT COUNT(pt) > 0
+             FROM PaymentTransaction pt
+            WHERE pt.invoice.hospital.id = :hospitalId
+              AND LOWER(TRIM(pt.referenceNumber)) = :reference
+              AND pt.paymentMethod <> com.example.hms.enums.PaymentMethod.CASH
+              AND pt.status IN :statuses
+           """)
+    boolean existsLiveReference(@Param("hospitalId") UUID hospitalId,
+                                @Param("reference") String reference,
+                                @Param("statuses") java.util.Collection<com.example.hms.enums.PaymentStatus> statuses);
 }

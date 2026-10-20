@@ -84,6 +84,7 @@ import {
 } from './credential-renewal/credential-renewal.component';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -129,10 +130,20 @@ interface NavTile {
 
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * QA D316: the patient dashboard card is "current" medications, so only the
+ * courses still running; a completed or discontinued one stays on the
+ * medications page.
+ */
+export function currentMedications(meds: MedicationSummary[]): MedicationSummary[] {
+  return meds.filter((m) => m.status === 'ACTIVE');
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     RouterLink,
     DatePipe,
@@ -993,7 +1004,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         key: 'appts_today',
         label: this.t('DASHBOARD.TODAYS_APPOINTMENTS'),
-        value: s.appointments.todayTotal,
+        value: s.appointments.today,
         icon: 'calendar_today',
         color: '#0e7c6b',
         bgColor: '#e6f4f1',
@@ -1133,6 +1144,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return this.hospitalAdminSummary()?.recentAuditEvents ?? [];
   });
 
+  /**
+   * The resource half of a recent-activity line. The raw entity type (USER,
+   * PATIENT…) repeated what the translated event type already says, and the
+   * audit writer's "Unknown Resource" placeholder is not a name (D260).
+   */
+  auditResourceLabel(resourceName: string | null | undefined): string | null {
+    const name = resourceName?.trim();
+    if (!name || name === 'Unknown Resource') return null;
+    return name;
+  }
+
   // ── MVP 17: Staffing by department ──────────────────────────
   staffingByDepartment = computed<DepartmentStaffingRow[]>(() => {
     return this.hospitalAdminSummary()?.staffingByDepartment ?? [];
@@ -1161,6 +1183,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   invoiceAging = computed<InvoiceAgingBuckets | null>(() => {
     return this.hospitalAdminSummary()?.invoiceAging ?? null;
   });
+
+  /** QA D283: the server's bucket labels are English; the order is fixed (current … 90+). */
+  readonly agingBucketLabelKeys: readonly string[] = [
+    'DASHBOARD.AGING_CURRENT',
+    'DASHBOARD.AGING_1_30',
+    'DASHBOARD.AGING_31_60',
+    'DASHBOARD.AGING_61_90',
+    'DASHBOARD.AGING_90_PLUS',
+  ];
 
   invoiceAgingBuckets = computed<InvoiceAgingBucket[]>(() => {
     const aging = this.invoiceAging();
@@ -2633,7 +2664,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       pending++;
       this.portalService.getMyMedications().subscribe({
         next: (meds) => {
-          this.myMedications.set(meds);
+          // QA D316: the card is "current" medications; a completed or
+          // discontinued course stays on the medications page, not here.
+          this.myMedications.set(currentMedications(meds));
           done();
         },
         error: () => done(),

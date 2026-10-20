@@ -137,12 +137,11 @@ public class PharmacistVerificationService {
         // moment they did.
         PrescriptionStatus status = prescription.getStatus();
         if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
-            throw new BusinessException(
-                "Only a signed prescription can be verified; this one is " + status + ".");
+            throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
         }
 
         if (isVerified(prescription)) {
-            throw new BusinessException("This prescription has already been verified.");
+            throw new BusinessException("pharmacy.r7.alreadyVerified");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -158,7 +157,7 @@ public class PharmacistVerificationService {
                 && prescription.getStaff().getUser() != null
                 && currentUserId.equals(prescription.getStaff().getUser().getId())) {
             throw new BusinessException(
-                "A prescription cannot be verified by the clinician who prescribed it.");
+                "pharmacy.r7.selfVerification");
         }
 
         prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));

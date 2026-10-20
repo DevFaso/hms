@@ -3,7 +3,10 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.service.LabOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,6 +55,7 @@ public class LabOrderController {
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @WriteAudited(entity = "LAB_ORDER", eventType = AuditEventType.LAB_ORDER_CREATED)
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -61,6 +65,8 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO created = labOrderService.createLabOrder(requestDTO, locale);
+        WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_CREATED, created);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -134,6 +140,7 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO updated = labOrderService.updateLabOrder(id, requestDTO, locale);
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, updated);
         return ResponseEntity.ok(ApiResponseWrapper.success(updated));
     }
 
@@ -173,15 +180,16 @@ public class LabOrderController {
 
         String rawStatus = request == null ? null : request.getStatus();
         if (rawStatus == null || rawStatus.isBlank()) {
-            throw new com.example.hms.exception.BusinessException("Request body must include a 'status' field.");
+            throw new com.example.hms.exception.BusinessException("lab.order.statusFieldRequired");
         }
         LabOrderStatus toStatus;
         try {
             toStatus = LabOrderStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new com.example.hms.exception.BusinessException("Unknown lab order status: " + rawStatus);
+            throw new com.example.hms.exception.BusinessException("lab.order.unknownStatus", rawStatus);
         }
         LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, result);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
@@ -192,5 +200,12 @@ public class LabOrderController {
 
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
+    }
+
+    /** QA D429: the lab audit row names the event, the order and its patient. Ids only. */
+    private static void auditLabOrder(com.example.hms.enums.AuditEventType type, LabOrderResponseDTO order) {
+        if (order != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(type, order.getId(), order.getPatientId());
+        }
     }
 }

@@ -3,6 +3,7 @@ package com.example.hms.service;
 import static com.example.hms.config.SecurityConstants.*;
 
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.LabTestDefinitionMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabTestDefinition;
@@ -64,6 +65,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final UserRepository userRepository;
     private final HospitalRepository hospitalRepository;
     private final ActingScopeResolver actingScopeResolver;
+    /** QA D213: each approval step is audited by name. */
+    private final com.example.hms.service.AuditEventLogService auditEventLogService;
 
     /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
     private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
@@ -71,6 +74,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -91,7 +95,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertOwnAssignment(currentUser, assignment);
             hospital = assignment.getHospital();
             if (hospital == null) {
-                throw new IllegalStateException("Assignment is not linked to a hospital");
+                throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.assignmentNoHospital"));
             }
             assertWithinActiveScope(currentUser, hospital.getId());
             assertUserCanManageHospitalId(currentUser, hospital.getId());
@@ -159,6 +163,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
+        requireOrderedRanges(dto.getReferenceRanges());
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -196,7 +201,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         // definition off, never on (QA D159, same bypass as the ranges).
         if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
             throw new IllegalStateException(
-                "A lab test definition is activated through its approval workflow, not by editing it.");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.activateViaApproval"));
         }
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
@@ -382,17 +387,34 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         String action = dto.getAction() == null ? "" : dto.getAction().trim().toUpperCase(Locale.ROOT);
+        boolean singleDirectorException = false;
 
         switch (action) {
             case "SUBMIT_FOR_QA" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
+                // QA D417: ranges lock from submission on, and activation needs
+                // one, so a definition submitted without a range came out of
+                // approval stuck: it could neither be activated nor edited.
+                requireRangesBeforeReview(definition);
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
                 definition.setRejectionReason(null);
+                definition.setSubmittedById(currentUser.getId());
+                definition.setReviewedById(null);
+                definition.setApprovedById(null);
             }
             case "COMPLETE_QA_REVIEW" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                // QA D213 (round 5): a definition submitted before V201 has no
+                // recorded submitter, so the four-eyes check below passed for
+                // anyone, including the submitter. It is sent back (REJECT)
+                // and resubmitted, which records who submitted it.
+                if (definition.getSubmittedById() == null && !isSuperAdmin(currentUser)) {
+                    throw new BusinessException("lab.definition.submitterUnknown");
+                }
+                assertNotSameUser(currentUser, definition.getSubmittedById(),
+                    "lab.definition.fourEyes.qaNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
@@ -400,6 +422,16 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "APPROVE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                // QA D314 / D417: the director may also have done the QA review.
+                // Four eyes means two people, the author and an independent
+                // reviewer-approver; requiring a third (allowed only when the
+                // hospital had a single director) left a lab with a second,
+                // absent director unable to activate anything. The combined
+                // review is recorded in the audit row. The submitter rule holds.
+                requireRangesBeforeReview(definition);
+                singleDirectorException = reviewerIsApprover(currentUser, definition);
+                assertNotSameUser(currentUser, definition.getSubmittedById(),
+                    "lab.definition.fourEyes.approverNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());
@@ -407,16 +439,23 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "ACTIVATE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
+                // QA D213: a live test with no reference range grades nothing.
+                if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+                    throw new BusinessException("lab.definition.rangesRequired");
+                }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
             }
             case "REJECT" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                // QA D417: APPROVED too, so a definition approved before the
+                // range rule (no range, cannot activate) can go back to edit.
                 assertInStatus(definition, EnumSet.of(
                     LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
-                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+                    LabTestDefinitionApprovalStatus.APPROVED));
                 if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
-                    throw new IllegalArgumentException("A rejection reason is required.");
+                    throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.rejectionReasonRequired"));
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
                 definition.setRejectionReason(dto.getRejectionReason());
@@ -428,10 +467,68 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
                 definition.setActive(false);
             }
-            default -> throw new IllegalArgumentException("Unknown approval action: " + dto.getAction());
+            default -> throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.unknownAction", String.valueOf(dto.getAction())));
         }
 
-        return mapper.toDto(repository.save(definition));
+        LabTestDefinition saved = repository.save(definition);
+        auditApprovalStep(currentUser, saved, action, singleDirectorException);
+        return mapper.toDto(saved);
+    }
+
+    /**
+     * QA D314 / D417: true when the approver also completed the QA review,
+     * which the audit row then records. A super-admin is not flagged.
+     */
+    private boolean reviewerIsApprover(User user, LabTestDefinition definition) {
+        return !isSuperAdmin(user) && definition.getReviewedById() != null
+            && definition.getReviewedById().equals(user.getId());
+    }
+
+    /** QA D417: no definition enters review without a reference range. */
+    private static void requireRangesBeforeReview(LabTestDefinition definition) {
+        if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+            throw new BusinessException("lab.definition.rangesRequiredForReview");
+        }
+    }
+
+    /**
+     * QA D213: the four steps were four identical generic audit rows. This
+     * one names the step and the status it led to. Ids only, no PHI.
+     */
+    private void auditApprovalStep(User actor, LabTestDefinition definition, String action,
+                                   boolean singleDirectorException) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        try {
+            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .userId(actor.getId())
+                .hospitalName(definition.getHospital() != null ? definition.getHospital().getName() : null)
+                .eventDescription("Lab test definition approval step " + action + " -> "
+                    + definition.getApprovalStatus()
+                    + (singleDirectorException
+                        ? " (the approver also completed the QA review)"
+                        : ""))
+                .entityType("LabTestDefinition")
+                .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+                .build());
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                .warn("Approval-step audit not written for definition {}: {}", definition.getId(),
+                    ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * QA D213: four-eyes. A super-admin is exempt: a global definition has
+     * no other approver.
+     */
+    private void assertNotSameUser(User user, UUID previousActor, String message) {
+        if (previousActor != null && previousActor.equals(user.getId()) && !isSuperAdmin(user)) {
+            throw new BusinessException(message);
+        }
     }
 
     /**
@@ -459,6 +556,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         LabTestDefinitionApprovalStatus.RETIRED);
 
     /**
+     * QA D287: an inverted reference or critical range was saved (bean
+     * validation on a bare list body is not guaranteed to run), and every
+     * value graded against it was wrong. The same rules as the DTO's
+     * constraints, enforced on every write path.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges) {
+        if (ranges == null) {
+            return;
+        }
+        for (LabTestReferenceRangeDTO range : ranges) {
+            if (range == null) {
+                continue;
+            }
+            if (!range.isReferenceRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.inverted");
+            }
+            if (!range.isCriticalRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.criticalInverted");
+            }
+            if (!range.isAgeRangeOrdered()) {
+                throw new BusinessException("lab.referenceRange.ageInverted");
+            }
+        }
+    }
+
+    /**
      * QA D159: the reference ranges are what QA and the director approved,
      * and they grade every result. Changing them on a definition under
      * review, approved or live would put unreviewed ranges in front of
@@ -473,22 +596,29 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             ? List.of() : definition.getReferenceRanges();
         List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
         if (!current.equals(next)) {
-            throw new IllegalStateException(
-                "The reference ranges of a definition that is " + definition.getApprovalStatus()
-                + " cannot be changed without a new approval: retire it and submit a new definition for review.");
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.rangesLocked", String.valueOf(definition.getApprovalStatus())));
         }
+    }
+
+    /** QA D314 / D318 (round 5): a status the reader can read, not the enum name. */
+    private static String statusLabel(LabTestDefinitionApprovalStatus status) {
+        return status == null ? "" : com.example.hms.utility.MessageUtil.resolveOrRaw(
+            "lab.definition.status." + status.name());
     }
 
     private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
         if (!allowed.contains(definition.getApprovalStatus())) {
-            throw new IllegalStateException(
-                "Action not allowed from status: " + definition.getApprovalStatus()
-                + ". Allowed: " + allowed);
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.actionNotAllowed", statusLabel(definition.getApprovalStatus()),
+                allowed.stream().map(LabTestDefinitionServiceImpl::statusLabel)
+                    .collect(java.util.stream.Collectors.joining(", "))));
         }
     }
 
     @Override
     public LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to reference range update");

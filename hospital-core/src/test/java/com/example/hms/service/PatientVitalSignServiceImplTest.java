@@ -58,6 +58,12 @@ class PatientVitalSignServiceImplTest {
     @Mock
     private PatientVitalSignMapper vitalSignMapper;
 
+    @Mock
+    private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @InjectMocks
     private PatientVitalSignServiceImpl patientVitalSignService;
 

@@ -72,7 +72,7 @@ public class BedAssignmentService {
     /** The actual work, shared by both public entry points. */
     private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException("Beds can only be assigned to active admissions.");
+            throw new BusinessException("bed.r7.admissionNotActive");
         }
         UUID hospitalId = admission.getHospital().getId();
         // ── Tenant isolation: a bed from another hospital reads as not-found. ──
@@ -84,8 +84,9 @@ public class BedAssignmentService {
             return; // already assigned — idempotent
         }
         if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
         }
+        requireWardFitsPatient(bed, admission.getPatient());
 
         if (current != null) {
             markAvailable(current);
@@ -97,7 +98,41 @@ public class BedAssignmentService {
         // Keep the legacy free-text field in the "room/bed" shape the
         // worklists parse (DoctorWorklistServiceImpl splits on '/').
         admission.setRoomBed(bedLabel(bed));
+        // QA D237: a bed in another department's ward moves the stay there; the
+        // admission kept the first department and every worklist kept showing it.
+        if (bed.getWard() != null && bed.getWard().getDepartment() != null) {
+            admission.setDepartment(bed.getWard().getDepartment());
+        }
         log.info("Bed {} assigned to admission {}", bedLabel(bed), admission.getId());
+    }
+
+    /**
+     * QA D431: the bed picker ignored sex and age, so a 5-year-old was put in
+     * a maternity bed. A ward reserved for one population refuses a patient
+     * whose record says they are outside it; a missing sex or birth date is let
+     * through (an incomplete record must not block an admission).
+     */
+    static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
+            return;
+        }
+        Integer age = patient.getDateOfBirth() == null ? null
+            : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
+        com.example.hms.enums.WardType type = bed.getWard().getWardType();
+        boolean mismatch = switch (type) {
+            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            case PEDIATRIC -> age != null && age >= 18;
+            case NICU -> age != null && age >= 1;
+            default -> false; // Every other ward takes any patient.
+        };
+        if (mismatch) {
+            throw new BusinessException(switch (type) {
+                case MATERNITY -> "bed.ward.maternityMismatch";
+                case PEDIATRIC -> "bed.ward.pediatricMismatch";
+                default -> "bed.ward.nicuMismatch";
+            }, bedLabel(bed));
+        }
     }
 
     /**
@@ -159,7 +194,7 @@ public class BedAssignmentService {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
         if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
         }
         bed.setStatus(BedStatus.RESERVED);
         bedRepository.save(bed);

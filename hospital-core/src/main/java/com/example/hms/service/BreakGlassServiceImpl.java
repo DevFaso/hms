@@ -86,6 +86,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
      * with the same injected bean, so writer and readers share one time source.
      */
     private final Clock clock;
+    /** D410: a patient who opted out of sharing is told their opt-out was overridden. */
+    private final BreakGlassPatientNotifier patientNotifier;
 
     // ---------------------------------------------------------------------
     // Declare
@@ -100,10 +102,16 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // exactly as an unknown hospital.
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
-        Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
-
+        // D409: unscoped. Break-the-glass exists for a patient the reader's
+        // hospital does not know; the tenant-scoped finder answered 404 for
+        // exactly that patient. The caller is still checked as privileged at
+        // the hospital, and the declaration is audited.
+        // The privilege check comes BEFORE the unscoped load: otherwise an
+        // unprivileged caller could tell an existing patient id (403) from an
+        // unknown one (404) at any hospital.
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
         int ttl = validTtl(request.getTtlMinutes());
         LocalDateTime now = LocalDateTime.now(clock);
@@ -121,6 +129,10 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         emitAudit(AuditEventType.BREAK_GLASS_ACCESS, caller, hospital, patient,
             "Break-the-glass session declared (TTL " + ttl + " min): " + request.getReason(),
             saved.getId(), AuditStatus.SUCCESS);
+
+        if (patientNotifier != null) {
+            patientNotifier.notifyIfOptedOut(patient, hospital);
+        }
 
         log.warn("[BREAK_GLASS] Declared session={} user={} patient={} hospital={} ttl={}min (reason in the audit row, not the log: free text can carry PHI)",
             saved.getId(), caller.getId(), patient.getId(), hospital.getId(), ttl);
@@ -159,9 +171,8 @@ public class BreakGlassServiceImpl implements BreakGlassService {
                     + (request != null && request.getReason() != null ? request.getReason() : "no reason given"),
                 session.getId(), AuditStatus.SUCCESS);
 
-            log.warn("[BREAK_GLASS] Revoked session={} by user={} reason='{}'",
-                session.getId(), caller.getId(),
-                request != null ? request.getReason() : null);
+            // The reason is free text (it can carry PHI): it lives in the audit row only.
+            log.warn("[BREAK_GLASS] Revoked session={} by user={}", session.getId(), caller.getId());
         }
         return toDto(session);
     }

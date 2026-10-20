@@ -41,6 +41,15 @@ public class BillingInvoiceResponseDTO {
     // Auditing (optional)
     private String createdByName;
 
+    /** QA D428: the visit invoice a folded check-in copay was credited to. */
+    private String creditedToInvoiceNumber;
+
+    /**
+     * QA D421: what the patient has declared and staff have not confirmed
+     * yet. Set on the patient portal's reads; it counts against the balance.
+     */
+    private BigDecimal pendingDeclaredAmount;
+
     // Invoice
     private String invoiceNumber;
     private String invoiceDate;

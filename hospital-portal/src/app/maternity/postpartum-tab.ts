@@ -189,12 +189,22 @@ export class PostpartumTabComponent {
     () => this.schedule()?.screening?.instrumentCode ?? DEFAULT_SCREENING_INSTRUMENT,
   );
   /**
+   * Codes of the instruments whose validated text is loaded, from
+   * GET /pro-instruments; null until that answer arrives.
+   */
+  private readonly loadedInstrumentCodes = signal<string[] | null>(null);
+  /**
    * Until the validated text is loaded (SUPER_ADMIN import), there is nothing
    * to administer — the button stays off rather than opening an empty modal.
-   * An older schedule without the hook is treated as available so the modal
-   * can still explain itself.
+   * QA D323: when the schedule does not say (no plan yet, or an older
+   * schedule), the instrument list decides; it used to default to "available"
+   * and offered EPDS on a server with no EPDS text.
    */
-  screeningAvailable = computed(() => this.schedule()?.screening?.instrumentAvailable ?? true);
+  screeningAvailable = computed(() => {
+    const said = this.schedule()?.screening?.instrumentAvailable;
+    if (said !== undefined && said !== null) return said;
+    return this.loadedInstrumentCodes()?.includes(this.screeningCode()) ?? false;
+  });
 
   showScreeningModal = signal(false);
   screeningInstrument = signal<ProInstrumentView | null>(null);
@@ -223,6 +233,13 @@ export class PostpartumTabComponent {
   private readonly instrumentRequests = new Subject<string>();
 
   constructor() {
+    this.screeningService
+      .instruments()
+      .pipe(
+        catchError(() => of([])),
+        takeUntilDestroyed(),
+      )
+      .subscribe((list) => this.loadedInstrumentCodes.set(list.map((i) => i.code)));
     this.instrumentRequests
       .pipe(
         tap(() => {

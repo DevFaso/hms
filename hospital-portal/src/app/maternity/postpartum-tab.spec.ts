@@ -107,6 +107,7 @@ describe('PostpartumTabComponent — screening', () => {
     laborSpy.episodes.and.returnValue(of([]));
 
     screeningSpy = jasmine.createSpyObj('ProScreeningService', [
+      'instruments',
       'instrument',
       'record',
       'history',
@@ -114,6 +115,9 @@ describe('PostpartumTabComponent — screening', () => {
     ]);
     screeningSpy.history.and.returnValue(of([]));
     screeningSpy.instrument.and.returnValue(of(instrument));
+    screeningSpy.instruments.and.returnValue(
+      of([{ code: 'EPDS', name: 'EPDS', languages: ['en'] }]),
+    );
 
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warning']);
     const patientSpy = jasmine.createSpyObj('PatientService', ['search', 'lookup']);
@@ -185,9 +189,25 @@ describe('PostpartumTabComponent — screening', () => {
     postpartumSpy.schedule.and.returnValue(of(schedule({ instrumentAvailable: false })));
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
     expect(component.screeningAvailable()).toBeFalse();
-    // An older schedule without the hook must not lock the button forever.
+    // An older schedule without the hook must not lock the button forever:
+    // the instrument list (EPDS loaded here) decides.
     component.schedule.set({} as PostpartumSchedule);
     expect(component.screeningAvailable()).toBeTrue();
+  });
+
+  it('QA D323: with no plan and no EPDS text on the server, the button is off', () => {
+    screeningSpy.instruments.and.returnValue(of([]));
+    const fresh = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    expect(fresh.schedule()).toBeNull();
+    expect(fresh.screeningAvailable()).toBeFalse();
+    fresh.schedule.set({} as PostpartumSchedule);
+    expect(fresh.screeningAvailable()).toBeFalse();
+  });
+
+  it('QA D323: an instrument list that fails to load does not offer the screening', () => {
+    screeningSpy.instruments.and.returnValue(throwError(() => new Error('down')));
+    const fresh = TestBed.createComponent(PostpartumTabComponent).componentInstance;
+    expect(fresh.screeningAvailable()).toBeFalse();
   });
 
   it('opening the modal loads the instrument and keeps the language the server chose', () => {

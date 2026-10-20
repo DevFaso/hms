@@ -67,6 +67,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
 
     private final MtmReviewRepository reviewRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -85,6 +86,8 @@ public class MtmReviewServiceImpl implements MtmReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", dto.getHospitalId()));
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         User pharmacist = resolveCurrentUser();
 
         boolean polypharmacy = computePolypharmacyAlert(patient.getId(), hospital.getId());

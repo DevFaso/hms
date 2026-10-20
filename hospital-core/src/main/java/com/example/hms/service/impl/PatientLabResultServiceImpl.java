@@ -57,6 +57,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
      * range). Every client already renders UNKNOWN as "not interpreted".
      */
     private static final String STATUS_UNKNOWN = "UNKNOWN";
+    /** QA D240: released, with a non-numeric answer (Positif, Négatif...). */
+    private static final String STATUS_QUALITATIVE = "QUALITATIVE";
+
+    /** A word answer with no digit in it; "<0.5" or "9.2 g/dL" is numeric, just ungraded. */
+    private static boolean isQualitative(String value) {
+        return value != null && !value.isBlank() && value.chars().noneMatch(Character::isDigit);
+    }
 
     /**
      * Resolvable message key, not a sentence, and deliberately the same one
@@ -450,6 +457,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         String fromRange = statusFromRange(mapped != null ? mapped.getSeverityFlag() : null);
         String fromFlag = statusOf(result.getAbnormalFlag());
         if (fromRange == null) {
+            // QA D240: "Positif" on a malaria RDT is not "unknown": it is a
+            // qualitative answer that no numeric range can grade. Say so,
+            // rather than "Inconnu" on a released result.
+            if (STATUS_UNKNOWN.equals(fromFlag) && isQualitative(result.getResultValue())) {
+                return STATUS_QUALITATIVE;
+            }
             return fromFlag;
         }
         int rangeRank = rank(fromRange);
@@ -477,6 +490,8 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             case STATUS_CRITICAL -> STATUS_CRITICAL;
             case "HIGH" -> STATUS_ABNORMAL_HIGH;
             case "LOW" -> STATUS_ABNORMAL_LOW;
+            // QA D286: a qualitative answer that reads positive.
+            case LabResultMapper.FLAG_ABNORMAL -> STATUS_ABNORMAL;
             default -> STATUS_NORMAL;
         };
     }

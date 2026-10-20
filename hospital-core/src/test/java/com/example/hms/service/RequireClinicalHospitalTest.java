@@ -41,7 +41,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Locale;
@@ -113,6 +112,9 @@ class RequireClinicalHospitalTest {
     @MockitoSettings(strictness = Strictness.LENIENT)
     @DisplayName("patient pharmacy directory")
     class PharmacyDirectory {
+        @Mock
+        private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
         @Mock private PatientRepository patientRepository;
         @Mock private HospitalRepository hospitalRepository;
         @Mock private PatientHospitalRegistrationRepository registrationRepository;
@@ -203,6 +205,9 @@ class RequireClinicalHospitalTest {
         @Mock private HospitalRepository hospitalRepository;
         @Mock private PatientRepository patientRepository;
         @Mock private StaffRepository staffRepository;
+        /** Unstubbed, it answers null: a global (unscoped) caller, so the D205 scope check stands aside and the lookup under test runs. */
+        @Mock private RoleValidator roleValidator;
+        @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
         @InjectMocks private GeneralReferralServiceImpl service;
 
         private GeneralReferralRequestDTO request(UUID hospitalId, UUID receivingHospitalId) {
@@ -216,6 +221,7 @@ class RequireClinicalHospitalTest {
 
         @BeforeEach
         void stubs() {
+            org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
             when(patientRepository.findByIdUnscoped(any())).thenReturn(Optional.of(patient()));
             when(hospitalRepository.findById(PROVIDER_ID)).thenReturn(Optional.of(pharmacy()));
             when(hospitalRepository.findById(HOSPITAL_ID)).thenReturn(Optional.of(hospital()));
@@ -420,15 +426,22 @@ class RequireClinicalHospitalTest {
 
         @Test
         void aProviderNamedByNameIsAnUnknownHospital() {
+            // findClinicalByName excludes provider facilities; a plain name
+            // lookup would have found it, so it must not be consulted.
             when(hospitalRepository.findByName("Pharmacie du Centre")).thenReturn(Optional.of(pharmacy()));
+            when(hospitalRepository.findClinicalByName("Pharmacie du Centre")).thenReturn(Optional.empty());
             AdminSignupRequest request = new AdminSignupRequest();
             request.setHospitalName("Pharmacie du Centre");
 
-            ResponseEntity<?> answer = ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request);
+            Throwable thrown = catchThrowable(() ->
+                ReflectionTestUtils.invokeMethod(controller, "resolveHospitalFromName", request));
 
-            assertThat(answer).isNotNull();
-            assertThat(answer.getStatusCode().value()).isEqualTo(400);
+            // A translated 400 (BusinessException) naming an unknown hospital.
+            assertThat(thrown).isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(((com.example.hms.exception.BusinessException) thrown).getMessageKey())
+                .isEqualTo("user.adminRegister.hospitalNotFound");
             assertThat(request.getHospitalId()).isNull();
+            verify(hospitalRepository, never()).findByName(anyString());
         }
 
         @Test

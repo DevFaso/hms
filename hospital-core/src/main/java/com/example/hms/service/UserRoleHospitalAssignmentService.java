@@ -185,4 +185,13 @@ public interface UserRoleHospitalAssignmentService {
      * for a row the caller may change; any other row answers as a missing one.
      */
     void resendNotifications(UUID assignmentId);
+
+    /**
+     * QA D418: the anonymous "send me a new activation code" request. Issues a
+     * fresh code for a pending assignment and sends it (e-mail and/or SMS),
+     * at most once per {@code cooldown} per assignment across every instance
+     * (the claim is a conditional UPDATE on the row). Returns whether a code
+     * went out; a revoked, active or recently re-sent row returns false.
+     */
+    boolean resendPendingActivationCode(UUID assignmentId, java.time.Duration cooldown);
 }

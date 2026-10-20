@@ -65,6 +65,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
 
@@ -140,7 +141,7 @@ class UserServiceImplTest {
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getMessage()).contains("not allowed");
+        assertThat(response.getMessage()).isEqualTo(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"));
     }
 
     @Test
@@ -157,7 +158,7 @@ class UserServiceImplTest {
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getMessage()).contains("not allowed");
+        assertThat(response.getMessage()).isEqualTo(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"));
     }
 
     @Test
@@ -318,6 +319,17 @@ class UserServiceImplTest {
             req.setPassword("Temp@1234");
             req.setRoleNames(Set.of("ROLE_HOSPITAL_ADMIN"));
             return req;
+        }
+
+        @Test
+        @DisplayName("QA D329: the patient role next to a staff role is refused before anything is written")
+        void patientRoleWithStaffRolesIsRefused() {
+            AdminSignupRequest req = buildRequest("mixed", "mixed@hospital.com", "+1234567811");
+            req.setRoleNames(Set.of("ROLE_RECEPTIONIST", "ROLE_PATIENT"));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(userRepository, never()).saveAndFlush(any(User.class));
         }
 
         @Test
@@ -678,7 +690,8 @@ class UserServiceImplTest {
             AdminSignupRequest req1 = patientRequest(null, "qa.reception@test.com", null, hospitalId);
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req1))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("staff account");
+                // QA D317: a key the handler resolves in the caller's language.
+                .hasMessageContaining(".notForPatient");
 
             assertThat(user.isForcePasswordChange()).isFalse();
             verify(userRepository, never()).save(any());
@@ -927,18 +940,18 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("D21: a second delete keeps what the first delete recorded")
+        @DisplayName("D21 / QA D327: a second delete is refused and keeps what the first delete recorded")
         void repeatDeleteKeepsRecordedAnswer() {
             user.setDeleted(true);
             user.setActive(false);
             user.setActivatedBeforeDelete(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
 
-            userService.deleteUser(userId);
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
 
             assertThat(user.getActivatedBeforeDelete()).isTrue();
+            verify(userRepository, never()).save(any(User.class));
         }
 
         @Test
@@ -1080,6 +1093,32 @@ class UserServiceImplTest {
     @Nested
     @DisplayName("restoreUser")
     class RestoreUser {
+
+        @Test
+        @DisplayName("QA D327: restoring an account that is not deleted is refused and not audited")
+        void restoreOfALiveAccountIsRefused() {
+            user.setDeleted(false);
+            user.setActive(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> userService.restoreUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(userRepository, never()).save(any(User.class));
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D327: deleting an already deleted account is refused and not audited again")
+        void repeatDeleteIsRefused() {
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(userRepository, never()).save(any(User.class));
+            verify(auditEventLogService, never()).logEvent(any());
+        }
 
         @Test
         @DisplayName("restores a deleted user: sets isDeleted=false, isActive=true and saves")
@@ -2155,17 +2194,17 @@ class UserServiceImplTest {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
                     any(), any())).thenReturn(onePage);
 
             // Even if a deleted flag reached the service, the scoped path has no deleted view.
             userService.getAllUsers(0, 10, true, true);
             userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
 
-            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
-            verify(userRepository).searchUsers(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
+            verify(userRepository).searchStaffDirectory(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
                     eq(false), eq(true), eq(hospitals), any());
         }
 
@@ -2188,7 +2227,7 @@ class UserServiceImplTest {
             patientAccount.setId(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
             when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
@@ -2207,12 +2246,12 @@ class UserServiceImplTest {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
                     anyBoolean(), any(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
 
             userService.searchUsers("p@example.com", null, "p@example.com", 0, 10, false, false);
 
-            verify(userRepository).searchUsers(eq("p@example.com"), isNull(), isNull(), eq("p@example.com"),
+            verify(userRepository).searchStaffDirectory(eq("p@example.com"), isNull(), isNull(), eq("p@example.com"),
                     eq(false), eq(false), eq(false), eq(true), eq(hospitals), any());
         }
 
@@ -2224,7 +2263,7 @@ class UserServiceImplTest {
             account.setPatientProfile(new com.example.hms.model.Patient());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(account)));
             when(userMapper.toSummaryDTO(account)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("p@example.com").username("p@example.com").build());
@@ -2232,6 +2271,45 @@ class UserServiceImplTest {
             var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
             assertThat(row.getEmail()).isNull();
             assertThat(row.getUsername()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D347: a non-administrator gets the minimal row for a staff account too")
+        void nonAdministratorGetsMinimalRowForStaffAccounts() {
+            User staffAccount = new User();
+            staffAccount.setStaffProfile(new com.example.hms.model.Staff());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(staffAccount)));
+            when(userMapper.toSummaryDTO(staffAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+                    .builder().email("n@example.com").username("nurse.b").firstName("Nurse").roleName("ROLE_NURSE").build());
+
+            var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
+            assertThat(row.getEmail()).isNull();
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getFirstName()).isEqualTo("Nurse");
+            assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
+        }
+
+        @Test
+        @DisplayName("QA D430: a non-administrator's directory and search never run the all-accounts queries")
+        void nonAdministratorListsStaffOnly() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), any(), any())).thenReturn(onePage);
+
+            userService.getAllUsers(0, 10, false, false);
+            userService.searchUsers("ami", null, null, 0, 10, false, false);
+
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
+            verify(userRepository, never()).findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
+            verify(userRepository, never()).searchUsers(any(), any(), any(), any(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -2414,6 +2492,35 @@ class UserServiceImplTest {
                     request("ROLE_PATIENT", null, "70202020")))
                 .isInstanceOf(Exception.class);
             verify(userRepository, never()).saveAndFlush(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({
+            "ROLE_BILLING_SPECIALIST, BILLING_SPECIALIST",
+            "ROLE_LAB_TECHNICIAN, LAB_TECHNICIAN",
+            "ROLE_LAB_DIRECTOR, LAB_DIRECTOR",
+            "ROLE_ACCOUNTANT, ADMINISTRATIVE_STAFF"
+        })
+        @DisplayName("QA D435: lab and billing staff onboarded at a hospital get a staff row")
+        void billingStaffGetAStaffRow(String roleCode, String expectedTitle) {
+            Role role = new Role();
+            role.setId(UUID.randomUUID());
+            role.setCode(roleCode);
+            stubCreation(role);
+            UUID hospitalId = UUID.randomUUID();
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            lenient().when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            AdminSignupRequest req = request(roleCode, "staff.d435@example.com", "70202021");
+            req.setHospitalId(hospitalId);
+
+            userService.createUserWithRolesAndHospital(req);
+
+            org.mockito.ArgumentCaptor<Staff> staff = org.mockito.ArgumentCaptor.forClass(Staff.class);
+            verify(staffRepository).save(staff.capture());
+            assertThat(staff.getValue().getHospital()).isSameAs(hospital);
+            assertThat(staff.getValue().getJobTitle())
+                .isEqualTo(com.example.hms.enums.JobTitle.valueOf(expectedTitle));
         }
 
         @Test

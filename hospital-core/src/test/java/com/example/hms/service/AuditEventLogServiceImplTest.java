@@ -284,6 +284,27 @@ class AuditEventLogServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D429: a row with no resource name is named after its entity type, not 'Unknown Resource'")
+    void logEvent_withoutResourceName_usesTheEntityType_D429() {
+        when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        for (String entity : java.util.List.of("CONSENT", "ORGANIZATION")) {
+            auditService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.DATA_CREATE)
+                .eventDescription("POST /" + entity.toLowerCase())
+                .entityType(entity)
+                .resourceId(UUID.randomUUID().toString())
+                .build());
+        }
+
+        var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(AuditEventLog::getResourceName)
+            .containsExactly("CONSENT", "ORGANIZATION");
+    }
+
+    @Test
     @DisplayName("logEvent sets no patient key for events that concern no patient")
     void logEvent_nonPatientEvent_hasNoPatientKey() {
         when(auditRepository.save(any())).thenReturn(AuditEventLog.builder().build());

@@ -607,7 +607,7 @@ class PatientServiceImplTest {
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Hospital must be resolved");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"));
     }
 
     @Test
@@ -698,7 +698,7 @@ class PatientServiceImplTest {
 
         assertThatThrownBy(() -> patientService.createPatientDiagnosis(patientId, hospitalId, requesterUserId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ICD-10");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisIcd10Invalid"));
 
         verify(patientProblemRepository, never()).save(any());
     }
@@ -735,7 +735,7 @@ class PatientServiceImplTest {
             request
         ))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisStatusReasonRequired"));
 
         verify(patientProblemRepository, never()).save(any());
     }
@@ -753,7 +753,7 @@ class PatientServiceImplTest {
             "  "
         ))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("justification");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisRemoveReasonRequired"));
     }
 
     @Test

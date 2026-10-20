@@ -220,6 +220,13 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             resourceId = resolvePatientResourceId(resourceId, resourceName);
             resourceName = resolvePatientResourceName(resourceName, resourceId);
         }
+        // QA D309/D429: rows written by the generic write audit (consents,
+        // organisations, ...) carry no name, and every one of them read
+        // "Unknown Resource". The entity type is what the row is about.
+        if ((resourceName == null || resourceName.isBlank())
+                && requestDTO.getEntityType() != null && !requestDTO.getEntityType().isBlank()) {
+            resourceName = requestDTO.getEntityType();
+        }
 
         ImpersonatorIdentity impersonator = resolveImpersonatorIdentity(requestDTO);
 

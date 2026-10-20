@@ -125,7 +125,7 @@ class OrganizationLifecycleServiceImplTest {
         TenantLifecycleActionRequestDTO blank = withReason("  ");
         assertThatThrownBy(() -> service.suspend(orgId, blank, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("reason is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.reasonRequired"));
         verify(organizationRepository, never()).save(any());
     }
 
@@ -137,7 +137,7 @@ class OrganizationLifecycleServiceImplTest {
 
         assertThatThrownBy(() -> service.suspend(orgId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot suspend");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.transitionRefused"));
     }
 
     // ── restore ────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ class OrganizationLifecycleServiceImplTest {
 
         assertThatThrownBy(() -> service.schedulePurge(orgId, req, "12345678"))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("past");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.purgeInPast"));
         verify(mfaService, never()).requireStepUp(any(), any(), any(), anyBoolean());
     }
 
@@ -412,6 +412,6 @@ class OrganizationLifecycleServiceImplTest {
             .reason("a nanosecond ago").purgeScheduledFor(NOW.minusNanos(1)).build();
         assertThatThrownBy(() -> service.schedulePurge(orgId, justPast, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("past");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("organization.r7.purgeInPast"));
     }
 }

@@ -63,7 +63,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     private static final String MSG_PATIENT_ID_REQUIRED = "Patient ID is required";
     private static final String MSG_LOG_ACCESS_DENIED = "You do not have permission to update monitoring logs";
     private static final String MSG_PLAN_ACCESS_DENIED = "You do not have permission to access this care plan";
-    private static final String MSG_PATIENT_ACCESS_DENIED = "You do not have permission to access this patient";
+    private static final String MSG_PATIENT_ACCESS_DENIED = "highRiskPregnancy.access.denied";
 
     private static final EnumSet<HighRiskMilestoneType> REQUIRED_BASELINE_MILESTONES = EnumSet.of(
         HighRiskMilestoneType.SPECIALIST_CONSULT,
@@ -350,7 +350,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
 
     private void assertProviderAccess(User user) {
         if (!isProvider(user)) {
-            throw new BusinessException("Only clinical staff can perform this action");
+            throw new BusinessException("highRiskPregnancy.access.clinicalOnly");
         }
     }
 
@@ -358,7 +358,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
         if (isProvider(user) || isPatient(user)) {
             return;
         }
-        throw new BusinessException("Action limited to clinical staff or the patient");
+        throw new BusinessException("highRiskPregnancy.access.clinicalOrPatient");
     }
 
     /**
@@ -427,7 +427,7 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
             .filter(Objects::nonNull)
             .anyMatch(reg -> reg.getHospital() != null && hospitalId.equals(reg.getHospital().getId()) && reg.isActive());
         if (!registered) {
-            throw new BusinessException("Patient is not registered in the requested hospital");
+            throw new BusinessException("highRiskPregnancy.patient.notRegistered");
         }
     }
 }

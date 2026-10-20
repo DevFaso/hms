@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,6 +49,7 @@ class GeneralReferralServiceImplTest {
     @Mock private GeneralReferralRepository referralRepository;
     @Mock private com.example.hms.repository.AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -75,6 +77,8 @@ class GeneralReferralServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("Jane");
@@ -86,14 +90,25 @@ class GeneralReferralServiceImplTest {
 
         referringProvider = new Staff();
         referringProvider.setId(referringProviderId);
+        // QA D205: the referrer is the signed-in clinician, at the sending hospital.
+        com.example.hms.model.User caller = new com.example.hms.model.User();
+        caller.setId(UUID.randomUUID());
+        referringProvider.setUser(caller);
+        referringProvider.setHospital(hospital);
+        org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(caller.getId());
 
         receivingProvider = new Staff();
         receivingProvider.setId(receivingProviderId);
         receivingProvider.setHospital(hospital);
+        // QA D273: the receiver is a physician, which RoleValidator answers from the user.
+        com.example.hms.model.User receiver = new com.example.hms.model.User();
+        receiver.setId(UUID.randomUUID());
+        receivingProvider.setUser(receiver);
 
         department = new Department();
         department.setId(departmentId);
         department.setName("Cardiology");
+        department.setHospital(hospital);
     }
 
     private GeneralReferralRequestDTO buildRequest() {
@@ -314,6 +329,34 @@ class GeneralReferralServiceImplTest {
         GeneralReferralResponseDTO result = service.submitReferral(referralId);
 
         assertThat(result.getStatus()).isEqualTo(ReferralStatus.SUBMITTED);
+    }
+
+    @Test
+    @DisplayName("QA D412: a nurse cannot submit a doctor's draft referral")
+    void submitReferralByAnotherClinicianIsRefused() {
+        GeneralReferral referral = buildReferral();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submitReferral(referralId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(referral.getStatus()).isEqualTo(ReferralStatus.DRAFT);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D430: the patient portal never lists a draft referral")
+    void portalPatientDoesNotSeeDrafts() {
+        GeneralReferral draft = buildReferral();
+        GeneralReferral sent = buildReferral();
+        sent.setId(UUID.randomUUID());
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        UUID portalPatientId = draft.getPatient().getId();
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(portalPatientId)).thenReturn(List.of(draft, sent));
+
+        List<GeneralReferralResponseDTO> visible = service.getReferralsForPortalPatient(portalPatientId);
+
+        assertThat(visible).extracting(GeneralReferralResponseDTO::getStatus).containsExactly(ReferralStatus.SUBMITTED);
     }
 
     // ── acknowledgeReferral ─────────────────────────────────────────────────

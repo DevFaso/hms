@@ -518,9 +518,9 @@
                 <span class="material-symbols-outlined">money_off</span>
               </div>
               <div class="metric-body">
-                <span class="metric-value"
-                  >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
-                >
+                <span class="metric-value">{{
+                  formatInvoiceAmount(writeOffs()!.cancelledTotal)
+                }}</span>
                 <span class="metric-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
               </div>
             </div>
@@ -597,7 +597,7 @@
                   [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
                 >
                   <div style="font-size: 11px; color: #64748b; font-weight: 500">
-                    {{ bucket.label }}
+                    {{ agingBucketLabelKeys[i] | translate }}
                   </div>
                   <div
                     style="font-size: 18px; font-weight: 700; margin: 2px 0"
@@ -606,7 +606,7 @@
                     {{ bucket.count }}
                   </div>
                   <div style="font-size: 11px; color: #475569">
-                    ${{ bucket.total | number: '1.0-0' }}
+                    {{ formatInvoiceAmount(bucket.total) }}
                   </div>
                 </div>
               }
@@ -624,9 +624,9 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.TOTAL_OUTSTANDING' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #0f172a"
-                >${{ invoiceAging()!.grandTotal | number: '1.0-0' }}</span
-              >
+              <span style="font-size: 16px; font-weight: 700; color: #0f172a">{{
+                formatInvoiceAmount(invoiceAging()!.grandTotal)
+              }}</span>
             </div>
             <div
               style="
@@ -740,7 +740,7 @@
                     min-width: 70px;
                     text-align: right;
                   "
-                  >${{ pm.total | number: '1.0-0' }}</span
+                  >{{ formatInvoiceAmount(pm.total) }}</span
                 >
               </div>
             }
@@ -757,9 +757,9 @@
                 <span style="font-size: 13px; font-weight: 600; color: #475569">{{
                   'DASHBOARD.TOTAL_COLLECTED' | translate
                 }}</span>
-                <span style="font-size: 15px; font-weight: 700; color: #059669"
-                  >${{ paymentMethodTotal() | number: '1.0-0' }}</span
-                >
+                <span style="font-size: 15px; font-weight: 700; color: #059669">{{
+                  formatInvoiceAmount(paymentMethodTotal())
+                }}</span>
               </div>
             }
           </div>
@@ -1110,15 +1110,17 @@
           <div class="audit-list">
             @for (evt of hospitalAdminAuditEvents(); track evt.id) {
               <div class="audit-row">
-                <span class="audit-time">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
+                <span class="audit-time">{{
+                  evt.eventTimestamp | serverTime | date: 'shortTime'
+                }}</span>
                 <div class="audit-body">
                   <span class="audit-actor">{{
                     evt.userName ?? ('COMMON.SYSTEM' | translate)
                   }}</span>
                   <span class="audit-summary"
                     >{{ evt.eventType | enumLabel: 'auditEventType' }}
-                    @if (evt.entityType || evt.resourceName) {
-                      — {{ evt.entityType ?? '' }} {{ evt.resourceName ?? '' }}
+                    @if (auditResourceLabel(evt.resourceName); as resource) {
+                      — {{ resource }}
                     }
                   </span>
                 </div>
@@ -3001,7 +3003,7 @@
       </section>
 
       <!-- Billing Summary -->
-      <section class="card patient-card">
+      <section class="card patient-card" data-testid="dashboard-billing">
         <div class="card-head">
           <div class="card-title-group">
             <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
@@ -3027,12 +3029,25 @@
                   <span class="bill-date">{{ inv.date | date: 'mediumDate' }}</span>
                 </div>
                 <div class="bill-amount-wrap">
+                  <!-- QA D254 (dashboard): the invoice total, and what is left when anything is -->
                   <span class="bill-amount" [class.bill-due]="inv.balance > 0">
-                    {{ formatInvoiceAmount(inv.balance) }}
+                    {{ formatInvoiceAmount(inv.amount) }}
                   </span>
-                  <span class="bill-status" [attr.data-status]="inv.status">
-                    {{ inv.status | enumLabel: 'invoiceStatus' }}
-                  </span>
+                  @if (inv.balance > 0 && inv.balance !== inv.amount) {
+                    <span class="bill-date">
+                      {{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}
+                      {{ formatInvoiceAmount(inv.balance) }}
+                    </span>
+                  }
+                  @if (inv.creditedTo) {
+                    <span class="bill-status" data-status="CREDITED">
+                      {{ 'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedTo } }}
+                    </span>
+                  } @else {
+                    <span class="bill-status" [attr.data-status]="inv.status">
+                      {{ inv.status | enumLabel: 'invoiceStatus' }}
+                    </span>
+                  }
                 </div>
               </div>
             }

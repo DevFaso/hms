@@ -3,6 +3,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, LabResultSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { localizeDecimals } from '../../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-my-lab-results',
@@ -62,5 +63,10 @@ export class MyLabResultsComponent implements OnInit {
     return lab.isAbnormal
       ? 'PORTAL.LAB_RESULTS.ABNORMAL_RESULT'
       : 'PORTAL.LAB_RESULTS.NORMAL_RESULT';
+  }
+
+  /** QA D344: a numeric result in the patient's notation ("7,9" in French). */
+  displayResult(result: string | null | undefined): string {
+    return localizeDecimals(result ?? '');
   }
 }

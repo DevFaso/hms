@@ -534,17 +534,24 @@ class UserEndpointAuthorizationIT extends BaseIT {
         List<UUID> atA = List.of(adminA.getId(), receptionistA.getId(), nurseA.getId(), patientA.getId(),
             pendingA.getId(), dualAB.getId());
 
+        // QA D430: a nurse's directory lists colleagues only, never the patient account.
+        List<UUID> staffAtA = atA.stream().filter(id -> !id.equals(patientA.getId())).toList();
+
         String nurse = hms(nurseA, "ROLE_NURSE");
         var all = page(get("/users").param("size", "100"), nurse);
-        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(atA);
-        assertThat(total(all)).isEqualTo(atA.size());
+        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(staffAtA);
+        assertThat(total(all)).isEqualTo(staffAtA.size());
 
         // Paging: one row per page, the total still counts the whole scope.
         var first = page(get("/users").param("size", "1").param("page", "0"), nurse);
-        assertThat(ids(first)).hasSize(1);
-        assertThat(total(first)).isEqualTo(atA.size());
+        assertThat(List.of((long) ids(first).size(), total(first)))
+            .containsExactly(1L, (long) staffAtA.size());
         var last = page(get("/users").param("size", "4").param("page", "1"), nurse);
-        assertThat(ids(last)).hasSize(atA.size() - 4);
+        assertThat(ids(last)).hasSize(staffAtA.size() - 4);
+
+        // A's administrator still lists every account at A, the patient included.
+        var adminAll = page(get("/users").param("size", "100"), hms(adminA, "ROLE_HOSPITAL_ADMIN"));
+        assertThat(ids(adminAll)).containsExactlyInAnyOrderElementsOf(atA);
 
         // Search: B's doctor is not found by name, email or role; A's accounts are.
         assertThat(List.of(
@@ -553,8 +560,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
                 total(page(get("/users/search").param("name", "sa"), nurse))))
             .containsOnly(0L);
         var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
-        assertThat(total(doctors)).isEqualTo(1);
-        assertThat(ids(doctors)).containsExactly(dualAB.getId());
+        assertThat(List.<Object>of(total(doctors), ids(doctors)))
+            .containsExactly(1L, List.of(dualAB.getId()));
         // QA D198: none of these accounts holds a staff profile, so a nurse sees their
         // e-mails masked and cannot confirm one by searching; A's administrator can.
         assertThat(List.of(

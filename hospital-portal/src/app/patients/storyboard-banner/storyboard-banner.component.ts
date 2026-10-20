@@ -151,6 +151,7 @@ export class StoryboardBannerComponent implements OnChanges, OnDestroy {
               (s.problems?.length ?? 0) === 0 &&
               (s.restrictedRows?.length ?? 0) === 0 &&
               !s.activeEncounter &&
+              !s.lastEncounter &&
               !(s.codeStatus?.status || (s.codeStatus?.directives?.length ?? 0) > 0));
           this.state.set(empty ? 'empty' : 'ready');
         },

@@ -118,7 +118,9 @@
     "WARD_CODE": "Code de l'unité",
     "WARD_CODE_PLACEHOLDER": "ex. MAT01",
     "WARD_NAME": "Nom de l'unité",
-    "WARD_TYPE": "Type d'unité"
+    "WARD_TYPE": "Type d'unité",
+    "DEPARTMENT": "Service",
+    "NO_DEPARTMENT": "Aucun service"
   },
   "ERROR_403": {
     "BACK": "Retour au tableau de bord",
@@ -215,6 +217,8 @@
     "PULSE": "Pouls",
     "RECORD_DELIVERY": "Enregistrer l'accouchement",
     "RISK_NOTES": "Notes de risque",
+    "RECENT_DELIVERY_OVERRIDE": "Motif de dérogation (accouchement récent)",
+    "RECENT_DELIVERY_OVERRIDE_HINT": "Obligatoire uniquement si une naissance a été enregistrée pour cette patiente au cours des 20 dernières semaines.",
     "SAVE_DELIVERY": "Enregistrer le compte rendu",
     "SAVE_ENTRY": "Enregistrer l'entrée",
     "SEX_FEMALE": "Féminin",
@@ -817,10 +821,10 @@
       "ADD_FAILED": "Impossible d'ajouter la correspondance",
       "COL_ACTIVE": "Actif",
       "COL_COC": "Combo. cat.",
-      "COL_CODE": "Code HMS",
+      "COL_CODE": "Code e-Keneya",
       "COL_DATAELEMENT": "DataElement DHIS2",
       "COL_PERIOD": "Période",
-      "COL_SYSTEM": "Système HMS",
+      "COL_SYSTEM": "Système e-Keneya",
       "DELETED": "Correspondance supprimée",
       "DELETE_FAILED": "Impossible de supprimer la correspondance",
       "EMPTY": "Aucune correspondance pour ce jeu de données.",
@@ -927,6 +931,7 @@
     "NO_KNOWN_ALLERGIES": "Aucune allergie connue au dossier.",
     "NO_ACTIVE_PROBLEMS": "Aucun problème actif au dossier.",
     "NO_ACTIVE_ENCOUNTER": "Aucune visite active.",
+    "LAST_VISIT": "Dernière visite : {{date}} ({{department}}).",
     "NO_CODE_STATUS": "Statut de réanimation non renseigné.",
     "TYPE": "Type",
     "STATUS": "Statut",
@@ -1128,6 +1133,8 @@
     "DISCHARGE_SUCCESS": "Patient sorti avec succès",
     "DISCHARGE_SUMMARY": "Résumé de Sortie",
     "DISCHARGE_SUMMARY_PLACEHOLDER": "Bref résumé de l'hospitalisation et du résultat...",
+    "DISCHARGE_DIAGNOSIS": "Diagnostic de sortie",
+    "DISCHARGE_DIAGNOSIS_PLACEHOLDER": "Diagnostic retenu à la sortie",
     "DISCHARGING": "Sortie de",
     "DISCHARGING_BTN": "Sortie en cours...",
     "DISCHARGING_PROVIDER": "Médecin en charge",
@@ -1372,7 +1379,12 @@
     "TIMESTAMP": "Horodatage",
     "TITLE": "Journal d'Audit",
     "TOTAL_EVENTS": "Total des Événements",
-    "USER": "Utilisateur"
+    "USER": "Utilisateur",
+    "WRITE_POST": "Création : {{entity}}",
+    "WRITE_PUT": "Modification : {{entity}}",
+    "WRITE_PATCH": "Modification : {{entity}}",
+    "WRITE_DELETE": "Suppression : {{entity}}",
+    "WRITE_ENTITY_UNKNOWN": "enregistrement"
   },
   "BILLING": {
     "ALL_STATUSES": "Tous les statuts",
@@ -1547,7 +1559,8 @@
     "VOICE_MEMO_EMPTY": "Le mémo vocal était vide — veuillez réessayer.",
     "VOICE_MEMO_NOT_SUPPORTED": "L'enregistrement de mémo vocal n'est pas pris en charge dans ce navigateur.",
     "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal.",
-    "ATTACHMENT": "Pièce jointe"
+    "ATTACHMENT": "Pièce jointe",
+    "SUBTITLE_PATIENT": "Écrire à votre équipe soignante"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -1650,7 +1663,7 @@
     "UNASSIGNED": "Non attribué",
     "SYSTEM": "Système",
     "MINUTES_SHORT": "{{count}} min",
-    "COPYRIGHT_FOOTER": "© {{year}} HMS — Système de gestion hospitalière",
+    "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Système de gestion hospitalière",
     "PATIENT_PICKER_NO_MATCH": "Aucun patient ne correspond à cette recherche."
   },
   "CONSULTATIONS": {
@@ -2118,7 +2131,7 @@
     "WARD": "Service",
     "WARD_OCCUPANCY": "Occupation par Service",
     "WELCOME_DESC": "Votre tableau de bord se remplira à mesure que vous utiliserez le système.",
-    "WELCOME_HMS": "Bienvenue sur HMS",
+    "WELCOME_HMS": "Bienvenue sur e-Keneya",
     "WL_STATUS": {
       "SCHEDULED": "Planifié",
       "CHECKED_IN": "Enregistré",
@@ -2142,7 +2155,12 @@
     "WRITTEN_OFF": "Radié",
     "FILTER_BY_DATE": "Filtrer par date",
     "FILTER_BY_URGENCY": "Filtrer par urgence",
-    "FILTER_BY_LOCATION": "Filtrer par emplacement"
+    "FILTER_BY_LOCATION": "Filtrer par emplacement",
+    "AGING_CURRENT": "Non échues",
+    "AGING_1_30": "1 à 30 jours",
+    "AGING_31_60": "31 à 60 jours",
+    "AGING_61_90": "61 à 90 jours",
+    "AGING_90_PLUS": "Plus de 90 jours"
   },
   "DELIVERY": {
     "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
@@ -2479,6 +2497,7 @@
     "LOAD_FAILED": "Échec du chargement des drapeaux de fonctionnalité",
     "NEW_FLAG": "Nouveau Drapeau",
     "NO_FLAGS": "Aucun drapeau trouvé",
+    "NO_FLAGS_MATCHING": "Aucun drapeau ne correspond à « {{query}} »",
     "OFF": "DÉSACTIVÉ",
     "ON": "ACTIVÉ",
     "OVERRIDE_REMOVED": "Remplacement supprimé pour {{key}}",
@@ -2560,7 +2579,8 @@
     "PROVINCE_PLACEHOLDER": "ex. Kadiogo",
     "REGION": "Région",
     "REGION_PLACEHOLDER": "ex. Centre, Île-de-France",
-    "REQUIRED_FIELDS": "Le nom, la ville, le pays et le numéro de téléphone sont obligatoires",
+    "REQUIRED_FIELDS": "Le nom, la ville, le pays, le téléphone et une adresse ou une boîte postale sont obligatoires.",
+    "ADDRESS_OR_PO_BOX_HINT": "Indiquez l'adresse ou la boîte postale (l'une des deux est obligatoire).",
     "SEARCH_PLACEHOLDER": "Rechercher des hôpitaux…",
     "SECTOR": "Secteur / Quartier",
     "SECTOR_PLACEHOLDER": "ex. Secteur 30",
@@ -3041,6 +3061,11 @@
     "CURRENT_RESULT": "Résultat actuel",
     "PREVIOUS_RESULT": "Résultat précédent",
     "BASELINE": "Référence (aucun résultat précédent)",
+    "SIGNIFICANCE_BASELINE": "Référence",
+    "SIGNIFICANCE_STABLE": "Stable",
+    "SIGNIFICANCE_MINOR": "Changement mineur",
+    "SIGNIFICANCE_SIGNIFICANT": "Changement significatif",
+    "SIGNIFICANCE_CRITICAL": "Changement critique",
     "DAYS_BETWEEN": "jours d’écart",
     "READ_BACK": "Relecture",
     "READ_BACK_PROMPT": "Répétez la valeur critique qui vous a été communiquée pour",
@@ -3053,10 +3078,10 @@
     "READ_BACK_MISMATCH": "DISCORDANCE de relecture — non acquitté",
     "ORDER_OPTION": "{{patient}} — {{test}} — {{date}} ({{code}})",
     "AUTOVERIFICATION": "Validation automatique",
-    "SELF_RELEASED": "Auto-validé",
+    "SELF_RELEASED": "Validé par son auteur",
     "SELF_RELEASED_HINT": "Validé par la personne qui l’a saisi, sans second relecteur",
     "SELF_RELEASE_TITLE": "Valider votre propre résultat ?",
-    "SELF_RELEASE_BODY": "Vous avez saisi ce résultat ({{test}} pour {{patient}}). Le valider vous-même, sans second relecteur, est permis ; la validation sera enregistrée et affichée comme une auto-validation.",
+    "SELF_RELEASE_BODY": "Vous avez saisi ce résultat ({{test}} pour {{patient}}). Le valider vous-même, sans second relecteur, est permis ; la validation sera enregistrée et affichée comme « Validé par son auteur ».",
     "SELF_RELEASE_CONFIRM": "Le valider moi-même",
     "ENTER_CORRECTION": "Saisir une correction",
     "CORRECTION": "Rectification",
@@ -3084,10 +3109,11 @@
     "COL_RESULT_DATE": "Date du résultat",
     "COL_RECEIVED": "Reçu le",
     "COL_ACTIONS": "Actions",
+    "FLAG_CRITICAL": "Critique",
     "FLAG_HIGH": "Élevé",
     "FLAG_LOW": "Bas",
     "FLAG_NORMAL": "Normal",
-    "FLAG_UNSPECIFIED": "Non signalé",
+    "FLAG_UNSPECIFIED": "Non évalué",
     "FLAG_UNIT_MISMATCH": "Non évalué : unités différentes",
     "CRITICAL": "Critique",
     "RELEASE": "Valider",
@@ -3101,7 +3127,7 @@
     "EMPTY": "Aucun résultat en attente de validation.",
     "LOAD_ERROR": "Impossible de charger la file de validation.",
     "PAGE_OF": "Page {{page}} sur {{total}}",
-    "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme une auto-validation.",
+    "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme « Validé par son auteur ».",
     "SELF_RELEASE_CONFIRM": "Le valider moi-même"
   },
   "LAB_INSTRUMENTS": {
@@ -3288,9 +3314,9 @@
     "ENTER_EMAIL": "Veuillez saisir votre adresse e-mail.",
     "RESEND_ACTIVATION": "Renvoyer l'e-mail d'activation",
     "RA_TITLE": "Activer votre compte",
-    "RA_INSTRUCTION": "Saisissez l'adresse e-mail de votre compte et nous enverrons un nouveau lien d'activation, valable 24 heures.",
+    "RA_INSTRUCTION": "Saisissez l'adresse e-mail ou le numéro de téléphone de votre compte et nous enverrons un nouveau lien ou code d'activation, valable 24 heures.",
     "SEND_ACTIVATION_LINK": "Envoyer le lien d'activation",
-    "ACTIVATION_LINK_SENT": "Si cette adresse correspond à un compte non encore activé, un nouveau lien d'activation est en route. Il est valable 24 heures.",
+    "ACTIVATION_LINK_SENT": "Si cette adresse ou ce numéro correspond à un compte non encore activé, un nouveau lien ou code d'activation est en route. Il est valable 24 heures.",
     "RESET_LINK_SENT": "Si cette adresse e-mail ou ce numéro est enregistré, un lien de réinitialisation a été envoyé. Vérifiez votre boîte de réception ou vos SMS."
   },
   "NAV": {
@@ -3379,7 +3405,7 @@
     "MEDICATION_HISTORY": "Historique Médicamenteux",
     "PROCEDURE_ORDERS": "Ordres de Procédure",
     "REGISTRATIONS": "Enregistrements",
-    "MY_EDUCATION": "Mes documents",
+    "MY_EDUCATION": "Mon éducation santé",
     "REFILLS": "Demandes de renouvellement",
     "LAB_OUTBOX": "Boîte d’envoi instruments",
     "MICROBIOLOGY": "Microbiologie",
@@ -3426,6 +3452,7 @@
     "PROVIDER_AUDIT": "Journal d'audit"
   },
   "NOTIFICATIONS": {
+    "CRITICAL_ALERT": "Alerte critique",
     "ALL": "Tout",
     "ALL_CAUGHT_UP": "Vous êtes à jour !",
     "ALL_MARKED_READ": "Toutes les notifications ont été marquées comme lues",
@@ -3464,6 +3491,7 @@
     "VIEW_ALL": "Voir tout"
   },
   "NURSE": {
+    "AWAITING_TRIAGE": "En attente de triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Saisir l'action...",
     "ACTIVE_ADMISSIONS_HERE": "Les admissions actives apparaîtront ici",
@@ -3512,7 +3540,7 @@
     "CODE_STATUS": "Consignes de réanimation",
     "COMMUNICATION_INBOX": "Boîte de réception",
     "COMPLETE": "Terminé",
-    "COMPLETE_HANDOFF": "Terminer le transfert",
+    "COMPLETE_HANDOFF": "Terminer la transmission",
     "COMPLETE_TASK": "Terminer la tâche",
     "CONFIRM": "Confirmer",
     "CREATE_TASK": "Créer une tâche",
@@ -3549,14 +3577,14 @@
     "FLUID_BALANCE": "Bilan hydrique",
     "FREQUENCY": "Fréquence",
     "GIVE": "Administrer",
-    "HANDOFF": "Transfert",
-    "HANDOFFS": "Transferts",
+    "HANDOFF": "Transmission",
+    "HANDOFFS": "Transmissions",
     "HANDOFF_ASSESSMENT": "Évaluation",
     "HANDOFF_BACKGROUND": "Antécédents",
     "HANDOFF_DIRECTION": "Sens",
-    "HANDOFF_DIRECTION_PLACEHOLDER": "ex. Relève de garde, Transfert en radiologie",
-    "HANDOFF_NOTES": "Notes de transfert",
-    "HANDOFF_PLACEHOLDER": "Saisir les notes de transfert...",
+    "HANDOFF_DIRECTION_PLACEHOLDER": "— Choisir le type de transmission —",
+    "HANDOFF_NOTES": "Notes de transmission",
+    "HANDOFF_PLACEHOLDER": "Saisir les notes de transmission...",
     "HANDOFF_RECOMMENDATION": "Recommandation",
     "HANDOFF_REPORTED_BY": "Rapporté par",
     "HANDOFF_SITUATION": "Situation",
@@ -3595,7 +3623,7 @@
     "MY_UNIT": "Mon unité",
     "NARRATIVE": "Narratif",
     "NARRATIVE_PLACEHOLDER": "Saisir le narratif...",
-    "NEW_HANDOFF": "Nouveau transfert",
+    "NEW_HANDOFF": "Nouvelle transmission",
     "NEW_TASK": "Nouvelle tâche",
     "NEXT_DUE": "Prochaine prise",
     "NIGHT_SHIFT": "Poste de nuit",
@@ -3606,7 +3634,7 @@
     "NOTE_TITLE": "Titre de la note",
     "NO_ANNOUNCEMENTS": "Aucune annonce",
     "NO_FLOW_BOARD": "Aucune donnée de flux",
-    "NO_HANDOFFS": "Aucun transfert",
+    "NO_HANDOFFS": "Aucune transmission",
     "NO_MEDICATIONS": "Aucun médicament",
     "NO_MESSAGES": "Aucun message",
     "NO_NOTES": "Aucune note de soins",
@@ -3660,7 +3688,7 @@
     "STAT": "Immédiat (STAT)",
     "SUBJECTIVE": "Subjectif",
     "SUBJECTIVE_PLACEHOLDER": "Saisir le subjectif...",
-    "SUBMIT_HANDOFF": "Enregistrer le transfert",
+    "SUBMIT_HANDOFF": "Enregistrer la transmission",
     "SUBTITLE": "Soins et surveillance des patients",
     "SYSTOLIC": "Systolique",
     "SYSTOLIC_BP": "TA systolique",
@@ -3728,7 +3756,8 @@
       "NOTE_SAVED": "Note de soins enregistrée pour {{patient}}",
       "NOTE_FAILED": "Échec de l'enregistrement de la note de soins",
       "NO_ENCOUNTER": "Aucune consultation active trouvée pour ce patient.",
-      "ENCOUNTER_LOOKUP_FAILED": "Échec de la recherche de la consultation."
+      "ENCOUNTER_LOOKUP_FAILED": "Échec de la recherche de la consultation.",
+      "HANDOFF_SITUATION_REQUIRED": "Décrivez la situation (le S de SBAR) avant la transmission."
     },
     "MED_ACTION": {
       "GIVEN": "administré",
@@ -3815,7 +3844,7 @@
     "USERNAME": "Nom d'utilisateur",
     "VERIFYING": "Vérification...",
     "WELCOME": "Bienvenue",
-    "WELCOME_TO_HMS": "Bienvenue sur HMS",
+    "WELCOME_TO_HMS": "Bienvenue sur e-Keneya",
     "ERR_NO_LINK_CODE": "Aucun code d'affectation n'a été trouvé dans le lien. Veuillez vérifier votre e-mail.",
     "ERR_LINK_INVALID": "Ce lien d'affectation est invalide ou a expiré.",
     "ERR_LOAD_FAILED": "Impossible de charger votre affectation. Veuillez réessayer plus tard.",
@@ -4477,7 +4506,9 @@
       "RECORDED": "Enregistré",
       "SOURCE": "Origine",
       "NORMAL_PREFIX": "Normal",
-      "NORMAL_RANGE": "Plage normale"
+      "NORMAL_RANGE": "Plage normale",
+      "UNIT_BREATHS_MIN": "cycles/min",
+      "FASTING": "à jeun"
     },
     "APPOINTMENTS": {
       "TITLE": "Mes rendez-vous",
@@ -4626,6 +4657,7 @@
       "PAYMENT_METHOD": "Mode de paiement",
       "REFERENCE": "Référence / ID de transaction (facultatif)",
       "REFERENCE_PLACEHOLDER": "ex. TXN-123456",
+      "REFERENCE_REQUIRED": "Indiquez la référence du paiement par carte, virement ou mobile money.",
       "ENTER_AMOUNT": "Saisir le montant",
       "CANCEL": "Annuler",
       "PROCESSING": "Traitement en cours…",
@@ -4640,7 +4672,11 @@
       "MOBILE_MONEY": "Mobile Money",
       "CASH": "Espèces",
       "PAYMENT_PENDING": "Votre paiement de {{amount}} a été déclaré. Il apparaîtra sur votre facture dès que la caisse de l’hôpital l’aura confirmé.",
-      "PAYMENT_PENDING_NOTE": "Les paiements déclarés ici sont confirmés par l’hôpital avant que votre solde ne change."
+      "PAYMENT_PENDING_NOTE": "Les paiements déclarés ici sont confirmés par l’hôpital avant que votre solde ne change.",
+      "PENDING_DECLARED": "Déjà déclaré, en attente de confirmation",
+      "LEFT_TO_DECLARE": "Reste à déclarer",
+      "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} F CFA : {{pending}} F CFA déjà déclarés sont en attente de confirmation.",
+      "CREDITED_TO": "Reporté sur la facture {{number}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -4869,7 +4905,11 @@
         "HOME": "Mesure à domicile",
         "SELF_REPORTED": "Auto-déclaré",
         "DEVICE": "Appareil connecté",
-        "TRIAGE": "Triage"
+        "TRIAGE": "Triage",
+        "OTHER": "Autre",
+        "DELIVERY": "Salle d’accouchement",
+        "PATIENT_REPORTED": "Déclaré par le patient",
+        "MANUAL": "Saisie manuelle"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consultation",
@@ -4882,6 +4922,7 @@
         "TELEHEALTH": "Télésanté"
       },
       "STATUS": {
+        "QUALITATIVE": "Résultat qualitatif",
         "ABNORMAL": "Anormal",
         "ABNORMAL_HIGH": "Anormal - élevé",
         "ABNORMAL_LOW": "Anormal - bas",
@@ -5349,6 +5390,10 @@
         "INVOICE_CREATED": "Facture créée",
         "INVOICE_UPDATED": "Facture modifiée",
         "LAB_ORDER_CREATED": "Examen prescrit",
+        "LAB_ORDER_UPDATED": "Demande d'examen modifiée",
+        "LAB_SPECIMEN_UPDATED": "Prélèvement mis à jour",
+        "LAB_RESULT_CREATED": "Résultat d'examen saisi",
+        "LAB_RESULT_ACKNOWLEDGED": "Résultat d'examen pris en compte",
         "LAB_RESULT_RELEASED": "Résultat d'examen validé",
         "LAB_RESULT_UPDATED": "Résultat d'examen modifié",
         "LOGIN": "Connexion",
@@ -5596,8 +5641,16 @@
         "PAIN": "Douleur",
         "PSYCHOSOCIAL": "Psychosocial"
       },
+      "HANDOFF_DIRECTION": {
+        "BREAK_COVER": "Remplacement pendant une pause",
+        "PROCEDURE": "Vers un examen ou un acte",
+        "SHIFT_CHANGE": "Relève de garde",
+        "WARD_TRANSFER": "Transfert de service"
+      },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Bilan complet",
+        "NEWS2_HIGH": "NEWS2 élevé : toutes les 15 min",
+        "NEWS2_MEDIUM": "NEWS2 moyen : toutes les heures",
         "ROUTINE": "Routine"
       },
       "NEWBORN_ALERT_TYPE": {
@@ -5780,7 +5833,8 @@
         "PATHOLOGY_REPORT": "Compte rendu d’anatomopathologie",
         "ED_NOTE": "Note des urgences",
         "MEDICATION_ORDER": "Prescription médicamenteuse",
-        "CARE_PLAN": "Plan de soins"
+        "CARE_PLAN": "Plan de soins",
+        "GENERIC_REPORT": "Autre compte rendu"
       },
       "ADMISSION_TYPE": {
         "EMERGENCY": "Urgence",
@@ -5805,6 +5859,60 @@
         "MEDICATION": "Médicament",
         "LAB_TEST": "Analyse de laboratoire",
         "GENERAL": "Général"
+      },
+      "AUDIT_ENTITY_TYPE": {
+        "USER": "Compte utilisateur",
+        "PATIENT": "Patient",
+        "LAB_RESULT": "Résultat de laboratoire",
+        "HOSPITAL": "Établissement",
+        "ENCOUNTER": "Consultation",
+        "ORGANIZATION": "Organisation",
+        "WEBHOOK_ENDPOINT": "Point de terminaison webhook",
+        "PRESCRIPTION_ROUTING": "Orientation d’ordonnance",
+        "USER_ROLE_ASSIGNMENT": "Attribution de rôle",
+        "STOCK_TRANSACTION": "Mouvement de stock",
+        "ROI_REQUEST": "Demande de communication du dossier",
+        "REGION_POLICY": "Politique régionale",
+        "PROGRAM_ENROLLMENT": "Inscription à un programme",
+        "PRESCRIPTION": "Ordonnance",
+        "PHONE_OTP_CHALLENGE": "Vérification du téléphone",
+        "PATIENT_RECALL": "Rappel patient",
+        "PATIENT_HOSPITAL_REGISTRATION": "Inscription du patient",
+        "PRO_RESPONSE": "Réponse au questionnaire",
+        "PRO_INSTRUMENT": "Questionnaire",
+        "PROVIDER_FACILITY": "Structure partenaire",
+        "PLATFORM_SERVICE": "Service de la plateforme",
+        "PLATFORM_RELEASE_WINDOW": "Fenêtre de mise en production",
+        "PLATFORM_DOWNTIME": "Interruption programmée",
+        "PLATFORM": "Plateforme",
+        "PATIENT_UPLOADED_DOCUMENT": "Document du patient",
+        "PATIENT_RECORD_SHARING_OPTOUT": "Refus du partage du dossier",
+        "PANEL_ASSIGNMENT": "Affectation à une patientèle",
+        "NURSING_NOTE": "Note infirmière",
+        "LAB_TEST_DEFINITION": "Définition d’examen de laboratoire",
+        "INVENTORY": "Stock",
+        "IMAGING_STUDY": "Examen d’imagerie",
+        "IDENTITY_LINKED": "Identité liée",
+        "IDENTITIES_MERGED": "Identités fusionnées",
+        "HOSPITAL_RECORD_ACCESS_POSTURE": "Paramètre d’accès aux dossiers",
+        "FHIR_BULK_EXPORT_JOB": "Export FHIR groupé",
+        "FEATURE_FLAG_OVERRIDE": "Forçage de drapeau de fonctionnalité",
+        "FEATURE_FLAG": "Drapeau de fonctionnalité",
+        "EMPI_MASTER_IDENTITY": "Identité patient de référence",
+        "ELIGIBILITY_CHECK": "Vérification d’éligibilité",
+        "BILLING_INVOICE": "Facture",
+        "BREAK_GLASS_SESSION": "Accès d’urgence",
+        "API_KEY": "Clé d’API",
+        "ADMISSION": "Hospitalisation",
+        "REFERRAL": "Orientation"
+      },
+      "TIMELINE_CATEGORY": {
+        "ALLERGY": "Allergie",
+        "ENCOUNTER": "Consultation",
+        "IMAGING": "Imagerie",
+        "LAB_RESULT": "Résultat de laboratoire",
+        "PRESCRIPTION": "Ordonnance",
+        "PROCEDURE": "Acte"
       }
     },
     "DOCUMENTS": {
@@ -5924,7 +6032,7 @@
       "SAVED": "Enregistré.",
       "SAVE_FAILED": "Impossible d'enregistrer. Veuillez réessayer.",
       "SEND_QUESTION": "Envoyer la question",
-      "TITLE": "Mes documents",
+      "TITLE": "Mon éducation santé",
       "WARNING_DESC": "Votre équipe soignante a partagé un document sur les signes d'alerte. Veuillez le lire.",
       "WARNING_TITLE": "Informations de sécurité importantes",
       "WATCH_VIDEO": "Regarder la vidéo",
@@ -6331,9 +6439,11 @@
     "PASSWORD_CHANGE_FAILED": "Le mot de passe n’a pas pu être modifié. Veuillez réessayer.",
     "PASSWORD_MANAGED_BY_SSO": "Votre mot de passe est géré par votre fournisseur d’authentification unique.",
     "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
-    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail."
+    "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail.",
+    "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS."
   },
   "RECEPTION": {
+    "COCKPIT_DATE": "Jour affiché",
     "ACCEPT_OFFER": "Accepter",
     "ACCEPT_OFFER_FAILED": "Échec de l'acceptation de l'offre",
     "ACTIVE_COVERAGE": "Couverture active",
@@ -6801,6 +6911,42 @@
       "PERMS_LOAD_FAILED": "Échec du chargement des autorisations",
       "PERMS_UPDATED": "Autorisations mises à jour",
       "PERMS_UPDATE_FAILED": "Échec de la mise à jour des autorisations"
+    },
+    "SYSTEM_DESC": {
+      "ACCOUNTANT": "Comptable chargé(e) des écritures, du suivi des dépenses et des rapprochements financiers",
+      "ADMIN": "Utilisateur administratif disposant de privilèges opérationnels étendus",
+      "ANESTHESIOLOGIST": "Spécialiste en anesthésie chargé(e) de la consultation préopératoire, de la sédation et de la prise en charge de la douleur",
+      "BILLING_SPECIALIST": "Chargé(e) de facturation : factures, demandes de remboursement, encaissements et rapports financiers",
+      "CLAIMS_REVIEWER": "Agent chargé de vérifier et de transmettre les demandes de remboursement pharmacie à l'AMU et aux assureurs",
+      "CLEANER": "Agent d'entretien chargé de l'hygiène et de la propreté des locaux de l'hôpital",
+      "DOCTOR": "Médecin habilité à poser des diagnostics, prescrire, demander des examens et gérer les plans de traitement",
+      "HOSPITAL_ADMIN": "Administrateur de l'hôpital, chargé du personnel, des services, de la facturation et de la configuration de l'hôpital",
+      "INVENTORY_CLERK": "Agent de pharmacie chargé des réceptions, des ajustements de stock et des inventaires",
+      "LAB_DIRECTOR": "Directeur(trice) du laboratoire, autorité finale d'approbation des définitions d'analyses selon CLIA/CAP/ISO 15189",
+      "LAB_MANAGER": "Responsable de laboratoire supervisant le travail des techniciens, la vérification des résultats, le contrôle qualité et le fonctionnement du laboratoire",
+      "LAB_SCIENTIST": "Biologiste chargé(e) du traitement des échantillons, de la réalisation des analyses et de la publication des résultats",
+      "LAB_TECHNICIAN": "Technicien de laboratoire chargé du prélèvement, de la réception et du traitement des échantillons, et de la saisie préliminaire des résultats",
+      "MANAGER": "Responsable de service ou d'exploitation, chargé de la coordination du personnel et de la planification des ressources",
+      "MIDWIFE": "Sage-femme spécialisée dans le suivi maternel, l'accompagnement du travail et l'examen du nouveau-né",
+      "MODERATOR": "Modérateur des contenus et des activités, avec des droits de supervision et de revue",
+      "NURSE": "Infirmier(ère) diplômé(e) assurant les soins, l'administration des médicaments et le relevé des constantes",
+      "PATIENT": "Patient inscrit, avec un accès en libre-service à son dossier, à ses rendez-vous et à ses ordonnances",
+      "PHARMACIST": "Pharmacien(ne) chargé(e) de la dispensation, de la vérification des interactions médicamenteuses et de la gestion des stocks",
+      "PHARMACY_VERIFIER": "Pharmacien(ne) habilité(e) à vérifier et contresigner la dispensation des substances contrôlées",
+      "PHYSICIAN": "Médecin généraliste disposant de privilèges cliniques pour la consultation et le traitement des patients",
+      "PHYSIOTHERAPIST": "Kinésithérapeute concevant les programmes de rééducation, les séances et les bilans de mobilité",
+      "PROVIDER_ADMIN": "Administrateur d'un établissement prestataire externe (pharmacie ou laboratoire)",
+      "QUALITY_MANAGER": "Responsable qualité chargé(e) de revoir la documentation de validation et la conformité CAP/CLIA/ISO avant l'approbation du directeur du laboratoire",
+      "RADIOLOGIST": "Radiologue interprétant les radiographies, scanners et IRM et rédigeant les comptes rendus",
+      "RECEPTIONIST": "Agent d'accueil chargé de l'enregistrement des patients, des rendez-vous et de l'accueil des visiteurs",
+      "SECURITY": "Agent de sécurité chargé du contrôle des accès, de la surveillance et de la sûreté des locaux",
+      "STAFF": "Personnel de soutien de l'hôpital, avec accès aux plannings et aux rendez-vous",
+      "STORE_MANAGER": "Responsable de pharmacie supervisant les stocks, les seuils de réapprovisionnement et les rapports de stock",
+      "SUPER_ADMIN": "Super-administrateur de la plateforme, avec accès complet à toutes les organisations, à tous les hôpitaux et aux paramètres du système",
+      "SUPPORT": "Agent de support aidant les utilisateurs en cas de problème ou de question sur le système",
+      "SURGEON": "Chirurgien(ne) réalisant les interventions, gérant les plans opératoires et les soins postopératoires",
+      "TECHNICIAN": "Technicien biomédical ou informatique chargé de la maintenance des équipements et du support technique",
+      "USER": "Utilisateur standard disposant des droits d'accès de base"
     }
   },
   "SCHEDULING": {
@@ -6952,7 +7098,9 @@
     "TOGGLE_VISIBILITY": "Afficher ou masquer le mot de passe",
     "USERNAME_DESC": "Choisissez un nom d'utilisateur unique",
     "USERNAME_HINT": "3 à 50 caractères : lettres, chiffres, points, tirets, tirets bas",
-    "USERNAME_PLACEHOLDER": "ex. jean.dupont"
+    "USERNAME_PLACEHOLDER": "ex. jean.dupont",
+    "CURRENT_HINT_SMS": "Le mot de passe temporaire reçu par SMS",
+    "CURRENT_HINT_GENERIC": "Le mot de passe temporaire qui vous a été remis"
   },
   "SETTINGS_HUB": {
     "ACCOUNT_DESC": "Mettez à jour votre nom, vos coordonnées, votre photo et vos autres informations personnelles.",
@@ -7529,6 +7677,7 @@
     "labResultsScopeHint": "Résultats de l'hôpital dans lequel vous travaillez. Un résultat que vous avez prescrit dans un autre hôpital figure dans la file de cet hôpital, pas dans celle-ci.",
     "labResultsSubtitle": "Résultats publiés sur les examens que vous avez prescrits.",
     "labTruncated": "Affichage de {{shown}} sur {{total}}, les plus urgents d’abord.",
+    "labQualitative": "Qualitatif",
     "labUnknown": "Non évalué",
     "messages": "Messages",
     "orders": "Ordonnances",
@@ -7786,6 +7935,7 @@
     "VERIF_PROVISIONAL": "Provisoire",
     "VERIF_REFUTED": "Réfutée",
     "VERIF_UNCONFIRMED": "Non confirmée",
+    "LAB_STATUS_QUALITATIVE": "Résultat qualitatif : à interpréter par le clinicien",
     "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence"
   },
   "PHARMACY": {
@@ -8052,6 +8202,15 @@
     "SELECT_ITEM_REQUIRED": "Sélectionnez un article d'inventaire",
     "SELECT_MEDICATION_OPTION": "— Sélectionner un médicament —",
     "SELECT_OPTION": "— Sélectionner —",
+    "LEDGER_REASON_RECEIPT_LOT": "Réception : lot {{lot}}",
+    "LEDGER_REASON_RECEIPT": "Réception",
+    "LEDGER_REASON_DISPENSE": "Dispensation d’une ordonnance",
+    "LEDGER_REASON_RETURN": "Retour, réf. {{ref}}",
+    "LEDGER_REASON_TRANSFER": "Transfert vers {{dest}}",
+    "ADJ_REASON_DAMAGE": "Dommage",
+    "ADJ_REASON_EXPIRY_WRITE_OFF": "Mise au rebut (péremption)",
+    "ADJ_REASON_CYCLE_COUNT_VARIANCE": "Écart d’inventaire",
+    "ADJ_REASON_CONTROLLED_DISCREPANCY": "Écart sur stupéfiant",
     "SELECT_REASON_OPTION": "— Sélectionner un motif —",
     "SELECT_TYPE_OPTION": "— Sélectionner un type —",
     "SEND_TO_PARTNER": "Envoyer au partenaire",
@@ -8160,12 +8319,17 @@
     },
     "NO_PHARMACY_HINT": "Aucune pharmacie n’est encore enregistrée pour cet établissement. Un administrateur de l’établissement peut en enregistrer une dans le Registre des pharmacies.",
     "SELECT_PHARMACY": "Pharmacie",
+    "NEW_ITEM_STARTS_AT_ZERO": "Un nouvel article démarre à 0. Ajoutez du stock par une réception avec un lot.",
     "QTY_ON_HAND_COLUMN": "Qté en stock",
     "REORDER_QTY_COLUMN": "Qté à commander",
     "RECEIPT_EXPIRY_REQUIRED": "Saisissez la date de péremption du lot.",
     "RECEIPT_LOT_EXPIRED": "Ce lot est périmé et ne peut pas être entré en stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "Cet article est suivi par lot : choisissez le lot concerné par le mouvement.",
-    "SELECT_LOT_OPTION": "Sélectionnez un lot"
+    "SELECT_LOT_OPTION": "Sélectionnez un lot",
+    "UNIT_PRICE": "Prix unitaire (F CFA)",
+    "PRICE_SAVED": "Prix enregistré.",
+    "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
+    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -8220,7 +8384,8 @@
       "DRAFT": "Brouillon",
       "PENDING_QA": "En attente d'examen AQ",
       "PENDING_DIRECTOR": "En attente d'approbation du directeur",
-      "APPROVED": "Approuvés, en attente d'activation"
+      "APPROVED": "Approuvés, en attente d'activation",
+      "REJECTED": "Rejetés, à corriger et resoumettre"
     },
     "SEARCH_PLACEHOLDER": "Rechercher par nom, code ou catégorie…",
     "LOADING": "Chargement de la file d'attente…",
@@ -10732,24 +10897,29 @@
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Encaissement pharmacie",
-    "SUBTITLE": "Recherche de dispense et enregistrement du paiement",
-    "STEP_LOOKUP": "1. Rechercher un dispense",
-    "DISPENSE_ID": "Identifiant du dispense",
-    "DISPENSE_ID_PLACEHOLDER": "UUID du dispense",
+    "SUBTITLE": "Recherche de la délivrance et enregistrement du paiement",
+    "STEP_LOOKUP": "1. Rechercher une délivrance",
+    "DISPENSE_ID": "Identifiant de la délivrance",
+    "DISPENSE_ID_PLACEHOLDER": "Identifiant de la délivrance",
     "LOAD": "Charger",
     "MEDICATION": "Médicament",
     "QTY_DISPENSED": "Quantité délivrée",
     "PATIENT": "Patient",
     "PHARMACY": "Pharmacie",
     "STEP_PAYMENT": "2. Enregistrer le paiement",
-    "AMOUNT_XOF": "Montant (XOF)",
+    "AMOUNT_XOF": "Montant (F CFA)",
     "PAYMENT_METHOD": "Mode de paiement",
     "REFERENCE": "Référence",
     "REFERENCE_PLACEHOLDER": "Transaction / police",
     "SUBMIT": "Valider le paiement",
     "PRINT": "Imprimer",
     "NEW_PAYMENT": "Nouveau paiement",
-    "RECEIPT_NO_PATIENT": "Non renseigné"
+    "RECEIPT_NO_PATIENT": "Non renseigné",
+    "NO_PRICE": "La pharmacie n'a pas encore fixé le prix de ce médicament : renseignez son prix unitaire dans l'inventaire avant d'encaisser.",
+    "DISPENSE_PICK": "Délivrance à encaisser",
+    "DISPENSE_PICK_PLACEHOLDER": "Choisir une délivrance",
+    "NO_DISPENSES": "Aucune délivrance à encaisser dans cette pharmacie.",
+    "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",
@@ -10759,7 +10929,8 @@
     "NO_PAYMENTS": "Aucun paiement de pharmacie pour le moment.",
     "CLAIMS_TITLE": "Réclamations d’assurance",
     "NO_CLAIMS": "Aucune réclamation de pharmacie pour le moment.",
-    "REF": "Réf : {{ref}}"
+    "REF": "Réf : {{ref}}",
+    "VOIDED": "Annulé avec la délivrance : à rembourser"
   },
   "VITAL_LIMITS": {
     "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",

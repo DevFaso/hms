@@ -57,15 +57,21 @@ import java.util.Locale;
 @Transactional
 public class PostpartumCareServiceImpl implements PostpartumCareService {
 
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private static final double FEVER_THRESHOLD_C = 38.0;
     private static final int TACHYCARDIA_THRESHOLD = 100;
     private static final int HYPOTENSION_SYSTOLIC_THRESHOLD = 90;
     private static final int PAIN_ALERT_THRESHOLD = 7;
     private static final int HEMORRHAGE_BLOOD_LOSS_THRESHOLD_ML = 500;
 
+    /** Tolerance for a device clock slightly ahead of the server. */
+    static final java.time.Duration CLOCK_SKEW = java.time.Duration.ofMinutes(5);
+
     private final PostpartumObservationRepository observationRepository;
     private final PostpartumCarePlanRepository carePlanRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
@@ -77,6 +83,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
     public PostpartumObservationResponseDTO recordObservation(UUID patientId,
@@ -84,14 +91,19 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                                                               UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Postpartum observation request payload is required.");
+            throw new BusinessException("maternity.postpartum.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         ObstetricEligibility.requireObstetricEligible(patient);
 
+        requireNotInFuture(request);
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
         PostpartumCarePlan carePlan = resolveCarePlan(patient, hospital, registration, request);
@@ -198,7 +210,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (response != null && response.getSchedule() != null) {
             schedule = response.getSchedule();
         } else {
-            boolean overdue = plan.getOverdueSince() != null && plan.getOverdueSince().isBefore(LocalDateTime.now());
+            boolean overdue = plan.getNextDueAt() != null && plan.getNextDueAt().isBefore(LocalDateTime.now());
             Integer frequency = plan.currentCheckFrequencyMinutes();
             schedule = PostpartumScheduleDTO.builder()
                 .carePlanId(plan.getId())
@@ -221,7 +233,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new BusinessException("maternity.registration.otherPatient");
             }
             return registration;
         }
@@ -241,11 +253,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         if (requestedHospitalId != null) {
             return hospitalRepository.findClinicalById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, patient.getHospitalId()));
         }
         throw new BusinessException("postpartum.hospital.required");
     }
@@ -256,7 +268,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
             return staff;
         }
@@ -287,6 +299,18 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
         Optional<PostpartumCarePlan> existing = carePlanRepository
             .findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patient.getId(), hospital.getId());
+        LocalDateTime latestBirth = deliveryRecordRepository
+            .findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patient.getId(), hospital.getId())
+            .map(com.example.hms.model.labor.DeliveryRecord::getBirthDateTime)
+            .orElse(null);
+        if (existing.isPresent() && latestBirth != null && existing.get().getDeliveryOccurredAt() != null
+            && existing.get().getDeliveryOccurredAt().isBefore(latestBirth)) {
+            // QA D215 (D162): the active plan belongs to an earlier delivery.
+            // Close it; the new birth starts its own plan in immediate recovery.
+            existing.get().markClosed(latestBirth);
+            carePlanRepository.save(existing.get());
+            existing = Optional.empty();
+        }
         if (existing.isPresent()) {
             PostpartumCarePlan plan = existing.get();
             if (plan.getRegistration() == null && registration != null) {
@@ -303,7 +327,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .patient(patient)
             .hospital(hospital)
             .registration(registration)
-            .deliveryOccurredAt(resolveDeliveryTimestamp(request))
+            .deliveryOccurredAt(request.getDeliveryOccurredAt() == null && latestBirth != null
+                ? latestBirth : resolveDeliveryTimestamp(request))
             .build();
         if (plan.getDeliveryOccurredAt() == null) {
             plan.setDeliveryOccurredAt(LocalDateTime.now());
@@ -311,6 +336,25 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         plan.setNextDueAt(plan.getDeliveryOccurredAt()
             .plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES));
         return carePlanRepository.save(plan);
+    }
+
+    /**
+     * QA D268: an observation dated a day ahead closed the immediate-recovery
+     * window and moved a haemorrhage patient to 8-hourly checks. A check is
+     * recorded when it was done, so a time ahead of the server clock (beyond a
+     * small skew between devices) is refused, as is a delivery in the future.
+     */
+    private static void requireNotInFuture(PostpartumObservationRequestDTO request) {
+        LocalDateTime limit = LocalDateTime.now(java.time.ZoneId.systemDefault()).plus(CLOCK_SKEW);
+        if (request.getObservationTime() != null && request.getObservationTime().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.observationTime.future");
+        }
+        if (request.getDeliveryOccurredAt() != null && request.getDeliveryOccurredAt().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.deliveryTime.future");
+        }
+        if (request.getOriginalEntryTime() != null && request.getOriginalEntryTime().isAfter(limit)) {
+            throw new BusinessException("maternity.postpartum.observationTime.future");
+        }
     }
 
     private LocalDateTime resolveDeliveryTimestamp(PostpartumObservationRequestDTO request) {
@@ -328,7 +372,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return null;
         }
         return observationRepository.findByIdAndPatient_IdAndHospital_Id(observationId, patientId, hospitalId)
-            .orElseThrow(() -> new BusinessException("Unable to record correction; original observation not located."));
+            .orElseThrow(() -> new BusinessException("maternity.postpartum.originalNotFound"));
     }
 
     @SuppressWarnings("java:S107") // builder method needs all domain objects to construct observation
@@ -413,7 +457,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasHemorrhageIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.URGENT,
                 "postpartum-hemorrhage",
-                "Hemorrhage risk detected. Activate uterotonic protocol and notify provider immediately.",
+                alertText("postpartum-hemorrhage"),
                 "Bleeding Assessment"));
             observation.setHemorrhageProtocolActivated(true);
             escalateMonitoring = true;
@@ -423,7 +467,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (hasInfectionIndicators(observation)) {
             alerts.add(buildAlert(PostpartumAlertType.INFECTION, PostpartumAlertSeverity.URGENT,
                 "postpartum-infection",
-                "Possible postpartum infection. Initiate sepsis screening and contact provider.",
+                alertText("postpartum-infection"),
                 "Infection Screening"));
             escalateMonitoring = true;
             infectionAlert = true;
@@ -432,7 +476,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
             alerts.add(buildAlert(PostpartumAlertType.PAIN, PostpartumAlertSeverity.CAUTION,
                 "postpartum-pain",
-                "Pain score above comfort threshold. Reassess analgesia plan and comfort interventions.",
+                alertText("postpartum-pain"),
                 "Pain Score"));
             observation.setPainManagementReferralSuggested(true);
         }
@@ -441,7 +485,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.isMentalHealthReferralSuggested()) {
             alerts.add(buildAlert(PostpartumAlertType.PSYCHOSOCIAL, PostpartumAlertSeverity.CAUTION,
                 "postpartum-psychosocial",
-                "Psychosocial concern identified. Coordinate mental health or social work referral.",
+                alertText("postpartum-psychosocial"),
                 "Psychosocial Screening"));
         }
 
@@ -480,14 +524,25 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             || observation.isChillsOrRigors();
     }
 
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
+     * stored and read by staff, so it is never composed in English in code.
+     */
+    private String alertText(String code) {
+        return messageSource.getMessage("postpartum.alert.msg." + code, null, NotificationLocales.STAFF);
+    }
+
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
                                                   String code, String message, String triggeredBy) {
+        // QA D216 (D172/D61): stored, charted and notified text in the staff
+        // locale; the English literal is only the fallback.
         return PostpartumObservationAlert.builder()
             .type(type)
             .severity(severity)
             .code(code)
-            .message(message)
-            .triggeredBy(triggeredBy)
+            .message(messageSource.getMessage("postpartum.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .triggeredBy(messageSource.getMessage("postpartum.alert.trigger." + code, null, triggeredBy,
+                NotificationLocales.STAFF))
             .build();
     }
 
@@ -516,11 +571,17 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
 
         if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
-            applyImmediatePhaseScheduling(plan, observation, request);
+            // QA D268: a haemorrhage on this plan, now or earlier in the window,
+            // keeps the 15-minute checks until the midwife confirms
+            // stabilization; the clock and the check count alone do not end them.
+            boolean haemorrhageOnPlan = observation.isHemorrhageProtocolActivated()
+                || (plan.getId() != null
+                    && observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()));
+            applyImmediatePhaseScheduling(plan, observation, request, haemorrhageOnPlan);
             // QA D104: a critical alert that closes the immediate window (e.g. a
             // haemorrhage with stabilization confirmed) must land in enhanced
             // monitoring, not in the routine 8-hour shift baseline.
-            if (escalateMonitoring && plan.isImmediateWindowCompleted()) {
+            if ((escalateMonitoring || haemorrhageOnPlan) && plan.isImmediateWindowCompleted()) {
                 applyShiftPhaseScheduling(plan, observation, request, true);
             }
         } else {
@@ -537,14 +598,16 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
     private void applyImmediatePhaseScheduling(PostpartumCarePlan plan,
                                                PostpartumObservation observation,
-                                               PostpartumObservationRequestDTO request) {
+                                               PostpartumObservationRequestDTO request,
+                                               boolean haemorrhageOnPlan) {
         plan.incrementImmediateObservationCount();
         LocalDateTime windowEnd = plan.getDeliveryOccurredAt()
             .plusMinutes(PostpartumCarePlan.IMMEDIATE_WINDOW_MINUTES);
         boolean targetMet = plan.getImmediateObservationsCompleted() >= plan.getImmediateObservationTarget();
         boolean outsideWindow = observation.getObservationTime().isAfter(windowEnd);
         boolean stabilization = Boolean.TRUE.equals(request.getStabilizationConfirmed());
-        if (targetMet || outsideWindow || stabilization) {
+        boolean closes = haemorrhageOnPlan ? stabilization : (targetMet || outsideWindow || stabilization);
+        if (closes) {
             plan.setImmediateWindowCompleted(true);
             plan.setStabilizationAchievedAt(observation.getObservationTime());
             plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
@@ -573,7 +636,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 ? request.getEnhancedMonitoringFrequencyMinutes()
                 : Math.max(PostpartumCarePlan.MIN_SHIFT_FREQUENCY_MINUTES, frequency / 2));
             plan.setShiftFrequencyMinutes(enhancedFrequency);
-            plan.setEscalationReason("Critical postpartum alert triggered");
+            plan.setEscalationReason(messageSource.getMessage("postpartum.escalation.critical", null,
+                "Critical postpartum alert triggered", NotificationLocales.STAFF));
             plan.setNextDueAt(observation.getObservationTime().plusMinutes(enhancedFrequency));
         } else if (plan.isEnhancedMonitoring() && resolveEnhanced) {
             plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
@@ -641,7 +705,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         LocalDateTime nextDue = plan.getNextDueAt();
         if (nextDue != null && nextDue.isBefore(LocalDateTime.now())) {
             plan.setOverdueSince(nextDue);
-        } else if (plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
+        } else {
+            // QA D215: a check due in the future is not overdue; a stale
+            // overdueSince from an earlier miss must not survive it.
             plan.setOverdueSince(null);
         }
     }
@@ -687,8 +753,11 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
             .forEach(alert -> {
+                // QA D216: the type is a translated label, never the raw enum.
+                String typeLabel = alert.getType() == null ? ""
+                    : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
                 String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());

@@ -59,6 +59,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import java.util.Map;
 import java.util.Set;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabOrderServiceImplTest {
 
@@ -244,6 +245,23 @@ class LabOrderServiceImplTest {
         assertThat(saved.getProviderSignatureDigest()).isEqualTo(existingDigest);
         assertThat(saved.getSignedAt()).isEqualTo(existingSignedAt);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    /** QA D266: URGENT and STAT orders were stored as ROUTINE (the request's priority was never copied). */
+    @Test
+    void createLabOrderStoresTheRequestedPriority() {
+        mockCommonLookups();
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class)))
+            .thenReturn(LabOrderResponseDTO.builder().build());
+
+        for (String requested : List.of("URGENT", "STAT")) {
+            labOrderService.createLabOrder(baseRequestBuilder().priority(requested).build(), Locale.ENGLISH);
+        }
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues()).extracting(LabOrder::getPriority).containsExactly("URGENT", "STAT");
     }
 
     @Test
@@ -537,7 +555,24 @@ class LabOrderServiceImplTest {
         // Someone else is signed in and names this doctor's staff id.
         when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
 
+        // QA D432: a colleague at the same hospital is no secret, so the
+        // refusal says what is wrong instead of "staff not found".
         LabOrderRequestDTO request = baseRequestBuilder().build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(thrown -> ((com.example.hms.exception.BusinessException) thrown).getMessageKey())
+            .isEqualTo("labOrder.orderingStaff.notCaller");
+        verify(roleValidator, never()).canOrderLabTests(any(), any());
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrder_anotherClinicianAtAnotherHospitalStillReadsAsUnknown_D432() {
+        Staff elsewhere = sameDoctorsRowAt(otherHospital());
+        givenTheRequestNamesTheRowAt(elsewhere);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(elsewhere.getId()).build();
         assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
@@ -597,8 +632,10 @@ class LabOrderServiceImplTest {
         when(staffRepository.findById(otherDoctor.getId())).thenReturn(Optional.of(otherDoctor));
 
         LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId).orderingStaffId(otherDoctor.getId()).build();
+        // QA D432: a colleague at this hospital is refused by name, not as "not found".
         assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labOrder.orderingStaff.notCaller");
         verify(labOrderRepository, never()).save(any());
     }
 

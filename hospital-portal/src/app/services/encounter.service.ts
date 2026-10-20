@@ -68,6 +68,8 @@ export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
 
 export interface EncounterResponse {
   id: string;
+  /** QA D276: the visit code a billing clerk links an invoice to. */
+  code?: string;
   patientId: string;
   patientName: string;
   patientEmail: string;
@@ -178,7 +180,7 @@ export interface NursingIntakeResponse {
 /* ── MVP 6: Check-Out & AVS ─────────────────────────────────────── */
 
 export interface FollowUpAppointmentRequest {
-  reason: string;
+  reason?: string;
   preferredDate?: string;
   notes?: string;
 }
@@ -303,6 +305,8 @@ export interface EncounterFilterRequest {
   status?: EncounterStatus;
   fromDate?: string;
   toDate?: string;
+  /** Page size (GET /encounters is paged, default 20). */
+  size?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -319,6 +323,7 @@ export class EncounterService {
       if (filters.status) params = params.set('status', filters.status);
       if (filters.fromDate) params = params.set('from', filters.fromDate);
       if (filters.toDate) params = params.set('to', filters.toDate);
+      if (filters.size) params = params.set('size', filters.size);
     }
     return this.http
       .get<{ content: EncounterResponse[] }>(this.baseUrl, { params })

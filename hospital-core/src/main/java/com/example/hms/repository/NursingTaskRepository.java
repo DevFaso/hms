@@ -22,5 +22,8 @@ public interface NursingTaskRepository extends JpaRepository<NursingTask, UUID> 
 
     Optional<NursingTask> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
+    /** QA D294: the patient's tasks still open when the stay closes. */
+    List<NursingTask> findByPatient_IdAndHospital_IdAndStatus(UUID patientId, UUID hospitalId, String status);
+
     long countByHospital_IdAndStatusAndDueAtBefore(UUID hospitalId, String status, LocalDateTime now);
 }

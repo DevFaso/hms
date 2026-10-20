@@ -98,6 +98,51 @@ describe('MyPharmacyInvoicesComponent', () => {
     expect(component.loading()).toBe(false);
   });
 
+  it('writes each amount as F CFA like the totals, never as a raw XOF code (QA D434)', async () => {
+    await build(
+      () =>
+        of({
+          success: true,
+          data: { content: samplePayments, totalElements: 2, number: 0, size: 50 },
+        }),
+      () =>
+        of({
+          success: true,
+          data: { content: sampleClaims, totalElements: 1, number: 0, size: 50 },
+        }),
+    );
+    fixture.detectChanges();
+
+    const amounts = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.amount'),
+    ).map((el) => el.textContent ?? '');
+    expect(amounts.length).toBe(3);
+    for (const text of amounts) {
+      expect(text).toContain('CFA');
+      expect(text).not.toContain('XOF');
+    }
+  });
+
+  it('QA D404: a payment voided with its cancelled dispense is shown as such and not counted', async () => {
+    const voided = {
+      ...samplePayments[0],
+      id: 'p9',
+      amount: 200,
+      status: 'VOIDED',
+    } as unknown as PharmacyPaymentResponse;
+    await build(
+      () =>
+        of({
+          success: true,
+          data: { content: [...samplePayments, voided], totalElements: 3, number: 0, size: 50 },
+        }),
+      () => of({ success: true, data: { content: [], totalElements: 0, number: 0, size: 50 } }),
+    );
+
+    expect(component.totalPaid()).toBe(2000);
+    expect(fixture.nativeElement.querySelectorAll('.voided').length).toBe(1);
+  });
+
   it('renders an empty state when the patient has no payments', async () => {
     await build(() =>
       of({ success: true, data: { content: [], totalElements: 0, number: 0, size: 50 } }),

@@ -55,6 +55,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class TreatmentPlanServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private TreatmentPlanRepository treatmentPlanRepository;
     @Mock private TreatmentPlanFollowUpRepository treatmentPlanFollowUpRepository;
     @Mock private TreatmentPlanReviewRepository treatmentPlanReviewRepository;

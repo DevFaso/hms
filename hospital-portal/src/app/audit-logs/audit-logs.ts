@@ -17,11 +17,29 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { EnumLabelService } from '../core/enum-label.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+
+/** QA D330: the write audit's "METHOD /route" description, read as an action. */
+const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
+const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
+  POST: 'AUDIT.WRITE_POST',
+  PUT: 'AUDIT.WRITE_PUT',
+  PATCH: 'AUDIT.WRITE_PATCH',
+  DELETE: 'AUDIT.WRITE_DELETE',
+};
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './audit-logs.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',
@@ -30,8 +48,35 @@ export class AuditLogsComponent implements OnInit {
   private readonly auditService = inject(AuditLogService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   readonly pageSize = 20;
+
+  /**
+   * QA D330: the entity in the reader's language. Rows carry it as an enum
+   * (LAB_RESULT) or a class name (LabTestDefinition); both read the same.
+   */
+  entityLabel(entityType: string | null | undefined): string {
+    if (!entityType) return '--';
+    const code = entityType.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    return this.enumLabels.transform(code, 'auditEntityType');
+  }
+
+  /**
+   * QA D330: a generic write row is described as "POST /api/..."; it reads
+   * as the action and the entity, and the route stays in the tooltip.
+   */
+  describe(log: AuditEventLog): string {
+    const description = (log.eventDescription ?? '').trim();
+    const match = WRITE_DESCRIPTION.exec(description);
+    if (match) {
+      const entity = log.entityType
+        ? this.entityLabel(log.entityType)
+        : this.translate.instant('AUDIT.WRITE_ENTITY_UNKNOWN');
+      return this.translate.instant(WRITE_ACTION_KEYS[match[1]], { entity });
+    }
+    return description || '--';
+  }
 
   logs = signal<AuditEventLog[]>([]);
   eventTypes = signal<AuditEventTypeStatus[]>([]);

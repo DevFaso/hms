@@ -19,15 +19,13 @@ import { HospitalScopeUrlService } from '../../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { shortOrderCode } from '../../shared/lab/order-code';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
  */
-export function shortOrderCode(code: string | null | undefined): string {
-  const trimmed = (code ?? '').trim();
-  return trimmed ? '#' + trimmed.slice(0, 8).toUpperCase() : '—';
-}
+export { shortOrderCode };
 
 /**
  * D49: a `datetime-local` value is the user's wall clock with no zone, and the
@@ -796,6 +794,8 @@ export class LabResultsComponent implements OnInit {
       case 'CRITICAL':
         return 'severity-badge severity-critical';
       case 'HIGH':
+      case 'LOW':
+      case 'ABNORMAL':
         return 'severity-badge severity-high';
       case 'NORMAL':
         return 'severity-badge severity-normal';

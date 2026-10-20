@@ -80,6 +80,25 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
     }
 
     @Test
+    void createOrganization_whenNameAlreadyExists_isRefused_D435() {
+        SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
+            .name("  acme health ")
+            .code("ACME2")
+            .timezone("Africa/Ouagadougou")
+            .contactEmail("ops@acmehealth.io")
+            .build();
+
+        when(organizationRepository.existsByCode("ACME2")).thenReturn(false);
+        when(organizationRepository.existsByNameIgnoreCase("acme health")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createOrganization(request))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("organization.r7.nameExists"));
+        verify(organizationRepository, never()).save(any());
+    }
+
+    @Test
     void createOrganization_whenCodeAlreadyExists_throwsIllegalArgumentException() {
         SuperAdminCreateOrganizationRequestDTO request = SuperAdminCreateOrganizationRequestDTO.builder()
             .name("Acme Health")
@@ -91,8 +110,9 @@ class SuperAdminOrganizationProvisioningServiceImplTest {
         when(organizationRepository.existsByCode("ACME")).thenReturn(true);
 
         assertThatThrownBy(() -> service.createOrganization(request))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("already exists");
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("organization.r7.codeExists"));
 
         verify(organizationRepository, never()).save(any(Organization.class));
         verifyNoInteractions(organizationSecurityService, organizationPlatformBootstrapService, organizationMapper);

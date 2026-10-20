@@ -51,7 +51,7 @@ import java.util.Set;
 )
 @Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-@ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems"})
+@ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems", "creditedToInvoice", "createdByUser"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class BillingInvoice extends BaseEntity {
 
@@ -122,6 +122,21 @@ public class BillingInvoice extends BaseEntity {
      */
     @Column(name = "client_request_id")
     private java.util.UUID clientRequestId;
+
+    /** QA D210: the paid copay taken at check-in, credited to the visit invoice once it is issued (V200). */
+    @Builder.Default
+    @Column(name = "check_in_copay", nullable = false)
+    private boolean checkInCopay = false;
+
+    /** QA D428: the visit invoice a folded check-in copay was credited to (V213). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "credited_to_invoice_id", foreignKey = @ForeignKey(name = "fk_bi_credited_to"))
+    private BillingInvoice creditedToInvoice;
+
+    /** QA D428: the user who created the invoice, read through {@link #createdBy}. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", insertable = false, updatable = false)
+    private User createdByUser;
 
     /* ---------- Helpers ---------- */
 

@@ -36,7 +36,17 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     @Query("SELECT h.id FROM Hospital h WHERE h.lifecycleState IN :states")
     List<UUID> findIdsByLifecycleStateIn(@Param("states") Collection<HospitalLifecycleState> states);
 
-    boolean existsByNameIgnoreCaseAndZipCode(String name, String zipCode);
+    /**
+     * QA D285: the duplicate check ignores case, surrounding blanks and a
+     * blank-versus-missing zip code, so "  clinique X " is the same hospital
+     * as "Clinique X".
+     */
+    @Query("""
+        select count(h) > 0 from Hospital h
+        where lower(trim(h.name)) = lower(trim(cast(:name as string)))
+          and coalesce(trim(h.zipCode), '') = coalesce(trim(cast(:zipCode as string)), '')
+        """)
+    boolean existsByNameIgnoreCaseAndZipCode(@Param("name") String name, @Param("zipCode") String zipCode);
 
     /**
      * Hospital search backing the super-admin scope-chip typeahead and the

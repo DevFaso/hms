@@ -89,6 +89,9 @@
   "gender": {
     "reason": "two String sources, neither an enum: Patient.gender, whose vocabulary is the portal's own filter list (MALE / FEMALE / OTHER / PREFER_NOT_TO_SAY), and the lab reference range, whose LabTestReferenceRangeDTO.gender is @Pattern(\"ALL|MALE|FEMALE\") — ALL is keyed for that one and belongs to no patient"
   },
+  "handoffDirection": {
+    "reason": "no enum holds it: NurseHandoff.direction is a String column; NurseTaskServiceImpl.HANDOFF_DIRECTIONS is the set the server accepts on create (SHIFT_CHANGE / WARD_TRANSFER / PROCEDURE / BREAK_COVER), mirrored by the nurse-station picker. Rows written before that check may hold free text, which the pipe renders raw."
+  },
   "imagingModality": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/ImagingModality.java"
   },
@@ -221,5 +224,8 @@
   "vitalType": {
     "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"
   },
-  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" }
+  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" },
+  "timelineCategory": {
+    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl writes from its CATEGORY_* constants (ENCOUNTER / PRESCRIPTION / LAB_RESULT / ALLERGY / IMAGING / PROCEDURE), all six keyed in PORTAL.ENUM.TIMELINE_CATEGORY; check by hand when a category is added there."
+  }
 }

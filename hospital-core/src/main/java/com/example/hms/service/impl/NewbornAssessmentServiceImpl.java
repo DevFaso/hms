@@ -49,6 +49,8 @@ import java.util.Locale;
 @Transactional
 public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private static final int LOW_APGAR_THRESHOLD = 7;
     private static final double LOW_TEMP_THRESHOLD = 36.5;
     private static final double HIGH_TEMP_THRESHOLD = 37.5;
@@ -67,6 +69,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
     private final NewbornAssessmentRepository assessmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
@@ -84,7 +87,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                          UUID recorderUserId) {
         Objects.requireNonNull(patientId, "patientId is required");
         if (request == null) {
-            throw new BusinessException("Newborn assessment request payload is required.");
+            throw new BusinessException("maternity.newborn.payloadRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -99,6 +102,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
 
@@ -245,19 +252,19 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (oneMinute != null && oneMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.URGENT,
-                "newborn-apgar-1", "Apgar score under 7 at 1 minute.", "Apgar 1 minute"));
+                "newborn-apgar-1", alertText("newborn-apgar-1"), "Apgar 1 minute"));
             assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
             urgent = true;
         }
         if (fiveMinute != null && fiveMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.URGENT,
-                "newborn-apgar-5", "Apgar score under 7 at 5 minutes.", "Apgar 5 minute"));
+                "newborn-apgar-5", alertText("newborn-apgar-5"), "Apgar 5 minute"));
             assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
             urgent = true;
         }
         if (!urgent && tenMinute != null && tenMinute < LOW_APGAR_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.APGAR, NewbornAlertSeverity.CAUTION,
-                "newborn-apgar-10", "Apgar score remains below 7 at 10 minutes; continue close monitoring.",
+                "newborn-apgar-10", alertText("newborn-apgar-10"),
                 "Apgar 10 minute"));
         }
         return urgent;
@@ -270,7 +277,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (temperature < CRITICAL_LOW_TEMP || temperature > CRITICAL_HIGH_TEMP) {
             alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.URGENT,
-                "newborn-temperature-critical", "Critical temperature instability detected. Initiate thermoregulation protocol.",
+                "newborn-temperature-critical", alertText("newborn-temperature-critical"),
                 "Temperature"));
             assessment.addFollowUpAction(NewbornFollowUpAction.THERMAL_SUPPORT);
             if (!assessment.isThermoregulationSupportInitiated()) {
@@ -280,7 +287,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (temperature < LOW_TEMP_THRESHOLD || temperature > HIGH_TEMP_THRESHOLD) {
             alerts.add(buildAlert(NewbornAlertType.THERMOREGULATION, NewbornAlertSeverity.CAUTION,
-                "newborn-temperature", "Temperature outside preferred range. Reassess thermoregulation plan.",
+                "newborn-temperature", alertText("newborn-temperature"),
                 "Temperature"));
         }
         return false;
@@ -293,14 +300,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (heartRate != null && (heartRate < HEART_RATE_LOW || heartRate > HEART_RATE_HIGH)) {
             alerts.add(buildAlert(NewbornAlertType.CARDIOVASCULAR, NewbornAlertSeverity.URGENT,
-                "newborn-heart-rate", "Heart rate outside safe range. Escalate to neonatal team.",
+                "newborn-heart-rate", alertText("newborn-heart-rate"),
                 "Heart Rate"));
             assessment.addFollowUpAction(NewbornFollowUpAction.NICU_CONSULT);
             urgent = true;
         }
         if (respirations != null && (respirations < RESP_RATE_LOW || respirations > RESP_RATE_HIGH)) {
             alerts.add(buildAlert(NewbornAlertType.RESPIRATORY, NewbornAlertSeverity.URGENT,
-                "newborn-respiratory", "Respiratory rate outside safe range. Initiate respiratory support.",
+                "newborn-respiratory", alertText("newborn-respiratory"),
                 "Respiratory Rate"));
             assessment.addFollowUpAction(NewbornFollowUpAction.RESPIRATORY_SUPPORT);
             if (!assessment.isRespiratorySupportInitiated()) {
@@ -318,7 +325,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (oxygen < OXYGEN_CRITICAL) {
             alerts.add(buildAlert(NewbornAlertType.OXYGENATION, NewbornAlertSeverity.URGENT,
-                "newborn-oxygenation", "Oxygen saturation under 90%. Provide supplemental oxygen and escalate.",
+                "newborn-oxygenation", alertText("newborn-oxygenation"),
                 "SpO2"));
             assessment.addFollowUpAction(NewbornFollowUpAction.OXYGEN_THERAPY);
             return true;
@@ -333,7 +340,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (glucose < GLUCOSE_CRITICAL) {
             alerts.add(buildAlert(NewbornAlertType.GLUCOSE, NewbornAlertSeverity.URGENT,
-                "newborn-glucose", "Critical hypoglycemia detected. Initiate glucose protocol immediately.",
+                "newborn-glucose", alertText("newborn-glucose"),
                 "Glucose"));
             assessment.addFollowUpAction(NewbornFollowUpAction.GLUCOSE_MONITORING);
             if (!assessment.isGlucoseProtocolInitiated()) {
@@ -344,17 +351,29 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return false;
     }
 
+    /**
+     * Alert text in the staff locale (QA D226), like the labor alerts: the alert is
+     * stored and read by staff, so it is never composed in English in code.
+     */
+    private String alertText(String code) {
+        return messageSource.getMessage("newborn.alert.msg." + code, null, NotificationLocales.STAFF);
+    }
+
     private NewbornAssessmentAlert buildAlert(NewbornAlertType type,
                                               NewbornAlertSeverity severity,
                                               String code,
                                               String message,
                                               String trigger) {
+        // QA D216 (D172/D61): the stored alert text is shown on the chart and
+        // sent as a notification, so it is rendered in the staff locale from
+        // the bundle; the English literal is only the fallback.
         return NewbornAssessmentAlert.builder()
             .type(type)
             .severity(severity)
             .code(code)
-            .message(message)
-            .triggeredBy(trigger)
+            .message(messageSource.getMessage("newborn.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .triggeredBy(messageSource.getMessage("newborn.alert.trigger." + code, null, trigger,
+                NotificationLocales.STAFF))
             .build();
     }
 
@@ -374,8 +393,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
             .forEach(alert -> {
+                // QA D216: the type is a translated label, never the raw enum.
+                String typeLabel = alert.getType() == null ? ""
+                    : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
                 String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{alert.getType(), patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
@@ -407,7 +429,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         if (hospital != null && delivery.getHospital() != null
             && !hospital.getId().equals(delivery.getHospital().getId())) {
-            throw new BusinessException("Delivery record belongs to a different hospital.");
+            throw new BusinessException("maternity.newborn.deliveryOtherHospital");
         }
         if (mother != null && delivery.getPatient() != null
             && !mother.getId().equals(delivery.getPatient().getId())) {
@@ -432,7 +454,12 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
                 .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
             if (!registration.getPatient().getId().equals(patient.getId())) {
-                throw new BusinessException("Registration does not belong to the specified patient.");
+                throw new BusinessException("maternity.registration.otherPatient");
+            }
+            // QA r5 tenancy sweep: a registration of another hospital answers as unknown.
+            if (hospitalId != null && (registration.getHospital() == null
+                    || !hospitalId.equals(registration.getHospital().getId()))) {
+                throw new ResourceNotFoundException("registration.notFound", registrationId);
             }
             return registration;
         }
@@ -454,13 +481,13 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (requestedHospitalId != null) {
             return hospitalRepository.findClinicalById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, patient.getHospitalId()));
         }
-        throw new BusinessException("Unable to resolve hospital context for newborn assessment.");
+        throw new BusinessException("maternity.newborn.hospitalUnresolved");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -469,7 +496,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
             if (hospital != null && staff.getHospital() != null
                 && !hospital.getId().equals(staff.getHospital().getId())) {
-                throw new BusinessException("Recorder staff assignment does not match resolved hospital context.");
+                throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
             return staff;
         }

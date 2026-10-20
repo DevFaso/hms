@@ -191,6 +191,30 @@ describe('MyAppointmentsComponent', () => {
   // two URL shapes had no route at all before 2026-08-25, so every emailed
   // link landed on the wildcard route.
 
+  describe('upcoming vs past (QA D433)', () => {
+    const appt = (id: string, date: string, status = 'SCHEDULED'): PortalAppointment =>
+      ({ id, date, rawStartTime: '00:00', rawEndTime: '00:30', status }) as PortalAppointment;
+
+    it("lists today's visit as upcoming, yesterday's as past, and a completed one as past only", () => {
+      const now = new Date();
+      const iso = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      portalService.getMyAppointments.and.returnValue(
+        of([
+          appt('today', iso(now)),
+          appt('old', iso(yesterday)),
+          appt('done', iso(now), 'COMPLETED'),
+        ]),
+      );
+
+      component.ngOnInit();
+
+      expect(component.upcoming().map((a) => a.id)).toEqual(['today']);
+      expect(component.past().map((a) => a.id)).toEqual(['old', 'done']);
+    });
+  });
+
   describe('deep links', () => {
     const linked = (over: Partial<PortalAppointment> = {}): PortalAppointment =>
       ({

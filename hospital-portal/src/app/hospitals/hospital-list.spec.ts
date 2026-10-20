@@ -68,4 +68,40 @@ describe('HospitalListComponent (QA D36)', () => {
     expect(el.querySelector('[data-test="hospital-edit-h-1"]')).not.toBeNull();
     expect(el.querySelector('[data-test="hospital-delete-h-1"]')).not.toBeNull();
   });
+
+  it('QA D435: a Burkina Faso hospital needs an address or a P.O. box, and is told so before saving', () => {
+    const hospitalService = jasmine.createSpyObj<HospitalService>('HospitalService', [
+      'list',
+      'create',
+    ]);
+    hospitalService.list.and.returnValue(of([]));
+    const orgService = jasmine.createSpyObj<OrganizationService>('OrganizationService', ['list']);
+    orgService.list.and.returnValue(of({ content: [] } as unknown as OrganizationPage));
+    TestBed.configureTestingModule({
+      imports: [HospitalListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: HospitalService, useValue: hospitalService },
+        { provide: OrganizationService, useValue: orgService },
+        { provide: RoleContextService, useValue: { isSuperAdmin: signal(true) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(HospitalListComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    Object.assign(cmp.form, {
+      name: 'CMA Pissy',
+      city: 'Ouagadougou',
+      country: 'BF',
+      phoneNumber: '+22670000000',
+      address: '  ',
+      poBox: '',
+    });
+
+    cmp.submitForm();
+
+    expect(hospitalService.create).not.toHaveBeenCalled();
+    const label = (fixture.nativeElement as HTMLElement).querySelector('label[for="hAddress"]');
+    expect(label === null || label.textContent!.includes('*')).toBeTrue();
+  });
 });

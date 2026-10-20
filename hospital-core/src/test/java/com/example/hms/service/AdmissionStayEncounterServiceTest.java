@@ -23,10 +23,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -38,6 +40,11 @@ class AdmissionStayEncounterServiceTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
+    @Mock private com.example.hms.repository.NursingTaskRepository nursingTaskRepository;
+    @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
+    @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
 
     @InjectMocks private AdmissionStayEncounterService service;
 
@@ -118,6 +125,59 @@ class AdmissionStayEncounterServiceTest {
 
         assertThat(service.openStayEncounter(admission)).isNull();
         verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void aStatedDischargeDiagnosisWinsOverTheWorkingDiagnosis_D218() {
+        Encounter stay = new Encounter();
+        stay.setAdmissionId(admission.getId());
+        admission.setPrimaryDiagnosisDescription("Fièvre");
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        service.recordDischarge(admission, "Paludisme grave");
+
+        ArgumentCaptor<Encounter> saved = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(saved.capture());
+        assertThat(saved.getValue().getDischargeDiagnoses()).isEqualTo("[\"Paludisme grave\"]");
+    }
+
+    @Test
+    void theDischargeClosesThePatientsPendingHandoffs_D234() {
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.empty());
+        com.example.hms.model.NurseHandoff open = new com.example.hms.model.NurseHandoff();
+        open.setStatus("PENDING");
+        when(nurseHandoffRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(open));
+        when(messageSource.getMessage(eq("nurse.handoff.closedByDischarge"), any(), any(), any()))
+            .thenReturn("Clôturée à la sortie");
+
+        service.recordDischarge(admission);
+
+        assertThat(open.getStatus()).isEqualTo("COMPLETED");
+        assertThat(open.getCompletedAt()).isNotNull();
+        assertThat(open.getCompletedByName()).isEqualTo("Clôturée à la sortie");
+        verify(nurseHandoffRepository).saveAll(List.of(open));
+    }
+
+    @Test
+    void theDischargeClosesThePatientsPendingNursingTasks_D294() {
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.empty());
+        com.example.hms.model.NursingTask open = new com.example.hms.model.NursingTask();
+        open.setStatus("PENDING");
+        when(nursingTaskRepository.findByPatient_IdAndHospital_IdAndStatus(
+            admission.getPatient().getId(), hospital.getId(), "PENDING")).thenReturn(List.of(open));
+        when(messageSource.getMessage(eq("nurse.handoff.closedByDischarge"), any(), any(), any()))
+            .thenReturn("Clôturée à la sortie");
+
+        service.recordDischarge(admission);
+
+        assertThat(open.getStatus()).isEqualTo("COMPLETED");
+        assertThat(open.getCompletedAt()).isNotNull();
+        assertThat(open.getCompletedByName()).isEqualTo("Clôturée à la sortie");
+        verify(nursingTaskRepository).saveAll(List.of(open));
     }
 
     @Test
@@ -236,5 +296,113 @@ class AdmissionStayEncounterServiceTest {
         service.recordDischarge(admission);
 
         verify(encounterRepository, never()).findFirstByAdmissionIdOrderByEncounterDateDesc(any());
+    }
+
+    /* ── D426: a discharged stay records its discharge summary ──────────── */
+
+    @Test
+    void d426_theDischargeWritesASummaryWithTheStaysMedicinesAndFollowUps() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        stay.setPatient(admission.getPatient());
+        stay.setHospital(hospital);
+        stay.setStaff(doctor);
+        stay.setAssignment(new UserRoleHospitalAssignment());
+        admission.setDischargeInstructions("Repos, revoir dans 2 semaines");
+        admission.setFollowUpAppointments(List.of(java.util.Map.of(
+            "appointmentType", "CONSULTATION", "appointmentDate", "2026-11-03", "purpose", "Contrôle")));
+        com.example.hms.model.Prescription amox = new com.example.hms.model.Prescription();
+        amox.setMedicationName("Amoxicilline");
+        amox.setDosage("1 g");
+        amox.setFrequency("3x/j");
+        amox.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        com.example.hms.model.Prescription draft = new com.example.hms.model.Prescription();
+        draft.setMedicationName("Brouillon");
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(amox, draft)));
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        ArgumentCaptor<com.example.hms.model.discharge.DischargeSummary> saved =
+            ArgumentCaptor.forClass(com.example.hms.model.discharge.DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        com.example.hms.model.discharge.DischargeSummary summary = saved.getValue();
+        assertThat(summary.getEncounter()).isSameAs(stay);
+        assertThat(summary.getDischargeDiagnosis()).isEqualTo("Pneumopathie");
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("Repos, revoir dans 2 semaines");
+        assertThat(summary.getMedicationReconciliation())
+            .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
+            .containsExactly("Amoxicilline");
+        assertThat(summary.getFollowUpAppointments())
+            .extracting(com.example.hms.model.discharge.FollowUpAppointmentEntry::getAppointmentDate)
+            .containsExactly(java.time.LocalDate.of(2026, 11, 3));
+    }
+
+    @Test
+    void d426_aSummaryAlreadyWrittenOnTheDischargeScreenIsKept() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(true);
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    @Test
+    void d426_followUpsKeepOnlyUsableRowsAndReadADateTime() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        stay.setPatient(admission.getPatient());
+        stay.setHospital(hospital);
+        stay.setStaff(doctor);
+        stay.setAssignment(new UserRoleHospitalAssignment());
+        java.util.List<java.util.Map<String, Object>> followUps = new java.util.ArrayList<>();
+        followUps.add(null);
+        followUps.add(java.util.Map.of("notes", " "));
+        followUps.add(java.util.Map.of("date", "2026-11-03T10:00:00", "provider", "Dr Kone", "specialty", "Pneumologie"));
+        followUps.add(java.util.Map.of("type", "CONTROLE", "date", "bientot"));
+        admission.setFollowUpAppointments(followUps);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        ArgumentCaptor<com.example.hms.model.discharge.DischargeSummary> saved =
+            ArgumentCaptor.forClass(com.example.hms.model.discharge.DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        assertThat(saved.getValue().getFollowUpAppointments()).hasSize(2);
+        com.example.hms.model.discharge.FollowUpAppointmentEntry first = saved.getValue().getFollowUpAppointments().get(0);
+        assertThat(first.getAppointmentDate()).isEqualTo(java.time.LocalDate.of(2026, 11, 3));
+        assertThat(first.getProviderName()).isEqualTo("Dr Kone");
+        com.example.hms.model.discharge.FollowUpAppointmentEntry second = saved.getValue().getFollowUpAppointments().get(1);
+        assertThat(second.getAppointmentDate()).isNull();
+        assertThat(second.getAppointmentType()).isEqualTo("CONTROLE");
+    }
+
+    @Test
+    void d426_noProviderMeansNoSummaryRatherThanAnInvalidOne() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        verify(dischargeSummaryRepository, never()).save(any());
     }
 }

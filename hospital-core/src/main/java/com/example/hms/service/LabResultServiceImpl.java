@@ -71,6 +71,7 @@ public class LabResultServiceImpl implements LabResultService {
     private final LabResultRepository labResultRepository;
     private final com.example.hms.service.lab.LabResultEntryGuard labResultEntryGuard;
     private final LabOrderRepository labOrderRepository;
+    private final com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final LabResultMapper labResultMapper;
     private final RoleValidator roleValidator;
@@ -217,7 +218,8 @@ public class LabResultServiceImpl implements LabResultService {
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
-            requirePlausibleResultDate(request.getResultDate(), labOrder);
+            request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
 
     UUID currentUserId = authService.getCurrentUserId();
@@ -307,6 +309,11 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingApplication(null);
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
+        }
+        if (!ingested) {
+            // QA D286: a positive qualitative answer is abnormal. An ingested
+            // result keeps the analyzer's own OBX-8 flag.
+            result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
         }
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
@@ -619,13 +626,24 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public LabResultResponseDTO getLabResultById(UUID id, Locale locale) {
+        return readLabResultById(id, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased) {
+        return readLabResultById(id, includeUnreleased);
+    }
+
+    private LabResultResponseDTO readLabResultById(UUID id, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
+            .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
 
         // The result and the trend around it are one read, accounted once.
-        List<LabResult> trend = readableTrendFor(labResult);
+        List<LabResult> trend = readableTrendFor(labResult, includeUnreleased);
         recordReadReach(List.of(labResult), trend);
 
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
@@ -669,13 +687,29 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
+        return readLabResultsPage(pageable, null, true);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                        UUID patientId, boolean includeUnreleased) {
+        return readLabResultsPage(pageable, patientId, includeUnreleased);
+    }
+
+    private Page<LabResultResponseDTO> readLabResultsPage(Pageable pageable, UUID patientId,
+                                                          boolean includeUnreleased) {
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
-            // Verified super-admin in global view: return all paged
-            return labResultRepository.findAll(pageable)
+            // Verified super-admin in global view. QA D211 (round 5): this
+            // branch applied neither the patientId filter nor released-only.
+            return labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
+                    patientId == null ? NO_HOSPITAL : patientId,
+                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE))
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospital(hospitalId,
+        Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
+            !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
@@ -687,7 +721,7 @@ public class LabResultServiceImpl implements LabResultService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // A release worklist is one hospital's queue; the global view has none.
-            throw new BusinessException("A hospital scope is required for the release worklist.");
+            throw new BusinessException("lab.result.releaseScopeRequired");
         }
         // B1: a laboratory releases what it ran, so an order another hospital
         // sent here belongs on this queue — releasing it is exactly what the
@@ -726,13 +760,21 @@ public class LabResultServiceImpl implements LabResultService {
         if (!labOrder.isHandledBy(activeHospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
-        requirePlausibleResultDate(request.getResultDate(), labOrder);
+        request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
         UserRoleHospitalAssignment assignment =
             requireAssignmentAtActingHospital(request.getAssignmentId(), activeHospitalId);
 
+        boolean valueChanged = !Objects.equals(labResult.getResultValue(), request.getResultValue())
+            || !Objects.equals(labResult.getResultUnit(), request.getResultUnit())
+            || labResult.getLabOrder() == null
+            || !Objects.equals(labResult.getLabOrder().getId(), labOrder.getId());
+
+        labResult.setAbnormalFlag(LabResultValueRules.flagFor(
+            request.getResultValue(), labResult.getResultValue(), labResult.getAbnormalFlag()));
         labResult.setLabOrder(labOrder);
         labResult.setResultValue(request.getResultValue());
         labResult.setResultUnit(request.getResultUnit());
@@ -740,7 +782,25 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setNotes(request.getNotes());
         labResult.setAssignment(assignment);
 
+        if (valueChanged) {
+            // QA D206 review: the critical stamp describes a page about the
+            // OLD value. Amending an unreleased typo (79 -> 4.2) left it set,
+            // so the corrected result stayed on the critical tile and the
+            // escalation sweep kept chasing it. The chain restarts from the
+            // new value: re-paged below if it is still critical, gone if not.
+            labResult.setCriticalNotifiedAt(null);
+            labResult.setCriticalEscalatedAt(null);
+            labResult.setCriticalEscalationLevel((short) 0);
+            labResult.setCriticalReadBackValue(null);
+            labResult.setCriticalReadBackAt(null);
+            labResult.setCriticalReadBackByUserId(null);
+            labResult.setCriticalReadBackByDisplay(null);
+        }
+
         LabResult updated = labResultRepository.save(labResult);
+        if (valueChanged) {
+            criticalValueNotificationService.notifyIfCritical(updated, severityOf(updated));
+        }
 
         return labResultMapper.toResponseDTO(updated);
     }
@@ -773,10 +833,19 @@ public class LabResultServiceImpl implements LabResultService {
      * workstation behind UTC was recorded hours BEFORE the order it answers.
      * The portal now sends the instant; this refuses whatever still arrives
      * impossible. Ingested results keep the analyzer's own time.
+     *
+     * <p>QA D339: the clock-skew tolerance let a result timed one minute before
+     * its order be STORED that way, and the specimen's collection time was not
+     * checked at all. The floor is now the later of the order time and the
+     * earliest collection; a time beyond the tolerance is refused, and one
+     * inside it is moved up to the floor, so no stored result precedes its
+     * order or its specimen.
+     *
+     * @return the result time to store
      */
-    private static void requirePlausibleResultDate(LocalDateTime resultDate, LabOrder labOrder) {
+    private LocalDateTime plausibleResultDate(LocalDateTime resultDate, LabOrder labOrder) {
         if (resultDate == null) {
-            return;
+            return null;
         }
         LocalDateTime now = LocalDateTime.now();
         if (resultDate.isAfter(now.plus(RESULT_DATE_SKEW))) {
@@ -786,6 +855,20 @@ public class LabResultServiceImpl implements LabResultService {
         if (orderedAt != null && resultDate.isBefore(orderedAt.minus(RESULT_DATE_SKEW))) {
             throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeOrder"));
         }
+        LocalDateTime collectedAt = labOrder.getId() == null ? null
+            : labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
+                .map(com.example.hms.model.LabSpecimen::getCollectedAt)
+                .filter(java.util.Objects::nonNull)
+                .min(java.util.Comparator.naturalOrder())
+                .orElse(null);
+        if (collectedAt != null && resultDate.isBefore(collectedAt.minus(RESULT_DATE_SKEW))) {
+            throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.resultDate.beforeCollection"));
+        }
+        LocalDateTime floor = orderedAt;
+        if (collectedAt != null && (floor == null || collectedAt.isAfter(floor))) {
+            floor = collectedAt;
+        }
+        return floor != null && resultDate.isBefore(floor) ? floor : resultDate;
     }
 
     @Override
@@ -910,6 +993,10 @@ public class LabResultServiceImpl implements LabResultService {
         // result by guessing the UUID.
         requireResultInActiveHospital(labResult);
         acknowledgeResult(labResult, currentUserId);
+        // QA D429: the acknowledge route returns no body; name the patient here.
+        com.example.hms.security.audit.WriteAuditDetail.describe(AuditEventType.LAB_RESULT_ACKNOWLEDGED, labResult.getId(),
+            labResult.getLabOrder() != null && labResult.getLabOrder().getPatient() != null
+                ? labResult.getLabOrder().getPatient().getId() : null);
     }
 
     @Override
@@ -1233,8 +1320,11 @@ public class LabResultServiceImpl implements LabResultService {
         String severity = labResultMapper.severityFlagOf(labResult);
         com.example.hms.enums.InBasketPriority priority = switch (severity) {
             case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
-            case "LOW", "HIGH" -> com.example.hms.enums.InBasketPriority.URGENT;
-            default -> com.example.hms.enums.InBasketPriority.NORMAL;
+            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
+            // QA D286: no range grades a qualitative answer; its recorded flag does.
+            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
+                ? com.example.hms.enums.InBasketPriority.URGENT
+                : com.example.hms.enums.InBasketPriority.NORMAL;
         };
         String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
         com.example.hms.model.Patient patient = order.getPatient();
@@ -1409,20 +1499,20 @@ public class LabResultServiceImpl implements LabResultService {
 
     private void validateReleasePermissions(UUID userId, UUID runningHospitalId, UUID actingHospitalId) {
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user for release operation.");
+            throw new BusinessException("lab.result.releaseUserUnknown");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (runningHospitalId == null) {
-            throw new BusinessException("Unable to determine hospital context for lab result release.");
+            throw new BusinessException("lab.result.releaseHospitalUnknown");
         }
         // B1: an order sent to another laboratory is released there. The
         // ordering hospital still reads the result — this is not a 404 — but
         // it does not sign off work it did not do.
         if (actingHospitalId != null && !actingHospitalId.equals(runningHospitalId)) {
             throw new BusinessException(
-                "Only the laboratory performing this order may release its results.");
+                "lab.result.releaseOtherLab");
         }
         UUID hospitalId = runningHospitalId;
 
@@ -1436,19 +1526,19 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR);
 
         if (!allowed) {
-            throw new BusinessException("Only laboratory scientists, managers or directors can release lab results.");
+            throw new BusinessException("lab.result.releaseRoleRequired");
         }
     }
 
     private void validateSignPermissions(UUID userId, UUID hospitalId) {
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user for sign operation.");
+            throw new BusinessException("lab.result.signUserUnknown");
         }
         if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (hospitalId == null) {
-            throw new BusinessException("Unable to determine hospital context for lab result sign-off.");
+            throw new BusinessException("lab.result.signHospitalUnknown");
         }
 
         boolean allowed = roleValidator.isDoctor(userId, hospitalId)
@@ -1456,7 +1546,7 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.isLabScientist(userId, hospitalId);
 
         if (!allowed) {
-            throw new BusinessException("Only attending clinicians may sign lab results.");
+            throw new BusinessException("lab.result.signRoleRequired");
         }
     }
 
@@ -1649,7 +1739,7 @@ public class LabResultServiceImpl implements LabResultService {
             return;
         }
         if (!holdsLabResultAuthorRole(userId, hospitalId)) {
-            throw new BusinessException("User does not have a lab or clinical role for this hospital.");
+            throw new BusinessException("lab.result.noRoleHere");
         }
     }
 
@@ -1677,9 +1767,7 @@ public class LabResultServiceImpl implements LabResultService {
         // for. The read-back path sets acknowledged itself on a match, so this
         // guard never blocks it.
         if (result.getCriticalNotifiedAt() != null && result.getCriticalReadBackAt() == null) {
-            throw new BusinessException(
-                "This is a critical result: acknowledge it by reading the value back, not by "
-                    + "dismissing the alert. Use the read-back action.");
+            throw new BusinessException("lab.result.criticalNeedsReadBack");
         }
         result.setAcknowledged(true);
         result.setAcknowledgedAt(LocalDateTime.now());
@@ -1694,7 +1782,7 @@ public class LabResultServiceImpl implements LabResultService {
      * verified super-admin in global view. Not accounted: the caller accounts
      * the result and its trend together.
      */
-    private List<LabResult> readableTrendFor(LabResult source) {
+    private List<LabResult> readableTrendFor(LabResult source, boolean includeUnreleased) {
         LabOrder labOrder = source.getLabOrder();
         if (labOrder == null
             || labOrder.getPatient() == null
@@ -1704,7 +1792,7 @@ public class LabResultServiceImpl implements LabResultService {
             return List.of();
         }
         return readableTrendRows(labOrder.getPatient().getId(), labOrder.getLabTestDefinition().getId(),
-            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND));
+            actingHospitalOrVerifiedGlobalView(LAB_RESULT_NOT_FOUND), includeUnreleased);
     }
 
     private List<LabResultTrendPointDTO> toTrendPoints(List<LabResult> rows) {
@@ -1742,13 +1830,17 @@ public class LabResultServiceImpl implements LabResultService {
      * the same query, with its {@code globalView} flag: there is no unscoped
      * trend finder left to call.
      */
-    private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId) {
+    private List<LabResult> readableTrendRows(UUID patientId, UUID testDefinitionId, UUID actingHospitalId,
+                                              boolean includeUnreleased) {
         org.springframework.data.domain.PageRequest window =
             org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
         if (actingHospitalId == null) {
             // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
             return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
-                Set.of(NO_HOSPITAL), null, true, window);
+                Set.of(NO_HOSPITAL), null, true, window)
+                .stream()
+                .filter(r -> includeUnreleased || r.isReleased())
+                .toList();
         }
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
@@ -1757,6 +1849,9 @@ public class LabResultServiceImpl implements LabResultService {
                 false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
+            // QA D211: outside the laboratory an unreleased value is not a
+            // result yet, in a trend any more than on its own.
+            .filter(r -> includeUnreleased || r.isReleased())
             .limit(TREND_WINDOW)
             .toList();
     }
@@ -1862,8 +1957,9 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     @Transactional(readOnly = true)
-    public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale) {
+    public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased) {
         LabResult current = labResultRepository.findById(currentResultId)
+            .filter(r -> includeUnreleased || r.isReleased())
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         // Hospital scope enforcement: the shared single-row comparison, which
@@ -1872,13 +1968,13 @@ public class LabResultServiceImpl implements LabResultService {
 
         LabOrder labOrder = current.getLabOrder();
         if (labOrder == null || labOrder.getPatient() == null || labOrder.getLabTestDefinition() == null) {
-            throw new BusinessException("Cannot compare lab results: missing patient or test definition");
+            throw new BusinessException("lab.result.compareMissingData");
         }
 
         UUID patientId = labOrder.getPatient().getId();
         UUID testDefinitionId = labOrder.getLabTestDefinition().getId();
 
-        List<LabResult> trendResults = readableTrendFor(current);
+        List<LabResult> trendResults = readableTrendFor(current, includeUnreleased);
         // The compared result is returned with the patient's name, so it is
         // accounted with its trend - it used to be passed as "already
         // accounted" while nothing had accounted it.
@@ -1915,12 +2011,13 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale) {
+    public List<LabResultComparisonDTO> compareSequentialResults(UUID patientId, UUID testDefinitionId, Locale locale,
+                                                                 boolean includeUnreleased) {
         // This read had no tenant check at all: the unscoped finder, by the
         // patient id in the URL, returned any hospital's patient's last twelve
         // values with their name to any clinician anywhere.
         UUID actingHospitalId = requireHospitalScopeForPatientRead();
-        List<LabResult> allResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId);
+        List<LabResult> allResults = readableTrendRows(patientId, testDefinitionId, actingHospitalId, includeUnreleased);
 
         // Nothing readable here and no such patient are the same answer.
         if (allResults.isEmpty()) {
@@ -2002,7 +2099,7 @@ public class LabResultServiceImpl implements LabResultService {
         for (LabResult result : candidates) {
             if (queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-                if (dto != null && labResultMapper.raisesCriticalAlert(result, dto.getSeverityFlag())) {
+                if (dto != null && labResultMapper.raisesCriticalAlert(dto.getSeverityFlag())) {
                     surfaced.add(result);
                     answer.add(dto);
                 }
@@ -2020,7 +2117,7 @@ public class LabResultServiceImpl implements LabResultService {
             return LabResultComparisonDTO.ComparisonMetadata.builder()
                 .trendDirection(LabResultComparisonDTO.TrendDirection.INSUFFICIENT_DATA)
                 .significanceLevel("BASELINE")
-                .interpretation("First recorded measurement - no comparison available")
+                .interpretation(com.example.hms.utility.MessageUtil.resolve("lab.comparison.baseline"))
                 .build();
         }
 
@@ -2052,11 +2149,14 @@ public class LabResultServiceImpl implements LabResultService {
             // Non-numeric comparison
             boolean changed = !currentVal.equalsIgnoreCase(previousVal);
             return LabResultComparisonDTO.ComparisonMetadata.builder()
-                .absoluteChange(changed ? "Changed from " + previousVal + " to " + currentVal : "No change")
+                .absoluteChange(changed
+                    ? com.example.hms.utility.MessageUtil.resolve("lab.comparison.changedFromTo", previousVal, currentVal)
+                    : com.example.hms.utility.MessageUtil.resolve("lab.comparison.noChange"))
                 .trendDirection(changed ? LabResultComparisonDTO.TrendDirection.FLUCTUATING : LabResultComparisonDTO.TrendDirection.STABLE)
                 .daysBetween(daysBetween)
                 .significanceLevel(changed ? "SIGNIFICANT" : "STABLE")
-                .interpretation(changed ? "Qualitative change detected" : "Result unchanged")
+                .interpretation(com.example.hms.utility.MessageUtil.resolve(
+                    changed ? "lab.comparison.qualitativeChange" : "lab.comparison.unchanged"))
                 .build();
         }
     }
@@ -2112,12 +2212,15 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     private String generateInterpretation(double current, double previous, double absoluteChange, double percentageChange, long daysBetween, String unit) {
-        String direction = absoluteChange > 0 ? "increased" : "decreased";
+        // QA D226: the portal shows this sentence as is, so it is composed in the
+        // request locale; numbers are pre-formatted so MessageFormat adds no grouping.
+        String key = absoluteChange > 0 ? "lab.comparison.increased" : "lab.comparison.decreased";
         String unitStr = unit != null ? " " + unit : "";
-
-        return String.format("Value %s by %.2f%s (%.1f%%) over %d days. Previous: %.2f%s, Current: %.2f%s",
-            direction, Math.abs(absoluteChange), unitStr, Math.abs(percentageChange), daysBetween,
-            previous, unitStr, current, unitStr);
+        java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        return com.example.hms.utility.MessageUtil.resolve(key,
+            String.format(locale, "%.2f", Math.abs(absoluteChange)), unitStr,
+            String.format(locale, "%.1f", Math.abs(percentageChange)), String.valueOf(daysBetween),
+            String.format(locale, "%.2f", previous), String.format(locale, "%.2f", current));
     }
 
     private List<LabResultReferenceRangeDTO> extractReferenceRanges(LabOrder labOrder) {

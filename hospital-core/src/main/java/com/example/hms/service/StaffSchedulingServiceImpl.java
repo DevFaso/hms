@@ -494,6 +494,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (dto.endTime().equals(dto.startTime())) {
             throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
         }
+        // QA D282: two concurrent submits both passed the check below and both
+        // saved. Serialise on the staff row first; the lock lasts to commit.
+        staffRepository.findLockedById(staff.getId());
         if (shiftRepository.existsOverlappingShift(staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
             throw new BusinessRuleException(message("schedule.shift.overlap", locale));
         }

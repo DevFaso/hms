@@ -134,6 +134,27 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     expect(c.signedQuantity({ transactionType: 'DISPENSE', quantity: 2 } as never)).toBe('-2');
   });
 
+  it('QA D227: shows ledger reasons translated, with no raw code or prescription id', () => {
+    const c = create();
+    const label = (reason: string) => c.reasonLabel({ reason } as never);
+    expect(label('Stock receipt: lot QA-PARA-L1')).toBe('PHARMACY.LEDGER_REASON_RECEIPT_LOT');
+    expect(label('Dispense for prescription 3105c0de-0000-4000-8000-000000000000')).toBe(
+      'PHARMACY.LEDGER_REASON_DISPENSE',
+    );
+    expect(label('RETURN ref QA-RET-001')).toBe('PHARMACY.LEDGER_REASON_RETURN');
+    expect(label('CYCLE_COUNT_VARIANCE: recount')).toBe(
+      'PHARMACY.ADJ_REASON_CYCLE_COUNT_VARIANCE : recount',
+    );
+    expect(label('CONTROLLED_DISCREPANCY')).toBe('PHARMACY.ADJ_REASON_CONTROLLED_DISCREPANCY');
+    expect(label('Broken bottle')).toBe('Broken bottle');
+    // QA D337: the API's DAMAGED / EXPIRED spellings are translated too.
+    expect(label('DAMAGED: QA R6 ampoule cassée')).toBe(
+      'PHARMACY.ADJ_REASON_DAMAGE : QA R6 ampoule cassée',
+    );
+    expect(label('EXPIRED: QA R6')).toBe('PHARMACY.ADJ_REASON_EXPIRY_WRITE_OFF : QA R6');
+    expect(c.reasonLabel({ reason: null } as never)).toBe('—');
+  });
+
   it('requires a lot to adjust a lot-tracked item', () => {
     const c = create();
     c.openForm();

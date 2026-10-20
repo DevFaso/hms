@@ -67,6 +67,63 @@ class GlobalExceptionHandlerTest {
     }
 
     // =========================================================================
+    // QA D226: keyed service messages reach a French user in French
+    // =========================================================================
+
+    @Nested
+    @DisplayName("QA D226: service messages in the request locale")
+    class D226Localized {
+
+        @SuppressWarnings("unchecked")
+        private Map<String, Object> bodyOf(ResponseEntity<Object> response) {
+            return (Map<String, Object>) response.getBody();
+        }
+
+        private ResponseEntity<Object> inFrench(java.util.function.Supplier<ResponseEntity<Object>> call) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            handler.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                return call.get();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("a keyed UnauthorizedAccessException answers 403 in French, not a 500")
+        void keyedRefusalIsA403InFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("lab.result.entryLabStaffOnly", "Glycémie"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message"))
+                .startsWith("Seul le personnel du laboratoire")
+                .contains("Glycémie");
+        }
+
+        @Test
+        @DisplayName("a free-sentence UnauthorizedAccessException stays in the log")
+        void sentenceRefusalIsOpaque() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleUnauthorizedAccess(
+                new UnauthorizedAccessException("Authenticated user not resolvable: jdoe"), request));
+
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat((String) bodyOf(response).get("message")).doesNotContain("jdoe");
+        }
+
+        @Test
+        @DisplayName("a service BusinessException key renders French")
+        void businessKeyIsFrench() {
+            ResponseEntity<Object> response = inFrench(() -> handler.handleBusinessException(
+                new BusinessException("billing.payment.exceedsBalance", "5000", "2000"), request));
+
+            assertThat((String) bodyOf(response).get("message"))
+                .isEqualTo("Le montant du paiement (5000) dépasse le solde dû (2000).");
+        }
+    }
+
+    // =========================================================================
     // handleNotificationTransportUnavailable
     // =========================================================================
 
@@ -327,7 +384,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("uses the request locale through the MessageSource")
         void translatesThroughMessageSource() {
             var source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
-            source.setBasenames("classpath:messages");
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
             source.setDefaultEncoding("UTF-8");
             source.setFallbackToSystemLocale(false);
             source.setAlwaysUseMessageFormat(true);
@@ -409,6 +466,23 @@ class GlobalExceptionHandlerTest {
             org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
                 .contains("sources").contains("INVALID_PARAMETER")
                 .doesNotContain("PLATFORM_CONFIG").doesNotContain("AuditSource");
+        }
+    }
+
+    @Nested
+    @DisplayName("handleMissingParameter (QA D332)")
+    class HandleMissingParameter {
+
+        @Test
+        @DisplayName("a missing required parameter answers 400 with a message naming it, not an empty body")
+        void namesTheMissingParameter() {
+            var ex = new org.springframework.web.bind.MissingServletRequestParameterException("summary", "String");
+
+            var response = handler.handleMissingParameter(ex, request);
+
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
+                .contains("summary").contains("message");
         }
     }
 
@@ -678,7 +752,7 @@ class GlobalExceptionHandlerTest {
         @BeforeEach
         void french() {
             source = new org.springframework.context.support.ReloadableResourceBundleMessageSource();
-            source.setBasenames("classpath:messages");
+            source.setBasenames(com.example.hms.config.MessageBundles.basenames());
             source.setDefaultEncoding("UTF-8");
             source.setFallbackToSystemLocale(false);
             source.setAlwaysUseMessageFormat(true);
@@ -749,6 +823,47 @@ class GlobalExceptionHandlerTest {
                 request);
             assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
             assertThat(messageOf(response)).isEqualTo("Accès refusé");
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D258: the hospital-scope refusal speaks the caller's language")
+    class HospitalScopeRefusalLocale {
+
+        @Test
+        @DisplayName("the 403 body from the handler is French for a French caller")
+        void handlerBodyIsLocalized() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                ResponseEntity<Object> response = handler.handleHospitalScopeRefused(
+                    new HospitalScopeRefusedException("Select a hospital"), request);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody();
+                assertThat(body).containsEntry("message",
+                    "Sélectionnez un hôpital : cette action est impossible en vue globale.");
+                assertThat(body).containsEntry("code", HospitalScopeRefusedException.CODE);
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+
+        @Test
+        @DisplayName("the 403 written by the auth filter is French for a French caller")
+        void filterBodyIsLocalized() throws Exception {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                org.springframework.mock.web.MockHttpServletResponse response =
+                    new org.springframework.mock.web.MockHttpServletResponse();
+                com.example.hms.security.HospitalScopeResponses.writeRefusal(response,
+                    com.example.hms.security.tenant.ActingScope.Reason.NOT_PERMITTED);
+                String json = response.getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+                assertThat(new tools.jackson.databind.ObjectMapper().readTree(json).get("message").asString())
+                    .isEqualTo("Accès refusé : vous n'avez pas de rôle actif dans l'hôpital demandé.");
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
         }
     }
 }

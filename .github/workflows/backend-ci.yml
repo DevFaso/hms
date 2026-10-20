@@ -7,9 +7,23 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  # The ~10,000-test suite used to run in ONE job (~21 min). It now runs in
+  # TEST_SHARDS parallel shards: build.gradle's -PtestShardCount/-PtestShardIndex
+  # partition the top-level test classes by name hash (every class runs in
+  # exactly one shard), and inside a shard Gradle runs 2 test forks in
+  # parallel (maxParallelForks). The build-and-test job below then merges
+  # the shards' JaCoCo exec files and enforces the SAME 80% coverage gate
+  # on the merged result. No test is skipped and no threshold changed.
+  test-shard:
+    name: Tests (shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
+    env:
+      TEST_SHARDS: 3
 
     steps:
       - uses: actions/checkout@v7
@@ -32,8 +46,11 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build & Test
-        run: ./gradlew :hospital-core:clean :hospital-core:build --stacktrace
+      - name: Test (shard ${{ matrix.shard }} of ${{ env.TEST_SHARDS }})
+        run: >-
+          ./gradlew :hospital-core:test --stacktrace
+          -PtestShardCount=${TEST_SHARDS}
+          -PtestShardIndex=${{ matrix.shard }}
         env:
           SPRING_PROFILES_ACTIVE: test
 
@@ -47,19 +64,79 @@ jobs:
                 grep -A 20 '<failure\|<error' "$f" | head -60;
               done
 
-      - name: Generate Jacoco Report
-        if: always()
-        run: ./gradlew :hospital-core:jacocoTestReport
+      - name: Name the shard's coverage file
+        run: mv hospital-core/build/jacoco/test.exec "hospital-core/build/jacoco/test-shard-${{ matrix.shard }}.exec"
 
-      - name: Verify Test Coverage
-        run: ./gradlew :hospital-core:jacocoTestCoverageVerification
+      - name: Upload shard coverage and results
+        uses: actions/upload-artifact@v7
+        with:
+          name: backend-shard-${{ matrix.shard }}
+          path: |
+            hospital-core/build/jacoco/test-shard-${{ matrix.shard }}.exec
+            hospital-core/build/test-results/test/*.xml
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: test-results
+          name: test-results-shard-${{ matrix.shard }}
           path: hospital-core/build/reports/tests/test/
+
+  # Kept under its historical id so the check name
+  # "Backend (JUnit, Jacoco) / build-and-test" is unchanged.
+  build-and-test:
+    name: build-and-test
+    needs: test-shard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      # Everything :hospital-core:build did before except the tests, which the
+      # shards ran: compile, resources, bootJar and the other check tasks.
+      - name: Build (tests ran in the shards)
+        run: ./gradlew :hospital-core:build -x test --stacktrace
+
+      - name: Download shard coverage and results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: backend-shard-*
+          path: hospital-core/build
+          merge-multiple: true
+
+      - name: Check every shard's coverage and results arrived
+        run: |
+          n=$(ls hospital-core/build/jacoco/test-shard-*.exec | wc -l)
+          echo "exec files: $n"
+          test "$n" -eq 3
+          ls hospital-core/build/test-results/test/TEST-*.xml | wc -l
+
+      - name: Generate Jacoco Report (merged shards)
+        run: ./gradlew :hospital-core:jacocoTestReport -x test
+
+      - name: Verify Test Coverage (merged shards)
+        run: ./gradlew :hospital-core:jacocoTestCoverageVerification -x test
 
       - name: Upload Coverage Report
         if: always()

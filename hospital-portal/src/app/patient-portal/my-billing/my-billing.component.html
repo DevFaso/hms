@@ -39,11 +39,11 @@
           <div class="portal-list-item">
             <div
               class="pli-icon"
-              [style.background]="inv.balance > 0 ? '#fef3c7' : '#d1fae5'"
-              [style.color]="inv.balance > 0 ? '#d97706' : '#059669'"
+              [style.background]="isPayable(inv) ? '#fef3c7' : '#d1fae5'"
+              [style.color]="isPayable(inv) ? '#d97706' : '#059669'"
             >
               <span class="material-symbols-outlined">{{
-                inv.balance > 0 ? 'pending' : 'check_circle'
+                isPayable(inv) ? 'pending' : 'check_circle'
               }}</span>
             </div>
             <div class="pli-body">
@@ -59,13 +59,27 @@
               >
             </div>
             <div class="pli-end">
-              <span class="pli-amount" [class.has-balance]="inv.balance > 0">{{
-                inv.balance | currency: 'XOF' : 'symbol' : '1.0-0'
+              <!-- QA D254: the invoice total, with what is left to pay when anything is -->
+              <span class="pli-amount" [class.has-balance]="isPayable(inv)">{{
+                inv.amount | currency: 'XOF' : 'symbol' : '1.0-0'
               }}</span>
-              <span class="pli-status" [attr.data-status]="inv.status">{{
-                inv.status | enumLabel: 'invoiceStatus'
-              }}</span>
-              @if (inv.balance > 0 && inv.status !== 'DRAFT') {
+              @if (isPayable(inv)) {
+                <span class="pli-meta"
+                  >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}
+                  {{ inv.balance | currency: 'XOF' : 'symbol' : '1.0-0' }}</span
+                >
+              }
+              @if (inv.creditedTo) {
+                <!-- QA D428: a folded copay says where the money went, not only "cancelled" -->
+                <span class="pli-status" data-status="CREDITED">{{
+                  'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedTo }
+                }}</span>
+              } @else {
+                <span class="pli-status" [attr.data-status]="inv.status">{{
+                  inv.status | enumLabel: 'invoiceStatus'
+                }}</span>
+              }
+              @if (isPayable(inv)) {
                 <button class="pay-btn" (click)="openPayDialog(inv)">
                   <span class="material-symbols-outlined">payment</span>
                   {{ 'PORTAL.BILLING.PAY_NOW' | translate }}
@@ -115,6 +129,21 @@
               payingInvoice()!.balance | currency: 'XOF' : 'symbol' : '1.0-0'
             }}</span>
           </div>
+          <!-- QA D421: declarations awaiting confirmation are shown, and what is left to declare -->
+          @if (pendingOf(payingInvoice()!) > 0) {
+            <div class="pay-invoice-info pay-pending">
+              <span class="pay-label">{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}</span>
+              <span class="pay-value">{{
+                pendingOf(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
+              }}</span>
+            </div>
+            <div class="pay-invoice-info">
+              <span class="pay-label">{{ 'PORTAL.BILLING.LEFT_TO_DECLARE' | translate }}</span>
+              <span class="pay-value">{{
+                declarable(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
+              }}</span>
+            </div>
+          }
 
           <p class="pay-label">{{ 'PORTAL.BILLING.PAYMENT_PENDING_NOTE' | translate }}</p>
 
@@ -132,7 +161,7 @@
                 id="payAmount"
                 type="number"
                 [min]="1"
-                [max]="payingInvoice()!.balance"
+                [max]="declarable(payingInvoice()!)"
                 step="1"
                 [(ngModel)]="payAmount"
                 [placeholder]="'PORTAL.BILLING.ENTER_AMOUNT' | translate"
@@ -160,7 +189,7 @@
                 type="text"
                 [(ngModel)]="payReference"
                 [placeholder]="'PORTAL.BILLING.REFERENCE_PLACEHOLDER' | translate"
-                maxlength="500"
+                maxlength="120"
               />
             </div>
 
@@ -181,7 +210,7 @@
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {
                   {{ 'PORTAL.BILLING.PAY' | translate }}
-                  {{ payAmount ? (payAmount | currency: 'XOF') : '' }}
+                  {{ payAmount ? (payAmount | currency: 'XOF' : 'symbol' : '1.0-0') : '' }}
                 }
               </button>
             </div>

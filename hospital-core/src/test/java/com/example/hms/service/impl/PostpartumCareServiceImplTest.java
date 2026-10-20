@@ -54,12 +54,16 @@ import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.util.List;
 import java.util.Map;
 import com.example.hms.i18n.TestMessageSources;
 
 @ExtendWith(MockitoExtension.class)
 class PostpartumCareServiceImplTest {
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock
     private PostpartumObservationRepository observationRepository;
@@ -83,6 +87,8 @@ class PostpartumCareServiceImplTest {
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock
     private com.example.hms.service.pro.ProResponseService proResponseService;
+    @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     private PostpartumCareServiceImpl service;
     private UUID patientId;
@@ -96,7 +102,7 @@ class PostpartumCareServiceImplTest {
         service = new PostpartumCareServiceImpl(
             observationRepository,
             carePlanRepository,
-            patientRepository,
+            patientRepository, patientRegistrationGuard,
             registrationRepository,
             hospitalRepository,
             staffRepository,
@@ -106,7 +112,8 @@ class PostpartumCareServiceImplTest {
             proResponseService,
             recordAccessPolicy,
             reachRecorder,
-            TestMessageSources.bundles()
+            TestMessageSources.bundles(),
+            deliveryRecordRepository
         );
 
         patientId = UUID.randomUUID();
@@ -170,7 +177,10 @@ class PostpartumCareServiceImplTest {
         assertFalse(response.getAlerts().isEmpty(), "Expected hemorrhage alert to be generated");
         assertEquals(PostpartumAlertType.HEMORRHAGE, response.getAlerts().get(0).getType());
         assertEquals(PostpartumAlertSeverity.URGENT, response.getAlerts().get(0).getSeverity());
-        assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hemorrhage"));
+        assertEquals("postpartum-hemorrhage", response.getAlerts().get(0).getCode());
+        // QA D226: the alert body is the staff-locale (French) text, not English composed in code.
+        assertTrue(response.getAlerts().get(0).getMessage().startsWith("Risque d"));
+        assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hémorragie"));
 
     verify(notificationService, times(1)).createNotification(anyString(), anyString());
 
@@ -346,5 +356,129 @@ class PostpartumCareServiceImplTest {
 
         assertEquals(PostpartumSchedulePhase.ENHANCED_MONITORING, plan.getActivePhase());
         assertTrue(plan.getShiftFrequencyMinutes() < PostpartumCarePlan.DEFAULT_SHIFT_FREQUENCY_MINUTES);
+    }
+
+    /* ── QA D268 (round 5) ────────────────────────────────────────────── */
+
+    @Test
+    void aFutureDatedObservationIsRefusedAndTheScheduleIsUntouched_D268() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        LocalDateTime nextDue = LocalDateTime.now().plusMinutes(10);
+        plan.setNextDueAt(nextDue);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().plusHours(24))
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .build();
+
+        assertThatThrownBy(() -> service.recordObservation(patientId, request, recorderId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("maternity.postpartum.observationTime.future");
+        verify(observationRepository, never()).save(any());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(nextDue, plan.getNextDueAt());
+    }
+
+    @Test
+    void afterAHaemorrhageTheFifteenMinuteChecksOutliveTheTwoHourWindow_D268() {
+        PostpartumCarePlan plan = PostpartumCarePlan.builder().patient(patient).hospital(hospital).build();
+        plan.setId(UUID.randomUUID());
+        plan.setDeliveryOccurredAt(LocalDateTime.now().minusHours(3));
+        plan.setImmediateObservationsCompleted(2);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+        when(observationRepository.existsByCarePlan_IdAndHemorrhageProtocolActivatedTrue(plan.getId()))
+            .thenReturn(true);
+
+        LocalDateTime observationTime = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(observationTime)
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        service.recordObservation(patientId, request, recorderId);
+
+        assertFalse(plan.isImmediateWindowCompleted());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, plan.getActivePhase());
+        assertEquals(observationTime.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), plan.getNextDueAt());
+    }
+
+    @Test
+    void aSystolicOf900IsRefusedByValidation_D277() {
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId).systolicBpMmHg(900).build();
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            assertThat(factory.getValidator().validate(request))
+                .extracting(v -> v.getPropertyPath().toString())
+                .containsExactly("systolicBpMmHg");
+        }
+    }
+
+    /* ── QA D215 / D216 (round 4) ─────────────────────────────────────── */
+
+    @Test
+    void anObservationAfterANewDeliveryStartsAFreshPlanInsteadOfReusingTheOldOne() {
+        LocalDateTime firstBirth = LocalDateTime.now().minusDays(2);
+        LocalDateTime secondBirth = LocalDateTime.now().minusMinutes(30);
+        PostpartumCarePlan oldPlan = PostpartumCarePlan.builder()
+            .patient(patient)
+            .hospital(hospital)
+            .deliveryOccurredAt(firstBirth)
+            .build();
+        oldPlan.setId(UUID.randomUUID());
+        oldPlan.setActive(true);
+        oldPlan.setImmediateWindowCompleted(true);
+        oldPlan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+        oldPlan.setShiftFrequencyMinutes(240);
+        oldPlan.setOverdueSince(LocalDateTime.now().minusHours(5));
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(oldPlan));
+        com.example.hms.model.labor.DeliveryRecord latest = com.example.hms.model.labor.DeliveryRecord.builder()
+            .birthDateTime(secondBirth).build();
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(latest));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now())
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        assertFalse(oldPlan.isActive(), "the earlier delivery's plan must be closed");
+        ArgumentCaptor<PostpartumCarePlan> saved = ArgumentCaptor.forClass(PostpartumCarePlan.class);
+        verify(carePlanRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        PostpartumCarePlan fresh = saved.getAllValues().stream().filter(p -> p != oldPlan).findFirst().orElseThrow();
+        assertEquals(secondBirth, fresh.getDeliveryOccurredAt());
+        assertEquals(PostpartumSchedulePhase.IMMEDIATE_RECOVERY, fresh.getActivePhase());
+        assertFalse(fresh.isImmediateWindowCompleted());
+        assertFalse(response.getSchedule().isOverdue(), "a check due in the future is not overdue");
+    }
+
+    @Test
+    void urgentPostpartumNotificationsAreFrenchWithATranslatedType() {
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .excessiveBleeding(true)
+            .build();
+
+        PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
+
+        ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).createNotification(message.capture(), anyString());
+        assertTrue(message.getValue().startsWith("Alerte post-partum (hémorragie)"), message.getValue());
+        assertFalse(message.getValue().contains("HEMORRHAGE"), message.getValue());
+        assertEquals("Évaluation des saignements", response.getAlerts().get(0).getTriggeredBy());
     }
 }

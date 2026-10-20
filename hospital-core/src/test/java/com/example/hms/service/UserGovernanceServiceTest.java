@@ -199,4 +199,36 @@ class UserGovernanceServiceTest {
         assertThat(rotation.get(1).getDaysUntilDue()).isGreaterThanOrEqualTo(0);
         verify(userRepository).findByIsDeletedFalse();
     }
+
+    @Test
+    void importUsersRejectsBlankCsv() {
+        SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
+            .csvContent("   ")
+            .build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.importUsers(request))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("users.csv.blank");
+    }
+
+    @Test
+    void importUsersReportsEachRowFailureWithItsMessageKey() {
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles,hospitalId
+            carol,,Carol,Doe,3333,DOCTOR,
+            dave,dave@example.com,Dave,Roe,4444,;,
+            erin,erin@example.com,Erin,Poe,5555,DOCTOR,not-a-uuid""";
+
+        SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
+            .csvContent(csv)
+            .build();
+
+        SuperAdminUserBulkImportResponseDTO response = service.importUsers(request);
+
+        assertThat(response.getImported()).isZero();
+        assertThat(response.getFailed()).isEqualTo(3);
+        assertThat(response.getResults()).hasSize(3).noneMatch(result -> result.isSuccess());
+        assertThat(response.getResults()).extracting(result -> result.getMessage())
+            .containsExactly("users.csv.rowMissingFields", "users.csv.rowNoRoles", "users.csv.invalidUuid");
+    }
 }

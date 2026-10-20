@@ -61,6 +61,15 @@ class DispenseControllerTest {
     }
 
     @Test
+    @DisplayName("QA D416: the checkout cashier can load the pharmacy list and its dispenses")
+    void cashierReachesTheCheckoutPicker() throws Exception {
+        assertThat(gateOf("listByPharmacy", UUID.class, Pageable.class)).contains("'BILLING_SPECIALIST'");
+        Method list = com.example.hms.controller.PharmacyRegistryController.class.getDeclaredMethod(
+                "list", UUID.class, Pageable.class, org.springframework.security.core.Authentication.class);
+        assertThat(list.getAnnotation(PreAuthorize.class).value()).contains("'ROLE_BILLING_SPECIALIST'");
+    }
+
+    @Test
     @DisplayName("GET /settings has the gate of the work queue")
     void settingsHaveTheWorkQueueGate() throws Exception {
         assertThat(gateOf("getSettings")).isEqualTo(gateOf("getWorkQueue", Pageable.class, QueueClaimFilter.class));

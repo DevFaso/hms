@@ -81,6 +81,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        if (dto.getTransactionType() == StockTransactionType.RETURN) {
+            requireReturnWithinIssued(item, lot, dto.getQuantity());
+        }
 
         User performer = resolvePerformer(dto.getPerformedBy());
         User witness = resolveWitness(dto, item, performer);
@@ -217,6 +220,41 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
     }
 
+    /** Movements that take stock off a lot or item, which a return may put back. */
+    private static final Set<StockTransactionType> ISSUED_TYPES =
+            java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER);
+    private static final Set<StockTransactionType> RETURNED_TYPES =
+            java.util.EnumSet.of(StockTransactionType.RETURN);
+
+    /**
+     * QA D270 (bypass of D208): a manual RETURN put any quantity back, and a
+     * lot received at 200 held 100 186. A return gives back what left: it is
+     * bounded by what was dispensed or transferred out of that lot (or, for
+     * an item not tracked in lots, that item) and not already returned. The
+     * item row is locked first so concurrent returns are counted in turn.
+     */
+    private void requireReturnWithinIssued(InventoryItem item, StockLot lot, BigDecimal quantity) {
+        inventoryItemRepository.lockById(item.getId());
+        BigDecimal issued;
+        BigDecimal returned;
+        if (lot != null) {
+            issued = stockTransactionRepository.sumQuantityForLot(lot.getId(), ISSUED_TYPES);
+            returned = stockTransactionRepository.sumQuantityForLot(lot.getId(), RETURNED_TYPES);
+        } else {
+            issued = stockTransactionRepository.sumQuantityForItem(item.getId(), ISSUED_TYPES);
+            returned = stockTransactionRepository.sumQuantityForItem(item.getId(), RETURNED_TYPES);
+        }
+        BigDecimal returnable = nz(issued).subtract(nz(returned));
+        if (quantity.compareTo(returnable) > 0) {
+            throw new BusinessException("stockTransaction.return.exceedsIssued",
+                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+        }
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
+    }
+
     /**
      * QA D157 (D82 follow-up): a manual movement of a controlled substance
      * is witnessed by a second person, not the performer, who holds an
@@ -268,7 +306,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private User resolvePerformer(UUID performedBy) {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine performing user");
+            throw new BusinessException("stock.user.performingUnknown");
         }
         // D82: the movement is recorded against the signed-in user. A
         // caller-supplied performer let one user book a movement in a
@@ -315,7 +353,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 if (quantity.signum() < 0) {
                     takeOff(item, lot, quantity.negate(), now);
                 } else {
-                    putOn(item, lot, quantity, now);
+                    putOnWithinReceived(item, lot, quantity, now);
                 }
             }
         }
@@ -325,12 +363,23 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
     private void takeOff(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
         if (lot != null && stockLotRepository.decrementRemaining(lot.getId(), quantity, now) == 0) {
-            throw new BusinessException("Insufficient lot stock: lot " + lot.getLotNumber()
-                    + " does not hold the requested " + quantity);
+            throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(), String.valueOf(quantity));
         }
         if (inventoryItemRepository.decrementOnHand(item.getId(), quantity, now) == 0) {
-            throw new BusinessException("Insufficient stock: the item does not hold the requested " + quantity);
+            throw new BusinessException("stock.item.insufficient", String.valueOf(quantity));
         }
+    }
+
+    /**
+     * QA D405: a positive adjustment of a lot cannot take it above what it
+     * received (lot 50 adjusted to 9999). Checked in the UPDATE itself, so a
+     * concurrent return cannot slip past it.
+     */
+    private void putOnWithinReceived(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
+        if (lot != null && stockLotRepository.incrementRemainingWithinReceived(lot.getId(), quantity, now) == 0) {
+            throw new BusinessException(MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+        inventoryItemRepository.incrementOnHand(item.getId(), quantity, now);
     }
 
     private void putOn(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {

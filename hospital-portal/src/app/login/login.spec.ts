@@ -217,7 +217,21 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     component.openResendActivation();
     component.submitResendActivation();
     httpMock.expectNone((r) => r.url === '/auth/resend-verification');
-    expect(component.error).toBe('LOGIN.ENTER_EMAIL');
+    expect(component.error).toBe('LOGIN.ENTER_EMAIL_OR_PHONE');
+  });
+
+  it('QA D418: a phone number is sent as the phone, so a phone-only account can ask again', () => {
+    component.openResendActivation();
+    component.resendActivationEmail = ' +226 70 00 00 00 ';
+    component.submitResendActivation();
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/auth/resend-verification' &&
+        r.params.get('phone') === '+226 70 00 00 00' &&
+        !r.params.has('email'),
+    );
+    req.flush({});
+    expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
   });
 
   it('seeds globalView=true and clears effective hospital scope after JWT-only login', () => {

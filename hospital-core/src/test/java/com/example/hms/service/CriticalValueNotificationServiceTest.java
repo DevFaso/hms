@@ -21,7 +21,6 @@ import com.example.hms.model.Notification;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.repository.LabResultRepository;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -99,16 +98,15 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         verify(notificationService).createNotification(
-            contains("Potassium 7.1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+            contains("Potassium 7,1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
         assertThat(result.getCriticalNotifiedAt()).isNotNull();
         verify(labResultRepository).save(result);
     }
 
     @Test
     void notifiesForComputedHighSeverity() {
-        when(labResultMapper.toResponseDTO(result))
-            .thenReturn(LabResultResponseDTO.builder().severityFlag("HIGH").build());
-        when(labResultMapper.raisesCriticalAlert(result, "HIGH")).thenReturn(true);
+        when(labResultMapper.severityFlagOf(result)).thenReturn("HIGH");
+        when(labResultMapper.raisesCriticalAlert("HIGH")).thenReturn(true);
 
         service.notifyIfCritical(result);
 
@@ -117,8 +115,7 @@ class CriticalValueNotificationServiceTest {
 
     @Test
     void skipsNormalResults() {
-        when(labResultMapper.toResponseDTO(result))
-            .thenReturn(LabResultResponseDTO.builder().severityFlag("NORMAL").build());
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
 
         service.notifyIfCritical(result);
 
@@ -144,6 +141,61 @@ class CriticalValueNotificationServiceTest {
 
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNull();
+    }
+
+    /**
+     * QA D313 (D206 follow-up): K 7.9 on a range that declares no critical
+     * limits is out of range, HIGH, but not a panic value: no page, and every
+     * screen labels it HIGH. The D107/D271 fail-safe paged it as critical.
+     */
+    @Test
+    void aHighWithoutCriticalLimitsIsHighAndNotPaged() {
+        gradeWithRealMapper("mmol/L");
+        result.setResultValue("7.9");
+        LabResultMapper mapper = new LabResultMapper();
+
+        service.notifyIfCritical(result);
+
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(mapper.toResponseDTO(result).getSeverityFlag()).isEqualTo("HIGH");
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("HIGH");
+    }
+
+    /** QA D313: the same for a value below the range: LOW, not paged. */
+    @Test
+    void aLowWithoutCriticalLimitsIsLowAndNotPaged() {
+        gradeWithRealMapper("mmol/L");
+        result.setResultValue("2.0");
+        LabResultMapper mapper = new LabResultMapper();
+
+        service.notifyIfCritical(result);
+
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("LOW");
+        assertThat(mapper.raisesCriticalAlert("LOW")).isFalse();
+    }
+
+    /** QA D271: once critical limits exist, a value below the range but above them stays LOW. */
+    @Test
+    void aLowInsideCriticalLimitsIsLabelledLowAndNotPaged() {
+        gradeWithCriticalLimits(2.5, 6.5);
+        result.setResultValue("3.0");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(new LabResultMapper().severityFlagOf(result)).isEqualTo("LOW");
+    }
+
+    /** QA D206: once critical limits exist, a value inside them stays HIGH. */
+    @Test
+    void aHighInsideCriticalLimitsIsLabelledHigh() {
+        gradeWithCriticalLimits(2.5, 8.5);
+        result.setResultValue("7.9");
+
+        assertThat(new LabResultMapper().severityFlagOf(result)).isEqualTo("HIGH");
     }
 
     /** D107: with critical limits set, HIGH is HIGH and only a value beyond them alerts. */
@@ -185,12 +237,13 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
-    void aValueOutsideARangeInItsOwnUnitStillAlerts() {
+    void aValueOutsideARangeWithoutCriticalLimitsDoesNotPage() {
+        // QA D313: out of range is abnormal, not critical, until limits exist.
         gradeWithRealMapper("mmol/L");
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -309,10 +362,59 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void escalateOverdueStopsChasingAResultThatIsNoLongerCritical() {
+        // QA D305: glucose 5.0 (range 3.9-6.1, NORMAL) still carried an old
+        // critical stamp and was paged as critical every 30 min, up to level 84.
+        result.setResultValue("5.0");
+        result.setAbnormalFlag(AbnormalFlag.NORMAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusDays(1));
+        result.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(31));
+        result.setCriticalEscalationLevel((short) 84);
+        when(labResultMapper.severityFlagOf(result)).thenReturn("NORMAL");
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of(result));
+
+        Integer escalated = service.escalateOverdue();
+
+        assertThat(escalated).isZero();
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        assertThat(result.getCriticalEscalatedAt()).isNull();
+        assertThat(result.getCriticalEscalationLevel()).isZero();
+        verify(labResultRepository).save(result);
+    }
+
+    @Test
+    void escalateOverdueAsksOnlyForRowsBelowTheRoundCap() {
+        // QA D305: the chain is capped; the sweep query excludes capped rows.
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of());
+
+        service.escalateOverdue();
+
+        verify(labResultRepository).findCriticalAwaitingEscalation(any(LocalDateTime.class), eq((short) 12));
+    }
+
+    @Test
+    void escalateOverdueStopsAtTheRoundCap() {
+        // QA D305: the round that reaches the cap still pages, and is the last.
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        result.setCriticalEscalationLevel((short) 11);
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of(result));
+
+        Integer escalated = service.escalateOverdue();
+
+        assertThat(escalated).isEqualTo(1);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 12);
+    }
+
+    @Test
     void escalateOverdueReturnsTheBoxedCountTheLockedProxyReliesOn() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         Integer escalated = service.escalateOverdue();
@@ -325,7 +427,7 @@ class CriticalValueNotificationServiceTest {
     void escalateOverdueNotifiesAndStampsOnce() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         int escalated = service.escalateOverdue();
@@ -339,9 +441,10 @@ class CriticalValueNotificationServiceTest {
 
     @Test
     void escalateOverdueStampsEvenWithoutResolvableUser() {
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
         result.getLabOrder().setOrderingStaff(null);
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         int escalated = service.escalateOverdue();
@@ -357,10 +460,12 @@ class CriticalValueNotificationServiceTest {
         broken.setId(UUID.randomUUID());
         broken.setLabOrder(result.getLabOrder());
         broken.setResultValue("x");
+        broken.setAbnormalFlag(AbnormalFlag.CRITICAL);
         broken.setCriticalNotifiedAt(LocalDateTime.now().minusHours(2));
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
 
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(broken, result));
         doThrow(new IllegalStateException("boom")).when(labResultRepository).save(broken);
 
@@ -394,7 +499,7 @@ class CriticalValueNotificationServiceTest {
         result.setCriticalEscalationLevel((short) 1);
         when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
             .thenReturn(List.of("admin.kabore", "admin.sawadogo"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         service.escalateOverdue();
@@ -415,7 +520,7 @@ class CriticalValueNotificationServiceTest {
         givenHospital();
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
         result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         service.escalateOverdue();
@@ -434,7 +539,7 @@ class CriticalValueNotificationServiceTest {
         result.setCriticalEscalationLevel((short) 8);
         when(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, "ROLE_HOSPITAL_ADMIN"))
             .thenReturn(List.of("admin.kabore"));
-        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class)))
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
             .thenReturn(List.of(result));
 
         service.escalateOverdue();
@@ -509,5 +614,44 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(updated.getCriticalReadBackAt()).isNotNull();
         assertThat(updated.isAcknowledged()).isTrue();
+    }
+
+    @Test
+    void readBackTreatsTheFrenchDecimalCommaAsTheSameNumber() {
+        // QA D415: "28,5" is how a French clinician repeats 28.5.
+        assertThat(CriticalValueNotificationService.normalizeForComparison("28,5"))
+            .isEqualTo(CriticalValueNotificationService.normalizeForComparison("28.50"));
+        assertThat(CriticalValueNotificationService.normalizeForComparison("2,85"))
+            .isNotEqualTo(CriticalValueNotificationService.normalizeForComparison("28.5"));
+    }
+
+    @Test
+    void escalateOverdueKeepsEscalatingAStillCriticalRangeGradedResult() {
+        // QA D402: GLU 30.2 is CRITICAL by its range, not by an analyzer flag;
+        // the sweep must grade it from the stored definition and climb.
+        result.setAbnormalFlag(null);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(35));
+        when(labResultMapper.severityFlagOf(result)).thenReturn("CRITICAL");
+        when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of(result));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        assertThat(result.getCriticalNotifiedAt()).isNotNull();
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 1);
+    }
+
+    @Test
+    void escalateOverdueKeepsAnUngradableResultInTheChain() {
+        // QA D402: a grade the sweep cannot establish is not proof the value is
+        // no longer critical; it paged once, so it keeps escalating.
+        result.setAbnormalFlag(null);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusMinutes(35));
+        when(labResultMapper.severityFlagOf(result)).thenReturn("UNSPECIFIED");
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of(result));
+
+        assertThat(service.escalateOverdue()).isEqualTo(1);
+        assertThat(result.getCriticalNotifiedAt()).isNotNull();
     }
 }

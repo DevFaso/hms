@@ -70,7 +70,7 @@ public class PatientLabResultController {
         "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER",
         "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
 
-    private static boolean isLaboratoryStaff(Authentication auth) {
+    static boolean isLaboratoryStaff(Authentication auth) {
         return auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
             .anyMatch(a -> LAB_AUTHORITIES.contains(a.getAuthority()));
     }

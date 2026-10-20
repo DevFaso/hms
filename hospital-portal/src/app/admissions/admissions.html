@@ -143,6 +143,11 @@
                 <div class="cell-primary">
                   {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
                 </div>
+                @if (a.encounterCode) {
+                  <div class="cell-secondary" [title]="'BILLING.ENCOUNTER_REFERENCE' | translate">
+                    {{ a.encounterCode }}
+                  </div>
+                }
               </td>
               <td>{{ a.roomBed || '—' }}</td>
               <td>{{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}</td>
@@ -632,6 +637,20 @@
         </div>
 
         <div class="field">
+          <label for="discharge-diagnosis"
+            >{{ 'ADMISSIONS.DISCHARGE_DIAGNOSIS' | translate }} *</label
+          >
+          <textarea
+            id="discharge-diagnosis"
+            maxlength="2000"
+            [(ngModel)]="dischargeForm.dischargeDiagnosis"
+            class="form-textarea"
+            rows="2"
+            [placeholder]="'ADMISSIONS.DISCHARGE_DIAGNOSIS_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+
+        <div class="field">
           <label for="discharge-summary">{{ 'ADMISSIONS.DISCHARGE_SUMMARY' | translate }} *</label>
           <textarea
             id="discharge-summary"
@@ -666,6 +685,7 @@
             discharging() ||
             !dischargeForm.dischargeDisposition ||
             !dischargeForm.dischargeSummary ||
+            !dischargeForm.dischargeDiagnosis.trim() ||
             !dischargeForm.dischargingProviderId
           "
         >

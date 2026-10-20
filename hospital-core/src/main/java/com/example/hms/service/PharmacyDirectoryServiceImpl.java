@@ -38,16 +38,16 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
     @Transactional(readOnly = true)
     public List<PharmacyLocationResponseDTO> listPatientPharmacies(UUID patientId, UUID hospitalId) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to load pharmacy options.");
+            throw new BusinessException("pharmacy.r7.optionsPatientRequired");
         }
         if (hospitalId == null) {
-            throw new BusinessException("Hospital context is required to load pharmacy options.");
+            throw new BusinessException("pharmacy.r7.optionsHospitalRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         if (!registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            throw new BusinessException("Patient is not registered in the requested hospital context.");
+            throw new BusinessException("patient.notRegisteredInHospital");
         }
 
         // A clinical destination only: a provider's id (or an unknown one) is

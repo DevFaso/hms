@@ -102,6 +102,10 @@ export class EnumLabelService implements OnDestroy {
       SELF_REPORTED: 'Self-Reported',
       DEVICE: 'Connected Device',
       TRIAGE: 'Triage',
+      OTHER: 'Other',
+      DELIVERY: 'Delivery room',
+      PATIENT_REPORTED: 'Reported by the patient',
+      MANUAL: 'Manual entry',
     },
 
     /* ── Encounter / visit types ──────────────────────────── */
@@ -594,6 +598,10 @@ export class EnumLabelService implements OnDestroy {
       APPOINTMENT_CREATED: 'Appointment Created',
       PRESCRIPTION_CREATED: 'Prescription Created',
       LAB_ORDER_CREATED: 'Lab Order Created',
+      LAB_ORDER_UPDATED: 'Lab Order Updated',
+      LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
+      LAB_RESULT_CREATED: 'Lab Result Created',
+      LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',
       IMAGING_ORDER_CREATED: 'Imaging Order Created',
       IMPERSONATION_STARTED: 'Impersonation Started',
       IMPERSONATION_ENDED: 'Impersonation Ended',
@@ -738,6 +746,16 @@ export class EnumLabelService implements OnDestroy {
      * value, so a group added here can only fill a gap, never change the label
      * an earlier group already gives. scripts/lib/enum-labels-net.test.mjs
      * fails when a declared domain has no group. */
+    /* ── Patient chart timeline categories (PatientServiceImpl CATEGORY_*) ── */
+    timelineCategory: {
+      ALLERGY: 'Allergy',
+      ENCOUNTER: 'Encounter',
+      IMAGING: 'Imaging',
+      LAB_RESULT: 'Lab result',
+      PRESCRIPTION: 'Prescription',
+      PROCEDURE: 'Procedure',
+    },
+
     /* ── Immunization status ───────────────────────────────── */
     immunizationStatus: {
       COMPLETED: 'Completed',
@@ -871,9 +889,19 @@ export class EnumLabelService implements OnDestroy {
       SCHEDULED: 'Scheduled',
     },
 
+    /* ── Nurse handoff direction (QA D235) ─────────────────── */
+    handoffDirection: {
+      BREAK_COVER: 'Break cover',
+      PROCEDURE: 'To a procedure or exam',
+      SHIFT_CHANGE: 'Shift change',
+      WARD_TRANSFER: 'Ward transfer',
+    },
+
     /* ── Vitals round type ─────────────────────────────────── */
     vitalTaskType: {
       FULL_SET: 'Full Set',
+      NEWS2_HIGH: 'NEWS2 high: every 15 min',
+      NEWS2_MEDIUM: 'NEWS2 medium: hourly',
       ROUTINE: 'Routine',
     },
 

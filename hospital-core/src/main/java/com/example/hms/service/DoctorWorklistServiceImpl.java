@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.utility.ElapsedTime;
-import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
@@ -121,8 +120,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         LocalDateTime safetyAlertFloor = LocalDateTime.now(java.time.ZoneId.systemDefault())
                 .minusDays(SAFETY_ALERT_WINDOW_DAYS);
         long criticalLabs = labResultRepository
-                .countByLabOrder_OrderingStaff_IdAndAbnormalFlagAndAcknowledgedFalseAndCreatedAtAfter(
-                        staffId, AbnormalFlag.CRITICAL, safetyAlertFloor);
+                .countUnacknowledgedCriticalForOrderingStaff(staffId, safetyAlertFloor);
 
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);
@@ -178,8 +176,14 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
         Map<UUID, String> patientRoomBed = buildPatientRoomBedMap(staffId);
 
-        addEncounterItems(staffId, status, seenPatients, items, patientRoomBed);
-        addAppointmentItems(staffId, status, date, seenPatients, items);
+        LocalDate worklistDate = date != null ? date : LocalDate.now();
+        // QA D306: the visits the encounter rows already show, so an
+        // appointment row is dropped only when it IS one of them.
+        Set<UUID> coveredAppointments = new HashSet<>();
+        Set<UUID> patientsSeenOnDay = new HashSet<>();
+        addEncounterItems(staffId, status, worklistDate, seenPatients, coveredAppointments, patientsSeenOnDay,
+                items, patientRoomBed);
+        addAppointmentItems(staffId, status, worklistDate, coveredAppointments, patientsSeenOnDay, seenPatients, items);
         addConsultItems(staffId, status, seenPatients, items);
 
         // Apply urgency filter if provided
@@ -208,8 +212,11 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return patientRoomBed;
     }
 
-    private void addEncounterItems(UUID staffId, String status, Set<UUID> seenPatients,
+    @SuppressWarnings("java:S107") // QA D306: the visit-matching sets are the point
+    private void addEncounterItems(UUID staffId, String status, LocalDate worklistDate, Set<UUID> seenPatients,
+                                   Set<UUID> coveredAppointments, Set<UUID> patientsSeenOnDay,
                                    List<DoctorWorklistItemDTO> items, Map<UUID, String> patientRoomBed) {
+        Set<UUID> seenEncounters = new HashSet<>();
         List<EncounterStatus> encounterStatuses = List.of(
                 EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED, EncounterStatus.SCHEDULED,
                 EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
@@ -217,7 +224,18 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         for (EncounterStatus es : encounterStatuses) {
             for (Encounter enc : encounterRepository.findByStaff_IdAndStatus(staffId, es)) {
                 Patient p = enc.getPatient();
-                if (p == null || !seenPatients.add(p.getId())) continue;
+                // QA D306: one row per OPEN ENCOUNTER, not per patient. Keyed on
+                // the patient, an older encounter left IN_PROGRESS hid the visit
+                // the patient is here for today. The patient is still recorded,
+                // so the same person's appointment and consult rows stay merged.
+                if (p == null || !seenEncounters.add(enc.getId())) continue;
+                seenPatients.add(p.getId());
+                if (enc.getAppointment() != null) {
+                    coveredAppointments.add(enc.getAppointment().getId());
+                } else if (enc.getEncounterDate() != null
+                        && worklistDate.equals(enc.getEncounterDate().toLocalDate())) {
+                    patientsSeenOnDay.add(p.getId());
+                }
 
                 String mappedStatus = mapEncounterStatus(es);
                 if (!matchesStatusFilter(status, mappedStatus)) continue;
@@ -227,13 +245,21 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         }
     }
 
-    private void addAppointmentItems(UUID staffId, String status, LocalDate date,
+    private void addAppointmentItems(UUID staffId, String status, LocalDate worklistDate,
+                                     Set<UUID> coveredAppointments, Set<UUID> patientsSeenOnDay,
                                      Set<UUID> seenPatients, List<DoctorWorklistItemDTO> items) {
-        LocalDate worklistDate = date != null ? date : LocalDate.now();
+        Set<UUID> appointmentPatients = new HashSet<>();
         List<Appointment> todayAppts = appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, worklistDate);
         for (Appointment appt : todayAppts) {
             Patient p = appt.getPatient();
-            if (p == null || !seenPatients.add(p.getId())) continue;
+            // QA D306: an OLDER open encounter of the same patient no longer
+            // hides today's appointment; only the encounter of this very visit
+            // (linked, or an unlinked one opened that day) does.
+            if (p == null || coveredAppointments.contains(appt.getId())
+                    || patientsSeenOnDay.contains(p.getId())) continue;
+            // One appointment row per patient (the portal keys it on the patient).
+            if (!appointmentPatients.add(p.getId())) continue;
+            seenPatients.add(p.getId());
 
             String apptStatus = appt.getStatus() != null ? appt.getStatus().name() : STATUS_SCHEDULED;
             String mappedStatus = mapAppointmentStatus(apptStatus);
@@ -322,17 +348,39 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .mrn(p.getMrnForHospital(encHospitalId))
                 .age(age)
                 .sex(p.getGender())
-                .room(roomBed[0])
+                // QA D292 (D179): an outpatient has no stay; the room the triage
+                // nurse put them in is on the encounter.
+                .room(roomBed[0] != null ? roomBed[0] : blankToNull(enc.getRoomAssignment()))
                 .bed(roomBed[1])
                 .location(location)
                 .latestVitalsSummary(latestVitalsSummary)
-                .chiefComplaint(enc.getNotes())
+                .chiefComplaint(chiefComplaintOf(enc))
                 .urgency(enc.getUrgency() != null ? enc.getUrgency().name() : URGENCY_ROUTINE)
                 .encounterStatus(mappedStatus)
                 .waitMinutes(waitMinutes)
                 .updatedAt(enc.getUpdatedAt() != null ? enc.getUpdatedAt() : enc.getCreatedAt())
                 .alerts(Collections.emptyList())
                 .build();
+    }
+
+    /**
+     * QA D238: the encounter's own chief complaint (triage writes it there), else
+     * the reason the visit was booked for. It used to read the free-text notes,
+     * which are blank on a fresh encounter, so the column was always null.
+     */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    static String chiefComplaintOf(Encounter enc) {
+        if (enc.getChiefComplaint() != null && !enc.getChiefComplaint().isBlank()) {
+            return enc.getChiefComplaint();
+        }
+        if (enc.getAppointment() != null && enc.getAppointment().getReason() != null
+                && !enc.getAppointment().getReason().isBlank()) {
+            return enc.getAppointment().getReason();
+        }
+        return null;
     }
 
     private String[] parseRoomBed(String rawRoomBed) {

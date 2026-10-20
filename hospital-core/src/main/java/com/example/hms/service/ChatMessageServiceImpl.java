@@ -55,6 +55,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 public class ChatMessageServiceImpl implements ChatMessageService {
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
+    private static final String CONVERSATION_NOT_FOUND_KEY = "chat.conversation.notFound";
     private static final String TIMESTAMP_FIELD = "timestamp";
 
     /**
@@ -355,7 +356,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         // QA D197: a refusal is a 403, not a raw SecurityException (which answered 500).
         if (!allowed) {
-            throw new AccessDeniedException("Your role does not permit messaging this user.");
+            // QA D433: a refusal the sender can read, in their language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.roleNotPermitted"));
         }
 
         // QA D170: the patient boundary is also a relationship. A patient reaches a
@@ -378,7 +381,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .anyMatch(hospitalId -> userRoleHospitalAssignmentRepository
                 .existsByUserIdAndHospitalIdAndActiveTrue(staffUserId, hospitalId));
         if (!shared) {
-            throw new AccessDeniedException("You can only message your care team at a hospital where you are registered.");
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.send.careTeamOnly"));
         }
     }
 
@@ -411,6 +415,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getChatHistory(UUID user1Id, UUID user2Id, int page, int size, Locale locale) {
+        requireCallerIsOneOf(user1Id, user2Id);
         User user1 = userRepository.findById(user1Id)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, user1Id));
         User user2 = userRepository.findById(user2Id)
@@ -428,6 +433,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional
     public void markMessagesAsRead(UUID senderId, UUID recipientId, Locale locale) {
+        // Only the recipient reads a message; nobody else may flip its read flag.
+        requireCallerIsOneOf(recipientId, recipientId);
         User sender = userRepository.findById(senderId)
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, senderId));
         User recipient = userRepository.findById(recipientId)
@@ -441,6 +448,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> searchMessages(UUID user1Id, UUID user2Id, String keyword, int page, int size) {
+        requireCallerIsOneOf(user1Id, user2Id);
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository
             .searchMessagesBetweenUsers(user1Id, user2Id, keyword, pageable);
@@ -454,6 +462,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getAllMessagesForUser(UUID userId, Boolean unread, int page, int size) {
+        requireCallerIsOneOf(userId, userId);
         Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages;
         if (Boolean.TRUE.equals(unread)) {
@@ -471,7 +480,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatConversationSummaryDTO> getUserConversations(UUID userId, int page, int size) {
+        requireCallerIsOneOf(userId, userId);
         int offset = page * size;
+        User currentUser = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, userId));
 
         List<Object[]> rawResults = chatMessageRepository.findLatestConversations(userId, size, offset);
 
@@ -490,14 +502,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             User otherUser = userRepository.findById(otherUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.notFound", otherUserId));
 
-            User currentUser = userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", userId));
-
             int unreadCount = chatMessageRepository.countBySenderAndRecipientAndReadFalse(otherUser, currentUser);
 
             return ChatConversationSummaryDTO.builder()
                 .conversationUserId(otherUser.getId())
-                .conversationUserName(otherUser.getFirstName() + " " + otherUser.getLastName())
+                .conversationUserName(displayName(otherUser))
                 .lastMessageContent(content)
                 .lastMessageTimestamp(timestamp)
                 .lastMessageRead(read)
@@ -507,27 +516,67 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
+        requireCallerIdentity(email, User::getEmail);
         List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
+        requireCallerIdentity(email, User::getEmail);
         List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
+        requireCallerIdentity(username, User::getUsername);
         List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
         return mapWithAttachments(messages);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
+        requireCallerIdentity(username, User::getUsername);
         List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
         return mapWithAttachments(messages);
+    }
+
+    /**
+     * Chat content is readable by its two participants only (QA D301). The
+     * read endpoints take user ids in the path; a caller who is not one of
+     * them gets the same 404 as an unknown user, so ids reveal nothing about
+     * who talks to whom. There is no role bypass: a super admin is not a
+     * party to a private conversation either.
+     */
+    private void requireCallerIsOneOf(UUID first, UUID second) {
+        UUID caller = getCurrentUserId();
+        if (!caller.equals(first) && !caller.equals(second)) {
+            // QA D433: still a 404 (no oracle), but it names the conversation,
+            // not "user not found" with an id the caller never asked about.
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
+        }
+    }
+
+    /** The by-email / by-username lookups answer for the caller's own address only (QA D301/D343). */
+    private void requireCallerIdentity(String requested, java.util.function.Function<User, String> attribute) {
+        UUID caller = getCurrentUserId();
+        String own = userRepository.findById(caller).map(attribute).orElse(null);
+        if (requested == null || own == null || !own.equalsIgnoreCase(requested.trim())) {
+            throw new ResourceNotFoundException(CONVERSATION_NOT_FOUND_KEY);
+        }
+    }
+
+    private static String displayName(User user) {
+        String name = java.util.stream.Stream.of(user.getFirstName(), user.getLastName())
+            .filter(part -> part != null && !part.isBlank())
+            .collect(java.util.stream.Collectors.joining(" "));
+        return name.isBlank() ? user.getUsername() : name;
     }
 
     private List<ChatMessageResponseDTO> mapWithAttachments(List<ChatMessage> messages) {

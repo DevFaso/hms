@@ -175,6 +175,30 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
+    void withNoOpenVisitTheLastFinishedOneIsNamed_D252() {
+        when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(PATIENT_ID, Set.of(HOSPITAL_ID))).thenReturn(List.of());
+        when(patientChartAccess.require(eq(PATIENT_ID), any())).thenReturn(buildPatient("MRN-1", null));
+        Encounter done = new Encounter();
+        done.setId(java.util.UUID.randomUUID());
+        done.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        done.setEncounterDate(java.time.LocalDateTime.now().minusDays(2));
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(PATIENT_ID), eq(HOSPITAL_ID),
+            org.mockito.ArgumentMatchers.argThat(c -> c != null && c.contains(com.example.hms.enums.EncounterStatus.COMPLETED))))
+            .thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(PATIENT_ID), eq(HOSPITAL_ID),
+            org.mockito.ArgumentMatchers.argThat(c -> c != null && !c.contains(com.example.hms.enums.EncounterStatus.COMPLETED))))
+            .thenReturn(List.of(done));
+
+        PatientStoryboardDTO dto = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(dto.getActiveEncounter()).isNull();
+        assertThat(dto.getLastEncounter()).isNotNull();
+        assertThat(dto.getLastEncounter().getId()).isEqualTo(done.getId());
+    }
+
+    @Test
     void capsAllergyAndProblemListsToProtectMobileBandwidth() {
         java.util.List<PatientAllergy> many = new java.util.ArrayList<>();
         for (int i = 0; i < PatientStoryboardServiceImpl.MAX_ALLERGIES + 4; i++) {

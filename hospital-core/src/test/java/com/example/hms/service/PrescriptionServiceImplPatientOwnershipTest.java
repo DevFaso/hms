@@ -50,12 +50,16 @@ import static org.mockito.Mockito.when;
  * exist": {@link ResourceNotFoundException} carrying the same
  * {@code prescription.notfound} key, never a 403.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("PrescriptionServiceImpl: a patient reads only their own prescription")
 class PrescriptionServiceImplPatientOwnershipTest {
 
-    private static final String NOT_FOUND_KEY = "prescription.notfound";
+    private static final String NOT_FOUND_KEY = "Prescription not found";
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;

@@ -289,6 +289,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
     private final PatientTrackerEventPublisher trackerEventPublisher;
+    private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
@@ -359,7 +360,10 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter saved = encounterRepository.save(encounter);
 
         if (request.getNote() != null) {
-            upsertEncounterNoteInternal(saved, ctx.staff(), request.getNote(), locale, request.getCreatedBy());
+            // D406: a note nested in the encounter body is authored by the session too.
+            EncounterNoteRequestDTO nested = request.getNote();
+            upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy());
         }
 
         recordHistory(saved, "CREATED", resolveHistoryActor(request.getCreatedBy(), ctx.staff()), null);
@@ -410,7 +414,10 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter saved = encounterRepository.save(merged);
 
         if (request.getNote() != null) {
-            upsertEncounterNoteInternal(saved, ctx.staff(), request.getNote(), locale, request.getUpdatedBy());
+            // D406: a note nested in the encounter body is authored by the session too.
+            EncounterNoteRequestDTO nested = request.getNote();
+            upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy());
         }
 
         // Mirror the dedicated checkout flow: whenever an update transitions the
@@ -464,6 +471,10 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, id);
         }
         Encounter existing = encounterRepository.findById(id).orElse(null);
+        // QA r5 tenancy sweep: a delete loads under the read's tenant guard.
+        if (existing != null) {
+            com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existing.getHospital(), MSG_ENCOUNTER_NOT_FOUND, id);
+        }
         encounterRepository.deleteById(id);
         if (existing != null) {
             // Record history for deletion
@@ -484,7 +495,12 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        EncounterNote note = upsertEncounterNoteInternal(encounter, encounter.getStaff(), request, locale, null);
+        // D406: the author is the session user, never the encounter's attending
+        // nor a staff id the body names, and a note is its author's alone: a
+        // second clinician appends an addendum instead of overwriting it.
+        NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
+            request.getAuthorUserId(), request.getAuthorName(), locale);
+        EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null);
         return encounterMapper.toEncounterNoteResponseDTO(note);
     }
 
@@ -504,18 +520,15 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
 
-        NoteAuthor author = resolveNoteAuthor(request.getAuthorStaffId(),
-            request.getAuthorUserId(),
-            request.getAuthorName(),
-            encounter.getStaff(),
-            locale);
+        NoteAuthor author = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
+            request.getAuthorUserId(), request.getAuthorName(), locale);
         validateAuthorScope(encounter, author.staff(), locale);
 
         EncounterNoteAddendum addendum = EncounterNoteAddendum.builder()
             .note(note)
             .author(author.user())
             .authorStaff(author.staff())
-            .authorName(resolveAuthorName(request.getAuthorName(), author))
+            .authorName(author.sessionResolved() ? author.displayName() : resolveAuthorName(request.getAuthorName(), author))
             .authorCredentials(trimToNull(request.getAuthorCredentials()))
             .content(request.getContent())
             .eventOccurredAt(request.getEventOccurredAt())
@@ -573,9 +586,7 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = loadNoteScoped(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
-            throw new BusinessException(
-                "This note has already been signed. A signature cannot be reissued; "
-                    + "append an addendum instead.");
+            throw new BusinessException("encounter.note.alreadySigned");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -618,14 +629,13 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = loadNoteScoped(encounterId);
 
         if (!note.isRequiresCosign()) {
-            throw new BusinessException("This note does not declare a co-signature requirement.");
+            throw new BusinessException("encounter.note.noCosignRequirement");
         }
         if (note.getCosignedAt() != null || note.getCosignedBy() != null) {
-            throw new BusinessException("This note has already been co-signed.");
+            throw new BusinessException("encounter.note.alreadyCosigned");
         }
         if (!note.isSigned()) {
-            throw new BusinessException(
-                "The author must sign the note before it can be co-signed.");
+            throw new BusinessException("encounter.note.authorSignFirst");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -640,9 +650,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         UUID authorUserId = note.getAuthor() != null ? note.getAuthor().getId() : null;
         if (authorUserId != null && authorUserId.equals(currentUserId)) {
-            throw new BusinessException(
-                "A note cannot be co-signed by its own author; the co-signature exists to put "
-                    + "a second clinician's judgment on record.");
+            throw new BusinessException("encounter.note.selfCosign");
         }
 
         note.setCosignedBy(cosigner);
@@ -708,15 +716,10 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
-                                                      Staff defaultStaff,
+                                                      NoteAuthor author,
                                                       EncounterNoteRequestDTO request,
                                                       Locale locale,
                                                       String actorOverride) {
-        NoteAuthor author = resolveNoteAuthor(request.getAuthorStaffId(),
-            request.getAuthorUserId(),
-            request.getAuthorName(),
-            defaultStaff,
-            locale);
         validateAuthorScope(encounter, author.staff(), locale);
 
         EncounterNote note = Optional.ofNullable(encounter.getEncounterNote())
@@ -728,8 +731,12 @@ public class EncounterServiceImpl implements EncounterService {
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
         if (!isNew && note.isSigned()) {
-            throw new BusinessException(
-                "This note is signed and can no longer be edited. Append an addendum instead.");
+            throw new BusinessException("encounter.note.signedLocked");
+        }
+        // D406: a session author may only revise their own note. Another
+        // clinician's text is never overwritten nor re-attributed; they add an addendum.
+        if (!isNew && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
+            throw new BusinessException("encounter.note.otherAuthor");
         }
         if (isNew) {
             note.setEncounter(encounter);
@@ -747,7 +754,9 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote saved = encounterNoteRepository.save(note);
         encounter.setEncounterNote(saved);
 
-        String changedBy = trimToNull(actorOverride) != null ? trimToNull(actorOverride) : author.actorIdentifier();
+        // A session author is the history's actor; a body-supplied name is not.
+        String changedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
+            ? trimToNull(actorOverride) : author.actorIdentifier();
         recordNoteHistory(encounter, saved, isNew ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED, changedBy);
         return saved;
     }
@@ -832,8 +841,11 @@ public class EncounterServiceImpl implements EncounterService {
         if (appointmentId == null) {
             return null;
         }
-        return appointmentRepository.findById(appointmentId)
+        Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
+        // QA r5 tenancy sweep: another hospital's row answers as unknown.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(appointment.getHospital(), "appointment.notFound", appointmentId);
+        return appointment;
     }
 
     private Department findDepartmentInHospital(Hospital hospital, UUID departmentId) {
@@ -907,7 +919,8 @@ public class EncounterServiceImpl implements EncounterService {
     private void applyAuthorMetadata(EncounterNote note, NoteAuthor author, EncounterNoteRequestDTO request) {
         note.setAuthor(author.user());
         note.setAuthorStaff(author.staff());
-        if (author.displayName() != null) {
+        if (author.sessionResolved() || author.displayName() != null) {
+            // A session author's display name is the server's, never the body's.
             note.setAuthorName(author.displayName());
         }
         setStringIfPresent(request.getAuthorCredentials(), value -> note.setAuthorCredentials(trimToNull(value)));
@@ -970,9 +983,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (request.getSignedAt() != null
             || trimToNull(request.getSignedByName()) != null
             || trimToNull(request.getSignedByCredentials()) != null) {
-            throw new BusinessException(
-                "Note signatures are recorded by POST /encounters/{id}/notes/sign; "
-                    + "they cannot be asserted in the note body.");
+            throw new BusinessException("encounter.note.signatureViaEndpoint");
         }
         // Set-only, the prescription idiom: declaring the co-sign requirement
         // is documentation; withdrawing it would be an attestation decision no
@@ -1174,7 +1185,50 @@ public class EncounterServiceImpl implements EncounterService {
             displayName = joinName(staff.getUser().getFirstName(), staff.getUser().getLastName());
         }
         String actorIdentifier = determineActorIdentifier(displayName, user, staff, defaultStaff);
-        return new NoteAuthor(user, staff, displayName, actorIdentifier);
+        return new NoteAuthor(user, staff, displayName, actorIdentifier, false);
+    }
+
+    /**
+     * D406: the author of a note written through the API is the signed-in user.
+     * A staff or user id in the body is accepted only when it names that user;
+     * anything else is a write in someone else's name and is refused. Without a
+     * session (internal callers) the legacy resolution applies.
+     */
+    private NoteAuthor resolveSessionNoteAuthor(Encounter encounter,
+                                                UUID requestedStaffId,
+                                                UUID requestedUserId,
+                                                String requestedDisplayName,
+                                                Locale locale) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            return resolveNoteAuthor(requestedStaffId, requestedUserId, requestedDisplayName,
+                encounter.getStaff(), locale);
+        }
+        UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        Staff staff = encounterHospitalId == null ? null
+            : staffRepository.findByUserIdAndHospitalId(currentUserId, encounterHospitalId).orElse(null);
+        if (requestedStaffId != null && (staff == null || !requestedStaffId.equals(staff.getId()))) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "A note can only be written in the signed-in clinician's own name.");
+        }
+        if (requestedUserId != null && !requestedUserId.equals(currentUserId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "A note can only be written in the signed-in clinician's own name.");
+        }
+        User user = staff != null && staff.getUser() != null
+            ? staff.getUser()
+            : userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", currentUserId));
+        String displayName = joinName(user.getFirstName(), user.getLastName());
+        if (displayName == null) {
+            displayName = user.getUsername();
+        }
+        String actorIdentifier = determineActorIdentifier(displayName, user, staff, null);
+        return new NoteAuthor(user, staff, displayName, actorIdentifier, true);
+    }
+
+    private static boolean isSameUser(User a, User b) {
+        return a != null && b != null && a.getId() != null && a.getId().equals(b.getId());
     }
 
     private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff) {
@@ -1288,7 +1342,8 @@ public class EncounterServiceImpl implements EncounterService {
     private record NoteAuthor(User user,
                               Staff staff,
                               String displayName,
-                              String actorIdentifier) {}
+                              String actorIdentifier,
+                              boolean sessionResolved) {}
 
     private record EncounterResolution(Patient patient,
                                        Staff staff,
@@ -1666,7 +1721,7 @@ public class EncounterServiceImpl implements EncounterService {
                 return;
             }
         }
-        throw new BusinessException("Provide " + label + ".");
+        throw new BusinessException("encounter.provideOneOf", label);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -1687,14 +1742,19 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
-            throw new BusinessException(
-                    "Cannot submit triage for encounter in status " + current
-                            + ". Expected ARRIVED or TRIAGE.");
+            throw new BusinessException("encounter.triage.submitWrongStatus", String.valueOf(current));
         }
 
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
         com.example.hms.model.PatientVitalSign savedVital = patientVitalSignRepository.save(vital);
+        // QA D265 (D207 on the triage path): a triage set scoring MEDIUM/HIGH
+        // alerts the triage nurse and the visit's clinician, through the same
+        // escalation every other vitals path uses.
+        news2EscalationService.escalateIfNeeded(vital,
+                encounter.getPatient() != null ? encounter.getPatient().getId() : null,
+                encounter.getHospital() != null ? encounter.getHospital().getId() : null,
+                actorUsername, visitPhysicianUsername(encounter));
 
         // (b) Update chief complaint on encounter (override with triage value if provided)
         if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
@@ -1735,6 +1795,11 @@ public class EncounterServiceImpl implements EncounterService {
                 .chiefComplaint(saved.getChiefComplaint())
                 .vitalSignId(savedVital.getId())
                 .build();
+    }
+
+    private static String visitPhysicianUsername(Encounter encounter) {
+        Staff provider = encounter.getStaff();
+        return provider != null && provider.getUser() != null ? provider.getUser().getUsername() : null;
     }
 
     /**
@@ -1816,9 +1881,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
                 && current != EncounterStatus.TRIAGE
                 && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot submit nursing intake for encounter in status " + current
-                            + ". Expected WAITING_FOR_PHYSICIAN, TRIAGE, or IN_PROGRESS.");
+            throw new BusinessException("encounter.intake.wrongStatus", String.valueOf(current));
         }
 
         // Resolve recorder staff
@@ -1994,8 +2057,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
         if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
-            throw new BusinessException("Encounter is already " + current.name()
-                + " and cannot be checked out.");
+            throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -2033,10 +2095,24 @@ public class EncounterServiceImpl implements EncounterService {
         // Captured since MVP 6 and silently dropped until V128 — this is where
         // the desk finally sees "Dr Ouédraogo wants this patient back in two
         // weeks" without the patient having to remember it.
-        createRecallFromCheckout(encounter, request, actorUsername);
+        java.time.LocalDate recallDue = createRecallFromCheckout(encounter, request, actorUsername);
 
         // (d) Build and return AVS
-        return checkOutMapper.toAfterVisitSummary(encounter, request, null);
+        com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
+            checkOutMapper.toAfterVisitSummary(encounter, request, null);
+        // QA D321: the AVS shows the follow-up date the recall was filed with
+        // (the defaulted one too, when no date was given).
+        if (recallDue != null) {
+            avs.setFollowUpAppointmentDate(recallDue.toString());
+        }
+        // QA D426 (D322): the checkout's own AVS listed no medicines unless the
+        // clinician retyped them; the summary just written carries the visit's orders.
+        dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
+            if (isBlankText(avs.getPrescriptionSummary())) {
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+            }
+        });
+        return avs;
     }
 
     /**
@@ -2046,12 +2122,12 @@ public class EncounterServiceImpl implements EncounterService {
      * label because pre-V128 clients may omit it; the due date falls back to
      * two weeks out when no preference was given or it fails to parse.
      */
-    private void createRecallFromCheckout(
+    private java.time.LocalDate createRecallFromCheckout(
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
             String actorUsername) {
         if (request == null || request.getFollowUpAppointment() == null) {
-            return;
+            return null;
         }
         var followUp = request.getFollowUpAppointment();
         try {
@@ -2080,8 +2156,10 @@ public class EncounterServiceImpl implements EncounterService {
                                     ? followUp.getNotes().substring(0, 500) : followUp.getNotes())
                             .createdBy(actorUsername)
                             .build());
+            return dueDate;
         } catch (RuntimeException ex) {
             log.warn("Could not create a recall for encounter {}: {}", encounter.getId(), ex.getMessage());
+            return null;
         }
     }
 
@@ -2103,6 +2181,13 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setDisposition(DischargeDisposition.HOME);
         summary.setDischargeDiagnosis(buildDischargeDiagnosisText(encounter, request));
         summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
+        // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
+        // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
+        if (request != null) {
+            keepIfGiven(request.getPrescriptionSummary(), 3000, summary::setPrescriptionSummary);
+            keepIfGiven(request.getReferralSummary(), 3000, summary::setReferralSummary);
+            keepIfGiven(request.getPatientEducationMaterials(), 2000, summary::setPatientEducationProvided);
+        }
 
         // Encounter notes → hospitalCourse (visit summary)
         if (encounter.getNotes() != null && !encounter.getNotes().isBlank()) {
@@ -2204,6 +2289,43 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
+    private static boolean isBlankText(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * QA D322: the medicines the patient goes home with, one line each, from
+     * the discharge summary's reconciliation (stopped ones left out).
+     */
+    private static String medicationsAtDischarge(DischargeSummary summary) {
+        String text = summary.getMedicationReconciliation().stream()
+            .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
+            .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
+            .filter(m -> !isBlankText(m.getMedicationName()))
+            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(), m.getRoute(),
+                    m.getFrequency(), m.getPatientInstructions())
+                .filter(part -> !isBlankText(part))
+                .map(String::trim)
+                .collect(Collectors.joining(" ")))
+            .collect(Collectors.joining("\n"));
+        return text.isBlank() ? null : text;
+    }
+
+    /** QA D322: the earliest dated follow-up on the discharge summary, or null. */
+    private static String firstFollowUpDate(DischargeSummary summary) {
+        java.time.LocalDate first = null;
+        for (com.example.hms.model.discharge.FollowUpAppointmentEntry f : summary.getFollowUpAppointments()) {
+            java.time.LocalDate d = f.getAppointmentDate();
+            if (d == null && f.getAppointmentTime() != null) {
+                d = f.getAppointmentTime().toLocalDate();
+            }
+            if (d != null && (first == null || d.isBefore(first))) {
+                first = d;
+            }
+        }
+        return first != null ? first.toString() : null;
+    }
+
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId) {
@@ -2217,10 +2339,45 @@ public class EncounterServiceImpl implements EncounterService {
         requireEncounterReadable(encounter, scope);
 
         if (encounter.getCheckoutTimestamp() == null) {
-            throw new BusinessException("Encounter has not been checked out yet.");
+            throw new BusinessException("encounter.checkout.notYet");
         }
 
-        return checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
+            checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        // QA D224: a later read used to lose the prescription summary and the
+        // education text, which lived only on the checkout request.
+        dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
+            avs.setPrescriptionSummary(summary.getPrescriptionSummary());
+            avs.setReferralSummary(summary.getReferralSummary());
+            avs.setPatientEducationMaterials(summary.getPatientEducationProvided());
+            // QA D322: an inpatient discharge summary carries its medicines and
+            // follow-ups as lists, not as the checkout's free text, so the
+            // stay's AVS showed neither.
+            if (isBlankText(avs.getPrescriptionSummary())) {
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+            }
+            if (isBlankText(avs.getFollowUpInstructions())) {
+                avs.setFollowUpInstructions(summary.getFollowUpInstructions());
+            }
+            if (isBlankText(avs.getFollowUpAppointmentDate())) {
+                avs.setFollowUpAppointmentDate(firstFollowUpDate(summary));
+            }
+        });
+        // QA D321: a follow-up requested at checkout is filed as a recall.
+        if (isBlankText(avs.getFollowUpAppointmentDate())) {
+            patientRecallRepository.findFirstByEncounter_IdAndSourceOrderByDueDateAsc(
+                    encounter.getId(), com.example.hms.enums.RecallSource.CHECKOUT)
+                .filter(r -> r.getDueDate() != null)
+                .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
+        }
+        return avs;
+    }
+
+    private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {
+        if (value != null && !value.isBlank()) {
+            String trimmed = value.trim();
+            setter.accept(trimmed.length() <= max ? trimmed : trimmed.substring(0, max));
+        }
     }
 
     /**
@@ -2299,8 +2456,7 @@ public class EncounterServiceImpl implements EncounterService {
             if (user != null && encounterStaff != null
                     && encounterStaff.getUser() != null
                     && !encounterStaff.getUser().getId().equals(user.getId())) {
-                throw new BusinessException(
-                        "You are not the assigned physician for this encounter.");
+                throw new BusinessException("encounter.notAssignedPhysician");
             }
         }
 
@@ -2310,9 +2466,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            throw new BusinessException(
-                    "Cannot start encounter in status " + current
-                            + ". Expected WAITING_FOR_PHYSICIAN.");
+            throw new BusinessException("encounter.start.wrongStatus", String.valueOf(current));
         }
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
@@ -2334,9 +2488,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
-            throw new BusinessException(
-                    "Cannot complete triage for encounter in status " + current
-                            + ". Expected ARRIVED or TRIAGE.");
+            throw new BusinessException("encounter.triage.completeWrongStatus", String.valueOf(current));
         }
 
         requireTriageRecorded(encounter);
@@ -2400,9 +2552,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot complete examination in status " + current
-                            + ". Expected IN_PROGRESS.");
+            throw new BusinessException("encounter.exam.wrongStatus", String.valueOf(current));
         }
 
         boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
@@ -2432,9 +2582,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException(
-                    "Cannot mark ready for discharge in status " + current
-                            + ". Expected AWAITING_RESULTS or IN_PROGRESS.");
+            throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);

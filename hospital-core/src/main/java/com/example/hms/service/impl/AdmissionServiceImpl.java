@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -50,8 +51,15 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
+    private static final String ORDER_SET_NOT_FOUND_KEY = "orderSet.notFound";
+    private static final java.util.Set<com.example.hms.enums.AdmissionStatus> CLOSED_STAY_STATUSES =
+        java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.DISCHARGED,
+            com.example.hms.enums.AdmissionStatus.CANCELLED,
+            com.example.hms.enums.AdmissionStatus.TRANSFERRED,
+            com.example.hms.enums.AdmissionStatus.DECEASED);
 
 
     /**
@@ -74,6 +82,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
+    private final com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     private final EncounterAutoCompletionService encounterAutoCompletion;
     private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     private final BedAssignmentService bedAssignmentService;
@@ -109,13 +118,27 @@ public class AdmissionServiceImpl implements AdmissionService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         
+        // QA D262: the admitting hospital is the caller's acting scope; the body's id is a claim.
+        requireActingAt(request.getHospitalId(), HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
+        // ...and the patient is one this hospital registered.
+        if (!registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+        }
         
         Staff admittingProvider = staffRepository.findById(request.getAdmittingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.admittingProvider.notFound", request.getAdmittingProviderId()));
 
         requirePhysician(admittingProvider, hospital.getId());
+
+        // QA D304: one open stay per patient. The patient row lock serialises two
+        // concurrent admissions, so the second one sees the first and is refused.
+        patientRepository.lockByIdUnscoped(patient.getId());
+        if (admissionRepository.existsOpenAdmissionForPatient(patient.getId())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("admission.patient.alreadyAdmitted"));
+        }
 
         Admission admission = new Admission();
         admission.setPatient(patient);
@@ -123,9 +146,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         admission.setAdmittingProvider(admittingProvider);
         
         if (request.getDepartmentId() != null) {
-            Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
-            admission.setDepartment(department);
+            admission.setDepartment(loadDepartmentAt(request.getDepartmentId(), hospital.getId()));
         }
         
         if (request.getAttendingPhysicianId() != null) {
@@ -153,8 +174,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // Apply order sets if specified
         if (request.getOrderSetIds() != null && !request.getOrderSetIds().isEmpty()) {
-            List<AdmissionOrderSet> orderSets = orderSetRepository.findAllById(request.getOrderSetIds());
-            admission.setAppliedOrderSets(orderSets);
+            admission.setAppliedOrderSets(loadOrderSetsAt(request.getOrderSetIds(), hospital.getId()));
         }
 
         admission = admissionRepository.save(admission);
@@ -181,13 +201,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionResponseDTO updateAdmission(UUID admissionId, AdmissionUpdateRequestDTO request) {
-        Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
+        // QA D262: a write loads under the same tenant guard as the read.
+        Admission admission = loadTenantScopedAdmission(admissionId);
 
         if (request.getDepartmentId() != null) {
-            Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
-            admission.setDepartment(department);
+            admission.setDepartment(loadDepartmentAt(request.getDepartmentId(), admission.getHospital().getId()));
         }
 
         if (request.getAttendingPhysicianId() != null) {
@@ -217,11 +235,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionResponseDTO applyOrderSets(UUID admissionId, AdmissionOrderExecutionRequestDTO request) {
-        Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
+        // QA D262: a write loads under the same tenant guard as the read.
+        Admission admission = loadTenantScopedAdmission(admissionId);
 
-        List<AdmissionOrderSet> orderSets = orderSetRepository.findAllById(request.getOrderSetIds());
-        orderSets.forEach(admission::applyOrderSet);
+        loadOrderSetsAt(request.getOrderSetIds(), admission.getHospital().getId())
+            .forEach(admission::applyOrderSet);
 
         admission = admissionRepository.save(admission);
         return admissionMapper.toResponseDTO(admission);
@@ -230,8 +248,14 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionResponseDTO dischargePatient(UUID admissionId, AdmissionDischargeRequestDTO request) {
-        Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
+        // QA D262: a write loads under the same tenant guard as the read.
+        Admission admission = loadTenantScopedAdmission(admissionId);
+        // QA D267: a second discharge answered 200 and overwrote the summary,
+        // the instructions and the discharge time the after-visit summary was
+        // built from. A closed stay is not discharged again.
+        if (CLOSED_STAY_STATUSES.contains(admission.getStatus())) {
+            throw new ConflictException("admission.discharge.alreadyClosed");
+        }
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("admission.dischargingProvider.notFound", request.getDischargingProviderId()));
@@ -255,7 +279,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // The stay's encounter carries the discharge (D151), then it and only
         // it is completed (D134).
-        stayEncounters.recordDischarge(admission);
+        stayEncounters.recordDischarge(admission, request.getDischargeDiagnosis());
         completeActiveEncounters(admission);
 
         // Free the structured bed (the admission keeps bed/roomBed as history)
@@ -279,8 +303,8 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public void cancelAdmission(UUID admissionId) {
-        Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId));
+        // QA D262: a write loads under the same tenant guard as the read.
+        Admission admission = loadTenantScopedAdmission(admissionId);
         admission.cancel();
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
@@ -316,6 +340,53 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new ResourceNotFoundException(ADMISSION_NOT_FOUND_KEY, admissionId);
         }
         return admission;
+    }
+
+    /**
+     * QA D262: a hospital named in a request body is a claim. Outside global
+     * view it must be the caller's acting hospital, else the caller learns
+     * nothing about it: the same 404 as an unknown id.
+     */
+    private void requireActingAt(UUID hospitalId, String notFoundKey, UUID reportedId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && !activeHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException(notFoundKey, reportedId);
+        }
+    }
+
+    /** A department of this hospital; another hospital's department answers as unknown. */
+    private Department loadDepartmentAt(UUID departmentId, UUID hospitalId) {
+        Department department = departmentRepository.findById(departmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, departmentId));
+        if (department.getHospital() == null || !department.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, departmentId);
+        }
+        return department;
+    }
+
+    /** Order sets of this hospital only; any other id answers as unknown. */
+    private List<AdmissionOrderSet> loadOrderSetsAt(List<UUID> orderSetIds, UUID hospitalId) {
+        List<AdmissionOrderSet> orderSets = orderSetRepository.findAllById(orderSetIds);
+        for (UUID id : orderSetIds) {
+            boolean found = orderSets.stream().anyMatch(set -> id.equals(set.getId())
+                && set.getHospital() != null && hospitalId.equals(set.getHospital().getId()));
+            if (!found) {
+                throw new ResourceNotFoundException(ORDER_SET_NOT_FOUND_KEY, id);
+            }
+        }
+        return orderSets;
+    }
+
+    /** An order set of the caller's acting hospital (any, in global view). */
+    private AdmissionOrderSet loadTenantScopedOrderSet(UUID orderSetId) {
+        AdmissionOrderSet orderSet = orderSetRepository.findById(orderSetId)
+            .orElseThrow(() -> new ResourceNotFoundException(ORDER_SET_NOT_FOUND_KEY, orderSetId));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && (orderSet.getHospital() == null
+                || !activeHospitalId.equals(orderSet.getHospital().getId()))) {
+            throw new ResourceNotFoundException(ORDER_SET_NOT_FOUND_KEY, orderSetId);
+        }
+        return orderSet;
     }
 
     @Override
@@ -407,8 +478,9 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionOrderSetResponseDTO createOrderSet(AdmissionOrderSetRequestDTO request) {
+        requireActingAt(request.getHospitalId(), HOSPITAL_NOT_FOUND_KEY, request.getHospitalId());
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
-            .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, request.getHospitalId()));
 
         Staff createdBy = staffRepository.findById(request.getCreatedByStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getCreatedByStaffId()));
@@ -424,9 +496,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         orderSet.setCreatedBy(createdBy);
 
         if (request.getDepartmentId() != null) {
-            Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_KEY, request.getDepartmentId()));
-            orderSet.setDepartment(department);
+            orderSet.setDepartment(loadDepartmentAt(request.getDepartmentId(), hospital.getId()));
         }
 
         orderSet = orderSetRepository.save(orderSet);
@@ -436,8 +506,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional(readOnly = true)
     public AdmissionOrderSetResponseDTO getOrderSet(UUID orderSetId) {
-        AdmissionOrderSet orderSet = orderSetRepository.findById(orderSetId)
-            .orElseThrow(() -> new ResourceNotFoundException("orderSet.notFound", orderSetId));
+        AdmissionOrderSet orderSet = loadTenantScopedOrderSet(orderSetId);
         return admissionMapper.toOrderSetResponseDTO(orderSet);
     }
 
@@ -459,8 +528,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public void deactivateOrderSet(UUID orderSetId, String reason, UUID deactivatedByStaffId) {
-        AdmissionOrderSet orderSet = orderSetRepository.findById(orderSetId)
-            .orElseThrow(() -> new ResourceNotFoundException("orderSet.notFound", orderSetId));
+        AdmissionOrderSet orderSet = loadTenantScopedOrderSet(orderSetId);
 
         Staff deactivatedBy = staffRepository.findById(deactivatedByStaffId)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", deactivatedByStaffId));

@@ -29,6 +29,8 @@ public class LabResultMapper {
 
     public static final String FLAG_UNSPECIFIED = "UNSPECIFIED";
     public static final String FLAG_CRITICAL = "CRITICAL";
+    /** A result no range grades (a qualitative answer) that reads abnormal. */
+    public static final String FLAG_ABNORMAL = "ABNORMAL";
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
@@ -51,7 +53,7 @@ public class LabResultMapper {
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range());
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -126,7 +128,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = determineSeverityFlag(result.getResultValue(), grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range());
 
         return LabResultTrendPointDTO.builder()
             .labResultId(result.getId() != null ? result.getId().toString() : null)
@@ -139,23 +141,17 @@ public class LabResultMapper {
     }
 
     /**
-     * D107: whether a result graded {@code severityFlag} raises the critical
-     * value alert. CRITICAL always does. HIGH does only when the range it was
-     * graded against declares no critical limits - the fail-safe for catalogs
-     * configured before limits existed, so they keep alerting as before. Once
-     * a laboratory sets limits, a value merely above the range is HIGH and is
-     * labelled and treated as HIGH, not paged as a critical.
+     * Whether a result graded {@code severityFlag} raises the critical value
+     * alert: only a CRITICAL grade does, that is a value beyond the range's
+     * critical limits or an analyzer's CRITICAL flag.
+     *
+     * <p>QA D313 (D206 follow-up): the D107/D271 fail-safe paged ANY value
+     * outside a range that declares no critical limits, so a glucose of 6.5 on
+     * 3.9-6.1 paged the doctor as a panic value. Out of range is abnormal (HIGH
+     * or LOW), not critical; a laboratory that wants a page sets the limits.
      */
-    public boolean raisesCriticalAlert(LabResult result, String severityFlag) {
-        if (FLAG_CRITICAL.equalsIgnoreCase(severityFlag)) {
-            return true;
-        }
-        if (!"HIGH".equalsIgnoreCase(severityFlag) || result == null) {
-            return false;
-        }
-        OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
-        return graded == null || (graded.getCriticalLow() == null && graded.getCriticalHigh() == null);
+    public boolean raisesCriticalAlert(String severityFlag) {
+        return FLAG_CRITICAL.equalsIgnoreCase(severityFlag);
     }
 
     /**
@@ -169,7 +165,45 @@ public class LabResultMapper {
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
         LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
-        return determineSeverityFlag(result.getResultValue(), graded);
+        return effectiveSeverityFlag(result, graded);
+    }
+
+    /**
+     * QA D206 / D212: the ONE severity every screen shows. It is the range
+     * grade, except that an analyzer's CRITICAL flag is labelled CRITICAL
+     * (QA D313: a value outside a range without critical limits is not). Never
+     * the notification stamp: that describes a page, not the current value.
+     * Before this, K 7.9 on such a range was paged as a critical value and
+     * shown as "Eleve" with a critical tile of 0.
+     */
+    private static String effectiveSeverityFlag(LabResult result, LabTestReferenceRange graded) {
+        String flag = determineSeverityFlag(result.getResultValue(), graded);
+        if (FLAG_CRITICAL.equals(flag)) {
+            return flag;
+        }
+        // From the value only: an analyzer's CRITICAL flag is part of the
+        // result. The criticalNotifiedAt stamp is NOT - it records a page
+        // about a value that may since have been amended (79 -> 4.2), and
+        // keying the label on it kept a corrected typo CRITICAL for good.
+        if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
+            return FLAG_CRITICAL;
+        }
+        // QA D313: a value outside a range that declares no critical limits
+        // stays HIGH or LOW (abnormal). It used to be promoted to CRITICAL here.
+        // QA D286: no range grades a qualitative answer, so the range says
+        // UNSPECIFIED ("Non evalue"). The recorded flag, or - for a row stored
+        // before the write-time rule existed - the value itself, says abnormal.
+        // An explicit NORMAL someone recorded is kept.
+        if (FLAG_UNSPECIFIED.equals(flag) && (isAbnormalRecorded(result.getAbnormalFlag())
+                || (result.getAbnormalFlag() == null
+                    && com.example.hms.service.LabResultValueRules.isPositiveQualitative(result.getResultValue())))) {
+            return FLAG_ABNORMAL;
+        }
+        return flag;
+    }
+
+    private static boolean isAbnormalRecorded(com.example.hms.enums.AbnormalFlag recorded) {
+        return recorded != null && recorded.severity() == com.example.hms.enums.AbnormalFlag.ABNORMAL;
     }
 
     /**
@@ -338,7 +372,7 @@ public class LabResultMapper {
         String hospitalName = resolveHospitalName(order);
         String performingHospitalId = resolvePerformingHospitalId(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
-        String labOrderCode = order.getId() != null ? order.getId().toString() : null;
+        String labOrderCode = LabOrderMapper.orderCodeOf(order);
         String orderedByName = resolveOrderingStaffName(order);
 
         return new OrderContext(

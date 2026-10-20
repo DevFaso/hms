@@ -21,6 +21,7 @@ import {
 } from '../services/dashboard.service';
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 interface ControlTowerStat {
   key: string;
@@ -67,7 +68,7 @@ interface ActivityRow {
 @Component({
   selector: 'app-super-admin',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe, EnumLabelPipe],
   templateUrl: './super-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './super-admin.scss',

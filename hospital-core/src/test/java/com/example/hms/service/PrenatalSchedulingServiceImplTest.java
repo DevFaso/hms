@@ -51,6 +51,7 @@ import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import static org.mockito.Mockito.lenient;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class PrenatalSchedulingServiceImplTest {
 
@@ -375,7 +376,8 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.lmp.implausible");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.lmp.implausible"));
     }
 
     @Test
@@ -393,6 +395,31 @@ class PrenatalSchedulingServiceImplTest {
 
         assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessage("prenatal.pregnancy.delivered");
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.delivered"));
+    }
+
+    /* ── QA D249: schedule recommendations in the caller's language ─────── */
+
+    @Test
+    void generateScheduleRendersRecommendationsAndAlertsInFrench() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
+
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2023, 9, 4))
+            .highRisk(true)
+            .build();
+
+        PrenatalScheduleResponseDTO response = service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME);
+
+        assertThat(response.getRecommendations()).isNotEmpty().allSatisfy(rec -> {
+            assertThat(rec.getRecommendation()).contains("semaine").doesNotContain("week");
+            assertThat(rec.getNotes()).doesNotContain("Monitor").doesNotContain("Standard");
+        });
+        assertThat(response.getAlerts()).anySatisfy(alert -> assertThat(alert).startsWith("Grossesse à haut risque"));
     }
 }

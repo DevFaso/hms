@@ -118,6 +118,9 @@ class DispenseReadyForCollectionTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** QA D404: the money follows a cancelled dispense. */
+    @Mock private PharmacyPaymentVoider paymentVoider;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -871,6 +874,7 @@ class DispenseReadyForCollectionTest {
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(d));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(d));
 
             assertThatThrownBy(() -> service.cancelDispense(dispenseId))
                     .isInstanceOf(BusinessException.class)

@@ -44,7 +44,11 @@ describe('errorInterceptor', () => {
       'refreshTokenRequest',
       'setToken',
       'setRefreshToken',
+      'getToken',
+      'isExpired',
     ]);
+    auth.getToken.and.returnValue(null);
+    auth.isExpired.and.returnValue(true);
     auth.getRefreshToken.and.returnValue(null);
     auth.getUserProfile.and.returnValue(null);
     router = jasmine.createSpyObj('Router', ['navigate']);
@@ -263,25 +267,44 @@ describe('errorInterceptor', () => {
   });
 
   for (const url of ['/api/auth/me/change-password', '/api/auth/me/change-email']) {
-    it(`a wrong current password on ${url} is retried once on a fresh token, then reaches the form without a sign-out (D87)`, () => {
+    it(`a wrong current password on ${url} reaches the form once, never re-sent (D87, QA D342)`, () => {
       auth.getRefreshToken.and.returnValue('r1');
       auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
-      auth.refreshTokenRequest.and.returnValue(
-        of({ accessToken: 'new-token', refreshToken: 'r2' }),
-      );
+      auth.getToken.and.returnValue('live-token');
+      auth.isExpired.and.returnValue(false);
 
       let error: HttpErrorResponse | undefined;
       http.post(url, {}).subscribe({ error: (e) => (error = e) });
       httpMock
         .expectOne(url)
         .flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
+      // No refresh and no second request carrying the same wrong password.
+      httpMock.expectNone(url);
+
+      expect(auth.refreshTokenRequest).not.toHaveBeenCalled();
+      expect(auth.logout).not.toHaveBeenCalled();
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(401);
+    });
+
+    it(`a wrong password on ${url} after an expired token is retried once, then reaches the form (D87)`, () => {
+      auth.getRefreshToken.and.returnValue('r1');
+      auth.getUserProfile.and.returnValue({ id: 'u1' } as never);
+      auth.getToken.and.returnValue('old-token');
+      auth.isExpired.and.returnValue(true);
+      auth.refreshTokenRequest.and.returnValue(
+        of({ accessToken: 'new-token', refreshToken: 'r2' }),
+      );
+
+      let error: HttpErrorResponse | undefined;
+      http.post(url, {}).subscribe({ error: (e) => (error = e) });
+      httpMock.expectOne(url).flush(null, { status: 401, statusText: 'Unauthorized' });
       const retry = httpMock.expectOne(url);
       expect(retry.request.headers.get('Authorization')).toBe('Bearer new-token');
       retry.flush({ message: 'wrong' }, { status: 401, statusText: 'Unauthorized' });
 
       expect(auth.refreshTokenRequest).toHaveBeenCalledTimes(1);
       expect(auth.logout).not.toHaveBeenCalled();
-      expect(router.navigate).not.toHaveBeenCalled();
       expect(error?.status).toBe(401);
     });
 

@@ -140,6 +140,15 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     @Query("SELECT p FROM Patient p WHERE p.id = :id")
     Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
 
+    /**
+     * QA D304: row lock on the patient, so two concurrent admissions of the
+     * same patient serialise and the second sees the first's open stay.
+     * Same access rule as {@link #findByIdUnscoped(UUID)}.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM Patient p WHERE p.id = :id")
+    Optional<Patient> lockByIdUnscoped(@Param("id") UUID id);
+
   List<Patient> findByActive(boolean active);
 
     List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);

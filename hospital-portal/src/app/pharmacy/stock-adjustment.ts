@@ -42,6 +42,13 @@ const ADJUSTMENT_REASON_CODES = [
   'CONTROLLED_DISCREPANCY',
 ] as const;
 
+/** QA D337: reason codes written by other clients, mapped to the form's codes. */
+const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
+  DAMAGED: 'DAMAGE',
+  EXPIRED: 'EXPIRY_WRITE_OFF',
+  EXPIRY: 'EXPIRY_WRITE_OFF',
+};
+
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
@@ -389,6 +396,37 @@ export class StockAdjustmentComponent implements OnInit {
    * The old list named types that do not exist (RECEIVE, ADJUSTMENT_IN…),
    * so every receipt read as negative.
    */
+  /**
+   * QA D227: the ledger's reason, in the reader's language. The stored text
+   * is composed in English by the server ("Stock receipt: lot X",
+   * "Dispense for prescription <uuid>") or by this form ("CYCLE_COUNT_VARIANCE:
+   * notes", "RETURN ref X"); the known shapes are shown translated, with no
+   * raw code or id, and anything else as typed.
+   */
+  reasonLabel(tx: StockTransactionResponse): string {
+    const reason = (tx.reason ?? '').trim();
+    if (!reason) return '—';
+    const t = (key: string, params?: Record<string, string>) =>
+      this.translate.instant(`PHARMACY.${key}`, params);
+    let m = /^Stock receipt: lot (.+)$/i.exec(reason);
+    if (m) return t('LEDGER_REASON_RECEIPT_LOT', { lot: m[1] });
+    if (/^RECEIPT$/i.test(reason)) return t('LEDGER_REASON_RECEIPT');
+    if (/^Dispense for prescription\b/i.test(reason)) return t('LEDGER_REASON_DISPENSE');
+    m = /^RETURN ref (.+)$/i.exec(reason);
+    if (m) return t('LEDGER_REASON_RETURN', { ref: m[1] });
+    m = /^TRANSFER to (.+)$/i.exec(reason);
+    if (m) return t('LEDGER_REASON_TRANSFER', { dest: m[1] });
+    m = /^([A-Z_]+)(?::\s*([\s\S]*))?$/.exec(reason);
+    // QA D337: the API also takes the common spellings DAMAGED and EXPIRED
+    // (scripts and older clients); they read as the form's own codes.
+    const code = m ? (LEGACY_REASON_CODES[m[1]] ?? m[1]) : '';
+    if (m && (ADJUSTMENT_REASON_CODES as readonly string[]).includes(code)) {
+      const label = t(`ADJ_REASON_${code}`);
+      return m[2] ? `${label} : ${m[2]}` : label;
+    }
+    return reason;
+  }
+
   signedQuantity(tx: StockTransactionResponse): string {
     const q = Number(tx.quantity);
     const magnitude = Math.abs(q);

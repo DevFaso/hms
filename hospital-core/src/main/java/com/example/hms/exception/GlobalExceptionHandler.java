@@ -43,6 +43,7 @@ public class GlobalExceptionHandler {
     private static final String FIELD_MESSAGE   = "message";
     private static final String FIELD_PATH      = "path";
     private static final String FIELD_CODE      = "code";
+    private static final String FIELD_FIELD     = "field";
 
     /** Machine-readable codes the portal maps onto its own translated text (D53). */
     static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
@@ -119,7 +120,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
         body.put(FIELD_MESSAGE, passThrough(message));
-        if (field != null) body.put("field", field);
+        if (field != null) body.put(FIELD_FIELD, field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
@@ -298,7 +299,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
-            body.put("field", field);
+            body.put(FIELD_FIELD, field);
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -378,6 +379,23 @@ public class GlobalExceptionHandler {
                 "A referenced record could not be found. This may indicate a data integrity issue. "
                 + "Please contact support if this persists."),
             request);
+    }
+
+    /**
+     * QA D332: a required query parameter left out (a referral completed with
+     * no {@code summary}) answered 400 with Spring's empty body, so the portal
+     * had nothing to show. The caller is told which value is missing, in its
+     * own language.
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<Object> handleMissingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
+        String message = localized("error.request.missingParameter",
+            "A required value is missing: \"{0}\".", ex.getParameterName());
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        body.put(FIELD_FIELD, ex.getParameterName());
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     /**
@@ -545,12 +563,39 @@ public class GlobalExceptionHandler {
         if (log.isWarnEnabled()) {
             log.warn("Hospital scope refused ({}) at path {}", ex.getReason(), request.getDescription(false));
         }
-        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN, ex.getMessage(), request);
+        // QA D258: the message in the caller's language, not the thrower's English.
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            com.example.hms.security.tenant.ActingScopeResolver.localizedRefusalMessage(ex.getReason(), ex.getMessage()),
+            request);
         body.put("code", HospitalScopeRefusedException.CODE);
         body.put("reason", ex.getReason());
         if (ex.getRefusedHospitalId() != null) {
             body.put("hospitalId", ex.getRefusedHospitalId().toString());
         }
+        return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
+    }
+
+    /**
+     * {@link UnauthorizedAccessException} carries {@code @ResponseStatus(FORBIDDEN)},
+     * but the {@code RuntimeException} catch-all below wins over the annotation,
+     * so every one of them answered a 500 "unexpected error" (QA D226). A keyed
+     * refusal is resolved in the request locale; a free sentence stays in the
+     * log only, since it can carry a username or an id.
+     */
+    @ExceptionHandler(UnauthorizedAccessException.class)
+    public ResponseEntity<Object> handleUnauthorizedAccess(UnauthorizedAccessException ex, WebRequest req) {
+        String raw = ex.getMessage();
+        if (com.example.hms.utility.MessageUtil.isMessageKey(raw)) {
+            log.warn("Access refused: {}", raw);
+            return buildErrorResponse(HttpStatus.FORBIDDEN,
+                com.example.hms.utility.MessageUtil.resolveOrRaw(raw, ex.getArgs()), req);
+        }
+        if (log.isWarnEnabled()) {
+            log.warn("Access refused at path {}", req.getDescription(false));
+        }
+        Map<String, Object> body = errorBody(HttpStatus.FORBIDDEN,
+            localized("error.access.denied", "Access denied"), req);
+        body.put(FIELD_CODE, CODE_ACCESS_DENIED);
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 

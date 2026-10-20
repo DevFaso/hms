@@ -158,7 +158,8 @@ export class LaborTabComponent {
 
   submitStart(): void {
     const patient = this.patient();
-    if (!patient) return;
+    // QA D295: an episode needs its onset time; the button is disabled without it.
+    if (!patient || !this.startForm.laborOnsetAt) return;
     this.saving.set(true);
     this.laborService.startEpisode(patient.id, this.startForm).subscribe({
       next: () => {
@@ -167,8 +168,12 @@ export class LaborTabComponent {
         this.startFormOpen.set(false);
         this.loadEpisodes(patient.id);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LABOR.EPISODE_START_ERROR'));
+      error: (err: { error?: { message?: string } }) => {
+        // QA D214: the server's reason (e.g. a recent delivery needs an
+        // override) is shown, not hidden behind a generic failure.
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LABOR.EPISODE_START_ERROR'),
+        );
         this.saving.set(false);
       },
     });

@@ -144,8 +144,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (dto.getInvoiceNumber() != null && !dto.getInvoiceNumber().isBlank()) {
             throw new BusinessException("billing.invoice.numberAssignedByServer");
         }
+        // QA D307: a typed total is whole francs, like the payments that settle it.
+        requireWholeAmount(dto.getTotalAmount());
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
+        // QA D403: the visit billed must be this patient's visit.
+        rejectEncounterOfOtherPatient(encounter, patient);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
         // QA D91: nothing is paid until a payment is recorded.
@@ -153,15 +157,91 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setTotalAmount(dto.getTotalAmount() != null ? dto.getTotalAmount() : BigDecimal.ZERO);
         invoice.setStatus(requestedStatusOnCreate(dto.getStatus()));
         invoice.setClientRequestId(dto.getClientRequestId());
+        // QA D428: no auditing listener stamps it, so the creator is set here.
+        invoice.setCreatedBy(roleValidator.getCurrentUserId());
         // QA D94: the server numbers the invoice; a typed number is ignored.
         invoice.setInvoiceNumber(allocateNumber(hospital));
 
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
+        creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * QA D272: an issued visit invoice takes the copay whether or not it has
+     * been part-paid; a copay paid after the invoice was issued is taken when
+     * the clerk records the next payment on it. A DRAFT is not issued yet.
+     */
+    private static final java.util.Set<InvoiceStatus> COPAY_CREDITABLE =
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
+
+    /**
+     * QA D210: once a visit's invoice is issued, the copay already paid at
+     * check-in for that visit is moved onto it as a payment, and the
+     * stand-alone copay invoice is closed, so the patient is not billed twice.
+     * A copay larger than what the invoice still owes stays where it is.
+     */
+    private void creditCheckInCopays(BillingInvoice target) {
+        if (target.getEncounter() == null || target.getEncounter().getId() == null
+                || target.isCheckInCopay() || !COPAY_CREDITABLE.contains(target.getStatus())) {
+            return;
+        }
+        List<BillingInvoice> copays = invoiceRepository
+            .findByEncounter_IdAndCheckInCopayTrueAndStatus(target.getEncounter().getId(), InvoiceStatus.PAID);
+        if (copays == null) {
+            return;
+        }
+        for (BillingInvoice candidate : copays) {
+            BillingInvoice copay = lockCreditableCopay(candidate, target);
+            if (copay != null) {
+                moveCopayOnto(copay, target);
+            }
+        }
+    }
+
+    /** The copay, locked and re-read, when it may be credited to the target; else null. */
+    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target) {
+        if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
+            return null;
+        }
+        // Locked and re-read: two invoices issued at once must not both take the same copay.
+        BillingInvoice copay = invoiceRepository.findLockedById(candidate.getId()).orElse(null);
+        if (copay == null || copay.getStatus() != InvoiceStatus.PAID || copay.getPatient() == null
+                || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
+            return null;
+        }
+        BigDecimal credit = copayCredit(copay);
+        BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid);
+        return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
+    }
+
+    private static BigDecimal copayCredit(BillingInvoice copay) {
+        return copay.getAmountPaid() != null ? copay.getAmountPaid() : BigDecimal.ZERO;
+    }
+
+    private void moveCopayOnto(BillingInvoice copay, BillingInvoice target) {
+        BigDecimal credit = copayCredit(copay);
+        for (PaymentTransaction row : paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())) {
+            if (row.getStatus() == PaymentStatus.CONFIRMED) {
+                row.setInvoice(target);
+                paymentTransactionRepository.save(row);
+            }
+        }
+        copay.setAmountPaid(BigDecimal.ZERO);
+        copay.setStatus(InvoiceStatus.CANCELLED);
+        copay.setCreditedToInvoice(target); // QA D428
+        invoiceRepository.save(copay);
+        settle(target, credit);
     }
 
     /** QA D183: the hospital never moves; one named in the body must be the invoice's own. */
     private static void rejectHospitalMismatch(BillingInvoiceRequestDTO dto, Hospital hospital) {
+        // QA D230: a hospital id in the body is a claim; one that is not the
+        // acting hospital is refused, never rewritten.
+        if (dto.getHospitalId() != null && !dto.getHospitalId().equals(hospital.getId())) {
+            throw new BusinessException("billing.invoice.hospitalMismatch");
+        }
         String named = dto.getHospitalName();
         if (named == null || named.isBlank()) {
             return;
@@ -194,8 +274,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             key = dto.getPatientId();
             patient = patientRepository.findById(dto.getPatientId()).orElse(null);
         } else if (dto.getPatientEmail() != null && !dto.getPatientEmail().isBlank()) {
-            key = dto.getPatientEmail();
-            patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail()).orElse(null);
+            key = dto.getPatientEmail().trim();
+            patient = patientByLegacyKey(dto.getPatientEmail().trim(), hospitalId);
         } else {
             throw new BusinessException("billing.invoice.patientRequired");
         }
@@ -206,18 +286,60 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return patient;
     }
 
+    /**
+     * QA D269: most patients here have a phone number and no e-mail, so the
+     * legacy key also takes the patient's id or their MRN at this hospital
+     * before the e-mail/username.
+     */
+    private Patient patientByLegacyKey(String key, UUID hospitalId) {
+        UUID asId = parseUuid(key);
+        if (asId != null) {
+            return patientRepository.findById(asId).orElse(null);
+        }
+        List<Patient> byMrn = registrationRepository.findActiveByHospitalIdAndIdentifier(hospitalId, key).stream()
+            .filter(r -> r.getMrn() != null && r.getMrn().equalsIgnoreCase(key))
+            .map(com.example.hms.model.PatientHospitalRegistration::getPatient)
+            .distinct()
+            .toList();
+        if (byMrn.size() == 1) {
+            return byMrn.get(0);
+        }
+        return patientRepository.findByUsernameOrEmail(key).orElse(null);
+    }
+
+    private static UUID parseUuid(String value) {
+        if (value.length() != 36) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException notAnId) {
+            return null;
+        }
+    }
+
+    /** QA D403: an invoice may only carry a visit of the patient it bills. */
+    private static void rejectEncounterOfOtherPatient(Encounter encounter, Patient patient) {
+        if (encounter == null || patient == null || encounter.getPatient() == null) {
+            return;
+        }
+        if (!java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new BusinessException("billing.encounter.otherPatient");
+        }
+    }
+
     /** The encounter named by code, only when it belongs to the invoicing hospital. */
     private Encounter resolveEncounter(BillingInvoiceRequestDTO dto, UUID hospitalId) {
         if (dto.getEncounterReference() == null || dto.getEncounterReference().isBlank()) {
             return null;
         }
-        Encounter encounter = encounterRepository.findByCode(dto.getEncounterReference()).orElse(null);
-        if (encounter == null || encounter.getHospital() == null) {
-            return null;
-        }
+        // QA D219: an unknown code is refused, not silently dropped.
+        Encounter encounter = encounterRepository.findByCode(dto.getEncounterReference().trim())
+            .filter(e -> e.getHospital() != null)
+            .orElseThrow(() -> new BusinessException("billing.invoice.encounterNotFound"));
         // QA D70: an encounter code is a claim; one of another hospital is refused, not dropped.
         if (!hospitalId.equals(encounter.getHospital().getId())) {
-            throw new BusinessException("The encounter does not belong to this hospital.");
+            throw new BusinessException("billing.encounter.otherHospital");
         }
         return encounter;
     }
@@ -267,7 +389,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale) {
         // QA D101: a DRAFT invoice is not yet issued to the patient.
         return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
-            .map(invoiceMapper::toBillingInvoiceResponseDTO);
+            .map(this::toPortalResponse);
+    }
+
+    /** QA D421: the patient's invoice with what they already declared and staff have not confirmed. */
+    private BillingInvoiceResponseDTO toPortalResponse(BillingInvoice invoice) {
+        BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        if (dto == null) {
+            return null;
+        }
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        dto.setPendingDeclaredAmount(pending != null ? pending : BigDecimal.ZERO);
+        return dto;
     }
 
     @Override
@@ -338,11 +472,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED));
         applyPatientChange(invoice, dto, hospitalId, patientLocked);
 
-        invoice.setEncounter(resolveEncounter(dto, hospitalId));
+        // QA D303/D308: a body without an encounter reference keeps the visit
+        // link (the QA's PUT and older clients omit it); a blank one unlinks.
+        if (dto.getEncounterReference() != null) {
+            invoice.setEncounter(resolveEncounter(dto, hospitalId));
+        }
+        // QA D403: checked after both moves, so a new patient with the kept
+        // visit, or a new visit with the kept patient, is refused alike.
+        rejectEncounterOfOtherPatient(invoice.getEncounter(), invoice.getPatient());
         invoice.setInvoiceDate(dto.getInvoiceDate());
         invoice.setDueDate(dto.getDueDate());
         // QA D72: with lines the total is their sum; without, the typed amount.
         if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
+            requireWholeAmount(dto.getTotalAmount()); // QA D307
             if (dto.getTotalAmount().compareTo(paid) < 0) {
                 throw new BusinessException("billing.invoice.totalBelowPaid");
             }
@@ -353,6 +495,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setNotes(dto.getNotes());
 
         BillingInvoice saved = invoiceRepository.save(invoice);
+        // QA D210: issuing the visit invoice takes over the check-in copay.
+        creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 
@@ -431,7 +575,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (paid.signum() > 0) {
             invoice.setStatus(paid.compareTo(total) >= 0 ? InvoiceStatus.PAID : InvoiceStatus.PARTIALLY_PAID);
         }
-        invoiceRepository.save(invoice);
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        // QA D210: a visit invoice issued at 0 and priced later by its lines takes the copay now.
+        creditCheckInCopays(saved);
+    }
+
+    @Override
+    @Transactional
+    public void creditCheckInCopays(UUID invoiceId) {
+        invoiceRepository.findById(invoiceId).ifPresent(this::creditCheckInCopays);
     }
 
     @Override
@@ -473,8 +625,48 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new BusinessException("billing.payment.notConfirmed");
         }
         Locale effectiveLocale = locale != null ? locale : LocaleContextHolder.getLocale();
-        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, effectiveLocale);
-        return new InvoicePdfResponseDTO(pdf, invoice.getInvoiceNumber() + "-receipt", invoice.getId());
+        // QA D228: a readable number (invoice number + the payment's rank among
+        // the money ever received on it) and the amount paid as of THIS payment,
+        // not as of today. Ranked by confirmation time, which never changes.
+        List<PaymentTransaction> received = paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId)
+            .stream()
+            .filter(p -> p.getStatus() == PaymentStatus.CONFIRMED || p.getStatus() == PaymentStatus.REVERSED)
+            // A row confirmed before confirmation times were kept ranks by when it was written.
+            .sorted(java.util.Comparator.comparing(BillingInvoiceServiceImpl::receivedAt,
+                    java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder()))
+                .thenComparing(p -> String.valueOf(p.getId())))
+            .toList();
+        ReceiptPosition position = receiptPosition(received, row);
+        int rank = position.rank();
+        BigDecimal paidThen = position.paidThen();
+        String receiptNumber = invoice.getInvoiceNumber() + "-R" + rank;
+        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
+        return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
+    }
+
+    private record ReceiptPosition(int rank, BigDecimal paidThen) { }
+
+    /** QA D228: the payment's rank among the money received, and the amount paid as of it. */
+    private static ReceiptPosition receiptPosition(List<PaymentTransaction> received, PaymentTransaction row) {
+        int rank = 0;
+        BigDecimal paidThen = BigDecimal.ZERO;
+        for (PaymentTransaction p : received) {
+            rank++;
+            // A row reversed before this payment was received no longer counted as paid then.
+            boolean countedThen = p.getStatus() != PaymentStatus.REVERSED || p.getReversedAt() == null
+                || receivedAt(row) == null || p.getReversedAt().isAfter(receivedAt(row));
+            if (countedThen && p.getAmount() != null) {
+                paidThen = paidThen.add(p.getAmount());
+            }
+            if (p.getId() != null && p.getId().equals(row.getId())) {
+                break;
+            }
+        }
+        if (received.stream().noneMatch(p -> p.getId() != null && p.getId().equals(row.getId()))) {
+            rank = received.size() + 1;
+            paidThen = paidThen.add(row.getAmount() != null ? row.getAmount() : BigDecimal.ZERO);
+        }
+        return new ReceiptPosition(rank, paidThen);
     }
 
     @Override
@@ -484,7 +676,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = (searchRequest != null ? searchRequest.getHospitalId() : null);
         if (activeHospitalId != null) {
-            effectiveHospitalId = activeHospitalId; // override any client-supplied hospitalId
+            // QA D230: another hospital named in the body is refused, not rewritten.
+            if (effectiveHospitalId != null && !effectiveHospitalId.equals(activeHospitalId)) {
+                throw new BusinessException("billing.invoice.hospitalMismatch");
+            }
+            effectiveHospitalId = activeHospitalId;
         }
 
         List<InvoiceStatus> statuses = null;
@@ -499,8 +695,68 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             statuses,
             searchRequest != null ? searchRequest.getFromDate() : null,
             searchRequest != null ? searchRequest.getToDate() : null,
-            pageable
+            likePattern(searchRequest != null ? searchRequest.getQuery() : null),
+            stableOrder(pageable)
         ).map(invoiceMapper::toBillingInvoiceResponseDTO);
+    }
+
+    private static java.time.LocalDateTime receivedAt(PaymentTransaction row) {
+        return row.getConfirmedAt() != null ? row.getConfirmedAt() : row.getCreatedAt();
+    }
+
+    /** QA D203: a lower-case contains-pattern with LIKE wildcards in the term escaped away, or null. */
+    static String likePattern(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        String term = query.trim().toLowerCase(java.util.Locale.ROOT).replace("%", "").replace("_", "");
+        return term.isEmpty() ? null : "%" + term + "%";
+    }
+
+    /**
+     * QA D203: newest first with the id as the last key, so a row sits on
+     * exactly one page; a caller's sort is kept and the tiebreakers follow it.
+     */
+    static org.springframework.data.domain.Pageable stableOrder(org.springframework.data.domain.Pageable pageable) {
+        org.springframework.data.domain.Sort base = pageable.getSort().isSorted()
+            ? pageable.getSort()
+            // QA D326: newest = most recently created; a back-dated invoice
+            // date must not push a new invoice down the list.
+            : org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("createdAt"));
+        org.springframework.data.domain.Sort sort = base.getOrderFor("id") != null
+            ? base : base.and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("id")));
+        if (pageable.isUnpaged()) {
+            return pageable;
+        }
+        return org.springframework.data.domain.PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale) {
+        // QA D209: the KPIs cover the whole scope; global view reads every hospital.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<Object[]> rows = invoiceRepository.summarize(hospitalId, LocalDate.now(java.time.ZoneId.systemDefault()));
+        Object[] row = rows.isEmpty() ? new Object[6] : rows.get(0);
+        return com.example.hms.payload.dto.BillingSummaryDTO.builder()
+            .total(asLong(row[0]))
+            .paid(asLong(row[1]))
+            .outstanding(asLong(row[2]))
+            .overdue(asLong(row[3]))
+            .totalRevenue(asAmount(row[4]))
+            .balance(asAmount(row[5]))
+            .build();
+    }
+
+    private static long asLong(Object value) {
+        return value instanceof Number n ? n.longValue() : 0L;
+    }
+
+    private static BigDecimal asAmount(Object value) {
+        if (value instanceof BigDecimal b) {
+            return b;
+        }
+        return value instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : BigDecimal.ZERO;
     }
 
     @Override
@@ -520,10 +776,47 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D140: nothing verifies a patient's declaration (no payment
         // provider callback exists), so it settles nothing. It is recorded as
         // PENDING and the invoice moves only when a cashier confirms it.
-        BillingInvoice invoice = loadPayable(invoiceId, patientId, payment.getAmount());
+        // QA D231: locked, and the open declarations count against the
+        // balance, so a patient cannot stack PENDING payments above what is owed.
+        BillingInvoice invoice = invoiceRepository.findLockedById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoiceId, PaymentStatus.PENDING);
+        BigDecimal declared = payment.getAmount().add(pending != null ? pending : BigDecimal.ZERO);
+        requirePayable(invoice, patientId, payment.getAmount());
+        // QA D421: refused in the patient's own figures (what they typed, what
+        // is already declared, what is left), not as one sum they never typed.
+        BigDecimal open = pending != null ? pending : BigDecimal.ZERO;
+        if (open.signum() > 0) {
+            BigDecimal balanceDue = invoice.getTotalAmount()
+                .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+            if (declared.compareTo(balanceDue) > 0) {
+                throw new BusinessException("billing.payment.exceedsWithPending", payment.getAmount(), open,
+                    balanceDue.subtract(open).max(BigDecimal.ZERO));
+            }
+        }
+        requirePayable(invoice, patientId, declared);
+        rejectReusedReference(invoice, method, payment.getTransactionReference());
         savePaymentRow(invoice, payment.getAmount(), method,
             payment.getTransactionReference(), payment.getNotes(), recordedBy, PaymentStatus.PENDING);
-        return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        response.setPendingDeclaredAmount(open.add(payment.getAmount()));
+        return response;
+    }
+
+    /**
+     * QA D345: a card, transfer or mobile-money reference names one provider
+     * transaction; a second live row with it (any invoice of the hospital)
+     * would count the same money twice. Cash has no provider reference.
+     */
+    private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
+        if (method == PaymentMethod.CASH || reference == null || reference.isBlank() || invoice.getHospital() == null) {
+            return;
+        }
+        if (paymentTransactionRepository.existsLiveReference(invoice.getHospital().getId(),
+                reference.trim().toLowerCase(java.util.Locale.ROOT),
+                java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED))) {
+            throw new BusinessException("billing.payment.duplicateReference");
+        }
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
@@ -541,6 +834,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .status(status)
             .confirmedBy(confirmed ? recordedBy : null)
             .confirmedAt(confirmed ? java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()) : null)
+            // QA D228: the total as it stands when the money is received.
+            .invoiceTotalAtReceipt(confirmed ? invoice.getTotalAmount() : null)
             .build();
         PaymentTransaction saved = paymentTransactionRepository.save(row);
         return java.util.Objects.requireNonNullElse(saved, row);
@@ -564,7 +859,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 }
             }
         }
-        throw new BusinessException("Unsupported payment method.");
+        throw new BusinessException("billing.payment.methodUnsupported");
     }
 
     private static String blankToNull(String value) {
@@ -579,13 +874,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return settle(requirePayable(invoice, patientId, amount), amount);
     }
 
-    /** The invoice, checked to be this patient's, issued, open, and owing at least {@code amount}. */
-    private BillingInvoice loadPayable(UUID invoiceId, UUID patientId, BigDecimal amount) {
-        BillingInvoice invoice = invoiceRepository.findById(invoiceId)
-            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
-        return requirePayable(invoice, patientId, amount);
-    }
-
     /** {@code invoice} checked to be this patient's, issued, open, and owing at least {@code amount}. */
     private static BillingInvoice requirePayable(BillingInvoice invoice, UUID patientId, BigDecimal amount) {
         UUID invoiceId = invoice.getId();
@@ -596,20 +884,20 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         // ── Validate the invoice is payable ──
         if (invoice.getStatus() == InvoiceStatus.PAID) {
-            throw new BusinessException("This invoice is already fully paid.");
+            throw new BusinessException("billing.invoice.alreadyPaid");
         }
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
-            throw new BusinessException("Cannot make a payment on a cancelled invoice.");
+            throw new BusinessException("billing.invoice.paymentOnCancelled");
         }
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {
-            throw new BusinessException("This invoice has not been issued yet.");
+            throw new BusinessException("billing.invoice.notIssued");
         }
 
         BigDecimal currentPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
 
         if (amount.compareTo(balanceDue) > 0) {
-            throw new BusinessException("Payment amount (" + amount + ") exceeds balance due (" + balanceDue + ").");
+            throw new BusinessException("billing.payment.exceedsBalance", amount, balanceDue);
         }
         return invoice;
     }
@@ -647,6 +935,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? PaymentMethod.OTHER
             : parsePaymentMethod(payment.getMethod());
         requireWholeAmount(payment.getAmount());
+        rejectReusedReference(invoice, method, payment.getReference());
+        // QA D272: the copay already taken at check-in counts before the clerk's payment.
+        creditCheckInCopays(invoice);
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
             payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);
@@ -706,6 +997,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setStatus(PaymentStatus.CONFIRMED);
         row.setConfirmedBy(staffId);
         row.setConfirmedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        row.setInvoiceTotalAtReceipt(invoice.getTotalAmount()); // QA D228
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, saved, row.getId(), "Pending payment confirmed");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
@@ -833,6 +1125,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .totalAmount(amount)
             .amountPaid(BigDecimal.ZERO)
             .status(InvoiceStatus.SENT)
+            .checkInCopay(true)
+            .createdBy(recordedBy) // QA D428
             .build();
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         BillingInvoice settled = settle(saved, amount);

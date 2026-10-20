@@ -29,6 +29,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabTestValidationStudyServiceImplTest {
 
@@ -107,7 +108,7 @@ class LabTestValidationStudyServiceImplTest {
         var req = requestDto();
         assertThatThrownBy(() -> service.create(DEF_ID, req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("labtestdefinition.notfound");
+                .hasMessageContaining("Lab test definition not found.");
 
         verify(repository, never()).save(any());
     }
@@ -133,7 +134,7 @@ class LabTestValidationStudyServiceImplTest {
 
         assertThatThrownBy(() -> service.getById(STUDY_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("labvalidationstudy.notfound");
+                .hasMessageContaining("Validation study not found.");
     }
 
     // ── getByDefinitionId ─────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ class LabTestValidationStudyServiceImplTest {
 
         assertThatThrownBy(() -> service.getByDefinitionId(DEF_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("labtestdefinition.notfound");
+                .hasMessageContaining("Lab test definition not found.");
     }
 
     @Test
@@ -209,7 +210,7 @@ class LabTestValidationStudyServiceImplTest {
         var req = requestDto();
         assertThatThrownBy(() -> service.update(STUDY_ID, req))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("labvalidationstudy.notfound");
+                .hasMessageContaining("Validation study not found.");
     }
 
     // ── delete ────────────────────────────────────────────────────────────────
@@ -229,7 +230,7 @@ class LabTestValidationStudyServiceImplTest {
 
         assertThatThrownBy(() -> service.delete(STUDY_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("labvalidationstudy.notfound");
+                .hasMessageContaining("Validation study not found.");
 
         verify(repository, never()).deleteById(any());
     }

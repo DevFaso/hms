@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -49,13 +49,14 @@ describe('ReferralsComponent', () => {
     // bypasses interceptors entirely so we don't need to stub it.
     roleContextStub = jasmine.createSpyObj(
       'RoleContextService',
-      ['scopeToHospital', 'enableGlobalView'],
+      ['scopeToHospital', 'enableGlobalView', 'hasAnyActiveRole'],
       {
         isSuperAdmin: signal(false),
         globalView: signal(false),
         selectedHospitalId: signal<string | null>(null),
       },
     );
+    roleContextStub.hasAnyActiveRole.and.returnValue(true);
     authStub = jasmine.createSpyObj('AuthService', ['getUserProfile']);
     authStub.getUserProfile.and.returnValue({ staffId: 'staff-1' } as any);
 
@@ -92,6 +93,28 @@ describe('ReferralsComponent', () => {
   it('should create', () => {
     flushInitRequests();
     expect(component).toBeTruthy();
+  });
+
+  it('QA D427: a nurse is not offered New referral, which the API refuses', () => {
+    roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_NURSE'),
+    );
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('.page-actions .btn-primary'),
+    );
+    expect(buttons.length).toBe(0);
+  });
+
+  it('QA D412/D427: only the author of a draft is offered Submit', () => {
+    flushInitRequests();
+    const draft = (referringProviderId: string, status = 'DRAFT') =>
+      ({ id: 'r', status, referringProviderId }) as any;
+    expect(component.isMyDraft(draft('staff-1'))).toBeTrue();
+    expect(component.isMyDraft(draft('doctor-2'))).toBeFalse();
+    expect(component.isMyDraft(draft('staff-1', 'SUBMITTED'))).toBeFalse();
   });
 
   it('QA D36: the destination picker reads the hospital directory, not the scoped list', () => {
@@ -315,5 +338,32 @@ describe('ReferralsComponent', () => {
         .withContext(`badge count for ${tab} tab must equal filtered row count`)
         .toBe(component.filtered().length);
     }
+  });
+
+  it('QA D243: the urgency options are translated, not raw enum names', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          REFERRAL_URGENCY: {
+            ROUTINE: 'Routine',
+            PRIORITY: 'Prioritaire',
+            URGENT: 'Urgente',
+            EMERGENCY: 'Urgence',
+          },
+        },
+      },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    flushInitRequests();
+    component.openCreate();
+    fixture.detectChanges();
+    httpMock.match(() => true).forEach((r) => r.flush([]));
+    fixture.detectChanges();
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#ref-urgency option'),
+    ).map((o) => o.textContent?.trim());
+    expect(options).toEqual(['Routine', 'Prioritaire', 'Urgente', 'Urgence']);
   });
 });

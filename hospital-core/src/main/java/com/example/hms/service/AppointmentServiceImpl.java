@@ -95,6 +95,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -238,6 +239,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         return EffectiveRoles.holds(user, assignmentRepository.findAllByUserId(user.getId()), roleCode);
     }
 
+    /**
+     * QA D351: the booked reason and notes. The reason was never stored on a
+     * staff booking, so the reception queue and the doctor's worklist fell
+     * back to the chief complaint triage recorded.
+     */
+    static void applyBookingText(Appointment appointment, AppointmentRequestDTO request) {
+        appointment.setNotes(request.getNotes());
+        appointment.setReason(request.getReason());
+    }
+
     /* =======================
        CREATE
        ======================= */
@@ -279,6 +290,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // auth scope
         requireHospitalScope(currentUser, hospital.getId(), locale);
+
+        // QA D401: staff book into the hospital's own schedule, so the patient
+        // must be registered there; otherwise the same 404 as an unknown id
+        // (the booking response used to hand back the patient's name and phone).
+        if (isStaffOrAdmin) {
+            patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        }
 
         // --- Staff resolution ---
         final Staff staff = resolveStaff(request);
@@ -342,7 +360,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setStartTime(request.getStartTime());
         appointment.setEndTime(endTime);
-    appointment.setNotes(request.getNotes());
+        applyBookingText(appointment, request);
     AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
     appointment.setStatus(status);
         appointment.setCreatedBy(currentUser);
@@ -574,7 +592,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessException("Appointment start and end time must not be null");
         }
 
-        requireHospitalScope(currentUser, existing.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, existing);
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
@@ -588,6 +606,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!staff.getHospital().getId().equals(hospital.getId())) {
             throw new AccessDeniedException("Staff does not belong to selected hospital");
         }
+        // QA D401: an update may move the appointment to another hospital or
+        // patient; the patient must be registered where it lands.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         UserRoleHospitalAssignment assignment = assignmentRepository
             .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
@@ -703,7 +724,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
 
-        requireHospitalScope(currentUser, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(currentUser, appointment);
 
         AppointmentStatus newStatus;
         switch (action.toLowerCase()) {
@@ -830,7 +851,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!isSuperAdmin(currentUser)) {
             boolean isPatient = appointment.getPatient().getUser().getId().equals(currentUser.getId());
             if (!isPatient && !hasHospitalAccess(currentUser, appointment.getHospital().getId())) {
-                throw new AccessDeniedException(messageSource.getMessage("access.denied", NO_ARGS, locale));
+                throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
             }
         }
     // On GET, return full details (existing mapping)
@@ -881,7 +902,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment appointment = appointmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
-        requireHospitalScope(user, appointment.getHospital().getId(), locale);
+        requireAppointmentVisible(user, appointment);
 
         appointmentRepository.delete(appointment);
         log.info("Deleted appointment with ID: {}", id);
@@ -1156,6 +1177,17 @@ public class AppointmentServiceImpl implements AppointmentService {
             return true;
         }
         return resolveHospitalScope(user).contains(hospitalId);
+    }
+
+    /**
+     * QA D259: an appointment at a hospital outside the caller's scope answers exactly
+     * as a missing id does (404), like every other tenant-scoped resource — a 403 told
+     * a prober the id exists.
+     */
+    private void requireAppointmentVisible(User user, Appointment appointment) {
+        if (!hasHospitalAccess(user, appointment.getHospital().getId())) {
+            throw new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointment.getId());
+        }
     }
 
     private void requireHospitalScope(User user, UUID hospitalId, Locale locale) {

@@ -85,8 +85,7 @@ public class UserController {
             "SUPER_ADMIN".equalsIgnoreCase(r) || SUPER_ADMIN_AUTHORITY.equalsIgnoreCase(r));
 
         if (!callerIsReceptionistOnly && !isPatientOnly && !isGlobalRole && request.getHospitalId() == null) {
-            ResponseEntity<UserResponseDTO> badRequest = resolveHospitalFromName(request);
-            if (badRequest != null) return badRequest;
+            resolveHospitalFromName(request);
         }
 
         // Delivery outcomes are recorded by the send paths — including the
@@ -130,7 +129,13 @@ public class UserController {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private ResponseEntity<UserResponseDTO> resolveHospitalFromName(AdminSignupRequest request) {
+    /**
+     * A staff registration with no hospital id: by name when one is given,
+     * otherwise the hospital the caller acts at (a hospital admin onboards
+     * into their own hospital, D201). With neither, a translated 400 body
+     * instead of an empty one.
+     */
+    private void resolveHospitalFromName(AdminSignupRequest request) {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
             // By NAME a hospital only: a provider facility is named by id (the
             // path of its PROVIDER_ADMIN), and by name it answers as an unknown
@@ -139,13 +144,18 @@ public class UserController {
                 .orElse(null);
             if (hospital == null) {
                 log.warn("[ADMIN REGISTER] Hospital not found for provided hospital name.");
-                return ResponseEntity.badRequest().build();
+                throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalNotFound");
             }
             request.setHospitalId(hospital.getId());
-            return null;
+            return;
+        }
+        UUID acting = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        if (acting != null) {
+            request.setHospitalId(acting);
+            return;
         }
         log.warn("[ADMIN REGISTER] Missing hospital for non-patient staff/admin registration.");
-        return ResponseEntity.badRequest().build();
+        throw new com.example.hms.exception.BusinessException("user.adminRegister.hospitalRequired");
     }
 
     // Who may read, edit, delete and restore which account, and who may use the

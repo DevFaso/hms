@@ -65,10 +65,14 @@ public class CheckOutMapper {
         // Follow-up appointment
         if (followUpAppointmentId != null) {
             builder.followUpAppointmentId(followUpAppointmentId);
-            if (request != null && request.getFollowUpAppointment() != null
-                    && request.getFollowUpAppointment().getPreferredDate() != null) {
-                builder.followUpAppointmentDate(request.getFollowUpAppointment().getPreferredDate());
-            }
+        }
+        // QA D321: the requested follow-up is shown even when no appointment
+        // was booked from it (checkout files it as a recall); it used to need an
+        // appointment id that checkout never passes, so it vanished from the AVS.
+        if (request != null && request.getFollowUpAppointment() != null
+                && request.getFollowUpAppointment().getPreferredDate() != null
+                && !request.getFollowUpAppointment().getPreferredDate().isBlank()) {
+            builder.followUpAppointmentDate(request.getFollowUpAppointment().getPreferredDate());
         }
 
         AfterVisitSummaryDTO summary = builder.build();

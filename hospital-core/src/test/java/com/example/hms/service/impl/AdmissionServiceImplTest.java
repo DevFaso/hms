@@ -41,16 +41,19 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import java.util.Map;
 import java.util.Set;
 import com.example.hms.enums.SensitivityCategory;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class AdmissionServiceImplTest {
 
     @Mock private AdmissionRepository admissionRepository;
     @Mock private AdmissionOrderSetRepository orderSetRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
@@ -86,6 +89,8 @@ class AdmissionServiceImplTest {
         staff.setUser(staffUser);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
+        // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
     }
 
     @Test
@@ -102,7 +107,29 @@ class AdmissionServiceImplTest {
 
         assertThatThrownBy(() -> service.admitPatient(request))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .hasMessageContaining("admission.provider.physician.required");
+            .hasMessageContaining("The admitting and attending providers must be physicians at this hospital.");
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void admitPatient_refusesASecondOpenAdmissionWith409() {
+        // QA D304: POST /api/admissions twice for the same patient answered 201 twice.
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.existsOpenAdmissionForPatient(patientId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("already has an open admission");
+        // The check runs under the patient row lock, so two concurrent admits serialise.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(patientRepository, admissionRepository);
+        order.verify(patientRepository).lockByIdUnscoped(patientId);
+        order.verify(admissionRepository).existsOpenAdmissionForPatient(patientId);
         verify(admissionRepository, never()).save(any());
     }
 
@@ -289,6 +316,38 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void dischargePatient_aSecondDischargeIsAConflictAndChangesNothing_D267() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        AdmissionDischargeRequestDTO first = new AdmissionDischargeRequestDTO();
+        first.setDischargingProviderId(staffId);
+        first.setDischargeDisposition(DischargeDisposition.HOME);
+        first.setDischargeSummary("Full summary");
+        first.setDischargeInstructions("Rest");
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        service.dischargePatient(admissionId, first);
+        java.time.LocalDateTime dischargedAt = admission.getActualDischargeDateTime();
+
+        AdmissionDischargeRequestDTO again = new AdmissionDischargeRequestDTO();
+        again.setDischargingProviderId(staffId);
+        again.setDischargeDisposition(DischargeDisposition.HOME);
+        again.setDischargeSummary("again");
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, again))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage("admission.discharge.alreadyClosed");
+        assertThat(admission.getDischargeSummary()).isEqualTo("Full summary");
+        assertThat(admission.getDischargeInstructions()).isEqualTo("Rest");
+        assertThat(admission.getActualDischargeDateTime()).isEqualTo(dischargedAt);
+        verify(admissionRepository, times(1)).save(admission);
+    }
+
+    @Test
     void dischargePatient_success() {
         Admission admission = new Admission();
         admission.setId(admissionId);
@@ -332,7 +391,7 @@ class AdmissionServiceImplTest {
         service.dischargePatient(admissionId, request);
 
         // QA D134: the stay's own encounters, never the patient-wide sweep.
-        verify(stayEncounters).recordDischarge(admission);
+        verify(stayEncounters).recordDischarge(admission, null);
         verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
     }
 
@@ -440,5 +499,87 @@ class AdmissionServiceImplTest {
         verify(admissionRepository, never()).findByPatientIdOrderByAdmissionDateTimeDesc(any());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ── QA D262: hospital B may not discharge, edit or cancel hospital A's admission ──
+
+    private Admission activeAdmissionAtHospitalA() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        // The caller (DOCTOR_B) acts at hospital B.
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        return admission;
+    }
+
+    @Test
+    void dischargePatient_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+        request.setDischargeSummary("x");
+
+        assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(encounterAutoCompletion, never()).completeAdmissionEncounters(any());
+    }
+
+    @Test
+    void updateAdmission_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setAcuityLevel(com.example.hms.enums.AcuityLevel.values()[0]);
+
+        assertThatThrownBy(() -> service.updateAdmission(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
+        assertThat(admission.getAcuityLevel()).isNull();
+    }
+
+    @Test
+    void cancelAdmission_fromAnotherHospital_isNotFound_D262() {
+        Admission admission = activeAdmissionAtHospitalA();
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void admitPatient_atAnotherHospitalThanTheCallers_isNotFound_D262() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
+    void admitPatient_notRegisteredAtTheHospital_isNotFound_D262() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(admissionRepository, never()).save(any());
     }
 }

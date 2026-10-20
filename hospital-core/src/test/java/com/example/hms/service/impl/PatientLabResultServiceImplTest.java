@@ -501,6 +501,27 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(0).getStatus()).isEqualTo("UNKNOWN");
     }
 
+    /** QA D240: a released "Positif" is a qualitative answer, not "unknown". */
+    @Test void getLabResults_released_qualitativeValue_isQualitativeNotUnknown() {
+        LabResult lr = buildLabResult("Positif", null, true, false);
+        LabTestDefinition testDef = new LabTestDefinition();
+        testDef.setName("TDR paludisme"); testDef.setTestCode("TDRPALU");
+        LabOrder order = new LabOrder();
+        order.setLabTestDefinition(testDef);
+        lr.setLabOrder(order);
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("UNSPECIFIED");
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+
+        when(patientChartAccess.require(eq(patientId), any())).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(Set.of(hospitalId)), eq(hospitalId), eq(false), any(Pageable.class)))
+            .thenReturn(List.of(lr));
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+        assertThat(results.get(0).getStatus()).isEqualTo("QUALITATIVE");
+    }
+
     @Test void getLabResults_released_criticalSeverity() {
         LabResult lr = buildLabResult("200", "mg/dL", true, false);
         LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());

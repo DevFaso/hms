@@ -93,6 +93,31 @@ class UserRepositoryDirectoryScopeTest {
         assertThat(listed(Set.of(a.getId(), b.getId()))).contains(moved, pending, activeAtA);
     }
 
+    @Test
+    @DisplayName("QA D430: the non-administrator directory lists colleagues, never a patient-only account")
+    void staffDirectoryExcludesPatientOnlyAccounts() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        Role patientRole = roleRepository.findByCode("ROLE_PATIENT").orElseGet(() -> {
+            Role r = new Role();
+            r.setName("ROLE_PATIENT");
+            r.setCode("ROLE_PATIENT");
+            return roleRepository.save(r);
+        });
+        User patientOnly = user("patient.only");
+        assign(patientOnly, patientRole, a, true);
+        Set<UUID> atA = Set.of(a.getId());
+
+        List<UUID> staffListed = userRepository.findStaffDirectoryPaged(true, atA, false, false, PageRequest.of(0, 50))
+            .map(User::getId).getContent();
+        List<UUID> staffSearched = userRepository.searchStaffDirectory("Test", null, null, null, false, false, false,
+            true, atA, PageRequest.of(0, 50)).map(User::getId).getContent();
+
+        assertThat(staffListed).contains(pending, activeAtA).doesNotContain(patientOnly.getId());
+        assertThat(staffSearched).contains(pending, activeAtA).doesNotContain(patientOnly.getId());
+        // The administrators' all-accounts list still sees the patient.
+        assertThat(listed(atA)).contains(patientOnly.getId());
+    }
+
     private List<UUID> listed(Set<UUID> hospitalIds) {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
         return userRepository.findAllPaged(false, false, true, hospitalIds, PageRequest.of(0, 50))

@@ -40,6 +40,9 @@ import com.example.hms.utility.ObstetricEligibility;
 @Service
 @RequiredArgsConstructor
 public class BirthPlanServiceImpl implements BirthPlanService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
 
     private static final Logger log = LoggerFactory.getLogger(BirthPlanServiceImpl.class);
 
@@ -76,6 +79,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
             patient = getPatientByIdOrThrow(request.getPatientId());
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
+            patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
         ObstetricEligibility.requireObstetricEligible(patient);
 
@@ -252,7 +256,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         checkProviderReviewAccess(user);
 
         if (hospitalId == null) {
-            throw new BusinessException("Hospital ID is required to view pending reviews");
+            throw new BusinessException("maternity.birthPlan.hospitalRequiredForReviews");
         }
 
         Page<BirthPlan> pendingPlans = birthPlanRepository.findPendingReviewByHospital(hospitalId, pageable);
@@ -390,7 +394,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             return patient.getHospitalRegistrations().iterator().next().getHospital();
         }
 
-        throw new BusinessException("No hospital specified and patient has no hospital registrations");
+        throw new BusinessException("maternity.birthPlan.noHospital");
     }
 
     @SuppressWarnings("java:S1172") // user will be used when HospitalContext is implemented

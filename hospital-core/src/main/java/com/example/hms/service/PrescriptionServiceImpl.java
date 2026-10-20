@@ -60,12 +60,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    private static final String NOT_ON_STAY_CARE_TEAM =
+        "The prescriber is not on the care team of this patient's stay.";
+
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
     private static final String SIGNATURE_ALGORITHM = "SHA-256";
 
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientAllergyRepository patientAllergyRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
@@ -97,6 +101,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     /** D83: an allergy override is audited (who, when, which reason digest). */
     private final AuditEventLogService auditEventLogService;
+    /** D414: an inpatient whose stay has no encounter yet gets it opened, never a phantom consultation. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
 
     @Override
     @Transactional
@@ -122,6 +129,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
             throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
         }
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
@@ -906,6 +917,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
             throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
         }
+        // QA D401: the order is written into the chart at hospitalId, so the
+        // patient must be registered there. Thrown inside the transaction, it
+        // also rolls back an encounter resolveEncounterContext auto-created.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospitalId);
 
         if (!roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
             throw new BusinessException("prescription.only.doctor.admin");
@@ -1074,8 +1089,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (encounter.getPatient() == null || !encounter.getPatient().getId().equals(patient.getId())) {
             throw new BusinessException("prescription.encounter.patient.mismatch");
         }
-        if (encounter.getStaff() == null || !encounter.getStaff().getId().equals(staff.getId())) {
-            throw new BusinessException("prescription.encounter.staff.mismatch");
+        // QA D414: an inpatient stay is led by one doctor but ordered on by
+        // several (consultants, the doctor on call). Only a visit is the
+        // prescriber's own; the prescription carries its prescriber either way,
+        // and the hospital check below still pins them to the stay's hospital.
+        if (!isPrescribersEncounter(encounter, staff)) {
+            if (encounter.getAdmissionId() == null) {
+                throw new BusinessException("prescription.encounter.staff.mismatch");
+            }
+            // The waiver covers the stay's care team only: an unrelated doctor
+            // at the same hospital may not attach an order to someone's stay.
+            requireStayCareTeam(encounter, staff);
         }
         if (staff.getHospital() == null || !staff.getHospital().getId().equals(encounter.getHospital().getId())) {
             throw new BusinessException("prescription.encounter.staff.hospital.mismatch");
@@ -1088,10 +1112,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * 2) staff.assignment / URHA lookup for doctor role within the hospital scope
      */
     private UserRoleHospitalAssignment resolvePrescriberAssignmentOrThrow(Staff staff, Encounter encounter, UUID hospitalId) {
-        if (encounter != null && encounter.getAssignment() != null) {
+        // The encounter's assignment is the prescriber's only when the encounter
+        // is theirs: on a stay led by another doctor (D414) it is the lead's.
+        if (encounter != null && encounter.getAssignment() != null && isPrescribersEncounter(encounter, staff)) {
             return encounter.getAssignment();
         }
         return resolveAssignmentForStaff(staff, hospitalId);
+    }
+
+    private static boolean isPrescribersEncounter(Encounter encounter, Staff staff) {
+        return encounter.getStaff() != null && staff != null
+            && encounter.getStaff().getId() != null && encounter.getStaff().getId().equals(staff.getId());
     }
 
     /**
@@ -1161,6 +1192,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (stay.isPresent()) {
             return stay.get();
         }
+        // QA D414 (D41/D97 not fixed): the lookup above only finds a stay the
+        // prescriber leads, so a consultant or covering doctor prescribing for
+        // an inpatient minted a completed "consultation" that never happened.
+        // The order belongs to the patient's open stay whoever leads it; the
+        // prescription carries its own prescriber.
+        Optional<Encounter> anyStay = encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                patient.getId(), hospitalId,
+                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+        // The caller must be on that stay's care team: ensureContextConsistency
+        // refuses anyone else (verification GAP-1) for every path, this one too.
+        if (anyStay.isPresent()) {
+            return anyStay.get();
+        }
+        Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId, staff);
+        if (openedStay != null) {
+            return openedStay;
+        }
 
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
@@ -1171,6 +1220,68 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    /**
+     * D414: an admission whose stay encounter was never opened (admitted before
+     * stays had encounters, or with no lead at the time) still makes the patient
+     * an inpatient; the order opens the stay instead of a completed consultation.
+     */
+    private Encounter openStayForActiveAdmission(UUID patientId, UUID hospitalId, Staff staff) {
+        if (admissionRepository == null || stayEncounters == null) {
+            return null;
+        }
+        Optional<com.example.hms.model.Admission> admission = admissionRepository
+            .findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.ACTIVE,
+                    com.example.hms.enums.AdmissionStatus.ON_LEAVE,
+                    com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE))
+            .stream()
+            .findFirst();
+        if (admission.isEmpty()) {
+            return null;
+        }
+        // Checked before the stay is opened: opening another doctor's stay is
+        // itself a write an unrelated prescriber may not cause.
+        if (!isOnAdmissionCareTeam(admission.get(), staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+        return stayEncounters.openStayEncounter(admission.get());
+    }
+
+    /**
+     * QA D414 (verification GAP-1): an order on a stay led by another doctor is
+     * allowed only for its care team: the stay lead, the admission's attending
+     * or admitting physician, or a consultant recorded on the admission.
+     */
+    private void requireStayCareTeam(Encounter stay, Staff staff) {
+        if (isPrescribersEncounter(stay, staff)) {
+            return;
+        }
+        com.example.hms.model.Admission admission = admissionRepository == null || stay.getAdmissionId() == null
+            ? null : admissionRepository.findById(stay.getAdmissionId()).orElse(null);
+        if (admission == null || !isOnAdmissionCareTeam(admission, staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+    }
+
+    private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
+        UUID staffId = staff != null ? staff.getId() : null;
+        if (staffId == null) {
+            return false;
+        }
+        if (sameStaff(admission.getAttendingPhysician(), staffId)
+            || sameStaff(admission.getAdmittingProvider(), staffId)) {
+            return true;
+        }
+        List<java.util.Map<String, String>> consultants = admission.getConsultingPhysicians();
+        String id = staffId.toString();
+        return consultants != null && consultants.stream()
+            .anyMatch(c -> c != null && id.equalsIgnoreCase(c.get("staffId")));
+    }
+
+    private static boolean sameStaff(Staff member, UUID staffId) {
+        return member != null && staffId.equals(member.getId());
     }
 
     private UUID determineHospitalId(Staff staff, Patient patient) {
@@ -1276,14 +1387,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
         String med = normalizeDrugText(medicationName);
         String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
-        boolean conflict = false;
-        for (PatientAllergy allergy : allergies) {
-            if (allergy.isActive() && matchesAllergen(med, allergy.getAllergenDisplay())) {
-                conflict = true;
-                handleAllergyConflict(patient, allergy, medicationName, request.getForceOverride(), reason);
-            }
+        // QA D432: the warning cited whichever matching entry came first, so a
+        // moderate entry could hide a severe one for the same allergen. The
+        // most severe matching entry is the one the prescriber is shown.
+        Optional<PatientAllergy> worst = allergies.stream()
+            .filter(PatientAllergy::isActive)
+            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay()))
+            .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
+        if (worst.isEmpty()) {
+            return null;
         }
-        return conflict ? reason : null;
+        handleAllergyConflict(patient, worst.get(), medicationName, request.getForceOverride(), reason);
+        return reason;
+    }
+
+    /** Higher is worse; an unknown severity ranks above a mild one, below a moderate one. */
+    static int allergySeverityRank(PatientAllergy allergy) {
+        if (allergy.getSeverity() == null) {
+            return 2;
+        }
+        return switch (allergy.getSeverity()) {
+            case LIFE_THREATENING -> 5;
+            case SEVERE -> 4;
+            case MODERATE -> 3;
+            case UNKNOWN -> 2;
+            case MILD -> 1;
+        };
     }
 
     private static void recordAllergyOverride(Prescription prescription, String overrideReason) {
@@ -1379,8 +1508,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!Boolean.TRUE.equals(forceOverride) || reason.isEmpty()) {
             // Sent as a critical CDS card so the prescribing screen shows the
             // alert and offers the override (with its mandatory reason).
+            // QA D333: the severity is shown in the reader's language, never as the enum constant.
+            String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + severityStr);
             String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
-                allergy.getAllergenDisplay(), severityStr, medicationName);
+                allergy.getAllergenDisplay(), severityLabel, medicationName);
             CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
                 new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
                 null, null, null, UUID.randomUUID().toString());

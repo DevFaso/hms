@@ -20,6 +20,8 @@ public class LaborEpisodeRequestDTO {
     private UUID registrationId;
     private UUID admittedByStaffId;
 
+    /** QA D295: the partograph and the labour durations are measured from it. */
+    @jakarta.validation.constraints.NotNull(message = "{maternity.labor.onset.required}")
     private LocalDateTime laborOnsetAt;
     private LocalDateTime admittedAt;
     private MembraneStatus membraneStatus;
@@ -34,4 +36,11 @@ public class LaborEpisodeRequestDTO {
     private Integer para;
 
     private String riskNotes;
+
+    /**
+     * QA D214: required when a birth was recorded for this mother recently;
+     * the clinician's reason for opening a new labour episode anyway.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String recentDeliveryOverrideReason;
 }

@@ -66,6 +66,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class DispenseServiceImplTest {
 
     @Mock private DispenseRepository dispenseRepository;
@@ -117,6 +118,14 @@ class DispenseServiceImplTest {
 
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
+    /** QA D241: real, so the lot picker's response is what the portal gets. */
+    @org.mockito.Spy
+    private com.example.hms.mapper.pharmacy.StockLotMapper stockLotMapper =
+        new com.example.hms.mapper.pharmacy.StockLotMapper();
+
+    /** QA D404: the money follows a cancelled dispense. */
+    @Mock private PharmacyPaymentVoider paymentVoider;
 
     @InjectMocks
     private DispenseServiceImpl service;
@@ -464,6 +473,56 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).decrementRemaining(eq(stockLotId), eq(BigDecimal.TEN), any());
             verify(inventoryItemRepository).decrementOnHand(eq(inventoryItem.getId()), eq(BigDecimal.TEN), any());
             verify(stockTransactionRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D416: a fill from a lot with no catalog id is saved with the lot's medication, so it can be priced")
+        void aFillFromALotTakesTheLotsMedication() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationCatalogItemId(null); // what the dispensing screen sends
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            org.mockito.ArgumentCaptor<com.example.hms.mapper.pharmacy.DispenseMapper.DispenseContext> ctx =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.mapper.pharmacy.DispenseMapper.DispenseContext.class);
+            verify(dispenseMapper).toEntity(eq(dto), ctx.capture());
+            assertThat(ctx.getValue().medicationCatalogItem()).isSameAs(catalogItem);
+        }
+
+        @Test
+        @DisplayName("QA D416: a body naming another medication than the lot's is refused, nothing moves")
+        void aCatalogIdThatIsNotTheLotsIsRefused() {
+            MedicationCatalogItem other = new MedicationCatalogItem();
+            other.setId(UUID.randomUUID());
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationCatalogItemId(other.getId());
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(medicationCatalogItemRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.createDispense(dto)).isInstanceOf(BusinessException.class);
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
         }
 
         @Test
@@ -1151,6 +1210,9 @@ class DispenseServiceImplTest {
         void prescriptionLock() {
             org.mockito.Mockito.lenient().when(prescriptionRepository.findByIdForUpdate(prescriptionId))
                     .thenReturn(Optional.of(prescription));
+            // QA D404: the dispense row lock answers with the row findById gives.
+            org.mockito.Mockito.lenient().when(dispenseRepository.findLockedById(dispenseId))
+                    .thenAnswer(inv -> dispenseRepository.findById(dispenseId));
         }
 
         @Test
@@ -1166,6 +1228,36 @@ class DispenseServiceImplTest {
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository);
             order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
             order.verify(dispenseRepository).save(dispense);
+        }
+
+        @Test
+        @DisplayName("QA D404: a paid fill's payment is voided after the dispense row is locked")
+        void voidsThePaymentOfACancelledFill() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+
+            service.cancelDispense(dispenseId);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository,
+                    paymentVoider);
+            order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
+            order.verify(dispenseRepository).findLockedById(dispenseId);
+            order.verify(dispenseRepository).save(dispense);
+            order.verify(paymentVoider).voidForCancelledDispense(eq(dispense), any());
+        }
+
+        @Test
+        @DisplayName("QA D404: a refused cancel voids nothing")
+        void aRefusedCancelVoidsNothing() {
+            Dispense dispense = buildDispense(DispenseStatus.CANCELLED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId)).isInstanceOf(BusinessException.class);
+
+            verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
         }
 
         @Test
@@ -1295,7 +1387,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Quantity requested");
+                    .hasMessageContaining("quantity requested");
         }
 
         @Test
@@ -1307,7 +1399,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Quantity dispensed must");
+                    .hasMessageContaining("quantity dispensed must");
         }
 
         @Test
@@ -1349,7 +1441,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Patient does not match");
+                    .hasMessageContaining("patient does not match");
         }
 
         @Test
@@ -1367,7 +1459,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("verifiedBy");
+                    .hasMessageContaining("verifier must be the signed-in user");
         }
 
         @Test
@@ -2149,7 +2241,7 @@ class DispenseServiceImplTest {
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("HOSPITAL_DISPENSARY")
+                    .hasMessageContaining("hospital dispensary")
                     .hasMessageContaining("COMMUNITY_PHARMACY");
 
             verify(dispenseRepository, never()).save(any());
@@ -2173,6 +2265,91 @@ class DispenseServiceImplTest {
                     .hasMessageContaining("PARTNER_PHARMACY");
 
             verify(dispenseRepository, never()).save(any());
+        }
+    }
+
+    /**
+     * QA D241: the counter's lot picker listed every lot of the pharmacy,
+     * morphine included, for a paracetamol order. The server lists only
+     * lots of the prescribed drug with stock left, for a prescription of the
+     * caller's own hospital.
+     */
+    @Nested
+    @DisplayName("listDispensableLots (QA D241)")
+    class ListDispensableLots {
+
+        private StockLot lot(String genericName, String lotNumber, BigDecimal remaining) {
+            MedicationCatalogItem drug = new MedicationCatalogItem();
+            drug.setId(UUID.randomUUID());
+            drug.setGenericName(genericName);
+            InventoryItem item = InventoryItem.builder().pharmacy(pharmacy).medicationCatalogItem(drug)
+                    .quantityOnHand(BigDecimal.valueOf(100)).build();
+            item.setId(UUID.randomUUID());
+            StockLot lot = StockLot.builder().inventoryItem(item).lotNumber(lotNumber)
+                    .expiryDate(TODAY.plusMonths(6)).remainingQuantity(remaining)
+                    .barcodeValue(LotBarcode.mint()).build();
+            lot.setId(UUID.randomUUID());
+            return lot;
+        }
+
+        /** QA D335: an expired lot is not offered, and the rest come shortest-dated first. */
+        @Test
+        void expiredLotsAreDroppedAndTheRestAreFefoOrdered() {
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            StockLot late = lot("paracetamol", "PCM-LATE", BigDecimal.valueOf(10));
+            late.setExpiryDate(java.time.LocalDate.now().plusYears(2));
+            StockLot expired = lot("paracetamol", "PCM-OLD", BigDecimal.valueOf(10));
+            expired.setExpiryDate(java.time.LocalDate.now().minusDays(1));
+            StockLot soon = lot("paracetamol", "PCM-SOON", BigDecimal.valueOf(10));
+            soon.setExpiryDate(java.time.LocalDate.now().plusDays(10));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(late, expired, soon)));
+
+            assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
+                    .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
+                    .containsExactly("PCM-SOON", "PCM-LATE");
+        }
+
+        @Test
+        void onlyLotsOfThePrescribedDrugWithStockLeftAreListed() {
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            StockLot paracetamol = lot("paracetamol", "PCM-1", BigDecimal.valueOf(40));
+            StockLot emptyParacetamol = lot("paracetamol", "PCM-0", BigDecimal.ZERO);
+            StockLot morphine = lot("morphine", "MOR-1", BigDecimal.valueOf(20));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(paracetamol, emptyParacetamol, morphine)));
+
+            assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
+                    .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
+                    .containsExactly("PCM-1");
+        }
+
+        @Test
+        void withoutAnActiveHospitalNothingIsListed() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+            assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(prescriptionRepository, never()).findById(any());
+        }
+
+        @Test
+        void aPrescriptionOfAnotherHospitalIsRefusedLikeAMissingOne() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(stockLotRepository, never()).findByInventoryItemPharmacyId(any(), any());
         }
     }
 }

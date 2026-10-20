@@ -50,8 +50,11 @@ import static org.mockito.Mockito.when;
  * signs the result of an order sent to it — judged by its roles THERE — and
  * the ordering hospital reads it; a third hospital gets 404 throughout.
  */
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplPerformingHospitalTest {
+
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
 
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
@@ -433,7 +436,7 @@ class LabResultServiceImplPerformingHospitalTest {
         when(labResultRepository.findHandledByHospitals(List.of(performing.getId())))
             .thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(critical);
-        when(labResultMapper.raisesCriticalAlert(result, "CRITICAL")).thenReturn(true);
+        when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
 
         assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
             .containsExactly(critical);
@@ -446,11 +449,37 @@ class LabResultServiceImplPerformingHospitalTest {
     void pagedResultsReadWhatTheHospitalOrdersOrPerforms() {
         PageRequest page = PageRequest.of(0, 10);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospital(performing.getId(), page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
+                new UUID(0L, 0L), page))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
         assertThat(service.getLabResultsPage(page, Locale.ENGLISH).getContent()).containsExactly(mapped);
+    }
+
+    /** QA D211: a doctor's list is released-only and honours patientId. */
+    @Test
+    void nonLaboratoryListIsReleasedOnlyAndFilteredByPatient() {
+        PageRequest page = PageRequest.of(0, 10);
+        UUID patientId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, page))
+            .thenReturn(new PageImpl<>(List.of(result)));
+        when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
+
+        assertThat(service.getLabResultsPage(page, Locale.ENGLISH, patientId, false).getContent())
+            .containsExactly(mapped);
+    }
+
+    /** QA D211: the by-id read does not hand an unreleased value to a non-laboratory reader. */
+    @Test
+    void nonLaboratoryByIdReadOfUnreleasedResultIsNotFound() {
+        result.setReleased(false);
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getLabResultById(result.getId(), Locale.ENGLISH, false)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
     }
 
     @Test

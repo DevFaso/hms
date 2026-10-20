@@ -53,6 +53,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
 
     private final MaternalHistoryRepository maternalHistoryRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
@@ -71,7 +72,11 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
-        
+        // QA D401: written at the caller's acting hospital (the body's id is a
+        // claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+
         // Check if maternal history already exists for this patient
         if (maternalHistoryRepository.existsByPatient_Id(request.getPatientId())) {
             throw new BusinessException("Maternal history already exists for patient. Use update to create a new version.");
@@ -108,6 +113,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         MaternalHistory existingHistory = maternalHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
@@ -116,6 +123,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
+        // QA r5 tenancy sweep: the new version is written at the caller's acting hospital; the body's id is a claim.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
         
         // Ensure patient ID matches
         if (!existingHistory.getPatient().getId().equals(request.getPatientId())) {
@@ -309,6 +318,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         MaternalHistory maternalHistory = maternalHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(maternalHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
         
         maternalHistory.setReviewedByProvider(true);
         maternalHistory.setReviewTimestamp(LocalDateTime.now());
@@ -326,6 +337,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         MaternalHistory maternalHistory = maternalHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
+        // QA r5 tenancy sweep: a write loads under the tenant guard.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(maternalHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
         
         maternalHistoryRepository.delete(maternalHistory);
         

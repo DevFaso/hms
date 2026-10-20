@@ -156,9 +156,12 @@ export class PharmacyRegistryComponent implements OnInit {
     }
     this.saving.set(true);
     const existing = this.editing();
+    // QA D336: an unselected type or mode went out as "" and the server
+    // could not read it as a value, so the save failed with a bare field name.
+    const payload = this.toRequest();
     const req$ = existing
-      ? this.svc.updatePharmacy(existing.id, this.form)
-      : this.svc.createPharmacy(this.form);
+      ? this.svc.updatePharmacy(existing.id, payload)
+      : this.svc.createPharmacy(payload);
 
     req$.subscribe({
       next: () => {
@@ -209,6 +212,24 @@ export class PharmacyRegistryComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /** The form as the server reads it: an empty choice is no value, not "". */
+  toRequest(): PharmacyRequest {
+    return {
+      ...this.form,
+      pharmacyType: this.form.pharmacyType || undefined,
+      fulfillmentMode: this.form.fulfillmentMode || undefined,
+    } as PharmacyRequest;
+  }
+
+  /**
+   * QA D336: only a hospital or super admin may create, edit or delete a
+   * registry entry (the server refuses everyone else with 403); a pharmacist
+   * reads it.
+   */
+  canManage(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']);
   }
 
   private emptyForm(): PharmacyRequest {

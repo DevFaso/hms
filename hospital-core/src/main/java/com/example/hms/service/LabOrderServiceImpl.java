@@ -181,7 +181,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             performing = hospitalRepository.findById(requested)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound", requested));
             if (!isRoutableLab(performing)) {
-                throw new BusinessException("The performing laboratory must be an active hospital or laboratory.");
+                throw new BusinessException("lab.order.performingLabInactive");
             }
         }
         requirePerformerChangeAllowed(base, performing);
@@ -205,8 +205,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!labSpecimenRepository.findByLabOrder_Id(base.getId()).isEmpty()
                 || !labResultRepository.findByLabOrder_Id(base.getId()).isEmpty()) {
-            throw new com.example.hms.exception.ConflictException(
-                "The performing laboratory cannot change once a specimen or a result has been recorded for this order.");
+            throw new com.example.hms.exception.ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.performingLabLocked"));
         }
     }
 
@@ -305,7 +304,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         Hospital hospital = encounter != null ? encounter.getHospital() : null;
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
-            throw new BusinessException("Encounter hospital does not match the requested hospital.");
+            throw new BusinessException("lab.order.encounterHospitalMismatch");
         }
 
         if (hospital == null && requestedHospitalId != null) {
@@ -314,7 +313,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
 
         if (hospital == null) {
-            throw new BusinessException("Lab orders must reference a hospital either via encounter or hospital identifier.");
+            throw new BusinessException("lab.order.hospitalRequired");
         }
 
         boolean patientRegistered = patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(
@@ -322,7 +321,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             hospital.getId()
         );
         if (!patientRegistered) {
-            throw new BusinessException("Patient is not registered with the specified hospital.");
+            throw new BusinessException("lab.order.patientNotRegistered");
         }
 
         Staff staff = keptOrderingStaff(base, request.getOrderingStaffId(), hospital);
@@ -347,7 +346,7 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         if (isNew && labOrderRepository.existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(
             patient.getId(), testDefinition.getId(), request.getOrderDatetime())) {
-            throw new BusinessException("Duplicate lab order detected for the same test, patient, and date.");
+            throw new BusinessException("lab.order.duplicate");
         }
 
         LabOrder labOrder = (base != null) ? base : new LabOrder();
@@ -361,6 +360,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         labOrder.setAssignment(assignment);
         labOrder.setOrderDatetime(request.getOrderDatetime());
         applyRequestedStatus(labOrder, request.getStatus(), isNew);
+        labOrder.setPriority(resolvePriority(request.getPriority(), base));
         labOrder.setClinicalIndication(clinicalIndication);
         labOrder.setMedicalNecessityNote(medicalNecessityNote);
         labOrder.setNotes(notes);
@@ -380,6 +380,25 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");
+
+    /**
+     * D266: the requested priority was never copied onto the entity, so URGENT
+     * and STAT orders were stored as ROUTINE. A blank value keeps the existing
+     * order's priority (ROUTINE for a new one); an unknown value is refused
+     * rather than silently downgraded.
+     */
+    static String resolvePriority(String requested, LabOrder base) {
+        if (requested == null || requested.isBlank()) {
+            return base != null && base.getPriority() != null ? base.getPriority() : "ROUTINE";
+        }
+        String normalized = requested.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!LAB_PRIORITIES.contains(normalized)) {
+            throw new BusinessException("lab.order.priority.invalid");
+        }
+        return normalized;
     }
 
     /**
@@ -614,6 +633,12 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .orElse(null);
             if (!personId.equals(callerId)) {
                 log.warn("Lab order refused: the ordering staff named is not the caller");
+                // QA D432: a colleague at the order's own hospital is someone the
+                // caller can already see, so "staff not found" only misled. Say
+                // what is wrong; a row elsewhere still reads as unknown.
+                if (named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
+                    throw new BusinessException("labOrder.orderingStaff.notCaller");
+                }
                 throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             }
         }
@@ -673,7 +698,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         try {
             requested = LabOrderStatus.valueOf(requestedStatus.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException ex) {
-            throw new BusinessException("Unknown lab order status: " + requestedStatus);
+            throw new BusinessException("lab.order.unknownStatus", String.valueOf(requestedStatus));
         }
         if (isNew) {
             if (!CREATABLE_STATUSES.contains(requested)) {
@@ -684,11 +709,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 // scripted caller sends one — the seeder builds entities
                 // directly, and the only sample carrying IN_PROGRESS is a PUT,
                 // which is unaffected.)
-                throw new BusinessException(
-                    "A new lab order cannot be created with status " + requested.name()
-                        + ". New orders start at ORDERED or PENDING; the laboratory workflow moves "
-                        + "them on from there, and a cancellation goes through the transition "
-                        + "endpoint so it is role-checked and cannot freeze a brand-new order.");
+                throw new BusinessException("lab.order.invalidInitialStatus", requested.name());
             }
             labOrder.setStatus(requested);
             return;
@@ -974,8 +995,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                                           UUID hospitalId, UUID orderingHospitalId) {
         Set<LabOrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(from, Set.of());
         if (!allowed.contains(to)) {
-            throw new BusinessException(
-                "Invalid lab order status transition: " + from.name() + " \u2192 " + to.name() + ".");
+            throw new BusinessException("lab.order.invalidTransition", from.name(), to.name());
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -984,7 +1004,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
                     && !roleValidator.isHospitalAdmin(currentUserId, orderingHospitalId)
                     && !roleValidator.isSuperAdminFromAuth()) {
-                throw new BusinessException("Only lab managers or admins may cancel a lab order.");
+                throw new BusinessException("lab.order.cancelForbidden");
             }
             return;
         }
@@ -996,8 +1016,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                     "advance analytical steps");
             case VERIFIED, COMPLETED -> requireLabScientistOrManager(currentUserId, hospitalId,
                     "verify or complete a lab order");
-            default -> throw new BusinessException(
-                "Status " + to.name() + " cannot be set via transition.");
+            default -> throw new BusinessException("lab.order.statusNotTransitionable", to.name());
         }
     }
 
@@ -1023,11 +1042,11 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (base != null) {
                 return base.getPrimaryDiagnosisCode();
             }
-            throw new BusinessException("Primary diagnosis code is required for lab orders.");
+            throw new BusinessException("lab.order.primaryDiagnosisRequired");
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!DiagnosisCodeValidator.isValidIcd10(normalized)) {
-            throw new BusinessException("Invalid ICD-10 diagnosis code: " + normalized);
+            throw new BusinessException("lab.order.invalidIcd10", normalized);
         }
         return normalized;
     }
@@ -1042,7 +1061,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         for (String code : requested) {
             if (!DiagnosisCodeValidator.isValidIcd10(code)) {
-                throw new BusinessException("Invalid ICD-10 diagnosis code: " + code);
+                throw new BusinessException("lab.order.invalidIcd10", code);
             }
         }
         return requested;
@@ -1073,7 +1092,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (base != null && base.getOrderChannelOther() != null) {
             return base.getOrderChannelOther();
         }
-        throw new BusinessException("orderChannelOther must be provided when orderChannel is OTHER.");
+        throw new BusinessException("lab.order.channelOtherRequired");
     }
 
     private String resolveOrderingProviderNpi(Staff staff, String override, LabOrder base) {
@@ -1095,10 +1114,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             return null;
         }
         if (!resolved.matches("\\d{10}")) {
-            throw new BusinessException("NPI must be a 10-digit numeric identifier.");
+            throw new BusinessException("lab.order.npiFormat");
         }
         if (staffNpi != null && requestNpi != null && !staffNpi.equals(requestNpi)) {
-            throw new BusinessException("Provided NPI does not match the staff member's recorded NPI.");
+            throw new BusinessException("lab.order.npiMismatch");
         }
         return resolved;
     }
@@ -1110,7 +1129,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 return base.getProviderSignatureDigest();
             }
             if (isNew) {
-                throw new BusinessException("An electronic signature attestation is required for lab orders.");
+                throw new BusinessException("lab.order.signatureRequired");
             }
             return null;
         }
@@ -1169,7 +1188,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!documentationShared) {
             String channelName = channel.name().toLowerCase(Locale.ENGLISH);
-            throw new BusinessException("Medicare guidelines require lab orders submitted via " + channelName + " channel to include documentation shared with the performing laboratory.");
+            throw new BusinessException("lab.order.channelDocumentationRequired", channelName);
         }
     }
 
@@ -1207,10 +1226,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             expiresAt = base.getStandingOrderExpiresAt();
         }
         if (expiresAt == null) {
-            throw new BusinessException("Standing orders must include an expiration timestamp.");
+            throw new BusinessException("lab.order.standingExpiryRequired");
         }
         if (orderDatetime != null && expiresAt.isBefore(orderDatetime)) {
-            throw new BusinessException("Standing order expiration must be after the order date.");
+            throw new BusinessException("lab.order.standingExpiryAfterOrder");
         }
         return expiresAt;
     }
@@ -1221,7 +1240,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             lastReviewedAt = base.getStandingOrderLastReviewedAt();
         }
         if (lastReviewedAt == null) {
-            throw new BusinessException("Standing orders must include the last review timestamp.");
+            throw new BusinessException("lab.order.standingLastReviewRequired");
         }
         return lastReviewedAt;
     }
@@ -1232,7 +1251,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             reviewIntervalDays = base.getStandingOrderReviewIntervalDays();
         }
         if (reviewIntervalDays == null || reviewIntervalDays <= 0) {
-            throw new BusinessException("Standing orders require a positive review interval (days).");
+            throw new BusinessException("lab.order.standingReviewInterval");
         }
         return reviewIntervalDays;
     }
@@ -1240,7 +1259,7 @@ public class LabOrderServiceImpl implements LabOrderService {
     private LocalDateTime computeStandingOrderReviewDueAt(LocalDateTime lastReviewedAt, int reviewIntervalDays) {
         LocalDateTime reviewDueAt = lastReviewedAt.plusDays(reviewIntervalDays);
         if (reviewDueAt.isBefore(LocalDateTime.now())) {
-            throw new BusinessException("Standing order review is overdue. Please review before placing new orders.");
+            throw new BusinessException("lab.order.standingReviewOverdue");
         }
         return reviewDueAt;
     }
@@ -1269,13 +1288,13 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     private void requireLabStaff(UUID userId, UUID hospitalId) {
         if (!roleValidator.isLabStaff(userId, hospitalId)) {
-            throw new BusinessException("Only lab staff may perform specimen collection/receipt operations.");
+            throw new BusinessException("lab.specimen.labStaffOnly");
         }
     }
 
     private void requireLabScientistOrManager(UUID userId, UUID hospitalId, String action) {
         if (!roleValidator.isLabScientist(userId, hospitalId) && !roleValidator.isLabManager(userId, hospitalId)) {
-            throw new BusinessException("Only lab scientists or managers may " + action + ".");
+            throw new BusinessException("lab.order.labStaffOnly", action);
         }
     }
 }

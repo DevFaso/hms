@@ -6,7 +6,6 @@ import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.repository.LabResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,8 +36,14 @@ import com.example.hms.service.i18n.NotificationLocales;
  * nobody acknowledged produced two notifications to one person and then went
  * permanently quiet. Round 1 nudges the provider; from round 2 the hospital's
  * admins are added; it keeps firing on the interval until somebody resolves it.
- * Going silent on an unacknowledged critical value is the failure mode this
- * whole service exists to prevent, so there is deliberately no round cap.
+ * <p>
+ * QA D305: before each round the sweep re-grades the result. A result that is
+ * no longer critical (its value was corrected, or it was stamped by an older
+ * grading rule) leaves the chain and its stamps are cleared, as the amendment
+ * path does; a NORMAL glucose had been paged as critical 84 times. The chain is
+ * also capped at {@code hms.lab.critical-escalation.max-rounds} rounds (default
+ * 12, six hours at the default interval): past that the result stays on the
+ * critical worklist, but the sweep stops paging.
  * <p>
  * Acknowledgement is NOT the read-back — that claim used to sit in this javadoc
  * and was simply false. A read-back is the receiver repeating the value so the
@@ -84,6 +89,10 @@ public class CriticalValueNotificationService {
     /** Minutes an unacknowledged critical result waits before escalation. */
     @Value("${hms.lab.critical-escalation.escalate-after-minutes:30}")
     private long escalateAfterMinutes;
+
+    /** QA D305: rounds after which the sweep stops paging for one result. */
+    @Value("${hms.lab.critical-escalation.max-rounds:12}")
+    private short maxEscalationRounds = 12;
 
     public CriticalValueNotificationService(
         NotificationService notificationService,
@@ -234,10 +243,15 @@ public class CriticalValueNotificationService {
         // Fails loudly if a future caller reaches this body around the lock.
         LockAssert.assertLocked();
         LocalDateTime cutoff = LocalDateTime.now(java.time.ZoneId.systemDefault()).minus(Duration.ofMinutes(escalateAfterMinutes));
-        List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff);
+        List<LabResult> overdue = labResultRepository.findCriticalAwaitingEscalation(cutoff, maxEscalationRounds);
         int escalated = 0;
         for (LabResult result : overdue) {
             try {
+                if (noLongerCritical(result)) {
+                    // QA D305: not critical any more, so nothing to chase.
+                    leaveChain(result);
+                    continue;
+                }
                 escalateOne(result);
                 escalated++;
             } catch (RuntimeException ex) {
@@ -246,6 +260,19 @@ public class CriticalValueNotificationService {
             }
         }
         return escalated;
+    }
+
+    /**
+     * QA D305: clears the critical stamps of a result that no longer grades as
+     * critical, exactly as an amendment of its value does, so the sweep drops it
+     * and a later critical value can page afresh.
+     */
+    private void leaveChain(LabResult result) {
+        result.setCriticalNotifiedAt(null);
+        result.setCriticalEscalatedAt(null);
+        result.setCriticalEscalationLevel((short) 0);
+        labResultRepository.save(result);
+        log.info("Lab result {} no longer grades as critical; escalation stopped", result.getId());
     }
 
     private void escalateOne(LabResult result) {
@@ -269,6 +296,10 @@ public class CriticalValueNotificationService {
         if (round >= TIER_TWO_ROUND) {
             log.warn("Critical lab result {} still unresolved after {} escalation round(s)",
                 result.getId(), round);
+        }
+        if (round >= maxEscalationRounds) {
+            log.warn("Critical lab result {} reached the escalation cap of {} round(s); the sweep stops paging",
+                result.getId(), maxEscalationRounds);
         }
     }
 
@@ -359,9 +390,7 @@ public class CriticalValueNotificationService {
                 }));
             log.warn("Critical-value read-back MISMATCH on lab result {}: reported '{}', repeated '{}'",
                 result.getId(), result.getResultValue(), repeatedValue);
-            throw new com.example.hms.exception.BusinessException(
-                "Read-back does not match the reported result. Confirm the value with the laboratory "
-                    + "before acting on it.");
+            throw new com.example.hms.exception.BusinessException("lab.criticalReadBack.mismatch");
         }
 
         // Only a MATCHING read-back resolves the result and stops escalation.
@@ -378,11 +407,16 @@ public class CriticalValueNotificationService {
      * "3.40" reads back "3.4" — a clinician repeating the number correctly must
      * not be told they got it wrong.
      */
-    private static String normalizeForComparison(String value) {
+    static String normalizeForComparison(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        // QA D415: a French reader says and types "28,5"; one comma between
+        // digits is the decimal separator, not a mismatch.
+        if (trimmed.matches("[+-]?\\d+,\\d+")) {
+            trimmed = trimmed.replace(',', '.');
+        }
         try {
             return new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
         } catch (NumberFormatException notNumeric) {
@@ -397,10 +431,48 @@ public class CriticalValueNotificationService {
         }
         String severity = knownSeverity;
         if (severity == null) {
-            LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-            severity = dto != null ? dto.getSeverityFlag() : null;
+            severity = gradeFromStoredDefinition(result);
         }
-        return labResultMapper.raisesCriticalAlert(result, severity);
+        return labResultMapper.raisesCriticalAlert(severity);
+    }
+
+    /**
+     * QA D402: whether the sweep may drop a result from the chain. Only a
+     * result that the stored test definition POSITIVELY grades as something
+     * other than critical leaves. A result that cannot be graded at all
+     * (no range, units differ, definition gone) was critical when it paged
+     * and keeps escalating: losing an unacknowledged critical value is the
+     * failure that matters, an extra page is not.
+     */
+    private boolean noLongerCritical(LabResult result) {
+        if (result.getAbnormalFlag() == AbnormalFlag.CRITICAL) {
+            return false;
+        }
+        String severity = gradeFromStoredDefinition(result);
+        if (severity == null || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
+            return false;
+        }
+        return !labResultMapper.raisesCriticalAlert(severity);
+    }
+
+    /**
+     * QA D402: the grade from the stored value and the stored test definition.
+     * The mapper deliberately reads only what is already loaded, and the
+     * sweep loads results with their order and definition as lazy proxies:
+     * graded that way every result came out UNSPECIFIED, so the D305 exit
+     * wiped the stamps of every still-critical result at its first sweep.
+     * Both proxies are initialised here, inside the caller's transaction.
+     */
+    private String gradeFromStoredDefinition(LabResult result) {
+        LabOrder order = result.getLabOrder();
+        if (order == null) {
+            return null;
+        }
+        org.hibernate.Hibernate.initialize(order);
+        if (order.getLabTestDefinition() != null) {
+            org.hibernate.Hibernate.initialize(order.getLabTestDefinition());
+        }
+        return labResultMapper.severityFlagOf(result);
     }
 
     private String resolveOrderingUsername(LabResult result) {
@@ -442,11 +514,33 @@ public class CriticalValueNotificationService {
         String patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : messageSource.getMessage("patient.fallback.generic", null, locale);
-        String value = result.getResultValue()
+        String value = localizedValue(result.getResultValue(), locale)
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
         return messageSource.getMessage(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             new Object[]{testName, value, patientName},
             locale);
+    }
+
+    /**
+     * QA D349: a numeric result in the reader's notation ("5,0" in French),
+     * keeping the scale the laboratory reported. Anything that is not a plain
+     * number ("Positif", "&lt;0.5") is shown as entered.
+     */
+    static String localizedValue(String raw, java.util.Locale locale) {
+        if (raw == null) {
+            return "";
+        }
+        try {
+            java.math.BigDecimal number = new java.math.BigDecimal(raw.trim());
+            java.text.NumberFormat format = java.text.NumberFormat.getNumberInstance(locale);
+            int scale = Math.max(number.scale(), 0);
+            format.setGroupingUsed(false);
+            format.setMinimumFractionDigits(scale);
+            format.setMaximumFractionDigits(scale);
+            return format.format(number);
+        } catch (NumberFormatException notANumber) {
+            return raw;
+        }
     }
 }

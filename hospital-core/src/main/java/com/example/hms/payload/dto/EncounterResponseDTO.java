@@ -23,6 +23,9 @@ public class EncounterResponseDTO {
 
     private UUID id;
 
+    /** QA D276: the visit's code, the key a billing clerk types to link an invoice to it. */
+    private String code;
+
     private UUID patientId;
     private String patientName;
     private String patientEmail;

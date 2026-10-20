@@ -65,7 +65,7 @@
       (click)="setTab('all')"
       [title]="'BILLING.TAB_ALL_TITLE' | translate"
     >
-      {{ 'COMMON.ALL' | translate }} ({{ invoices().length }})
+      {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
     </button>
     <button
       class="tab"
@@ -100,7 +100,7 @@
       type="text"
       [placeholder]="'BILLING.SEARCH' | translate"
       [(ngModel)]="searchTerm"
-      (input)="applyFilter()"
+      (input)="onSearchInput()"
     />
   </div>
 
@@ -185,6 +185,13 @@
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
                   (inv.status | enumLabel: 'invoiceStatus') || '—'
                 }}</span>
+                @if (inv.creditedToInvoiceNumber) {
+                  <!-- QA D428: a folded copay names the invoice it was credited to -->
+                  <span class="field-hint">{{
+                    'PORTAL.BILLING.CREDITED_TO'
+                      | translate: { number: inv.creditedToInvoiceNumber }
+                  }}</span>
+                }
               </td>
               <td class="actions-cell">
                 <div class="action-group">
@@ -306,6 +313,10 @@
               ><span class="field-value">{{ inv.hospitalName || '—' }}</span>
             </div>
             <div class="detail-field">
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
+              ><span class="field-value">{{ inv.encounterCode || '—' }}</span>
+            </div>
+            <div class="detail-field">
               <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span
               ><span class="field-value">{{ inv.invoiceDate | date: 'longDate' }}</span>
             </div>
@@ -318,6 +329,11 @@
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
+              @if (inv.creditedToInvoiceNumber) {
+                <span class="field-hint">{{
+                  'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedToInvoiceNumber }
+                }}</span>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span
@@ -439,6 +455,7 @@
                     id="line-price"
                     type="number"
                     min="0"
+                    step="1"
                     [ngModel]="newItemUnitPrice()"
                     (ngModelChange)="newItemUnitPrice.set($event)"
                   />
@@ -476,7 +493,7 @@
                 <tbody>
                   @for (p of payments(); track p.id) {
                     <tr>
-                      <td>{{ p.paymentDate }}</td>
+                      <td>{{ p.paymentDate ? (p.paymentDate | date: 'mediumDate') : '—' }}</td>
                       <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
@@ -605,6 +622,7 @@
               [(ngModel)]="form.totalAmount"
               [disabled]="editingHasLines()"
               min="0"
+              step="1"
             />
             <p class="field-hint">
               {{

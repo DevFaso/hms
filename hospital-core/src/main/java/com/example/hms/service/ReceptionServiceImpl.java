@@ -331,7 +331,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(appt.getId())
                 .patientId(pid)
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .mrn(p.getMrnForHospital(appt.getHospital() != null ? appt.getHospital().getId() : null))
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .issueType(issueType)
                 .clinicianName(providerName(appt))
@@ -404,12 +404,14 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(appt.getId())
                 .patientId(pid)
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                // QA D239: the MRN at this hospital, and the booked reason
+                // (else what triage recorded); both were hard-wired to null.
+                .mrn(p.getMrnForHospital(hospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .providerName(providerName(appt))
                 .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
-                .appointmentReason(appt.getReason())
+                .appointmentReason(visitReason(appt, encounter))
                 .status(computedStatus)
                 .waitMinutes(computeWaitMinutes(encounter))
                 .encounterId(encounter != null ? encounter.getId() : null)
@@ -431,7 +433,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .appointmentId(null)
                 .patientId(p.getId())
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null)
+                .mrn(p.getMrnForHospital(walkInHospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(walkIn.getEncounterDate() != null
                         ? walkIn.getEncounterDate().toLocalTime().format(TIME_FMT) : null)
@@ -439,13 +441,24 @@ public class ReceptionServiceImpl implements ReceptionService {
                         ? walkIn.getStaff().getUser().getFirstName() + " " + walkIn.getStaff().getUser().getLastName()
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
-                .appointmentReason("Walk-in")
+                .appointmentReason(notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : "Walk-in")
                 .status(computedStatus)
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
                 .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
                 .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
+    }
+
+    /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */
+    static String visitReason(Appointment appt, Encounter encounter) {
+        if (notBlank(appt.getReason())) return appt.getReason();
+        if (encounter != null && notBlank(encounter.getChiefComplaint())) return encounter.getChiefComplaint();
+        return notBlank(appt.getNotes()) ? appt.getNotes() : null;
+    }
+
+    private static boolean notBlank(String value) {
+        return value != null && !value.isBlank();
     }
 
     private String providerName(Appointment appt) {
@@ -650,10 +663,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_WAITING.equals(entry.getStatus())) {
-            throw new BusinessException("Only a waiting entry can be offered a slot.");
+            throw new BusinessException("reception.offer.notWaiting");
         }
         if (slotId == null) {
-            throw new BusinessException("Choose a slot to offer.");
+            throw new BusinessException("reception.offer.slotRequired");
         }
         AppointmentSlot slot = slotRepo.findById(slotId)
                 .filter(s -> s.getHospital() != null && hospitalId.equals(s.getHospital().getId()))
@@ -671,7 +684,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // used to live here is now ElapsedTime, shared by every call site.
         long minutes = ElapsedTime.minutesBetween(now, expiry);
         if (minutes < 1) {
-            throw new BusinessException("That slot starts too soon to offer.");
+            throw new BusinessException("reception.offer.tooSoon");
         }
         // hold() re-validates availability and stamps HELD for the offer window,
         // so nobody else books the time while the patient decides.
@@ -693,11 +706,11 @@ public class ReceptionServiceImpl implements ReceptionService {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus()) || entry.getOfferedSlot() == null) {
-            throw new BusinessException("There is no open offer on this entry.");
+            throw new BusinessException("reception.offer.none");
         }
         LocalDateTime now = LocalDateTime.now();
         if (entry.getOfferExpiresAt() != null && entry.getOfferExpiresAt().isBefore(now)) {
-            throw new BusinessException("The offer has expired. Offer another slot.");
+            throw new BusinessException("reception.offer.expired");
         }
         AppointmentSlot slot = entry.getOfferedSlot();
         if (slot.getStatus() == SlotStatus.HELD) {
@@ -720,7 +733,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
         if (!WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
-            throw new BusinessException("There is no open offer on this entry.");
+            throw new BusinessException("reception.offer.none");
         }
         releaseOfferedSlot(entry);
         entry.setStatus(WAITLIST_STATUS_WAITING);
@@ -868,7 +881,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 1. Resolve appointment (required — walk-in handled by separate endpoint)
         if (request.getAppointmentId() == null) {
-            throw new IllegalArgumentException("appointmentId is required for check-in");
+            throw new BusinessException("reception.checkin.appointmentRequired");
         }
         // QA D149: a copay is money taken at the desk; it is validated before
         // anything is written, and recorded below (it used to be dropped).
@@ -893,9 +906,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // Validate appointment is in a check-in-eligible status
         AppointmentStatus currentStatus = appointment.getStatus();
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Cannot check in — appointment status is " + currentStatus
-                    + ". Only SCHEDULED or CONFIRMED appointments can be checked in.");
+            throw new BusinessException("reception.checkin.notEligible", String.valueOf(currentStatus));
         }
 
         // 2. Transition appointment to CHECKED_IN
@@ -989,7 +1000,8 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientName(patientName)
                 .arrivalTimestamp(encounter.getArrivalTimestamp())
                 .chiefComplaint(encounter.getChiefComplaint())
-                .message("Patient " + patientName + " successfully checked in")
+                .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
+                        org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();
     }
 

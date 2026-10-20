@@ -2881,4 +2881,87 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V200 - QA D210: flag the check-in copay invoice so the visit
+         invoice credits it. Single ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V200-billing-invoice-check-in-copay" author="hms-team" runOnChange="false">
+        <sqlFile path="V200__billing_invoice_check_in_copay.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V201: lab.lab_test_definitions.submitted_by_id - who submitted the
+         definition for QA (QA D213: distinct reviewer and approver).
+         Single nullable ALTER, no DO block.
+         ================================================================= -->
+    <changeSet id="V201-lab-test-definition-submitted-by" author="hms-team" runOnChange="false">
+        <sqlFile path="V201__lab_test_definition_submitted_by.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V202 (QA D224): the after-visit summary's prescription and referral
+         summaries are kept on the discharge summary. Single ALTER, no DO block. -->
+    <changeSet id="V202-discharge-summary-avs-texts" author="hms-team" runOnChange="false">
+        <sqlFile path="V202__discharge_summary_avs_texts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V204 (QA D264): the selling price per unit on a pharmacy inventory
+         item, so a dispense payment is checked against what it costs.
+         Single ALTER, no DO block. -->
+    <changeSet id="V204-inventory-item-unit-price" author="hms-team" runOnChange="false">
+        <sqlFile path="V204__inventory_item_unit_price.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V205 (QA D291): lab.lab_orders.order_number, a readable order code
+         from lab.lab_order_number_seq, backfilled. Plain statements, no DO block. -->
+    <changeSet id="V205-lab-order-number" author="hms-team" runOnChange="false">
+        <sqlFile path="V205__lab_order_number.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V206 (QA D312): deactivate the EMPTY duplicate inventory items left
+         from before the D208 guard (one per pharmacy and drug is kept; a twin
+         holding stock is left for a person). Plain statement, no DO block. -->
+    <changeSet id="V206-deactivate-empty-duplicate-inventory-items" author="hms-team" runOnChange="false">
+        <sqlFile path="V206__deactivate_empty_duplicate_inventory_items.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V209 (QA D304): partial unique index, one open admission per patient,
+         created only when no duplicates exist. DO block. -->
+    <changeSet id="V209-one-open-admission-per-patient" author="hms-team" runOnChange="false">
+        <sqlFile path="V209__one_open_admission_per_patient.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V213 (QA D404): billing.pharmacy_payments.status (POSTED/VOIDED) with
+         voided_at/voided_by/void_reason; payments on already-cancelled
+         dispenses backfilled to VOIDED; QA D416: dispenses from a lot with no
+         catalog medication take the lot's; QA D228: payment_transactions.
+         invoice_total_at_receipt; QA D428: billing_invoices.credited_to_invoice_id
+         (FK, backfilled for folded copays). Plain statements, no DO block. -->
+    <changeSet id="V213-pharmacy-payment-void-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V213__pharmacy_payment_void_status.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

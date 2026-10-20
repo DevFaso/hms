@@ -38,4 +38,28 @@ describe('FeatureFlagsComponent', () => {
     component.removeOverride(flag);
     httpMock.expectOne((r) => r.method === 'DELETE' && r.url === '/feature-flags/beta.x');
   });
+
+  it('says "no flags" with no empty quoted query when nothing is searched (D247)', () => {
+    const fixture = TestBed.createComponent(FeatureFlagsComponent);
+    fixture.detectChanges();
+    httpMock.expectOne('/feature-flags').flush({});
+    httpMock.match('/feature-flags/overrides').forEach((r) => r.flush([]));
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector('.empty-state')?.textContent;
+    expect(text).toContain('FLAGS.NO_FLAGS');
+    expect(text).not.toContain('""');
+  });
+
+  it('shows the server reason when a flag cannot be created (QA D310)', () => {
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    component.newFlagKey.set('qa.r6.newflag');
+    component.createFlag();
+    httpMock
+      .expectOne((r) => r.method === 'PUT' && r.url === '/feature-flags/qa.r6.newflag')
+      .flush(
+        { message: 'Drapeau de fonctionnalité inconnu.' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    expect(toast.error).toHaveBeenCalledWith('Drapeau de fonctionnalité inconnu.');
+  });
 });

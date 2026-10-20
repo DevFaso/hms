@@ -41,16 +41,40 @@ export class MyBillingComponent implements OnInit {
     this.portal.getMyInvoices().subscribe({
       next: (inv) => {
         this.invoices.set(inv);
-        this.totalBalance.set(inv.reduce((sum, i) => sum + (i.balance ?? 0), 0));
+        this.totalBalance.set(
+          inv.filter((i) => this.isPayable(i)).reduce((sum, i) => sum + (i.balance ?? 0), 0),
+        );
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
   }
 
+  /** QA D202: only an issued, open invoice with money left on it is owed or payable. */
+  isPayable(inv: PortalInvoice): boolean {
+    return (
+      (inv.balance ?? 0) > 0 &&
+      inv.status !== 'DRAFT' &&
+      inv.status !== 'CANCELLED' &&
+      inv.status !== 'PAID'
+    );
+  }
+
+  /** QA D421: what is already declared on this invoice and awaiting confirmation. */
+  pendingOf(inv: PortalInvoice): number {
+    return Math.max(inv.pending ?? 0, 0);
+  }
+
+  /** QA D421: what the patient may still declare: the balance less what is pending. */
+  declarable(inv: PortalInvoice): number {
+    return Math.max((inv.balance ?? 0) - this.pendingOf(inv), 0);
+  }
+
   openPayDialog(inv: PortalInvoice) {
     this.payingInvoice.set(inv);
-    this.payAmount = inv.balance;
+    // QA D421: prefilled with what is left to declare, not the full balance
+    // (which the server refused whenever a declaration was pending).
+    this.payAmount = this.declarable(inv);
     this.payMethod = 'CARD';
     this.payReference = '';
     this.payError.set('');
@@ -75,6 +99,22 @@ export class MyBillingComponent implements OnInit {
 
     if (this.payAmount > inv.balance) {
       this.payError.set(this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS'));
+      return;
+    }
+    // QA D421: refused in the figures the dialog shows.
+    if (this.payAmount > this.declarable(inv)) {
+      this.payError.set(
+        this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS_PENDING', {
+          max: this.declarable(inv).toFixed(0),
+          pending: this.pendingOf(inv).toFixed(0),
+        }),
+      );
+      return;
+    }
+
+    // QA D433: only cash is declared without a reference staff can check.
+    if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
+      this.payError.set(this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED'));
       return;
     }
 

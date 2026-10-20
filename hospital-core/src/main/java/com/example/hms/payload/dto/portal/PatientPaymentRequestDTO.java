@@ -41,4 +41,17 @@ public class PatientPaymentRequestDTO {
     @Size(max = 1000)
     @Schema(description = "Optional notes about the payment", example = "Partial payment for consultation")
     private String notes;
+
+    /**
+     * QA D433: a card, transfer or mobile-money payment is declared with the
+     * reference staff need to confirm it; only cash is paid at the desk.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{patientPayment.reference.required}")
+    @io.swagger.v3.oas.annotations.Hidden
+    public boolean isReferenceGivenForNonCashPayment() {
+        if (paymentMethod == null || "CASH".equalsIgnoreCase(paymentMethod.trim())) {
+            return true;
+        }
+        return transactionReference != null && !transactionReference.isBlank();
+    }
 }

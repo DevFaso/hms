@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks.bpa;
 
+import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
 import com.example.hms.cdshooks.dto.CdsHookDtos.CdsLink;
 import com.example.hms.cdshooks.dto.CdsHookDtos.Source;
@@ -47,9 +48,18 @@ public class NewsScoreProtocolRule implements BpaRule {
     private static final String PATIENT_REPORTED_SOURCE = "PATIENT_REPORTED";
 
     private final BpaProtocolRepository protocolRepository;
+    private final CdsCardText text;
 
+    /** English-only, for rules built outside Spring. */
     public NewsScoreProtocolRule(BpaProtocolRepository protocolRepository) {
+        this(protocolRepository, CdsCardText.ENGLISH);
+    }
+
+    /** QA D217: the card is written in the caller's language, like the D61 rules. */
+    @org.springframework.beans.factory.annotation.Autowired
+    public NewsScoreProtocolRule(BpaProtocolRepository protocolRepository, CdsCardText text) {
         this.protocolRepository = protocolRepository;
+        this.text = text;
     }
 
     @Override
@@ -82,32 +92,35 @@ public class NewsScoreProtocolRule implements BpaRule {
             .findFirst();
     }
 
-    private static CdsCard buildCard(BpaProtocol protocol, NewsScoreResult score,
+    private CdsCard buildCard(BpaProtocol protocol, NewsScoreResult score,
                                      PatientVitalSign vitals) {
-        StringBuilder detail = new StringBuilder(protocol.getSummary())
-            .append("\n\nNEWS2: ").append(score.total())
-            .append(" (").append(score.riskBand().name().replace('_', '-')).append(" risk)")
-            .append(" — vitals recorded ").append(vitals.getRecordedAt());
+        StringBuilder detail = new StringBuilder(BpaCardText.summary(text, protocol))
+            .append("\n\n").append(text.get("cds.bpa.news2.score", "NEWS2: {0} ({1} risk) — vitals recorded {2}",
+                String.valueOf(score.total()),
+                text.get("cds.bpa.news2.band." + score.riskBand().name(), score.riskBand().name().replace('_', '-')),
+                BpaCardText.when(vitals.getRecordedAt())));
         if (!score.complete()) {
-            detail.append("\n⚠ Score is INCOMPLETE — not recorded: ")
-                .append(String.join(", ", score.missingParameters()))
-                .append(". The true score can only be equal or higher.");
+            detail.append("\n").append(text.get("cds.bpa.news2.incomplete",
+                "⚠ Score is INCOMPLETE — not recorded: {0}. The true score can only be equal or higher.",
+                String.join(", ", score.missingParameters().stream()
+                    .map(m -> text.get("cds.bpa.news2.param." + m, m)).toList())));
         }
         if (score.anyParameterThree()) {
-            detail.append("\nAt least one parameter scores 3 — urgent review per policy.");
+            detail.append("\n").append(text.get("cds.bpa.news2.parameterThree",
+                "At least one parameter scores 3 — urgent review per policy."));
         }
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(
-                "RCP — NEWS2 and escalation matrix",
+                text.get("cds.bpa.news2.link", "RCP — NEWS2 and escalation matrix"),
                 protocol.getProtocolUrl(),
                 "absolute",
                 null));
         return new CdsCard(
-            protocol.getName(),
+            BpaCardText.name(text, protocol),
             detail.toString(),
             CdsCard.Indicator.WARNING,
-            new Source("HMS Best-Practice Advisory", null, null),
+            new Source(text.get("cds.bpa.source", "HMS Best-Practice Advisory"), null, null),
             links,
             null,
             null,

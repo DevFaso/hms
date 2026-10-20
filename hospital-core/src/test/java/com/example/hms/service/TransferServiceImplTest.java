@@ -215,7 +215,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.reasonRequired"));
         verify(bedAssignmentService, never()).reserveBed(any(), any());
     }
 
@@ -227,7 +227,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already has a transfer");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyPending"));
         verify(bedAssignmentService, never()).reserveBed(any(), any());
     }
 
@@ -240,7 +240,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already on its way");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.destinationTaken"));
     }
 
     @Test
@@ -251,7 +251,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already in that bed");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.alreadyInBed"));
     }
 
     @Test
@@ -261,7 +261,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not holding a bed");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.noBedHeld"));
     }
 
     // ── The isolation interlock ─────────────────────────────────────────
@@ -275,12 +275,11 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("airborne precautions")
-            // The refusal must NAME the bed. Asserting only on the prose let a
-            // precedence bug through: .formatted binds tighter than +, so it
-            // applied to the second literal and the clinician was refused with
-            // a raw "%s" where the bed should have been.
-            .hasMessageContaining(BedAssignmentService.bedLabel(destinationBed))
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("transfer.r7.isolationRequired"))
+            // The refusal must NAME the bed: it travels as the message argument
+            // (QA D424), so the bundle in the reader's language places it.
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getArgs())
+                .containsExactly(BedAssignmentService.bedLabel(destinationBed)))
             .hasMessageNotContaining("%s");
         // A refused order must not strand the bed it was going to use.
         verify(bedAssignmentService, never()).reserveBed(any(), any());
@@ -348,7 +347,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("needs a reason");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.overrideReasonRequired"));
     }
 
     // ── Completion ──────────────────────────────────────────────────────
@@ -378,7 +377,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.completeTransfer(orderId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer waiting");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.notPending"));
     }
 
     // ── Cancellation ────────────────────────────────────────────────────
@@ -407,7 +406,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelTransfer(orderId, blank))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reason is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.heldBedReasonRequired"));
         verify(bedAssignmentService, never()).releaseReservation(any());
     }
 
@@ -422,7 +421,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelTransfer(orderId, request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer waiting");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.notPending"));
     }
 
     // ── Reads and tenancy ───────────────────────────────────────────────
@@ -482,7 +481,7 @@ class TransferServiceImplTest {
 
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital is required");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("transfer.r7.hospitalRequired"));
     }
 
     @Test

@@ -41,6 +41,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class HospitalLifecycleServiceImplTest {
 
     @Mock private HospitalRepository hospitalRepository;
@@ -55,6 +56,8 @@ class HospitalLifecycleServiceImplTest {
      */
     private static final Instant NOW = Instant.parse("2099-03-01T03:00:00Z");
     @Spy private Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     @InjectMocks private HospitalLifecycleServiceImpl service;
 
@@ -131,7 +134,7 @@ class HospitalLifecycleServiceImplTest {
         TenantLifecycleActionRequestDTO req = withReason("ops");
         assertThatThrownBy(() -> service.suspend(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot suspend");
+            .hasMessageContaining("Suspension is not allowed");
     }
 
     @Test
@@ -147,6 +150,23 @@ class HospitalLifecycleServiceImplTest {
         assertThat(result.getLifecycleState()).isEqualTo(HospitalLifecycleState.ACTIVE);
         assertThat(hospital.isActive()).isTrue();
         verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        // D246: no stale suspension block once the hospital is back
+        assertThat(result.getSuspendedAt()).isNull();
+        assertThat(result.getSuspendedBy()).isNull();
+    }
+
+    @Test
+    void namesTheActorInsteadOfAnId_D246() {
+        hospital.setLifecycleState(HospitalLifecycleState.SUSPENDED);
+        hospital.setSuspendedAt(NOW);
+        hospital.setSuspendedBy(actorId);
+        com.example.hms.model.User actor = new com.example.hms.model.User();
+        actor.setFirstName("Awa");
+        actor.setLastName("Traore");
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(actor));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(service.getLifecycle(hospitalId).getSuspendedByName()).isEqualTo("Awa Traore");
     }
 
     @Test
@@ -171,7 +191,7 @@ class HospitalLifecycleServiceImplTest {
         TenantLifecycleActionRequestDTO req = withReason("nope");
         assertThatThrownBy(() -> service.schedulePurge(hospitalId, req, null))
             .isInstanceOf(BusinessRuleException.class)
-            .hasMessageContaining("Cannot schedule purge");
+            .hasMessageContaining("Scheduling the purge is not allowed");
     }
 
     @Test

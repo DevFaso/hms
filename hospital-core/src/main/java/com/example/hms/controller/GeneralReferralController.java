@@ -48,6 +48,8 @@ public class GeneralReferralController {
     private final RoleValidator roleValidator;
 
     @PostMapping
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
     @Operation(summary = "Create referral", description = "Create a new multi-specialty referral")
     public ResponseEntity<GeneralReferralResponseDTO> createReferral(@Valid @RequestBody GeneralReferralRequestDTO request) {
@@ -62,6 +64,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/submit")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
     @Operation(summary = "Submit referral", description = "Submit referral to receiving provider")
     public ResponseEntity<GeneralReferralResponseDTO> submitReferral(@PathVariable UUID referralId) {
@@ -69,6 +73,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/acknowledge")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Acknowledge referral", description = "Receiving provider acknowledges referral")
     public ResponseEntity<GeneralReferralResponseDTO> acknowledgeReferral(
@@ -80,6 +86,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/schedule")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Schedule referral", description = "Receiving provider schedules an appointment")
     public ResponseEntity<GeneralReferralResponseDTO> scheduleReferral(
@@ -90,6 +98,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/start")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Start referral", description = "Mark referral consultation as in progress")
     public ResponseEntity<GeneralReferralResponseDTO> startReferral(@PathVariable UUID referralId) {
@@ -97,6 +107,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/complete")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Complete referral", description = "Mark referral as completed with summary")
     public ResponseEntity<GeneralReferralResponseDTO> completeReferral(
@@ -108,6 +120,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/reject")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Reject referral", description = "Receiving provider declines the referral")
     public ResponseEntity<GeneralReferralResponseDTO> rejectReferral(
@@ -118,6 +132,8 @@ public class GeneralReferralController {
     }
 
     @PostMapping("/{referralId}/cancel")
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "GeneralReferralServiceImpl audits each referral step with its patient and status (QA D309)")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
     @Operation(summary = "Cancel referral", description = "Cancel referral with reason")
     public ResponseEntity<Void> cancelReferral(

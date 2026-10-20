@@ -741,4 +741,32 @@ class UserCredentialLifecycleServiceImplTest {
             .isInstanceOf(IllegalArgumentException.class);
         verify(mfaService, never()).requireStepUp(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
+
+    @Test
+    void everyRefusedRecoveryVerificationCarriesItsMessageKey() {
+        UUID userId = UUID.randomUUID();
+
+        UserRecoveryContact verified = pendingContact(userId);
+        verified.setVerified(true);
+        UserRecoveryContact noCode = pendingContact(userId);
+        UserRecoveryContact exhausted = pendingContact(userId);
+        exhausted.setVerificationCodeHash("hashed");
+        exhausted.setVerificationAttempts(99);
+        UserRecoveryContact wrongCode = pendingContact(userId);
+        wrongCode.setVerificationCodeHash("hashed");
+        wrongCode.setVerificationCodeExpiresAt(NOW.plusMinutes(5));
+        when(passwordEncoder.matches("000000", "hashed")).thenReturn(false);
+
+        List<String> messages = new ArrayList<>();
+        for (UserRecoveryContact contact : List.of(verified, noCode, exhausted, wrongCode)) {
+            when(recoveryContactRepository.findById(contact.getId())).thenReturn(Optional.of(contact));
+            UUID contactId = contact.getId();
+            Throwable thrown = catchThrowable(() -> service.verifyRecoveryContact(userId, contactId, "000000"));
+            assertThat(thrown).isInstanceOfAny(IllegalStateException.class, IllegalArgumentException.class);
+            messages.add(thrown.getMessage());
+        }
+        assertThat(messages).containsExactly("users.recovery.alreadyVerified", "users.verification.noCodeSent",
+            "users.verification.tooManyAttempts", "users.verification.invalidCode");
+        assertThat(wrongCode.isVerified()).isFalse();
+    }
 }

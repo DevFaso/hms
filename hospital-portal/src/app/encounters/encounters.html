@@ -8,10 +8,12 @@
       <!-- Cross-tenant scope chip — only renders for super-admin
            (docs/super-admin-cross-tenant-design.md). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span>
-        {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
-      </button>
+      @if (canCreateEncounter()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
+        </button>
+      }
     </div>
   </div>
 
@@ -143,6 +145,9 @@
                 <div class="cell-primary">
                   {{ enc.patientName || ('COMMON.UNKNOWN' | translate) }}
                 </div>
+                @if (enc.code) {
+                  <div class="cell-secondary">{{ enc.code }}</div>
+                }
               </td>
               <td>{{ enc.staffName || '—' }}</td>
               <td>{{ enc.departmentName || '—' }}</td>
@@ -169,20 +174,24 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="btn-icon"
-                    [title]="'ENCOUNTERS.EDIT' | translate"
-                    (click)="openEdit(enc)"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="btn-icon danger"
-                    [title]="'ENCOUNTERS.DELETE' | translate"
-                    (click)="confirmDelete(enc)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (canEditEncounter()) {
+                    <button
+                      class="btn-icon"
+                      [title]="'ENCOUNTERS.EDIT' | translate"
+                      (click)="openEdit(enc)"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canDeleteEncounter()) {
+                    <button
+                      class="btn-icon danger"
+                      [title]="'ENCOUNTERS.DELETE' | translate"
+                      (click)="confirmDelete(enc)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -218,6 +227,10 @@
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'BILLING.ENCOUNTER_REFERENCE' | translate }}</span
+              ><span class="field-value">{{ enc.code || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span

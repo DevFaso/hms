@@ -42,7 +42,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO createSpecimen(LabSpecimenRequestDTO request, Locale locale) {
         if (request.getLabOrderId() == null) {
-            throw new BusinessException("labOrderId is required when creating a specimen.");
+            throw new BusinessException("lab.specimen.orderRequired");
         }
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
@@ -113,8 +113,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
         if (specimen.getStatus() != LabSpecimenStatus.COLLECTED
                 && specimen.getStatus() != LabSpecimenStatus.IN_TRANSIT) {
-            throw new BusinessException(
-                "Specimen cannot be received from status: " + specimen.getStatus().name());
+            throw new BusinessException("lab.specimen.notReceivable", specimen.getStatus().name());
         }
 
         specimen.setReceivedAt(LocalDateTime.now());
@@ -168,7 +167,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
                 return accession;
             }
         }
-        throw new BusinessException("Unable to generate a unique accession number; please retry.");
+        throw new BusinessException("lab.specimen.accessionRetry");
     }
 
     private static String generateRandomSuffix(int length) {

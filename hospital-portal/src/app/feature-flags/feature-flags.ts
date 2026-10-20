@@ -172,9 +172,11 @@ export class FeatureFlagsComponent implements OnInit {
           this.saving.set(false);
           this.toast.success(this.translate.instant('FLAGS.CREATED', { key }));
         },
-        error: () => {
+        // QA D310: the server says why (an unknown key, for one); a bare
+        // "creation failed" left the operator guessing.
+        error: (err: { error?: { message?: string } }) => {
           this.saving.set(false);
-          this.toast.error(this.translate.instant('FLAGS.CREATE_FAILED'));
+          this.toast.error(err?.error?.message || this.translate.instant('FLAGS.CREATE_FAILED'));
         },
       });
   }

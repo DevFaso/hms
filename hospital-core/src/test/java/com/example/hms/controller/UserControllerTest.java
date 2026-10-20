@@ -177,7 +177,48 @@ class UserControllerTest {
                         AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isBadRequest())
+            // D201: the refusal carries a sentence, never an empty body
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.message").isNotEmpty());
+    }
+
+    @Test
+    void adminRegister_hospitalAdmin_withoutHospitalId_registersIntoTheActingHospital() throws Exception {
+        // D201: the portal's Users > "Inscrire" sent no hospitalId; the
+        // hospital admin's acting hospital is the hospital of the new account.
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .hospitalAdmin(true)
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(Set.of(hospitalA))
+                .build());
+        try {
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setEmail("awa@example.com");
+            req.setFirstName("Awa");
+            req.setLastName("Traore");
+            req.setPhoneNumber("+22670000003");
+            req.setRoleNames(Set.of("ROLE_NURSE"));
+            UserResponseDTO dto = new UserResponseDTO();
+            dto.setId(UUID.randomUUID());
+            when(userService.createUserWithRolesAndHospital(any())).thenReturn(dto);
+
+            mockMvc.perform(post("/users/admin-register")
+                    .with(SecurityMockMvcRequestPostProcessors.user("qa.admin.a")
+                        .authorities(AuthorityUtils.createAuthorityList("ROLE_HOSPITAL_ADMIN")))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isCreated());
+
+            org.mockito.ArgumentCaptor<AdminSignupRequest> sent =
+                org.mockito.ArgumentCaptor.forClass(AdminSignupRequest.class);
+            verify(userService).createUserWithRolesAndHospital(sent.capture());
+            org.assertj.core.api.Assertions.assertThat(sent.getValue().getHospitalId()).isEqualTo(hospitalA);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     // -------------------------------------------------------------------------
