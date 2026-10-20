@@ -3489,6 +3489,7 @@
     "VIEW_ALL": "Voir tout"
   },
   "NURSE": {
+    "AWAITING_TRIAGE": "En attente de triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Saisir l'action...",
     "ACTIVE_ADMISSIONS_HERE": "Les admissions actives apparaîtront ici",

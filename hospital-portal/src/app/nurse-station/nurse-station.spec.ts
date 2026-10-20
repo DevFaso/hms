@@ -64,8 +64,9 @@ describe('NurseStationComponent — two-tier polling', () => {
     nurseServiceSpy.getPatientFlow.and.returnValue(of(null as any));
     nurseServiceSpy.getPendingAdmissions.and.returnValue(of([]));
 
-    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole']);
     authSpy.getHospitalId.and.returnValue('h1');
+    authSpy.hasAnyRole.and.returnValue(false);
     wsEvents$ = new Subject<PatientTrackerEvent>();
     trackerWsSpy = jasmine.createSpyObj('PatientTrackerWsService', [
       'connect',
@@ -275,6 +276,50 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(component.flowBoard()).toBe(board);
     expect(component.workboard().length).toBe(1);
     expect(component.lastRefreshed()).toBeTruthy();
+  });
+
+  /* ── QA D408: triage entry for outpatients on the workboard ─── */
+
+  describe('awaiting triage (D408)', () => {
+    const arrived = {
+      id: 'e1',
+      patientName: 'Out Patient',
+      status: 'ARRIVED',
+      encounterType: 'OUTPATIENT',
+      encounterDate: '2026-10-20T08:00:00',
+    } as never;
+    const stay = { id: 'e2', status: 'ARRIVED', encounterType: 'INPATIENT' } as never;
+
+    beforeEach(() => {
+      encounterSpy.list.and.callFake(((f: { status?: string }) =>
+        of(f?.status === 'ARRIVED' ? [arrived, stay] : [])) as never);
+    });
+
+    it('a nurse sees ARRIVED/TRIAGE outpatients and opens the triage form on one', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED' });
+      expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE' });
+      expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);
+
+      component.activeSection.set('workboard');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const btn = fixture.nativeElement.querySelector(
+        '[data-testid="awaiting-triage-open"]',
+      ) as HTMLButtonElement;
+      expect(btn).withContext('triage action on the nurse-station workboard').toBeTruthy();
+      btn.click();
+      fixture.detectChanges();
+      expect(component.triageEncounter()?.id).toBe('e1');
+      expect(fixture.nativeElement.querySelector('app-triage-form')).toBeTruthy();
+    });
+
+    it('a non-nurse gets no triage list and no encounter query', () => {
+      component.loadFlow$().subscribe();
+      expect(encounterSpy.list).not.toHaveBeenCalled();
+      expect(component.awaitingTriage()).toEqual([]);
+    });
   });
 
   /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
