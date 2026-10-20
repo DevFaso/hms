@@ -894,6 +894,16 @@ class UserServiceImplTest {
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, true, roles(1))).isFalse();
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(0))).isFalse();
         }
+
+        @Test
+        @DisplayName("QA D522: a welcome mail carrying the role codes is reported as the activation mail")
+        void welcomeMailWithCodesIsTheActivation() {
+            List<EmailService.WelcomeRole> twoRoles = List.of(
+                new EmailService.WelcomeRole("ROLE_DOCTOR", "H", "123456", "https://x/a"),
+                new EmailService.WelcomeRole("ROLE_NURSE", "H", "654321", "https://x/b"));
+            assertThat(UserServiceImpl.welcomeMailPurpose(twoRoles)).isEqualTo("ACTIVATION");
+            assertThat(UserServiceImpl.welcomeMailPurpose(List.of())).isEqualTo("WELCOME");
+        }
     }
 
     // =====================================================================

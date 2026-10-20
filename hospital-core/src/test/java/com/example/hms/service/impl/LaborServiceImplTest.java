@@ -77,6 +77,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
+    @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
 
     private LaborServiceImpl service;
 
@@ -96,7 +97,7 @@ class LaborServiceImplTest {
             patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles(), postpartumCarePlanRepository);
+            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -385,6 +386,35 @@ class LaborServiceImplTest {
 
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
         assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.CAESAREAN_SECTION);
+    }
+
+    /** QA D516: recording a birth posts its charge, filed by the recorder. */
+    @Test
+    void recordDeliveryPostsTheDeliveryCharge() {
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        org.mockito.Mockito.verify(deliveryChargeService).chargeDelivery(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient), org.mockito.ArgumentMatchers.eq(recorderUserId));
+    }
+
+    /** QA D516: a charge that cannot be posted never undoes the clinical record. */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheChargeFails() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom"));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    /** QA D516: no second charge when the episode already has a delivery. */
+    @Test
+    void recordDeliverySecondAttemptPostsNoCharge() {
+        when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest()));
+        org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
     }
 
     @Test

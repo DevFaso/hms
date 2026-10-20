@@ -92,6 +92,21 @@ public class LaborServiceImpl implements LaborService {
     static final int APGAR_CRITICAL = 4;
     static final int TERM_WEEKS = 40;
     static final int PRETERM_WEEKS = 37;
+    /**
+     * QA D516: a birth reaches billing as a draft charge. A failure to post it
+     * is logged (ids only) and never undoes the clinical record.
+     */
+    private void chargeDelivery(DeliveryRecord saved, UUID recorderUserId) {
+        if (deliveryChargeService == null) {
+            return;
+        }
+        try {
+            deliveryChargeService.chargeDelivery(saved, recorderUserId);
+        } catch (RuntimeException ex) {
+            log.warn("Delivery charge not posted for delivery {}: {}", saved.getId(), ex.getClass().getSimpleName());
+        }
+    }
+
     static final int VERY_PRETERM_WEEKS = 32;
     /**
      * QA D214: a new labour this soon after a recorded birth cannot be a new
@@ -116,6 +131,7 @@ public class LaborServiceImpl implements LaborService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
     private final com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
+    private final com.example.hms.service.DeliveryChargeService deliveryChargeService;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -343,6 +359,7 @@ public class LaborServiceImpl implements LaborService {
         episodeRepository.save(episode);
 
         DeliveryRecord saved = deliveryRecordRepository.save(record);
+        chargeDelivery(saved, recorderUserId);
         closeEarlierPostpartumPlans(episode, birthAt);
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy);
         return laborMapper.toDeliveryResponse(saved);

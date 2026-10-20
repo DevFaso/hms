@@ -589,8 +589,14 @@ public class AuthController {
                description = "Generates a new activation token and resends the verification email.")
     @PostMapping("/resend-verification")
     public ResponseEntity<Object> resendVerificationEmail(
-            @RequestParam(value = "email", required = false) @Email String email,
-            @RequestParam(value = "phone", required = false) String phone) {
+            @RequestParam(value = "email", required = false) @Email String emailParam,
+            @RequestParam(value = "phone", required = false) String phoneParam,
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+        // QA D542: the portal now sends the contact in the body - a phone
+        // number or address in the query string lands in access logs and the
+        // browser history. The query parameters stay for older clients.
+        String email = firstNonBlank(body == null ? null : body.get("email"), emailParam);
+        String phone = firstNonBlank(body == null ? null : body.get("phone"), phoneParam);
         if (email == null || email.isBlank()) {
             if (phone == null || phone.isBlank()) {
                 throw new com.example.hms.exception.BusinessException("auth.r7.contactRequired");
@@ -627,6 +633,10 @@ public class AuthController {
 
         return ResponseEntity.ok(new MessageResponse(
                 "If the email is registered, a new verification link has been sent."));
+    }
+
+    private static String firstNonBlank(String preferred, String fallback) {
+        return preferred != null && !preferred.isBlank() ? preferred.trim() : fallback;
     }
 
     /**

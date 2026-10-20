@@ -36,7 +36,12 @@ describe('UserListComponent registration', () => {
     users.list.and.returnValue(of(page) as never);
     users.search.and.returnValue(of(page) as never);
     users.adminRegister.and.returnValue(of({ id: 'u1' } as UserDetail));
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'warning']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'warning',
+      'info',
+    ]);
 
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
@@ -130,6 +135,23 @@ describe('UserListComponent registration', () => {
     component.submitCreate();
     expect(users.adminRegister).not.toHaveBeenCalled();
     expect(component.fieldErrors()['phoneNumber']).toBeTruthy();
+  });
+
+  it('QA D522: a multi-role registration says the activation went out by e-mail', () => {
+    users.adminRegister.and.returnValue(
+      of({
+        id: 'u1',
+        activationDelivery: [
+          { channel: 'SMS', purpose: 'ACTIVATION', outcome: 'FAILED' },
+          { channel: 'EMAIL', purpose: 'ACTIVATION', outcome: 'QUEUED' },
+        ],
+      } as unknown as UserDetail),
+    );
+    openCreateWith(['ROLE_DOCTOR', 'ROLE_NURSE']);
+    component.createForm.email = 'awa@hopital.bf';
+    component.submitCreate();
+    expect(toast.warning).toHaveBeenCalledWith('DELIVERY.SMS_FAILED');
+    expect(toast.info).toHaveBeenCalledWith('DELIVERY.ACTIVATION_EMAIL_QUEUED');
   });
 
   it('shows undeliverable generated credentials once, then forgets them', () => {

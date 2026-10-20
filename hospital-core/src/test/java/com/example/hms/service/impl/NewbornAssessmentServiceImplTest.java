@@ -340,6 +340,39 @@ class NewbornAssessmentServiceImplTest {
         verify(assessmentRepository, never()).save(any());
     }
 
+    /** QA D517: on the mother's chart, no recorded delivery means no newborn to assess. */
+    @Test
+    void recordAssessmentOnTheMotherChartWithNoRecordedDeliveryIsRefused() {
+        patient.setDateOfBirth(LocalDate.of(1995, 5, 1));
+        patient.setGender("F");
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, request, recorderId));
+        assertEquals("maternity.newborn.noDelivery", ex.getMessageKey());
+        verify(assessmentRepository, never()).save(any());
+    }
+
+    /** QA D517: on the mother's chart, the assessment links her latest delivery here. */
+    @Test
+    void recordAssessmentOnTheMotherChartLinksHerLatestDelivery() {
+        patient.setDateOfBirth(LocalDate.of(1995, 5, 1));
+        patient.setGender("F");
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        delivery.setPatient(patient);
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(delivery));
+        NewbornAssessmentRequestDTO request = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
+
+        assertEquals(delivery.getId(), response.getDeliveryRecordId());
+    }
+
     @Test
     void abnormalAssessmentAlertsCarryACreationTime() {
         // QA D131: the alert rows were inserted with a NULL created_at, so every

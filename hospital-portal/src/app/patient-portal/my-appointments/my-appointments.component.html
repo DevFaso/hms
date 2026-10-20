@@ -312,11 +312,11 @@
       </section>
     }
 
-    <!-- Past -->
-    @if (past().length > 0) {
+    <!-- Cancelled (future) then past: QA D542, a cancelled future visit is not "past" -->
+    @for (group of closedGroups(); track group.titleKey) {
       <section class="portal-section">
-        <h2 class="portal-section-title">{{ 'PORTAL.APPOINTMENTS.PAST' | translate }}</h2>
-        @for (appt of past(); track appt.id) {
+        <h2 class="portal-section-title">{{ group.titleKey | translate }}</h2>
+        @for (appt of group.items; track appt.id) {
           <div
             class="portal-appt-card past"
             (click)="toggleExpand(appt.id)"

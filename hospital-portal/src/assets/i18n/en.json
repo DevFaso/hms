@@ -2163,6 +2163,7 @@
     "AGING_90_PLUS": "90+ days"
   },
   "DELIVERY": {
+    "ACTIVATION_EMAIL_QUEUED": "The activation e-mail (with each role's code) is queued for sending.",
     "CREDENTIALS_NOT_DELIVERED": "The one-time login credentials could not be sent to the patient.",
     "EMAIL_FAILED": "The account was created, but the activation email could not be delivered. Use “Resend code” once the problem is fixed.",
     "EMAIL_NOT_CONFIGURED": "Email sending is not configured on this server — the activation code was not emailed.",
@@ -4517,6 +4518,7 @@
       "EMPTY_DESC": "You don't have any appointments scheduled.",
       "UPCOMING": "Upcoming",
       "PAST": "Past Appointments",
+      "CANCELLED_SECTION": "Cancelled appointments",
       "DATE": "Date",
       "TIME": "Time",
       "PROVIDER": "Provider",

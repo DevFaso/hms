@@ -129,6 +129,8 @@ export interface LabTestDefinition {
     | 'RETIRED';
   approvedById: string | null;
   approvedAt: string | null;
+  /** QA D534: the submitter, never offered the QA pass or the approval. */
+  submittedById?: string | null;
   reviewedById: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;

@@ -2163,6 +2163,7 @@
     "AGING_90_PLUS": "Plus de 90 jours"
   },
   "DELIVERY": {
+    "ACTIVATION_EMAIL_QUEUED": "L'e-mail d'activation (avec le code de chaque rôle) est en file d'envoi.",
     "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
     "EMAIL_FAILED": "Le compte a été créé, mais l'e-mail d'activation n'a pas pu être envoyé. Utilisez « Renvoyer le code » une fois le problème résolu.",
     "EMAIL_NOT_CONFIGURED": "L'envoi d'e-mails n'est pas configuré sur ce serveur — le code d'activation n'a pas été envoyé par e-mail.",
@@ -4517,6 +4518,7 @@
       "EMPTY_DESC": "Vous n'avez aucun rendez-vous prévu.",
       "UPCOMING": "À venir",
       "PAST": "Rendez-vous passés",
+      "CANCELLED_SECTION": "Rendez-vous annulés",
       "DATE": "Date",
       "TIME": "Heure",
       "PROVIDER": "Praticien",

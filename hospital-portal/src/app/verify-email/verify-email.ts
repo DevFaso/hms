@@ -78,7 +78,7 @@ export class VerifyEmailComponent implements OnInit {
       this.resendSent.set(this.translate.instant('VERIFY.RESENT'));
     };
     this.http
-      .post<{ message?: string }>('/auth/resend-verification', null, { params: { email } })
+      .post<{ message?: string }>('/auth/resend-verification', { email })
       .subscribe({ next: done, error: done });
   }
 

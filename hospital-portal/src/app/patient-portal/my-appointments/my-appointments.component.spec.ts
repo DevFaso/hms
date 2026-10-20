@@ -334,14 +334,18 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     component = fixture.componentInstance;
   });
 
-  it('buckets a cancelled future appointment into Past so it stays visible', () => {
+  it('QA D542: a cancelled future appointment is listed as cancelled, not past', () => {
     portal.getMyAppointments.and.returnValue(
       of([appt({ id: 'up-1', status: 'SCHEDULED' }), appt({ id: 'gone-1', status: 'CANCELLED' })]),
     );
     fixture.detectChanges();
 
     expect(component.upcoming().map((a) => a.id)).toEqual(['up-1']);
-    expect(component.past().map((a) => a.id)).toEqual(['gone-1']);
+    expect(component.cancelled().map((a) => a.id)).toEqual(['gone-1']);
+    expect(component.past()).toEqual([]);
+    expect(component.closedGroups().map((g) => g.titleKey)).toEqual([
+      'PORTAL.APPOINTMENTS.CANCELLED_SECTION',
+    ]);
   });
 
   it('offers cancel/reschedule only on actionable statuses', () => {

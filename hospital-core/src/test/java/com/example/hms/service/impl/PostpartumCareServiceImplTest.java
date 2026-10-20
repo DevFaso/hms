@@ -155,6 +155,27 @@ class PostpartumCareServiceImplTest {
             return obs;
         });
         lenient().when(carePlanRepository.save(any(PostpartumCarePlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // QA D517: postpartum care needs a recorded birth; the tests below have one.
+        lenient().when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+    }
+
+    /** QA D517: a postpartum observation for a woman with no recorded delivery is refused. */
+    @Test
+    void recordObservationWithNoRecordedDeliveryIsRefused() {
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(false);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .build();
+
+        com.example.hms.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> service.recordObservation(patientId, request, recorderId));
+        assertEquals("maternity.postpartum.noDelivery", ex.getMessageKey());
+        verify(observationRepository, org.mockito.Mockito.never()).save(any());
+        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
     }
 
     @Test
