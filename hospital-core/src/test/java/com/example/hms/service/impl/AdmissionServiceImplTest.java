@@ -112,6 +112,28 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void admitPatient_refusesASecondOpenAdmissionWith409() {
+        // QA D304: POST /api/admissions twice for the same patient answered 201 twice.
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.existsOpenAdmissionForPatient(patientId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.admitPatient(request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("already has an open admission");
+        // The check runs under the patient row lock, so two concurrent admits serialise.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(patientRepository, admissionRepository);
+        order.verify(patientRepository).lockByIdUnscoped(patientId);
+        order.verify(admissionRepository).existsOpenAdmissionForPatient(patientId);
+        verify(admissionRepository, never()).save(any());
+    }
+
+    @Test
     void admitPatient_success() {
         AdmissionRequestDTO request = new AdmissionRequestDTO();
         request.setPatientId(patientId);

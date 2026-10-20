@@ -2942,4 +2942,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V209 (QA D304): partial unique index, one open admission per patient,
+         created only when no duplicates exist. DO block. -->
+    <changeSet id="V209-one-open-admission-per-patient" author="hms-team" runOnChange="false">
+        <sqlFile path="V209__one_open_admission_per_patient.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

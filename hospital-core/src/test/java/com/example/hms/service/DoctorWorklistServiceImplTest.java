@@ -333,7 +333,7 @@ class DoctorWorklistServiceImplTest {
     }
 
     @Test
-    void getWorklist_deduplicatesPatients() {
+    void getWorklist_anOlderOpenEncounterDoesNotHideTodaysVisit_D306() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
         Staff staff = stubStaff(staffId);
@@ -342,8 +342,10 @@ class DoctorWorklistServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId, "Bob", "Smith");
 
-        Encounter enc1 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        Encounter enc2 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.ARRIVED, LocalDateTime.now());
+        // QA D306: an encounter left IN_PROGRESS days ago hid the visit of today.
+        Encounter enc1 = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusDays(3));
+        UUID todayId = UUID.randomUUID();
+        Encounter enc2 = stubEncounter(todayId, patient, EncounterStatus.ARRIVED, LocalDateTime.now());
 
         when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc1));
@@ -358,7 +360,34 @@ class DoctorWorklistServiceImplTest {
 
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
 
-        assertEquals(1, result.size(), "Same patient should appear only once");
+        assertEquals(2, result.size(), "One row per open encounter");
+        assertTrue(result.stream().anyMatch(i -> todayId.equals(i.getEncounterId())), "Today's visit is listed");
+    }
+
+    @Test
+    void getWorklist_todaysAppointmentIsNotHiddenByAnOlderEncounter_D306() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+        Patient patient = stubPatient(UUID.randomUUID(), "Bob", "Smith");
+        Encounter old = stubEncounter(UUID.randomUUID(), patient, EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusDays(3));
+        Appointment appt = mock(Appointment.class);
+        when(appt.getId()).thenReturn(UUID.randomUUID());
+        when(appt.getPatient()).thenReturn(patient);
+        when(appt.getReason()).thenReturn("Visit today");
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS)).thenReturn(List.of(old));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(2, result.size());
+        assertTrue(result.stream().anyMatch(i -> "Visit today".equals(i.getChiefComplaint())));
     }
 
     @Test

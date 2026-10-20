@@ -428,6 +428,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         if (resolved.isEmpty()) return Optional.empty();
         AutoCreateContext ac = resolved.get();
 
+        // QA D304: one open stay per patient, on this path too. An A01 for a
+        // patient already in a bed does not open a second, bedless stay.
+        if (admissionRepository.existsOpenAdmissionForPatient(ctx.patient.getId())) {
+            log.warn("ADT auto-create skipped — patient {} already has an open admission at hospital {}",
+                ctx.patient.getId(), ctx.hospitalId);
+            return Optional.empty();
+        }
+
         Admission admission = buildAdmission(ctx, ac.config(), ac.provider(), ac.department());
         admission = admissionRepository.save(admission);
         emitAutoCreateAudit(admission, ctx);

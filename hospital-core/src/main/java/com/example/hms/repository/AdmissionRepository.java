@@ -133,6 +133,14 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     Optional<Admission> findCurrentAdmissionByPatient(@Param("patientId") UUID patientId);
 
     /**
+     * QA D304: a patient holds at most one open stay. Every status that is not
+     * closed counts (PENDING, ACTIVE, ON_LEAVE, AWAITING_DISCHARGE).
+     */
+    @Query("SELECT COUNT(a) > 0 FROM Admission a WHERE a.patient.id = :patientId "
+        + "AND a.status IN ('PENDING', 'ACTIVE', 'ON_LEAVE', 'AWAITING_DISCHARGE')")
+    boolean existsOpenAdmissionForPatient(@Param("patientId") UUID patientId);
+
+    /**
      * Count active admissions by hospital
      */
     @Query("SELECT COUNT(a) FROM Admission a WHERE a.hospital.id = :hospitalId AND a.status IN ('ACTIVE', 'ON_LEAVE')")
