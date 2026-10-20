@@ -535,7 +535,7 @@ class PatientVitalSignServiceImplTest {
         assertThat(snapshot.get().getHeartRate()).isEqualTo(75);
     }
 
-    private void dischargedWithAStaleVisit(UUID patientId, UUID hospitalId) {
+    private void dischargedWithAStaleVisit() {
         LocalDateTime discharged = LocalDateTime.now().minusDays(1);
         com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
         stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
@@ -558,7 +558,7 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
-        dischargedWithAStaleVisit(patientId, hospitalId);
+        dischargedWithAStaleVisit();
         PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
             .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).heartRateBpm(80).build();
 
@@ -581,7 +581,7 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
-        dischargedWithAStaleVisit(patientId, hospitalId);
+        dischargedWithAStaleVisit();
         when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> {
             PatientVitalSign e = inv.getArgument(0);
             e.setId(UUID.randomUUID());

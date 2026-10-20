@@ -47,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -758,9 +759,9 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @DisplayName("QA D515: an A03 discharge frees the bed and cancels the stay's pending transfer")
     void d515_anA03DischargeCancelsThePendingTransfer() {
         com.example.hms.repository.TransferOrderRepository transfers =
-            org.mockito.Mockito.mock(com.example.hms.repository.TransferOrderRepository.class);
+            mock(com.example.hms.repository.TransferOrderRepository.class);
         com.example.hms.service.BedAssignmentService realBeds = new com.example.hms.service.BedAssignmentService(
-            org.mockito.Mockito.mock(com.example.hms.repository.BedRepository.class), admissionRepository, transfers);
+            mock(com.example.hms.repository.BedRepository.class), admissionRepository, transfers);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "bedAssignmentService", realBeds);
         Admission row = new Admission();
         row.setId(UUID.randomUUID());

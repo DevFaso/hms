@@ -2215,8 +2215,10 @@ public class EncounterServiceImpl implements EncounterService {
         com.example.hms.model.Hospital hospital = encounter.getHospital();
         com.example.hms.model.Staff staff = encounter.getStaff();
         com.example.hms.model.UserRoleHospitalAssignment assignment = encounter.getAssignment();
-        com.example.hms.model.Department department = encounter.getDepartment() != null
-                ? encounter.getDepartment() : (staff != null ? staff.getDepartment() : null);
+        com.example.hms.model.Department department = encounter.getDepartment();
+        if (department == null && staff != null) {
+            department = staff.getDepartment();
+        }
         if (encounter.getPatient() == null || hospital == null || hospital.getId() == null
                 || staff == null || staff.getHospital() == null
                 || !hospital.getId().equals(staff.getHospital().getId())
