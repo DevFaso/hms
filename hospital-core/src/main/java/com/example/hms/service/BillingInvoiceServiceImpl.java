@@ -395,6 +395,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     /** QA D421: the patient's invoice with what they already declared and staff have not confirmed. */
     private BillingInvoiceResponseDTO toPortalResponse(BillingInvoice invoice) {
         BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        if (dto == null) {
+            return null;
+        }
         BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
             PaymentStatus.PENDING);
         dto.setPendingDeclaredAmount(pending != null ? pending : BigDecimal.ZERO);
