@@ -20,6 +20,8 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,6 +83,9 @@ class StockTransactionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // MessageUtil is static: without its own source this class only passed when an
+        // earlier test had installed one, and asserted on raw keys when run alone.
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");

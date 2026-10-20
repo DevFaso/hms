@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.models.PharmacyClaimDto
 import com.bitnesttechs.hms.patient.core.models.PharmacyPaymentDto
+import com.bitnesttechs.hms.patient.core.models.paidTotal
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,7 +33,7 @@ class PharmacyInvoicesViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
-    val totalPaid: Double get() = _payments.value.sumOf { it.amount }
+    val totalPaid: Double get() = _payments.value.paidTotal()
     val totalClaimed: Double get() = _claims.value.sumOf { it.amount }
 
     init { load() }
