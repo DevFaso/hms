@@ -22,6 +22,11 @@ function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
   return (u.roleName ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
 }
 
+/** QA D541 — the legacy HOSPITAL_ADMINISTRATOR rows still match the one "hospital admin" filter. */
+function canonicalJobTitle(title: string | null | undefined): string {
+  return title === 'HOSPITAL_ADMINISTRATOR' ? 'HOSPITAL_ADMIN' : (title ?? '');
+}
+
 @Component({
   selector: 'app-staff-list',
   standalone: true,
@@ -91,8 +96,9 @@ export class StaffListComponent implements OnInit {
     'LABORATORY_SCIENTIST',
     'QUALITY_MANAGER',
     'TECHNICIAN',
+    // QA D541: HOSPITAL_ADMINISTRATOR is the legacy spelling of HOSPITAL_ADMIN;
+    // both read "Administrateur hôpital", so offering both listed it twice.
     'HOSPITAL_ADMIN',
-    'HOSPITAL_ADMINISTRATOR',
     'ADMINISTRATIVE_STAFF',
     'ADMINISTRATIVE_ASSISTANT',
     'RECEPTIONIST',
@@ -250,7 +256,8 @@ export class StaffListComponent implements OnInit {
       result = result.filter((s) => s.employmentType === this.employmentTypeFilter);
     }
     if (this.jobTitleFilter) {
-      result = result.filter((s) => s.jobTitle === this.jobTitleFilter);
+      const wanted = canonicalJobTitle(this.jobTitleFilter);
+      result = result.filter((s) => canonicalJobTitle(s.jobTitle) === wanted);
     }
     if (term) {
       result = result.filter(

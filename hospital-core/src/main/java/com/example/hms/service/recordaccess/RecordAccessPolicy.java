@@ -48,4 +48,13 @@ public interface RecordAccessPolicy {
      * construction.
      */
     Set<UUID> readableHospitalIds(UUID actorUserId, UUID patientId, UUID actingHospitalId);
+
+    /**
+     * QA D504 — true when the patient's sharing opt-out is active and nothing
+     * here overrides it ({@link #decide} refuses), so every clinical list read
+     * at this hospital is narrowed to the acting hospital's rows. The response
+     * must say so instead of returning a list that looks complete. Says
+     * nothing about whether such rows exist.
+     */
+    boolean foreignRowsWithheld(UUID actorUserId, UUID patientId, UUID actingHospitalId);
 }

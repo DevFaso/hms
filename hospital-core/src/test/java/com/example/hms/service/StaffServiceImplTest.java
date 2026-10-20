@@ -160,7 +160,7 @@ class StaffServiceImplTest {
 
     @Test
     void getAnyLicenseByUserId_returnsLicense() {
-        when(staffRepository.findAnyLicenseByUserId(user.getId())).thenReturn(Optional.of("LIC-001"));
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff));
 
         Optional<String> result = staffService.getAnyLicenseByUserId(user.getId());
 
@@ -227,12 +227,47 @@ class StaffServiceImplTest {
 
     @Test
     void getFirstStaffByUserIdOrderByCreatedAtAsc_returnsFirst() {
-        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff));
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         Optional<StaffResponseDTO> result = staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale);
 
         assertThat(result).isPresent();
+    }
+
+    /** QA D506: hospital admin A asks GET /staff/users/{doctorB}/first and must not get B's row. */
+    @Test
+    void d506_firstStaffAndLicenceSkipAnotherHospitalsRow() {
+        Hospital hospitalA = new Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(hospitalA.getId())).build());
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff)); // staff is at hospitalId (B)
+
+        assertThat(staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale)).isEmpty();
+        assertThat(staffService.getAnyLicenseByUserId(user.getId())).isEmpty();
+    }
+
+    /** D506 path re-verified: the admin's own hospital's row is still returned, the oldest visible first. */
+    @Test
+    void d506_firstStaffReturnsTheOldestVisibleRow() {
+        Staff atA = new Staff();
+        atA.setId(UUID.randomUUID());
+        atA.setUser(user);
+        Hospital hospitalA = new Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        atA.setHospital(hospitalA);
+        atA.setCreatedAt(java.time.LocalDateTime.now().minusDays(1));
+        staff.setCreatedAt(java.time.LocalDateTime.now().minusDays(30)); // older, but at B
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .permittedHospitalIds(java.util.Set.of(hospitalA.getId())).build());
+        when(staffRepository.findByUserId(user.getId())).thenReturn(List.of(staff, atA));
+        StaffResponseDTO dtoA = new StaffResponseDTO();
+        dtoA.setId(atA.getId().toString());
+        when(staffMapper.toStaffDTO(atA)).thenReturn(dtoA);
+
+        assertThat(staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(user.getId(), locale))
+            .map(StaffResponseDTO::getId).contains(atA.getId().toString());
     }
 
     @Test

@@ -114,6 +114,16 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         return readable;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignRowsWithheld(UUID actorUserId, UUID patientId, UUID actingHospitalId) {
+        if (patientId == null || actingHospitalId == null
+            || !optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
+            return false;
+        }
+        return !cachedDecision(actorUserId, patientId, actingHospitalId).permitted();
+    }
+
     /**
      * The acting facility passed in is a pharmacy or a laboratory. The
      * facility decides, never the ambient confinement: a provider user who is

@@ -384,7 +384,7 @@ public class SecurityConfig {
         // TRACE is intentionally excluded (should be denied/disabled)
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization", "Content-Type"));
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type", "X-Records-Withheld"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
 

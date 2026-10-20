@@ -238,7 +238,38 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public ImagingOrderResponseDTO getOrder(UUID orderId) {
-        return imagingOrderMapper.toResponseDTO(getOrderInScope(orderId));
+        return imagingOrderMapper.toResponseDTO(getOrderReadableHere(orderId));
+    }
+
+    /**
+     * QA D508 — a READ by id answers exactly as the by-patient list does: the
+     * order is readable when its hospital is the acting one, or one the
+     * record-access policy opens for this patient (E9 #59b, the same
+     * {@code readableHospitalIds} the list filters on, so the opt-out,
+     * restriction and break-the-glass rules are the list's). The list showed
+     * hospital A's order to hospital B and the same id then answered 404.
+     * Anything outside that set is still answered exactly as a missing order,
+     * and every write keeps {@link #getOrderInScope}: reading across is not
+     * acting across.
+     */
+    private ImagingOrder getOrderReadableHere(UUID orderId) {
+        ImagingOrder order = getOrderEntity(orderId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
+            return order;
+        }
+        UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        if (patientId == null
+                || !recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId)
+                    .contains(orderHospitalId)) {
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
+        }
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(orderHospitalId), activeHospitalId),
+            "Cross-hospital imaging order read on the treatment relationship");
+        return order;
     }
 
     @Override

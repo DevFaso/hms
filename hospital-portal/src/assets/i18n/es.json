@@ -7827,6 +7827,9 @@
     "WOUND_CARE": "Cuidado de heridas"
   },
   "CHART": {
+    "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
+    "RECORDS_WITHHELD": "Los registros de otros hospitales (problemas, medicamentos, laboratorio, signos vitales, notas, consultas, imágenes) no se muestran: este paciente rechazó compartir su historial. Estas listas pueden estar incompletas.",
+    "LIST_WITHHELD": "Los registros de otros hospitales están ocultos: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
     "ADD_ALLERGY": "Agregar alergia",
     "ADD_PROBLEM": "Agregar diagnóstico",
     "ADD_SECTION": "Agregar sección",

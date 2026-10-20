@@ -346,6 +346,64 @@ class PatientStoryboardServiceImplTest {
     }
 
     @Test
+    void d504WithoutBreakGlassTheStoryboardSaysItsAllergyListIsNarrowed() {
+        PatientAllergy local = allergy("Sulfa", AllergySeverity.MILD, true);
+        when(allergyRepo.hasActiveSharingOptOut(PATIENT_ID)).thenReturn(true);
+        when(allergyRepo.findVisibleAt(PATIENT_ID, HOSPITAL_ID)).thenReturn(List.of(local));
+        when(problemRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+        when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+            eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+        when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+
+        PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+        assertThat(sb.getAllergies())
+            .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+            .containsExactly("Sulfa");
+        assertThat(sb.isAllergiesWithheld()).isTrue();
+        // QA D504 (round 3): problems and encounters are narrowed too.
+        assertThat(sb.isRecordsWithheld()).isTrue();
+    }
+
+    @Test
+    void d504BreakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            Hospital other = Hospital.builder().name("CHU Yalgado").build();
+            other.setId(UUID.randomUUID());
+            PatientAllergy away = allergy("Penicillin", AllergySeverity.SEVERE, true);
+            away.setHospital(other);
+            when(allergyRepo.hasActiveSharingOptOut(PATIENT_ID)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, PATIENT_ID, HOSPITAL_ID)).thenReturn(
+                com.example.hms.service.recordaccess.RecordAccessDecision.permitted(PATIENT_ID, HOSPITAL_ID, doctorB,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                        com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), HOSPITAL_ID,
+                        PATIENT_ID, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            when(allergyRepo.findByPatient_Id(PATIENT_ID)).thenReturn(List.of(away));
+            when(allergyRepo.findVisibleAt(eq(PATIENT_ID), any())).thenReturn(List.of());
+            when(problemRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+            when(encounterRepo.findByPatient_IdAndHospital_IdAndStatusNotIn(
+                eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
+            when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
+
+            PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
+
+            assertThat(sb.getAllergies())
+                .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
+                .containsExactly("Penicillin");
+            assertThat(sb.isAllergiesWithheld()).isFalse();
+            assertThat(sb.isRecordsWithheld()).isFalse();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     void listsProblemsAndDirectivesFromOtherHospitalsAndWithholdsForeignSensitiveOnes() {
         // E9 #59 (D1 + D3): the chart follows the patient. A problem recorded
         // elsewhere shows with its hospital; one carrying a sensitivity category

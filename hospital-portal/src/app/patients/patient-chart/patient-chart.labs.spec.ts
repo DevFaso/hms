@@ -91,6 +91,8 @@ describe('PatientChartComponent — labs section', () => {
     orders?: LabOrderResponse[];
     resultsFail?: boolean;
     ordersFail?: boolean;
+    /** QA D504 — every chart list answers with X-Records-Withheld. */
+    withheld?: boolean;
   }
 
   function setup(options: SetupOptions = {}): void {
@@ -103,13 +105,16 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    const withheld = options.withheld ?? false;
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld }),
+    );
     patientService.listLabResults.and.returnValue(
       options.resultsFail
         ? throwError(() => new Error('403'))
-        : of(options.results ?? [released()]),
+        : of({ items: options.results ?? [released()], withheld }),
     );
 
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
@@ -164,6 +169,46 @@ describe('PatientChartComponent — labs section', () => {
       .map((el) => el.textContent?.trim() ?? '')
       .filter((label) => label.length > 0);
   }
+
+  /* ── QA D504: an opt-out never makes a section read as the whole record ── */
+
+  function note(testId: string): Element | null {
+    return fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+  }
+
+  it('QA D504: problems, chart updates and labs each say the list is incomplete when rows are withheld', () => {
+    setup({ withheld: true });
+
+    component.setSection('problems');
+    component.loadProblems();
+    fixture.detectChanges();
+    expect(note('problems-withheld')).not.toBeNull();
+
+    component.setSection('updates');
+    component.loadUpdates();
+    fixture.detectChanges();
+    expect(note('updates-withheld')).not.toBeNull();
+
+    openLabs();
+    expect(note('labs-withheld')).not.toBeNull();
+  });
+
+  it('QA D504: a complete list shows no withheld note', () => {
+    setup();
+
+    component.setSection('problems');
+    component.loadProblems();
+    fixture.detectChanges();
+    expect(note('problems-withheld')).toBeNull();
+
+    component.setSection('updates');
+    component.loadUpdates();
+    fixture.detectChanges();
+    expect(note('updates-withheld')).toBeNull();
+
+    openLabs();
+    expect(note('labs-withheld')).toBeNull();
+  });
 
   /* ── The gate ── */
 
@@ -371,10 +416,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 
@@ -445,10 +492,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 
@@ -505,10 +554,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 
@@ -617,7 +668,7 @@ describe('PatientChartComponent — labs section', () => {
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.loadLabResults();
     fixture.detectChanges();
 
@@ -640,9 +691,11 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
     patientService.listLabResults.and.returnValue(throwError(() => new Error('500')));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
@@ -683,7 +736,7 @@ describe('PatientChartComponent — labs section', () => {
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
 
     scope.set({ hospitalId: 'h-2' });
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     // Retry lands before change detection lets the scope watcher run: this
     // pins Retry's own guard. (Once the watcher runs it re-reads the section
     // for the new scope as well — that path has its own test below.)
@@ -704,7 +757,7 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.setSection('allergies');
     openLabs();
 
@@ -721,7 +774,7 @@ describe('PatientChartComponent — labs section', () => {
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(component.labOrdersError()).toBeTrue();
 
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     component.setSection('allergies');
     openLabs();
 
@@ -769,10 +822,12 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
-    patientService.listLabResults.and.returnValue(of([released()]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
+    patientService.listLabResults.and.returnValue(of({ items: [released()], withheld: false }));
     labService = jasmine.createSpyObj<LabService>('LabService', ['listOrders']);
     labService.listOrders.and.returnValue(of([order()]));
 

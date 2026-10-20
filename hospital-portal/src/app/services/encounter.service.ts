@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
+import { WithheldResult, recordsWithheld } from './patient.service';
 
 export type EncounterStatus =
   | 'SCHEDULED'
@@ -328,6 +329,22 @@ export class EncounterService {
     return this.http
       .get<{ content: EncounterResponse[] }>(this.baseUrl, { params })
       .pipe(map((res) => res?.content ?? []));
+  }
+
+  /**
+   * QA D504 — one patient's visit history, with whether the patient's sharing
+   * opt-out held other hospitals' encounters back from it.
+   */
+  listForPatient(patientId: string): Observable<WithheldResult<EncounterResponse[]>> {
+    const params = new HttpParams().set('patientId', patientId);
+    return this.http
+      .get<{ content: EncounterResponse[] }>(this.baseUrl, { params, observe: 'response' })
+      .pipe(
+        map((res) => ({
+          items: res.body?.content ?? [],
+          withheld: recordsWithheld(res.headers),
+        })),
+      );
   }
 
   getById(id: string): Observable<EncounterResponse> {

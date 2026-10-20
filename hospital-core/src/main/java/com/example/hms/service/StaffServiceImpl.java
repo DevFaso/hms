@@ -67,7 +67,12 @@ public class StaffServiceImpl implements StaffService {
     // Find any license by user ID
     @Transactional(readOnly = true)
     public Optional<String> getAnyLicenseByUserId(UUID userId) {
-        return staffRepository.findAnyLicenseByUserId(userId);
+        // QA D506 (sibling): only a licence held on a staff row the caller may see.
+        return staffRepository.findByUserId(userId).stream()
+            .filter(this::isStaffVisible)
+            .map(Staff::getLicenseNumber)
+            .filter(lic -> lic != null && !lic.isBlank())
+            .findFirst();
     }
 
     // Find staff by ID and active status
@@ -121,7 +126,12 @@ public class StaffServiceImpl implements StaffService {
     // Find first staff by user ID ordered by creation date
     @Transactional(readOnly = true)
     public Optional<StaffResponseDTO> getFirstStaffByUserIdOrderByCreatedAtAsc(UUID userId, Locale locale) {
-        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+        // QA D506: the oldest staff row the caller may see. Hospital admin A asking
+        // for a user employed at B got B's row (email, phone) back.
+        return staffRepository.findByUserId(userId).stream()
+            .filter(this::isStaffVisible)
+            .min(java.util.Comparator.comparing(Staff::getCreatedAt,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
             .map(staffMapper::toStaffDTO);
     }
 

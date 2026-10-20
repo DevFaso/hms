@@ -49,7 +49,7 @@ describe('PatientDetailComponent', () => {
       'downloadRecordPdf',
     ]);
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent', 'getGrowthChart']);
-    encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
+    encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list', 'listForPatient']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error', 'info', 'warn']);
     permissionSpy = jasmine.createSpyObj('PermissionService', [
@@ -107,11 +107,12 @@ describe('PatientDetailComponent', () => {
     microSpy.listForPatient.and.returnValue(of([]));
 
     patientServiceSpy.getById.and.returnValue(of(mockPatient));
-    vitalServiceSpy.getRecent.and.returnValue(of([]));
+    vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));
     vitalServiceSpy.getGrowthChart.and.returnValue(
       of({ patientId: 'p1', dateOfBirth: '1998-01-01', gender: 'MALE', points: [] }),
     );
     encounterServiceSpy.list.and.returnValue(of([] as any));
+    encounterServiceSpy.listForPatient.and.returnValue(of({ items: [], withheld: false }));
     appointmentServiceSpy.list.and.returnValue(of([] as any));
     permissionSpy.hasPermission.and.returnValue(true);
     permissionSpy.hasAnyPermission.and.returnValue(true);
@@ -235,6 +236,35 @@ describe('PatientDetailComponent', () => {
     component.setTab('vitals');
     expect(component.activeTab()).toBe('vitals');
     expect(vitalServiceSpy.getRecent).toHaveBeenCalledWith('p1');
+  });
+
+  it('QA D504: says the vitals and encounters lists are incomplete when the opt-out withholds rows', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: true }));
+    encounterServiceSpy.listForPatient.and.returnValue(of({ items: [], withheld: true }));
+    fixture.detectChanges();
+
+    component.setTab('vitals');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-withheld"]')).not.toBeNull();
+
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(encounterServiceSpy.listForPatient).toHaveBeenCalledWith('p1');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D504: a complete vitals or encounters list shows no withheld note', () => {
+    roleContextSpy.hasAnyActiveRole.and.returnValue(true);
+    fixture.detectChanges();
+    component.setTab('vitals');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="vitals-withheld"]')).toBeNull();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]')).toBeNull();
   });
 
   it('does not read vitals without a hospital scope, and says why', () => {
@@ -401,7 +431,9 @@ describe('PatientDetailComponent', () => {
     };
 
     it('should show no-metrics placeholder when vital has only notes', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([vitalWithOnlyNotes]));
+      vitalServiceSpy.getRecent.and.returnValue(
+        of({ items: [vitalWithOnlyNotes], withheld: false }),
+      );
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();
@@ -419,7 +451,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('should NOT show no-metrics placeholder when vital has numeric metrics', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([vitalWithMetrics]));
+      vitalServiceSpy.getRecent.and.returnValue(of({ items: [vitalWithMetrics], withheld: false }));
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();
@@ -436,7 +468,7 @@ describe('PatientDetailComponent', () => {
     });
 
     it('should show empty state when no vitals exist', () => {
-      vitalServiceSpy.getRecent.and.returnValue(of([]));
+      vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));
       fixture.detectChanges();
       component.setTab('vitals');
       fixture.detectChanges();

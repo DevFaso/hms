@@ -4,6 +4,7 @@ import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.RecordsWithheldHeaders;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.EncounterRequestDTO;
@@ -90,6 +91,7 @@ public class EncounterController {
 
     private final EncounterService encounterService;
     private final ControllerAuthUtils authUtils;
+    private final RecordsWithheldHeaders recordsWithheld;
 
     // ----------------------------------------------------------
     // Create (Receptionist can check-in → default ARRIVED)
@@ -200,7 +202,8 @@ public class EncounterController {
 
         Page<EncounterResponseDTO> page =
             encounterService.list(patientId, staffId, resolvedHospitalId, from, to, status, pageable, locale);
-        return ResponseEntity.ok(page);
+        // QA D504: a patient's visit history narrowed by the opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(page);
     }
 
     // ----------------------------------------------------------

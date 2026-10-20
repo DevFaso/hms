@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -14,6 +14,10 @@ export interface PatientAddressHistoryEntry {
 
 export interface PatientResponse {
   id: string;
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   firstName: string;
   lastName: string;
   middleName?: string;
@@ -323,6 +327,10 @@ export interface PatientTimeline {
   generatedAt: string;
   /** E9 #64 — empty in-hospital and under a live break-the-glass session. */
   restrictedRows?: RestrictedRows[];
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
 }
 
 /** SMS OTP challenge issued by POST /patients/phone-verification. */
@@ -344,6 +352,25 @@ export interface RegistrationMatch {
   hospitalCount: number;
   alreadyRegisteredHere: boolean;
   matchedOn: 'PHONE' | 'EMAIL';
+}
+
+export interface AllergyListResult {
+  items: PatientAllergy[];
+  withheld: boolean;
+}
+
+/**
+ * QA D504 — a clinical read plus whether the patient's sharing opt-out held
+ * other hospitals' rows back from it (`X-Records-Withheld: OTHER_HOSPITALS`).
+ */
+export interface WithheldResult<T> {
+  items: T;
+  withheld: boolean;
+}
+
+/** QA D504 — reads the opt-out signal off a clinical list response. */
+export function recordsWithheld(headers: { get(name: string): string | null }): boolean {
+  return headers.get('X-Records-Withheld') === 'OTHER_HOSPITALS';
 }
 
 @Injectable({ providedIn: 'root' })
@@ -467,10 +494,22 @@ export class PatientService {
 
   /* ── Allergies ── */
 
-  listAllergies(patientId: string, hospitalId?: string): Observable<PatientAllergy[]> {
+  /**
+   * QA D504 — `withheld` is true when the patient's sharing opt-out keeps other
+   * hospitals' allergies out of this list, so the chart never reads an empty
+   * list as "no allergies".
+   */
+  listAllergies(patientId: string, hospitalId?: string): Observable<AllergyListResult> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
-    return this.http.get<PatientAllergy[]>(`/patients/${patientId}/allergies`, { params });
+    return this.http
+      .get<PatientAllergy[]>(`/patients/${patientId}/allergies`, { params, observe: 'response' })
+      .pipe(
+        map((res) => ({
+          items: res.body ?? [],
+          withheld: recordsWithheld(res.headers),
+        })),
+      );
   }
 
   addAllergy(patientId: string, req: PatientAllergyRequest): Observable<PatientAllergy> {
@@ -500,11 +539,13 @@ export class PatientService {
   listDiagnoses(
     patientId: string,
     options?: { hospitalId?: string; includeHistorical?: boolean },
-  ): Observable<PatientProblem[]> {
+  ): Observable<WithheldResult<PatientProblem[]>> {
     let params = new HttpParams();
     if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
     if (options?.includeHistorical) params = params.set('includeHistorical', 'true');
-    return this.http.get<PatientProblem[]>(`/patients/${patientId}/diagnoses`, { params });
+    return this.http
+      .get<PatientProblem[]>(`/patients/${patientId}/diagnoses`, { params, observe: 'response' })
+      .pipe(map((res) => ({ items: res.body ?? [], withheld: recordsWithheld(res.headers) })));
   }
 
   addDiagnosis(patientId: string, req: PatientDiagnosisRequest): Observable<PatientProblem> {
@@ -535,15 +576,22 @@ export class PatientService {
   listChartUpdates(
     patientId: string,
     options?: { hospitalId?: string; page?: number; size?: number },
-  ): Observable<{ content: ChartUpdate[]; totalElements: number }> {
+  ): Observable<WithheldResult<{ content: ChartUpdate[]; totalElements: number }>> {
     let params = new HttpParams();
     if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
     if (options?.page !== undefined) params = params.set('page', String(options.page));
     if (options?.size !== undefined) params = params.set('size', String(options.size));
-    return this.http.get<{ content: ChartUpdate[]; totalElements: number }>(
-      `/patients/${patientId}/chart-updates`,
-      { params },
-    );
+    return this.http
+      .get<{ content: ChartUpdate[]; totalElements: number }>(
+        `/patients/${patientId}/chart-updates`,
+        { params, observe: 'response' },
+      )
+      .pipe(
+        map((res) => ({
+          items: res.body ?? { content: [], totalElements: 0 },
+          withheld: recordsWithheld(res.headers),
+        })),
+      );
   }
 
   createChartUpdate(patientId: string, req: ChartUpdateRequest): Observable<ChartUpdate> {
@@ -561,11 +609,16 @@ export class PatientService {
   listLabResults(
     patientId: string,
     options?: { hospitalId?: string; limit?: number },
-  ): Observable<PatientLabResult[]> {
+  ): Observable<WithheldResult<PatientLabResult[]>> {
     let params = new HttpParams();
     if (options?.hospitalId) params = params.set('hospitalId', options.hospitalId);
     if (options?.limit !== undefined) params = params.set('limit', String(options.limit));
-    return this.http.get<PatientLabResult[]>(`/patients/${patientId}/lab-results`, { params });
+    return this.http
+      .get<PatientLabResult[]>(`/patients/${patientId}/lab-results`, {
+        params,
+        observe: 'response',
+      })
+      .pipe(map((res) => ({ items: res.body ?? [], withheld: recordsWithheld(res.headers) })));
   }
 
   /* ── Doctor timeline (audited access) ── */

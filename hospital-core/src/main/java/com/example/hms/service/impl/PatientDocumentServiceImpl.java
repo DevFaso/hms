@@ -25,6 +25,13 @@ import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.PatientDocumentService;
+import com.example.hms.enums.TreatmentRelationshipKind;
+import com.example.hms.exception.ChartRestrictedException;
+import com.example.hms.enums.RecordAccessDenialReason;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.model.Hospital;
+import com.example.hms.service.recordaccess.RecordAccessDecision;
+import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -55,6 +62,16 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    private final RecordAccessPolicy recordAccessPolicy;
+    private final HospitalRepository hospitalRepository;
+
+    /**
+     * What authorised a staff read: the hospital name the audit row carries,
+     * and the break-the-glass session when the read ran under one instead of
+     * a registration at the acting hospital (QA D504).
+     */
+    private record StaffReach(String hospitalName, UUID breakGlassSessionId) {
+    }
 
     @Override
     // rollbackFor is load-bearing, not decoration. Spring rolls back on
@@ -150,7 +167,8 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Transactional(readOnly = true)
     public Page<PatientDocumentResponseDTO> listForPatient(UUID hospitalId, UUID patientId,
                                                            PatientDocumentType documentType, Pageable pageable) {
-        requireRegisteredAt(hospitalId, patientId);
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
+        auditBreakGlassRead(hospitalId, patientId, reach, null);
         Page<PatientUploadedDocument> page = documentType == null
                 ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
                 : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
@@ -160,30 +178,37 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     @Override
     @Transactional(readOnly = true)
     public PatientDocumentResponseDTO getForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
-        requireRegisteredAt(hospitalId, patientId);
-        return documentMapper.toDto(requireOwnDocument(patientId, documentId));
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
+        PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        auditBreakGlassRead(hospitalId, patientId, reach, doc);
+        return documentMapper.toDto(doc);
     }
 
     @Override
     @Transactional(readOnly = true)
     public DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
-        PatientHospitalRegistration registration = requireRegisteredAt(hospitalId, patientId);
+        StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
         java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
-        auditStaffDownload(hospitalId, registration, doc);
+        auditStaffDownload(hospitalId, patientId, reach, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";
         String displayName = doc.getDisplayName() != null ? doc.getDisplayName() : "document";
         return new DocumentPayload(path, contentType, displayName);
     }
 
     /**
-     * Staff see a patient's uploads only through a hospital the patient is
-     * registered at. No hospital (a super-admin in global view) is a 400 that
-     * says so; a patient not registered at the caller's hospital is a 404 —
-     * the same answer as a document that does not exist, so the endpoint
-     * does not confirm that a patient is known elsewhere.
+     * Staff see a patient's uploads through a hospital the patient is
+     * registered at, or (QA D504) under a live break-the-glass session the
+     * actor declared for this patient at the acting hospital: the same
+     * emergency access that opens the rest of the chart over an opt-out or a
+     * restriction. No hospital (a super-admin in global view) is a 400 that
+     * says so. A restricted chart is the loud 403 the chart itself answers,
+     * so the portal offers the declaration. Any other refusal (an opt-out
+     * without a session included) stays a 404, the same answer as a document
+     * that does not exist, so the endpoint never confirms that a patient is
+     * known elsewhere or has opted out.
      */
-    private PatientHospitalRegistration requireRegisteredAt(UUID hospitalId, UUID patientId) {
+    private StaffReach requireRegisteredAt(UUID hospitalId, UUID patientId) {
         if (hospitalId == null) {
             throw new BusinessException("documents.hospitalRequired");
         }
@@ -191,8 +216,40 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
             // No id to name: "Patient not found with ID: null" helped nobody.
             throw new ResourceNotFoundException("patient.notFoundUnspecified");
         }
-        return registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        java.util.Optional<PatientHospitalRegistration> registration =
+                registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId);
+        if (registration.isPresent()) {
+            Hospital hospital = registration.get().getHospital();
+            return new StaffReach(hospital != null ? hospital.getName() : null, null);
+        }
+        UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
+                .orElse(null);
+        RecordAccessDecision decision = actorId == null ? null
+                : recordAccessPolicy.decide(actorId, patientId, hospitalId);
+        if (decision != null && decision.permitted() && decision.relationship() != null
+                && decision.relationship().kind() == TreatmentRelationshipKind.BREAK_GLASS) {
+            String hospitalName = hospitalRepository.findById(hospitalId).map(Hospital::getName).orElse(null);
+            return new StaffReach(hospitalName, decision.relationship().carrierId());
+        }
+        if (decision != null && decision.reason() == RecordAccessDenialReason.CHART_RESTRICTED) {
+            throw new ChartRestrictedException(patientId);
+        }
+        throw new ResourceNotFoundException("patient.notFound", patientId);
+    }
+
+    /**
+     * QA D504: a list or a view of the documents under break-the-glass is a
+     * disclosure the patient was promised to see; a registered read is not
+     * (the interceptor's PATIENT_ACCESS row covers it), so nothing is written.
+     * The description names the session and at most the document id and type.
+     */
+    private void auditBreakGlassRead(UUID hospitalId, UUID patientId, StaffReach reach, PatientUploadedDocument doc) {
+        if (reach.breakGlassSessionId() == null) {
+            return;
+        }
+        String what = doc == null ? "Staff list of patient-uploaded documents"
+                : "Staff view of patient-uploaded document " + doc.getId() + " (" + doc.getDocumentType() + ")";
+        emitDocumentAudit(hospitalId, patientId, reach, doc, what);
     }
 
     /**
@@ -209,32 +266,37 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
      * the per-hospital audit queries find it. The audit service derives no
      * assignment from {@code userId} alone.
      */
-    private void auditStaffDownload(UUID hospitalId, PatientHospitalRegistration registration,
+    private void auditStaffDownload(UUID hospitalId, UUID patientId, StaffReach reach,
                                     PatientUploadedDocument doc) {
+        emitDocumentAudit(hospitalId, patientId, reach, doc,
+                "Staff download of patient-uploaded document " + doc.getId() + " (" + doc.getDocumentType() + ")");
+    }
+
+    private void emitDocumentAudit(UUID hospitalId, UUID patientId, StaffReach reach,
+                                   PatientUploadedDocument doc, String what) {
         try {
             UUID actorId = authUtils.resolveUserId(SecurityContextHolder.getContext().getAuthentication())
                     .orElse(null);
             UserRoleHospitalAssignment assignment = actorId == null ? null
                     : assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actorId, hospitalId)
                             .orElse(null);
-            String hospitalName = registration.getHospital() != null ? registration.getHospital().getName() : null;
-            UUID patientId = registration.getPatient() != null ? registration.getPatient().getId() : null;
+            String description = reach.breakGlassSessionId() == null ? what
+                    : what + " under break-the-glass session " + reach.breakGlassSessionId();
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userName(SecurityUtils.getCurrentUsername())
                     .userId(actorId)
                     .assignmentId(assignment != null ? assignment.getId() : null)
                     .roleName(assignment != null && assignment.getRole() != null ? assignment.getRole().getName() : null)
-                    .hospitalName(hospitalName)
+                    .hospitalName(reach.hospitalName())
                     .patientId(patientId)
                     .eventType(AuditEventType.DATA_ACCESS)
                     .entityType("PATIENT_UPLOADED_DOCUMENT")
-                    .resourceId(doc.getId() != null ? doc.getId().toString() : null)
-                    .eventDescription("Staff download of patient-uploaded document " + doc.getId()
-                            + " (" + doc.getDocumentType() + ")")
+                    .resourceId(doc != null && doc.getId() != null ? doc.getId().toString() : null)
+                    .eventDescription(description)
                     .status(AuditStatus.SUCCESS)
                     .build());
         } catch (RuntimeException ex) {
-            log.warn("Audit emit failed for staff document download {}: {}", doc.getId(), ex.getMessage());
+            log.warn("Audit emit failed for staff document read {}: {}", doc != null ? doc.getId() : null, ex.getMessage());
         }
     }
 
