@@ -171,10 +171,11 @@ class AuthControllerTest {
         givenAuthenticatedWith("ROLE_DOCTOR", "ROLE_NURSE");
         com.example.hms.model.User user = new com.example.hms.model.User();
         user.setId(java.util.UUID.randomUUID());
-        user.setUsername("multi1");
+        user.setUsername("Multi1");
         user.setForcePasswordChange(true);
         user.setForceUsernameChange(true);
-        when(userRepository.findByUsername("multi1")).thenReturn(java.util.Optional.of(user));
+        // Typed in another case: the picker must find the account the way authentication did.
+        when(userRepository.findByUsernameIgnoreCase("multi1")).thenReturn(java.util.Optional.of(user));
 
         LoginRequest login = new LoginRequest();
         login.setUsername("multi1");

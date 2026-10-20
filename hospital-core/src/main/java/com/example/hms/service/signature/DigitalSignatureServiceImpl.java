@@ -236,12 +236,16 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         // QA D502: a signature is the signer's. Only the signer revokes it, or
         // an administrator of the hospital it was made in (the tenant check
         // above), and the revocation always carries a reason in the audit log.
-        // Another clinician is refused, whatever their role.
+        // Another clinician is refused, whatever their role. The admin must be
+        // signed in as admin AND hold HOSPITAL_ADMIN at the signature's own
+        // hospital: an admin role elsewhere does not count.
         boolean isSigner = currentUserId != null && signature.getSignedBy() != null
             && signature.getSignedBy().getUser() != null
             && currentUserId.equals(signature.getSignedBy().getUser().getId());
         boolean isAdmin = com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
-            || roleValidator.isHospitalAdminFromAuthGlobalOnly();
+            || (roleValidator.isHospitalAdminFromAuthGlobalOnly()
+                && currentUserId != null && signature.getHospital() != null
+                && roleValidator.isHospitalAdmin(currentUserId, signature.getHospital().getId()));
         if (!isSigner && !isAdmin) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 text("signature.revoke.notSigner", LocaleContextHolder.getLocale()));

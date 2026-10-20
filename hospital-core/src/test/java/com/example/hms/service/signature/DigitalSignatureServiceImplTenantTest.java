@@ -231,12 +231,32 @@ class DigitalSignatureServiceImplTenantTest {
         when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
         when(authService.getCurrentUserId()).thenReturn(adminId);
         when(roleValidator.isHospitalAdminFromAuthGlobalOnly()).thenReturn(true);
+        when(roleValidator.isHospitalAdmin(adminId, hospital)).thenReturn(true);
         when(signatureRepository.save(signature)).thenReturn(signature);
 
         service.revokeSignature(signature.getId(), reason());
 
         assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.REVOKED);
         assertThat(signature.getRevocationReason()).isEqualTo("Signed on the wrong report");
+    }
+
+    @Test
+    void anAdminOfAnotherHospitalCannotRevokeHere() {
+        // Doctor at A, HOSPITAL_ADMIN only at B: the authority union says admin,
+        // the assignment at A does not.
+        UUID hospital = UUID.randomUUID();
+        UUID callerId = UUID.randomUUID();
+        pinTo(hospital);
+        DigitalSignature signature = signedBy(UUID.randomUUID(), hospital);
+        when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdminFromAuthGlobalOnly()).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(callerId, hospital)).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeSignature(signature.getId(), reason()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.SIGNED);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
     // ── QA D507: hospital B does not read hospital A's signatures ──
