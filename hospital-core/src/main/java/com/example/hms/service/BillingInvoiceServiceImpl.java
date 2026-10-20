@@ -98,7 +98,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.replayTx.setReadOnly(true);
     }
 
-    /** The create runs in its own transaction so a lost race on the key can be answered after it rolls back. */
     /**
      * QA D537: reads the creator for the create response. createdByUser is a
      * read-only association, so the freshly built entity had it null and the

@@ -172,7 +172,7 @@ class BillingInvoiceServiceImplTest {
         org.springframework.test.util.ReflectionTestUtils.setField(creator, "id", creatorId);
         creator.setFirstName("Awa");
         creator.setLastName("Biller");
-        com.example.hms.repository.UserRepository users = org.mockito.Mockito.mock(com.example.hms.repository.UserRepository.class);
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
         when(users.findById(creatorId)).thenReturn(Optional.of(creator));
         billingInvoiceService.setUserRepository(users);
         when(roleValidator.getCurrentUserId()).thenReturn(creatorId);

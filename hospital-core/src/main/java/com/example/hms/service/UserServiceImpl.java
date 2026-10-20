@@ -1212,8 +1212,8 @@ public class UserServiceImpl implements UserService {
      * link, so the separate role-assignment mails are suppressed. An existing
      * user given another assignment, or a patient, keeps the role-assignment
      * mail.
+     * QA D522: a welcome mail that lists the role codes is the activation mail.
      */
-    /** QA D522: a welcome mail that lists the role codes is the activation mail. */
     static String welcomeMailPurpose(List<EmailService.WelcomeRole> welcomeRoles) {
         return welcomeRoles == null || welcomeRoles.isEmpty()
             ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME

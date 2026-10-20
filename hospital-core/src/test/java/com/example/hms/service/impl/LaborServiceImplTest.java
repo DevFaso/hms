@@ -393,7 +393,7 @@ class LaborServiceImplTest {
     void recordDeliveryPostsTheDeliveryCharge() {
         service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
 
-        org.mockito.Mockito.verify(deliveryChargeService).chargeDelivery(
+        verify(deliveryChargeService).chargeDelivery(
             org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient), org.mockito.ArgumentMatchers.eq(recorderUserId));
     }
 
@@ -422,12 +422,12 @@ class LaborServiceImplTest {
             service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
 
             org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
-            org.mockito.Mockito.verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
+            verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
             org.assertj.core.api.Assertions.assertThatCode(() ->
                 org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
                     .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit))
                 .doesNotThrowAnyException();
-            org.mockito.Mockito.verify(deliveryChargeService).chargeDelivery(
+            verify(deliveryChargeService).chargeDelivery(
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(recorderUserId));
             assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
         } finally {
@@ -440,7 +440,10 @@ class LaborServiceImplTest {
     void recordDeliverySecondAttemptPostsNoCharge() {
         when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
 
-        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest()));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("already exists");
         org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
     }
 

@@ -300,7 +300,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
      * does not count: plans created before this rule had no delivery either.
      */
     private void requireRecordedDelivery(UUID patientId) {
-        LocalDateTime since = LocalDateTime.now().minusDays(POSTPARTUM_DELIVERY_LOOKBACK_DAYS);
+        LocalDateTime since = LocalDateTime.now(java.time.ZoneId.systemDefault()).minusDays(POSTPARTUM_DELIVERY_LOOKBACK_DAYS);
         if (!deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId, since)) {
             throw new BusinessException("maternity.postpartum.noDelivery");
         }

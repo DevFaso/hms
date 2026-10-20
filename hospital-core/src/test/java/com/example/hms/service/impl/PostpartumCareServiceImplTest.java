@@ -174,8 +174,8 @@ class PostpartumCareServiceImplTest {
             com.example.hms.exception.BusinessException.class,
             () -> service.recordObservation(patientId, request, recorderId));
         assertEquals("maternity.postpartum.noDelivery", ex.getMessageKey());
-        verify(observationRepository, org.mockito.Mockito.never()).save(any());
-        verify(carePlanRepository, org.mockito.Mockito.never()).save(any());
+        verify(observationRepository, never()).save(any());
+        verify(carePlanRepository, never()).save(any());
     }
 
     @Test
