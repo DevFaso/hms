@@ -4,19 +4,31 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
 import org.springframework.core.type.filter.AnnotationTypeFilter;
+import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.GenericArrayType;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.lang.reflect.WildcardType;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
@@ -66,6 +78,10 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("DischargeSummaryController#updateDischargeSummary{dischargingProviderId}", "ignored: an update never changes the provider"),
         Map.entry("EncounterController#addEncounterNoteAddendum{authorStaffId}", "checked: QA D406, resolveSessionNoteAuthor"),
         Map.entry("EncounterController#addEncounterNoteAddendum{authorUserId}", "checked: QA D406, resolveSessionNoteAuthor"),
+        Map.entry("EncounterController#create{note.authorStaffId}", "checked: QA D406, EncounterServiceImpl create passes the nested note through resolveSessionNoteAuthor"),
+        Map.entry("EncounterController#create{note.authorUserId}", "checked: QA D406, EncounterServiceImpl create passes the nested note through resolveSessionNoteAuthor"),
+        Map.entry("EncounterController#update{note.authorStaffId}", "checked: QA D406, EncounterServiceImpl update passes the nested note through resolveSessionNoteAuthor"),
+        Map.entry("EncounterController#update{note.authorUserId}", "checked: QA D406, EncounterServiceImpl update passes the nested note through resolveSessionNoteAuthor"),
         Map.entry("EncounterController#create{staffId}", "subject, not actor: the clinician the encounter is assigned to"),
         Map.entry("EncounterController#update{staffId}", "subject, not actor: the clinician the encounter is assigned to"),
         Map.entry("EncounterController#upsertEncounterNote{authorStaffId}", "checked: QA D406, resolveSessionNoteAuthor"),
@@ -115,15 +131,7 @@ class ClientSuppliedIdentityGuardTest {
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         for (BeanDefinition definition : scanner.findCandidateComponents("com.example.hms")) {
             Class<?> controller = Class.forName(definition.getBeanClassName());
-            for (Method method : controller.getDeclaredMethods()) {
-                if (!isWrite(method)) {
-                    continue;
-                }
-                String where = controller.getSimpleName() + "#" + method.getName();
-                for (Parameter parameter : method.getParameters()) {
-                    inspect(where, parameter, found);
-                }
-            }
+            scan(controller, found);
         }
         assertThat(found)
             .as("write endpoints taking an actor identity from the client; derive it from the session "
@@ -134,7 +142,19 @@ class ClientSuppliedIdentityGuardTest {
             .isSubsetOf(found);
     }
 
-    private static void inspect(String where, Parameter parameter, TreeSet<String> found) {
+    static void scan(Class<?> controller, Set<String> found) {
+        for (Method method : controller.getDeclaredMethods()) {
+            if (!isWrite(method)) {
+                continue;
+            }
+            String where = controller.getSimpleName() + "#" + method.getName();
+            for (Parameter parameter : method.getParameters()) {
+                inspect(where, parameter, found);
+            }
+        }
+    }
+
+    private static void inspect(String where, Parameter parameter, Set<String> found) {
         RequestParam requestParam = parameter.getAnnotation(RequestParam.class);
         PathVariable pathVariable = parameter.getAnnotation(PathVariable.class);
         if (requestParam != null || pathVariable != null) {
@@ -148,21 +168,117 @@ class ClientSuppliedIdentityGuardTest {
             }
             return;
         }
-        if (parameter.getAnnotation(RequestBody.class) != null) {
-            for (Class<?> type = parameter.getType();
-                 type != null && type.getName().startsWith("com.example.hms");
-                 type = type.getSuperclass()) {
-                for (Field field : type.getDeclaredFields()) {
-                    if (IDENTITY.matcher(field.getName()).matches()) {
-                        found.add(where + "{" + field.getName() + "}");
-                    }
-                }
-            }
+        // G2: a @ModelAttribute or an unannotated non-simple parameter is bound
+        // from the request like a body, so its fields count too.
+        boolean bound = parameter.getAnnotation(RequestBody.class) != null
+            || parameter.getAnnotation(ModelAttribute.class) != null
+            || (parameter.getAnnotations().length == 0 && !BeanUtils.isSimpleProperty(parameter.getType()));
+        if (bound) {
+            walk(where, "", parameter.getParameterizedType(), found, new HashSet<>());
         }
     }
 
+    /**
+     * G1: walks a bound type: its own and inherited fields, nested DTOs under
+     * com.example.hms, and the element types of collections, maps and arrays.
+     * A nested match is recorded as {@code where{outer.inner}}.
+     */
+    private static void walk(String where, String prefix, Type type, Set<String> found, Set<Class<?>> visiting) {
+        if (type instanceof ParameterizedType parameterized) {
+            for (Type argument : parameterized.getActualTypeArguments()) {
+                walk(where, prefix, argument, found, visiting);
+            }
+            walk(where, prefix, parameterized.getRawType(), found, visiting);
+            return;
+        }
+        if (type instanceof GenericArrayType array) {
+            walk(where, prefix, array.getGenericComponentType(), found, visiting);
+            return;
+        }
+        if (type instanceof WildcardType wildcard) {
+            for (Type upper : wildcard.getUpperBounds()) {
+                walk(where, prefix, upper, found, visiting);
+            }
+            return;
+        }
+        if (!(type instanceof Class<?> raw)) {
+            return;
+        }
+        if (raw.isArray()) {
+            walk(where, prefix, raw.getComponentType(), found, visiting);
+            return;
+        }
+        if (!raw.getName().startsWith("com.example.hms") || raw.isEnum() || !visiting.add(raw)) {
+            return;
+        }
+        for (Class<?> c = raw; c != null && c.getName().startsWith("com.example.hms"); c = c.getSuperclass()) {
+            for (Field field : c.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                    continue;
+                }
+                if (IDENTITY.matcher(field.getName()).matches()) {
+                    found.add(where + "{" + prefix + field.getName() + "}");
+                }
+                walk(where, prefix + field.getName() + ".", field.getGenericType(), found, visiting);
+            }
+        }
+        visiting.remove(raw);
+    }
+
     private static boolean isWrite(Method method) {
-        return method.isAnnotationPresent(PostMapping.class) || method.isAnnotationPresent(PutMapping.class)
-            || method.isAnnotationPresent(PatchMapping.class) || method.isAnnotationPresent(DeleteMapping.class);
+        if (method.isAnnotationPresent(PostMapping.class) || method.isAnnotationPresent(PutMapping.class)
+            || method.isAnnotationPresent(PatchMapping.class) || method.isAnnotationPresent(DeleteMapping.class)) {
+            return true;
+        }
+        // G2: @RequestMapping(method = POST/PUT/PATCH/DELETE) is a write too.
+        RequestMapping mapping = method.getAnnotation(RequestMapping.class);
+        return mapping != null && List.of(mapping.method()).stream().anyMatch(m -> m == RequestMethod.POST
+            || m == RequestMethod.PUT || m == RequestMethod.PATCH || m == RequestMethod.DELETE);
+    }
+
+    // Fixtures are not @RestController, so the classpath scan never sees them.
+
+    record ItemDto(String performedByStaffId, String note) { }
+
+    record OuterDto(List<ItemDto> items, ItemDto[] array, ItemDto single) { }
+
+    record NodeDto(NodeDto parent, String signerStaffId) { }
+
+    static class FormDto {
+        String authorStaffId;
+    }
+
+    static class Fixture {
+        @PostMapping("/a") void nested(@RequestBody OuterDto body) { }
+        @PostMapping("/b") void bodyList(@RequestBody List<ItemDto> body) { }
+        @PostMapping("/c") void cyclic(@RequestBody NodeDto body) { }
+        @RequestMapping(value = "/d", method = RequestMethod.POST) void legacy(@RequestBody ItemDto body) { }
+        @RequestMapping(value = "/e", method = RequestMethod.GET) void legacyRead(@RequestBody ItemDto body) { }
+        @PostMapping("/f") void model(@ModelAttribute FormDto form) { }
+        @PostMapping("/g") void unannotated(FormDto form) { }
+        @PostMapping("/h") void simple(String staffId) { }
+    }
+
+    @Test
+    void g1RecursesIntoNestedDtosCollectionsAndArraysWithoutLooping() {
+        Set<String> found = new TreeSet<>();
+        scan(Fixture.class, found);
+        assertThat(found).contains(
+            "Fixture#nested{items.performedByStaffId}",
+            "Fixture#nested{array.performedByStaffId}",
+            "Fixture#nested{single.performedByStaffId}",
+            "Fixture#bodyList{performedByStaffId}",
+            "Fixture#cyclic{signerStaffId}");
+    }
+
+    @Test
+    void g2CoversRequestMappingWritesAndFormBoundParameters() {
+        Set<String> found = new TreeSet<>();
+        scan(Fixture.class, found);
+        assertThat(found).contains(
+            "Fixture#legacy{performedByStaffId}",
+            "Fixture#model{authorStaffId}",
+            "Fixture#unannotated{authorStaffId}");
+        assertThat(found).noneMatch(f -> f.startsWith("Fixture#legacyRead") || f.startsWith("Fixture#simple"));
     }
 }
