@@ -15,6 +15,7 @@ import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -83,6 +84,10 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findFirstByUser_IdAndHospital_IdAndActiveTrue(UUID userId, UUID hospitalId);
 
+    /** QA D516: an active assignment at the hospital holding one of these role codes (oldest first). */
+    Optional<UserRoleHospitalAssignment> findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
+        UUID hospitalId, Collection<String> roleCodes);
+
     List<UserRoleHospitalAssignment> findByUser_IdAndActiveTrue(UUID userId);
 
     Optional<UserRoleHospitalAssignment> findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(UUID userId, String roleCode);
@@ -142,12 +147,16 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     /**
      * QA D314: how many distinct people hold a role at a hospital. A lab with
      * a single director cannot have its QA review and its director approval
-     * done by two different directors.
+     * done by two different directors. QA D523: only people who can still
+     * sign in count - a disabled or deleted director left with an active
+     * assignment must not block the only working one.
      */
     @Query("""
         SELECT COUNT(DISTINCT a.user.id)
         FROM UserRoleHospitalAssignment a
         WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
           AND a.hospital.id = :hospitalId
           AND UPPER(a.role.code) = :roleCode
     """)

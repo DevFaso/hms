@@ -2164,6 +2164,7 @@
     "AGING_90_PLUS": "Más de 90 días"
   },
   "DELIVERY": {
+    "ACTIVATION_EMAIL_QUEUED": "El correo de activación (con el código de cada rol) está en cola de envío.",
     "CREDENTIALS_NOT_DELIVERED": "Las credenciales de acceso de un solo uso no pudieron enviarse al paciente.",
     "EMAIL_FAILED": "La cuenta se creó, pero el correo de activación no pudo entregarse. Use «Reenviar código» cuando se resuelva el problema.",
     "EMAIL_NOT_CONFIGURED": "El envío de correo no está configurado en este servidor — el código de activación no se envió por correo.",
@@ -4519,6 +4520,7 @@
       "EMPTY_DESC": "No tiene ninguna cita programada.",
       "UPCOMING": "Próximas",
       "PAST": "Citas pasadas",
+      "CANCELLED_SECTION": "Citas canceladas",
       "DATE": "Fecha",
       "TIME": "Hora",
       "PROVIDER": "Profesional",

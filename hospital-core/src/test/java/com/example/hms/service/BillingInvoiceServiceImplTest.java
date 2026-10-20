@@ -162,6 +162,27 @@ class BillingInvoiceServiceImplTest {
         assertEquals(InvoiceStatus.DRAFT, persisted.getStatus());
     }
 
+    /** QA D537: the create response names who created the invoice. */
+    @Test
+    void createInvoice_responseNamesTheCreator_D537() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        UUID creatorId = UUID.randomUUID();
+        com.example.hms.model.User creator = new com.example.hms.model.User();
+        org.springframework.test.util.ReflectionTestUtils.setField(creator, "id", creatorId);
+        creator.setFirstName("Awa");
+        creator.setLastName("Biller");
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
+        when(users.findById(creatorId)).thenReturn(Optional.of(creator));
+        billingInvoiceService.setUserRepository(users);
+        when(roleValidator.getCurrentUserId()).thenReturn(creatorId);
+
+        BillingInvoiceResponseDTO response = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("5000")).build(), Locale.ENGLISH);
+
+        assertEquals("Awa Biller", response.getCreatedByName());
+    }
+
     @Test
     void createInvoice_phoneOnlyPatientByIdKeepsTheTypedTotal_D72_D92() {
         pinnedHospital();

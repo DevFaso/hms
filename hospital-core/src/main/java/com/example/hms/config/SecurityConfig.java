@@ -759,6 +759,12 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
                 // -------------------- Billing --------------------
+                // QA D538: the pharmacy checkout. Mirrors the controller's
+                // @PreAuthorize so a role it refuses gets the 403 here, before
+                // the body is validated (a nurse saw 400 field errors first).
+                .requestMatchers(HttpMethod.POST, "/pharmacy/payments")
+                .hasAnyAuthority(ROLE_PHARMACIST, ROLE_BILLING_SPECIALIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.GET, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
 

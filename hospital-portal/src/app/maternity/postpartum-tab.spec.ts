@@ -195,6 +195,22 @@ describe('PostpartumTabComponent — screening', () => {
     expect(component.screeningAvailable()).toBeTrue();
   });
 
+  it('QA D539: the disabled screening button looks disabled', () => {
+    postpartumSpy.schedule.and.returnValue(of(schedule({ instrumentAvailable: false })));
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    fixture.componentInstance.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        '.screening-card button.btn-primary',
+      ),
+    )[0];
+    expect(button).toBeDefined();
+    expect(button.disabled).toBeTrue();
+    expect(getComputedStyle(button).opacity).toBe('0.5');
+    expect(getComputedStyle(button).cursor).toBe('not-allowed');
+  });
+
   it('QA D323: with no plan and no EPDS text on the server, the button is off', () => {
     screeningSpy.instruments.and.returnValue(of([]));
     const fresh = TestBed.createComponent(PostpartumTabComponent).componentInstance;

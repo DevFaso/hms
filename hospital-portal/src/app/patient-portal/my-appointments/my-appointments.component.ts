@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -40,6 +47,14 @@ export class MyAppointmentsComponent implements OnInit {
 
   upcoming = signal<PortalAppointment[]>([]);
   past = signal<PortalAppointment[]>([]);
+  /** QA D542: cancelled visits whose date is still ahead - not "past". */
+  cancelled = signal<PortalAppointment[]>([]);
+  readonly closedGroups = computed(() =>
+    [
+      { titleKey: 'PORTAL.APPOINTMENTS.CANCELLED_SECTION', items: this.cancelled() },
+      { titleKey: 'PORTAL.APPOINTMENTS.PAST', items: this.past() },
+    ].filter((g) => g.items.length > 0),
+  );
 
   // ── Booking form state ───────────────────────────────────────────
   showBookingForm = signal(false);
@@ -126,9 +141,12 @@ export class MyAppointmentsComponent implements OnInit {
         const isClosed = (a: PortalAppointment) =>
           a.status === 'COMPLETED' || a.status === 'CANCELLED';
         this.upcoming.set(appts.filter((a) => !isClosed(a) && a.date >= today));
-        // Cancelled appointments land in Past (whatever their date) so they
-        // stay visible after the patient cancels instead of vanishing.
-        this.past.set(appts.filter((a) => isClosed(a) || a.date < today));
+        // QA D542: a cancelled visit still ahead is listed under "Cancelled",
+        // not "Past"; it stays visible after the patient cancels.
+        const cancelledAhead = (a: PortalAppointment) =>
+          a.status === 'CANCELLED' && a.date >= today;
+        this.cancelled.set(appts.filter(cancelledAhead));
+        this.past.set(appts.filter((a) => !cancelledAhead(a) && (isClosed(a) || a.date < today)));
         this.loading.set(false);
         this.applyDeepLink(appts);
       },

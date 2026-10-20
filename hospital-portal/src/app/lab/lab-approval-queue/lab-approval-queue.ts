@@ -86,6 +86,14 @@ export class LabApprovalQueueComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
 
+  /** QA D534: the signed-in user's id, to keep the four-eyes steps off their own submission. */
+  private readonly currentUserId = this.auth.getUserId();
+
+  /** QA D534: the submitter is never offered the QA pass or the approval (the server refuses it). */
+  isOwnSubmission(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.submittedById && def.submittedById === this.currentUserId;
+  }
+
   // Approval modal
   showApprovalModal = signal(false);
   approvalTarget = signal<LabTestDefinition | null>(null);
@@ -211,8 +219,11 @@ export class LabApprovalQueueComponent implements OnInit {
         this.processingApproval.set(false);
         this.loadQueue();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'));
+      error: (err: { error?: { message?: string } }) => {
+        // QA D534: the server's reason (four-eyes, missing range…) is shown, not a generic failure.
+        this.toast.error(
+          err?.error?.message || this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'),
+        );
         this.processingApproval.set(false);
       },
     });

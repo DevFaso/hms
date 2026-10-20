@@ -104,6 +104,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         // body's hospital id is a claim), for a patient registered there.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        requireRecordedDelivery(patient.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
         PostpartumCarePlan carePlan = resolveCarePlan(patient, hospital, registration, request);
@@ -288,6 +289,23 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return null;
         }
         return userRepository.findById(recorderUserId).orElse(null);
+    }
+
+    /** How far back a recorded birth still opens postpartum care (QA D517). */
+    static final int POSTPARTUM_DELIVERY_LOOKBACK_DAYS = 365;
+
+    /**
+     * QA D517: a postpartum observation was accepted for a woman with no
+     * recorded delivery, which opened a care plan dated "now" for a birth that
+     * never happened. The birth must be on file first (at any hospital: a
+     * mother may deliver at one and be followed at another). An existing plan
+     * does not count: plans created before this rule had no delivery either.
+     */
+    private void requireRecordedDelivery(UUID patientId) {
+        LocalDateTime since = LocalDateTime.now(java.time.ZoneId.systemDefault()).minusDays(POSTPARTUM_DELIVERY_LOOKBACK_DAYS);
+        if (!deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId, since)) {
+            throw new BusinessException("maternity.postpartum.noDelivery");
+        }
     }
 
     private PostpartumCarePlan resolveCarePlan(Patient patient,

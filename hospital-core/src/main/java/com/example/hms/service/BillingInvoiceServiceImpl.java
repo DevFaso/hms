@@ -98,7 +98,24 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.replayTx.setReadOnly(true);
     }
 
-    /** The create runs in its own transaction so a lost race on the key can be answered after it rolls back. */
+    /**
+     * QA D537: reads the creator for the create response. createdByUser is a
+     * read-only association, so the freshly built entity had it null and the
+     * create response said createdByName=null.
+     */
+    private com.example.hms.repository.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUserRepository(com.example.hms.repository.UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    private void attachCreator(BillingInvoice invoice, UUID creatorId) {
+        if (creatorId != null && userRepository != null) {
+            userRepository.findById(creatorId).ifPresent(invoice::setCreatedByUser);
+        }
+    }
+
     private final org.springframework.transaction.support.TransactionTemplate createTx;
     private final org.springframework.transaction.support.TransactionTemplate replayTx;
 
@@ -160,6 +177,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setClientRequestId(dto.getClientRequestId());
         // QA D428: no auditing listener stamps it, so the creator is set here.
         invoice.setCreatedBy(roleValidator.getCurrentUserId());
+        attachCreator(invoice, invoice.getCreatedBy());
         // QA D94: the server numbers the invoice; a typed number is ignored.
         invoice.setInvoiceNumber(allocateNumber(hospital));
 
