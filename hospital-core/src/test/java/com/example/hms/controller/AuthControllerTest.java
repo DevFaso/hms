@@ -40,6 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1391,5 +1393,137 @@ class AuthControllerTest {
                 e.getEventType() == com.example.hms.enums.AuditEventType.TOKEN_REFRESH
                         && e.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
                         && pharmacist.getId().equals(e.getUserId())));
+    }
+
+    // ── QA D311/D418: activation re-send for phone-only and staff accounts ──
+
+    private com.example.hms.model.UserRoleHospitalAssignment pendingAssignment(java.util.UUID id) {
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        org.springframework.test.util.ReflectionTestUtils.setField(a, "id", id);
+        a.setActive(false);
+        a.setConfirmationCode("123456");
+        return a;
+    }
+
+    @Test
+    void resendVerification_byPhone_resendsEveryPendingAssignmentCode_D418() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("patient1").phoneNumber("+22670000000").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID pendingId = java.util.UUID.randomUUID();
+        com.example.hms.model.UserRoleHospitalAssignment done = pendingAssignment(java.util.UUID.randomUUID());
+        done.setActive(true);
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByPhoneNumber("+22670000000")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId))
+                .thenReturn(java.util.List.of(pendingAssignment(pendingId), done));
+
+        mockMvc.perform(post("/auth/resend-verification").param("phone", " +22670000000 "))
+                .andExpect(status().isOk());
+
+        verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
+        verify(notifier, times(1)).resendPendingActivationCode(any(java.util.UUID.class), any());
+    }
+
+    @Test
+    void resendVerification_phoneOnlyPatientWhoNeverActivated_getsANewCode_D418() throws Exception {
+        // A patient registered at the desk: a phone number, no e-mail, no
+        // staff role - only the PATIENT assignment still waiting for its code.
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("deskpatient").phoneNumber("+22670000002").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID patientAssignmentId = java.util.UUID.randomUUID();
+        com.example.hms.model.UserRoleHospitalAssignment patientRow = pendingAssignment(patientAssignmentId);
+        com.example.hms.model.Role patientRole = new com.example.hms.model.Role();
+        patientRole.setCode("ROLE_PATIENT");
+        patientRow.setRole(patientRole);
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        // Typed as at the desk, stored in E.164.
+        when(userRepository.findByPhoneNumber("+22670000002")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId)).thenReturn(java.util.List.of(patientRow));
+
+        mockMvc.perform(post("/auth/resend-verification").param("phone", "70 00 00 02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("If the number is registered, a new activation code has been sent."));
+
+        verify(notifier).resendPendingActivationCode(patientAssignmentId, AuthController.RESEND_COOLDOWN);
+        verify(userRepository, never()).findByEmail(any());
+    }
+
+    @Test
+    void resendVerification_everyRequestGoesThroughTheSharedCooldownClaim_D418() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("patient2").phoneNumber("+22670000001").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID pendingId = java.util.UUID.randomUUID();
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId))
+                .thenReturn(java.util.List.of(pendingAssignment(pendingId)));
+
+        for (int i = 0; i < 3; i++) {
+            mockMvc.perform(post("/auth/resend-verification").param("phone", "+22670000001"))
+                    .andExpect(status().isOk());
+        }
+
+        // No per-instance memory: every request asks the database claim
+        // (claimActivationResend), which sends at most once per cooldown.
+        verify(notifier, times(3)).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
+        verify(notifier, never()).sendNotifications(any(java.util.UUID.class));
+    }
+
+    @Test
+    void resendVerification_unknownPhone_answersTheSameWithoutSending_D418() throws Exception {
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByPhoneNumber(any())).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(post("/auth/resend-verification").param("phone", "+22679999999"))
+                .andExpect(status().isOk());
+
+        verify(notifier, never()).resendPendingActivationCode(any(java.util.UUID.class), any());
+    }
+
+    @Test
+    void resendVerification_withNeitherEmailNorPhone_isABadRequest_D418() throws Exception {
+        mockMvc.perform(post("/auth/resend-verification"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void resendVerification_byEmail_stillSendsTheLinkAndAlsoTheStaffCode_D418() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("nurse9").email("nurse9@example.com").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID pendingId = java.util.UUID.randomUUID();
+        com.example.hms.service.EmailService email =
+                mock(com.example.hms.service.EmailService.class);
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.email()).thenReturn(email);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByEmail("nurse9@example.com")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId)).thenReturn(java.util.List.of(pendingAssignment(pendingId)));
+
+        mockMvc.perform(post("/auth/resend-verification").param("email", "nurse9@example.com"))
+                .andExpect(status().isOk());
+
+        verify(email).sendActivationEmail(eq("nurse9@example.com"), any());
+        verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
     }
 }

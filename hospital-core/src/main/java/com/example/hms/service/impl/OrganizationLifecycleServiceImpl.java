@@ -41,10 +41,8 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     // Action labels — used for transition validation, reason validation, and
     // MFA step-up messages. Kept as constants to dedupe per Sonar S1192.
     private static final String ACTION_SUSPEND = "suspend";
-    private static final String ACTION_RESTORE = "restore";
     private static final String ACTION_ARCHIVE = "archive";
     private static final String ACTION_SCHEDULE_PURGE = "schedule purge";
-    private static final String ACTION_CANCEL_PURGE = "cancel purge";
 
     private static final Set<OrganizationLifecycleState> SUSPENDABLE = EnumSet.of(
         OrganizationLifecycleState.ACTIVE
@@ -103,8 +101,8 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO suspend(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, SUSPENDABLE, ACTION_SUSPEND);
-        String reason = requireReason(request, ACTION_SUSPEND);
+        requireTransition(org, SUSPENDABLE);
+        String reason = requireReason(request);
         requireStepUp(ACTION_SUSPEND, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.SUSPENDED);
@@ -126,7 +124,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO restore(UUID organizationId, TenantLifecycleActionRequestDTO request) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, RESTORABLE, ACTION_RESTORE);
+        requireTransition(org, RESTORABLE);
 
         OrganizationLifecycleState previous = org.getLifecycleState();
         org.setLifecycleState(OrganizationLifecycleState.ACTIVE);
@@ -147,8 +145,8 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO archive(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, ARCHIVABLE, ACTION_ARCHIVE);
-        String reason = requireReason(request, ACTION_ARCHIVE);
+        requireTransition(org, ARCHIVABLE);
+        String reason = requireReason(request);
         requireStepUp(ACTION_ARCHIVE, mfaToken);
 
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
@@ -168,8 +166,8 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO schedulePurge(UUID organizationId, TenantLifecycleActionRequestDTO request, String mfaToken) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, PURGE_SCHEDULABLE, ACTION_SCHEDULE_PURGE);
-        String reason = requireReason(request, ACTION_SCHEDULE_PURGE);
+        requireTransition(org, PURGE_SCHEDULABLE);
+        String reason = requireReason(request);
 
         // `request` is guaranteed non-null here — requireReason() above throws
         // otherwise. Only the per-call override on getPurgeScheduledFor() is optional.
@@ -178,7 +176,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
         if (scheduledFor.isBefore(Instant.now(clock))) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            throw BusinessRuleException.ofKey("organization.r7.purgeInPast");
         }
         // Checked before the step-up, which would otherwise spend a backup code
         // on a request that cannot run.
@@ -199,7 +197,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
     @Override
     public TenantLifecycleResponseDTO cancelPurge(UUID organizationId, TenantLifecycleActionRequestDTO request) {
         Organization org = loadOrThrow(organizationId);
-        requireTransition(org, PURGE_CANCELLABLE, ACTION_CANCEL_PURGE);
+        requireTransition(org, PURGE_CANCELLABLE);
 
         org.setLifecycleState(OrganizationLifecycleState.ARCHIVED);
         org.setPurgeScheduledFor(null);
@@ -221,18 +219,16 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
     }
 
-    private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed, String action) {
+    private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed) {
         if (!allowed.contains(org.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " organization in state " + org.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw BusinessRuleException.ofKey("organization.r7.transitionRefused");
         }
     }
 
-    private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
+    private String requireReason(TenantLifecycleActionRequestDTO request) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " an organization.");
+            throw BusinessRuleException.ofKey("organization.r7.reasonRequired");
         }
         return reason.trim();
     }

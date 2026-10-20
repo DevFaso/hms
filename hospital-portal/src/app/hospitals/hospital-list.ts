@@ -126,7 +126,16 @@ export class HospitalListComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.name || !this.form.city || !this.form.country || !this.form.phoneNumber) {
+    // QA D435: the server refuses a hospital with neither an address nor a
+    // P.O. box; say so here instead of after the round trip.
+    const hasAddress = !!this.form.address?.trim() || !!this.form.poBox?.trim();
+    if (
+      !this.form.name ||
+      !this.form.city ||
+      !this.form.country ||
+      !this.form.phoneNumber ||
+      !hasAddress
+    ) {
       this.toast.error(this.translate.instant('HOSPITALS.REQUIRED_FIELDS'));
       return;
     }

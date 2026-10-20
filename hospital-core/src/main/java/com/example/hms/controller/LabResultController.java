@@ -3,6 +3,9 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.CriticalValueReadBackRequestDTO;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.service.lab.LabResultAuthority;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
@@ -76,11 +79,13 @@ public class LabResultController {
     // before the test is loaded. LabResultEntryGuard makes that call in the
     // service. This stays broad on purpose.
     @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
+    @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_CREATED)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         LabResultResponseDTO created = labResultService.createLabResult(requestDTO, locale);
+        WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
         auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_CREATED, created);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }

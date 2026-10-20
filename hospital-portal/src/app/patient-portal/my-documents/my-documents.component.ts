@@ -45,6 +45,11 @@ export class MyDocumentsComponent implements OnInit {
 
   readonly documentTypes = DOCUMENT_TYPES;
 
+  /** The translation key of a document type; the raw enum is never shown (QA D344/D434). */
+  typeLabelKey(type: PatientDocumentType): string {
+    return DOCUMENT_TYPES.find((t) => t.value === type)?.labelKey ?? 'PORTAL.DOCUMENTS.TYPE_OTHER';
+  }
+
   documents = signal<PatientDocumentResponse[]>([]);
   totalElements = signal(0);
   loading = signal(true);

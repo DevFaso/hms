@@ -493,7 +493,7 @@
                 <tbody>
                   @for (p of payments(); track p.id) {
                     <tr>
-                      <td>{{ p.paymentDate }}</td>
+                      <td>{{ p.paymentDate ? (p.paymentDate | date: 'mediumDate') : '—' }}</td>
                       <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>

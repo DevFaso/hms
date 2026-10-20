@@ -10,6 +10,7 @@ import { ProviderPortalService } from '../../services/provider-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { followFacility } from '../follow-facility';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 const PAGE_SIZE = 20;
 
@@ -24,7 +25,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'app-provider-audit',
   standalone: true,
-  imports: [DatePipe, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './provider-audit.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',

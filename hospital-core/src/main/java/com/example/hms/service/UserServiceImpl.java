@@ -190,7 +190,7 @@ public class UserServiceImpl implements UserService {
         if (existing > 0) {
             return BootstrapSignupResponse.builder()
                     .success(false)
-                    .message("Bootstrap not allowed; users already exist")
+                    .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"))
                     .username(null)
                     .email(null)
                     .build();
@@ -255,7 +255,7 @@ public class UserServiceImpl implements UserService {
 
         return BootstrapSignupResponse.builder()
                 .success(true)
-                .message("Bootstrap Super Admin created — account is active, you can sign in now")
+                .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapCreated"))
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();
@@ -373,7 +373,14 @@ public class UserServiceImpl implements UserService {
 
         final boolean requiresStaff = roles.stream().anyMatch(role -> switch (role.getCode()) {
             case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_HOSPITAL_ADMIN,
-                 "ROLE_RECEPTIONIST", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST", "ROLE_SURGEON", "ROLE_PHYSICIAN" -> true;
+                 "ROLE_RECEPTIONIST", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST", "ROLE_SURGEON", "ROLE_PHYSICIAN",
+                 // QA D435 (and the round-4 note): lab and billing staff onboarded
+                 // through the same form got no staff row, so they were missing
+                 // from every staff and department picker.
+                 "ROLE_LAB_TECHNICIAN", "ROLE_LAB_DIRECTOR", "ROLE_LAB_MANAGER", "ROLE_BILLING_SPECIALIST",
+                 "ROLE_ACCOUNTANT", "ROLE_CLAIMS_REVIEWER", "ROLE_ANESTHESIOLOGIST", "ROLE_PHYSIOTHERAPIST",
+                 "ROLE_PHARMACY_VERIFIER", "ROLE_QUALITY_MANAGER", "ROLE_INVENTORY_CLERK",
+                 "ROLE_STORE_MANAGER" -> true;
             default -> false;
         });
 
@@ -1286,6 +1293,12 @@ public class UserServiceImpl implements UserService {
                 return JobTitle.LAB_DIRECTOR;
             case "ROLE_BILLING_SPECIALIST":
                 return JobTitle.BILLING_SPECIALIST;
+            case "ROLE_ANESTHESIOLOGIST":
+                return JobTitle.ANESTHESIOLOGIST;
+            case "ROLE_PHYSIOTHERAPIST":
+                return JobTitle.PHYSIOTHERAPIST;
+            case "ROLE_QUALITY_MANAGER":
+                return JobTitle.QUALITY_MANAGER;
             default:
                 return null;
         }

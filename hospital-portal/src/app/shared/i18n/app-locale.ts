@@ -66,6 +66,23 @@ export function formatClockTime(time: string, locale: string = currentLocale()):
 }
 
 /**
+ * A number with exactly `digits` decimals in the active locale's
+ * notation: 1.235 reads "1,235" in French and Spanish, "1.235" in English
+ * (QA D434, the QC chart labels used toFixed and always printed a dot).
+ */
+export function formatDecimal(
+  value: number,
+  digits: number,
+  locale: string = currentLocale(),
+): string {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+    useGrouping: false,
+  });
+}
+
+/**
  * Decimal numbers inside a display string written with the locale's
  * separator: "37.9" reads "37,9" in French and Spanish (QA D344). Only a dot
  * between two digits is touched, so "mg/dL", dates and ids are left alone.

@@ -63,7 +63,7 @@
                 }
               </td>
               <td>{{ item.genericName }}</td>
-              <td>{{ item.form ?? '—' }}</td>
+              <td>{{ formLabel(item.form) }}</td>
               <td>{{ item.strength ? item.strength + ' ' + (item.strengthUnit ?? '') : '—' }}</td>
               <td>
                 <span class="code-chip">{{ item.atcCode ?? '—' }}</span>

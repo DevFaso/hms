@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -25,7 +25,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CurrencyPipe],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',

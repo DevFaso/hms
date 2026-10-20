@@ -19,7 +19,7 @@ public class ApiResponseWrapper<T> {
     public static <T> ApiResponseWrapper<T> success(T data) {
         return ApiResponseWrapper.<T>builder()
                 .success(true)
-                .message("Operation successful")
+                .message(com.example.hms.utility.MessageUtil.resolveOrRaw("common.r7.operationSuccessful"))
                 .data(data)
                 .build();
     }

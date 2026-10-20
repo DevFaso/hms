@@ -135,6 +135,15 @@ public class AuthController {
      * comments on {@link AuthControllerProperties}.</p>
      */
     private final AuthControllerProperties authProps;
+
+    /**
+     * QA D418: the anonymous re-send of an activation code may reach a given
+     * assignment at most once per cooldown, so the endpoint cannot be used to
+     * flood a number with SMS (or run up their cost). Enforced on the
+     * assignment row ({@code claimActivationResend}), so it holds across
+     * instances; the per-IP limit of {@code RateLimitFilter} also applies.
+     */
+    static final java.time.Duration RESEND_COOLDOWN = java.time.Duration.ofMinutes(5);
     /**
      * The provider MFA gate (provider plan AC-13). Through an
      * {@link ObjectProvider}: a {@code @WebMvcTest} slice has no such bean,
@@ -580,7 +589,14 @@ public class AuthController {
                description = "Generates a new activation token and resends the verification email.")
     @PostMapping("/resend-verification")
     public ResponseEntity<Object> resendVerificationEmail(
-            @RequestParam("email") @Email @NotBlank String email) {
+            @RequestParam(value = "email", required = false) @Email String email,
+            @RequestParam(value = "phone", required = false) String phone) {
+        if (email == null || email.isBlank()) {
+            if (phone == null || phone.isBlank()) {
+                throw new com.example.hms.exception.BusinessException("auth.r7.contactRequired");
+            }
+            return resendActivationByPhone(phone.trim());
+        }
         var userOpt = userRepository.findByEmail(email);
         if (userOpt.isEmpty()) {
             // Don't reveal whether email exists
@@ -602,14 +618,65 @@ public class AuthController {
                 authProps.frontendBaseUrl(), user.getEmail(), user.getActivationToken());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
-            log.info("📧 Resent verification email to '{}'", user.getEmail());
+            log.info("📧 Resent verification email to '{}'", com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()));
         } catch (Exception e) {
             log.warn("⚠️ Failed to resend verification email to '{}': {}",
-                    user.getEmail(), e.getMessage());
+                    com.example.hms.utility.ActivationDeliveryTracker.maskEmail(user.getEmail()), e.getClass().getSimpleName());
         }
+        resendPendingAssignmentCodes(user);
 
         return ResponseEntity.ok(new MessageResponse(
                 "If the email is registered, a new verification link has been sent."));
+    }
+
+    /**
+     * QA D311/D418: a phone-only account (a patient registered at the desk
+     * without an e-mail) had no way to ask for a new activation. Re-sends the
+     * code of every assignment still waiting for confirmation — by SMS, and by
+     * e-mail as well when the account has one. Same neutral answer whether or
+     * not the number is known, so the endpoint does not reveal accounts.
+     */
+    private ResponseEntity<Object> resendActivationByPhone(String phone) {
+        MessageResponse neutral = new MessageResponse(
+                "If the number is registered, a new activation code has been sent.");
+        // Same lookup as the reset-by-phone flow: the number as typed at the
+        // desk ("70 00 00 00") is stored in E.164.
+        String e164 = com.example.hms.utility.PhoneNumbers.toE164(
+                phone, com.example.hms.utility.PhoneNumbers.DEFAULT_CALLING_CODE);
+        java.util.Optional<com.example.hms.model.User> found = e164 == null
+                ? java.util.Optional.empty() : userRepository.findByPhoneNumber(e164);
+        found.or(() -> userRepository.findByPhoneNumber(phone))
+                .filter(user -> !user.isActive())
+                .ifPresent(this::resendPendingAssignmentCodes);
+        return ResponseEntity.ok(neutral);
+    }
+
+    /**
+     * Re-sends the code of every assignment of {@code user} still waiting for
+     * confirmation, through the assignment notifier (e-mail when the account
+     * has an address, SMS when it has a number). Staff stay inactive until
+     * that code is typed, so the plain verification link alone did not
+     * activate a staff account (QA D311/D418).
+     */
+    private void resendPendingAssignmentCodes(com.example.hms.model.User user) {
+        var assignments = authNotification.assignments();
+        if (assignments == null) {
+            return;
+        }
+        for (var assignment : assignmentRepository.findByUserId(user.getId())) {
+            boolean pending = !Boolean.TRUE.equals(assignment.getActive())
+                    && assignment.getConfirmationCode() != null
+                    && !assignment.getConfirmationCode().isBlank();
+            if (!pending) {
+                continue;
+            }
+            try {
+                assignments.resendPendingActivationCode(assignment.getId(), RESEND_COOLDOWN);
+            } catch (RuntimeException e) {
+                log.warn("Activation re-send failed for assignment {}: {}",
+                        assignment.getId(), e.getClass().getSimpleName());
+            }
+        }
     }
 
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")

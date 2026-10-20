@@ -3,7 +3,10 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.security.audit.WriteAuditInterceptor;
+import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.service.LabOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,6 +55,7 @@ public class LabOrderController {
      */
     @PostMapping
     @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'SUPER_ADMIN')")
+    @WriteAudited(entity = "LAB_ORDER", eventType = AuditEventType.LAB_ORDER_CREATED)
     @Operation(summary = "Create Lab Order", description = "Creates a new lab order capturing ICD-10 diagnosis, order channel, documentation, and signature metadata")
     @ApiResponse(responseCode = "201", description = "Lab order created successfully")
     @ApiResponse(responseCode = "400", description = "Invalid request")
@@ -61,6 +65,7 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO created = labOrderService.createLabOrder(requestDTO, locale);
+        WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
         auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_CREATED, created);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }

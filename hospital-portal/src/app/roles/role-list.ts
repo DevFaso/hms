@@ -9,6 +9,7 @@ import {
 } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { roleDescriptionKey } from './role-description';
 
 @Component({
   selector: 'app-role-list',
@@ -45,6 +46,9 @@ export class RoleListComponent implements OnInit {
   allPermissions = signal<PermissionResponse[]>([]);
   selectedPermissionIds = signal<Set<string>>(new Set());
   permissionsLoading = signal(false);
+
+  /** QA D434: a seeded description in the reader's language, else `null`. */
+  readonly descriptionKey = roleDescriptionKey;
 
   ngOnInit(): void {
     this.loadRoles();

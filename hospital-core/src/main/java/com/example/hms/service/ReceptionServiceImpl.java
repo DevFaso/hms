@@ -1000,7 +1000,8 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientName(patientName)
                 .arrivalTimestamp(encounter.getArrivalTimestamp())
                 .chiefComplaint(encounter.getChiefComplaint())
-                .message("Patient " + patientName + " successfully checked in")
+                .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
+                        org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();
     }
 

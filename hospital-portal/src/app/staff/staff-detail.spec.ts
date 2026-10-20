@@ -101,6 +101,22 @@ describe('StaffDetailComponent — credentialing entry point', () => {
     fixture.detectChanges();
   }
 
+  it('shows the specialization in the reader language, never the raw enum (QA D434)', async () => {
+    await setup(staff({ specialization: 'GENERAL_PRACTICE' } as Partial<StaffResponse>));
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { SPECIALIZATION: { GENERAL_PRACTICE: 'Médecine générale' } } } },
+      true,
+    );
+    translate.use('fr');
+    openEmploymentTab();
+    fixture.detectChanges();
+
+    expect(root().textContent).toContain('Médecine générale');
+    expect(root().textContent).not.toContain('GENERAL_PRACTICE');
+  });
+
   it('offers credentialing for a practitioner with no expiry on file', async () => {
     await setup();
     openEmploymentTab();

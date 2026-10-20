@@ -144,11 +144,17 @@ export class BillingComponent implements OnInit {
     this.loadInvoices();
   }
 
+  /**
+   * QA D436: the new-invoice form opened with both required dates empty.
+   * The invoice is dated today and due in 30 days, both editable.
+   */
   emptyForm(): BillingInvoiceRequest {
+    const today = new Date();
+    const due = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
     return {
       patientId: '',
-      invoiceDate: '',
-      dueDate: '',
+      invoiceDate: this.isoDay(today),
+      dueDate: this.isoDay(due),
       totalAmount: 0,
       status: 'DRAFT',
     };
@@ -753,6 +759,13 @@ export class BillingComponent implements OnInit {
       default:
         return 'status-badge';
     }
+  }
+
+  /** A local calendar day as yyyy-MM-dd, the value an input[type=date] takes. */
+  private isoDay(day: Date): string {
+    const mm = String(day.getMonth() + 1).padStart(2, '0');
+    const dd = String(day.getDate()).padStart(2, '0');
+    return `${day.getFullYear()}-${mm}-${dd}`;
   }
 
   formatCurrency(amount: number): string {

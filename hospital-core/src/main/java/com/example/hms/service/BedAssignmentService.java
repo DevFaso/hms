@@ -72,7 +72,7 @@ public class BedAssignmentService {
     /** The actual work, shared by both public entry points. */
     private void doAssign(Admission admission, UUID bedId, Set<BedStatus> claimableFrom) {
         if (!BED_HOLDING_STATUSES.contains(admission.getStatus())) {
-            throw new BusinessException("Beds can only be assigned to active admissions.");
+            throw new BusinessException("bed.r7.admissionNotActive");
         }
         UUID hospitalId = admission.getHospital().getId();
         // ── Tenant isolation: a bed from another hospital reads as not-found. ──
@@ -84,7 +84,7 @@ public class BedAssignmentService {
             return; // already assigned — idempotent
         }
         if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
         }
         requireWardFitsPatient(bed, admission.getPatient());
 
@@ -194,7 +194,7 @@ public class BedAssignmentService {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("bed.notFound", bedId));
         if (!bed.isActive() || bed.getStatus() != BedStatus.AVAILABLE) {
-            throw new BusinessException("Bed " + bedLabel(bed) + " is not available.");
+            throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
         }
         bed.setStatus(BedStatus.RESERVED);
         bedRepository.save(bed);

@@ -97,11 +97,9 @@
               [attr.aria-grabbed]="dragIndex() === entry.flatIndex"
               aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
               [attr.aria-label]="
-                sidebarCollapsed()
-                  ? entry.item.translationKey
-                    ? (entry.item.translationKey | translate)
-                    : entry.item.label
-                  : null
+                entry.item.translationKey
+                  ? (entry.item.translationKey | translate)
+                  : entry.item.label
               "
               (click)="closeOverlays()"
               (keydown)="onNavKeydown($event, entry.flatIndex)"
@@ -334,7 +332,7 @@
               }
               <div class="notif-content">
                 <p class="notif-msg">{{ n.message }}</p>
-                <span class="notif-time">{{ n.createdAt | date: 'short' }}</span>
+                <span class="notif-time">{{ n.createdAt | serverTime | date: 'short' }}</span>
               </div>
               @if (!n.read) {
                 <span class="notif-unread-dot"></span>

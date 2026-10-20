@@ -279,14 +279,18 @@
                 />
               </div>
               <div class="field">
-                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }}</label>
+                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }} *</label>
                 <input
                   id="hAddress"
                   type="text"
                   [(ngModel)]="form.address"
                   name="address"
                   [placeholder]="'HOSPITALS.ADDRESS_PLACEHOLDER' | translate"
+                  aria-describedby="hAddressHint"
                 />
+                <small id="hAddressHint" class="field-hint">{{
+                  'HOSPITALS.ADDRESS_OR_PO_BOX_HINT' | translate
+                }}</small>
               </div>
             </div>
 

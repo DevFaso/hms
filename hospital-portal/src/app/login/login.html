@@ -647,7 +647,7 @@
         }
         <form (ngSubmit)="submitResendActivation()" class="login-form">
           <div class="form-group">
-            <label for="ra-email">{{ 'LOGIN.EMAIL_ADDRESS' | translate }}</label>
+            <label for="ra-email">{{ 'LOGIN.EMAIL_OR_PHONE' | translate }}</label>
             <div class="input-wrapper">
               <svg
                 class="input-icon"
@@ -662,11 +662,10 @@
               </svg>
               <input
                 id="ra-email"
-                type="email"
+                type="text"
                 [(ngModel)]="resendActivationEmail"
                 name="raEmail"
-                autocomplete="email"
-                placeholder="you@example.com"
+                autocomplete="username"
                 [disabled]="resendActivationLoading"
                 required
               />

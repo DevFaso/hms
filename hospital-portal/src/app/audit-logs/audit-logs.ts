@@ -18,6 +18,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /** QA D330: the write audit's "METHOD /route" description, read as an action. */
 const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
@@ -31,7 +32,14 @@ const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './audit-logs.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './audit-logs.scss',

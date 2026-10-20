@@ -162,7 +162,9 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.SPECIALIZATION' | translate }}</span>
-              <span class="value">{{ s.specialization ?? '—' }}</span>
+              <span class="value">{{
+                s.specialization ? (s.specialization | enumLabel: 'specialization') : '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'STAFF.LICENSE_NUMBER' | translate }}</span>

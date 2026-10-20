@@ -157,6 +157,57 @@ class ExceptionProseRatchetTest {
         assertTranslated("# QA round 6 (D317)", 90);
     }
 
+    @Test
+    @DisplayName("QA D424: the round-7 messages are really translated, not copied")
+    void roundSevenKeysAreTranslated() throws IOException {
+        assertTranslated("# QA round 7 (D424)", 70);
+    }
+
+    /**
+     * QA D424: the check-in answer ("Patient X successfully checked in") and the
+     * generic "Operation successful" reached French screens through a response
+     * DTO's {@code message}, a path the exception scan above never looked at.
+     * Every {@code .message(...)} builder call in main code must carry a resolved
+     * key, never an English sentence or a sentence glued together.
+     */
+    static final Pattern MESSAGE_PROSE = Pattern.compile(
+        "\\.message\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*([+)])");
+
+    static int countMessageProse(String source) {
+        int n = 0;
+        Matcher m = MESSAGE_PROSE.matcher(source);
+        while (m.find()) {
+            if (isProse(m.group(1)) || "+".equals(m.group(2))) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    @Test
+    @DisplayName("QA D424: no response DTO carries an English sentence in its message")
+    void responseMessagesAreKeys() throws IOException {
+        List<String> found = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                int n = countMessageProse(Files.readString(p, StandardCharsets.UTF_8));
+                if (n > 0) {
+                    found.add(MAIN_JAVA.relativize(p) + ": " + n);
+                }
+            }
+        }
+        assertThat(found).as("Resolve a messages*.properties key for the response message").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the response-message scan recognises a sentence and a concatenation")
+    void messageScanRecognisesProse() {
+        assertThat(countMessageProse(".message(\"Patient \" + name + \" successfully checked in\")")).isEqualTo(1);
+        assertThat(countMessageProse(".message(\"Operation successful\")")).isEqualTo(1);
+        assertThat(countMessageProse(".message(MessageUtil.resolveOrRaw(\"common.r7.operationSuccessful\"))")).isZero();
+        assertThat(countMessageProse(".message(\"ok\")")).isZero();
+    }
+
     private static void assertTranslated(String header, int atLeast) throws IOException {
         Map<String, String> en = block(header, "");
         Map<String, String> fr = block(header, "_fr");

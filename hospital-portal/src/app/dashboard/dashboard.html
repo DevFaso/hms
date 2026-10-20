@@ -1110,7 +1110,9 @@
           <div class="audit-list">
             @for (evt of hospitalAdminAuditEvents(); track evt.id) {
               <div class="audit-row">
-                <span class="audit-time">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
+                <span class="audit-time">{{
+                  evt.eventTimestamp | serverTime | date: 'shortTime'
+                }}</span>
                 <div class="audit-body">
                   <span class="audit-actor">{{
                     evt.userName ?? ('COMMON.SYSTEM' | translate)

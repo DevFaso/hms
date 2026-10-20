@@ -746,6 +746,16 @@ export class EnumLabelService implements OnDestroy {
      * value, so a group added here can only fill a gap, never change the label
      * an earlier group already gives. scripts/lib/enum-labels-net.test.mjs
      * fails when a declared domain has no group. */
+    /* ── Patient chart timeline categories (PatientServiceImpl CATEGORY_*) ── */
+    timelineCategory: {
+      ALLERGY: 'Allergy',
+      ENCOUNTER: 'Encounter',
+      IMAGING: 'Imaging',
+      LAB_RESULT: 'Lab result',
+      PRESCRIPTION: 'Prescription',
+      PROCEDURE: 'Procedure',
+    },
+
     /* ── Immunization status ───────────────────────────────── */
     immunizationStatus: {
       COMPLETED: 'Completed',

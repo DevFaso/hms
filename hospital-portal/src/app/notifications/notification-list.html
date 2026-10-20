@@ -62,7 +62,7 @@
           <div class="notif-content">
             <h4 class="notif-title">{{ notif.title || notif.message }}</h4>
             <p class="notif-message">{{ notif.message }}</p>
-            <span class="notif-time">{{ notif.createdAt | date: 'medium' }}</span>
+            <span class="notif-time">{{ notif.createdAt | serverTime | date: 'medium' }}</span>
           </div>
           @if (!notif.read) {
             <div class="unread-dot"></div>
@@ -71,7 +71,9 @@
         @if (expandedId() === notif.id) {
           <div class="notif-expanded-panel">
             <p class="notif-expanded-message">{{ notif.message }}</p>
-            <span class="notif-expanded-time">{{ notif.createdAt | date: 'medium' }}</span>
+            <span class="notif-expanded-time">{{
+              notif.createdAt | serverTime | date: 'medium'
+            }}</span>
           </div>
         }
       }

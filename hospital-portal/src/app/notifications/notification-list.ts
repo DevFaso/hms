@@ -5,11 +5,12 @@ import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-notification-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule],
   templateUrl: './notification-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './notification-list.scss',
