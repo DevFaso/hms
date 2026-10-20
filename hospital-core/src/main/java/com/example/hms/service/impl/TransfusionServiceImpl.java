@@ -543,17 +543,13 @@ public class TransfusionServiceImpl implements TransfusionService {
             .filter(s -> s.getHospital() != null && Objects.equals(s.getHospital().getId(), hospitalId))
             .filter(Staff::isActive)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getVerifiedByStaffId()));
-        // Another staff record of the same person (a second hospital's, say) is still one person.
-        if (administering.getUser() != null && verifier.getUser() != null
-            && Objects.equals(administering.getUser().getId(), verifier.getUser().getId())) {
-            throw new BusinessException(
-                "The bedside check requires two people. Name the second clinician who independently "
-                    + "verified this unit against this patient.");
-        }
-
         // The independent second check. A transfusion is the one administration
-        // where a single signature is not accepted practice anywhere.
-        if (Objects.equals(administering.getId(), verifier.getId())) {
+        // where a single signature is not accepted practice anywhere. Another staff
+        // record of the same person (a second hospital's, say) is still one person.
+        boolean samePerson = Objects.equals(administering.getId(), verifier.getId())
+            || (administering.getUser() != null && verifier.getUser() != null
+                && Objects.equals(administering.getUser().getId(), verifier.getUser().getId()));
+        if (samePerson) {
             throw new BusinessException(
                 "The bedside check requires two people. Name the second clinician who independently "
                     + "verified this unit against this patient.");
