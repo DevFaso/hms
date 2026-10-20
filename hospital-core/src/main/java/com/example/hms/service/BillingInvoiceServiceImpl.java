@@ -319,7 +319,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
-    /** QA D403: an invoice may only carry a visit of the patient it bills. */
     /**
      * QA D529: a second invoice for a stay already invoiced (and paid) was
      * created with no warning, billing the patient twice. A check-in copay is

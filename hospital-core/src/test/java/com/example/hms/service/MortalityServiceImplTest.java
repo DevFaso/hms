@@ -182,7 +182,7 @@ class MortalityServiceImplTest {
         assertThat(open.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
         assertThat(result.getClosure().getAdmissionsClosed()).isEqualTo(1);
         // QA D515: the bed (and any pending transfer's reservation) goes back.
-        org.mockito.Mockito.verify(bedAssignmentService).releaseBed(open);
+        verify(bedAssignmentService).releaseBed(open);
     }
 
     @Test
@@ -198,7 +198,7 @@ class MortalityServiceImplTest {
 
         assertThat(done.getStatus()).isEqualTo(AdmissionStatus.DISCHARGED);
         assertThat(result.getClosure().getAdmissionsClosed()).isZero();
-        org.mockito.Mockito.verify(bedAssignmentService, org.mockito.Mockito.never()).releaseBed(done);
+        verify(bedAssignmentService, never()).releaseBed(done);
     }
 
     @Test

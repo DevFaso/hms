@@ -3417,7 +3417,7 @@ class NurseTaskServiceImplTest {
         consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
         rx.setEncounter(consultation);
         UUID patientId = rx.getPatient().getId();
-        org.mockito.Mockito.doReturn(java.util.Set.of()).when(service).activelyAdmittedPatientIds(hospitalId);
+        doReturn(java.util.Set.of()).when(service).activelyAdmittedPatientIds(hospitalId);
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
@@ -3441,7 +3441,7 @@ class NurseTaskServiceImplTest {
         inEd.setEncounter(ed);
         UUID admittedId = inBed.getPatient().getId();
         UUID edId = inEd.getPatient().getId();
-        org.mockito.Mockito.doReturn(java.util.Set.of(admittedId)).when(service).activelyAdmittedPatientIds(hospitalId);
+        doReturn(java.util.Set.of(admittedId)).when(service).activelyAdmittedPatientIds(hospitalId);
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(admittedId, "Awa Kabore", "Awa", "Kabore"),
                 patient(edId, "Issa Sawadogo", "Issa", "Sawadogo")));

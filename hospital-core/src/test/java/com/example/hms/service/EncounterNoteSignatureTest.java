@@ -448,6 +448,6 @@ class EncounterNoteSignatureTest {
 
         assertThat(note.getAssessment()).isEqualTo("Revised");
         // updatedAt is stamped at flush; the response must be mapped after it.
-        org.mockito.Mockito.verify(encounterNoteRepository).flush();
+        verify(encounterNoteRepository).flush();
     }
 }

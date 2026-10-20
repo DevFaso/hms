@@ -225,45 +225,55 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
-
-            // Find the most recent vital sign for this patient at this hospital
-            Optional<PatientVitalSign> last = vitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
-
-            // Compute when the next vitals check is due
-            LocalDateTime dueTime;
-            boolean overdue;
-            NewsScoreCalculator.NewsScoreResult news = null;
-            if (last.isEmpty() || last.get().getRecordedAt() == null) {
-                // No vitals ever recorded — overdue now
-                dueTime = now.minusMinutes(30);
-                overdue = true;
-            } else {
-                // QA D207: the NEWS2 band of the last set shortens the interval.
-                // QA D518: the adult score does not set a child's interval.
-                news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
-                dueTime = last.get().getRecordedAt().plus(
-                    com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
-                overdue = dueTime.isBefore(now);
-            }
-
-            // Only include if within the lookahead window or already overdue
-            if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
-                tasks.add(NurseVitalTaskResponseDTO.builder()
-                    .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
-                    .patientId(ctx.patientId())
-                    .patientName(ctx.displayName())
-                    .type(vitalsRoundType(news, overdue))
-                    .dueTime(dueTime)
-                    .overdue(overdue)
-                    .news2Score(news != null ? news.total() : null)
-                    .build());
+            if (ctx.patientId() != null && admitted.contains(ctx.patientId())) {
+                NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow);
+                if (task != null) {
+                    tasks.add(task);
+                }
             }
         }
 
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
         return tasks.stream().limit(MAX_LIMIT).toList();
+    }
+
+    /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
+    private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
+                                                   Duration effectiveWindow) {
+        // Find the most recent vital sign for this patient at this hospital
+        Optional<PatientVitalSign> last = vitalSignRepository
+            .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
+
+        // Compute when the next vitals check is due
+        LocalDateTime dueTime;
+        boolean overdue;
+        NewsScoreCalculator.NewsScoreResult news = null;
+        if (last.isEmpty() || last.get().getRecordedAt() == null) {
+            // No vitals ever recorded — overdue now
+            dueTime = now.minusMinutes(30);
+            overdue = true;
+        } else {
+            // QA D207: the NEWS2 band of the last set shortens the interval.
+            // QA D518: the adult score does not set a child's interval.
+            news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+            dueTime = last.get().getRecordedAt().plus(
+                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
+            overdue = dueTime.isBefore(now);
+        }
+
+        // Only include if within the lookahead window or already overdue
+        if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
+            return NurseVitalTaskResponseDTO.builder()
+                .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
+                .patientId(ctx.patientId())
+                .patientName(ctx.displayName())
+                .type(vitalsRoundType(news, overdue))
+                .dueTime(dueTime)
+                .overdue(overdue)
+                .news2Score(news != null ? news.total() : null)
+                .build();
+        }
+        return null;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -300,8 +310,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
         boolean inBed = admitted.contains(ctx.patientId());
         for (Prescription rx : prescriptions) {
-            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
-            if (!inBed && !givenDuringOpenEmergencyVisit(rx)) continue;
+            if (!onWardMar(rx, closedStays, inBed)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -946,6 +955,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .toList();
     }
 
+    /** Whether an order belongs on the ward MAR (QA D514): active, not ended by a stay, and the patient is in a bed or an open emergency visit. */
+    private boolean onWardMar(Prescription rx, List<Admission> closedStays, boolean inBed) {
+        return ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !endedWithAStay(rx, closedStays)
+            && (inBed || givenDuringOpenEmergencyVisit(rx));
+    }
+
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
     private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
@@ -959,8 +974,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
             boolean inBed = admitted.contains(ctx.patientId());
             for (Prescription rx : prescriptions) {
-                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
-                if (!inBed && !givenDuringOpenEmergencyVisit(rx)) continue;
+                if (!onWardMar(rx, closedStays, inBed)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
@@ -1274,9 +1288,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private static boolean startedAfter(com.example.hms.model.Encounter encounter, LocalDateTime instant) {
-        LocalDateTime start = encounter.getEncounterDate() != null ? encounter.getEncounterDate()
-            : encounter.getArrivalTimestamp() != null ? encounter.getArrivalTimestamp()
-            : encounter.getCreatedAt();
+        LocalDateTime start = encounter.getEncounterDate();
+        if (start == null) {
+            start = encounter.getArrivalTimestamp() != null ? encounter.getArrivalTimestamp() : encounter.getCreatedAt();
+        }
         return start != null && start.isAfter(instant);
     }
 

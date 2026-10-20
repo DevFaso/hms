@@ -182,9 +182,9 @@ public class BedAssignmentService {
             return;
         }
         transferOrderRepository.findPendingForAdmission(admission.getId()).ifPresent(order -> {
-            releaseReservation(order.getToBed());
+            unreserve(order.getToBed());
             order.setStatus(TransferOrderStatus.CANCELLED);
-            order.setCancelledAt(java.time.LocalDateTime.now());
+            order.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
             order.setCancellationReason(MessageUtil.resolve("transfer.cancelledByDischarge"));
             transferOrderRepository.save(order);
             log.info("Pending transfer {} cancelled: admission {} closed", order.getId(), admission.getId());
@@ -235,6 +235,10 @@ public class BedAssignmentService {
      */
     @Transactional
     public void releaseReservation(Bed bed) {
+        unreserve(bed);
+    }
+
+    private void unreserve(Bed bed) {
         if (bed == null || bed.getStatus() != BedStatus.RESERVED) {
             return;
         }

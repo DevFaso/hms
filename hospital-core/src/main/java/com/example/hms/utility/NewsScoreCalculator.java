@@ -68,7 +68,7 @@ public final class NewsScoreCalculator {
         if (patient == null || patient.getDateOfBirth() == null) {
             return true;
         }
-        return java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now()).getYears()
+        return java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears()
             >= MIN_AGE_YEARS;
     }
 
