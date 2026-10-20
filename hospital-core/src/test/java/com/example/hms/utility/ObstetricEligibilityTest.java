@@ -51,7 +51,8 @@ class ObstetricEligibilityTest {
 
     @Test
     void d413_refusesAChildOfFive() {
-        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(5)))
+        Patient child = bornYearsAgo(5);
+        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(child))
             .isInstanceOf(BusinessException.class);
     }
 

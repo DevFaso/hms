@@ -317,7 +317,8 @@ class BedAssignmentServiceTest {
         Bed bed = bed("B04", BedStatus.AVAILABLE);
         when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
 
-        assertThatThrownBy(() -> service.assignBed(admission, bed.getId()))
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class);
         assertThat(bed.getStatus()).isEqualTo(BedStatus.AVAILABLE);
         verify(bedRepository, never()).save(any());
@@ -329,7 +330,8 @@ class BedAssignmentServiceTest {
         Bed bed = bed("B05", BedStatus.AVAILABLE);
         when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
 
-        assertThatThrownBy(() -> service.assignBed(admission, bed.getId()))
+        UUID bedId = bed.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -350,11 +352,25 @@ class BedAssignmentServiceTest {
         admission.setPatient(patient("MALE", 40));
         Bed paeds = bed("P01", BedStatus.AVAILABLE);
         when(bedRepository.findByIdAndWard_Hospital_Id(paeds.getId(), hospitalId)).thenReturn(Optional.of(paeds));
-        assertThatThrownBy(() -> service.assignBed(admission, paeds.getId()))
+        UUID paedsId = paeds.getId();
+        assertThatThrownBy(() -> service.assignBed(admission, paedsId))
             .isInstanceOf(BusinessException.class);
 
         ward.setWardType(WardType.GENERAL);
         service.assignBed(admission, paeds.getId());
         assertThat(paeds.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    @Test
+    void d431_aToddlerIsRefusedANicuBed() {
+        ward.setWardType(WardType.NICU);
+        admission.setPatient(patient("FEMALE", 2));
+        Bed cot = bed("N01", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(cot.getId(), hospitalId)).thenReturn(Optional.of(cot));
+        UUID cotId = cot.getId();
+
+        assertThatThrownBy(() -> service.assignBed(admission, cotId))
+            .isInstanceOf(BusinessException.class);
+        assertThat(cot.getStatus()).isEqualTo(BedStatus.AVAILABLE);
     }
 }

@@ -292,23 +292,31 @@ public class AdmissionStayEncounterService {
             return;
         }
         for (java.util.Map<String, Object> f : admission.getFollowUpAppointments()) {
-            if (f == null) {
-                continue;
+            com.example.hms.model.discharge.FollowUpAppointmentEntry entry = toFollowUp(f);
+            if (entry != null) {
+                summary.addFollowUpAppointment(entry);
             }
-            LocalDate date = parseDate(firstText(f, "appointmentDate", "date", "preferredDate"));
-            String type = firstText(f, "appointmentType", "type");
-            String purpose = firstText(f, "purpose", "reason", "notes");
-            if (date == null && type == null && purpose == null) {
-                continue;
-            }
-            summary.addFollowUpAppointment(com.example.hms.model.discharge.FollowUpAppointmentEntry.builder()
-                .appointmentType(type)
-                .providerName(firstText(f, "providerName", "provider"))
-                .specialty(firstText(f, "specialty"))
-                .appointmentDate(date)
-                .purpose(purpose)
-                .build());
         }
+    }
+
+    /** One follow-up the physician entered, or null when the row says nothing usable. */
+    private static com.example.hms.model.discharge.FollowUpAppointmentEntry toFollowUp(java.util.Map<String, Object> f) {
+        if (f == null) {
+            return null;
+        }
+        LocalDate date = parseDate(firstText(f, "appointmentDate", "date", "preferredDate"));
+        String type = firstText(f, "appointmentType", "type");
+        String purpose = firstText(f, "purpose", "reason", "notes");
+        if (date == null && type == null && purpose == null) {
+            return null;
+        }
+        return com.example.hms.model.discharge.FollowUpAppointmentEntry.builder()
+            .appointmentType(type)
+            .providerName(firstText(f, "providerName", "provider"))
+            .specialty(firstText(f, "specialty"))
+            .appointmentDate(date)
+            .purpose(purpose)
+            .build();
     }
 
     private static String firstText(java.util.Map<String, Object> map, String... keys) {

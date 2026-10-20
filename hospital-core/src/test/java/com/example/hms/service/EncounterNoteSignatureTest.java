@@ -47,6 +47,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -335,7 +337,7 @@ class EncounterNoteSignatureTest {
             .hasMessageContaining("addendum");
         assertThat(note.getAuthor()).isEqualTo(authorUser);
         assertThat(note.getAssessment()).isEqualTo("Pneumopathie");
-        org.mockito.Mockito.verify(encounterNoteRepository, org.mockito.Mockito.never()).save(any(EncounterNote.class));
+        verify(encounterNoteRepository, never()).save(any(EncounterNote.class));
     }
 
     @Test
@@ -365,13 +367,13 @@ class EncounterNoteSignatureTest {
 
         org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteAddendum> added =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteAddendum.class);
-        org.mockito.Mockito.verify(encounterNoteAddendumRepository).save(added.capture());
+        verify(encounterNoteAddendumRepository).save(added.capture());
         assertThat(added.getValue().getAuthorStaff()).isEqualTo(nurse);
         // The body's name is not the author's: the server's is.
         assertThat(added.getValue().getAuthorName()).isEqualTo("Mariam Sawadogo");
         org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        org.mockito.Mockito.verify(encounterNoteHistoryRepository).save(history.capture());
+        verify(encounterNoteHistoryRepository).save(history.capture());
         assertThat(history.getValue().getChangedBy()).isEqualTo("nurse@example.test");
         // The doctor's note itself is unchanged.
         assertThat(note.getAuthor()).isEqualTo(authorUser);
@@ -388,7 +390,7 @@ class EncounterNoteSignatureTest {
         assertThat(note.getAssessment()).isEqualTo("Revised");
         org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        org.mockito.Mockito.verify(encounterNoteHistoryRepository).save(history.capture());
+        verify(encounterNoteHistoryRepository).save(history.capture());
         assertThat(history.getValue().getChangedBy()).isEqualTo("doctor@example.test");
         assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_UPDATED");
     }
@@ -403,7 +405,7 @@ class EncounterNoteSignatureTest {
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
         org.mockito.ArgumentCaptor<EncounterNote> saved = org.mockito.ArgumentCaptor.forClass(EncounterNote.class);
-        org.mockito.Mockito.verify(encounterNoteRepository).save(saved.capture());
+        verify(encounterNoteRepository).save(saved.capture());
         assertThat(saved.getValue().getAuthorStaff()).isEqualTo(nurse);
         assertThat(saved.getValue().getAuthor()).isEqualTo(nurse.getUser());
     }

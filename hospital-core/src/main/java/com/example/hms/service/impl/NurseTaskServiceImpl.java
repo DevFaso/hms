@@ -1179,7 +1179,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    /** Resolve nurse Staff entity from userId + hospitalId. */
     /**
      * D411: the bedside five-rights scan belongs to the nurse who performed it.
      * The verify call stamps that nurse as the row's administering staff; a GIVEN
@@ -1234,6 +1233,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
     }
 
+    /** Resolve nurse Staff entity from userId + hospitalId. */
     private Optional<Staff> resolveNurseStaff(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return Optional.empty();
         return staffRepository.findByUserIdAndHospitalId(nurseUserId, hospitalId);

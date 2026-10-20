@@ -356,4 +356,53 @@ class AdmissionStayEncounterServiceTest {
 
         verify(dischargeSummaryRepository, never()).save(any());
     }
+
+    @Test
+    void d426_followUpsKeepOnlyUsableRowsAndReadADateTime() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        stay.setPatient(admission.getPatient());
+        stay.setHospital(hospital);
+        stay.setStaff(doctor);
+        stay.setAssignment(new UserRoleHospitalAssignment());
+        java.util.List<java.util.Map<String, Object>> followUps = new java.util.ArrayList<>();
+        followUps.add(null);
+        followUps.add(java.util.Map.of("notes", " "));
+        followUps.add(java.util.Map.of("date", "2026-11-03T10:00:00", "provider", "Dr Kone", "specialty", "Pneumologie"));
+        followUps.add(java.util.Map.of("type", "CONTROLE", "date", "bientot"));
+        admission.setFollowUpAppointments(followUps);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        ArgumentCaptor<com.example.hms.model.discharge.DischargeSummary> saved =
+            ArgumentCaptor.forClass(com.example.hms.model.discharge.DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        assertThat(saved.getValue().getFollowUpAppointments()).hasSize(2);
+        com.example.hms.model.discharge.FollowUpAppointmentEntry first = saved.getValue().getFollowUpAppointments().get(0);
+        assertThat(first.getAppointmentDate()).isEqualTo(java.time.LocalDate.of(2026, 11, 3));
+        assertThat(first.getProviderName()).isEqualTo("Dr Kone");
+        com.example.hms.model.discharge.FollowUpAppointmentEntry second = saved.getValue().getFollowUpAppointments().get(1);
+        assertThat(second.getAppointmentDate()).isNull();
+        assertThat(second.getAppointmentType()).isEqualTo("CONTROLE");
+    }
+
+    @Test
+    void d426_noProviderMeansNoSummaryRatherThanAnInvalidOne() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
 }

@@ -118,26 +118,20 @@ public class BedAssignmentService {
         }
         Integer age = patient.getDateOfBirth() == null ? null
             : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now()).getYears();
-        switch (bed.getWard().getWardType()) {
-            case MATERNITY -> {
-                if (com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
-                    || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient)) {
-                    throw new BusinessException("bed.ward.maternityMismatch", bedLabel(bed));
-                }
-            }
-            case PEDIATRIC -> {
-                if (age != null && age >= 18) {
-                    throw new BusinessException("bed.ward.pediatricMismatch", bedLabel(bed));
-                }
-            }
-            case NICU -> {
-                if (age != null && age >= 1) {
-                    throw new BusinessException("bed.ward.nicuMismatch", bedLabel(bed));
-                }
-            }
-            default -> {
-                // Every other ward takes any patient.
-            }
+        com.example.hms.enums.WardType type = bed.getWard().getWardType();
+        boolean mismatch = switch (type) {
+            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            case PEDIATRIC -> age != null && age >= 18;
+            case NICU -> age != null && age >= 1;
+            default -> false; // Every other ward takes any patient.
+        };
+        if (mismatch) {
+            throw new BusinessException(switch (type) {
+                case MATERNITY -> "bed.ward.maternityMismatch";
+                case PEDIATRIC -> "bed.ward.pediatricMismatch";
+                default -> "bed.ward.nicuMismatch";
+            }, bedLabel(bed));
         }
     }
 
