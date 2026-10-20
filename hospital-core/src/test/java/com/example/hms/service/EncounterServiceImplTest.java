@@ -2597,6 +2597,10 @@ class EncounterServiceImplTest {
         com.example.hms.model.Department department = new com.example.hms.model.Department();
         department.setId(UUID.randomUUID());
         encounter.setDepartment(department);
+        encounter.getStaff().setId(UUID.randomUUID());
+        Appointment alreadyAtEight = new Appointment();
+        alreadyAtEight.setStartTime(java.time.LocalTime.of(8, 0));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(any(), any())).thenReturn(List.of(alreadyAtEight));
         UUID bookedId = UUID.randomUUID();
         when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
             Appointment a = inv.getArgument(0);
@@ -2621,6 +2625,8 @@ class EncounterServiceImplTest {
         assertThat(booked.getValue().getAppointmentDate()).isEqualTo(preferred);
         assertThat(booked.getValue().getStatus()).isEqualTo(com.example.hms.enums.AppointmentStatus.PENDING);
         assertThat(booked.getValue().getReason()).isEqualTo("Contrôle paludisme");
+        // 08:00 is taken: the placeholder moves on rather than collide with uq_appt_staff_slot.
+        assertThat(booked.getValue().getStartTime()).isEqualTo(java.time.LocalTime.of(8, 30));
         assertThat(booked.getValue().getEndTime()).isAfter(booked.getValue().getStartTime());
         verify(checkOutMapper).toAfterVisitSummary(any(), any(), org.mockito.ArgumentMatchers.eq(bookedId));
         verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));

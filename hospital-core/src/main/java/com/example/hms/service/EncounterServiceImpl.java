@@ -2227,6 +2227,10 @@ public class EncounterServiceImpl implements EncounterService {
                     encounter.getId());
             return null;
         }
+        java.time.LocalTime start = freeFollowUpSlot(staff.getId(), date);
+        if (start == null) {
+            return null;
+        }
         String reason = checkoutFollowUpReason(followUp);
         String notes = followUp.getNotes();
         Appointment saved = appointmentRepository.save(Appointment.builder()
@@ -2236,8 +2240,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .hospital(hospital)
                 .department(department)
                 .appointmentDate(date)
-                .startTime(FOLLOW_UP_PLACEHOLDER_START)
-                .endTime(FOLLOW_UP_PLACEHOLDER_START.plusMinutes(30))
+                .startTime(start)
+                .endTime(start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
                 .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
                 .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
@@ -2246,6 +2250,28 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private static final java.time.LocalTime FOLLOW_UP_PLACEHOLDER_START = java.time.LocalTime.of(8, 0);
+    private static final java.time.LocalTime FOLLOW_UP_PLACEHOLDER_LAST = java.time.LocalTime.of(17, 30);
+    private static final int FOLLOW_UP_SLOT_MINUTES = 30;
+
+    /**
+     * The first half-hour from 08:00 the clinician has nothing booked at, so
+     * the placeholder never collides with uq_appt_staff_slot at flush (which
+     * would fail the whole checkout); null when the day is full.
+     */
+    private java.time.LocalTime freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
+        java.util.Set<java.time.LocalTime> taken = new java.util.HashSet<>();
+        if (staffId != null) {
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date)
+                    .forEach(a -> taken.add(a.getStartTime()));
+        }
+        for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
+                t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
+            if (!taken.contains(t)) {
+                return t;
+            }
+        }
+        return null;
+    }
 
     /** The follow-up date asked at checkout, or two weeks out when absent or unparseable. */
     private static java.time.LocalDate checkoutFollowUpDueDate(
