@@ -75,6 +75,9 @@ public class PatientController {
 
     /** How many matches the ?search= form of GET /patients returns: a typeahead, not a list. */
     private static final int LIST_SEARCH_LIMIT = 20;
+    /** QA D504 — tells the chart that a sharing opt-out narrowed the list. */
+    static final String RECORDS_WITHHELD_HEADER = "X-Records-Withheld";
+    static final String RECORDS_WITHHELD_OTHER_HOSPITALS = "OTHER_HOSPITALS";
 
     private static final String ROLE_RECEPTIONIST = "ROLE_RECEPTIONIST";
     private static final String MSG_DOCTOR_CONTEXT_REQUIRED = "Unable to resolve authenticated doctor context.";
@@ -532,6 +535,13 @@ public class PatientController {
         }
         List<PatientAllergyResponseDTO> allergies = patientService
             .getPatientAllergies(id, resolvedHospitalId, userId);
+        // QA D504: a list narrowed by the patient's sharing opt-out must not read
+        // as the whole record. The header names the fact, never the hidden rows.
+        if (patientService.foreignAllergiesWithheld(id, resolvedHospitalId, userId)) {
+            return ResponseEntity.ok()
+                .header(RECORDS_WITHHELD_HEADER, RECORDS_WITHHELD_OTHER_HOSPITALS)
+                .body(allergies);
+        }
         return ResponseEntity.ok(allergies);
     }
 

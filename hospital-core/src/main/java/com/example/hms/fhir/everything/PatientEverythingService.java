@@ -313,7 +313,7 @@ public class PatientEverythingService {
 
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null, ctx.reach(),
             "Cross-hospital FHIR $everything read on the treatment relationship");
-        emitAudit(patient, describe(patientId, params, bundle.getTotal()));
+        emitAudit(patient, hospitalId, describe(patientId, params, bundle.getTotal()));
         return bundle;
     }
 
@@ -547,7 +547,7 @@ public class PatientEverythingService {
         return new ForbiddenOperationException(message, outcome);
     }
 
-    private void emitAudit(Patient patient, String description) {
+    private void emitAudit(Patient patient, UUID hospitalId, String description) {
         try {
             // Without an explicit actor the audit sink records the exporter
             // as SYSTEM — useless for a PHI-export trail. Best-effort
@@ -558,6 +558,7 @@ public class PatientEverythingService {
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
+                .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : SecurityUtils.getCurrentUsername())
                 .resourceId(patient.getId() == null ? null : patient.getId().toString())

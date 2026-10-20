@@ -7827,6 +7827,7 @@
     "WOUND_CARE": "Soins des plaies"
   },
   "CHART": {
+    "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
     "ADD_ALLERGY": "Ajouter une allergie",
     "ADD_PROBLEM": "Ajouter un diagnostic",
     "ADD_SECTION": "Ajouter une section",

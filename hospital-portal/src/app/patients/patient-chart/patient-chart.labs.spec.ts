@@ -103,7 +103,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(
@@ -371,7 +371,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(of([released()]));
@@ -445,7 +445,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(of([released()]));
@@ -505,7 +505,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(of([released()]));
@@ -640,7 +640,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(throwError(() => new Error('500')));
@@ -769,7 +769,7 @@ describe('PatientChartComponent — labs section', () => {
       'listChartUpdates',
       'listLabResults',
     ]);
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     patientService.listLabResults.and.returnValue(of([released()]));

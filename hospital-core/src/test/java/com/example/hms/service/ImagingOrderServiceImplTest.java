@@ -585,6 +585,61 @@ class ImagingOrderServiceImplTest {
         );
     }
 
+    /** QA D508: the order the by-patient list showed hospital B opens by id at B too. */
+    @Test
+    void d508_getOrder_readableForeignOrder_matchesTheList() {
+        UUID hospitalB = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
+        when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB))
+            .thenReturn(java.util.Set.of(hospitalB, hospitalId));
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        assertThat(imagingOrderService.getOrder(orderId).getId()).isEqualTo(orderId);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalB), eq(doctorB), isNull(), any(), anyString());
+    }
+
+    /** QA D508: a foreign order the list would not show is a 404 by id as well. */
+    @Test
+    void d508_getOrder_unreadableForeignOrder_isNotFound() {
+        UUID hospitalB = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
+        when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB)).thenReturn(java.util.Set.of(hospitalB));
+
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId));
+    }
+
+    /** D508 path re-verified: reading across is not acting across — a status write stays 404. */
+    @Test
+    void d508_updateStatus_onReadableForeignOrder_staysNotFound() {
+        UUID hospitalB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.updateOrderStatus(orderId,
+                new com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO()));
+    }
+
     @Test
     void getOrder_sameHospital_success() {
         ImagingOrder order = new ImagingOrder();

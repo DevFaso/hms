@@ -1980,9 +1980,20 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D110 — allergy rows a reader at this hospital may see; every row for a global (null) scope. */
     private List<PatientAllergy> allergiesVisibleAt(UUID patientId, UUID hospitalId) {
-        return hospitalId == null
-            ? patientAllergyRepository.findByPatient_Id(patientId)
-            : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+        // QA D504: the opt-out and its break-the-glass override are one decision.
+        return com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId);
+    }
+
+    private static UUID currentPrincipalUserId() {
+        return com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+            patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId);
     }
 
     private List<PatientTimelineEntryDTO> collectAllergyEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
@@ -2743,8 +2754,10 @@ public class PatientServiceImpl implements PatientService {
 
         // QA D110: the allergy summary column covers every hospital's rows. For a patient
         // who opted out of record sharing, a reader elsewhere sees only this hospital's.
+        // QA D504: unless a break-the-glass session overrides the opt-out.
         if (hospitalId != null && dto.getAllergies() != null
-                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patient.getId(), hospitalId)) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
                 patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }

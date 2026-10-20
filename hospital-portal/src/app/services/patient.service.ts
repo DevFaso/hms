@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 export interface PatientAddressHistoryEntry {
   id: string;
@@ -346,6 +346,11 @@ export interface RegistrationMatch {
   matchedOn: 'PHONE' | 'EMAIL';
 }
 
+export interface AllergyListResult {
+  items: PatientAllergy[];
+  withheld: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class PatientService {
   private readonly http = inject(HttpClient);
@@ -467,10 +472,22 @@ export class PatientService {
 
   /* ── Allergies ── */
 
-  listAllergies(patientId: string, hospitalId?: string): Observable<PatientAllergy[]> {
+  /**
+   * QA D504 — `withheld` is true when the patient's sharing opt-out keeps other
+   * hospitals' allergies out of this list, so the chart never reads an empty
+   * list as "no allergies".
+   */
+  listAllergies(patientId: string, hospitalId?: string): Observable<AllergyListResult> {
     let params = new HttpParams();
     if (hospitalId) params = params.set('hospitalId', hospitalId);
-    return this.http.get<PatientAllergy[]>(`/patients/${patientId}/allergies`, { params });
+    return this.http
+      .get<PatientAllergy[]>(`/patients/${patientId}/allergies`, { params, observe: 'response' })
+      .pipe(
+        map((res) => ({
+          items: res.body ?? [],
+          withheld: res.headers.get('X-Records-Withheld') === 'OTHER_HOSPITALS',
+        })),
+      );
   }
 
   addAllergy(patientId: string, req: PatientAllergyRequest): Observable<PatientAllergy> {

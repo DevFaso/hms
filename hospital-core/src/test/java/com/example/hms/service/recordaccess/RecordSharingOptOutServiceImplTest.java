@@ -100,6 +100,29 @@ class RecordSharingOptOutServiceImplTest {
     }
 
     @Test
+    @DisplayName("D533: the receptionist's opt-out at hospital A names hospital A on its CONSENT_UPDATE row")
+    void d533_optOutAuditCarriesTheActingHospital() {
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorUserId)
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(java.util.Set.of(hospitalA))
+                .build());
+        try {
+            when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(false);
+
+            service.optOut(patientId, "QA", actorUserId, Locale.ENGLISH);
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalA);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     @DisplayName("a second opt-out is a 409, not a second row")
     void optOutTwiceConflicts() {
         when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(true);

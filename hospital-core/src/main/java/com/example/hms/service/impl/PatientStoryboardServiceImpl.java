@@ -173,9 +173,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      */
     private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
         // QA D110: an opted-out patient's other-hospital rows stay there.
-        List<PatientAllergy> source = hospitalId == null
-            ? allergyRepository.findByPatient_Id(patientId)
-            : allergyRepository.findVisibleAt(patientId, hospitalId);
+        // QA D504: unless a break-the-glass session overrides the opt-out.
+        List<PatientAllergy> source = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            allergyRepository, recordAccessPolicy,
+            HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator

@@ -322,6 +322,7 @@ public class RoiRequestService {
             .userId(roleValidator.getCurrentUserId())
             .userName(SecurityUtils.getCurrentUsername())
             .hospitalName(request.getHospital() != null ? request.getHospital().getName() : null)
+            .hospitalId(request.getHospital() != null ? request.getHospital().getId() : null) // QA D533
             .eventDescription(description)
             .build();
     }

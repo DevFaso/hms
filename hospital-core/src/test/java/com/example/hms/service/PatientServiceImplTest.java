@@ -284,6 +284,88 @@ class PatientServiceImplTest {
             .isEqualTo("Peanuts");
     }
 
+    // QA D504: break-the-glass overrides the opt-out on the allergy reads too.
+    private com.example.hms.service.recordaccess.RecordAccessDecision breakGlassDecision(UUID actor) {
+        return com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patientId, hospitalId, actor,
+            new com.example.hms.service.recordaccess.TreatmentRelationship(
+                com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), hospitalId, patientId,
+                null, null, true),
+            com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED);
+    }
+
+    @Test
+    void d504BreakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientAllergy severeAtA = new PatientAllergy();
+            severeAtA.setId(UUID.randomUUID());
+            severeAtA.setHospital(other);
+            severeAtA.setAllergenDisplay("Penicillin");
+            severeAtA.setActive(true);
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(breakGlassDecision(doctorB));
+            when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severeAtA));
+            when(patientAllergyMapper.toResponseDto(severeAtA)).thenReturn(PatientAllergyResponseDTO.builder()
+                .id(severeAtA.getId()).hospitalId(other.getId()).allergenDisplay("Penicillin").build());
+
+            assertThat(patientService.getPatientAllergies(patientId, hospitalId, doctorB))
+                .extracting(PatientAllergyResponseDTO::getAllergenDisplay).containsExactly("Penicillin");
+            assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isFalse();
+            verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void d504WithoutBreakGlassTheOptOutWithholdsAndSaysSo() {
+        UUID doctorB = UUID.randomUUID();
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(
+            com.example.hms.service.recordaccess.RecordAccessDecision.refused(patientId, hospitalId, doctorB,
+                com.example.hms.enums.RecordAccessDenialReason.PATIENT_OPTED_OUT,
+                com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+
+        assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isTrue();
+    }
+
+    @Test
+    void d504NoOptOutNothingIsWithheld() {
+        UUID doctorB = UUID.randomUUID();
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(false);
+
+        assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isFalse();
+        verify(recordAccessPolicy, never()).decide(any(), any(), any());
+    }
+
+    @Test
+    void d504BreakGlassKeepsTheWholeAllergySummaryDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).allergies("Peanuts, Penicillin").build();
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(responseDTO);
+            when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(breakGlassDecision(doctorB));
+
+            assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getAllergies())
+                .isEqualTo("Peanuts, Penicillin");
+            verify(patientAllergyRepository, never()).findByPatient_IdAndHospital_Id(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
     // QA D69: an MRN lookup must not return a patient registered only at another hospital.
     @Test
     void lookupPatientsDropsPatientsNotRegisteredAtCallerHospital() {

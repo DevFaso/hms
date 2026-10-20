@@ -43,6 +43,9 @@ class NurseDashboardServiceImplTest {
     @Mock
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
     @InjectMocks
     private NurseDashboardServiceImpl nurseDashboardService;
 
@@ -107,6 +110,34 @@ class NurseDashboardServiceImplTest {
         assertFalse(dto.getFlags().isEmpty());
         assertTrue(dto.getFlags().contains("Ready for discharge"));
         assertTrue(dto.getFlags().contains("Allergies noted"));
+    }
+
+    @Test
+    void d504_breakGlassKeepsTheWholeAllergySummaryDespiteTheOptOut() {
+        UUID nurseB = UUID.randomUUID();
+        Patient patient = buildPatient("p@example.com", "555-3333", "Awa", "Sana", "awa");
+        Hospital hospital = buildHospital("General Hospital", "GH-100");
+        PatientHospitalRegistration registration = buildRegistration(patient, hospital);
+        registration.setReadyByStaffId(nurseUserId);
+        PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
+        when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
+        when(recordAccessPolicy.decide(nurseB, patient.getId(), hospitalId)).thenReturn(
+            com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patient.getId(), hospitalId, nurseB,
+                new com.example.hms.service.recordaccess.TreatmentRelationship(
+                    com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), hospitalId,
+                    patient.getId(), null, null, true),
+                com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(nurseB).build());
+        try {
+            List<PatientResponseDTO> result = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+            assertEquals("Peanuts, Penicillin", result.get(0).getAllergies());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test

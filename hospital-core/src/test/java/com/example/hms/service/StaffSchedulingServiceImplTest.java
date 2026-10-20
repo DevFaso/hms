@@ -133,6 +133,30 @@ class StaffSchedulingServiceImplTest {
         verify(shiftRepository, never()).save(any(StaffShift.class));
     }
 
+    /** QA D541: hospital admin A posts a shift for DOCTOR_B at hospital B — a 403 refusal, not a 400. */
+    @Test
+    void d541_scheduleShiftAtAnotherHospitalIsAnAccessRefusal() {
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        UUID adminA = UUID.randomUUID();
+        Staff staffB = buildStaff(staffId, hospitalB);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staffB));
+        when(hospitalRepository.findClinicalById(hospitalB)).thenReturn(Optional.of(staffB.getHospital()));
+        when(roleValidator.getCurrentUserId()).thenReturn(adminA);
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.isHospitalAdmin(adminA, hospitalB)).thenReturn(false);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(adminA)).thenReturn(Optional.empty());
+
+        StaffShiftRequestDTO tomorrow = new StaffShiftRequestDTO(
+            staffId, hospitalB, null, TODAY.plusDays(1),
+            LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.scheduleShift(tomorrow, Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class)
+            .hasMessageContaining("schedule.staff.permissionDenied");
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
     @Test
     void scheduleShift_refusesAStaffMemberWhoseAccountIsInactive() {
         // QA D166 (partial D117): qa.r2.nurse290579 - staff row active, account

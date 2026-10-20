@@ -282,9 +282,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         boolean hasStructuredRows = false;
         try {
             // QA D110: an opted-out patient's other-hospital rows stay there.
-            List<PatientAllergy> rows = hospitalId == null
-                ? patientAllergyRepository.findByPatient_Id(patientId)
-                : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+            // QA D504: unless a break-the-glass session overrides the opt-out.
+            List<PatientAllergy> rows = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+                patientAllergyRepository, recordAccessPolicy,
+                com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
+                patientId, hospitalId);
             rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
             hasStructuredRows = !rows.isEmpty()
                 || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());

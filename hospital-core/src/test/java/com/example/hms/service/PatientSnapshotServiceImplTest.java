@@ -180,6 +180,42 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
+    void d504_breakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            PatientAllergy allergy = mock(PatientAllergy.class);
+            when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, HOSPITAL_ID)).thenReturn(
+                com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patientId, HOSPITAL_ID, doctorB,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                        com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), HOSPITAL_ID,
+                        patientId, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+            when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(Collections.emptyList());
+            when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+            when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+            when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+            when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getAllergies().contains("Penicillin"));
+            verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     void getSnapshot_withBothStores_readsOnlyTheStructuredRows() {
         // E9 #56 — the free-text column is a derived summary of the rows; reading
         // both would list every allergy twice.

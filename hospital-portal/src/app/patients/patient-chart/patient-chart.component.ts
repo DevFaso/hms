@@ -128,6 +128,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
   allergiesLoading = signal(false);
+  /** QA D504 — other hospitals' allergies are held back by the patient's opt-out. */
+  allergiesWithheld = signal(false);
   showAllergyModal = signal(false);
   editingAllergyId = signal<string | null>(null);
   allergySaving = signal(false);
@@ -484,8 +486,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
   loadAllergies(): void {
     this.allergiesLoading.set(true);
     this.patientService.listAllergies(this.patientId, this.hospitalId() || undefined).subscribe({
-      next: (list) => {
-        this.allergies.set(list ?? []);
+      next: (result) => {
+        this.allergies.set(result?.items ?? []);
+        this.allergiesWithheld.set(result?.withheld ?? false);
         this.allergiesLoading.set(false);
       },
       error: () => {

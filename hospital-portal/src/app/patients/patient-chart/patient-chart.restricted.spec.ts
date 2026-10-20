@@ -43,7 +43,7 @@ describe('PatientChartComponent — restricted rows', () => {
       'listChartUpdates',
     ]);
     patientService.getDoctorTimeline.and.returnValue(of(tl));
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
 

@@ -62,6 +62,9 @@
         </button>
       }
     </div>
+    @if (allergiesWithheld()) {
+      <p class="labs-hint" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+    }
     @if (allergiesLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (allergies().length === 0) {

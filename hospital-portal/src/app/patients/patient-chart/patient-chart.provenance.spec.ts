@@ -53,7 +53,7 @@ describe('PatientChartComponent — timeline provenance', () => {
       'listChartUpdates',
     ]);
     patientService.getDoctorTimeline.and.returnValue(of(timeline));
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
 
@@ -188,7 +188,7 @@ describe('PatientChartComponent — timeline category label (QA D434)', () => {
       generatedAt: '2026-03-12T10:00:00Z',
     };
     patientService.getDoctorTimeline.and.returnValue(of(timeline));
-    patientService.listAllergies.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
     patientService.listDiagnoses.and.returnValue(of([]));
     patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
     TestBed.configureTestingModule({

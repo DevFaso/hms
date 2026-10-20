@@ -106,6 +106,13 @@ public interface PatientService {
 
     List<PatientAllergyResponseDTO> getPatientAllergies(UUID patientId, UUID hospitalId, UUID requesterUserId);
 
+    /**
+     * QA D504 — true when the patient's sharing opt-out holds other hospitals'
+     * allergy rows back from this reader (no break-the-glass override), so the
+     * response can say the list is not the whole record.
+     */
+    boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId);
+
     PatientAllergyResponseDTO createPatientAllergy(
         UUID patientId,
         UUID hospitalId,
