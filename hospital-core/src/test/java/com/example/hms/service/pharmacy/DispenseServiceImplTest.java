@@ -462,6 +462,7 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
 
             try {
                 service.createDispense(dto);
@@ -472,6 +473,27 @@ class DispenseServiceImplTest {
 
             assertThat(prescription.getPharmacistVerifiedAt()).isNotNull();
             assertThat(prescription.getPharmacistVerifiedBy()).isSameAs(user);
+        }
+
+        @Test
+        @DisplayName("#922 review: a HOSPITAL_ADMIN filling cannot attest the pharmacist verification")
+        void d512_aHospitalAdminCannotAttestTheVerification() {
+            prescription.setPharmacistVerifiedAt(null);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThat(prescription.getPharmacistVerifiedAt()).isNull();
+            assertThat(prescription.getPharmacistVerifiedBy()).isNull();
+            verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
         @Test
@@ -489,6 +511,7 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
 
             assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(BusinessException.class);

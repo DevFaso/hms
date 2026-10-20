@@ -2468,6 +2468,34 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        void d513_updateRefusesANestedNoteOnACheckedOutVisit() {
+            // #922 review: PUT /encounters/{id} with a nested note bypassed the
+            // lock that POST /encounters/{id}/notes enforces.
+            Encounter existing = encounter();
+            existing.setStatus(EncounterStatus.COMPLETED);
+            Encounter merged = encounter();
+            merged.setStatus(EncounterStatus.COMPLETED);
+            com.example.hms.model.encounter.EncounterNote mine = new com.example.hms.model.encounter.EncounterNote();
+            mine.setId(UUID.randomUUID());
+            mine.setAssessment("original");
+            merged.setEncounterNote(mine);
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    any(Encounter.class), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any(UserRoleHospitalAssignment.class)))
+                .thenReturn(merged);
+            com.example.hms.payload.dto.EncounterRequestDTO request =
+                request(note(null, "rewritten after checkout"), merged.getEncounterDate());
+            request.setStatus(EncounterStatus.COMPLETED);
+
+            assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, true, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "encounter.note.closedLocked".equals(((BusinessException) e).getMessageKey()));
+            assertThat(mine.getAssessment()).isEqualTo("original");
+            verify(encounterNoteRepository, never()).save(any());
+        }
+
+        @Test
         void createRefusesANestedNoteInAnotherClinicianName() {
             when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),

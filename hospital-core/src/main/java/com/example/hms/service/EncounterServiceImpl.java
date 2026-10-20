@@ -364,7 +364,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy());
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy(), null);
         }
 
         recordHistory(saved, "CREATED", resolveHistoryActor(request.getCreatedBy(), ctx.staff()), null);
@@ -418,7 +418,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy());
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy(), previousStatus);
         }
 
         // Mirror the dedicated checkout flow: whenever an update transitions the
@@ -503,12 +503,10 @@ public class EncounterServiceImpl implements EncounterService {
         // part of the closed record. Rewriting it in place left it unsigned
         // with no trace; a late correction is an addendum, which is attributed
         // and dated.
-        if (isClosedEncounter(encounter) && hasExistingNote(encounter)) {
-            throw new BusinessException("encounter.note.closedLocked");
-        }
         NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
-        EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null);
+        EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null,
+            encounter.getStatus());
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -726,9 +724,8 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
-    private static boolean isClosedEncounter(Encounter encounter) {
-        return encounter.getStatus() == EncounterStatus.COMPLETED
-            || encounter.getStatus() == EncounterStatus.CANCELLED;
+    private static boolean isClosedStatus(EncounterStatus status) {
+        return status == EncounterStatus.COMPLETED || status == EncounterStatus.CANCELLED;
     }
 
     private boolean hasExistingNote(Encounter encounter) {
@@ -740,7 +737,15 @@ public class EncounterServiceImpl implements EncounterService {
                                                       NoteAuthor author,
                                                       EncounterNoteRequestDTO request,
                                                       Locale locale,
-                                                      String actorOverride) {
+                                                      String actorOverride,
+                                                      EncounterStatus statusBefore) {
+        // QA D513 (#922 review): the lock lives HERE, on every write path —
+        // PUT /encounters/{id} with a nested note reached this method without
+        // the guard. Keyed on the status before this request, so the update
+        // that checks the visit out may still carry its note.
+        if (isClosedStatus(statusBefore) && hasExistingNote(encounter)) {
+            throw new BusinessException("encounter.note.closedLocked");
+        }
         validateAuthorScope(encounter, author.staff(), locale);
 
         EncounterNote note = Optional.ofNullable(encounter.getEncounterNote())

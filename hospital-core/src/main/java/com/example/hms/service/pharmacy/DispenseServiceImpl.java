@@ -837,6 +837,13 @@ public class DispenseServiceImpl implements DispenseService {
         if (actors.verifiedBy() == null) {
             throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
         }
+        // #922 review: the dispense endpoints also admit HOSPITAL_ADMIN, but
+        // the verification is a pharmacist's attestation — the same roles
+        // POST /prescriptions/{id}/pharmacist-verify admits, no wider.
+        if (!roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only a pharmacist can verify a prescription.");
+        }
         pharmacistVerificationService.verifyAtCounter(prescription, actors.verifiedBy());
     }
 
