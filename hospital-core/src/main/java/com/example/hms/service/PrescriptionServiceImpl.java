@@ -1172,8 +1172,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                               Staff staff,
                                               UUID actingHospitalId) {
         if (request.getEncounterId() != null) {
-            return encounterRepository.findById(request.getEncounterId())
+            Encounter named = encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
+            // QA D525 (D431): an order written into a hospital stay after the
+            // discharge closed it was accepted, and would surface as a due
+            // dose for a patient who has gone home.
+            if (named.getAdmissionId() != null
+                    && (named.getStatus() == EncounterStatus.COMPLETED
+                        || named.getStatus() == EncounterStatus.CANCELLED)) {
+                throw new BusinessException("prescription.encounter.stayClosed");
+            }
+            return named;
         }
 
         UUID hospitalId = actingHospitalId != null ? actingHospitalId : determineHospitalId(staff, patient);

@@ -165,6 +165,31 @@ class AuthControllerTest {
                         containsInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN")));
     }
 
+    @Test
+    void qaD536_multiRoleLoginWithoutARoleReportsTheRealForcePasswordChange() throws Exception {
+        // POST /auth/login with no selectedRole, for a multi-role account on a temporary password.
+        givenAuthenticatedWith("ROLE_DOCTOR", "ROLE_NURSE");
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(java.util.UUID.randomUUID());
+        user.setUsername("Multi1");
+        user.setForcePasswordChange(true);
+        user.setForceUsernameChange(true);
+        // Typed in another case: the picker must find the account the way authentication did.
+        when(userRepository.findByUsernameIgnoreCase("multi1")).thenReturn(java.util.Optional.of(user));
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("multi1");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roleSelectionRequired").value(true))
+                .andExpect(jsonPath("$.forcePasswordChange").value(true))
+                .andExpect(jsonPath("$.forceUsernameChange").value(true));
+    }
+
     /** Authenticate as a user carrying exactly these authorities. */
     private void givenAuthenticatedWith(String... authorities) {
         var granted = java.util.Arrays.stream(authorities)
@@ -1427,6 +1452,29 @@ class AuthControllerTest {
 
         verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
         verify(notifier, times(1)).resendPendingActivationCode(any(java.util.UUID.class), any());
+    }
+
+    /** QA D542: the portal sends the phone in the JSON body so it never lands in a URL. */
+    @Test
+    void resendVerification_phoneInTheBody_resendsTheCode_D542() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("patient9").phoneNumber("+22670000009").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID pendingId = java.util.UUID.randomUUID();
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        when(userRepository.findByPhoneNumber("+22670000009")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId)).thenReturn(java.util.List.of(pendingAssignment(pendingId)));
+
+        mockMvc.perform(post("/auth/resend-verification")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"phone\":\"+22670000009\"}"))
+                .andExpect(status().isOk());
+
+        verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
     }
 
     @Test

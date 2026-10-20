@@ -127,6 +127,11 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
         return PatientStoryboardDTO.builder()
             .patient(buildHeader(patient, hospitalId))
             .allergies(allergies)
+            // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
+            .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                allergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+            // QA D504: the problems and encounters below are narrowed the same way.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
             .problems(problems)
             .activeEncounter(activeEncounter)
             .lastEncounter(lastEncounter)
@@ -173,9 +178,10 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
      */
     private List<AllergySummaryDTO> loadAllergies(UUID patientId, UUID hospitalId) {
         // QA D110: an opted-out patient's other-hospital rows stay there.
-        List<PatientAllergy> source = hospitalId == null
-            ? allergyRepository.findByPatient_Id(patientId)
-            : allergyRepository.findVisibleAt(patientId, hospitalId);
+        // QA D504: unless a break-the-glass session overrides the opt-out.
+        List<PatientAllergy> source = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            allergyRepository, recordAccessPolicy,
+            HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(), patientId, hospitalId);
         return source.stream()
             .filter(PatientAllergy::isActive)
             .sorted(Comparator

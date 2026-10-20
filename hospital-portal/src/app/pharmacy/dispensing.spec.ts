@@ -255,6 +255,28 @@ describe('DispensingComponent', () => {
     expect(component.showForm()).toBeFalse();
   });
 
+  it('QA D512: the pharmacist attestation is sent as verifiedBy, and only when ticked', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    const form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+    };
+    component.form = { ...form };
+    component.verifyAttested.set(false);
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].verifiedBy).toBeUndefined();
+
+    component.form = { ...form };
+    component.verifyAttested.set(true);
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].verifiedBy).toBe('user-1');
+  });
+
   it('should show error on dispense failure', () => {
     pharmacySvc.createDispense.and.returnValue(
       throwError(() => ({ error: { message: 'Insufficient stock' } })),

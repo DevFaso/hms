@@ -1445,6 +1445,7 @@
     "PENDING": "Pendiente",
     "RECORD_PAYMENT": "Registrar pago",
     "REVENUE": "Ingresos",
+    "SUPPLEMENTARY_CONFIRM": "¿Crear de todos modos una factura complementaria para esta visita?",
     "SAVE_FAILED": "Error al guardar",
     "SEARCH": "Buscar facturas...",
     "SEND": "Enviar",
@@ -2163,6 +2164,7 @@
     "AGING_90_PLUS": "Más de 90 días"
   },
   "DELIVERY": {
+    "ACTIVATION_EMAIL_QUEUED": "El correo de activación (con el código de cada rol) está en cola de envío.",
     "CREDENTIALS_NOT_DELIVERED": "Las credenciales de acceso de un solo uso no pudieron enviarse al paciente.",
     "EMAIL_FAILED": "La cuenta se creó, pero el correo de activación no pudo entregarse. Use «Reenviar código» cuando se resuelva el problema.",
     "EMAIL_NOT_CONFIGURED": "El envío de correo no está configurado en este servidor — el código de activación no se envió por correo.",
@@ -3525,6 +3527,7 @@
     "BALANCE": "Balance",
     "BED": "Cama",
     "BEDS_AVAILABLE": "Camas disponibles",
+    "THIS_PATIENT": "este paciente",
     "BLOOD_GLUCOSE": "Glucosa en sangre",
     "BLOOD_PRESSURE": "Presión arterial",
     "BPM": "lpm",
@@ -3726,7 +3729,7 @@
       "SYSTOLIC": "p. ej. 120",
       "DIASTOLIC": "p. ej. 80",
       "SPO2": "p. ej. 98",
-      "GLUCOSE": "p. ej. 100",
+      "GLUCOSE": "p. ej. 5,6",
       "WEIGHT": "p. ej. 70,5",
       "HEIGHT": "ej. 74,5",
       "HEAD_CIRCUMFERENCE": "ej. 44,2"
@@ -4517,6 +4520,7 @@
       "EMPTY_DESC": "No tiene ninguna cita programada.",
       "UPCOMING": "Próximas",
       "PAST": "Citas pasadas",
+      "CANCELLED_SECTION": "Citas canceladas",
       "DATE": "Fecha",
       "TIME": "Hora",
       "PROVIDER": "Profesional",
@@ -7938,6 +7942,9 @@
     "WOUND_CARE": "Cuidado de heridas"
   },
   "CHART": {
+    "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
+    "RECORDS_WITHHELD": "Los registros de otros hospitales (problemas, medicamentos, laboratorio, signos vitales, notas, consultas, imágenes) no se muestran: este paciente rechazó compartir su historial. Estas listas pueden estar incompletas.",
+    "LIST_WITHHELD": "Los registros de otros hospitales están ocultos: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
     "ADD_ALLERGY": "Agregar alergia",
     "ADD_PROBLEM": "Agregar diagnóstico",
     "ADD_SECTION": "Agregar sección",
@@ -8337,6 +8344,7 @@
     "STOCK_ROUTING_DESC": "Comprobar la disponibilidad de existencias y derivar recetas a farmacias asociadas",
     "STRENGTH": "Concentración",
     "SUBSTITUTION": "Sustitución",
+    "VERIFY_ATTEST": "He verificado esta receta (validación farmacéutica)",
     "SUBSTITUTION_REASON": "Motivo de sustitución",
     "SUPPLIER": "Proveedor",
     "SUPPLIER_PLACEHOLDER": "p. ej., CAMEG",

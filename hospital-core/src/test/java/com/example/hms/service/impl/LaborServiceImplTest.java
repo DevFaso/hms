@@ -77,6 +77,7 @@ class LaborServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
+    @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
 
     private LaborServiceImpl service;
 
@@ -96,7 +97,7 @@ class LaborServiceImplTest {
             patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles(), postpartumCarePlanRepository);
+            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -385,6 +386,65 @@ class LaborServiceImplTest {
 
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
         assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.CAESAREAN_SECTION);
+    }
+
+    /** QA D516: recording a birth posts its charge, filed by the recorder. */
+    @Test
+    void recordDeliveryPostsTheDeliveryCharge() {
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        verify(deliveryChargeService).chargeDelivery(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient), org.mockito.ArgumentMatchers.eq(recorderUserId));
+    }
+
+    /** QA D516: a charge that cannot be posted never undoes the clinical record. */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheChargeFails() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom"));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    /**
+     * QA D516 (self-review of #921): inside a transaction the charge waits
+     * for the delivery to commit and then runs in its own transaction, so a
+     * charge whose invoice save throws leaves the committed birth intact.
+     */
+    @Test
+    void recordDeliveryPostsTheChargeOnlyAfterCommitAndSurvivesItsFailure() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("invoice save failed"));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+            org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
+            verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+            verify(deliveryChargeService).chargeDelivery(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(recorderUserId));
+            assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /** QA D516: no second charge when the episode already has a delivery. */
+    @Test
+    void recordDeliverySecondAttemptPostsNoCharge() {
+        when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
+
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("already exists");
+        org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
     }
 
     @Test

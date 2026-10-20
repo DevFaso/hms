@@ -244,8 +244,21 @@ export class BillingComponent implements OnInit {
         this.loadInvoices(this.page());
       },
       error: (err: HttpErrorResponse) => {
-        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
         this.saving.set(false);
+        // QA D529: the stay already has an invoice. Billed twice only on purpose.
+        if (!this.editing() && err.status === 409 && !this.form.supplementary) {
+          const why = err.error?.message ?? '';
+          if (
+            globalThis.confirm(`${why}
+
+${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
+          ) {
+            this.form = { ...this.form, supplementary: true };
+            this.submitForm();
+          }
+          return;
+        }
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
       },
     });
   }

@@ -43,9 +43,18 @@
     transform 0.1s,
     box-shadow 0.2s;
 
-  &:hover {
+  &:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  }
+
+  // QA D539: a disabled primary button (e.g. the EPDS screening one) looked
+  // enabled - the shared style had no disabled state.
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
   }
 }
 

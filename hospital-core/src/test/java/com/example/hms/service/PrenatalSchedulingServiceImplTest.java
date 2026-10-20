@@ -198,6 +198,58 @@ class PrenatalSchedulingServiceImplTest {
             .anySatisfy(rec -> assertThat(rec.isScheduled()).isTrue());
     }
 
+    /** QA D519: a GP visit and a cancelled prenatal appointment are not antenatal visits. */
+    @Test
+    void generateScheduleIgnoresGpAndCancelledAppointments() {
+        LocalDate lmp = LocalDate.of(2023, 9, 4);
+        Appointment gp = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Médecine générale").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 8)).startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(9, 30))
+            .status(AppointmentStatus.SCHEDULED).reason("Consultation").build();
+        gp.setId(UUID.randomUUID());
+        Appointment cancelled = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 15)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
+            .status(AppointmentStatus.CANCELLED).reason("Consultation prénatale").build();
+        cancelled.setId(UUID.randomUUID());
+        Appointment prenatal = Appointment.builder()
+            .patient(patient).hospital(hospital)
+            .department(Department.builder().name("Maternité").hospital(hospital).build())
+            .appointmentDate(LocalDate.of(2024, 4, 22)).startTime(LocalTime.of(10, 0)).endTime(LocalTime.of(10, 30))
+            .status(AppointmentStatus.SCHEDULED).reason("CPN").build();
+        prenatal.setId(UUID.randomUUID());
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId))
+            .thenReturn(List.of(gp, cancelled, prenatal));
+
+        PrenatalScheduleResponseDTO response = service.generateSchedule(PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).lastMenstrualPeriodDate(lmp).build(), Locale.US, SCHEDULER_USERNAME);
+
+        assertThat(response.getExistingAppointments())
+            .extracting(com.example.hms.payload.dto.prenatal.PrenatalAppointmentSummaryDTO::getAppointmentId)
+            .containsExactly(prenatal.getId());
+        assertThat(response.getRecommendations())
+            .filteredOn(PrenatalVisitRecommendationDTO::isScheduled)
+            .extracting(PrenatalVisitRecommendationDTO::getAppointmentId)
+            .containsExactly(prenatal.getId());
+    }
+
+    /** QA D519: a midwife's appointment counts even with no reason or maternity department. */
+    @Test
+    void aMidwifeAppointmentCountsAsAPrenatalVisit() {
+        com.example.hms.model.Staff midwife = new com.example.hms.model.Staff();
+        midwife.setJobTitle(com.example.hms.enums.JobTitle.MIDWIFE);
+        Appointment appt = Appointment.builder().staff(midwife)
+            .appointmentDate(LocalDate.of(2024, 4, 22)).status(AppointmentStatus.CONFIRMED).build();
+        assertThat(PrenatalSchedulingServiceImpl.countsAsPrenatalVisit(appt)).isTrue();
+        appt.setStatus(AppointmentStatus.NO_SHOW);
+        assertThat(PrenatalSchedulingServiceImpl.countsAsPrenatalVisit(appt)).isFalse();
+    }
+
     @Test
     void generateScheduleNeverRecommendsAPastTargetOrAnInvertedWindow() {
         // QA D47: on a Sunday, LMP + whole weeks lands on the previous Monday;

@@ -97,6 +97,9 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     // Row-24 A04 follow-on additional dependency.
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    // QA D515: an A03 discharge frees the bed and cancels a pending transfer
+    // like every in-app discharge path.
+    private final com.example.hms.service.BedAssignmentService bedAssignmentService;
 
     /**
      * Runs in a nested transaction so a projection failure cannot roll
@@ -234,6 +237,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         row.calculateLengthOfStay();
 
         if (firstTransition) {
+            bedAssignmentService.releaseBed(row);
             emitAdmissionLifecycleAudit(
                 AuditEventType.ADMISSION_DISCHARGED, row, ctx,
                 String.format(

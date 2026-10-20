@@ -299,6 +299,33 @@ describe('BillingComponent', () => {
     expect(billingSpy.searchInvoices).toHaveBeenCalled();
   });
 
+  it('QA D529: a stay already invoiced asks before a supplementary invoice', () => {
+    fixture.detectChanges();
+    billingSpy.createInvoice.and.returnValues(
+      throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
+      of(mockInvoice()),
+    );
+    const confirm = spyOn(globalThis, 'confirm').and.returnValue(true);
+    component.openCreate();
+    component.submitForm();
+    expect(confirm).toHaveBeenCalled();
+    expect(billingSpy.createInvoice).toHaveBeenCalledTimes(2);
+    expect(billingSpy.createInvoice.calls.mostRecent().args[0].supplementary).toBeTrue();
+    expect(billingSpy.createInvoice.calls.first().args[0].supplementary).toBeUndefined();
+  });
+
+  it('QA D529: declining the supplementary invoice creates nothing more', () => {
+    fixture.detectChanges();
+    billingSpy.createInvoice.and.returnValue(
+      throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
+    );
+    spyOn(globalThis, 'confirm').and.returnValue(false);
+    component.openCreate();
+    component.submitForm();
+    expect(billingSpy.createInvoice).toHaveBeenCalledTimes(1);
+    expect(component.saving()).toBeFalse();
+  });
+
   it('submitForm creates a new invoice and closes the modal', () => {
     fixture.detectChanges();
     billingSpy.createInvoice.and.returnValue(of(mockInvoice()));

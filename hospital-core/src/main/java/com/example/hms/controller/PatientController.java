@@ -75,6 +75,9 @@ public class PatientController {
 
     /** How many matches the ?search= form of GET /patients returns: a typeahead, not a list. */
     private static final int LIST_SEARCH_LIMIT = 20;
+    /** QA D504 — tells the chart that a sharing opt-out narrowed the list. */
+    static final String RECORDS_WITHHELD_HEADER = "X-Records-Withheld";
+    static final String RECORDS_WITHHELD_OTHER_HOSPITALS = "OTHER_HOSPITALS";
 
     private static final String ROLE_RECEPTIONIST = "ROLE_RECEPTIONIST";
     private static final String MSG_DOCTOR_CONTEXT_REQUIRED = "Unable to resolve authenticated doctor context.";
@@ -532,7 +535,27 @@ public class PatientController {
         }
         List<PatientAllergyResponseDTO> allergies = patientService
             .getPatientAllergies(id, resolvedHospitalId, userId);
+        // QA D504: a list narrowed by the patient's sharing opt-out must not read
+        // as the whole record. The header names the fact, never the hidden rows.
+        if (patientService.foreignAllergiesWithheld(id, resolvedHospitalId, userId)) {
+            return ResponseEntity.ok()
+                .header(RECORDS_WITHHELD_HEADER, RECORDS_WITHHELD_OTHER_HOSPITALS)
+                .body(allergies);
+        }
         return ResponseEntity.ok(allergies);
+    }
+
+    /**
+     * QA D504: any clinical list narrowed by the patient's sharing opt-out
+     * carries {@code X-Records-Withheld}, so it never reads as the whole
+     * record. The header names the fact, never the hidden rows.
+     */
+    private org.springframework.http.HttpHeaders withheldHeaders(UUID patientId, UUID hospitalId, UUID userId) {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        if (patientService.foreignRecordsWithheld(patientId, hospitalId, userId)) {
+            headers.add(RECORDS_WITHHELD_HEADER, RECORDS_WITHHELD_OTHER_HOSPITALS);
+        }
+        return headers;
     }
 
     @Operation(
@@ -637,7 +660,10 @@ public class PatientController {
         }
         List<PatientProblemResponseDTO> diagnoses = patientService
             .listPatientDiagnoses(id, resolvedHospitalId, includeHistorical);
-        return ResponseEntity.ok(diagnoses);
+        // QA D504: a problem list narrowed by the patient's opt-out says so.
+        return ResponseEntity.ok()
+            .headers(withheldHeaders(id, resolvedHospitalId, authUtils.resolveUserId(auth).orElse(null)))
+            .body(diagnoses);
     }
 
     @Operation(
@@ -741,7 +767,8 @@ public class PatientController {
         resolveClinicalAssignment(userId, resolvedHospitalId);
         Page<PatientChartUpdateResponseDTO> response = patientChartUpdateService
             .listPatientChartUpdates(id, resolvedHospitalId, pageable);
-        return ResponseEntity.ok(response);
+        // QA D504: chart updates narrowed by the patient's opt-out say so.
+        return ResponseEntity.ok().headers(withheldHeaders(id, resolvedHospitalId, userId)).body(response);
     }
 
     @Operation(

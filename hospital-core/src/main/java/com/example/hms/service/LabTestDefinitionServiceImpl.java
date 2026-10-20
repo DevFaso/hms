@@ -153,8 +153,11 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             : List.of();
 
         Map<String, LabTestDefinition> deduplicated = new LinkedHashMap<>();
-        hospitalDefinitions.forEach(def -> deduplicated.put(def.getTestCode(), def));
-        globalDefinitions.forEach(def -> deduplicated.putIfAbsent(def.getTestCode(), def));
+        // QA D535: the active catalog lists only what may be ordered.
+        hospitalDefinitions.stream().filter(LabTestDefinition::isOrderable)
+            .forEach(def -> deduplicated.put(def.getTestCode(), def));
+        globalDefinitions.stream().filter(LabTestDefinition::isOrderable)
+            .forEach(def -> deduplicated.putIfAbsent(def.getTestCode(), def));
 
         return deduplicated.values().stream()
                 .map(mapper::toDto)
@@ -410,7 +413,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 // recorded submitter, so the four-eyes check below passed for
                 // anyone, including the submitter. It is sent back (REJECT)
                 // and resubmitted, which records who submitted it.
-                if (definition.getSubmittedById() == null && !isSuperAdmin(currentUser)) {
+                // QA D523: no super-admin exemption either - the super-admin
+                // alone could submit, review and approve.
+                if (definition.getSubmittedById() == null) {
                     throw new BusinessException("lab.definition.submitterUnknown");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
@@ -430,6 +435,14 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 // review is recorded in the audit row. The submitter rule holds.
                 requireRangesBeforeReview(definition);
                 singleDirectorException = reviewerIsApprover(currentUser, definition);
+                // QA D523: the combined review-approval (D417) is allowed only
+                // when the hospital has exactly one active lab director, and
+                // it is then recorded in the audit row. With two directors, or
+                // for anyone else (the super-admin included), the approver
+                // must be someone other than the QA reviewer.
+                if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
+                    throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
+                }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
                     "lab.definition.fourEyes.approverNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
@@ -480,8 +493,21 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
      * which the audit row then records. A super-admin is not flagged.
      */
     private boolean reviewerIsApprover(User user, LabTestDefinition definition) {
-        return !isSuperAdmin(user) && definition.getReviewedById() != null
+        return definition.getReviewedById() != null
             && definition.getReviewedById().equals(user.getId());
+    }
+
+    /**
+     * QA D523: the caller is the definition's hospital's one active lab
+     * director. A one-director hospital does not let a super-admin (or anyone
+     * else) who did the QA review approve it too.
+     */
+    private boolean isSoleDirector(User user, LabTestDefinition definition) {
+        return !isGlobalDefinition(definition)
+            && assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), definition.getHospital().getId(), Set.of(ROLE_LAB_DIRECTOR))
+            && assignmentRepository.countActiveUsersWithRoleCodeAtHospital(
+                definition.getHospital().getId(), ROLE_LAB_DIRECTOR) == 1;
     }
 
     /** QA D417: no definition enters review without a reference range. */
@@ -522,11 +548,12 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     /**
-     * QA D213: four-eyes. A super-admin is exempt: a global definition has
-     * no other approver.
+     * QA D213 / D523: four-eyes, for everyone. The super-admin exemption let
+     * one super-admin submit, review and approve alone; a global definition
+     * needs a second super-admin.
      */
     private void assertNotSameUser(User user, UUID previousActor, String message) {
-        if (previousActor != null && previousActor.equals(user.getId()) && !isSuperAdmin(user)) {
+        if (previousActor != null && previousActor.equals(user.getId())) {
             throw new BusinessException(message);
         }
     }

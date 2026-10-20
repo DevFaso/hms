@@ -269,6 +269,12 @@
 
     <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
+      <!-- QA D504: every chart section is narrowed by the opt-out, not only allergies. -->
+      @if (patient()!.recordsWithheld) {
+        <p class="info-row" role="note" data-testid="chart-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <app-patient-chart
         [patientId]="patient()!.id"
         [refreshToken]="accessEpoch()"
@@ -502,6 +508,9 @@
                 p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
               }}</span>
             </div>
+            @if (p.allergiesWithheld) {
+              <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+            }
           </div>
         </div>
         <div class="info-card">
@@ -534,6 +543,11 @@
       </div>
     }
     @if (activeTab() === 'vitals' && canViewVitals() && vitalsScoped()) {
+      @if (vitalsWithheld()) {
+        <p class="info-row" role="note" data-testid="vitals-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
@@ -627,8 +641,8 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">glucose</span>
                     <div>
-                      <strong>{{ v.bloodGlucoseMgDl }}</strong
-                      ><small> mg/dL</small>
+                      <strong>{{ glucoseMmol(v.bloodGlucoseMgDl) }}</strong
+                      ><small> mmol/L ({{ v.bloodGlucoseMgDl }} mg/dL)</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.BLOOD_GLUCOSE' | translate }}</span>
                   </div>
@@ -687,6 +701,11 @@
 
     <!-- ═══ Encounters Tab ═══ -->
     @if (activeTab() === 'encounters' && canViewEncounters()) {
+      @if (encountersWithheld()) {
+        <p class="info-row" role="note" data-testid="encounters-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (encountersLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>

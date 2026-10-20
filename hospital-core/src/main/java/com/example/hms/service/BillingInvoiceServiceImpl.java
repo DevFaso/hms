@@ -98,7 +98,24 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         this.replayTx.setReadOnly(true);
     }
 
-    /** The create runs in its own transaction so a lost race on the key can be answered after it rolls back. */
+    /**
+     * QA D537: reads the creator for the create response. createdByUser is a
+     * read-only association, so the freshly built entity had it null and the
+     * create response said createdByName=null.
+     */
+    private com.example.hms.repository.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setUserRepository(com.example.hms.repository.UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    private void attachCreator(BillingInvoice invoice, UUID creatorId) {
+        if (creatorId != null && userRepository != null) {
+            userRepository.findById(creatorId).ifPresent(invoice::setCreatedByUser);
+        }
+    }
+
     private final org.springframework.transaction.support.TransactionTemplate createTx;
     private final org.springframework.transaction.support.TransactionTemplate replayTx;
 
@@ -150,6 +167,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Encounter encounter = resolveEncounter(dto, hospitalId);
         // QA D403: the visit billed must be this patient's visit.
         rejectEncounterOfOtherPatient(encounter, patient);
+        rejectUnconfirmedSecondInvoice(encounter, dto);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
         // QA D91: nothing is paid until a payment is recorded.
@@ -159,6 +177,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setClientRequestId(dto.getClientRequestId());
         // QA D428: no auditing listener stamps it, so the creator is set here.
         invoice.setCreatedBy(roleValidator.getCurrentUserId());
+        attachCreator(invoice, invoice.getCreatedBy());
         // QA D94: the server numbers the invoice; a typed number is ignored.
         invoice.setInvoiceNumber(allocateNumber(hospital));
 
@@ -318,7 +337,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
-    /** QA D403: an invoice may only carry a visit of the patient it bills. */
+    /**
+     * QA D529: a second invoice for a stay already invoiced (and paid) was
+     * created with no warning, billing the patient twice. A check-in copay is
+     * folded into the visit invoice and does not count; a cancelled invoice
+     * does not either.
+     */
+    private void rejectUnconfirmedSecondInvoice(Encounter encounter, BillingInvoiceRequestDTO dto) {
+        if (encounter == null || encounter.getId() == null || Boolean.TRUE.equals(dto.getSupplementary())) {
+            return;
+        }
+        invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED).stream()
+            .filter(existing -> !existing.isCheckInCopay())
+            .findFirst()
+            .ifPresent(existing -> {
+                throw new com.example.hms.exception.ConflictException(com.example.hms.utility.MessageUtil.resolve("billing.invoice.encounterAlreadyInvoiced",
+                    existing.getInvoiceNumber(), String.valueOf(existing.getStatus())));
+            });
+    }
+
     private static void rejectEncounterOfOtherPatient(Encounter encounter, Patient patient) {
         if (encounter == null || patient == null || encounter.getPatient() == null) {
             return;

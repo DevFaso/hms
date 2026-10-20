@@ -102,6 +102,19 @@ class LabTestValidationStudyServiceImplTest {
     }
 
     @Test
+    void create_performerNamedAsAnotherUser_isRefused_D503() {
+        LabTestDefinition def = definition();
+        when(definitionRepository.findById(DEF_ID)).thenReturn(Optional.of(def));
+        when(mapper.toEntity(any(), any())).thenReturn(studyEntity(def));
+        LabTestValidationStudyRequestDTO req = requestDto();
+        req.setPerformedByUserId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.create(DEF_ID, req))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(repository, never()).save(any());
+    }
+
+    @Test
     void create_definitionNotFound_throwsEntityNotFound() {
         when(definitionRepository.findById(DEF_ID)).thenReturn(Optional.empty());
 
@@ -217,22 +230,23 @@ class LabTestValidationStudyServiceImplTest {
 
     @Test
     void delete_success() {
-        when(repository.existsById(STUDY_ID)).thenReturn(true);
+        LabTestValidationStudy existing = LabTestValidationStudy.builder().build();
+        when(repository.findById(STUDY_ID)).thenReturn(java.util.Optional.of(existing));
 
         service.delete(STUDY_ID);
 
-        verify(repository).deleteById(STUDY_ID);
+        verify(repository).delete(existing);
     }
 
     @Test
     void delete_notFound_throwsEntityNotFound() {
-        when(repository.existsById(STUDY_ID)).thenReturn(false);
+        when(repository.findById(STUDY_ID)).thenReturn(java.util.Optional.empty());
 
         assertThatThrownBy(() -> service.delete(STUDY_ID))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Validation study not found.");
 
-        verify(repository, never()).deleteById(any());
+        verify(repository, never()).delete(any());
     }
 
     // ── getValidationSummary ─────────────────────────────────────────────────

@@ -457,7 +457,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                 return;
             }
         }
-        throw new BusinessRuleException(message("schedule.staff.permissionDenied", locale));
+        // QA D541: a permission refusal is a 403, as on every other cross-hospital write,
+        // not a 400 that reads like a validation error.
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(message("schedule.staff.permissionDenied", locale));
     }
 
     private void ensureLeaveRequestPermissions(Staff staff,

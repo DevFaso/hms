@@ -130,14 +130,16 @@
                     def.approvalStatus === 'PENDING_QA_REVIEW' &&
                     (isQualityManager || isLabDirector || isSuperAdmin)
                   ) {
-                    <button
-                      class="btn-action btn-review"
-                      [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
-                    </button>
+                    @if (!isOwnSubmission(def)) {
+                      <button
+                        class="btn-action btn-review"
+                        [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
+                        (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
+                      >
+                        <span class="material-symbols-outlined">fact_check</span>
+                        {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
+                      </button>
+                    }
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
@@ -153,14 +155,16 @@
                     def.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' &&
                     (isLabDirector || isSuperAdmin)
                   ) {
-                    <button
-                      class="btn-action btn-approve"
-                      [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'APPROVE')"
-                    >
-                      <span class="material-symbols-outlined">verified</span>
-                      {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
-                    </button>
+                    @if (!isOwnSubmission(def)) {
+                      <button
+                        class="btn-action btn-approve"
+                        [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
+                        (click)="openApprovalModal(def, 'APPROVE')"
+                      >
+                        <span class="material-symbols-outlined">verified</span>
+                        {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
+                      </button>
+                    }
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"

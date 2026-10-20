@@ -505,9 +505,15 @@ public class UserServiceImpl implements UserService {
             // synchronisation runs on this thread before the controller
             // closes ActivationDeliveryTracker, so the registrar still sees
             // the outcome.
+            // QA D522 (D311/D418): when the welcome mail carries the role codes
+            // it IS the e-mailed activation - the per-assignment mails are
+            // suppressed - so it is reported as one. Reported as WELCOME, the
+            // registration said only that the SMS had failed, and the
+            // e-mailed activation looked as if it had never been sent.
+            final String welcomePurpose = welcomeMailPurpose(welcomeRoles);
             TransactionCallbacks.afterCommit(() -> {
                 boolean sent = com.example.hms.utility.ActivationDeliveryTracker.sendEmailAndReport(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME,
+                    welcomePurpose,
                     user.getEmail(),
                     () -> {
                         if (welcomeRoles.isEmpty()) {
@@ -1206,7 +1212,14 @@ public class UserServiceImpl implements UserService {
      * link, so the separate role-assignment mails are suppressed. An existing
      * user given another assignment, or a patient, keeps the role-assignment
      * mail.
+     * QA D522: a welcome mail that lists the role codes is the activation mail.
      */
+    static String welcomeMailPurpose(List<EmailService.WelcomeRole> welcomeRoles) {
+        return welcomeRoles == null || welcomeRoles.isEmpty()
+            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME
+            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION;
+    }
+
     static boolean welcomeMailCarriesCode(boolean newUserCreated, boolean isPatient, Set<Role> roles) {
         return newUserCreated && !isPatient && roles != null && !roles.isEmpty();
     }

@@ -714,6 +714,39 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("Reactivate that assignment");
     }
 
+    /** QA D521: hospital admin A asks for a role it may not grant; the FAILURE row reaches A's audit log. */
+    @Test
+    void d521_aRefusedGrantIsAnchoredAtTheActingHospital() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospital.getId())
+                .permittedHospitalIds(java.util.Set.of(hospital.getId()))
+                .build());
+        try {
+            org.mockito.Mockito.lenient().when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(accountAccess.requireMayGrant(any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("no"));
+            com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+                new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(assignee.getId());
+            dto.setRoleId(role.getId());
+            dto.setHospitalId(hospital.getId());
+
+            assertThatThrownBy(() -> service.assignRole(dto))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ROLE_ASSIGNED);
+            assertThat(audit.getValue().getHospitalId()).isEqualTo(hospital.getId());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
     @Test
     void anAssignmentAnEncounterWasRecordedUnderCannotBeHardDeleted() {
         UUID id = assignment.getId();

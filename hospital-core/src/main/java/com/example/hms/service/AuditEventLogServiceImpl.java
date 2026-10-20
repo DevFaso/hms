@@ -320,7 +320,15 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             && !assignment.getUser().getId().equals(user.getId())) {
             log.debug("Audit assignment/user mismatch (assignment user id: {}, actor id: {}). Dropping assignment link.",
                 assignment.getUser().getId(), user.getId());
-            return null;
+            assignment = null;
+        }
+        // QA D521/D533: no usable assignment, but the emitter named the hospital
+        // the action happened at. Anchor on the actor's own active assignment
+        // there, so the row reaches that hospital's audit log with its name.
+        if (assignment == null && user != null && requestDTO.getHospitalId() != null) {
+            assignment = assignmentRepository
+                .findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), requestDTO.getHospitalId())
+                .orElse(null);
         }
         return assignment;
     }

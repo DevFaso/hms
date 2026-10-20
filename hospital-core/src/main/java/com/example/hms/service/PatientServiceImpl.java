@@ -901,6 +901,12 @@ public class PatientServiceImpl implements PatientService {
             .entries(entries)
             .sensitiveCategories(sensitiveCategories)
             .containsSensitiveData(!sensitiveCategories.isEmpty())
+            // QA D504 (round 2): the allergy entries above omit other hospitals' rows; say so.
+            .allergiesWithheld(shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId))
+            // QA D504: every other category is narrowed the same way; say so too.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(currentPrincipalUserId(), patientId, hospitalId))
             .totalEntries(entries.size())
             .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
@@ -1980,9 +1986,26 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D110 — allergy rows a reader at this hospital may see; every row for a global (null) scope. */
     private List<PatientAllergy> allergiesVisibleAt(UUID patientId, UUID hospitalId) {
-        return hospitalId == null
-            ? patientAllergyRepository.findByPatient_Id(patientId)
-            : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+        // QA D504: the opt-out and its break-the-glass override are one decision.
+        return com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId);
+    }
+
+    private static UUID currentPrincipalUserId() {
+        return com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignRecordsWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+            patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId);
     }
 
     private List<PatientTimelineEntryDTO> collectAllergyEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
@@ -2743,8 +2766,16 @@ public class PatientServiceImpl implements PatientService {
 
         // QA D110: the allergy summary column covers every hospital's rows. For a patient
         // who opted out of record sharing, a reader elsewhere sees only this hospital's.
-        if (hospitalId != null && dto.getAllergies() != null
-                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+        // QA D504: unless a break-the-glass session overrides the opt-out.
+        // QA D504 (round 2): and the row says so, so the column never looks complete.
+        if (hospitalId != null
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patient.getId(), hospitalId)) {
+            dto.setAllergiesWithheld(true);
+            // Same condition (opt-out, not overridden): every other list is narrowed too.
+            dto.setRecordsWithheld(true);
+        }
+        if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
                 patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }

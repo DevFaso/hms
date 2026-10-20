@@ -227,6 +227,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .mrn(patient.getId().toString())
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
+                // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
+                .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                        patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+                // QA D504: the diagnoses, medications, vitals and labs below are narrowed the same way.
+                .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
@@ -282,9 +287,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         boolean hasStructuredRows = false;
         try {
             // QA D110: an opted-out patient's other-hospital rows stay there.
-            List<PatientAllergy> rows = hospitalId == null
-                ? patientAllergyRepository.findByPatient_Id(patientId)
-                : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+            // QA D504: unless a break-the-glass session overrides the opt-out.
+            List<PatientAllergy> rows = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+                patientAllergyRepository, recordAccessPolicy,
+                com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
+                patientId, hospitalId);
             rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
             hasStructuredRows = !rows.isEmpty()
                 || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());

@@ -39,6 +39,7 @@ class DigitalSignatureServiceImplTenantTest {
     @Mock private AuthService authService;
     @Mock private RoleValidator roleValidator;
     @Mock private SignableReportLocator reportLocator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
@@ -150,5 +151,149 @@ class DigitalSignatureServiceImplTenantTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(req))
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
         verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    // ── QA D502: only the signer, or an admin, revokes; the revoker is named ──
+
+    @org.junit.jupiter.api.AfterEach
+    void clearContext() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    private static void pinTo(UUID hospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalId).permittedHospitalIds(java.util.Set.of(hospitalId)).build());
+    }
+
+    private DigitalSignature signedBy(UUID signerUserId, UUID hospitalId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(signerUserId);
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setUser(user);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        DigitalSignature signature = new DigitalSignature();
+        signature.setId(UUID.randomUUID());
+        signature.setSignedBy(staff);
+        signature.setHospital(hospital);
+        signature.setStatus(com.example.hms.enums.SignatureStatus.SIGNED);
+        return signature;
+    }
+
+    private static com.example.hms.payload.dto.signature.SignatureRevocationRequestDTO reason() {
+        return com.example.hms.payload.dto.signature.SignatureRevocationRequestDTO.builder()
+            .revocationReason("Signed on the wrong report").build();
+    }
+
+    @Test
+    void anotherDoctorCannotRevokeTheSignature() {
+        UUID hospital = UUID.randomUUID();
+        pinTo(hospital);
+        DigitalSignature signature = signedBy(UUID.randomUUID(), hospital);
+        when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeSignature(signature.getId(), reason()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.SIGNED);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void theSignerRevokesAndIsNamedInTheAudit() {
+        UUID hospital = UUID.randomUUID();
+        UUID signerId = UUID.randomUUID();
+        pinTo(hospital);
+        DigitalSignature signature = signedBy(signerId, hospital);
+        com.example.hms.model.User me = new com.example.hms.model.User();
+        me.setId(signerId);
+        me.setFirstName("Ada");
+        me.setLastName("Lovelace");
+        when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
+        when(authService.getCurrentUserId()).thenReturn(signerId);
+        when(userRepository.findById(signerId)).thenReturn(java.util.Optional.of(me));
+        when(signatureRepository.save(signature)).thenReturn(signature);
+
+        service.revokeSignature(signature.getId(), reason());
+
+        assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.REVOKED);
+        assertThat(signature.getRevokedByUserId()).isEqualTo(signerId);
+        assertThat(signature.getRevokedByDisplay()).isEqualTo("Ada Lovelace");
+    }
+
+    @Test
+    void aHospitalAdminRevokesThroughTheAuditedPath() {
+        UUID hospital = UUID.randomUUID();
+        UUID adminId = UUID.randomUUID();
+        pinTo(hospital);
+        DigitalSignature signature = signedBy(UUID.randomUUID(), hospital);
+        when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
+        when(authService.getCurrentUserId()).thenReturn(adminId);
+        when(roleValidator.isHospitalAdminFromAuthGlobalOnly()).thenReturn(true);
+        when(roleValidator.isHospitalAdmin(adminId, hospital)).thenReturn(true);
+        when(signatureRepository.save(signature)).thenReturn(signature);
+
+        service.revokeSignature(signature.getId(), reason());
+
+        assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.REVOKED);
+        assertThat(signature.getRevocationReason()).isEqualTo("Signed on the wrong report");
+    }
+
+    @Test
+    void anAdminOfAnotherHospitalCannotRevokeHere() {
+        // Doctor at A, HOSPITAL_ADMIN only at B: the authority union says admin,
+        // the assignment at A does not.
+        UUID hospital = UUID.randomUUID();
+        UUID callerId = UUID.randomUUID();
+        pinTo(hospital);
+        DigitalSignature signature = signedBy(UUID.randomUUID(), hospital);
+        when(signatureRepository.findById(signature.getId())).thenReturn(java.util.Optional.of(signature));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdminFromAuthGlobalOnly()).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(callerId, hospital)).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeSignature(signature.getId(), reason()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(signature.getStatus()).isEqualTo(com.example.hms.enums.SignatureStatus.SIGNED);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    // ── QA D507: hospital B does not read hospital A's signatures ──
+
+    @Test
+    void hospitalBReadsNoneOfHospitalAsSignatures() {
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        DigitalSignature atA = signedBy(UUID.randomUUID(), hospitalA);
+        UUID providerId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        pinTo(hospitalB);
+        when(signatureRepository.findById(atA.getId())).thenReturn(java.util.Optional.of(atA));
+        when(signatureRepository.findBySignedBy_IdOrderBySignatureDateTimeDesc(providerId)).thenReturn(List.of(atA));
+        when(signatureRepository.findByReportIdAndReportTypeOrderBySignatureDateTimeDesc(
+                reportId, com.example.hms.enums.SignatureType.LAB_RESULT)).thenReturn(List.of(atA));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getSignatureById(atA.getId()))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getSignatureAuditTrail(atA.getId()))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(service.getSignaturesByProvider(providerId)).isEmpty();
+        assertThat(service.getSignaturesByReportId(com.example.hms.enums.SignatureType.LAB_RESULT, reportId)).isEmpty();
+        assertThat(service.isReportSigned(com.example.hms.enums.SignatureType.LAB_RESULT, reportId)).isFalse();
+    }
+
+    @Test
+    void hospitalAStillReadsItsOwnSignatures() {
+        UUID hospitalA = UUID.randomUUID();
+        DigitalSignature atA = signedBy(UUID.randomUUID(), hospitalA);
+        UUID providerId = UUID.randomUUID();
+        pinTo(hospitalA);
+        when(signatureRepository.findById(atA.getId())).thenReturn(java.util.Optional.of(atA));
+        when(signatureRepository.findBySignedBy_IdOrderBySignatureDateTimeDesc(providerId)).thenReturn(List.of(atA));
+        when(signatureMapper.toResponseDTO(atA)).thenReturn(new SignatureResponseDTO());
+
+        assertThat(service.getSignatureById(atA.getId())).isNotNull();
+        assertThat(service.getSignaturesByProvider(providerId)).hasSize(1);
     }
 }

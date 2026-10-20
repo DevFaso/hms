@@ -158,6 +158,9 @@ class DispenseServiceImplTest {
         prescription = new Prescription();
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
+        // QA D512: every fill needs a pharmacist verification; the fixture is
+        // verified unless a test is about the verification itself.
+        prescription.setPharmacistVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 8, 0));
         prescription.setMedicationName("Amoxicillin");
         prescription.setQuantity(BigDecimal.TEN);
 
@@ -429,8 +432,97 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D512: an ordinary prescription nobody verified is not filled (POST /pharmacy/dispense, no verifiedBy)")
+        void d512_anUnverifiedOrdinaryPrescriptionIsRefused() {
+            prescription.setPharmacistVerifiedAt(null);
+            DispenseRequestDTO dto = buildRequest();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().contains("dispense.verification.required") || e.getMessage().contains("verified by a pharmacist"));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+            assertThat(prescription.getPharmacistVerifiedAt()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D512: the dispensing pharmacist's attestation is recorded as the verification")
+        void d512_theAttestedVerificationIsStampedWithTheFill() {
+            prescription.setPharmacistVerifiedAt(null);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+
+            try {
+                service.createDispense(dto);
+            } catch (RuntimeException downstream) {
+                // Later stages (stock, mapping) are not stubbed here; the
+                // verification is stamped before any of them runs.
+            }
+
+            assertThat(prescription.getPharmacistVerifiedAt()).isNotNull();
+            assertThat(prescription.getPharmacistVerifiedBy()).isSameAs(user);
+        }
+
+        @Test
+        @DisplayName("#922 review: a HOSPITAL_ADMIN filling cannot attest the pharmacist verification")
+        void d512_aHospitalAdminCannotAttestTheVerification() {
+            prescription.setPharmacistVerifiedAt(null);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThat(prescription.getPharmacistVerifiedAt()).isNull();
+            assertThat(prescription.getPharmacistVerifiedBy()).isNull();
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D512: the prescriber cannot attest their own prescription at the counter")
+        void d512_thePrescriberCannotVerifyTheirOwn() {
+            prescription.setPharmacistVerifiedAt(null);
+            com.example.hms.model.Staff prescriber = new com.example.hms.model.Staff();
+            prescriber.setUser(user);
+            prescription.setStaff(prescriber);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class);
+            assertThat(prescription.getPharmacistVerifiedAt()).isNull();
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
         @DisplayName("QA D156: a controlled prescription nobody verified is not filled")
         void anUnverifiedControlledPrescriptionIsRefusedAtTheCounter() {
+            prescription.setPharmacistVerifiedAt(null);
             prescription.setControlledSubstance(true);
             prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
             DispenseRequestDTO dto = buildRequest();

@@ -102,6 +102,7 @@ class ImmunizationServiceImplTest {
         dto.setEncounterId(encounterId);
 
         Staff staff = new Staff(); staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         Encounter encounter = new Encounter(); encounter.setId(encounterId);
         PatientImmunization entity = new PatientImmunization();
         entity.setId(immunizationId);
@@ -240,6 +241,7 @@ class ImmunizationServiceImplTest {
     @AfterEach
     void clearHospitalContext() {
         HospitalContextHolder.clear();
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test

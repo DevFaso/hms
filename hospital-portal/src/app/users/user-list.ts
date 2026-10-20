@@ -16,7 +16,7 @@ import { UserService, UserSummary, AdminRegisterRequest } from '../services/user
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
-import { deliveryWarningKeys } from '../shared/delivery-warnings';
+import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
@@ -73,7 +73,7 @@ const JOB_TITLES = [
   'QUALITY_MANAGER',
   'RECEPTIONIST',
   'SURGEON',
-  'HOSPITAL_ADMINISTRATOR',
+  // QA D541: HOSPITAL_ADMINISTRATOR (legacy) is offered once, as HOSPITAL_ADMIN.
   'LABORATORY_SCIENTIST',
   'RADIOLOGIST',
   'ANESTHESIOLOGIST',
@@ -501,6 +501,11 @@ export class UserListComponent implements OnInit, OnDestroy {
         if (!existing) {
           for (const key of deliveryWarningKeys(saved.activationDelivery)) {
             this.toast.warning(this.translate.instant(key));
+          }
+          // QA D522: say so when the activation went out by e-mail, so a failed
+          // SMS next to it does not read as "activation by SMS only".
+          if (hasActivationSent(saved.activationDelivery, 'EMAIL')) {
+            this.toast.info(this.translate.instant('DELIVERY.ACTIVATION_EMAIL_QUEUED'));
           }
           if (saved.temporaryUsername && saved.temporaryPassword) {
             this.issuedCredentials.set({

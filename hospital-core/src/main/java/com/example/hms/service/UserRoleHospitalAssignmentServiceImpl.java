@@ -649,6 +649,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private AccessDeniedException refusedGrant(String roleCode, AccessDeniedException denied) {
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
             .userId(accountAccess.currentUserId().orElse(null))
+            // QA D521: anchored at the hospital the caller acts at, so the
+            // refusal reaches that hospital admin's audit log.
+            .hospitalId(com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())
             .eventType(AuditEventType.ROLE_ASSIGNED)
             .eventDescription("Role assignment refused: the caller may not grant this role there")
             .details(Map.of("requestedRole", Objects.toString(roleCode, UNKNOWN_ROLE)))
@@ -743,6 +746,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .build();
         }
 
+        requireMayGrantAtEveryScope(requestDTO, hospitalIds, locale);
+
         for (UUID hospitalId : hospitalIds) {
             UserRoleHospitalAssignmentRequestDTO singleRequest = buildSingleAssignmentRequest(requestDTO, hospitalId);
             try {
@@ -777,6 +782,32 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignments(successes)
             .failures(failures)
             .build();
+    }
+
+    /**
+     * QA D541 — a scope the caller may not grant at is refused like the single
+     * POST /assignments refuses it: a 403 for the whole request, audited, before
+     * anything is saved. It used to come back 200 with hospital B quietly moved
+     * to {@code failures} while hospital A's row was created. Scopes that fail
+     * for any other reason (unknown hospital, conflict) are still reported per
+     * scope by the loop.
+     */
+    private void requireMayGrantAtEveryScope(UserRoleAssignmentMultiRequestDTO requestDTO,
+                                             Set<UUID> hospitalIds, Locale locale) {
+        UserRoleHospitalAssignmentRequestDTO first =
+            buildSingleAssignmentRequest(requestDTO, hospitalIds.iterator().next());
+        Role role = resolveRole(first, locale);
+        String roleCode = getRoleCode(role);
+        UserAccountAccess.Grant grant = requireMayGrant(roleCode);
+        for (UUID hospitalId : hospitalIds) {
+            Hospital hospital;
+            try {
+                hospital = resolveHospitalHumanAware(buildSingleAssignmentRequest(requestDTO, hospitalId), role, locale);
+            } catch (BusinessException | ResourceNotFoundException unresolved) {
+                continue;
+            }
+            requireGrantAt(grant, hospital, roleCode);
+        }
     }
 
     @Override
@@ -2142,6 +2173,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .userName(resolveDisplayName(registrar, null))
                 .roleName(role != null ? role.getName() : null)
                 .hospitalName(resolveHospitalName(hospital))
+                // QA D521: assignmentId is the ASSIGNEE's row, which the audit
+                // service drops for the registrar; anchor on the registrar's
+                // own assignment at this hospital instead.
+                .hospitalId(hospital != null ? hospital.getId() : null)
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
                 .entityType(AUDIT_ENTITY_ASSIGNMENT)
@@ -2177,6 +2212,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .userName(resolveDisplayName(actor, null))
                 .roleName(role != null ? role.getName() : null)
                 .hospitalName(resolveHospitalName(assignment.getHospital()))
+                .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
                 .resourceName(assigneeDisplay)
                 .resourceId(assignment.getId() != null ? assignment.getId().toString() : null)
                 .entityType(AUDIT_ENTITY_ASSIGNMENT)

@@ -86,6 +86,10 @@ export interface PatientStoryboard {
   codeStatus?: StoryboardCodeStatus | null;
   hasHighSeverityAllergy: boolean;
   hasChronicProblem: boolean;
+  /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
+  allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   /** E9 #64 — problems withheld under D3, per recording hospital. */
   restrictedRows?: RestrictedRows[];
   hospitalId?: string | null;

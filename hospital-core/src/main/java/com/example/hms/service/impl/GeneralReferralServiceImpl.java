@@ -337,6 +337,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public void cancelReferral(UUID referralId, String reason) {
         GeneralReferral referral = findReferral(referralId);
+        // QA D510: cancelling is the SENDING side's act; the receiver declines
+        // (reject) instead. QA D509: and only the clinician who wrote it, as for
+        // submit — a colleague at the same hospital cancelled DOCTOR_A's referral.
+        requireSendingSide(referral);
+        requireCallerIsReferrer(referral, "generalReferral.cancel.referrerOnly");
         ReferralStatus before = referral.getStatus();
         referral.cancel(reason);
         referral = referralRepository.save(referral);
@@ -417,9 +422,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             outgoing = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
             incoming = referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
-        // Exclude DRAFT incoming referrals — drafts are unsent and only visible to the sender
+        // Exclude never-sent incoming referrals — drafts are unsent and only visible to the
+        // sender. QA D509: a draft CANCELLED before it was sent is still unsent.
         incoming = incoming.stream()
-            .filter(r -> r.getStatus() != ReferralStatus.DRAFT)
+            .filter(GeneralReferralServiceImpl::wasSent)
             .toList();
         // Merge outgoing and incoming, dedup by ID, sort newest-first
         Map<UUID, GeneralReferral> merged = new LinkedHashMap<>();
@@ -524,6 +530,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             boolean isReceivingHospital = referral.getReceivingHospital() != null
                 && activeHospitalId.equals(referral.getReceivingHospital().getId());
             if (!isSendingHospital && !isReceivingHospital) {
+                throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
+            }
+            // QA D509: a referral never sent does not exist for the receiving hospital.
+            if (!isSendingHospital && !wasSent(referral)) {
                 throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
             }
         }
@@ -669,6 +679,29 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     /**
+     * QA D509 — has this referral ever been sent to the receiving hospital? A
+     * draft has not, and neither has a draft cancelled before submission
+     * (status CANCELLED, never stamped {@code submittedAt}).
+     */
+    static boolean wasSent(GeneralReferral referral) {
+        ReferralStatus status = referral.getStatus();
+        if (status == ReferralStatus.DRAFT) {
+            return false;
+        }
+        return !(status == ReferralStatus.CANCELLED && referral.getSubmittedAt() == null);
+    }
+
+    /** QA D510 — only the sending hospital (which, for an internal referral, is also the receiver) cancels. */
+    private void requireSendingSide(GeneralReferral referral) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID sendingId = referral.getHospital() != null ? referral.getHospital().getId() : null;
+        if (activeHospitalId != null && !activeHospitalId.equals(sendingId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.cancel.sendingSideOnly"));
+        }
+    }
+
+    /**
      * QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer.
      * QA D412: a draft is sent by the clinician who wrote it. A nurse could
      * submit a doctor's draft, sending it out under the doctor's name. The
@@ -676,13 +709,17 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
      * refusal names only what the caller would need to be.
      */
     private void requireCallerIsReferrer(GeneralReferral referral) {
+        requireCallerIsReferrer(referral, "generalReferral.submit.referrerOnly");
+    }
+
+    private void requireCallerIsReferrer(GeneralReferral referral, String messageKey) {
         UUID callerId = roleValidator.getCurrentUserId();
         Staff referrer = referral.getReferringProvider();
         boolean isReferrer = callerId != null && referrer != null && referrer.getUser() != null
             && callerId.equals(referrer.getUser().getId());
         if (!isReferrer) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.submit.referrerOnly"));
+                com.example.hms.utility.MessageUtil.resolveOrRaw(messageKey));
         }
     }
 

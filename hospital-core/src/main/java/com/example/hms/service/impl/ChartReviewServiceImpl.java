@@ -79,6 +79,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+    /** QA D520: grades each result the way the lab-results screen does. */
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -432,6 +434,35 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
+    /**
+     * QA D520: the chart review read only the analyzer's stored flag, which a
+     * hand-entered result never carries, so a critical potassium showed no
+     * CRITIQUE pill here while the lab screen and the doctor's queue (QA D178)
+     * graded it from the reference range. Same grade, same three values.
+     */
+    private String gradedSeverity(LabResult r) {
+        String graded = labResultMapper.severityFlagOf(r);
+        if (com.example.hms.mapper.LabResultMapper.FLAG_CRITICAL.equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.CRITICAL.name();
+        }
+        if ("LOW".equals(graded) || "HIGH".equals(graded)
+                || com.example.hms.mapper.LabResultMapper.FLAG_ABNORMAL.equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.ABNORMAL.name();
+        }
+        if ("NORMAL".equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.NORMAL.name();
+        }
+        return r.getAbnormalFlag() != null ? r.getAbnormalFlag().severity().name() : null;
+    }
+
+    private com.example.hms.enums.AbnormalDirection gradedDirection(LabResult r) {
+        String graded = labResultMapper.severityFlagOf(r);
+        if ("LOW".equals(graded) || "HIGH".equals(graded)) {
+            return com.example.hms.enums.AbnormalDirection.valueOf(graded);
+        }
+        return r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null;
+    }
+
     private ResultEntryDTO toResultDto(LabResult r) {
         LabOrder order = r.getLabOrder();
         String testName = null;
@@ -454,8 +485,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .testCode(testCode)
             .resultValue(r.getResultValue())
             .resultUnit(r.getResultUnit())
-            .abnormalFlag(r.getAbnormalFlag() != null ? r.getAbnormalFlag().severity().name() : null)
-            .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
+            .abnormalFlag(gradedSeverity(r))
+            .abnormalDirection(gradedDirection(r))
             .resultDate(r.getResultDate())
             .orderingStaffName(orderingStaffName)
             .acknowledged(r.isAcknowledged())

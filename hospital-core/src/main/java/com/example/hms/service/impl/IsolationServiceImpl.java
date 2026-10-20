@@ -78,7 +78,7 @@ public class IsolationServiceImpl implements IsolationService {
             .reason(request.getReason())
             .suspectedOrganism(request.getSuspectedOrganism())
             .startedAt(LocalDateTime.now(clock))
-            .orderedBy(resolveStaff(request.getOrderedByStaffId(), hospitalId))
+            .orderedBy(com.example.hms.security.CallerIdentity.resolveActor(staffRepository, request.getOrderedByStaffId(), hospitalId))
             .notes(request.getNotes())
             .build();
 

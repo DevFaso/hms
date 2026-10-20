@@ -1445,6 +1445,7 @@
     "PENDING": "En Attente",
     "RECORD_PAYMENT": "Enregistrer un paiement",
     "REVENUE": "Revenus",
+    "SUPPLEMENTARY_CONFIRM": "Créer quand même une facture complémentaire pour cette visite ?",
     "SAVE_FAILED": "Échec de l'enregistrement",
     "SEARCH": "Rechercher des factures…",
     "SEND": "Envoyer",
@@ -2163,6 +2164,7 @@
     "AGING_90_PLUS": "Plus de 90 jours"
   },
   "DELIVERY": {
+    "ACTIVATION_EMAIL_QUEUED": "L'e-mail d'activation (avec le code de chaque rôle) est en file d'envoi.",
     "CREDENTIALS_NOT_DELIVERED": "Les identifiants de connexion à usage unique n'ont pas pu être envoyés au patient.",
     "EMAIL_FAILED": "Le compte a été créé, mais l'e-mail d'activation n'a pas pu être envoyé. Utilisez « Renvoyer le code » une fois le problème résolu.",
     "EMAIL_NOT_CONFIGURED": "L'envoi d'e-mails n'est pas configuré sur ce serveur — le code d'activation n'a pas été envoyé par e-mail.",
@@ -3525,6 +3527,7 @@
     "BALANCE": "Bilan",
     "BED": "Lit",
     "BEDS_AVAILABLE": "Lits disponibles",
+    "THIS_PATIENT": "ce patient",
     "BLOOD_GLUCOSE": "Glycémie",
     "BLOOD_PRESSURE": "Tension artérielle",
     "BPM": "bpm",
@@ -3726,7 +3729,7 @@
       "SYSTOLIC": "ex. 120",
       "DIASTOLIC": "ex. 80",
       "SPO2": "ex. 98",
-      "GLUCOSE": "ex. 100",
+      "GLUCOSE": "ex. 5,6",
       "WEIGHT": "ex. 70,5",
       "HEIGHT": "ex. 74,5",
       "HEAD_CIRCUMFERENCE": "ex. 44,2"
@@ -4517,6 +4520,7 @@
       "EMPTY_DESC": "Vous n'avez aucun rendez-vous prévu.",
       "UPCOMING": "À venir",
       "PAST": "Rendez-vous passés",
+      "CANCELLED_SECTION": "Rendez-vous annulés",
       "DATE": "Date",
       "TIME": "Heure",
       "PROVIDER": "Praticien",
@@ -7938,6 +7942,9 @@
     "WOUND_CARE": "Soins des plaies"
   },
   "CHART": {
+    "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
+    "RECORDS_WITHHELD": "Les données des autres hôpitaux (problèmes, médicaments, examens, constantes, notes, consultations, imagerie) ne sont pas affichées : ce patient a refusé le partage de son dossier. Ces listes peuvent être incomplètes.",
+    "LIST_WITHHELD": "Les données des autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
     "ADD_ALLERGY": "Ajouter une allergie",
     "ADD_PROBLEM": "Ajouter un diagnostic",
     "ADD_SECTION": "Ajouter une section",
@@ -8337,6 +8344,7 @@
     "STOCK_ROUTING_DESC": "Vérifier la disponibilité du stock et acheminer les prescriptions vers les pharmacies partenaires",
     "STRENGTH": "Dosage",
     "SUBSTITUTION": "Substitution",
+    "VERIFY_ATTEST": "J’ai vérifié cette ordonnance (validation pharmaceutique)",
     "SUBSTITUTION_REASON": "Raison de substitution",
     "SUPPLIER": "Fournisseur",
     "SUPPLIER_PLACEHOLDER": "ex. : CAMEG",

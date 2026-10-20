@@ -124,12 +124,17 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
      * from undoing the opt-out.
      */
     private void audit(UUID patientId, UUID actorUserId, String description) {
+        // QA D533: the hospital the desk acts at, captured now (the callback
+        // may run after the request context is gone); the audit service anchors
+        // the row on the actor's assignment there and names the hospital.
+        UUID actingHospitalId = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.CONSENT_UPDATE)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorUserId)
+                    .hospitalId(actingHospitalId)
                     .patientId(patientId)
                     .entityType("PATIENT_RECORD_SHARING_OPTOUT")
                     .resourceId(patientId.toString())

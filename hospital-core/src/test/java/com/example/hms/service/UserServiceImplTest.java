@@ -894,6 +894,16 @@ class UserServiceImplTest {
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, true, roles(1))).isFalse();
             assertThat(UserServiceImpl.welcomeMailCarriesCode(true, false, roles(0))).isFalse();
         }
+
+        @Test
+        @DisplayName("QA D522: a welcome mail carrying the role codes is reported as the activation mail")
+        void welcomeMailWithCodesIsTheActivation() {
+            List<EmailService.WelcomeRole> twoRoles = List.of(
+                new EmailService.WelcomeRole("ROLE_DOCTOR", "H", "123456", "https://x/a"),
+                new EmailService.WelcomeRole("ROLE_NURSE", "H", "654321", "https://x/b"));
+            assertThat(UserServiceImpl.welcomeMailPurpose(twoRoles)).isEqualTo("ACTIVATION");
+            assertThat(UserServiceImpl.welcomeMailPurpose(List.of())).isEqualTo("WELCOME");
+        }
     }
 
     // =====================================================================
@@ -2416,6 +2426,41 @@ class UserServiceImplTest {
             assertThat(saved.isForceUsernameChange()).isTrue();
             assertThat(saved.getPhoneNumber()).isEqualTo("+22670202020");
             assertThat(req.getPassword()).hasSize(14);
+        }
+
+        /**
+         * QA D522 (D311/D418), through the real registration: the welcome mail
+         * of a new staff account carries the assignment's code, so the
+         * afterCommit callback must report it as the ACTIVATION mail.
+         */
+        @Test
+        @DisplayName("QA D522: registration reports the code-carrying welcome mail as the activation")
+        void registrationReportsTheWelcomeMailAsTheActivation() {
+            stubCreation(superAdminRole);
+            UserRoleHospitalAssignment withCodes = new UserRoleHospitalAssignment();
+            withCodes.setId(UUID.randomUUID());
+            withCodes.setRole(superAdminRole);
+            withCodes.setAssignmentCode("ASSIGN-D522");
+            withCodes.setConfirmationCode("123456");
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+                .thenReturn(Optional.of(withCodes));
+            lenient().when(assignmentLinkService.buildProfileCompletionUrl(any())).thenReturn("https://x/a");
+
+            com.example.hms.utility.ActivationDeliveryTracker.open();
+            List<com.example.hms.payload.dto.NotificationDeliveryStatusDTO> reports;
+            try {
+                userService.createUserWithRolesAndHospital(request("ROLE_SUPER_ADMIN", "a@hospital.bf", "70202020"));
+            } finally {
+                reports = com.example.hms.utility.ActivationDeliveryTracker.close();
+            }
+
+            assertThat(reports)
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.getPurpose()).isEqualTo("ACTIVATION");
+                    assertThat(r.getOutcome()).isEqualTo("QUEUED");
+                });
         }
 
         @Test

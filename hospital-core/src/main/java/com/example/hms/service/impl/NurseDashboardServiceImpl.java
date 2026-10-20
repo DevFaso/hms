@@ -28,6 +28,7 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
     private final PatientMapper patientMapper;
     private final PatientVitalSignService patientVitalSignService;
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    private final com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
 
     @Override
     public List<PatientResponseDTO> getPatientsForNurse(UUID nurseUserId,
@@ -75,8 +76,16 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
     UUID hospitalId = registration.getHospital() != null ? registration.getHospital().getId() : null;
     PatientResponseDTO dto = patientMapper.toPatientDTO(patient, hospitalId);
         // QA D110: an opted-out patient's allergy summary narrows to this hospital's rows.
-        if (patient != null && patient.getId() != null && hospitalId != null && dto.getAllergies() != null
-                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+        // QA D504 (round 2): and the row carries the flag so the dashboard can say so.
+        if (patient != null && patient.getId() != null && hospitalId != null
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy,
+                    com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
+                    patient.getId(), hospitalId)) {
+            dto.setAllergiesWithheld(true);
+            dto.setRecordsWithheld(true);
+        }
+        if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
                 patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }

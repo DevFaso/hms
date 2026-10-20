@@ -110,6 +110,7 @@ class TreatmentPlanServiceImplTest {
         author = new Staff();
         author.setId(authorId);
         author.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
 
         supervising = new Staff();
         supervising.setId(supervisingId);
@@ -157,6 +158,11 @@ class TreatmentPlanServiceImplTest {
     }
 
     // ---- create ----
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
 
     @Test
     void create_success() {

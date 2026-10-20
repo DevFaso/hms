@@ -223,6 +223,7 @@ public class PatientRecordPdfService {
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
+                .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : username)
                 .resourceId(patient.getId().toString())

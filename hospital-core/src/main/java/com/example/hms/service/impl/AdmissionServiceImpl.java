@@ -263,6 +263,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         // physician at the admission's hospital - a nurse is not one.
         requirePhysician(dischargingProvider, admission.getHospital().getId(),
             "admission.dischargingProvider.physician.required");
+        // QA D503 class: the discharging provider is the caller, not a colleague named in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
 
         admission.discharge(
             request.getDischargeDisposition(),

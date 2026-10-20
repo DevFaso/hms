@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.RecordsWithheldHeaders;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.service.PatientLabResultService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +35,7 @@ public class PatientLabResultController {
 
     private final PatientLabResultService patientLabResultService;
     private final ControllerAuthUtils authUtils;
+    private final RecordsWithheldHeaders recordsWithheld;
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_LAB_SCIENTIST','ROLE_SUPER_ADMIN','ROLE_MIDWIFE','ROLE_PHARMACIST')")
@@ -62,7 +64,8 @@ public class PatientLabResultController {
         log.info("GET /api/patients/{}/lab-results - hospital: {}", patientId, resolvedHospitalId);
         List<PatientLabResultResponseDTO> results = patientLabResultService
             .getLabResultsForPatient(patientId, resolvedHospitalId, safeLimit, isLaboratoryStaff(auth));
-        return ResponseEntity.ok(results);
+        // QA D504: a list narrowed by the patient's opt-out says so.
+        return ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId, resolvedHospitalId)).body(results);
     }
 
     /** QA D160: only the laboratory sees a value before it is released. */

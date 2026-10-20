@@ -87,10 +87,16 @@ class AdmissionServiceImplTest {
         com.example.hms.model.User staffUser = new com.example.hms.model.User();
         staffUser.setId(UUID.randomUUID());
         staff.setUser(staffUser);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
         // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -367,6 +373,33 @@ class AdmissionServiceImplTest {
         when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
 
         assertThat(service.dischargePatient(admissionId, request)).isEqualTo(response);
+    }
+
+    @Test
+    void dischargePatient_inAColleaguesName_isRefusedAndChangesNothing_D503() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        // QA r8 round 2: a doctor named another doctor as the discharging provider.
+        UUID colleagueId = UUID.randomUUID();
+        Staff colleague = new Staff(); colleague.setId(colleagueId); colleague.setHospital(hospital);
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(roleValidator.isDoctor(colleagueUser.getId(), hospitalId)).thenReturn(true);
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(colleagueId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(colleagueId)).thenReturn(Optional.of(colleague));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test

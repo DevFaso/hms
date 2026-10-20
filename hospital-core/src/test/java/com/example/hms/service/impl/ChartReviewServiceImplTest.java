@@ -99,7 +99,8 @@ class ChartReviewServiceImplTest {
         service = new ChartReviewServiceImpl(
             patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
             imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo,
-            recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate);
+            recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate,
+            new com.example.hms.mapper.LabResultMapper());
         // E9 #60 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -647,5 +648,62 @@ class ChartReviewServiceImplTest {
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
         assertThat(dto.getEncounters()).hasSize(1);
+    }
+
+    /* ---- QA D520 ----------------------------------------------------- */
+
+    private LabResult handEnteredPotassium(String value) {
+        // A value typed by the lab tech: no analyzer flag on the row, a
+        // configured range with critical limits on the test definition.
+        LabResult r = labResult(LocalDateTime.now().minusHours(1), null, "Potassium", "2823-3");
+        LabTestDefinition def = r.getLabOrder().getLabTestDefinition();
+        def.setUnit("mmol/L");
+        com.example.hms.model.LabTestReferenceRange range = new com.example.hms.model.LabTestReferenceRange();
+        range.setMinValue(3.5);
+        range.setMaxValue(5.1);
+        range.setCriticalLow(2.5);
+        range.setCriticalHigh(6.5);
+        range.setUnit("mmol/L");
+        def.setReferenceRanges(new java.util.ArrayList<>(List.of(range)));
+        r.setResultValue(value);
+        r.setResultUnit("mmol/L");
+        return r;
+    }
+
+    @Test
+    void d520_aHandEnteredCriticalValueIsFlaggedCriticalOnTheTabAndTheTimeline() {
+        // QA D520: GET /patients/{id}/chart-review showed no CRITIQUE pill for
+        // a critical potassium the lab screen flagged, because only the
+        // analyzer flag (absent on a typed value) was read.
+        LabResult r = handEnteredPotassium("7.9");
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).singleElement()
+            .satisfies(e -> assertThat(e.getAbnormalFlag()).isEqualTo("CRITICAL"));
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> assertThat(e.getStatus()).isEqualTo("CRITICAL"));
+    }
+
+    @Test
+    void d520_aHandEnteredHighValueIsAbnormalHighAndANormalOneIsNormal() {
+        LabResult high = handEnteredPotassium("5.8");
+        LabResult normal = handEnteredPotassium("4.2");
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(high, normal));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).extracting(r -> r.getAbnormalFlag())
+            .containsExactlyInAnyOrder("ABNORMAL", "NORMAL");
+        assertThat(dto.getResults()).filteredOn(r -> "ABNORMAL".equals(r.getAbnormalFlag()))
+            .singleElement()
+            .satisfies(r -> assertThat(r.getAbnormalDirection()).isEqualTo(com.example.hms.enums.AbnormalDirection.HIGH));
     }
 }

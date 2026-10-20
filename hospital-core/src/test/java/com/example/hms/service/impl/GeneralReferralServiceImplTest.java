@@ -334,6 +334,8 @@ class GeneralReferralServiceImplTest {
         GeneralReferral referral = buildReferral(referralId);
         Hospital receiving = buildHospital(UUID.randomUUID(), "Receiving Hospital");
         referral.setReceivingHospital(receiving);
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        referral.setSubmittedAt(java.time.LocalDateTime.now());
         UUID providerId = UUID.randomUUID();
         Staff foreign = buildStaff(providerId, "Dr. Elsewhere");
         foreign.setHospital(referral.getHospital());
@@ -459,6 +461,7 @@ class GeneralReferralServiceImplTest {
     void cancelReferral_marksReferralCancelledAndPersistsReason() {
         UUID referralId = UUID.randomUUID();
         GeneralReferral referral = buildReferral(referralId);
+        signedInAsReferrer(referral);
 
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(referral)).thenReturn(referral);

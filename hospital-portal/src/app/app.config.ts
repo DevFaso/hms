@@ -1,5 +1,6 @@
+import { installDecimalCommaSupport } from './shared/decimal-comma';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
-import { registerLocaleData } from '@angular/common';
+import { DOCUMENT, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
 import localeEs from '@angular/common/locales/es';
 import { provideRouter, withNavigationErrorHandler, NavigationError } from '@angular/router';
@@ -84,5 +85,7 @@ export const appConfig: ApplicationConfig = {
     // form-based login keeps working untouched during the rollout.
     provideOAuthClient(),
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
+    // QA D505: comma decimals in every numeric input, whatever the browser locale.
+    provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
   ],
 };

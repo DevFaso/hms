@@ -200,14 +200,24 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
 
-        ImagingOrderResponseDTO result = imagingOrderService.updateOrderStatus(orderId, request);
+        // QA D503 class: the performer is the session, never the request's claim.
+        UUID sessionUserId = UUID.randomUUID();
+        com.example.hms.model.User sessionUser = signer(sessionUserId, "Ada", "Session");
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null, List.of()));
+        ImagingOrderResponseDTO result;
+        try {
+            result = imagingOrderService.updateOrderStatus(orderId, request);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
 
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
         assertThat(order.getCancellationReason()).isEqualTo("Duplicate order");
-        assertThat(order.getCancelledByUserId()).isEqualTo(performerId);
-        assertThat(order.getCancelledByName()).isEqualTo("Dr. Watson");
+        assertThat(order.getCancelledByUserId()).isEqualTo(sessionUserId).isNotEqualTo(performerId);
+        assertThat(order.getCancelledByName()).isEqualTo("Ada Session");
         assertThat(order.getStatusUpdatedAt()).isNotNull();
-        assertThat(order.getStatusUpdatedBy()).isEqualTo(performerId);
+        assertThat(order.getStatusUpdatedBy()).isEqualTo(sessionUserId);
         assertThat(result).isSameAs(responseDTO);
     }
 
@@ -262,11 +272,42 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.save(order)).thenReturn(order);
         when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
 
-        ImagingOrderResponseDTO result = imagingOrderService.updateOrder(orderId, request);
+        ImagingOrderResponseDTO result = imagingOrderService.updateOrder(orderId, request, null);
 
         assertThat(order.getDuplicateOfRecentOrder()).isFalse();
         assertThat(order.getDuplicateReferenceOrderId()).isNull();
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void qaD501_aSignedOrderIsNeverEditedInPlace() {
+        UUID signerId = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setOrderingProviderUserId(signerId);
+        order.setProviderSignedAt(LocalDateTime.now().minusHours(1));
+        order.setStudyType("Chest PA");
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderRequestDTO edit = ImagingOrderRequestDTO.builder().studyType("CT Head").build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, edit, signerId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStudyType()).isEqualTo("Chest PA");
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD501_anotherUserCannotEditAnUnsignedOrder() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderRequestDTO edit = ImagingOrderRequestDTO.builder().studyType("CT Head").build();
+        UUID nurse = UUID.randomUUID();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, edit, nurse))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -585,6 +626,61 @@ class ImagingOrderServiceImplTest {
         );
     }
 
+    /** QA D508: the order the by-patient list showed hospital B opens by id at B too. */
+    @Test
+    void d508_getOrder_readableForeignOrder_matchesTheList() {
+        UUID hospitalB = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
+        when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB))
+            .thenReturn(java.util.Set.of(hospitalB, hospitalId));
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        assertThat(imagingOrderService.getOrder(orderId).getId()).isEqualTo(orderId);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalB), eq(doctorB), isNull(), any(), anyString());
+    }
+
+    /** QA D508: a foreign order the list would not show is a 404 by id as well. */
+    @Test
+    void d508_getOrder_unreadableForeignOrder_isNotFound() {
+        UUID hospitalB = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
+        when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB)).thenReturn(java.util.Set.of(hospitalB));
+
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId));
+    }
+
+    /** D508 path re-verified: reading across is not acting across — a status write stays 404. */
+    @Test
+    void d508_updateStatus_onReadableForeignOrder_staysNotFound() {
+        UUID hospitalB = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setPatient(patient);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+
+        var statusUpdate = new com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO();
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.updateOrderStatus(orderId, statusUpdate));
+    }
+
     @Test
     void getOrder_sameHospital_success() {
         ImagingOrder order = new ImagingOrder();
@@ -708,7 +804,7 @@ class ImagingOrderServiceImplTest {
         status.setStatus(ImagingOrderStatus.CANCELLED);
         ImagingOrderSignatureRequestDTO signature = new ImagingOrderSignatureRequestDTO();
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, update))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, update, null))
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrderStatus(orderId, status))
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
@@ -730,7 +826,7 @@ class ImagingOrderServiceImplTest {
         ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
         request.setHospitalId(elsewhereId);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request, null))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(order.getHospital()).isSameAs(hospital);
         verify(imagingOrderRepository, never()).save(any());
@@ -767,7 +863,7 @@ class ImagingOrderServiceImplTest {
 
         ImagingOrderRequestDTO request = new ImagingOrderRequestDTO();
         request.setHospitalId(elsewhereId);
-        imagingOrderService.updateOrder(orderId, request);
+        imagingOrderService.updateOrder(orderId, request, null);
         assertThat(order.getHospital()).isSameAs(elsewhere);
 
         ImagingOrderStatusUpdateRequestDTO status = new ImagingOrderStatusUpdateRequestDTO();
@@ -804,7 +900,7 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
         ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
         repoint.setPatientId(foreignPatientId);
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, repoint))
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, repoint, null))
             .isInstanceOfSatisfying(ResourceNotFoundException.class,
                 e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
         assertThat(order.getPatient()).isSameAs(patient);
@@ -825,7 +921,7 @@ class ImagingOrderServiceImplTest {
 
         ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
         repoint.setPatientId(otherPatientId);
-        imagingOrderService.updateOrder(orderId, repoint);
+        imagingOrderService.updateOrder(orderId, repoint, null);
         assertThat(order.getPatient()).isSameAs(other);
     }
 
@@ -842,7 +938,7 @@ class ImagingOrderServiceImplTest {
 
         ImagingOrderRequestDTO repoint = new ImagingOrderRequestDTO();
         repoint.setPatientId(anyPatientId);
-        imagingOrderService.updateOrder(orderId, repoint);
+        imagingOrderService.updateOrder(orderId, repoint, null);
         assertThat(order.getPatient()).isSameAs(any);
         org.mockito.Mockito.verifyNoInteractions(registrationRepository);
     }

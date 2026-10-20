@@ -139,6 +139,8 @@ class PatientRecordPdfServiceTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_EXPORT);
         assertThat(audit.getValue().getResourceId()).isEqualTo(patientId.toString());
+        // QA D533: anchored at the exporting hospital so the row names it.
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
         assertThat(audit.getValue().getEventDescription())
             .contains("Patient/" + patientId, "4 chart entries")
             .doesNotContain("Karim", "Porgo", "HBX4939");

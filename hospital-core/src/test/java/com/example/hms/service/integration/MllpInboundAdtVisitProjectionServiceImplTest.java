@@ -47,6 +47,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +62,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
 
@@ -751,6 +753,49 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_DISCHARGED);
         assertThat(audit.getValue().getEntityType()).isEqualTo("ADMISSION");
+    }
+
+    @Test
+    @DisplayName("QA D515: an A03 discharge frees the bed and cancels the stay's pending transfer")
+    void d515_anA03DischargeCancelsThePendingTransfer() {
+        com.example.hms.repository.TransferOrderRepository transfers =
+            mock(com.example.hms.repository.TransferOrderRepository.class);
+        com.example.hms.service.BedAssignmentService realBeds = new com.example.hms.service.BedAssignmentService(
+            mock(com.example.hms.repository.BedRepository.class), admissionRepository, transfers);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "bedAssignmentService", realBeds);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        com.example.hms.model.TransferOrder pending = new com.example.hms.model.TransferOrder();
+        pending.setStatus(com.example.hms.enums.TransferOrderStatus.REQUESTED);
+        when(transfers.findPendingForAdmission(row.getId())).thenReturn(Optional.of(pending));
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A03", "V-D515", "WARD-A", null, LocalDateTime.of(2026, 5, 17, 14, 30)),
+            patient, hospital, "REG", "HOSP1", "MSG-D515");
+
+        assertThat(pending.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        verify(transfers).save(pending);
+    }
+
+    @Test
+    @DisplayName("QA D515: a re-sent A03 for a stay already discharged releases nothing again")
+    void d515_aResentA03ReleasesNothing() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.DISCHARGED);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A03", "V-D515B", "WARD-A", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-D515B");
+
+        verifyNoInteractions(bedAssignmentService);
     }
 
     @Test

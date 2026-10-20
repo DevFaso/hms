@@ -44,6 +44,16 @@ public class PatientTimelineResponseDTO {
 
     @Schema(description = "Indicates that at least one sensitive event was included in the payload.")
     private boolean containsSensitiveData;
+    /** QA D504: the patient opted out of sharing and other hospitals' allergy rows are withheld here. */
+    private boolean allergiesWithheld;
+
+    /**
+     * QA D504: the patient opted out of record sharing and nothing here
+     * overrides it, so every clinical list on this read (problems, medications,
+     * labs, vitals, notes, encounters, imaging) holds this hospital's rows
+     * only. Says nothing about whether other rows exist.
+     */
+    private boolean recordsWithheld;
 
     @Schema(description = "Total number of entries after applying filters and limits.")
     private int totalEntries;
