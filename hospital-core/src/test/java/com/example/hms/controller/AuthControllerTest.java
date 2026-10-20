@@ -165,6 +165,30 @@ class AuthControllerTest {
                         containsInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN")));
     }
 
+    @Test
+    void qaD536_multiRoleLoginWithoutARoleReportsTheRealForcePasswordChange() throws Exception {
+        // POST /auth/login with no selectedRole, for a multi-role account on a temporary password.
+        givenAuthenticatedWith("ROLE_DOCTOR", "ROLE_NURSE");
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(java.util.UUID.randomUUID());
+        user.setUsername("multi1");
+        user.setForcePasswordChange(true);
+        user.setForceUsernameChange(true);
+        when(userRepository.findByUsername("multi1")).thenReturn(java.util.Optional.of(user));
+
+        LoginRequest login = new LoginRequest();
+        login.setUsername("multi1");
+        login.setPassword("password123");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roleSelectionRequired").value(true))
+                .andExpect(jsonPath("$.forcePasswordChange").value(true))
+                .andExpect(jsonPath("$.forceUsernameChange").value(true));
+    }
+
     /** Authenticate as a user carrying exactly these authorities. */
     private void givenAuthenticatedWith(String... authorities) {
         var granted = java.util.Arrays.stream(authorities)

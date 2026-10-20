@@ -311,10 +311,16 @@ public class AuthController {
                 log.info("🔐 [LOGIN] Multi-role selection required for user='{}' roles={} in {}ms",
                         loginRequest.getUsername(), allRoles, elapsedMs);
 
+                // QA D536: the picker answer carries the account's real
+                // credential flags; it used to default them to false, so a
+                // multi-role user with a temporary password was not told.
+                var pickerUser = userRepository.findByUsername(loginRequest.getUsername()).orElse(null);
                 var body = JwtResponse.builder()
                         .roleSelectionRequired(true)
                         .availableRoles(allRoles)
                         .username(loginRequest.getUsername())
+                        .forcePasswordChange(pickerUser != null && pickerUser.isForcePasswordChange())
+                        .forceUsernameChange(pickerUser != null && pickerUser.isForceUsernameChange())
                         .build();
                 return ResponseEntity.ok(body);
             }

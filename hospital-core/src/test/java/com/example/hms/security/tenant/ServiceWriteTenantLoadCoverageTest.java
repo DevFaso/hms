@@ -104,7 +104,6 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),
         entry("ConsultationServiceImpl.resolveStaff#findById", ACTOR),
         entry("DepartmentServiceImpl.findDepartmentOrThrow#findById", CALLER_CHECKS + " (enforceHospitalScopeOnEntity)"),
-        entry("DigitalSignatureServiceImpl.verifySignature#findById", "verifies a signature value; it writes nothing"),
         entry("DispenseServiceImpl.resolveCatalogItem#findById", SHARED),
         entry("EncounterServiceImpl.resolveAuthorStaff#findById", ACTOR),
         entry("HighRiskPregnancyCarePlanServiceImpl.findPlanOrThrow#findById", CALLER_CHECKS + " (findPlanInActingHospital, or ownership for a patient)"),

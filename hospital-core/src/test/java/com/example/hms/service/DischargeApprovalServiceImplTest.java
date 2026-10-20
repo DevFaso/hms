@@ -102,6 +102,31 @@ class DischargeApprovalServiceImplTest {
         nurse.setId(nurseStaffId);
         nurse.setHospital(hospital);
         nurse.setAssignment(nurseAssignment);
+        // QA D503 class: the nurse who asks (and cancels) is the signed-in user.
+        actAsStaff(nurse);
+    }
+
+    private static void actAsStaff(Staff staff) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void qaD503_anotherNurseCannotCancelInTheRequestingNursesName() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        actAsStaff(Staff.builder().build());
+        assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, "changed"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
     }
 
     private DischargeApprovalRequestDTO buildRequest() {
@@ -261,6 +286,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());
@@ -334,6 +360,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());

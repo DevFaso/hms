@@ -15,7 +15,7 @@ public interface ImagingOrderService {
 
     ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId);
 
-    ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request);
+    ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId);
 
     ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request);
 

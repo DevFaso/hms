@@ -79,6 +79,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment nurseAssignment = assignmentRepository.findById(request.getNurseAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, request.getNurseAssignmentId()));
         validateAssignment(nurseAssignment, nurse, registration.getHospital().getId());
+        requireCallerUnlessSuperAdmin(nurse);
 
         registration.markReadyForDischarge(nurse.getId(), request.getNurseSummary());
         registrationRepository.save(registration);
@@ -112,6 +113,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
@@ -163,6 +165,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
@@ -190,9 +193,12 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         if (approval.getNurse() == null) {
             throw new BusinessException("Cannot cancel discharge request: no nurse associated with this approval");
         }
-        if (!Objects.equals(approval.getNurse().getId(), cancelledByStaffId)) {
+        if (cancelledByStaffId != null && !Objects.equals(approval.getNurse().getId(), cancelledByStaffId)) {
             throw new BusinessException("Only the requesting nurse can cancel a discharge request");
         }
+        // QA D503 class: the staffId on the request is a claim; the caller
+        // must be the requesting nurse herself.
+        requireCallerUnlessSuperAdmin(approval.getNurse());
 
         approval.setStatus(DischargeStatus.CANCELLED);
         approval.setResolvedAt(LocalDateTime.now());
@@ -284,5 +290,14 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    /**
+     * QA D503 class (D302/D406/D407): a staff id in the request names who acts.
+     * It must be the caller's own record; a verified super-admin may act for a
+     * staff member of the same hospital, as before.
+     */
+    private void requireCallerUnlessSuperAdmin(Staff staff) {
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
     }
 }
