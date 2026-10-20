@@ -327,9 +327,8 @@
                 class="material-symbols-outlined notif-icon"
                 [class.notif-icon-critical]="isCriticalNotification(n.type)"
                 aria-hidden="true"
-              >
-                {{ notificationIcon(n.type) }}
-              </span>
+                [textContent]="notificationIcon(n.type)"
+              ></span>
               @if (isCriticalNotification(n.type)) {
                 <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
               }
