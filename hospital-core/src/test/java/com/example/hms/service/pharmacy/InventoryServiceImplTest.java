@@ -647,6 +647,25 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D405: a lot received holding more than its received quantity is refused")
+        void remainingAboveReceivedIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("QA D315: the same lot number with another expiry date is refused")
         void sameLotOtherExpiryIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();

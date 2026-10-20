@@ -215,6 +215,12 @@ public class InventoryServiceImpl implements InventoryService {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
         }
+        // QA D405: a lot cannot be received holding more than was received.
+        if (dto.getRemainingQuantity() != null && dto.getInitialQuantity() != null
+            && dto.getRemainingQuantity().compareTo(dto.getInitialQuantity()) > 0) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
         // QA D315: a lot number identifies one manufacturing batch, which has
         // one expiry date. A second delivery of the same lot is fine; the same
         // lot number with another expiry is a typing error or a false label.
