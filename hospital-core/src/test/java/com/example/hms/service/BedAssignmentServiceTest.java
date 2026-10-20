@@ -301,4 +301,60 @@ class BedAssignmentServiceTest {
 
         verify(bedRepository, never()).save(any());
     }
+
+    /* ── D431: the bed picker ignored sex and age ─────────────────────── */
+
+    private static com.example.hms.model.Patient patient(String gender, int years) {
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setGender(gender);
+        p.setDateOfBirth(java.time.LocalDate.now().minusYears(years).minusDays(1));
+        return p;
+    }
+
+    @Test
+    void d431_aChildIsRefusedAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 5));
+        Bed bed = bed("B04", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        assertThatThrownBy(() -> service.assignBed(admission, bed.getId()))
+            .isInstanceOf(BusinessException.class);
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        verify(bedRepository, never()).save(any());
+    }
+
+    @Test
+    void d431_aManIsRefusedAMaternityBed() {
+        admission.setPatient(patient("MALE", 40));
+        Bed bed = bed("B05", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        assertThatThrownBy(() -> service.assignBed(admission, bed.getId()))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void d431_aWomanTakesAMaternityBed() {
+        admission.setPatient(patient("FEMALE", 28));
+        Bed bed = bed("B06", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        service.assignBed(admission, bed.getId());
+
+        assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
+
+    @Test
+    void d431_anAdultIsRefusedAPaediatricBedAndAnyoneTakesAGeneralOne() {
+        ward.setWardType(WardType.PEDIATRIC);
+        admission.setPatient(patient("MALE", 40));
+        Bed paeds = bed("P01", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(paeds.getId(), hospitalId)).thenReturn(Optional.of(paeds));
+        assertThatThrownBy(() -> service.assignBed(admission, paeds.getId()))
+            .isInstanceOf(BusinessException.class);
+
+        ward.setWardType(WardType.GENERAL);
+        service.assignBed(admission, paeds.getId());
+        assertThat(paeds.getStatus()).isEqualTo(BedStatus.OCCUPIED);
+    }
 }

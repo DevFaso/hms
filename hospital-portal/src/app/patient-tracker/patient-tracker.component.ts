@@ -27,6 +27,7 @@ import {
   AfterVisitSummary,
 } from '../services/encounter.service';
 import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
+import { TriageFormComponent } from '../nurse-station/triage-form/triage-form.component';
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -51,6 +52,7 @@ export interface TrackerColumn {
     TranslateModule,
     CheckoutDialogComponent,
     RovingFocusDirective,
+    TriageFormComponent,
   ],
   templateUrl: './patient-tracker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -196,6 +198,28 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   onCheckoutCompleted(_avs: AfterVisitSummary): void {
     this.showCheckoutDialog.set(false);
     this.checkoutEncounter.set(null);
+    this.loadBoard();
+  }
+
+  /* ── Triage form (D408) — the nurse records vitals + ESI for an arrived outpatient ─── */
+  triageEncounter = signal<EncounterResponse | null>(null);
+
+  openTriage(item: PatientTrackerItem): void {
+    this.encounterService.getById(item.encounterId).subscribe({
+      next: (encounter) => this.triageEncounter.set(encounter),
+      error: (err: { error?: { message?: string } } | null) =>
+        this.toast.error(
+          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
+        ),
+    });
+  }
+
+  onTriageDismissed(): void {
+    this.triageEncounter.set(null);
+  }
+
+  onTriageCompleted(): void {
+    this.triageEncounter.set(null);
     this.loadBoard();
   }
 

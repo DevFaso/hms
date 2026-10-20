@@ -180,7 +180,7 @@ export interface NursingIntakeResponse {
 /* ── MVP 6: Check-Out & AVS ─────────────────────────────────────── */
 
 export interface FollowUpAppointmentRequest {
-  reason: string;
+  reason?: string;
   preferredDate?: string;
   notes?: string;
 }

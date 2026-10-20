@@ -285,6 +285,47 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
+    @DisplayName("D410: a live break-the-glass session overrides the opt-out, as the patient portal promises")
+    void breakGlassOverridesOptOut() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.permitted()).isTrue();
+        assertThat(d.relationship().kind()).isEqualTo(TreatmentRelationshipKind.BREAK_GLASS);
+        assertThat(d.relationship().carrierId()).isEqualTo(session.getId());
+    }
+
+    @Test
+    @DisplayName("D410: without a session the opt-out still refuses, even with a treatment relationship")
+    void optOutWithoutSessionStillRefuses() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
+        verify(resolver, never()).resolve(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D410: a non-staff actor with a session is still refused on the opt-out")
+    void optOutNonStaffIgnoresSession() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        RecordAccessDecision d = policy.decide(actor, patient, hospitalId);
+
+        assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.PATIENT_OPTED_OUT);
+    }
+
+    @Test
     @DisplayName("no active staff record at the acting hospital → NOT_STAFF_AT_HOSPITAL")
     void notStaffHere() {
         when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
@@ -381,9 +422,10 @@ class RecordAccessPolicyImplTest {
     }
 
     @Test
-    @DisplayName("a break-the-glass session does not bypass the opt-out or the staff gate")
+    @DisplayName("a break-the-glass session does not bypass the staff gate (D410: it does override the opt-out for staff)")
     void breakGlassDoesNotBypassEarlierGates() {
         when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(actor, hospitalId)).thenReturn(Optional.empty());
         when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(new BreakGlassSession()));
 
         RecordAccessDecision d = policy.decide(actor, patient, hospitalId);

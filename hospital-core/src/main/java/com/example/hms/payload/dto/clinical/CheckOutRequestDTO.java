@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto.clinical;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -43,7 +42,10 @@ public class CheckOutRequestDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class FollowUpAppointmentRequest {
-        @NotNull
+        /**
+         * Optional (QA D426/D321): a follow-up with only a date was refused or
+         * dropped. The service files a generic reason when none is given.
+         */
         private String reason;
         /** ISO date string (yyyy-MM-dd) for the desired follow-up date. */
         private String preferredDate;

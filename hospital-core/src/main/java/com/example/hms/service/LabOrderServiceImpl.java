@@ -633,6 +633,12 @@ public class LabOrderServiceImpl implements LabOrderService {
                 .orElse(null);
             if (!personId.equals(callerId)) {
                 log.warn("Lab order refused: the ordering staff named is not the caller");
+                // QA D432: a colleague at the order's own hospital is someone the
+                // caller can already see, so "staff not found" only misled. Say
+                // what is wrong; a row elsewhere still reads as unknown.
+                if (named.getHospital() != null && hospital.getId().equals(named.getHospital().getId())) {
+                    throw new BusinessException("labOrder.orderingStaff.notCaller");
+                }
                 throw new ResourceNotFoundException(STAFF_NOT_FOUND, requestedStaffId);
             }
         }

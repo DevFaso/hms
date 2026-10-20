@@ -43,6 +43,8 @@ class AdmissionStayEncounterServiceTest {
     @Mock private com.example.hms.repository.NurseHandoffRepository nurseHandoffRepository;
     @Mock private com.example.hms.repository.NursingTaskRepository nursingTaskRepository;
     @Mock private org.springframework.context.MessageSource messageSource;
+    @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
+    @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
 
     @InjectMocks private AdmissionStayEncounterService service;
 
@@ -294,5 +296,64 @@ class AdmissionStayEncounterServiceTest {
         service.recordDischarge(admission);
 
         verify(encounterRepository, never()).findFirstByAdmissionIdOrderByEncounterDateDesc(any());
+    }
+
+    /* ── D426: a discharged stay records its discharge summary ──────────── */
+
+    @Test
+    void d426_theDischargeWritesASummaryWithTheStaysMedicinesAndFollowUps() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        stay.setPatient(admission.getPatient());
+        stay.setHospital(hospital);
+        stay.setStaff(doctor);
+        stay.setAssignment(new UserRoleHospitalAssignment());
+        admission.setDischargeInstructions("Repos, revoir dans 2 semaines");
+        admission.setFollowUpAppointments(List.of(java.util.Map.of(
+            "appointmentType", "CONSULTATION", "appointmentDate", "2026-11-03", "purpose", "Contrôle")));
+        com.example.hms.model.Prescription amox = new com.example.hms.model.Prescription();
+        amox.setMedicationName("Amoxicilline");
+        amox.setDosage("1 g");
+        amox.setFrequency("3x/j");
+        amox.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        com.example.hms.model.Prescription draft = new com.example.hms.model.Prescription();
+        draft.setMedicationName("Brouillon");
+        draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
+        when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(amox, draft)));
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        ArgumentCaptor<com.example.hms.model.discharge.DischargeSummary> saved =
+            ArgumentCaptor.forClass(com.example.hms.model.discharge.DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        com.example.hms.model.discharge.DischargeSummary summary = saved.getValue();
+        assertThat(summary.getEncounter()).isSameAs(stay);
+        assertThat(summary.getDischargeDiagnosis()).isEqualTo("Pneumopathie");
+        assertThat(summary.getFollowUpInstructions()).isEqualTo("Repos, revoir dans 2 semaines");
+        assertThat(summary.getMedicationReconciliation())
+            .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
+            .containsExactly("Amoxicilline");
+        assertThat(summary.getFollowUpAppointments())
+            .extracting(com.example.hms.model.discharge.FollowUpAppointmentEntry::getAppointmentDate)
+            .containsExactly(java.time.LocalDate.of(2026, 11, 3));
+    }
+
+    @Test
+    void d426_aSummaryAlreadyWrittenOnTheDischargeScreenIsKept() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(true);
+
+        service.recordDischarge(admission, "Pneumopathie");
+
+        verify(dischargeSummaryRepository, never()).save(any());
     }
 }

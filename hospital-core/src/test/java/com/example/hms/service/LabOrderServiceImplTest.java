@@ -555,7 +555,24 @@ class LabOrderServiceImplTest {
         // Someone else is signed in and names this doctor's staff id.
         when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
 
+        // QA D432: a colleague at the same hospital is no secret, so the
+        // refusal says what is wrong instead of "staff not found".
         LabOrderRequestDTO request = baseRequestBuilder().build();
+        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(thrown -> ((com.example.hms.exception.BusinessException) thrown).getMessageKey())
+            .isEqualTo("labOrder.orderingStaff.notCaller");
+        verify(roleValidator, never()).canOrderLabTests(any(), any());
+        verify(labOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void createLabOrder_anotherClinicianAtAnotherHospitalStillReadsAsUnknown_D432() {
+        Staff elsewhere = sameDoctorsRowAt(otherHospital());
+        givenTheRequestNamesTheRowAt(elsewhere);
+        when(authUtils.resolveUserId(any())).thenReturn(Optional.of(UUID.randomUUID()));
+
+        LabOrderRequestDTO request = baseRequestBuilder().orderingStaffId(elsewhere.getId()).build();
         assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
             .extracting(thrown -> ((ResourceNotFoundException) thrown).getMessageKey())
@@ -615,8 +632,10 @@ class LabOrderServiceImplTest {
         when(staffRepository.findById(otherDoctor.getId())).thenReturn(Optional.of(otherDoctor));
 
         LabOrderRequestDTO request = baseRequestBuilder().id(labOrderId).orderingStaffId(otherDoctor.getId()).build();
+        // QA D432: a colleague at this hospital is refused by name, not as "not found".
         assertThatThrownBy(() -> labOrderService.updateLabOrder(labOrderId, request, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "labOrder.orderingStaff.notCaller");
         verify(labOrderRepository, never()).save(any());
     }
 

@@ -97,6 +97,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     /** D83: an allergy override is audited (who, when, which reason digest). */
     private final AuditEventLogService auditEventLogService;
+    /** D414: an inpatient whose stay has no encounter yet gets it opened, never a phantom consultation. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
 
     @Override
     @Transactional
@@ -1074,7 +1077,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (encounter.getPatient() == null || !encounter.getPatient().getId().equals(patient.getId())) {
             throw new BusinessException("prescription.encounter.patient.mismatch");
         }
-        if (encounter.getStaff() == null || !encounter.getStaff().getId().equals(staff.getId())) {
+        // QA D414: an inpatient stay is led by one doctor but ordered on by
+        // several (consultants, the doctor on call). Only a visit is the
+        // prescriber's own; the prescription carries its prescriber either way,
+        // and the hospital check below still pins them to the stay's hospital.
+        if (!isPrescribersEncounter(encounter, staff) && encounter.getAdmissionId() == null) {
             throw new BusinessException("prescription.encounter.staff.mismatch");
         }
         if (staff.getHospital() == null || !staff.getHospital().getId().equals(encounter.getHospital().getId())) {
@@ -1088,10 +1095,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * 2) staff.assignment / URHA lookup for doctor role within the hospital scope
      */
     private UserRoleHospitalAssignment resolvePrescriberAssignmentOrThrow(Staff staff, Encounter encounter, UUID hospitalId) {
-        if (encounter != null && encounter.getAssignment() != null) {
+        // The encounter's assignment is the prescriber's only when the encounter
+        // is theirs: on a stay led by another doctor (D414) it is the lead's.
+        if (encounter != null && encounter.getAssignment() != null && isPrescribersEncounter(encounter, staff)) {
             return encounter.getAssignment();
         }
         return resolveAssignmentForStaff(staff, hospitalId);
+    }
+
+    private static boolean isPrescribersEncounter(Encounter encounter, Staff staff) {
+        return encounter.getStaff() != null && staff != null
+            && encounter.getStaff().getId() != null && encounter.getStaff().getId().equals(staff.getId());
     }
 
     /**
@@ -1161,6 +1175,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (stay.isPresent()) {
             return stay.get();
         }
+        // QA D414 (D41/D97 not fixed): the lookup above only finds a stay the
+        // prescriber leads, so a consultant or covering doctor prescribing for
+        // an inpatient minted a completed "consultation" that never happened.
+        // The order belongs to the patient's open stay whoever leads it; the
+        // prescription carries its own prescriber.
+        Optional<Encounter> anyStay = encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                patient.getId(), hospitalId,
+                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+        if (anyStay.isPresent()) {
+            return anyStay.get();
+        }
+        Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId);
+        if (openedStay != null) {
+            return openedStay;
+        }
 
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
@@ -1171,6 +1201,25 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    /**
+     * D414: an admission whose stay encounter was never opened (admitted before
+     * stays had encounters, or with no lead at the time) still makes the patient
+     * an inpatient; the order opens the stay instead of a completed consultation.
+     */
+    private Encounter openStayForActiveAdmission(UUID patientId, UUID hospitalId) {
+        if (admissionRepository == null || stayEncounters == null) {
+            return null;
+        }
+        return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.ACTIVE,
+                    com.example.hms.enums.AdmissionStatus.ON_LEAVE,
+                    com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE))
+            .stream()
+            .findFirst()
+            .map(stayEncounters::openStayEncounter)
+            .orElse(null);
     }
 
     private UUID determineHospitalId(Staff staff, Patient patient) {
@@ -1276,14 +1325,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
         String med = normalizeDrugText(medicationName);
         String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
-        boolean conflict = false;
-        for (PatientAllergy allergy : allergies) {
-            if (allergy.isActive() && matchesAllergen(med, allergy.getAllergenDisplay())) {
-                conflict = true;
-                handleAllergyConflict(patient, allergy, medicationName, request.getForceOverride(), reason);
-            }
+        // QA D432: the warning cited whichever matching entry came first, so a
+        // moderate entry could hide a severe one for the same allergen. The
+        // most severe matching entry is the one the prescriber is shown.
+        Optional<PatientAllergy> worst = allergies.stream()
+            .filter(PatientAllergy::isActive)
+            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay()))
+            .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
+        if (worst.isEmpty()) {
+            return null;
         }
-        return conflict ? reason : null;
+        handleAllergyConflict(patient, worst.get(), medicationName, request.getForceOverride(), reason);
+        return reason;
+    }
+
+    /** Higher is worse; an unknown severity ranks above a mild one, below a moderate one. */
+    static int allergySeverityRank(PatientAllergy allergy) {
+        if (allergy.getSeverity() == null) {
+            return 2;
+        }
+        return switch (allergy.getSeverity()) {
+            case LIFE_THREATENING -> 5;
+            case SEVERE -> 4;
+            case MODERATE -> 3;
+            case UNKNOWN -> 2;
+            case MILD -> 1;
+        };
     }
 
     private static void recordAllergyOverride(Prescription prescription, String overrideReason) {

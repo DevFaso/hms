@@ -369,6 +369,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
             requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
+            requireScanByAdministeringNurse(marRecord, marStatus, nurseUserId, hospitalId);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
             marRecord.setNotes(note);
@@ -1154,6 +1155,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Prescription rx, MedicationAdministrationRecord marRecord, UUID nurseUserId, UUID hospitalId,
         MedicationAdministrationStatus status, String note, String overrideReason
     ) {
+        requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
         marRecord.setStatus(status);
         marRecord.setAdministeredAt(LocalDateTime.now());
         marRecord.setNotes(note);
@@ -1178,6 +1180,60 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /** Resolve nurse Staff entity from userId + hospitalId. */
+    /**
+     * D411: the bedside five-rights scan belongs to the nurse who performed it.
+     * The verify call stamps that nurse as the row's administering staff; a GIVEN
+     * recorded by anyone else would carry a VERIFIED status for a scan they never
+     * did, so the dose must be re-scanned by the nurse who gives it.
+     */
+    private void requireScanByAdministeringNurse(
+        MedicationAdministrationRecord mar, MedicationAdministrationStatus status,
+        UUID nurseUserId, UUID hospitalId
+    ) {
+        if (status != MedicationAdministrationStatus.GIVEN || mar.getScanVerifiedAt() == null
+            || mar.getFiveRightsStatus() == null) {
+            return;
+        }
+        Staff verifier = mar.getAdministeredByStaff();
+        if (verifier == null || verifier.getId() == null) {
+            // A scan no staff row was stamped on (a pre-D411 row, or a verifier
+            // with no staff record here) has no owner to compare against.
+            return;
+        }
+        UUID administeringStaffId = resolveNurseStaff(nurseUserId, hospitalId).map(Staff::getId).orElse(null);
+        if (!verifier.getId().equals(administeringStaffId)) {
+            throw new BusinessException("nurse.mar.scanByAnotherNurse");
+        }
+    }
+
+    /**
+     * QA D431: the nurse station accepted vitals for a patient after their
+     * discharge, charted as if they were still on the ward. A patient whose
+     * stays here are all closed and who has no open visit is not under nursing
+     * care here. A patient never admitted (an outpatient) is not affected.
+     */
+    private void requireNotDischargedWithoutVisit(UUID patientId, UUID hospitalId) {
+        List<com.example.hms.model.Admission> stays =
+            admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                EnumSet.allOf(com.example.hms.enums.AdmissionStatus.class));
+        if (stays.isEmpty()) {
+            return;
+        }
+        boolean openStay = stays.stream().anyMatch(a -> a.getStatus() == com.example.hms.enums.AdmissionStatus.PENDING
+            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ACTIVE
+            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ON_LEAVE
+            || a.getStatus() == com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);
+        if (openStay) {
+            return;
+        }
+        boolean openVisit = !encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
+            EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
+                com.example.hms.enums.EncounterStatus.CANCELLED)).isEmpty();
+        if (!openVisit) {
+            throw new BusinessException("nurse.vitals.patientDischarged");
+        }
+    }
+
     private Optional<Staff> resolveNurseStaff(UUID nurseUserId, UUID hospitalId) {
         if (nurseUserId == null || hospitalId == null) return Optional.empty();
         return staffRepository.findByUserIdAndHospitalId(nurseUserId, hospitalId);
@@ -1439,6 +1495,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");
         }
+        requireNotDischargedWithoutVisit(patientId, hospitalId);
 
         PatientVitalSign vital = PatientVitalSign.builder()
             .patient(patient)
@@ -1664,6 +1721,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         NursingTask task = nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("nurse.task.notFound", taskId));
 
+        // QA D431: a task could be completed twice, the second call
+        // overwriting who completed it and when.
+        if (STATUS_COMPLETED.equalsIgnoreCase(task.getStatus())) {
+            throw new com.example.hms.exception.ConflictException("nurse.task.alreadyCompleted");
+        }
         String nurseName = resolveNurseName(nurseUserId);
         task.setStatus(STATUS_COMPLETED);
         task.setCompletedAt(LocalDateTime.now());

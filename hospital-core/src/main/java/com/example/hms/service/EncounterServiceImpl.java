@@ -360,7 +360,10 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter saved = encounterRepository.save(encounter);
 
         if (request.getNote() != null) {
-            upsertEncounterNoteInternal(saved, ctx.staff(), request.getNote(), locale, request.getCreatedBy());
+            // D406: a note nested in the encounter body is authored by the session too.
+            EncounterNoteRequestDTO nested = request.getNote();
+            upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy());
         }
 
         recordHistory(saved, "CREATED", resolveHistoryActor(request.getCreatedBy(), ctx.staff()), null);
@@ -411,7 +414,10 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter saved = encounterRepository.save(merged);
 
         if (request.getNote() != null) {
-            upsertEncounterNoteInternal(saved, ctx.staff(), request.getNote(), locale, request.getUpdatedBy());
+            // D406: a note nested in the encounter body is authored by the session too.
+            EncounterNoteRequestDTO nested = request.getNote();
+            upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy());
         }
 
         // Mirror the dedicated checkout flow: whenever an update transitions the
@@ -489,7 +495,12 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        EncounterNote note = upsertEncounterNoteInternal(encounter, encounter.getStaff(), request, locale, null);
+        // D406: the author is the session user, never the encounter's attending
+        // nor a staff id the body names, and a note is its author's alone: a
+        // second clinician appends an addendum instead of overwriting it.
+        NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
+            request.getAuthorUserId(), request.getAuthorName(), locale);
+        EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null);
         return encounterMapper.toEncounterNoteResponseDTO(note);
     }
 
@@ -509,18 +520,15 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
 
-        NoteAuthor author = resolveNoteAuthor(request.getAuthorStaffId(),
-            request.getAuthorUserId(),
-            request.getAuthorName(),
-            encounter.getStaff(),
-            locale);
+        NoteAuthor author = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
+            request.getAuthorUserId(), request.getAuthorName(), locale);
         validateAuthorScope(encounter, author.staff(), locale);
 
         EncounterNoteAddendum addendum = EncounterNoteAddendum.builder()
             .note(note)
             .author(author.user())
             .authorStaff(author.staff())
-            .authorName(resolveAuthorName(request.getAuthorName(), author))
+            .authorName(author.sessionResolved() ? author.displayName() : resolveAuthorName(request.getAuthorName(), author))
             .authorCredentials(trimToNull(request.getAuthorCredentials()))
             .content(request.getContent())
             .eventOccurredAt(request.getEventOccurredAt())
@@ -708,15 +716,10 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
-                                                      Staff defaultStaff,
+                                                      NoteAuthor author,
                                                       EncounterNoteRequestDTO request,
                                                       Locale locale,
                                                       String actorOverride) {
-        NoteAuthor author = resolveNoteAuthor(request.getAuthorStaffId(),
-            request.getAuthorUserId(),
-            request.getAuthorName(),
-            defaultStaff,
-            locale);
         validateAuthorScope(encounter, author.staff(), locale);
 
         EncounterNote note = Optional.ofNullable(encounter.getEncounterNote())
@@ -729,6 +732,11 @@ public class EncounterServiceImpl implements EncounterService {
         // silently rewrote signed notes anyway.
         if (!isNew && note.isSigned()) {
             throw new BusinessException("encounter.note.signedLocked");
+        }
+        // D406: a session author may only revise their own note. Another
+        // clinician's text is never overwritten nor re-attributed; they add an addendum.
+        if (!isNew && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
+            throw new BusinessException("encounter.note.otherAuthor");
         }
         if (isNew) {
             note.setEncounter(encounter);
@@ -746,7 +754,9 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterNote saved = encounterNoteRepository.save(note);
         encounter.setEncounterNote(saved);
 
-        String changedBy = trimToNull(actorOverride) != null ? trimToNull(actorOverride) : author.actorIdentifier();
+        // A session author is the history's actor; a body-supplied name is not.
+        String changedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
+            ? trimToNull(actorOverride) : author.actorIdentifier();
         recordNoteHistory(encounter, saved, isNew ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED, changedBy);
         return saved;
     }
@@ -909,7 +919,8 @@ public class EncounterServiceImpl implements EncounterService {
     private void applyAuthorMetadata(EncounterNote note, NoteAuthor author, EncounterNoteRequestDTO request) {
         note.setAuthor(author.user());
         note.setAuthorStaff(author.staff());
-        if (author.displayName() != null) {
+        if (author.sessionResolved() || author.displayName() != null) {
+            // A session author's display name is the server's, never the body's.
             note.setAuthorName(author.displayName());
         }
         setStringIfPresent(request.getAuthorCredentials(), value -> note.setAuthorCredentials(trimToNull(value)));
@@ -1174,7 +1185,50 @@ public class EncounterServiceImpl implements EncounterService {
             displayName = joinName(staff.getUser().getFirstName(), staff.getUser().getLastName());
         }
         String actorIdentifier = determineActorIdentifier(displayName, user, staff, defaultStaff);
-        return new NoteAuthor(user, staff, displayName, actorIdentifier);
+        return new NoteAuthor(user, staff, displayName, actorIdentifier, false);
+    }
+
+    /**
+     * D406: the author of a note written through the API is the signed-in user.
+     * A staff or user id in the body is accepted only when it names that user;
+     * anything else is a write in someone else's name and is refused. Without a
+     * session (internal callers) the legacy resolution applies.
+     */
+    private NoteAuthor resolveSessionNoteAuthor(Encounter encounter,
+                                                UUID requestedStaffId,
+                                                UUID requestedUserId,
+                                                String requestedDisplayName,
+                                                Locale locale) {
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            return resolveNoteAuthor(requestedStaffId, requestedUserId, requestedDisplayName,
+                encounter.getStaff(), locale);
+        }
+        UUID encounterHospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        Staff staff = encounterHospitalId == null ? null
+            : staffRepository.findByUserIdAndHospitalId(currentUserId, encounterHospitalId).orElse(null);
+        if (requestedStaffId != null && (staff == null || !requestedStaffId.equals(staff.getId()))) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "A note can only be written in the signed-in clinician's own name.");
+        }
+        if (requestedUserId != null && !requestedUserId.equals(currentUserId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "A note can only be written in the signed-in clinician's own name.");
+        }
+        User user = staff != null && staff.getUser() != null
+            ? staff.getUser()
+            : userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", currentUserId));
+        String displayName = joinName(user.getFirstName(), user.getLastName());
+        if (displayName == null) {
+            displayName = user.getUsername();
+        }
+        String actorIdentifier = determineActorIdentifier(displayName, user, staff, null);
+        return new NoteAuthor(user, staff, displayName, actorIdentifier, true);
+    }
+
+    private static boolean isSameUser(User a, User b) {
+        return a != null && b != null && a.getId() != null && a.getId().equals(b.getId());
     }
 
     private Staff resolveAuthorStaff(UUID requestedStaffId, Staff defaultStaff) {
@@ -1288,7 +1342,8 @@ public class EncounterServiceImpl implements EncounterService {
     private record NoteAuthor(User user,
                               Staff staff,
                               String displayName,
-                              String actorIdentifier) {}
+                              String actorIdentifier,
+                              boolean sessionResolved) {}
 
     private record EncounterResolution(Patient patient,
                                        Staff staff,
@@ -2050,6 +2105,13 @@ public class EncounterServiceImpl implements EncounterService {
         if (recallDue != null) {
             avs.setFollowUpAppointmentDate(recallDue.toString());
         }
+        // QA D426 (D322): the checkout's own AVS listed no medicines unless the
+        // clinician retyped them; the summary just written carries the visit's orders.
+        dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
+            if (isBlankText(avs.getPrescriptionSummary())) {
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+            }
+        });
         return avs;
     }
 

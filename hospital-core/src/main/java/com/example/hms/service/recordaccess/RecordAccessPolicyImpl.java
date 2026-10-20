@@ -188,14 +188,27 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
         // has withdrawn from sharing gets the same answer whether or not they
         // are on this hospital's schedule, so the refusal itself discloses
         // nothing about their movements.
-        if (optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)) {
+        boolean optedOut = optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId);
+        if (optedOut && !isActiveStaffAt(actorUserId, hospitalId)) {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.PATIENT_OPTED_OUT, posture);
         }
-        boolean staffHere = actorUserId != null
-            && staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
-                .map(s -> s.isActive())
-                .orElse(false);
+        if (optedOut) {
+            // QA D410: the patient portal promises that after an opt-out "an
+            // emergency access stays possible, recorded, and shown to you". A
+            // live break-the-glass session the actor declared for this patient
+            // here is that emergency access: it overrides the opt-out, every
+            // read under it is a BREAK_GLASS disclosure, and the declaration
+            // notified the patient (BreakGlassPatientNotifier). Without one the
+            // opt-out answer is unchanged.
+            return breakGlassGate.liveSession(actorUserId, patientId, hospitalId)
+                .map(s -> new TreatmentRelationship(TreatmentRelationshipKind.BREAK_GLASS, s.getId(),
+                    hospitalId, patientId, s.getStartedAt(), s.getExpiresAt(), true))
+                .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
+                .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
+                    RecordAccessDenialReason.PATIENT_OPTED_OUT, posture));
+        }
+        boolean staffHere = isActiveStaffAt(actorUserId, hospitalId);
         if (!staffHere) {
             return RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL, posture);
@@ -231,6 +244,13 @@ public class RecordAccessPolicyImpl implements RecordAccessPolicy {
             .map(rel -> RecordAccessDecision.permitted(patientId, hospitalId, actorUserId, rel, posture))
             .orElseGet(() -> RecordAccessDecision.refused(patientId, hospitalId, actorUserId,
                 RecordAccessDenialReason.NO_TREATMENT_RELATIONSHIP, posture));
+    }
+
+    private boolean isActiveStaffAt(UUID actorUserId, UUID hospitalId) {
+        return actorUserId != null
+            && staffRepository.findByUserIdAndHospitalId(actorUserId, hospitalId)
+                .map(s -> s.isActive())
+                .orElse(false);
     }
 
     /**

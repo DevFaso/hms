@@ -23,6 +23,16 @@ public final class ObstetricEligibility {
 
     public static final String MESSAGE_KEY = "maternity.patient.male";
 
+    /** QA D413 (D46 regression): a labour episode was accepted for a 5-year-old. */
+    public static final String TOO_YOUNG_MESSAGE_KEY = "maternity.patient.tooYoung";
+
+    /**
+     * Youngest recorded age at which an obstetric record is accepted. Set well
+     * below any plausible pregnancy so real care is never blocked; a child's
+     * chart is still refused. A missing birth date is let through, as for gender.
+     */
+    public static final int MIN_OBSTETRIC_AGE_YEARS = 8;
+
     private static final Set<String> MALE = Set.of("m", "male", "homme", "masculin", "h");
 
     private ObstetricEligibility() {
@@ -41,5 +51,17 @@ public final class ObstetricEligibility {
         if (isRecordedMale(patient)) {
             throw new BusinessException(MESSAGE_KEY);
         }
+        if (isRecordedChild(patient)) {
+            throw new BusinessException(TOO_YOUNG_MESSAGE_KEY, MIN_OBSTETRIC_AGE_YEARS);
+        }
+    }
+
+    /** True when the recorded birth date makes the patient younger than {@link #MIN_OBSTETRIC_AGE_YEARS}. */
+    public static boolean isRecordedChild(Patient patient) {
+        if (patient == null || patient.getDateOfBirth() == null) {
+            return false;
+        }
+        return java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now()).getYears()
+            < MIN_OBSTETRIC_AGE_YEARS;
     }
 }

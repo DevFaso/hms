@@ -1101,6 +1101,50 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void checkOut_aFollowUpWithOnlyADateIsStillFiled_D426() {
+        // QA D426 (D321): a date without a reason was dropped by the portal
+        // and refused by the DTO; it is filed with the generic reason.
+        UUID encounterId = UUID.randomUUID();
+        checkoutRecallEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusWeeks(3);
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .preferredDate(preferred.toString())
+                .build())
+            .build();
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, request, "doctor1", true, null);
+
+        assertThat(returned.getFollowUpAppointmentDate()).isEqualTo(preferred.toString());
+        org.mockito.ArgumentCaptor<com.example.hms.model.scheduling.PatientRecall> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
+        verify(patientRecallRepository).save(captor.capture());
+        assertThat(captor.getValue().getDueDate()).isEqualTo(preferred);
+        assertThat(captor.getValue().getReason()).isEqualTo("Follow-up after visit");
+    }
+
+    @Test
+    void checkOut_theAvsListsTheVisitsMedicinesWithoutRetyping_D426() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        DischargeSummary summary = new DischargeSummary();
+        summary.addMedicationReconciliation(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+            .medicationName("Amoxicilline").dosage("1 g").frequency("3x/j")
+            .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
+            .continueAtDischarge(true).build());
+        when(dischargeSummaryRepository.findByEncounter_Id(encounter.getId())).thenReturn(Optional.of(summary));
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, CheckOutRequestDTO.builder().build(),
+            "doctor1", true, null);
+
+        assertThat(returned.getPrescriptionSummary()).isEqualTo("Amoxicilline 1 g 3x/j");
+    }
+
+    @Test
     void checkOut_unparseableFollowUpDate_defaultsToTwoWeeks() {
         UUID encounterId = UUID.randomUUID();
         checkoutRecallEncounter(encounterId);

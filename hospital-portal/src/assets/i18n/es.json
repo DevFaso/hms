@@ -118,7 +118,9 @@
     "WARD_CODE": "Código de la sala",
     "WARD_CODE_PLACEHOLDER": "ej. MAT01",
     "WARD_NAME": "Nombre de la sala",
-    "WARD_TYPE": "Tipo de sala"
+    "WARD_TYPE": "Tipo de sala",
+    "DEPARTMENT": "Servicio",
+    "NO_DEPARTMENT": "Sin servicio"
   },
   "ERROR_403": {
     "BACK": "Volver al panel",
