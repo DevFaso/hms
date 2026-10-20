@@ -440,11 +440,33 @@ public class CriticalValueNotificationService {
         String patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : messageSource.getMessage("patient.fallback.generic", null, locale);
-        String value = result.getResultValue()
+        String value = localizedValue(result.getResultValue(), locale)
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
         return messageSource.getMessage(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             new Object[]{testName, value, patientName},
             locale);
+    }
+
+    /**
+     * QA D349: a numeric result in the reader's notation ("5,0" in French),
+     * keeping the scale the laboratory reported. Anything that is not a plain
+     * number ("Positif", "&lt;0.5") is shown as entered.
+     */
+    static String localizedValue(String raw, java.util.Locale locale) {
+        if (raw == null) {
+            return "";
+        }
+        try {
+            java.math.BigDecimal number = new java.math.BigDecimal(raw.trim());
+            java.text.NumberFormat format = java.text.NumberFormat.getNumberInstance(locale);
+            int scale = Math.max(number.scale(), 0);
+            format.setGroupingUsed(false);
+            format.setMinimumFractionDigits(scale);
+            format.setMaximumFractionDigits(scale);
+            return format.format(number);
+        } catch (NumberFormatException notANumber) {
+            return raw;
+        }
     }
 }

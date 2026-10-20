@@ -2514,7 +2514,9 @@ public class PatientServiceImpl implements PatientService {
 
     private String formatAllergySummary(PatientAllergy allergy) {
         String allergen = Optional.ofNullable(allergy.getAllergenDisplay()).orElse("Allergy");
-    String severity = allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN;
+        // QA D333: the severity in the reader's language, not the enum constant.
+        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum."
+            + (allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN"));
         return allergen + " (" + severity + ")";
     }
 

@@ -64,7 +64,7 @@
                     <div class="vc-body">
                       <span class="vc-type">{{ v.type | enumLabel: 'vitalType' }}</span>
                       <span class="vc-value"
-                        >{{ v.value }} <small>{{ v.unit }}</small></span
+                        >{{ displayValue(v.value) }} <small>{{ unitLabel(v.unit) }}</small></span
                       >
                       @if (getNormalRange(v.type)) {
                         <span class="vc-range"

@@ -51,16 +51,24 @@ class InpatientOrderEndTest {
     }
 
     @Test
-    void anOrderOnAnOpenStayEncounter_orAnOutpatientEncounter_fallsBackToTheStayWindow() {
+    void anOrderOnAnOpenStayEncounter_fallsBackToTheStayWindow() {
         Encounter enc = new Encounter();
         enc.setAdmissionId(UUID.randomUUID());
         enc.setStatus(EncounterStatus.IN_PROGRESS);
         rx.setEncounter(enc);
         assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of())).isFalse();
-
-        enc.setAdmissionId(null);
-        enc.setStatus(EncounterStatus.COMPLETED);
         assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isTrue();
+    }
+
+    @Test
+    void qaD316_anOutpatientVisitOrderWrittenWhileAStaySpannedThatMomentHasNotEnded() {
+        // Admitted and discharged the same day; the visit's prescription was
+        // written in between, on the outpatient encounter.
+        Encounter visit = new Encounter();
+        visit.setAdmissionId(null);
+        visit.setStatus(EncounterStatus.COMPLETED);
+        rx.setEncounter(visit);
+        assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isFalse();
     }
 
     @Test

@@ -409,7 +409,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                     throw new BusinessException("lab.definition.submitterUnknown");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "The QA review must be completed by someone other than the person who submitted it.");
+                    "lab.definition.fourEyes.qaNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
@@ -418,9 +418,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
                 assertNotSameUser(currentUser, definition.getReviewedById(),
-                    "The director's approval must come from someone other than the QA reviewer.");
+                    "lab.definition.fourEyes.approverNotReviewer");
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "The director's approval must come from someone other than the person who submitted it.");
+                    "lab.definition.fourEyes.approverNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
                 definition.setApprovedById(currentUser.getId());
                 definition.setApprovedAt(LocalDateTime.now());

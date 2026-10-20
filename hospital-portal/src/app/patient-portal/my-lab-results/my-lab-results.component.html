@@ -44,10 +44,11 @@
                 <span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
               } @else {
                 <span class="pli-sub">
-                  {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}: <strong>{{ lab.result }}</strong>
+                  {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}:
+                  <strong>{{ displayResult(lab.result) }}</strong>
                   @if (lab.referenceRange) {
                     &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}
-                    {{ lab.referenceRange }})
+                    {{ displayResult(lab.referenceRange) }})
                   }
                 </span>
               }
@@ -75,13 +76,15 @@
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}</span>
                   <span class="dv" [class.text-danger]="lab.isAbnormal">{{
-                    lab.isPending ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate) : lab.result
+                    lab.isPending
+                      ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
+                      : displayResult(lab.result)
                   }}</span>
                 </div>
                 @if (lab.referenceRange) {
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.LAB_RESULTS.REFERENCE_RANGE' | translate }}</span>
-                    <span class="dv">{{ lab.referenceRange }}</span>
+                    <span class="dv">{{ displayResult(lab.referenceRange) }}</span>
                   </div>
                 }
                 <div class="detail-item">

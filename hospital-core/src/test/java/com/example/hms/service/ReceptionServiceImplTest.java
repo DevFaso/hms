@@ -83,6 +83,7 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class ReceptionServiceImplTest {
 
     @Mock private AppointmentRepository appointmentRepo;
@@ -1598,7 +1599,7 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
                     .hasMessageContaining("COMPLETED");
         }
 
@@ -1619,7 +1620,7 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalStateException.class)
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
                     .hasMessageContaining("CHECKED_IN");
         }
 
@@ -1631,8 +1632,8 @@ class ReceptionServiceImplTest {
                     .build();
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
-                    .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("appointmentId");
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("An appointment is required for check-in.");
         }
 
         @Test

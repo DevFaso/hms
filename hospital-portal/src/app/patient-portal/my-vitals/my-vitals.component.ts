@@ -7,7 +7,8 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { localizeDecimals } from '../../shared/i18n/app-locale';
 import { PatientPortalService, VitalSignSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
@@ -28,6 +29,7 @@ interface VitalGroup {
 })
 export class MyVitalsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
+  private readonly translate = inject(TranslateService);
   vitals = signal<VitalSignSummary[]>([]);
   loading = signal(true);
   expandedGroupId = signal<string | null>(null);
@@ -112,10 +114,20 @@ export class MyVitalsComponent implements OnInit {
       HEART_RATE: '60 – 100 bpm',
       TEMPERATURE: '36.1 – 37.2 °C',
       OXYGEN_SATURATION: '95 – 100 %',
-      RESPIRATORY_RATE: '12 – 20 breaths/min',
+      RESPIRATORY_RATE: `12 – 20 ${this.unitLabel('breaths/min')}`,
       BMI: '18.5 – 24.9',
-      BLOOD_GLUCOSE: '70 – 100 mg/dL (fasting)',
+      BLOOD_GLUCOSE: `70 – 100 mg/dL (${this.translate.instant('PORTAL.VITALS.FASTING')})`,
     };
-    return ranges[type?.toUpperCase()] || '';
+    return localizeDecimals(ranges[type?.toUpperCase()] || '');
+  }
+
+  /** QA D344: a reading in the patient's notation ("37,9" in French). */
+  displayValue(value: string): string {
+    return localizeDecimals(value ?? '');
+  }
+
+  /** QA D344: the one unit that is a word, not a symbol, is translated. */
+  unitLabel(unit: string): string {
+    return unit === 'breaths/min' ? this.translate.instant('PORTAL.VITALS.UNIT_BREATHS_MIN') : unit;
   }
 }

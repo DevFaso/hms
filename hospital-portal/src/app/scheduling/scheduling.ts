@@ -18,7 +18,7 @@ import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-scheduling',
@@ -309,12 +309,17 @@ export class SchedulingComponent implements OnInit {
     const { start } = this.getWeekRange();
     const monday = new Date(start + 'T00:00:00');
     const today = this.toISODate(new Date());
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    return dayNames.map((label, i) => {
+    // QA D348: the locale knows its weekday abbreviations (staff-detail already did this).
+    const locale = currentLocale();
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
       const date = this.toISODate(d);
-      return { label, date, isToday: date === today };
+      return {
+        label: d.toLocaleDateString(locale, { weekday: 'short' }),
+        date,
+        isToday: date === today,
+      };
     });
   }
 
@@ -373,10 +378,7 @@ export class SchedulingComponent implements OnInit {
   // ── Formatting ──
   formatTime(time?: string): string {
     if (!time) return '—';
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hr = h % 12 || 12;
-    return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+    return formatClockTime(time);
   }
 
   /**

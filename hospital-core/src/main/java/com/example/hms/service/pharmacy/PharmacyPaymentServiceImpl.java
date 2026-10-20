@@ -58,7 +58,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         if (dispense.getPatient() == null
                 || !dispense.getPatient().getId().equals(dto.getPatientId())) {
-            throw new BusinessException("Patient does not match the dispense record");
+            throw new BusinessException("pharmacy.payment.patientMismatch");
         }
         if (dispense.getPharmacy() == null
                 || dispense.getPharmacy().getHospital() == null
@@ -111,10 +111,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         // The payer of record is the authenticated cashier/pharmacist.
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         if (dto.getReceivedBy() != null && !currentUserId.equals(dto.getReceivedBy())) {
-            throw new BusinessException("receivedBy must match the authenticated user");
+            throw new BusinessException("pharmacy.payment.receivedByMismatch");
         }
         User receivedBy = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
@@ -125,7 +125,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
             String phone = patient.getPhoneNumberPrimary();
             if (phone == null || phone.isBlank()) {
-                throw new BusinessException("Patient has no mobile-money phone number on file");
+                throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
             }
             try {
                 MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
@@ -138,7 +138,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 providerReference = charge.providerReference();
             } catch (MobileMoneyGateway.MobileMoneyException e) {
                 log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
-                throw new BusinessException("Mobile-money charge failed: " + e.getMessage());
+                throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
             }
         }
 
@@ -222,24 +222,24 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
     private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         if (dto == null) {
-            throw new BusinessException("Payment request is required");
+            throw new BusinessException("pharmacy.payment.requestRequired");
         }
         if (dto.getAmount() == null || dto.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("Payment amount must be positive");
+            throw new BusinessException("pharmacy.payment.amountPositive");
         }
         // QA D204 (D184): the franc CFA has no minor unit.
         if (dto.getAmount().stripTrailingZeros().scale() > 0) {
             throw new BusinessException("billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
-            throw new BusinessException("Payment method is required");
+            throw new BusinessException("pharmacy.payment.methodRequired");
         }
         // SUPER_ADMIN may have no active hospital; require one for payment creation.
         if (hospitalId == null) {
-            throw new BusinessException("Active hospital context is required to record payments");
+            throw new BusinessException("pharmacy.payment.hospitalRequired");
         }
         if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Payment hospital does not match the active hospital");
+            throw new BusinessException("pharmacy.payment.hospitalMismatch");
         }
     }
 }

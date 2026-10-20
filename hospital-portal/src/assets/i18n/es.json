@@ -4495,7 +4495,9 @@
       "RECORDED": "Registrado",
       "SOURCE": "Fuente",
       "NORMAL_PREFIX": "Normal",
-      "NORMAL_RANGE": "Rango normal"
+      "NORMAL_RANGE": "Rango normal",
+      "UNIT_BREATHS_MIN": "resp./min",
+      "FASTING": "en ayunas"
     },
     "APPOINTMENTS": {
       "TITLE": "Mis citas",
@@ -4921,7 +4923,11 @@
         "HOME": "Medición en casa",
         "SELF_REPORTED": "Autodeclarado",
         "DEVICE": "Dispositivo conectado",
-        "TRIAGE": "Triaje"
+        "TRIAGE": "Triaje",
+        "OTHER": "Otro",
+        "DELIVERY": "Sala de partos",
+        "PATIENT_REPORTED": "Informado por el paciente",
+        "MANUAL": "Entrada manual"
       },
       "ENCOUNTER_TYPE": {
         "CONSULTATION": "Consulta",

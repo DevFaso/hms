@@ -28,6 +28,14 @@ public final class InpatientOrderEnd {
                 || encounter.getStatus() == EncounterStatus.CANCELLED)) {
             return true;
         }
+        // QA D316: an order written on an outpatient visit is the visit's,
+        // not a stay's, even when a stay at the same hospital happened to
+        // span that moment (a same-day admission and discharge ended every
+        // prescription the patient was given that day). The time window
+        // below is for orders that name no encounter.
+        if (encounter != null && encounter.getAdmissionId() == null) {
+            return false;
+        }
         LocalDateTime written = rx.getCreatedAt();
         if (written == null || stays == null) return false;
         for (Admission stay : stays) {

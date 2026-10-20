@@ -145,4 +145,18 @@ class AppointmentBookingOwnershipTest {
         assertThat(stoppedLater.getMessage()).isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
         verify(patientRepository).findByIdUnscoped(own.getId());
     }
+
+    @Test
+    @DisplayName("QA D351: a staff booking keeps the reason it was booked for")
+    void bookingKeepsTheReason() {
+        AppointmentRequestDTO request = new AppointmentRequestDTO();
+        request.setReason("Fièvre et céphalées");
+        request.setNotes("Apporter le carnet");
+        com.example.hms.model.Appointment appointment = new com.example.hms.model.Appointment();
+
+        AppointmentServiceImpl.applyBookingText(appointment, request);
+
+        assertThat(appointment.getReason()).isEqualTo("Fièvre et céphalées");
+        assertThat(appointment.getNotes()).isEqualTo("Apporter le carnet");
+    }
 }

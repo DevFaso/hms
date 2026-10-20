@@ -119,7 +119,7 @@ class StaffFacingTextFrenchTest {
         LabResult critical = result("7.2", "mmol/L", LocalDateTime.now());
         critical.setLabOrder(new LabOrder());
         String body = ReflectionTestUtils.invokeMethod(service, "buildMessage", critical, false);
-        assertThat(body).startsWith("Résultat de laboratoire critique : ").contains("7.2 mmol/L");
+        assertThat(body).startsWith("Résultat de laboratoire critique : ").contains("7,2 mmol/L");
         String escalation = ReflectionTestUtils.invokeMethod(service, "buildMessage", critical, true);
         assertThat(escalation).startsWith("ESCALADE - résultat de laboratoire critique non acquitté : ");
     }

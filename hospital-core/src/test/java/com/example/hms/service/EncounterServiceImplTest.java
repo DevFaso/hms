@@ -83,6 +83,7 @@ import com.example.hms.enums.SensitivityCategory;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class EncounterServiceImplTest {
 
     @Mock private EncounterRepository encounterRepository;
@@ -1412,7 +1413,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, hospitalId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Cannot start encounter in status COMPLETED");
+                .hasMessageContaining("Cannot start an encounter in status COMPLETED");
     }
 
     @Test
@@ -2064,7 +2065,7 @@ class EncounterServiceImplTest {
 
             assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("encounter.triage.incomplete");
+                .hasMessageContaining("Record the vital signs and the ESI");
             assertThat(mine.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
         }
 
@@ -2078,7 +2079,7 @@ class EncounterServiceImplTest {
 
             assertThatThrownBy(() -> service.completeTriage(id, false, CALLER_HOSPITAL))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("encounter.triage.incomplete");
+                .hasMessageContaining("Record the vital signs and the ESI");
         }
 
         @Test

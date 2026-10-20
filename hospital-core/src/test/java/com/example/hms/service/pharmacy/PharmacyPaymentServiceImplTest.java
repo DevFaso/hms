@@ -49,6 +49,7 @@ import static org.mockito.Mockito.when;
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PharmacyPaymentServiceImpl")
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class PharmacyPaymentServiceImplTest {
 
     @Mock private PharmacyPaymentRepository paymentRepository;
@@ -201,7 +202,7 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("declined");
+                .hasMessageContaining("mobile-money charge failed");
 
         verify(paymentRepository, never()).save(any());
     }
@@ -271,7 +272,7 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Patient");
+                .hasMessageContaining("patient does not match");
     }
 
     @Test
@@ -351,7 +352,7 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Patient");
+                .hasMessageContaining("patient does not match");
     }
 
     @Test
@@ -432,7 +433,7 @@ class PharmacyPaymentServiceImplTest {
 
         assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("receivedBy");
+                .hasMessageContaining("receiver must be the signed-in user");
     }
 
     @Test

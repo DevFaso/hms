@@ -42,6 +42,7 @@ import static org.mockito.Mockito.when;
  * on-call schedule nobody can fill in is one that says everyone is off duty.
  */
 @ExtendWith(MockitoExtension.class)
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class OnCallScheduleServiceImplTest {
 
     @Mock private OnCallScheduleRepository onCallRepository;

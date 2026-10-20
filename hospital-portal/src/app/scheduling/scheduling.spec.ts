@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { formatClockTime, resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -299,9 +300,9 @@ describe('SchedulingComponent', () => {
   });
 
   it('formats times, ranges, and enum labels', () => {
-    expect(component.formatTime('08:30')).toBe('8:30 AM');
-    expect(component.formatTime('16:05')).toBe('4:05 PM');
-    expect(component.formatTime('00:00')).toBe('12:00 AM');
+    expect(formatClockTime('08:30', 'en-US')).toBe('8:30 AM');
+    expect(formatClockTime('16:05', 'en-US')).toBe('4:05 PM');
+    expect(formatClockTime('00:00', 'en-US')).toBe('12:00 AM');
     expect(component.formatTime(undefined)).toBe('—');
     expect(
       component.formatShiftRange(
@@ -319,5 +320,28 @@ describe('SchedulingComponent', () => {
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.shifts().length).toBe(0);
     expect(component.shiftsLoading()).toBeFalse();
+  });
+
+  describe('QA D348: French and Spanish clock and weekdays', () => {
+    afterEach(() => {
+      localStorage.removeItem('lang');
+      resetStoredLangForTests();
+    });
+
+    for (const [lang, monday, eight] of [
+      ['fr', 'lun.', '08:00'],
+      ['es', 'lun', '08:00'],
+    ] as const) {
+      it(`shows 24-hour times and ${lang} weekday names`, () => {
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        expect(component.formatTime('08:00')).toBe(eight);
+        expect(component.formatTime('16:00')).toBe('16:00');
+        expect(component.formatTime('18:00')).not.toMatch(/AM|PM/);
+        const labels = component.getWeekDays().map((d) => d.label);
+        expect(labels[0]).toBe(monday);
+        expect(labels.join(' ')).not.toMatch(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/);
+      });
+    }
   });
 });

@@ -92,19 +92,19 @@ public class DispenseVerificationService {
         }
         Patient patient = rx == null ? null : rx.getPatient();
         if (patient == null || patient.getId() == null) {
-            b.fail(DispenseCheck.PATIENT, "the prescription has no patient on it");
+            b.fail(DispenseCheck.PATIENT, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.noPatient"));
             return;
         }
         UUID scanned = parseUuidOrNull(scan);
         if (scanned == null) {
-            b.fail(DispenseCheck.PATIENT, "the scanned wristband is not a patient identifier");
+            b.fail(DispenseCheck.PATIENT, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wristbandNotPatient"));
             return;
         }
         if (patient.getId().equals(scanned)) {
             b.pass(DispenseCheck.PATIENT);
         } else {
             b.fail(DispenseCheck.PATIENT,
-                "the scanned wristband is a different patient from the one on this prescription");
+                com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wristbandOtherPatient"));
         }
     }
 
@@ -120,13 +120,13 @@ public class DispenseVerificationService {
             return;
         }
         if (lot == null) {
-            b.fail(DispenseCheck.DRUG, "a product was scanned but no stock lot was selected");
+            b.fail(DispenseCheck.DRUG, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.noLotSelected"));
             return;
         }
         String expected = normalize(lot.getBarcodeValue());
         if (expected.isEmpty()) {
             b.fail(DispenseCheck.DRUG,
-                "the selected lot has no printed label to scan against — print one first");
+                com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotNoLabel"));
             return;
         }
         if (!expected.equals(normalize(scan))) {
@@ -134,8 +134,8 @@ public class DispenseVerificationService {
             // product field is an easy slip, and saying so is more use than
             // "no match".
             b.fail(DispenseCheck.DRUG, LotBarcode.looksLikeLotBarcode(scan)
-                ? "the scanned pack is not the stock lot selected for this dispense"
-                : "that is not a pack label — check you have not scanned the wristband twice");
+                ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.packOtherLot")
+                : com.example.hms.utility.MessageUtil.resolve("pharmacy.check.notPackLabel"));
         }
         // A match is not recorded as a pass here: verifyDrug still has to
         // agree that the lot is the PRESCRIBED drug. Scanning the pack you
@@ -157,15 +157,14 @@ public class DispenseVerificationService {
         }
         MedicationCatalogItem item = catalogItemOf(lot);
         if (item == null) {
-            b.fail(DispenseCheck.DRUG, "the selected lot is not linked to a medication");
+            b.fail(DispenseCheck.DRUG, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotNoMedication"));
             return;
         }
         if (matchesPrescribedDrug(rx, item)) {
             b.pass(DispenseCheck.DRUG);
         } else {
             b.fail(DispenseCheck.DRUG,
-                "the selected lot is %s, which is not the prescribed %s"
-                    .formatted(describe(item), describePrescribed(rx)));
+                com.example.hms.utility.MessageUtil.resolve("pharmacy.check.wrongDrug", describe(item), describePrescribed(rx)));
         }
     }
 
@@ -176,13 +175,15 @@ public class DispenseVerificationService {
         }
         LocalDate expiry = lot.getExpiryDate();
         if (expiry == null) {
-            b.fail(DispenseCheck.EXPIRY, "the selected lot has no expiry date recorded");
+            b.fail(DispenseCheck.EXPIRY, com.example.hms.utility.MessageUtil.resolve("pharmacy.check.noExpiry"));
             return;
         }
         LocalDate today = LocalDate.now(clock);
         if (expiry.isBefore(today)) {
             b.fail(DispenseCheck.EXPIRY,
-                "lot %s expired on %s".formatted(lot.getLotNumber(), expiry));
+                com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotExpired", lot.getLotNumber(),
+                    expiry.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+                        .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale()))));
         } else {
             b.pass(DispenseCheck.EXPIRY);
         }
