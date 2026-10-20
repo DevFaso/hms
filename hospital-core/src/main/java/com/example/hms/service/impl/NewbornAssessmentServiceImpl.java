@@ -498,6 +498,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 && !hospital.getId().equals(staff.getHospital().getId())) {
                 throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
+            // QA D503 class: the recorder is the caller, not a colleague named in the body.
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
             return staff;
         }
         if (recorderUserId == null) {

@@ -58,6 +58,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final RoleValidator roleValidator;
     private final MessageSource messageSource;
     private final SignableReportLocator reportLocator;
+    private final com.example.hms.repository.UserRepository userRepository;
 
     private static String normaliseName(String value) {
         return value == null ? "" : value.trim().replaceAll("\s+", " ").toLowerCase(Locale.ROOT);
@@ -158,13 +159,12 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         List<DigitalSignature> signatures;
         if (request.getSignatureId() != null) {
             // Verify specific signature
-            DigitalSignature signature = signatureRepository.findById(request.getSignatureId())
-                .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, request.getSignatureId()));
+            DigitalSignature signature = loadInActingHospital(request.getSignatureId());
             signatures = List.of(signature);
         } else {
             // Find all signatures for report
-            signatures = signatureRepository.findActiveSignaturesByReportId(
-                request.getReportId(), request.getReportType());
+            signatures = inActingHospital(signatureRepository.findActiveSignaturesByReportId(
+                request.getReportId(), request.getReportType()));
         }
 
         // The verdict is read by whoever asked for the verification.
@@ -233,6 +233,23 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         }
 
         UUID currentUserId = authService.getCurrentUserId();
+        // QA D502: a signature is the signer's. Only the signer revokes it, or
+        // an administrator of the hospital it was made in (the tenant check
+        // above), and the revocation always carries a reason in the audit log.
+        // Another clinician is refused, whatever their role. The admin must be
+        // signed in as admin AND hold HOSPITAL_ADMIN at the signature's own
+        // hospital: an admin role elsewhere does not count.
+        boolean isSigner = currentUserId != null && signature.getSignedBy() != null
+            && signature.getSignedBy().getUser() != null
+            && currentUserId.equals(signature.getSignedBy().getUser().getId());
+        boolean isAdmin = com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+            || (roleValidator.isHospitalAdminFromAuthGlobalOnly()
+                && currentUserId != null && signature.getHospital() != null
+                && roleValidator.isHospitalAdmin(currentUserId, signature.getHospital().getId()));
+        if (!isSigner && !isAdmin) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                text("signature.revoke.notSigner", LocaleContextHolder.getLocale()));
+        }
         String currentUserName = getCurrentUserName();
 
         signature.revoke(currentUserId, currentUserName, request.getRevocationReason(),
@@ -266,8 +283,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     public List<SignatureResponseDTO> getSignaturesByReportId(SignatureType reportType, UUID reportId) {
         log.debug("Fetching signatures for report type: {}, ID: {}", reportType, reportId);
 
-        List<DigitalSignature> signatures = signatureRepository
-            .findByReportIdAndReportTypeOrderBySignatureDateTimeDesc(reportId, reportType);
+        List<DigitalSignature> signatures = inActingHospital(signatureRepository
+            .findByReportIdAndReportTypeOrderBySignatureDateTimeDesc(reportId, reportType));
 
         return signatures.stream()
             .map(signatureMapper::toResponseDTO)
@@ -279,8 +296,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     public List<SignatureResponseDTO> getSignaturesByProvider(UUID providerId) {
         log.debug("Fetching signatures for provider: {}", providerId);
 
-        List<DigitalSignature> signatures = signatureRepository
-            .findBySignedBy_IdOrderBySignatureDateTimeDesc(providerId);
+        List<DigitalSignature> signatures = inActingHospital(signatureRepository
+            .findBySignedBy_IdOrderBySignatureDateTimeDesc(providerId));
 
         return signatures.stream()
             .map(signatureMapper::toResponseDTO)
@@ -292,10 +309,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     public SignatureResponseDTO getSignatureById(UUID signatureId) {
         log.debug("Fetching signature: {}", signatureId);
 
-        DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
-
-        return signatureMapper.toResponseDTO(signature);
+        return signatureMapper.toResponseDTO(loadInActingHospital(signatureId));
     }
 
     @Override
@@ -303,8 +317,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     public List<SignatureAuditEntryDTO> getSignatureAuditTrail(UUID signatureId) {
         log.debug("Fetching audit trail for signature: {}", signatureId);
 
-        DigitalSignature signature = signatureRepository.findById(signatureId)
-            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
+        DigitalSignature signature = loadInActingHospital(signatureId);
 
         return signatureMapper.toAuditEntryDTOs(signature.getAuditLog());
     }
@@ -312,7 +325,10 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     @Override
     @Transactional(readOnly = true)
     public boolean isReportSigned(SignatureType reportType, UUID reportId) {
-        return signatureRepository.hasValidSignature(reportId, reportType);
+        // QA D507: another hospital's signature does not answer "signed".
+        return inActingHospital(signatureRepository
+            .findByReportIdAndReportTypeOrderBySignatureDateTimeDesc(reportId, reportType))
+            .stream().anyMatch(DigitalSignature::isValid);
     }
 
     @Override
@@ -390,13 +406,42 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
      * Get current user's display name
      */
     private String getCurrentUserName() {
-        try {
-            // Try to get from auth service or return default
-            UUID userId = authService.getCurrentUserId();
-            // In a real implementation, you'd fetch user details here
-            return "User-" + userId.toString().substring(0, 8);
-        } catch (RuntimeException e) {
+        // QA D502: the audit trail names the person, never "User-xxxxxxxx".
+        UUID userId = authService.getCurrentUserId();
+        if (userId == null) {
             return "System";
         }
+        return userRepository.findById(userId)
+            .map(user -> {
+                String name = java.util.stream.Stream.of(user.getFirstName(), user.getLastName())
+                    .filter(part -> part != null && !part.isBlank())
+                    .collect(java.util.stream.Collectors.joining(" "));
+                return name.isBlank() ? user.getUsername() : name;
+            })
+            .orElse("System");
+    }
+
+    /**
+     * QA D507: signature reads answer only for the hospital the caller acts at
+     * (a verified super-admin in global view reads every hospital). A row of
+     * another hospital is left out of a list, and answered as a missing id by
+     * a single read.
+     */
+    private List<DigitalSignature> inActingHospital(List<DigitalSignature> signatures) {
+        UUID acting = com.example.hms.security.tenant.TenantOwnership.actingHospitalIdOrNullForGlobal();
+        if (acting == null) {
+            return signatures;
+        }
+        return signatures.stream()
+            .filter(s -> s.getHospital() != null && acting.equals(s.getHospital().getId()))
+            .toList();
+    }
+
+    private DigitalSignature loadInActingHospital(UUID signatureId) {
+        DigitalSignature signature = signatureRepository.findById(signatureId)
+            .orElseThrow(() -> new ResourceNotFoundException(SIGNATURE_NOT_FOUND_KEY, signatureId));
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            signature.getHospital(), SIGNATURE_NOT_FOUND_KEY, signatureId);
+        return signature;
     }
 }

@@ -476,7 +476,8 @@ export class AdmissionsComponent implements OnInit {
       dischargeSummary: '',
       dischargeDiagnosis: '',
       dischargeInstructions: '',
-      dischargingProviderId: '',
+      // QA D503 class: the server records the caller as the discharging provider.
+      dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
     };
     this.showDischargeModal.set(true);
   }

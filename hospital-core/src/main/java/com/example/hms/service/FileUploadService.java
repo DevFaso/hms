@@ -17,6 +17,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -107,10 +108,15 @@ public class FileUploadService {
     public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
     /** Shown in refusals; must describe {@link #MAX_UPLOAD_BYTES}. */
     public static final String MAX_UPLOAD_LABEL = "10 MB";
+    private static final String EXT_JPEG = ".jpeg";
+    private static final String EXT_TIFF = ".tiff";
+    private static final String EXT_DOCX = ".docx";
+    private static final String MIME_PNG = "image/png";
+    private static final String MIME_JPEG = "image/jpeg";
     private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
-        ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".txt", ".rtf", ".doc",
-        ".docx"
+        ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
+        EXT_DOCX
     );
 
     /**
@@ -200,7 +206,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            file.getContentType(),
+            contentTypeFor(extension),
             file.getSize(),
             null
         );
@@ -233,7 +239,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            file.getContentType(),
+            contentTypeFor(extension),
             sizeBytes,
             checksum
         );
@@ -328,6 +334,63 @@ public class FileUploadService {
         if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
             throw new IllegalArgumentException("Unsupported attachment type");
         }
+        requireContentMatchesExtension(file, extension);
+    }
+
+    /**
+     * QA D540: the extension and the declared Content-Type are the client's
+     * claim. The first bytes must be what the extension says (a PDF starts with
+     * "%PDF-", a PNG with its signature...), and a text or RTF file must not be
+     * markup a browser would run. HTML declared as a PDF is refused.
+     */
+    static void requireContentMatchesExtension(MultipartFile file, String extension) {
+        byte[] head;
+        try (java.io.InputStream in = file.getInputStream()) {
+            head = in.readNBytes(512);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.unreadable"), ex);
+        }
+        if (!contentMatches(head, extension)) {
+            throw new IllegalArgumentException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("file.contentMismatch", extension));
+        }
+    }
+
+    static boolean contentMatches(byte[] head, String extension) {
+        return switch (extension) {
+            case ".pdf" -> startsWith(head, "%PDF-".getBytes(StandardCharsets.US_ASCII));
+            case ".png" -> startsWith(head, new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+            case ".jpg", EXT_JPEG -> startsWith(head, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
+            case ".gif" -> startsWith(head, "GIF87a".getBytes(StandardCharsets.US_ASCII))
+                || startsWith(head, "GIF89a".getBytes(StandardCharsets.US_ASCII));
+            case ".bmp" -> startsWith(head, "BM".getBytes(StandardCharsets.US_ASCII));
+            case EXT_TIFF -> startsWith(head, new byte[] {'I', 'I', 0x2A, 0x00})
+                || startsWith(head, new byte[] {'M', 'M', 0x00, 0x2A});
+            case ".doc" -> startsWith(head, new byte[] {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0,
+                (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1});
+            case EXT_DOCX -> startsWith(head, new byte[] {'P', 'K', 0x03, 0x04});
+            case ".rtf" -> startsWith(head, "{\\rtf".getBytes(StandardCharsets.US_ASCII));
+            case ".txt" -> !looksLikeMarkup(head);
+            default -> false;
+        };
+    }
+
+    private static boolean startsWith(byte[] head, byte[] magic) {
+        if (head.length < magic.length) {
+            return false;
+        }
+        for (int i = 0; i < magic.length; i++) {
+            if (head[i] != magic[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean looksLikeMarkup(byte[] head) {
+        String text = new String(head, StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT);
+        return text.contains("<html") || text.contains("<script") || text.contains("<!doctype")
+            || text.contains("<svg") || text.contains("<iframe") || text.contains("<body");
     }
 
     /**
@@ -440,7 +503,7 @@ public class FileUploadService {
                 relativePath,
                 buildPublicUrl(relativePath),
                 determineDisplayName(file, filename),
-                file.getContentType(),
+                contentTypeFor(extension),
                 sizeBytes,
                 checksum
         );
@@ -459,6 +522,24 @@ public class FileUploadService {
         if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
             throw new IllegalArgumentException("Unsupported document type. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX");
         }
+        requireContentMatchesExtension(file, extension);
+    }
+
+    /** QA D540: the stored type follows the checked extension, not the client's header. */
+    static String contentTypeFor(String extension) {
+        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
+            case ".pdf" -> "application/pdf";
+            case ".png" -> MIME_PNG;
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".gif" -> "image/gif";
+            case ".bmp" -> "image/bmp";
+            case EXT_TIFF -> "image/tiff";
+            case ".txt" -> "text/plain";
+            case ".rtf" -> "application/rtf";
+            case ".doc" -> "application/msword";
+            case EXT_DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            default -> "application/octet-stream";
+        };
     }
 
     public record StoredFileDescriptor(
@@ -481,10 +562,10 @@ public class FileUploadService {
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
     private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", ".jpeg", ".png", ".webp"
+        ".jpg", EXT_JPEG, ".png", ".webp"
     );
     private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
-        "image/jpeg", "image/png", "image/webp"
+        MIME_JPEG, MIME_PNG, "image/webp"
     );
     private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
         ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
@@ -617,8 +698,8 @@ public class FileUploadService {
 
     private String resolveChatContentTypeFromExtension(String extension) {
         return switch (extension) {
-            case ".jpg", ".jpeg" -> "image/jpeg";
-            case ".png" -> "image/png";
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".png" -> MIME_PNG;
             case ".webp" -> "image/webp";
             case ".webm" -> "audio/webm";
             case ".ogg", ".oga" -> "audio/ogg";

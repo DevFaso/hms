@@ -97,6 +97,12 @@ class DischargeSummaryServiceImplTest {
         encounter.setPatient(patient);
         encounter.setHospital(hospital);
         staff = new Staff(); staff.setId(staffId);
+        // QA D503: the discharging provider is the signed-in doctor.
+        com.example.hms.model.User providerUser = new com.example.hms.model.User();
+        providerUser.setId(UUID.randomUUID());
+        staff.setUser(providerUser);
+        staff.setHospital(hospital);
+        actAs(providerUser);
         assignment = new UserRoleHospitalAssignment(); assignment.setId(assignmentId);
 
         summary = DischargeSummary.builder()
@@ -189,7 +195,36 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Dr. Sig", randomId, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test void qaD503_anotherDoctorCannotFinalizeInTheProvidersName() {
+        // DOCTOR2 sends POST /finalize?providerId=<DOCTOR_A staffId>.
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Doctor A", staffId, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(summary.getIsFinalized()).isFalse();
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    @Test void qaD503_theProviderFinalizesWithoutSendingAProviderId() {
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.save(any())).thenReturn(summary);
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+        assertThat(service.finalizeDischargeSummary(summaryId, "Dr. Sig", null, Locale.ENGLISH).getId()).isEqualTo(summaryId);
+    }
+
+    private static void actAs(com.example.hms.model.User user) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     @Test void finalizeDischargeSummary_alreadyFinalized_throws() {

@@ -101,8 +101,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     }
 
     @Override
-    public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request) {
+    public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        requireEditableBy(order, callerUserId);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -155,18 +156,42 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setWorkflowNotes(request.getWorkflowNotes());
         order.setRequiresAuthorization(request.getRequiresAuthorization());
         order.setAuthorizationNumber(request.getAuthorizationNumber());
+        // QA D503 class: who changed the status is the session, never the
+        // performedBy fields of the request (kept on the DTO for old clients).
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
         order.setStatusUpdatedAt(LocalDateTime.now());
-        order.setStatusUpdatedBy(request.getPerformedByUserId());
+        order.setStatusUpdatedBy(actorId);
 
         if (request.getStatus() == ImagingOrderStatus.CANCELLED) {
             order.setCancellationReason(request.getCancellationReason());
             order.setCancelledAt(LocalDateTime.now());
-            order.setCancelledByUserId(request.getPerformedByUserId());
-            order.setCancelledByName(request.getPerformedByName());
+            order.setCancelledByUserId(actorId);
+            order.setCancelledByName(actor != null ? displayName(actor) : null);
         }
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D501: a signed order is immutable: its content is what the signer
+     * attested, so an amendment is a cancellation and a new order. An unsigned
+     * order is edited only by its ordering provider (a verified super-admin
+     * excepted); an order with no recorded provider (written before D302)
+     * keeps the old rule, any in-scope editor.
+     */
+    private void requireEditableBy(ImagingOrder order, UUID callerUserId) {
+        if (order.getProviderSignedAt() != null) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.signedImmutable"));
+        }
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider != null && !orderingProvider.equals(callerUserId)
+                && !com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
+        }
     }
 
     /**

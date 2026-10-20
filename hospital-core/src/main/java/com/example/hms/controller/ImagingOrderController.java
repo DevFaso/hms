@@ -55,9 +55,11 @@ public class ImagingOrderController {
 	@Operation(summary = "Update imaging order details")
 	public ResponseEntity<ImagingOrderResponseDTO> updateOrder(
 		@PathVariable UUID orderId,
-		@Valid @RequestBody ImagingOrderRequestDTO request
+		@Valid @RequestBody ImagingOrderRequestDTO request,
+		Authentication authentication
 	) {
-		ImagingOrderResponseDTO responseDTO = imagingOrderService.updateOrder(orderId, request);
+		UUID callerUserId = com.example.hms.security.PrincipalUserIds.of(authentication).orElse(null);
+		ImagingOrderResponseDTO responseDTO = imagingOrderService.updateOrder(orderId, request, callerUserId);
 		return ResponseEntity.ok(responseDTO);
 	}
 

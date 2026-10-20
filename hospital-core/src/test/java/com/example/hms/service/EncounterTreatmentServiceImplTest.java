@@ -63,6 +63,7 @@ class EncounterTreatmentServiceImplTest {
         encounter = new Encounter();
         treatment = new Treatment();
         staff = new Staff();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
 
         requestDTO = EncounterTreatmentRequestDTO.builder()
                 .encounterId(encounterId)
@@ -94,6 +95,11 @@ class EncounterTreatmentServiceImplTest {
     }
 
     // ── addTreatmentToEncounter ──────────────────────────────────────────────
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
 
     @Nested
     @DisplayName("addTreatmentToEncounter")
