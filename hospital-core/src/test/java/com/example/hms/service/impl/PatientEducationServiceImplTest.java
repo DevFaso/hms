@@ -336,6 +336,23 @@ class PatientEducationServiceImplTest {
     // ==================== Progress Tracking Tests ====================
 
     @Test
+    void trackProgress_patientNotRegisteredAtTheActingHospital_isNotFoundAndSavesNothing() {
+        // findById is registration-scoped to ANY of the caller's hospitals (QA D401).
+        PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
+            .resourceId(resourceId).progressPercentage(50).build();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+            .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+
+        assertThatThrownBy(() -> service.trackProgress(patientId, requestDTO, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(progressWrites, never()).insertIfAbsent(any(), any(), any(), any());
+        verify(progressRepository, never()).save(any());
+    }
+
+    @Test
     void trackProgress_shouldCreateNewProgressWhenNotExists() {
         // Given
         PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()

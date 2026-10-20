@@ -39,18 +39,27 @@ class PatientWriteRegistrationCoverageTest {
     private static final Path SERVICE_ROOT = Path.of("src/main/java/com/example/hms/service");
     private static final Path PAYLOAD_ROOT = Path.of("src/main/java/com/example/hms");
 
-    /** Tokens that prove a registration (or equivalent reach) check in a write method. */
-    private static final List<String> REGISTRATION_CHECKS = List.of(
-        "patientRegistrationGuard",
-        "existsByPatientIdAndHospitalId",
-        "isRegisteredInHospital",
-        "requirePatientInReach",
-        "ensurePatientRegistration",
-        "ensurePatientBelongsToHospital",
-        "validatePatientHospitalContext",
-        "PatientChartAccess",
-        "patientChartAccess",
-        "ensurePatientRegistered");
+    /**
+     * Calls that prove a registration (or equivalent reach) check in a write method. Each is matched
+     * as a CALL on code with comments and string literals blanked out, so a commented-out guard, or
+     * the name in a log message, is not coverage (QA #917 verification G1).
+     */
+    private static final List<Pattern> REGISTRATION_CHECKS = Stream.of(
+            "patientRegistrationGuard\\s*+\\.\\s*+requireRegisteredAt",
+            "existsByPatientIdAndHospitalId",
+            "isRegisteredInHospital",
+            "requirePatientInReach",
+            "ensurePatientRegistration",
+            "ensurePatientBelongsToHospital",
+            "validatePatientHospitalContext",
+            "PatientChartAccess\\s*+\\.\\s*+\\w++",
+            "patientChartAccess\\s*+\\.\\s*+\\w++",
+            "ensurePatientRegistered",
+            // hand-rolled registration checks in the non-Impl services (enrollment, panel, ROI, PRO)
+            "requirePatientInTenant",
+            "requireInTenant")
+        .map(call -> Pattern.compile("\\b" + call + "\\s*+\\("))
+        .toList();
 
     private static final String BOUND_TO_PARENT =
         "the patient is bound to an in-scope parent row (the caller's dispense, prescription, order or encounter)"
@@ -74,13 +83,26 @@ class PatientWriteRegistrationCoverageTest {
         entry("PharmacyClaimServiceImpl", BOUND_TO_PARENT + " (the dispense)"),
         entry("PharmacyPaymentServiceImpl", BOUND_TO_PARENT + " (the dispense)"),
         entry("PharmacySaleServiceImpl", "over-the-counter sale: the patient is optional and resolved through the"
-            + " registration-scoped PatientRepository.findById"));
+            + " registration-scoped PatientRepository.findById"),
+        entry("RecordSharingOptOutServiceImpl", "the opt-out is a patient-level consent row (no hospital); requirePatient"
+            + " loads through the tenant-scoped finder, assigned hospital AND registration"));
 
     /** {@code Class#method} -> why that one write needs no check of its own. Frozen: it only shrinks. */
     private static final Map<String, String> RECORDED_METHODS = Map.ofEntries(
         entry("BillingInvoiceServiceImpl#recordPayment", BOUND_TO_PARENT + " (the invoice, locked and matched to the patient)"),
         entry("BillingInvoiceServiceImpl#recordPatientPayment", BOUND_TO_PARENT
             + " (the invoice, locked and matched to the patient)"),
+        entry("CdsAcknowledgementServiceImpl#acknowledge", "requirePatientAccessible demands the patient's own"
+            + " hospital equal the resolved scope, stricter than a registration there"),
+        entry("PanelService#end", BOUND_TO_PARENT + " (the assignment, loaded by id + patient + hospital)"),
+        entry("PatientGuarantorServiceImpl#deactivate", BOUND_TO_PARENT
+            + " (the guarantor, loaded by id + patient + hospital)"),
+        entry("PatientGuarantorServiceImpl#reactivate", BOUND_TO_PARENT
+            + " (the guarantor, loaded by id + patient + hospital)"),
+        entry("ProgramEnrollmentService#recordVisit", BOUND_TO_PARENT
+            + " (the enrolment, loaded by id + patient + hospital)"),
+        entry("ProgramEnrollmentService#updateStatus", BOUND_TO_PARENT
+            + " (the enrolment, loaded by id + patient + hospital)"),
         entry("BirthPlanServiceImpl#updateBirthPlan", UPDATE_OF_OWNED_ROW + " (getBirthPlanInReach)"),
         entry("FamilyHistoryServiceImpl#updateFamilyHistory", UPDATE_OF_OWNED_ROW),
         entry("ImmunizationServiceImpl#updateImmunization", UPDATE_OF_OWNED_ROW),
@@ -103,13 +125,15 @@ class PatientWriteRegistrationCoverageTest {
     private static final Pattern WRITE_METHOD = Pattern.compile(
         "public\\s++[\\w<>\\[\\],.?]++(?:\\s*+[\\w<>\\[\\],.?]++)*?\\s++((?:create|book|add|record|submit|place|order|admit|register|save|upload"
             + "|log|start|schedule|update|document|administer|refer|sign|request|issue|amend|attach|assign"
-            + "|transfer|discharge|complete|initiate|capture|import|dispense|prescribe)\\w*+)\\s*+\\(([^)]*+)\\)");
+            + "|transfer|discharge|complete|initiate|capture|import|dispense|prescribe|track|enroll|revoke"
+            + "|acknowledge|deactivate|reactivate|end|optOut)\\w*+)\\s*+\\(([^)]*+)\\)");
     /** A private method declaration: the same-class helpers a write may delegate its check to. */
     private static final Pattern ANY_METHOD = Pattern.compile(
         "private\\s++(?:static\\s++)?(?:final\\s++)?[\\w<>\\[\\],.?]++(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(([^)]*+)\\)"
             + "\\s*+(?:throws\\s++[\\w.,\\s]++)?\\{");
     /** An unqualified call ({@code helper(..)}, not {@code repo.helper(..)}): only those reach a same-class helper. */
     private static final Pattern CALL = Pattern.compile("(?<![.\\w])(\\w++)\\s*+\\(");
+    private static final Pattern SERVICE_ANNOTATION = Pattern.compile("(?m)^@Service\\b");
     private static final Pattern PATIENT_ID_FIELD = Pattern.compile("\\bUUID\\s+patientId\\b");
     private static final Pattern PATIENT_ID_PARAM = Pattern.compile("UUID\\s+patientId\\b");
 
@@ -120,7 +144,7 @@ class PatientWriteRegistrationCoverageTest {
         Set<String> unchecked = new TreeSet<>();
         Set<String> patientWriteClasses = new TreeSet<>();
 
-        for (Path file : serviceImpls()) {
+        for (Path file : serviceClasses()) {
             String name = className(file);
             Map<String, Boolean> writes = patientWrites(Files.readString(file, StandardCharsets.UTF_8), dtosWithPatientId);
             if (writes.isEmpty()) {
@@ -139,7 +163,10 @@ class PatientWriteRegistrationCoverageTest {
 
         assertThat(patientWriteClasses)
             .as("the scan must find the D401 write paths, or it is scanning nothing")
-            .contains("AppointmentServiceImpl", "PrescriptionServiceImpl", "EncounterServiceImpl");
+            .contains("AppointmentServiceImpl", "PrescriptionServiceImpl", "EncounterServiceImpl",
+                // services without the Impl suffix, and writes named track/enroll/acknowledge (G2)
+                "ProgramEnrollmentService", "PanelService", "RoiRequestService", "ProResponseService",
+                "PatientEducationServiceImpl");
         assertThat(unchecked)
             .as("patient writes whose body (or a same-class helper it calls) has no registration check at the"
                 + " acting hospital (QA D401): use PatientRegistrationGuard.requireRegisteredAt, or record"
@@ -153,7 +180,7 @@ class PatientWriteRegistrationCoverageTest {
         Set<String> dtosWithPatientId = dtosDeclaringPatientId();
         Set<String> staleClasses = new TreeSet<>(RECORDED.keySet());
         Set<String> staleMethods = new TreeSet<>(RECORDED_METHODS.keySet());
-        for (Path file : serviceImpls()) {
+        for (Path file : serviceClasses()) {
             String name = className(file);
             Map<String, Boolean> writes =
                 patientWrites(Files.readString(file, StandardCharsets.UTF_8), dtosWithPatientId);
@@ -190,9 +217,42 @@ class PatientWriteRegistrationCoverageTest {
             .containsEntry("signFoo", true);
     }
 
-    private static List<Path> serviceImpls() throws IOException {
+    @Test
+    @DisplayName("a commented-out guard, or one named only in a comment or string, is not a check (G1)")
+    void aCommentedOutGuardIsUnchecked() {
+        String source = """
+            class FooServiceImpl {
+                public Foo createFoo(UUID patientId) {
+                    //patientRegistrationGuard.requireRegisteredAt(patientId, h);
+                    return null;
+                }
+                public Foo bookFoo(UUID patientId) { /* patientRegistrationGuard.requireRegisteredAt(patientId, h); */ return null; }
+                public Foo addFoo(UUID patientId) { log.info("patientRegistrationGuard.requireRegisteredAt(x)"); return null; }
+                public Foo signFoo(UUID patientId) { patientRegistrationGuard.toString(); return null; }
+                public Foo trackFoo(UUID patientId) { patientRegistrationGuard . requireRegisteredAt (patientId, h); return null; }
+                public Foo enrollFoo(UUID patientId) { return null; }
+            }
+            """;
+        assertThat(patientWrites(source, Set.of()))
+            .containsEntry("createFoo", false)
+            .containsEntry("bookFoo", false)
+            .containsEntry("addFoo", false)
+            .containsEntry("signFoo", false)
+            .containsEntry("trackFoo", true)
+            .containsEntry("enrollFoo", false);
+    }
+
+    /** Every Spring service under service/, with or without the Impl suffix (G2). */
+    private static List<Path> serviceClasses() throws IOException {
         try (Stream<Path> files = Files.walk(SERVICE_ROOT)) {
-            return files.filter(p -> p.toString().endsWith("Impl.java")).toList();
+            List<Path> found = new ArrayList<>();
+            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String text = Files.readString(p, StandardCharsets.UTF_8);
+                if (p.toString().endsWith("Impl.java") || SERVICE_ANNOTATION.matcher(text).find()) {
+                    found.add(p);
+                }
+            }
+            return found;
         }
     }
 
@@ -201,7 +261,8 @@ class PatientWriteRegistrationCoverageTest {
     }
 
     /** Write method name -> whether its body, or a same-class helper it reaches, carries a check. */
-    private static Map<String, Boolean> patientWrites(String source, Set<String> dtosWithPatientId) {
+    private static Map<String, Boolean> patientWrites(String rawSource, Set<String> dtosWithPatientId) {
+        String source = withoutCommentsAndLiterals(rawSource);
         Map<String, List<String>> bodies = methodBodies(source);
         Map<String, Boolean> writes = new TreeMap<>();
         Matcher m = WRITE_METHOD.matcher(source);
@@ -226,7 +287,7 @@ class PatientWriteRegistrationCoverageTest {
         pending.add(body);
         while (!pending.isEmpty()) {
             String next = pending.poll();
-            if (REGISTRATION_CHECKS.stream().anyMatch(next::contains)) {
+            if (REGISTRATION_CHECKS.stream().anyMatch(check -> check.matcher(next).find())) {
                 return true;
             }
             Matcher call = CALL.matcher(next);
@@ -271,6 +332,37 @@ class PatientWriteRegistrationCoverageTest {
             }
         }
         return source.length() - 1;
+    }
+
+    /**
+     * The source with every comment and string/char literal replaced by spaces (newlines kept), so a
+     * check that is commented out or only named in a message never counts as a call (G1).
+     */
+    static String withoutCommentsAndLiterals(String source) {
+        StringBuilder out = new StringBuilder(source.length());
+        int i = 0;
+        while (i < source.length()) {
+            char c = source.charAt(i);
+            int end;
+            if (source.startsWith("//", i)) {
+                int eol = source.indexOf('\n', i);
+                end = eol < 0 ? source.length() : eol;
+            } else if (source.startsWith("/*", i)) {
+                int close = source.indexOf("*/", i + 2);
+                end = close < 0 ? source.length() : close + 2;
+            } else if (c == '"' || c == '\'') {
+                end = Math.min(endOfLiteral(source, i, c) + 1, source.length());
+            } else {
+                out.append(c);
+                i++;
+                continue;
+            }
+            for (int k = i; k < end; k++) {
+                out.append(source.charAt(k) == '\n' ? '\n' : ' ');
+            }
+            i = end;
+        }
+        return out.toString();
     }
 
     private static int endOfLiteral(String source, int start, char quote) {

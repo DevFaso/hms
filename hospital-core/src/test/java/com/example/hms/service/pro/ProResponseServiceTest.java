@@ -307,6 +307,28 @@ class ProResponseServiceTest {
             assertThat(((ResourceNotFoundException) absent).getMessageKey()).isEqualTo("patient.notfound");
             verify(responseRepository, never()).saveAndFlush(any());
         }
+
+        @Test
+        void aClaimedHospitalThatIsNotTheActingOneIsNotFoundAndNothingIsSaved() {
+            // The patient IS registered at the claimed hospital; the caller acts elsewhere (QA D401).
+            com.example.hms.security.context.HospitalContextHolder.setContext(
+                com.example.hms.security.context.HospitalContext.builder()
+                    .activeHospitalId(UUID.randomUUID()).build());
+            try {
+                ProResponseCreateDTO dto = answers(Map.of(1, 1, 2, 1));
+                dto.setHospitalId(hospitalId);
+
+                assertThatThrownBy(() -> service.record(patientId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
+                assertThatThrownBy(() -> service.acknowledge(patientId, UUID.randomUUID(), hospitalId, null))
+                    .isInstanceOf(ResourceNotFoundException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
+                verify(responseRepository, never()).saveAndFlush(any());
+            } finally {
+                com.example.hms.security.context.HospitalContextHolder.clear();
+            }
+        }
     }
 
     // ── history ───────────────────────────────────────────────────────

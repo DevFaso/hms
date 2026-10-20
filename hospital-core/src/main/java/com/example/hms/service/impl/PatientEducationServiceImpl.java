@@ -230,6 +230,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // findById admits a patient registered at ANY of the caller's hospitals (QA D401):
+        // the progress row is written at this hospital, so the patient must be registered here.
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospital.getId());
 
         PatientEducationProgress progress = progressRowFor(patientId, resource.getId(), hospital.getId(),
             requestDTO.getComprehensionStatus() != null
