@@ -79,7 +79,7 @@ public class LabResultController {
     // before the test is loaded. LabResultEntryGuard makes that call in the
     // service. This stays broad on purpose.
     @PreAuthorize(LabResultAuthority.ENTRY_EXPRESSION)
-    @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_UPDATED)
+    @WriteAudited(entity = "LAB_RESULT", eventType = AuditEventType.LAB_RESULT_CREATED)
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,

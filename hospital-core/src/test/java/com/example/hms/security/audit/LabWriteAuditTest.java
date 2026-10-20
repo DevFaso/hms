@@ -156,7 +156,7 @@ class LabWriteAuditTest {
 
         AuditEventRequestDTO row = recordedAfter(controller, LabResultController.class.getMethod(
             "createLabResult", LabResultRequestDTO.class, Locale.class));
-        assertThat(row.getEventType()).isEqualTo(AuditEventType.LAB_RESULT_UPDATED);
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.LAB_RESULT_CREATED);
         assertThat(row.getPatientId()).isEqualTo(PATIENT);
         assertThat(row.getResourceId()).isEqualTo(RECORD.toString());
         assertThat(row.getEntityType()).isEqualTo("LAB_RESULT");
