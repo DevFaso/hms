@@ -29,6 +29,10 @@ public class PharmacyPaymentResponseDTO {
     private String referenceNumber;
     private UUID receivedBy;
     private String notes;
+    /** QA D404: POSTED, or VOIDED when the dispense was cancelled. */
+    private String status;
+    private LocalDateTime voidedAt;
+    private String voidReason;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

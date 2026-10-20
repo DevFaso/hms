@@ -4671,7 +4671,11 @@
       "MOBILE_MONEY": "Mobile Money",
       "CASH": "Espèces",
       "PAYMENT_PENDING": "Votre paiement de {{amount}} a été déclaré. Il apparaîtra sur votre facture dès que la caisse de l’hôpital l’aura confirmé.",
-      "PAYMENT_PENDING_NOTE": "Les paiements déclarés ici sont confirmés par l’hôpital avant que votre solde ne change."
+      "PAYMENT_PENDING_NOTE": "Les paiements déclarés ici sont confirmés par l’hôpital avant que votre solde ne change.",
+      "PENDING_DECLARED": "Déjà déclaré, en attente de confirmation",
+      "LEFT_TO_DECLARE": "Reste à déclarer",
+      "AMOUNT_EXCEEDS_PENDING": "Vous pouvez déclarer au plus {{max}} F CFA : {{pending}} F CFA déjà déclarés sont en attente de confirmation.",
+      "CREDITED_TO": "Reporté sur la facture {{number}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mon équipe soignante",
@@ -10866,7 +10870,11 @@
     "PRINT": "Imprimer",
     "NEW_PAYMENT": "Nouveau paiement",
     "RECEIPT_NO_PATIENT": "Non renseigné",
-    "NO_PRICE": "La pharmacie n'a pas encore fixé le prix de ce médicament : renseignez son prix unitaire dans l'inventaire avant d'encaisser."
+    "NO_PRICE": "La pharmacie n'a pas encore fixé le prix de ce médicament : renseignez son prix unitaire dans l'inventaire avant d'encaisser.",
+    "DISPENSE_PICK": "Délivrance à encaisser",
+    "DISPENSE_PICK_PLACEHOLDER": "Choisir une délivrance",
+    "NO_DISPENSES": "Aucune délivrance à encaisser dans cette pharmacie.",
+    "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",
@@ -10876,7 +10884,8 @@
     "NO_PAYMENTS": "Aucun paiement de pharmacie pour le moment.",
     "CLAIMS_TITLE": "Réclamations d’assurance",
     "NO_CLAIMS": "Aucune réclamation de pharmacie pour le moment.",
-    "REF": "Réf : {{ref}}"
+    "REF": "Réf : {{ref}}",
+    "VOIDED": "Annulé avec la délivrance : à rembourser"
   },
   "VITAL_LIMITS": {
     "TEMPERATURE": "La température doit être comprise entre {{min}} et {{max}} °C.",

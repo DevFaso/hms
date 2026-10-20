@@ -148,6 +148,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requireWholeAmount(dto.getTotalAmount());
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
+        // QA D403: the visit billed must be this patient's visit.
+        rejectEncounterOfOtherPatient(encounter, patient);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
         // QA D91: nothing is paid until a payment is recorded.
@@ -155,6 +157,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setTotalAmount(dto.getTotalAmount() != null ? dto.getTotalAmount() : BigDecimal.ZERO);
         invoice.setStatus(requestedStatusOnCreate(dto.getStatus()));
         invoice.setClientRequestId(dto.getClientRequestId());
+        // QA D428: no auditing listener stamps it, so the creator is set here.
+        invoice.setCreatedBy(roleValidator.getCurrentUserId());
         // QA D94: the server numbers the invoice; a typed number is ignored.
         invoice.setInvoiceNumber(allocateNumber(hospital));
 
@@ -226,6 +230,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         copay.setAmountPaid(BigDecimal.ZERO);
         copay.setStatus(InvoiceStatus.CANCELLED);
+        copay.setCreditedToInvoice(target); // QA D428
         invoiceRepository.save(copay);
         settle(target, credit);
     }
@@ -313,6 +318,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
+    /** QA D403: an invoice may only carry a visit of the patient it bills. */
+    private static void rejectEncounterOfOtherPatient(Encounter encounter, Patient patient) {
+        if (encounter == null || patient == null || encounter.getPatient() == null) {
+            return;
+        }
+        if (!java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new BusinessException("billing.encounter.otherPatient");
+        }
+    }
+
     /** The encounter named by code, only when it belongs to the invoicing hospital. */
     private Encounter resolveEncounter(BillingInvoiceRequestDTO dto, UUID hospitalId) {
         if (dto.getEncounterReference() == null || dto.getEncounterReference().isBlank()) {
@@ -374,7 +389,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale) {
         // QA D101: a DRAFT invoice is not yet issued to the patient.
         return invoiceRepository.findByPatient_IdAndStatusNot(patientId, InvoiceStatus.DRAFT, pageable)
-            .map(invoiceMapper::toBillingInvoiceResponseDTO);
+            .map(this::toPortalResponse);
+    }
+
+    /** QA D421: the patient's invoice with what they already declared and staff have not confirmed. */
+    private BillingInvoiceResponseDTO toPortalResponse(BillingInvoice invoice) {
+        BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        if (dto == null) {
+            return null;
+        }
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        dto.setPendingDeclaredAmount(pending != null ? pending : BigDecimal.ZERO);
+        return dto;
     }
 
     @Override
@@ -450,6 +477,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (dto.getEncounterReference() != null) {
             invoice.setEncounter(resolveEncounter(dto, hospitalId));
         }
+        // QA D403: checked after both moves, so a new patient with the kept
+        // visit, or a new visit with the kept patient, is refused alike.
+        rejectEncounterOfOtherPatient(invoice.getEncounter(), invoice.getPatient());
         invoice.setInvoiceDate(dto.getInvoiceDate());
         invoice.setDueDate(dto.getDueDate());
         // QA D72: with lines the total is their sum; without, the typed amount.
@@ -753,11 +783,24 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoiceId, PaymentStatus.PENDING);
         BigDecimal declared = payment.getAmount().add(pending != null ? pending : BigDecimal.ZERO);
         requirePayable(invoice, patientId, payment.getAmount());
+        // QA D421: refused in the patient's own figures (what they typed, what
+        // is already declared, what is left), not as one sum they never typed.
+        BigDecimal open = pending != null ? pending : BigDecimal.ZERO;
+        if (open.signum() > 0) {
+            BigDecimal balanceDue = invoice.getTotalAmount()
+                .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+            if (declared.compareTo(balanceDue) > 0) {
+                throw new BusinessException("billing.payment.exceedsWithPending", payment.getAmount(), open,
+                    balanceDue.subtract(open).max(BigDecimal.ZERO));
+            }
+        }
         requirePayable(invoice, patientId, declared);
         rejectReusedReference(invoice, method, payment.getTransactionReference());
         savePaymentRow(invoice, payment.getAmount(), method,
             payment.getTransactionReference(), payment.getNotes(), recordedBy, PaymentStatus.PENDING);
-        return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        BillingInvoiceResponseDTO response = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+        response.setPendingDeclaredAmount(open.add(payment.getAmount()));
+        return response;
     }
 
     /**
@@ -791,6 +834,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .status(status)
             .confirmedBy(confirmed ? recordedBy : null)
             .confirmedAt(confirmed ? java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()) : null)
+            // QA D228: the total as it stands when the money is received.
+            .invoiceTotalAtReceipt(confirmed ? invoice.getTotalAmount() : null)
             .build();
         PaymentTransaction saved = paymentTransactionRepository.save(row);
         return java.util.Objects.requireNonNullElse(saved, row);
@@ -952,6 +997,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         row.setStatus(PaymentStatus.CONFIRMED);
         row.setConfirmedBy(staffId);
         row.setConfirmedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        row.setInvoiceTotalAtReceipt(invoice.getTotalAmount()); // QA D228
         paymentTransactionRepository.save(row);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, staffId, saved, row.getId(), "Pending payment confirmed");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
@@ -1080,6 +1126,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .amountPaid(BigDecimal.ZERO)
             .status(InvoiceStatus.SENT)
             .checkInCopay(true)
+            .createdBy(recordedBy) // QA D428
             .build();
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         BillingInvoice settled = settle(saved, amount);

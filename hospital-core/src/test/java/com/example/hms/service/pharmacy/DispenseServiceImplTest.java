@@ -124,6 +124,9 @@ class DispenseServiceImplTest {
     private com.example.hms.mapper.pharmacy.StockLotMapper stockLotMapper =
         new com.example.hms.mapper.pharmacy.StockLotMapper();
 
+    /** QA D404: the money follows a cancelled dispense. */
+    @Mock private PharmacyPaymentVoider paymentVoider;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -470,6 +473,56 @@ class DispenseServiceImplTest {
             verify(stockLotRepository).decrementRemaining(eq(stockLotId), eq(BigDecimal.TEN), any());
             verify(inventoryItemRepository).decrementOnHand(eq(inventoryItem.getId()), eq(BigDecimal.TEN), any());
             verify(stockTransactionRepository).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D416: a fill from a lot with no catalog id is saved with the lot's medication, so it can be priced")
+        void aFillFromALotTakesTheLotsMedication() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationCatalogItemId(null); // what the dispensing screen sends
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            org.mockito.ArgumentCaptor<com.example.hms.mapper.pharmacy.DispenseMapper.DispenseContext> ctx =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.mapper.pharmacy.DispenseMapper.DispenseContext.class);
+            verify(dispenseMapper).toEntity(eq(dto), ctx.capture());
+            assertThat(ctx.getValue().medicationCatalogItem()).isSameAs(catalogItem);
+        }
+
+        @Test
+        @DisplayName("QA D416: a body naming another medication than the lot's is refused, nothing moves")
+        void aCatalogIdThatIsNotTheLotsIsRefused() {
+            MedicationCatalogItem other = new MedicationCatalogItem();
+            other.setId(UUID.randomUUID());
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationCatalogItemId(other.getId());
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(medicationCatalogItemRepository.findById(other.getId())).thenReturn(Optional.of(other));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            assertThatThrownBy(() -> service.createDispense(dto)).isInstanceOf(BusinessException.class);
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
         }
 
         @Test
@@ -1157,6 +1210,9 @@ class DispenseServiceImplTest {
         void prescriptionLock() {
             org.mockito.Mockito.lenient().when(prescriptionRepository.findByIdForUpdate(prescriptionId))
                     .thenReturn(Optional.of(prescription));
+            // QA D404: the dispense row lock answers with the row findById gives.
+            org.mockito.Mockito.lenient().when(dispenseRepository.findLockedById(dispenseId))
+                    .thenAnswer(inv -> dispenseRepository.findById(dispenseId));
         }
 
         @Test
@@ -1172,6 +1228,36 @@ class DispenseServiceImplTest {
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository);
             order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
             order.verify(dispenseRepository).save(dispense);
+        }
+
+        @Test
+        @DisplayName("QA D404: a paid fill's payment is voided after the dispense row is locked")
+        void voidsThePaymentOfACancelledFill() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+
+            service.cancelDispense(dispenseId);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository,
+                    paymentVoider);
+            order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
+            order.verify(dispenseRepository).findLockedById(dispenseId);
+            order.verify(dispenseRepository).save(dispense);
+            order.verify(paymentVoider).voidForCancelledDispense(eq(dispense), any());
+        }
+
+        @Test
+        @DisplayName("QA D404: a refused cancel voids nothing")
+        void aRefusedCancelVoidsNothing() {
+            Dispense dispense = buildDispense(DispenseStatus.CANCELLED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId)).isInstanceOf(BusinessException.class);
+
+            verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
         }
 
         @Test

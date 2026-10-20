@@ -105,6 +105,7 @@ public class DispenseServiceImpl implements DispenseService {
     private final PrescriptionRoutingDecisionRepository routingDecisionRepository;
     /** G15: the one owner of cancelling a prepared fill (rule 8). */
     private final PreparedFillVoider preparedFillVoider;
+    private final PharmacyPaymentVoider paymentVoider;
     /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
@@ -727,12 +728,11 @@ public class DispenseServiceImpl implements DispenseService {
 
         ActorPair actors = resolveActors(dto);
 
-        MedicationCatalogItem catalogItem = resolveCatalogItem(dto);
-
         // Tier 2 item 34: verify BEFORE any stock moves. The lot is loaded
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
         // fill with no lot used to be accepted as DISPENSED with no stock
         // movement at all, so the shelf and the ledger drifted apart.
@@ -840,6 +840,24 @@ public class DispenseServiceImpl implements DispenseService {
             verifiedByUser = dispensedByUser;
         }
         return new ActorPair(dispensedByUser, verifiedByUser);
+    }
+
+    /**
+     * QA D416: the dispensing screen sends the lot, not the catalog id, so
+     * its fills were saved with no medication, had no price and could never
+     * be paid. The medication of a fill from a lot is the lot's; a body that
+     * names another one is refused rather than priced on the wrong item.
+     */
+    private static MedicationCatalogItem catalogItemOfFill(MedicationCatalogItem named, StockLot stockLot) {
+        MedicationCatalogItem ofLot = stockLot != null && stockLot.getInventoryItem() != null
+                ? stockLot.getInventoryItem().getMedicationCatalogItem() : null;
+        if (ofLot == null) {
+            return named;
+        }
+        if (named != null && named.getId() != null && !named.getId().equals(ofLot.getId())) {
+            throw new BusinessException("pharmacy.dispense.catalogLotMismatch");
+        }
+        return ofLot;
     }
 
     private MedicationCatalogItem resolveCatalogItem(DispenseRequestDTO dto) {
@@ -1149,6 +1167,10 @@ public class DispenseServiceImpl implements DispenseService {
         // as it is under that lock.
         prescriptionRepository.findByIdForUpdate(dispense.getPrescription().getId())
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
+        // QA D404: then the dispense row, the lock a payment takes, so a
+        // payment cannot land between the cancel and the void below.
+        dispenseRepository.findLockedById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         dispense = resync(dispense);
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
@@ -1184,6 +1206,8 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         Dispense saved = dispenseRepository.save(dispense);
+        // QA D404: the money follows the stock back, in this transaction.
+        paymentVoider.voidForCancelledDispense(saved, "Dispense cancelled");
 
         // Recompute the prescription status from remaining non-cancelled
         // dispenses — but only from a fill state. A cancellation never

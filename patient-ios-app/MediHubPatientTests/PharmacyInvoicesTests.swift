@@ -68,4 +68,15 @@ final class PharmacyInvoicesTests: XCTestCase {
                                      rejectionReason: nil, notes: nil, createdAt: nil, updatedAt: nil)
         XCTAssertEqual(claim.displayStatus, "Unknown")
     }
+
+    func testPaidTotalLeavesOutVoidedPayments() {
+        func payment(_ amount: Double, _ status: String?) -> PharmacyPaymentDTO {
+            PharmacyPaymentDTO(id: nil, dispenseId: nil, patientId: nil, hospitalId: nil,
+                               paymentMethod: nil, amount: amount, currency: nil,
+                               referenceNumber: nil, receivedBy: nil, notes: nil,
+                               createdAt: nil, updatedAt: nil, status: status)
+        }
+        let payments = [payment(1000, "POSTED"), payment(500, "VOIDED"), payment(250, nil)]
+        XCTAssertEqual(payments.paidTotal, 1250)
+    }
 }

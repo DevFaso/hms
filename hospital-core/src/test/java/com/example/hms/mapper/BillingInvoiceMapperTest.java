@@ -49,4 +49,28 @@ class BillingInvoiceMapperTest {
 
         assertThat(mapper.toBillingInvoiceResponseDTO(invoice).getBalanceDue()).isEqualByComparingTo("4000");
     }
+
+    /** QA D428: a folded copay names the invoice it went to, and the creator is named. */
+    @Test
+    void foldedCopayNamesItsVisitInvoiceAndTheCreator_D428() {
+        BillingInvoice visit = new BillingInvoice();
+        visit.setInvoiceNumber("RHA-2026-000021");
+        com.example.hms.model.User creator = new com.example.hms.model.User();
+        creator.setFirstName("Awa");
+        creator.setLastName("Traore");
+        BillingInvoice copay = new BillingInvoice();
+        copay.setStatus(com.example.hms.enums.InvoiceStatus.CANCELLED);
+        copay.setCreditedToInvoice(visit);
+        copay.setCreatedByUser(creator);
+
+        BillingInvoiceResponseDTO dto = mapper.toBillingInvoiceResponseDTO(copay);
+
+        assertThat(dto.getCreditedToInvoiceNumber()).isEqualTo("RHA-2026-000021");
+        assertThat(dto.getCreatedByName()).isEqualTo("Awa Traore");
+    }
+
+    @Test
+    void noCreatorOnFileNoName_D428() {
+        assertThat(mapper.toBillingInvoiceResponseDTO(new BillingInvoice()).getCreatedByName()).isNull();
+    }
 }

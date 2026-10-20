@@ -733,6 +733,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
     this.form.quantityRequested = rx.quantity ?? 0;
+    // QA D432: the fill starts at what was prescribed, not at 0 (which kept
+    // Dispense disabled until the pharmacist retyped the quantity).
+    this.form.quantityDispensed = rx.quantity ?? 0;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.showForm.set(true);
     this.loadStockLots();

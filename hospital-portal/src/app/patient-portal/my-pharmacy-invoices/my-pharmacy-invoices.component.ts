@@ -44,7 +44,10 @@ export class MyPharmacyInvoicesComponent implements OnInit {
       next: (res) => {
         const items = res?.data?.content ?? [];
         this.payments.set(items);
-        this.totalPaid.set(items.reduce((sum, p) => sum + (p.amount ?? 0), 0));
+        // QA D404: a payment voided with its cancelled dispense is not counted.
+        this.totalPaid.set(
+          items.filter((p) => p.status !== 'VOIDED').reduce((sum, p) => sum + (p.amount ?? 0), 0),
+        );
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

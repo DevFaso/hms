@@ -647,6 +647,25 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D405: a lot received holding more than its received quantity is refused")
+        void remainingAboveReceivedIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("QA D315: the same lot number with another expiry date is refused")
         void sameLotOtherExpiryIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();
@@ -839,7 +858,7 @@ class InventoryServiceImplTest {
             assertThat(result.getLotNumber()).isEqualTo("LOT-001");
             verify(stockLotMapper).updateEntity(lot, dto);
             verify(stockLotRepository).save(lot);
-            verify(stockLotRepository, never()).setRemaining(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
         }
 
         @Test
@@ -863,7 +882,8 @@ class InventoryServiceImplTest {
         @Test
         @DisplayName("QA D341: a negative count correction is refused before the database")
         void negativeRemainingIsRefused() {
-            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001").build();
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .remainingQuantity(new BigDecimal("50.00")).build();
             lot.setId(stockLotId);
             StockLotRequestDTO dto = StockLotRequestDTO.builder()
                     .inventoryItemId(inventoryItemId).remainingQuantity(new BigDecimal("-3")).build();
@@ -872,49 +892,49 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
-            verify(stockLotRepository, never()).setRemaining(any(), any(), any());
+            verify(stockLotRepository, never()).save(any());
         }
 
-        @Test
-        @DisplayName("#825 round 5: a remaining-quantity correction is an atomic UPDATE")
-        void remainingIsSetAtomically() {
-            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001").build();
-            lot.setId(stockLotId);
-            StockLotRequestDTO dto = StockLotRequestDTO.builder()
-                    .inventoryItemId(inventoryItemId)
-                    .remainingQuantity(new BigDecimal("7.00"))
-                    .build();
-            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
-            stubHospitalScope();
-            when(stockLotRepository.save(lot)).thenReturn(lot);
-
-            service.updateStockLot(stockLotId, dto);
-
-            verify(stockLotRepository).setRemaining(eq(stockLotId), eq(new BigDecimal("7.00")), any());
-        }
-
-        @Test
-        @DisplayName("D82: a lot count correction moves the item total too and is recorded")
-        void lotCorrectionMovesTheItemAndIsRecorded() {
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"9999", "5", "45.00"})
+        @DisplayName("QA D405: the lot edit changes no count (9999 above 50 received, morphine down to 5): adjust instead")
+        void anyCountChangeIsRefused(String typed) {
             StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
-                    .remainingQuantity(new BigDecimal("50.00")).build();
+                    .initialQuantity(new BigDecimal("50.00")).remainingQuantity(new BigDecimal("19.00")).build();
             lot.setId(stockLotId);
             StockLotRequestDTO dto = StockLotRequestDTO.builder()
-                    .inventoryItemId(inventoryItemId)
-                    .remainingQuantity(new BigDecimal("45.00"))
-                    .build();
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001")
+                    .remainingQuantity(new BigDecimal(typed)).build();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.updateStockLot(stockLotId, dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("adjustment"));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(lot.getRemainingQuantity()).isEqualByComparingTo("19");
+        }
+
+        @Test
+        @DisplayName("QA D405: a form that echoes the current count back still saves its other fields")
+        void theSameCountIsAccepted() {
+            StockLot lot = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-001")
+                    .initialQuantity(new BigDecimal("50.00")).remainingQuantity(new BigDecimal("19.00")).build();
+            lot.setId(stockLotId);
+            StockLotRequestDTO dto = StockLotRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId).lotNumber("LOT-001").supplier("New supplier")
+                    .remainingQuantity(new BigDecimal("19")).build();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
             stubHospitalScope();
             when(stockLotRepository.save(lot)).thenReturn(lot);
-            when(roleValidator.getCurrentUserId()).thenReturn(userId);
-            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
             service.updateStockLot(stockLotId, dto);
 
-            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(new BigDecimal("-5.00")), any());
-            ArgumentCaptor<StockTransaction> tx = ArgumentCaptor.forClass(StockTransaction.class);
-            verify(stockTransactionRepository).save(tx.capture());
-            assertThat(tx.getValue().getTransactionType()).isEqualTo(StockTransactionType.ADJUSTMENT);
+            verify(stockLotMapper).updateEntity(lot, dto);
+            verify(stockTransactionRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
     }
 

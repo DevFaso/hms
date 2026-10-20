@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DashboardComponent, currentMedications } from './dashboard';
-import type { MedicationSummary } from '../services/patient-portal.service';
+import type { MedicationSummary, PortalInvoice } from '../services/patient-portal.service';
 import { routes as appRoutes } from '../app.routes';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -1923,5 +1923,121 @@ describe('QA D316: dashboard current medications', () => {
       med('d', 'ON_HOLD'),
     ]);
     expect(out.map((m) => m.id)).toEqual(['a']);
+  });
+});
+
+describe('QA D254: dashboard billing widget', () => {
+  function renderPatient(): ComponentFixture<DashboardComponent> {
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+      'getHospitalId',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_PATIENT']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_PATIENT'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'awa',
+      email: 'awa@example.org',
+      roles: ['ROLE_PATIENT'],
+      active: true,
+    } as never);
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter(appRoutes),
+        { provide: AuthService, useValue: authStub },
+        {
+          provide: PermissionService,
+          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+        },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setFallbackLang('en');
+    translate.use('en');
+    translate.setTranslation('en', {
+      PORTAL: { BILLING: { BALANCE_DUE: 'Balance due', CREDITED_TO: 'Credited to {{number}}' } },
+    });
+    const fixture = TestBed.createComponent(DashboardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    return fixture;
+  }
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  const invoice = (over: Partial<PortalInvoice>): PortalInvoice => ({
+    id: 'inv-1',
+    invoiceNumber: 'INV-1',
+    date: '2026-10-01',
+    dueDate: '2026-10-31',
+    amount: 5000,
+    paid: 5000,
+    balance: 0,
+    status: 'PAID',
+    facility: 'Clinic',
+    description: 'Consultation',
+    ...over,
+  });
+
+  const rows = (f: ComponentFixture<DashboardComponent>): HTMLElement[] =>
+    Array.from(
+      (f.nativeElement as HTMLElement).querySelectorAll(
+        '[data-testid="dashboard-billing"] .patient-bill-row',
+      ),
+    );
+
+  it('shows the total of a paid invoice, not its zero balance', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({})]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row).toBeDefined();
+    const amount = row.querySelector('.bill-amount')?.textContent?.trim();
+    expect(amount).toBe(c.formatInvoiceAmount(5000));
+    expect(amount).not.toBe(c.formatInvoiceAmount(0));
+    expect(row.textContent).not.toContain('Balance due');
+    expect(row.querySelector('.bill-status')?.getAttribute('data-status')).toBe('PAID');
+  });
+
+  it('marks a folded copay as credited to the invoice it moved to', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([
+      invoice({
+        id: 'inv-2',
+        amount: 2000,
+        paid: 0,
+        balance: 0,
+        status: 'CANCELLED',
+        creditedTo: 'INV-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.textContent?.trim()).toBe(
+      c.formatInvoiceAmount(2000),
+    );
+    const chip = row.querySelector('.bill-status');
+    expect(chip?.getAttribute('data-status')).toBe('CREDITED');
+    expect(chip?.textContent?.trim()).toBe('Credited to INV-9');
+  });
+
+  it('shows what is left on a part-paid invoice', () => {
+    const fixture = renderPatient();
+    const c = fixture.componentInstance;
+    c.myInvoices.set([invoice({ paid: 2000, balance: 3000, status: 'PARTIALLY_PAID' })]);
+    fixture.detectChanges();
+    const [row] = rows(fixture);
+    expect(row.querySelector('.bill-amount')?.classList).toContain('bill-due');
+    expect(row.textContent).toContain('Balance due');
+    expect(row.textContent).toContain(c.formatInvoiceAmount(3000));
   });
 });

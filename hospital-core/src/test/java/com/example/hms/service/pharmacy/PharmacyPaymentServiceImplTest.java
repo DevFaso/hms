@@ -260,6 +260,20 @@ class PharmacyPaymentServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D404: a cancelled dispense cannot be paid")
+    void rejectsACancelledDispense() {
+        dispense.setStatus(com.example.hms.enums.DispenseStatus.CANCELLED);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cancelled");
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("rejects dispense whose patient does not match the request")
     void rejectsPatientMismatch() {
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);

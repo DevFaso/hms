@@ -168,7 +168,7 @@ final class PharmacyInvoicesViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    var totalPaid: Double { payments.reduce(0) { $0 + ($1.amount ?? 0) } }
+    var totalPaid: Double { payments.paidTotal }
     var totalClaimed: Double { claims.reduce(0) { $0 + ($1.amount ?? 0) } }
 
     func load() async {

@@ -54,6 +54,7 @@ public class PreparedFillVoider {
     private final PharmacyServiceSupport support;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final PharmacyPaymentVoider paymentVoider;
 
     /**
      * The prescriber withdrew or changed the order: void its open
@@ -82,6 +83,8 @@ public class PreparedFillVoider {
         }
 
         returnStock(current);
+        // QA D404: a preparation paid at the till is voided with it.
+        paymentVoider.voidForCancelledDispense(current, "Prepared fill cancelled: " + reason.name());
 
         String prescriptionId = current.getPrescription() != null
                 ? String.valueOf(current.getPrescription().getId()) : "unknown";

@@ -65,6 +65,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 || !hospitalId.equals(dispense.getPharmacy().getHospital().getId())) {
             throw new ResourceNotFoundException("dispense.notfound");
         }
+        // QA D404: a cancelled dispense has nothing left to pay for.
+        if (dispense.getStatus() == com.example.hms.enums.DispenseStatus.CANCELLED) {
+            throw new BusinessException("pharmacy.payment.dispenseCancelled");
+        }
         return dispense;
     }
 

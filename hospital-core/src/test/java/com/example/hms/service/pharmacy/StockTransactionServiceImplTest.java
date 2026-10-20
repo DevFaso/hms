@@ -20,6 +20,8 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -81,6 +83,9 @@ class StockTransactionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // MessageUtil is static: without its own source this class only passed when an
+        // earlier test had installed one, and asserted on raw keys when run alone.
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");
@@ -137,6 +142,14 @@ class StockTransactionServiceImplTest {
         org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
                 .thenAnswer(inv -> {
                     stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().add(inv.getArgument(1)));
+                    return 1;
+                });
+        // QA D405: a positive adjustment stays within what the lot received.
+        org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemainingWithinReceived(any(), any(), any()))
+                .thenAnswer(inv -> {
+                    BigDecimal after = stockLot.getRemainingQuantity().add(inv.getArgument(1));
+                    if (after.compareTo(stockLot.getInitialQuantity()) > 0) return 0;
+                    stockLot.setRemainingQuantity(after);
                     return 1;
                 });
         org.mockito.Mockito.lenient().when(inventoryItemRepository.decrementOnHand(any(), any(), any()))
@@ -381,6 +394,7 @@ class StockTransactionServiceImplTest {
         @DisplayName("adds positive adjustment to item and lot")
         void positiveAdjustment() {
             BigDecimal qty = new BigDecimal("5.00");
+            stockLot.setInitialQuantity(new BigDecimal("60.00"));
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, qty);
             stubCommonMocks(dto, true);
 
@@ -389,6 +403,29 @@ class StockTransactionServiceImplTest {
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("105.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("55.00"));
             verify(stockLotRepository, never()).save(any(StockLot.class));
+        }
+
+        @Test
+        @DisplayName("QA D405: a positive adjustment above what the lot received is refused, nothing moves")
+        void positiveAdjustmentAboveReceivedIsRefused() {
+            // The QA: lot received 50 (50 left), adjusted by +9949.
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("9949"));
+            stubCommonMocks(dto, true);
+            // The refusal comes before the row is answered.
+            org.mockito.Mockito.reset(stockTransactionMapper);
+            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), any(), eq(user)))
+                    .thenReturn(StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                            .transactionType(dto.getTransactionType()).quantity(dto.getQuantity())
+                            .reason(dto.getReason()).performedByUser(user).build());
+            org.mockito.Mockito.reset(stockTransactionRepository);
+            when(stockTransactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> e.getMessage().toLowerCase(java.util.Locale.ROOT).contains("received"));
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
         }
 
         @Test
