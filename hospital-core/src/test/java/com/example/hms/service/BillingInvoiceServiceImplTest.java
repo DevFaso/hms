@@ -1203,6 +1203,23 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void updateInvoice_validEncounterCodeIsLinked_D308() {
+        // The QA's PUT: an unlinked invoice, a same-hospital visit code in the body.
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setCode("ENC-QA-308");
+        encounter.setHospital(invoice.getHospital());
+        when(encounterRepository.findByCode("ENC-QA-308")).thenReturn(Optional.of(encounter));
+
+        BillingInvoiceResponseDTO linked = billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().encounterReference(" ENC-QA-308 ").build(), Locale.ENGLISH);
+
+        assertEquals(encounter, invoice.getEncounter());
+        assertEquals("ENC-QA-308", linked.getEncounterCode());
+    }
+
+    @Test
     void recordPatientPayment_aCardReferenceAlreadyRecordedIsRefused_D345() {
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = payableInvoice(patientId);
