@@ -20,6 +20,8 @@ import {
 } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
+import { RoleContextService } from '../core/role-context.service';
 
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
@@ -37,6 +39,11 @@ export class BedManagementComponent implements OnInit {
   private readonly bedService = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly departmentLookup = inject(DepartmentLookupService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** QA D431: a ward belongs to a department; the form never offered one. */
+  readonly departments = signal<DepartmentOption[]>([]);
 
   readonly wardTypes: WardType[] = [
     'GENERAL',
@@ -136,13 +143,27 @@ export class BedManagementComponent implements OnInit {
 
   /* ── Ward CRUD ─────────────────────────────────────────── */
 
+  private loadDepartments(): void {
+    const hid = this.roleContext.activeHospitalId;
+    if (!hid) {
+      this.departments.set([]);
+      return;
+    }
+    this.departmentLookup.getActiveDepartments(hid).subscribe({
+      next: (list) => this.departments.set(list),
+      error: () => this.departments.set([]),
+    });
+  }
+
   openCreateWard(): void {
+    this.loadDepartments();
     this.editingWardId.set(null);
     this.wardForm = this.emptyWardForm();
     this.wardModalOpen.set(true);
   }
 
   openEditWard(ward: WardResponse): void {
+    this.loadDepartments();
     this.editingWardId.set(ward.id);
     this.wardForm = {
       name: ward.name,

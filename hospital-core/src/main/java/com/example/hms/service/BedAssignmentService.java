@@ -86,6 +86,7 @@ public class BedAssignmentService {
         if (!bed.isActive() || !claimableFrom.contains(bed.getStatus())) {
             throw new BusinessException("bed.r7.notAvailable", bedLabel(bed));
         }
+        requireWardFitsPatient(bed, admission.getPatient());
 
         if (current != null) {
             markAvailable(current);
@@ -103,6 +104,35 @@ public class BedAssignmentService {
             admission.setDepartment(bed.getWard().getDepartment());
         }
         log.info("Bed {} assigned to admission {}", bedLabel(bed), admission.getId());
+    }
+
+    /**
+     * QA D431: the bed picker ignored sex and age, so a 5-year-old was put in
+     * a maternity bed. A ward reserved for one population refuses a patient
+     * whose record says they are outside it; a missing sex or birth date is let
+     * through (an incomplete record must not block an admission).
+     */
+    static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
+            return;
+        }
+        Integer age = patient.getDateOfBirth() == null ? null
+            : java.time.Period.between(patient.getDateOfBirth(), java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears();
+        com.example.hms.enums.WardType type = bed.getWard().getWardType();
+        boolean mismatch = switch (type) {
+            case MATERNITY -> com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient)
+                || com.example.hms.utility.ObstetricEligibility.isRecordedChild(patient);
+            case PEDIATRIC -> age != null && age >= 18;
+            case NICU -> age != null && age >= 1;
+            default -> false; // Every other ward takes any patient.
+        };
+        if (mismatch) {
+            throw new BusinessException(switch (type) {
+                case MATERNITY -> "bed.ward.maternityMismatch";
+                case PEDIATRIC -> "bed.ward.pediatricMismatch";
+                default -> "bed.ward.nicuMismatch";
+            }, bedLabel(bed));
+        }
     }
 
     /**

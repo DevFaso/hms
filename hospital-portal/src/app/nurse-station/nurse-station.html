@@ -468,6 +468,37 @@
 
       <!-- ═══════════ WORKBOARD TAB ═══════════ -->
       @if (!loading() && activeSection() === 'workboard') {
+        @if (canTriage() && awaitingTriage().length > 0) {
+          <section class="awaiting-triage" data-testid="awaiting-triage">
+            <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
+            <div class="workboard-grid">
+              @for (e of awaitingTriage(); track e.id) {
+                <div class="workboard-card">
+                  <div class="workboard-card-header">
+                    <span class="patient-name">{{ e.patientName }}</span>
+                  </div>
+                  <div class="workboard-card-meta">
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">schedule</span>
+                      {{ e.encounterDate | date: 'shortTime' }}
+                    </span>
+                  </div>
+                  <div class="workboard-card-actions">
+                    <button
+                      class="action-btn action-triage"
+                      data-testid="awaiting-triage-open"
+                      (click)="openTriageForEncounter(e)"
+                      [title]="'TRIAGE.TITLE' | translate"
+                    >
+                      <span class="material-symbols-outlined">emergency</span>
+                      {{ 'TRIAGE.TITLE' | translate }}
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
         @if (workboard().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">grid_view</span>

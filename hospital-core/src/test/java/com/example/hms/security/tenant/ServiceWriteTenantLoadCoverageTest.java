@@ -96,6 +96,9 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("BillingInvoiceServiceImpl.creditCheckInCopays#findById", CALLER_CHECKS + " (invoice writes load through loadInScope)"),
         entry("BillingInvoiceServiceImpl.recomputeAndPersistTotals#findById", CALLER_CHECKS + " (invoice item writes check writableInvoice first)"),
         entry("BirthPlanServiceImpl.getBirthPlanByIdOrThrow#findById", CALLER_CHECKS + " (requireAtActingHospital)"),
+        entry("BreakGlassServiceImpl.declare#findByIdUnscoped", "QA D409: break-the-glass exists for a patient the"
+            + " acting hospital does not know; the caller is checked as privileged at the hospital, and the"
+            + " declaration is audited and, after an opt-out, notified to the patient"),
         entry("CareGapTraceService.traceOne#findById", SYSTEM),
         entry("ChatMessageServiceImpl.sendMessage#findById", "resolves the message recipient; no clinical row is written"),
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),

@@ -136,6 +136,9 @@ class PrescriptionServiceImplTest {
 
     /** D83: allergy overrides are audited. */
     @Mock private AuditEventLogService auditEventLogService;
+    /** D414: the open stay a consultant's order belongs to. */
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock private AdmissionStayEncounterService stayEncounters;
 
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
@@ -3855,5 +3858,198 @@ class PrescriptionServiceImplTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Allergy alert");
         verify(prescriptionRepository, never()).save(any());
+    }
+
+    // ═══════════════ QA round 7 ═══════════════
+
+    private PrescriptionRequestDTO requestWithoutEncounter() {
+        return PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .staffId(staffId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .build();
+    }
+
+    private void stubPrescriberWithoutEncounter() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        lenient().when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
+        lenient().when(prescriptionRepository.save(any())).thenReturn(new Prescription());
+        lenient().when(prescriptionMapper.toResponseDTO(any())).thenReturn(
+            PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build());
+        // The consultant's own doctor assignment, never the stay lead's.
+        lenient().when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR"))).thenReturn(Optional.of(assignment));
+    }
+
+    @Test
+    void d414_aConsultantsOrderForAnInpatientJoinsTheStayLedByAnotherDoctor() {
+        stubPrescriberWithoutEncounter();
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(encounter.getHospital());
+        stay.setPatient(patient);
+        stay.setAdmissionId(UUID.randomUUID());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        com.example.hms.model.Admission stayAdmission = new com.example.hms.model.Admission();
+        stayAdmission.setId(stay.getAdmissionId());
+        stayAdmission.addConsultingPhysician(staffId, "Consultant", "Cardiology");
+        when(admissionRepository.findById(stay.getAdmissionId())).thenReturn(Optional.of(stayAdmission));
+        Staff lead = new Staff();
+        lead.setId(UUID.randomUUID());
+        lead.setHospital(encounter.getHospital());
+        stay.setStaff(lead);
+        UserRoleHospitalAssignment leadAssignment = new UserRoleHospitalAssignment();
+        leadAssignment.setId(UUID.randomUUID());
+        stay.setAssignment(leadAssignment);
+        when(encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        // No phantom consultation: nothing is minted, the stay is reused.
+        verify(encounterRepository, never()).save(any(Encounter.class));
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(stay));
+        // The stay lead's assignment is not borrowed for the consultant's order.
+        verify(urhaRepository).findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR"));
+    }
+
+    @Test
+    void d414_anAdmissionWithoutAStayEncounterOpensItInsteadOfAPhantomConsultation() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        admission.setAttendingPhysician(staff);
+        when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        Encounter opened = new Encounter();
+        opened.setId(UUID.randomUUID());
+        opened.setHospital(encounter.getHospital());
+        opened.setPatient(patient);
+        opened.setAdmissionId(admission.getId());
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(admission));
+        when(stayEncounters.openStayEncounter(admission)).thenReturn(opened);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(encounterRepository, never()).save(any(Encounter.class));
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(opened));
+    }
+
+    private Encounter strangersStay(com.example.hms.model.Admission admission) {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(encounter.getHospital());
+        stay.setPatient(patient);
+        stay.setAdmissionId(admission.getId());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Staff lead = new Staff();
+        lead.setId(UUID.randomUUID());
+        lead.setHospital(encounter.getHospital());
+        stay.setStaff(lead);
+        admission.setAttendingPhysician(lead);
+        admission.addConsultingPhysician(UUID.randomUUID(), "Someone else", "Surgery");
+        return stay;
+    }
+
+    @Test
+    void gap1_anUnrelatedDoctorIsRefusedOnAnotherDoctorsStayViaTheImplicitPath() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter stay = strangersStay(admission);
+        when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void gap1_anUnrelatedDoctorIsRefusedOnAnotherDoctorsStayViaAnExplicitEncounterId() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter stay = strangersStay(admission);
+        when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+        request.setEncounterId(stay.getId());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void gap1_anUnrelatedDoctorDoesNotOpenAnotherDoctorsStay() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        strangersStay(admission);
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(admission));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(stayEncounters, never()).openStayEncounter(any());
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d414_anOutpatientWithNoVisitStillGetsTheBookkeepingAnchor() {
+        // Path re-verified: D41's anchor for a true outpatient stays as it was.
+        stubPrescriberWithoutEncounter();
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
+        when(urhaRepository.findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(
+            any(), eq(hospitalId), eq("DOCTOR"))).thenReturn(Optional.of(assignment));
+        when(encounterRepository.save(any())).thenReturn(encounter);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(encounterRepository).save(any(Encounter.class));
+    }
+
+    @Test
+    void d432_theAllergyAlertCitesTheMostSevereMatchingEntry() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+
+        PatientAllergy moderate = new PatientAllergy();
+        moderate.setActive(true);
+        moderate.setAllergenDisplay("Ibuprofen");
+        moderate.setSeverity(com.example.hms.enums.AllergySeverity.MODERATE);
+        PatientAllergy severe = new PatientAllergy();
+        severe.setActive(true);
+        severe.setAllergenDisplay("Ibuprofen");
+        severe.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        // The moderate entry comes first, as on dev.
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(moderate, severe));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .hasMessageContaining("severity severe")
+            .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("moderate"));
     }
 }

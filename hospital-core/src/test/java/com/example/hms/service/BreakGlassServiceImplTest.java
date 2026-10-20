@@ -70,6 +70,7 @@ class BreakGlassServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditService;
+    @Mock private BreakGlassPatientNotifier patientNotifier;
 
     /** Real system clock — the production bean is Clock.systemDefaultZone() (TimeConfig). */
     @Spy private Clock clock = Clock.systemDefaultZone();
@@ -151,6 +152,31 @@ class BreakGlassServiceImplTest {
             assertThat(out.getReason()).startsWith("Unconscious");
 
             verify(auditService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("D409/D410: a patient unknown to the reader's hospital can be broken into, and is told")
+        void declareForAPatientRegisteredElsewhere() {
+            // The tenant-scoped findById is never asked: it answered 404 for
+            // exactly the patient break-the-glass exists for.
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class)))
+                .thenAnswer(inv -> {
+                    BreakGlassSession bg = inv.getArgument(0);
+                    bg.setId(UUID.randomUUID());
+                    return bg;
+                });
+            BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .reason("Unconscious trauma patient, no family reachable.")
+                .build();
+
+            service.declare(req);
+
+            verify(patientRepository).findByIdUnscoped(patientId);
+            verify(patientRepository, never()).findById(any());
+            verify(patientNotifier).notifyIfOptedOut(patient, hospital);
         }
 
         @Test
@@ -262,7 +288,6 @@ class BreakGlassServiceImplTest {
         void declareRejectsUnprivileged() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
@@ -277,6 +302,26 @@ class BreakGlassServiceImplTest {
             assertThatThrownBy(() -> service.declare(req))
                 .isInstanceOf(UnauthorizedAccessException.class);
 
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an unprivileged caller gets the same 403 for an existing and an unknown patient id")
+        void declareUnprivilegedCannotProbePatientIds() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
+                .thenReturn(false);
+
+            for (UUID probe : List.of(patientId, UUID.randomUUID())) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Probing.").build();
+                assertThatThrownBy(() -> service.declare(req))
+                    .isInstanceOf(UnauthorizedAccessException.class);
+            }
+            verify(patientRepository, never()).findByIdUnscoped(any());
             verify(sessionRepository, never()).save(any());
         }
 
@@ -296,7 +341,7 @@ class BreakGlassServiceImplTest {
             assertThatThrownBy(() -> service.declare(req))
                 .isInstanceOf(ResourceNotFoundException.class);
             verify(sessionRepository, never()).save(any());
-            verify(patientRepository, never()).findById(any());
+            verify(patientRepository, never()).findByIdUnscoped(any());
         }
 
         @Test
@@ -579,7 +624,7 @@ class BreakGlassServiceImplTest {
         void superAdminBypassesHospitalRoleCheck() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.of(new com.example.hms.model.UserRoleHospitalAssignment()));
             when(sessionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -634,7 +679,7 @@ class BreakGlassServiceImplTest {
         void fixClock() {
             Clock fixed = Clock.fixed(now.atZone(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
             fixedService = new BreakGlassServiceImpl(sessionRepository, userRepository, patientRepository,
-                hospitalRepository, assignmentRepository, auditService, fixed);
+                hospitalRepository, assignmentRepository, auditService, fixed, null);
         }
 
         @Test
@@ -676,7 +721,7 @@ class BreakGlassServiceImplTest {
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());
         // Pin the role-code set so a regression that drops the ROLE_ prefix

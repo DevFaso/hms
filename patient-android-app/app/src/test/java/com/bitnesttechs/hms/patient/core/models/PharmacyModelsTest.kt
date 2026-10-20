@@ -17,4 +17,15 @@ class PharmacyModelsTest {
 
         assertEquals("Submitted for review", claim.statusDisplay)
     }
+
+    @Test
+    fun paidTotalLeavesOutVoidedPayments() {
+        val payments = listOf(
+            PharmacyPaymentDto(amount = 1000.0, status = "POSTED"),
+            PharmacyPaymentDto(amount = 500.0, status = "VOIDED"),
+            PharmacyPaymentDto(amount = 250.0)
+        )
+
+        assertEquals(1250.0, payments.paidTotal(), 0.0)
+    }
 }

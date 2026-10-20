@@ -171,7 +171,9 @@ public class PdfInvoiceService {
             }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
-            BigDecimal total = nz(invoice.getTotalAmount());
+            // QA D228: the total when this money was received, not today's.
+            BigDecimal total = payment.getInvoiceTotalAtReceipt() != null
+                ? payment.getInvoiceTotalAtReceipt() : nz(invoice.getTotalAmount());
             BigDecimal paid = nz(paidAsOfPayment);
             w.down(24);
             w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));

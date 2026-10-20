@@ -293,8 +293,9 @@ class ExceptionProseRatchetTest {
         "com/example/hms/service/pharmacy/DispenseVerificationService.java");
 
     /** A literal handed to a refusal helper ({@code assert*}, {@code require*}) or a dispense check ({@code .fail}). */
+    // Possessive runs: a per-character alternation overflowed the stack on a long helper call.
     static final Pattern HELPER_PROSE = Pattern.compile(
-        "(\\bassert\\w*|\\brequire\\w*|\\.fail)\\s*\\((?:[^;\"]++|\"(?:[^\"\\\\]|\\\\.)*+\")*?\"((?:[^\"\\\\]|\\\\.)*)\"");
+        "(\\bassert\\w*|\\brequire\\w*|\\.fail)\\s*\\((?:[^;\"]++|\"(?:[^\"\\\\]++|\\\\.)*+\")*?\"((?:[^\"\\\\]++|\\\\.)*+)\"");
 
     static int countHelperProse(String source) {
         int n = 0;

@@ -1,4 +1,4 @@
-import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -8,6 +8,7 @@ import {
   PharmacyPaymentMethod,
   PharmacyPaymentRequest,
   PharmacyPaymentResponse,
+  PharmacyResponse,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -15,7 +16,8 @@ import { ToastService } from '../core/toast.service';
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
  *
- * Pharmacist enters a dispense ID, selects payment method (Espèces / Mobile Money / Assurance),
+ * Pharmacist picks the dispense from the pharmacy's recent fills (QA D416:
+ * no more typing a dispense UUID), selects payment method (Espèces / Mobile Money / Assurance),
  * posts to the backend, and the printable receipt slides in. Patient-facing text
  * is in French and is hardcoded in the template for now; moving copy to
  * ngx-translate keys is a follow-up task.
@@ -28,7 +30,7 @@ import { ToastService } from '../core/toast.service';
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',
 })
-export class PharmacyCheckoutComponent {
+export class PharmacyCheckoutComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
@@ -41,6 +43,11 @@ export class PharmacyCheckoutComponent {
   notes = '';
 
   loading = signal(false);
+  /** QA D416: the cashier picks a fill from the pharmacy's list. */
+  pharmacies = signal<PharmacyResponse[]>([]);
+  selectedPharmacyId = signal('');
+  dispenses = signal<DispenseResponse[]>([]);
+  dispensesLoading = signal(false);
   dispense = signal<DispenseResponse | null>(null);
   receipt = signal<PharmacyPaymentResponse | null>(null);
 
@@ -49,6 +56,63 @@ export class PharmacyCheckoutComponent {
     { value: 'MOBILE_MONEY', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.MOBILE_MONEY' },
     { value: 'INSURANCE', labelKey: 'PORTAL.ENUM.PAYMENT_METHOD.INSURANCE' },
   ];
+
+  ngOnInit(): void {
+    this.loadPharmacies();
+  }
+
+  private loadPharmacies(): void {
+    this.svc.listPharmacies(0, 100).subscribe({
+      next: (page) => {
+        const list = page?.content ?? [];
+        this.pharmacies.set(list);
+        if (list.length > 0) {
+          this.selectPharmacy(list[0].id);
+        }
+      },
+      error: () => this.toast.error(this.translate.instant('PHARMACY.PHARMACIES_LOAD_FAILED')),
+    });
+  }
+
+  selectPharmacy(id: string): void {
+    this.selectedPharmacyId.set(id);
+    this.dispenseId = '';
+    this.dispense.set(null);
+    this.loadDispenses();
+  }
+
+  /** QA D416: the pharmacy's recent fills that can still be paid (a cancelled one cannot). */
+  loadDispenses(): void {
+    const pharmacyId = this.selectedPharmacyId();
+    if (!pharmacyId) {
+      this.dispenses.set([]);
+      return;
+    }
+    this.dispensesLoading.set(true);
+    this.svc.listDispensesByPharmacy(pharmacyId, 0, 50).subscribe({
+      next: (res) => {
+        const rows = res?.data?.content ?? [];
+        this.dispenses.set(rows.filter((d) => d.status !== 'CANCELLED'));
+        this.dispensesLoading.set(false);
+      },
+      error: () => {
+        this.dispenses.set([]);
+        this.dispensesLoading.set(false);
+        this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.DISPENSES_LOAD_FAILED'));
+      },
+    });
+  }
+
+  /** QA D416: picking a fill loads it, priced by the server. */
+  pickDispense(id: string): void {
+    this.dispenseId = id;
+    if (!id) {
+      this.dispense.set(null);
+      this.amount = null;
+      return;
+    }
+    this.loadDispense();
+  }
 
   /** QA D264: the server priced this dispense, so the amount is fixed. */
   hasCharge(): boolean {
@@ -133,6 +197,7 @@ export class PharmacyCheckoutComponent {
   }
 
   reset(): void {
+    this.loadDispenses();
     this.dispenseId = '';
     this.amount = null;
     this.paymentMethod = 'CASH';

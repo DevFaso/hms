@@ -66,6 +66,9 @@ describe('MyBillingComponent', () => {
           PAY_NOW: 'Payer',
           MAKE_PAYMENT: 'Effectuer un paiement',
           AMOUNT_EXCEEDS: 'Le montant dépasse le solde dû',
+          AMOUNT_EXCEEDS_PENDING: 'Au plus {{max}} : {{pending}} en attente',
+          PENDING_DECLARED: 'Déjà déclaré',
+          CREDITED_TO: 'Reporté sur la facture {{number}}',
           PAYMENT_PENDING: 'Paiement de {{amount}} déclaré, en attente de confirmation',
           PAYMENT_FAILED: 'Le paiement a échoué',
         },
@@ -112,6 +115,38 @@ describe('MyBillingComponent', () => {
     openDialog();
     expect(text('[role="dialog"] h3')).toContain('Effectuer un paiement');
     expect(component.payAmount).toBe(75);
+  });
+
+  it('QA D421: the dialog shows what is pending and prefills only what is left to declare', () => {
+    // The QA: 150 owed, 100 MOBILE_MONEY + 50 CARD already declared.
+    create([invoice({ balance: 300, amount: 300, pending: 150 })]);
+    openDialog();
+    expect(component.payAmount).toBe(150);
+    expect(text('.pay-pending')).toContain('Déjà déclaré');
+  });
+
+  it('QA D421: an amount above what is left is refused in the figures on screen', () => {
+    create([invoice({ balance: 300, amount: 300, pending: 150 })]);
+    openDialog();
+    component.payAmount = 200;
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(text('.pay-error')).toBe('Au plus 150 : 150 en attente');
+  });
+
+  it('QA D428: a folded copay names the invoice it was credited to', () => {
+    create([
+      invoice({
+        id: 'cp',
+        balance: 0,
+        paid: 0,
+        amount: 1000,
+        status: 'CANCELLED',
+        creditedTo: 'RHA-21',
+      }),
+    ]);
+    expect(text('.pli-status')).toBe('Reporté sur la facture RHA-21');
   });
 
   it('refuses an amount above the balance on screen, without calling the server', () => {

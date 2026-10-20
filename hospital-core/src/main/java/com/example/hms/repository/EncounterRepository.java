@@ -180,6 +180,13 @@ public interface EncounterRepository
     Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
             UUID patientId, UUID staffId, UUID hospitalId, Collection<EncounterStatus> statuses);
 
+    /**
+     * The patient's open hospital stay at this hospital, whoever leads it
+     * (QA D414): a consultant's order for an inpatient belongs to the stay.
+     */
+    Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+            UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
+
     /** An admission's own encounter, most recent first (QA D135). */
     Optional<Encounter> findFirstByAdmissionIdOrderByEncounterDateDesc(UUID admissionId);
 

@@ -33,6 +33,10 @@
           </div>
           <div class="row-meta">
             <span class="method">{{ methodLabel(p.paymentMethod) }}</span>
+            @if (p.status === 'VOIDED') {
+              <!-- QA D404: voided with the cancelled dispense; the pharmacy owes it back -->
+              <span class="ref voided">{{ 'MY_PHARMACY_INVOICES.VOIDED' | translate }}</span>
+            }
             @if (p.referenceNumber) {
               <span class="ref">{{
                 'MY_PHARMACY_INVOICES.REF' | translate: { ref: p.referenceNumber }

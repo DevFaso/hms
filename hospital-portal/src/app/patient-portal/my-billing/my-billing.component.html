@@ -69,9 +69,16 @@
                   {{ inv.balance | currency: 'XOF' : 'symbol' : '1.0-0' }}</span
                 >
               }
-              <span class="pli-status" [attr.data-status]="inv.status">{{
-                inv.status | enumLabel: 'invoiceStatus'
-              }}</span>
+              @if (inv.creditedTo) {
+                <!-- QA D428: a folded copay says where the money went, not only "cancelled" -->
+                <span class="pli-status" data-status="CREDITED">{{
+                  'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedTo }
+                }}</span>
+              } @else {
+                <span class="pli-status" [attr.data-status]="inv.status">{{
+                  inv.status | enumLabel: 'invoiceStatus'
+                }}</span>
+              }
               @if (isPayable(inv)) {
                 <button class="pay-btn" (click)="openPayDialog(inv)">
                   <span class="material-symbols-outlined">payment</span>
@@ -122,6 +129,21 @@
               payingInvoice()!.balance | currency: 'XOF' : 'symbol' : '1.0-0'
             }}</span>
           </div>
+          <!-- QA D421: declarations awaiting confirmation are shown, and what is left to declare -->
+          @if (pendingOf(payingInvoice()!) > 0) {
+            <div class="pay-invoice-info pay-pending">
+              <span class="pay-label">{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}</span>
+              <span class="pay-value">{{
+                pendingOf(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
+              }}</span>
+            </div>
+            <div class="pay-invoice-info">
+              <span class="pay-label">{{ 'PORTAL.BILLING.LEFT_TO_DECLARE' | translate }}</span>
+              <span class="pay-value">{{
+                declarable(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
+              }}</span>
+            </div>
+          }
 
           <p class="pay-label">{{ 'PORTAL.BILLING.PAYMENT_PENDING_NOTE' | translate }}</p>
 
@@ -139,7 +161,7 @@
                 id="payAmount"
                 type="number"
                 [min]="1"
-                [max]="payingInvoice()!.balance"
+                [max]="declarable(payingInvoice()!)"
                 step="1"
                 [(ngModel)]="payAmount"
                 [placeholder]="'PORTAL.BILLING.ENTER_AMOUNT' | translate"

@@ -8,18 +8,41 @@
   @if (!receipt()) {
     <section class="card no-print">
       <h3>{{ 'PHARMACY_CHECKOUT.STEP_LOOKUP' | translate }}</h3>
+      @if (pharmacies().length > 1) {
+        <div class="form-row">
+          <label for="checkoutPharmacy">{{ 'PHARMACY_CHECKOUT.PHARMACY' | translate }}</label>
+          <select
+            id="checkoutPharmacy"
+            [ngModel]="selectedPharmacyId()"
+            (ngModelChange)="selectPharmacy($event)"
+          >
+            @for (p of pharmacies(); track p.id) {
+              <option [value]="p.id">{{ p.name }}</option>
+            }
+          </select>
+        </div>
+      }
+      <!-- QA D416: the fill is picked from the pharmacy's list, not typed as an id -->
       <div class="form-row">
-        <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_ID' | translate }}</label>
-        <input
+        <label for="dispenseId">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK' | translate }}</label>
+        <select
           id="dispenseId"
-          type="text"
-          [(ngModel)]="dispenseId"
-          [placeholder]="'PHARMACY_CHECKOUT.DISPENSE_ID_PLACEHOLDER' | translate"
-        />
-        <button type="button" class="btn-primary" [disabled]="loading()" (click)="loadDispense()">
-          {{ 'PHARMACY_CHECKOUT.LOAD' | translate }}
-        </button>
+          [ngModel]="dispenseId"
+          (ngModelChange)="pickDispense($event)"
+          [disabled]="loading() || dispensesLoading()"
+        >
+          <option value="">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK_PLACEHOLDER' | translate }}</option>
+          @for (d of dispenses(); track d.id) {
+            <option [value]="d.id">
+              {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
+              {{ d.dispensedAt | date: 'dd/MM/yyyy HH:mm' }}
+            </option>
+          }
+        </select>
       </div>
+      @if (!dispensesLoading() && dispenses().length === 0) {
+        <p class="field-hint">{{ 'PHARMACY_CHECKOUT.NO_DISPENSES' | translate }}</p>
+      }
       @if (dispense(); as d) {
         <div class="dispense-summary">
           <dl>

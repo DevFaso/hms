@@ -115,7 +115,7 @@ import static org.mockito.Mockito.when;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @ActiveProfiles("test")
-@Import({DispenseServiceImpl.class, PreparedFillVoider.class, PrescriptionQueueClaimService.class,
+@Import({DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
         DispenseVerificationService.class,
         ControlledSubstanceGuard.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
         StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
@@ -716,7 +716,9 @@ class PreparedFillConcurrencyPostgresIT {
         entityManager.persist(item);
         lot = StockLot.builder()
             .inventoryItem(item).lotNumber("AMX-" + n).expiryDate(LocalDate.now().plusYears(1))
-            .initialQuantity(BigDecimal.valueOf(50)).remainingQuantity(BigDecimal.valueOf(50))
+            // Received 60, 50 left: room for the +5 count correction under the
+            // QA D405 bound (a lot never holds more than it received).
+            .initialQuantity(BigDecimal.valueOf(60)).remainingQuantity(BigDecimal.valueOf(50))
             .receivedDate(LocalDate.now()).barcodeValue(LotBarcode.mint()).build();
         entityManager.persist(lot);
     }

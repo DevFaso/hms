@@ -63,7 +63,7 @@ public class PharmacyRegistryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List active pharmacies",
         description = "Returns active pharmacies for the resolved hospital scope. "
             + "Super-admins in global view (no JWT scope, no hospitalId param) "

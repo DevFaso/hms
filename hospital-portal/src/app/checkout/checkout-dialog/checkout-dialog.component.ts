@@ -71,9 +71,10 @@ export class CheckoutDialogComponent {
       patientEducationMaterials: this.patientEducationMaterials() || undefined,
     };
 
-    if (this.followUpReason()) {
+    // QA D426 (D321): a follow-up date entered without a reason was dropped.
+    if (this.followUpReason().trim() || this.followUpDate()) {
       request.followUpAppointment = {
-        reason: this.followUpReason(),
+        reason: this.followUpReason().trim() || undefined,
         preferredDate: this.followUpDate() || undefined,
       };
     }

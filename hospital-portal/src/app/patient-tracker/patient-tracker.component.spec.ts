@@ -197,6 +197,37 @@ describe('PatientTrackerComponent', () => {
     expect(() => component.ngOnDestroy()).not.toThrow();
   });
 
+  /* ── Triage form (D408) ──────────────────────────── */
+
+  it('openTriage should fetch the encounter and open the triage form (D408)', () => {
+    const mockEnc: Partial<EncounterResponse> = { id: 'e3', status: 'ARRIVED' };
+    encounterSpy.getById.and.returnValue(of(mockEnc as EncounterResponse));
+
+    component.openTriage(mockItem({ encounterId: 'e3' }));
+
+    expect(encounterSpy.getById).toHaveBeenCalledWith('e3');
+    expect(component.triageEncounter()).toEqual(mockEnc as EncounterResponse);
+  });
+
+  it('onTriageCompleted should close the form and refresh the board (D408)', () => {
+    fixture.detectChanges();
+    trackerSpy.getTrackerBoard.calls.reset();
+    component.triageEncounter.set({ id: 'e3' } as EncounterResponse);
+
+    component.onTriageCompleted();
+
+    expect(component.triageEncounter()).toBeNull();
+    expect(trackerSpy.getTrackerBoard).toHaveBeenCalled();
+  });
+
+  it('arrived cards offer the triage form, not only the complete button (D408)', () => {
+    fixture.detectChanges();
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('.btn-complete-triage') as NodeListOf<HTMLElement>,
+    ).map((b) => b.textContent?.trim());
+    expect(buttons).toContain('TRIAGE.TITLE');
+  });
+
   /* ── Check-Out dialog (MVP 6) ────────────────────── */
 
   it('openCheckout should fetch encounter and show dialog', () => {

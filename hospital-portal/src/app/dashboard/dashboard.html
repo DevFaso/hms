@@ -3003,7 +3003,7 @@
       </section>
 
       <!-- Billing Summary -->
-      <section class="card patient-card">
+      <section class="card patient-card" data-testid="dashboard-billing">
         <div class="card-head">
           <div class="card-title-group">
             <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
@@ -3029,12 +3029,25 @@
                   <span class="bill-date">{{ inv.date | date: 'mediumDate' }}</span>
                 </div>
                 <div class="bill-amount-wrap">
+                  <!-- QA D254 (dashboard): the invoice total, and what is left when anything is -->
                   <span class="bill-amount" [class.bill-due]="inv.balance > 0">
-                    {{ formatInvoiceAmount(inv.balance) }}
+                    {{ formatInvoiceAmount(inv.amount) }}
                   </span>
-                  <span class="bill-status" [attr.data-status]="inv.status">
-                    {{ inv.status | enumLabel: 'invoiceStatus' }}
-                  </span>
+                  @if (inv.balance > 0 && inv.balance !== inv.amount) {
+                    <span class="bill-date">
+                      {{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}
+                      {{ formatInvoiceAmount(inv.balance) }}
+                    </span>
+                  }
+                  @if (inv.creditedTo) {
+                    <span class="bill-status" data-status="CREDITED">
+                      {{ 'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedTo } }}
+                    </span>
+                  } @else {
+                    <span class="bill-status" [attr.data-status]="inv.status">
+                      {{ inv.status | enumLabel: 'invoiceStatus' }}
+                    </span>
+                  }
                 </div>
               </div>
             }

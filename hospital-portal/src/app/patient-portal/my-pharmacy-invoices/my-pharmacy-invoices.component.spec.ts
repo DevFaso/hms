@@ -123,6 +123,26 @@ describe('MyPharmacyInvoicesComponent', () => {
     }
   });
 
+  it('QA D404: a payment voided with its cancelled dispense is shown as such and not counted', async () => {
+    const voided = {
+      ...samplePayments[0],
+      id: 'p9',
+      amount: 200,
+      status: 'VOIDED',
+    } as unknown as PharmacyPaymentResponse;
+    await build(
+      () =>
+        of({
+          success: true,
+          data: { content: [...samplePayments, voided], totalElements: 3, number: 0, size: 50 },
+        }),
+      () => of({ success: true, data: { content: [], totalElements: 0, number: 0, size: 50 } }),
+    );
+
+    expect(component.totalPaid()).toBe(2000);
+    expect(fixture.nativeElement.querySelectorAll('.voided').length).toBe(1);
+  });
+
   it('renders an empty state when the patient has no payments', async () => {
     await build(() =>
       of({ success: true, data: { content: [], totalElements: 0, number: 0, size: 50 } }),

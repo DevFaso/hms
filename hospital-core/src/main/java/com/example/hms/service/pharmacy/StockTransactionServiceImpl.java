@@ -353,7 +353,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 if (quantity.signum() < 0) {
                     takeOff(item, lot, quantity.negate(), now);
                 } else {
-                    putOn(item, lot, quantity, now);
+                    putOnWithinReceived(item, lot, quantity, now);
                 }
             }
         }
@@ -368,6 +368,18 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (inventoryItemRepository.decrementOnHand(item.getId(), quantity, now) == 0) {
             throw new BusinessException("stock.item.insufficient", String.valueOf(quantity));
         }
+    }
+
+    /**
+     * QA D405: a positive adjustment of a lot cannot take it above what it
+     * received (lot 50 adjusted to 9999). Checked in the UPDATE itself, so a
+     * concurrent return cannot slip past it.
+     */
+    private void putOnWithinReceived(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
+        if (lot != null && stockLotRepository.incrementRemainingWithinReceived(lot.getId(), quantity, now) == 0) {
+            throw new BusinessException(MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+        inventoryItemRepository.incrementOnHand(item.getId(), quantity, now);
     }
 
     private void putOn(InventoryItem item, StockLot lot, BigDecimal quantity, LocalDateTime now) {
