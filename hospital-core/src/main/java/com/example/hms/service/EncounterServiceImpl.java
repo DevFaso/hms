@@ -2053,10 +2053,17 @@ public class EncounterServiceImpl implements EncounterService {
         // Captured since MVP 6 and silently dropped until V128 — this is where
         // the desk finally sees "Dr Ouédraogo wants this patient back in two
         // weeks" without the patient having to remember it.
-        createRecallFromCheckout(encounter, request, actorUsername);
+        java.time.LocalDate recallDue = createRecallFromCheckout(encounter, request, actorUsername);
 
         // (d) Build and return AVS
-        return checkOutMapper.toAfterVisitSummary(encounter, request, null);
+        com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
+            checkOutMapper.toAfterVisitSummary(encounter, request, null);
+        // QA D321: the AVS shows the follow-up date the recall was filed with
+        // (the defaulted one too, when no date was given).
+        if (recallDue != null) {
+            avs.setFollowUpAppointmentDate(recallDue.toString());
+        }
+        return avs;
     }
 
     /**
@@ -2066,12 +2073,12 @@ public class EncounterServiceImpl implements EncounterService {
      * label because pre-V128 clients may omit it; the due date falls back to
      * two weeks out when no preference was given or it fails to parse.
      */
-    private void createRecallFromCheckout(
+    private java.time.LocalDate createRecallFromCheckout(
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
             String actorUsername) {
         if (request == null || request.getFollowUpAppointment() == null) {
-            return;
+            return null;
         }
         var followUp = request.getFollowUpAppointment();
         try {
@@ -2100,8 +2107,10 @@ public class EncounterServiceImpl implements EncounterService {
                                     ? followUp.getNotes().substring(0, 500) : followUp.getNotes())
                             .createdBy(actorUsername)
                             .build());
+            return dueDate;
         } catch (RuntimeException ex) {
             log.warn("Could not create a recall for encounter {}: {}", encounter.getId(), ex.getMessage());
+            return null;
         }
     }
 
@@ -2231,6 +2240,43 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
+    private static boolean isBlankText(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * QA D322: the medicines the patient goes home with, one line each, from
+     * the discharge summary's reconciliation (stopped ones left out).
+     */
+    private static String medicationsAtDischarge(DischargeSummary summary) {
+        String text = summary.getMedicationReconciliation().stream()
+            .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
+            .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
+            .filter(m -> !isBlankText(m.getMedicationName()))
+            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(), m.getRoute(),
+                    m.getFrequency(), m.getPatientInstructions())
+                .filter(part -> !isBlankText(part))
+                .map(String::trim)
+                .collect(Collectors.joining(" ")))
+            .collect(Collectors.joining("\n"));
+        return text.isBlank() ? null : text;
+    }
+
+    /** QA D322: the earliest dated follow-up on the discharge summary, or null. */
+    private static String firstFollowUpDate(DischargeSummary summary) {
+        java.time.LocalDate first = null;
+        for (com.example.hms.model.discharge.FollowUpAppointmentEntry f : summary.getFollowUpAppointments()) {
+            java.time.LocalDate d = f.getAppointmentDate();
+            if (d == null && f.getAppointmentTime() != null) {
+                d = f.getAppointmentTime().toLocalDate();
+            }
+            if (d != null && (first == null || d.isBefore(first))) {
+                first = d;
+            }
+        }
+        return first != null ? first.toString() : null;
+    }
+
     @Override
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId) {
@@ -2255,7 +2301,26 @@ public class EncounterServiceImpl implements EncounterService {
             avs.setPrescriptionSummary(summary.getPrescriptionSummary());
             avs.setReferralSummary(summary.getReferralSummary());
             avs.setPatientEducationMaterials(summary.getPatientEducationProvided());
+            // QA D322: an inpatient discharge summary carries its medicines and
+            // follow-ups as lists, not as the checkout's free text, so the
+            // stay's AVS showed neither.
+            if (isBlankText(avs.getPrescriptionSummary())) {
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+            }
+            if (isBlankText(avs.getFollowUpInstructions())) {
+                avs.setFollowUpInstructions(summary.getFollowUpInstructions());
+            }
+            if (isBlankText(avs.getFollowUpAppointmentDate())) {
+                avs.setFollowUpAppointmentDate(firstFollowUpDate(summary));
+            }
         });
+        // QA D321: a follow-up requested at checkout is filed as a recall.
+        if (isBlankText(avs.getFollowUpAppointmentDate())) {
+            patientRecallRepository.findFirstByEncounter_IdAndSourceOrderByDueDateAsc(
+                    encounter.getId(), com.example.hms.enums.RecallSource.CHECKOUT)
+                .filter(r -> r.getDueDate() != null)
+                .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
+        }
         return avs;
     }
 

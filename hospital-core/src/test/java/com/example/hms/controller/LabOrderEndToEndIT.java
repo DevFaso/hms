@@ -98,8 +98,9 @@ class LabOrderEndToEndIT extends BaseIT {
     private static final String ROLE_LAB_DIRECTOR = "ROLE_LAB_DIRECTOR";
     private static final String ROLE_QUALITY_MANAGER = "ROLE_QUALITY_MANAGER";
 
-    /** Reference range 0–10: a value above it computes to HIGH, which the notifier treats as critical. */
+    /** Reference range 0-10 with a critical limit of 20 (QA D313: out of range alone is HIGH, not critical). */
     private static final double RANGE_MAX = 10.0;
+    private static final double CRITICAL_HIGH = 20.0;
     private static final String NORMAL_VALUE = "5";
     private static final String CRITICAL_VALUE = "50";
 
@@ -181,7 +182,7 @@ class LabOrderEndToEndIT extends BaseIT {
             .name("Potassium")
             .unit("mmol/L")
             .referenceRanges(List.of(LabTestReferenceRange.builder()
-                .minValue(0.0).maxValue(RANGE_MAX).unit("mmol/L").build()))
+                .minValue(0.0).maxValue(RANGE_MAX).criticalHigh(CRITICAL_HIGH).unit("mmol/L").build()))
             .approvalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE)
             .build());
     }

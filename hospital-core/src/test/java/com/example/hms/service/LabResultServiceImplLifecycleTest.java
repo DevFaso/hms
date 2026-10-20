@@ -57,6 +57,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplLifecycleTest {
 
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
     @Mock private LabOrderRepository labOrderRepository;
@@ -215,6 +217,38 @@ class LabResultServiceImplLifecycleTest {
         // The QA run: a browser four hours behind UTC sent its local wall clock.
         LabResultRequestDTO request = entryRequest();
         request.setResultDate(order.getOrderDatetime().minusHours(4));
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("D339 — a result timed one minute before its order is stored at the order time")
+    void aResultInsideTheSkewIsMovedUpToTheOrderTime() {
+        // QA D339: the QA script sent a result time one minute before the order;
+        // the 5-minute skew tolerance stored it BEFORE the order.
+        stubEntryPath();
+        order.setOrderDatetime(LocalDateTime.now().minusSeconds(5));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultDate(order.getOrderDatetime().minusSeconds(60));
+
+        service.createLabResult(request, Locale.ENGLISH);
+
+        org.assertj.core.api.Assertions.assertThat(request.getResultDate()).isEqualTo(order.getOrderDatetime());
+    }
+
+    @Test
+    @DisplayName("D339 — a result timed well before its specimen was collected is refused")
+    void aResultBeforeTheCollectionIsRefused() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        order.setOrderDatetime(LocalDateTime.now().minusHours(3));
+        com.example.hms.model.LabSpecimen specimen = new com.example.hms.model.LabSpecimen();
+        specimen.setCollectedAt(LocalDateTime.now().minusHours(1));
+        when(labSpecimenRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(specimen));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultDate(LocalDateTime.now().minusHours(2));
 
         assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);

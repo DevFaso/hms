@@ -32,14 +32,19 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * <p>Resolved means acknowledged OR read back. Read-back is the stronger
      * act, but requiring it outright would strand results acknowledged before
      * V116 existed.
+     *
+     * <p>QA D305: the chain is capped at {@code maxRounds}; a row that reached
+     * it leaves the sweep (it stays on the critical worklist).
      */
     @org.springframework.data.jpa.repository.Query(
         "SELECT r FROM LabResult r WHERE r.acknowledged = false "
         + "AND r.criticalReadBackAt IS NULL "
         + "AND r.criticalNotifiedAt IS NOT NULL AND r.criticalNotifiedAt < :cutoff "
-        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff)")
+        + "AND (r.criticalEscalatedAt IS NULL OR r.criticalEscalatedAt < :cutoff) "
+        + "AND r.criticalEscalationLevel < :maxRounds")
     java.util.List<LabResult> findCriticalAwaitingEscalation(
-        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff);
+        @org.springframework.data.repository.query.Param("cutoff") java.time.LocalDateTime cutoff,
+        @org.springframework.data.repository.query.Param("maxRounds") short maxRounds);
 
     @Override
     @EntityGraph(attributePaths = {

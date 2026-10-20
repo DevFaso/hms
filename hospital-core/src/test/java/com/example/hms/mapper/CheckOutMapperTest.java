@@ -197,6 +197,21 @@ class CheckOutMapperTest {
         }
 
         @Test
+        void showsTheRequestedFollowUpDateWithoutABookedAppointment_D321() {
+            // QA D321: checkout files the follow-up as a recall and passes no
+            // appointment id; the date used to need one and was dropped.
+            Encounter encounter = buildEncounter();
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                    .preferredDate("2026-11-16").reason("Contrôle").build())
+                .build();
+
+            AfterVisitSummaryDTO avs = mapper.toAfterVisitSummary(encounter, request, null);
+
+            assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-11-16");
+        }
+
+        @Test
         void handlesFollowUpAppointmentId() {
             Encounter encounter = buildEncounter();
             UUID followUpId = UUID.randomUUID();

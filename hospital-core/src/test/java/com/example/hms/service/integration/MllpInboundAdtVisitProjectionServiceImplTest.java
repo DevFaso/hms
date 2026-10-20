@@ -506,6 +506,30 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D304: an A01 for a patient already in an open stay does not open a second one")
+    void autoCreateSkippedWhenPatientAlreadyAdmitted() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+        AdtIntakeProviderConfig config = intakeConfig();
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(staff(config.getAdmittingProviderId())));
+        when(departmentRepository.findById(config.getDepartmentId()))
+            .thenReturn(Optional.of(department(config.getDepartmentId())));
+        when(admissionRepository.existsOpenAdmissionForPatient(patient.getId())).thenReturn(true);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-9"), patient, hospital, "REG", "HOSP1", "MSG-AC-9");
+
+        assertThat(result).isNotEqualTo(VisitProjectionResult.ADMISSION_AUTOCREATED);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
     @DisplayName("Auto-create rejected when configured provider belongs to a different hospital (PR #358 Copilot High)")
     void autoCreateRejectedOnWrongTenantProvider() {
         properties.getAutoCreate().setEnabled(true);
