@@ -54,6 +54,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplPerformingHospitalTest {
 
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
     @Mock private LabOrderRepository labOrderRepository;

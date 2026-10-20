@@ -63,6 +63,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class LabResultServiceImplNullScopeTest {
 
+    @Mock private com.example.hms.repository.LabSpecimenRepository labSpecimenRepository;
+
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultEntryGuard labResultEntryGuard;
     @Mock private LabOrderRepository labOrderRepository;

@@ -132,6 +132,14 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         requirePhysician(admittingProvider, hospital.getId());
 
+        // QA D304: one open stay per patient. The patient row lock serialises two
+        // concurrent admissions, so the second one sees the first and is refused.
+        patientRepository.lockByIdUnscoped(patient.getId());
+        if (admissionRepository.existsOpenAdmissionForPatient(patient.getId())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("admission.patient.alreadyAdmitted"));
+        }
+
         Admission admission = new Admission();
         admission.setPatient(patient);
         admission.setHospital(hospital);
