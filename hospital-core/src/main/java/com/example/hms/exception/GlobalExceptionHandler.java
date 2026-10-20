@@ -43,6 +43,7 @@ public class GlobalExceptionHandler {
     private static final String FIELD_MESSAGE   = "message";
     private static final String FIELD_PATH      = "path";
     private static final String FIELD_CODE      = "code";
+    private static final String FIELD_FIELD     = "field";
 
     /** Machine-readable codes the portal maps onto its own translated text (D53). */
     static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
@@ -119,7 +120,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
         body.put(FIELD_MESSAGE, passThrough(message));
-        if (field != null) body.put("field", field);
+        if (field != null) body.put(FIELD_FIELD, field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
@@ -298,7 +299,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
-            body.put("field", field);
+            body.put(FIELD_FIELD, field);
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -381,13 +382,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Parameter-binding failures (e.g. an enum query param the deployed jar
-     * does not know, a non-UUID path variable) are client errors. Without
-     * this handler they fall through to the RuntimeException catch-all below
-     * and surface as 500 — exactly what happened when a stale backend
-     * received {@code sources=PLATFORM_CONFIG} on the aggregated audit search.
-     */
-    /**
      * QA D332: a required query parameter left out (a referral completed with
      * no {@code summary}) answered 400 with Spring's empty body, so the portal
      * had nothing to show. The caller is told which value is missing, in its
@@ -400,10 +394,17 @@ public class GlobalExceptionHandler {
             "A required value is missing: \"{0}\".", ex.getParameterName());
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
-        body.put("field", ex.getParameterName());
+        body.put(FIELD_FIELD, ex.getParameterName());
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * Parameter-binding failures (e.g. an enum query param the deployed jar
+     * does not know, a non-UUID path variable) are client errors. Without
+     * this handler they fall through to the RuntimeException catch-all below
+     * and surface as 500 — exactly what happened when a stale backend
+     * received {@code sources=PLATFORM_CONFIG} on the aggregated audit search.
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Object> handleTypeMismatch(
             MethodArgumentTypeMismatchException ex, WebRequest request) {
