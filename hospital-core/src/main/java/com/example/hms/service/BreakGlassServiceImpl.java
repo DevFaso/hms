@@ -106,10 +106,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // hospital does not know; the tenant-scoped finder answered 404 for
         // exactly that patient. The caller is still checked as privileged at
         // the hospital, and the declaration is audited.
+        // The privilege check comes BEFORE the unscoped load: otherwise an
+        // unprivileged caller could tell an existing patient id (403) from an
+        // unknown one (404) at any hospital.
+        ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
-
-        ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
 
         int ttl = validTtl(request.getTtlMinutes());
         LocalDateTime now = LocalDateTime.now(clock);

@@ -288,7 +288,6 @@ class BreakGlassServiceImplTest {
         void declareRejectsUnprivileged() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
             when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
                 .thenReturn(Optional.empty());
             when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
@@ -303,6 +302,26 @@ class BreakGlassServiceImplTest {
             assertThatThrownBy(() -> service.declare(req))
                 .isInstanceOf(UnauthorizedAccessException.class);
 
+            verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("an unprivileged caller gets the same 403 for an existing and an unknown patient id")
+        void declareUnprivilegedCannotProbePatientIds() {
+            when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
+                .thenReturn(Optional.empty());
+            when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(userId), eq(hospitalId), any()))
+                .thenReturn(false);
+
+            for (UUID probe : List.of(patientId, UUID.randomUUID())) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Probing.").build();
+                assertThatThrownBy(() -> service.declare(req))
+                    .isInstanceOf(UnauthorizedAccessException.class);
+            }
+            verify(patientRepository, never()).findByIdUnscoped(any());
             verify(sessionRepository, never()).save(any());
         }
 

@@ -32,6 +32,7 @@ class BreakGlassPatientNotifierTest {
     @Mock private NotificationService notificationService;
     @Mock private MessageSource messageSource;
     @Mock private PatientLocaleResolver patientLocaleResolver;
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @InjectMocks private BreakGlassPatientNotifier notifier;
 
@@ -76,5 +77,33 @@ class BreakGlassPatientNotifierTest {
         when(patientLocaleResolver.resolve(eq(patient), any())).thenThrow(new IllegalStateException("down"));
 
         assertThat(notifier.notifyIfOptedOut(patient, hospital)).isFalse();
+    }
+
+    @Test
+    void theNotificationIsSavedOnlyAfterTheDeclarationCommitsAndAFailureThereIsSwallowed() {
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient.getId())).thenReturn(true);
+        when(patientLocaleResolver.resolve(eq(patient), any())).thenReturn(Locale.FRENCH);
+        when(messageSource.getMessage(eq(BreakGlassPatientNotifier.MESSAGE_KEY), any(), eq(Locale.FRENCH)))
+            .thenReturn("msg");
+        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+            .thenThrow(new IllegalStateException("save failed"));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(notifier.notifyIfOptedOut(patient, hospital)).isTrue();
+            // Nothing touches the declare transaction: the save is deferred.
+            verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+
+            for (var sync : org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+                sync.afterCommit();
+            }
+            verify(notificationService).createNotification("msg", "patient.a3",
+                BreakGlassPatientNotifier.NOTIFICATION_TYPE);
+            // ...in its own REQUIRES_NEW transaction, never the declaration's.
+            verify(transactionManager).getTransaction(org.mockito.ArgumentMatchers.argThat(def ->
+                def.getPropagationBehavior() == org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW));
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 }
