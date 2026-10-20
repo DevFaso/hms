@@ -144,6 +144,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (dto.getInvoiceNumber() != null && !dto.getInvoiceNumber().isBlank()) {
             throw new BusinessException("billing.invoice.numberAssignedByServer");
         }
+        // QA D307: a typed total is whole francs, like the payments that settle it.
+        requireWholeAmount(dto.getTotalAmount());
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
 
@@ -443,11 +445,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED));
         applyPatientChange(invoice, dto, hospitalId, patientLocked);
 
-        invoice.setEncounter(resolveEncounter(dto, hospitalId));
+        // QA D303/D308: a body without an encounter reference keeps the visit
+        // link (the QA's PUT and older clients omit it); a blank one unlinks.
+        if (dto.getEncounterReference() != null) {
+            invoice.setEncounter(resolveEncounter(dto, hospitalId));
+        }
         invoice.setInvoiceDate(dto.getInvoiceDate());
         invoice.setDueDate(dto.getDueDate());
         // QA D72: with lines the total is their sum; without, the typed amount.
         if (dto.getTotalAmount() != null && !invoiceRepository.hasItems(id)) {
+            requireWholeAmount(dto.getTotalAmount()); // QA D307
             if (dto.getTotalAmount().compareTo(paid) < 0) {
                 throw new BusinessException("billing.invoice.totalBelowPaid");
             }
@@ -683,8 +690,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     static org.springframework.data.domain.Pageable stableOrder(org.springframework.data.domain.Pageable pageable) {
         org.springframework.data.domain.Sort base = pageable.getSort().isSorted()
             ? pageable.getSort()
-            : org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("invoiceDate"),
-                org.springframework.data.domain.Sort.Order.desc("createdAt"));
+            // QA D326: newest = most recently created; a back-dated invoice
+            // date must not push a new invoice down the list.
+            : org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("createdAt"));
         org.springframework.data.domain.Sort sort = base.getOrderFor("id") != null
             ? base : base.and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Order.desc("id")));
         if (pageable.isUnpaged()) {
@@ -746,9 +754,26 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal declared = payment.getAmount().add(pending != null ? pending : BigDecimal.ZERO);
         requirePayable(invoice, patientId, payment.getAmount());
         requirePayable(invoice, patientId, declared);
+        rejectReusedReference(invoice, method, payment.getTransactionReference());
         savePaymentRow(invoice, payment.getAmount(), method,
             payment.getTransactionReference(), payment.getNotes(), recordedBy, PaymentStatus.PENDING);
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
+    }
+
+    /**
+     * QA D345: a card, transfer or mobile-money reference names one provider
+     * transaction; a second live row with it (any invoice of the hospital)
+     * would count the same money twice. Cash has no provider reference.
+     */
+    private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
+        if (method == PaymentMethod.CASH || reference == null || reference.isBlank() || invoice.getHospital() == null) {
+            return;
+        }
+        if (paymentTransactionRepository.existsLiveReference(invoice.getHospital().getId(),
+                reference.trim().toLowerCase(java.util.Locale.ROOT),
+                java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED))) {
+            throw new BusinessException("billing.payment.duplicateReference");
+        }
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */
@@ -865,6 +890,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? PaymentMethod.OTHER
             : parsePaymentMethod(payment.getMethod());
         requireWholeAmount(payment.getAmount());
+        rejectReusedReference(invoice, method, payment.getReference());
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
         creditCheckInCopays(invoice);
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());

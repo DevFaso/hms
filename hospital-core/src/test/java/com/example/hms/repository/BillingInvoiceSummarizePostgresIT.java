@@ -66,6 +66,7 @@ class BillingInvoiceSummarizePostgresIT {
     }
 
     @Autowired private BillingInvoiceRepository repository;
+    @Autowired private PaymentTransactionRepository payments;
     @Autowired private PlatformTransactionManager transactionManager;
     @PersistenceContext private EntityManager entityManager;
 
@@ -174,6 +175,42 @@ class BillingInvoiceSummarizePostgresIT {
                 .createNativeQuery("DELETE FROM clinical.patient_hospital_registrations WHERE patient_id = :p")
                 .setParameter("p", patientId).executeUpdate());
         }
+    }
+
+    @Test
+    void aLiveProviderReferenceIsFoundAtItsHospitalOnly_D345() {
+        List<com.example.hms.enums.PaymentStatus> live = List.of(
+            com.example.hms.enums.PaymentStatus.PENDING, com.example.hms.enums.PaymentStatus.CONFIRMED);
+        List<UUID> rows = new ArrayList<>();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            BillingInvoice invoice = repository.getReferenceById(saved.get(0)); // hospital A
+            rows.add(payment(invoice, com.example.hms.enums.PaymentMethod.CARD, " OM-7781 ",
+                com.example.hms.enums.PaymentStatus.PENDING));
+            rows.add(payment(invoice, com.example.hms.enums.PaymentMethod.CASH, "CASH-1",
+                com.example.hms.enums.PaymentStatus.CONFIRMED));
+            rows.add(payment(invoice, com.example.hms.enums.PaymentMethod.CARD, "REV-1",
+                com.example.hms.enums.PaymentStatus.REVERSED));
+        });
+        try {
+            assertThat(payments.existsLiveReference(hospitalA, "om-7781", live)).isTrue();
+            assertThat(payments.existsLiveReference(hospitalB, "om-7781", live)).isFalse();
+            assertThat(payments.existsLiveReference(hospitalA, "cash-1", live)).isFalse();
+            assertThat(payments.existsLiveReference(hospitalA, "rev-1", live)).isFalse();
+        } finally {
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> payments.deleteAllById(rows));
+        }
+    }
+
+    private UUID payment(BillingInvoice invoice, com.example.hms.enums.PaymentMethod method, String reference,
+                         com.example.hms.enums.PaymentStatus status) {
+        com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+        row.setInvoice(invoice);
+        row.setAmount(new BigDecimal("10"));
+        row.setPaymentDate(TODAY);
+        row.setPaymentMethod(method);
+        row.setReferenceNumber(reference);
+        row.setStatus(status);
+        return payments.saveAndFlush(row).getId();
     }
 
     private void registration(UUID patientId, UUID hospitalId, String mrn) {

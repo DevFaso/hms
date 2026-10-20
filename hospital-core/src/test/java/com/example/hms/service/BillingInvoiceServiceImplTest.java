@@ -37,6 +37,8 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -1059,7 +1061,7 @@ class BillingInvoiceServiceImplTest {
         assertEquals(1, paging.getValue().getPageNumber());
         // A unique last key: equal dates can no longer swap rows between pages.
         List<org.springframework.data.domain.Sort.Order> orders = paging.getValue().getSort().toList();
-        assertEquals("invoiceDate", orders.get(0).getProperty());
+        assertEquals("createdAt", orders.get(0).getProperty()); // QA D326
         assertEquals("id", orders.get(orders.size() - 1).getProperty());
     }
 
@@ -1159,6 +1161,107 @@ class BillingInvoiceServiceImplTest {
         assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
         assertEquals(0, BigDecimal.ZERO.compareTo(copay.getAmountPaid()));
         assertEquals(visit.getId(), String.valueOf(row.getInvoice().getId()));
+    }
+
+    @Test
+    void updateInvoice_withoutEncounterReferenceKeepsTheVisitAndCreditsTheCopay_D303() {
+        // The QA's PUT: status SENT, no encounterReference in the body.
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        invoice.setTotalAmount(new BigDecimal("7450"));
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setHospital(invoice.getHospital());
+        invoice.setEncounter(encounter);
+        when(invoiceRepository.hasItems(invoice.getId())).thenReturn(true);
+        BillingInvoice copay = BillingInvoice.builder().patient(invoice.getPatient()).encounter(encounter)
+            .totalAmount(new BigDecimal("1000")).amountPaid(new BigDecimal("1000"))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findById(copay.getId())).thenReturn(Optional.of(copay));
+
+        BillingInvoiceResponseDTO sent = billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+
+        assertEquals(encounter, invoice.getEncounter());
+        assertEquals(0, new BigDecimal("6450").compareTo(sent.getBalanceDue()));
+        assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
+        verify(encounterRepository, never()).findByCode(any());
+    }
+
+    @Test
+    void updateInvoice_blankEncounterReferenceUnlinks_D303() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        invoice.setEncounter(encounter);
+
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().encounterReference("").build(), Locale.ENGLISH);
+
+        assertNull(invoice.getEncounter());
+    }
+
+    @Test
+    void updateInvoice_validEncounterCodeIsLinked_D308() {
+        // The QA's PUT: an unlinked invoice, a same-hospital visit code in the body.
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setCode("ENC-QA-308");
+        encounter.setHospital(invoice.getHospital());
+        when(encounterRepository.findByCode("ENC-QA-308")).thenReturn(Optional.of(encounter));
+
+        BillingInvoiceResponseDTO linked = billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().encounterReference(" ENC-QA-308 ").build(), Locale.ENGLISH);
+
+        assertEquals(encounter, invoice.getEncounter());
+        assertEquals("ENC-QA-308", linked.getEncounterCode());
+    }
+
+    @Test
+    void recordPatientPayment_aCardReferenceAlreadyRecordedIsRefused_D345() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL_ID);
+        invoice.setHospital(hospital);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.existsLiveReference(eq(HOSPITAL_ID), eq("om-20260926-7781"), any()))
+            .thenReturn(true);
+        UUID invoiceId = invoice.getId();
+        UUID userId = UUID.randomUUID();
+        var card = payment("CARD");
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, userId, card, Locale.ENGLISH));
+        assertEquals("billing.payment.duplicateReference", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_aDecimalXofTotalIsRefused_D307() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        UUID id = invoice.getId();
+        BillingInvoiceRequestDTO edit = editOf().totalAmount(new BigDecimal("7450.25")).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(id, edit, Locale.ENGLISH));
+        assertEquals("billing.payment.wholeAmountOnly", refused.getMessageKey());
+    }
+
+    @Test
+    void searchOrder_isNewestCreatedFirstWhateverTheInvoiceDate_D326() {
+        org.springframework.data.domain.Sort sort = BillingInvoiceServiceImpl
+            .stableOrder(org.springframework.data.domain.PageRequest.of(0, 20)).getSort();
+
+        java.util.List<org.springframework.data.domain.Sort.Order> orders = sort.toList();
+        assertEquals("createdAt", orders.get(0).getProperty());
+        assertTrue(orders.get(0).isDescending());
+        assertEquals("id", orders.get(orders.size() - 1).getProperty());
+        assertNull(sort.getOrderFor("invoiceDate"));
     }
 
     @Test
