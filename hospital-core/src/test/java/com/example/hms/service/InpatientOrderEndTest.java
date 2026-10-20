@@ -72,6 +72,18 @@ class InpatientOrderEndTest {
     }
 
     @Test
+    void anUnlinkedInpatientEncounterInsideAnEndedStay_stillEndsWithTheStay() {
+        // Encounters opened before V193 carry no admission_id.
+        Encounter legacy = new Encounter();
+        legacy.setAdmissionId(null);
+        legacy.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        legacy.setStatus(EncounterStatus.IN_PROGRESS);
+        rx.setEncounter(legacy);
+        assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isTrue();
+        assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of())).isFalse();
+    }
+
+    @Test
     void anOrderWrittenDuringAnEndedStayAtItsHospitalHasEnded() {
         assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isTrue();
     }

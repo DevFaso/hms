@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.EncounterType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Prescription;
@@ -32,8 +33,11 @@ public final class InpatientOrderEnd {
         // not a stay's, even when a stay at the same hospital happened to
         // span that moment (a same-day admission and discharge ended every
         // prescription the patient was given that day). The time window
-        // below is for orders that name no encounter.
-        if (encounter != null && encounter.getAdmissionId() == null) {
+        // below is for orders that name no encounter, and for INPATIENT
+        // encounters with no admission link (V193 did not backfill
+        // admission_id, so an older stay's encounter carries none).
+        if (encounter != null && encounter.getAdmissionId() == null
+            && encounter.getEncounterType() != EncounterType.INPATIENT) {
             return false;
         }
         LocalDateTime written = rx.getCreatedAt();
