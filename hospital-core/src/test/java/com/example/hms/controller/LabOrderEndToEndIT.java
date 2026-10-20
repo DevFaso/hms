@@ -362,6 +362,95 @@ class LabOrderEndToEndIT extends BaseIT {
         assertThat(acknowledged.getAcknowledgedByUserId()).isEqualTo(doctor.user().getId());
     }
 
+    @Test
+    @DisplayName("QA D402: the real sweep escalates a still-critical result and drops only a no-longer-critical one")
+    void sweepEscalatesAStillCriticalResultAndDropsOnlyANormalOne() throws Exception {
+        UUID criticalOrder = placeOrder(LocalDateTime.now().minusMinutes(90));
+        collectSpecimen(criticalOrder);
+        UUID critical = idOf(postResult(scientist, criticalOrder, CRITICAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+        UUID normalOrder = placeOrder(LocalDateTime.now().minusMinutes(90));
+        collectSpecimen(normalOrder);
+        UUID normal = idOf(postResult(scientist, normalOrder, NORMAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+
+        // Both carry a page 35 minutes old: the critical one because it paged,
+        // the normal one as the stale stamp of D305 (a value amended since).
+        LocalDateTime paged = LocalDateTime.now().minusMinutes(35);
+        for (UUID id : List.of(critical, normal)) {
+            LabResult row = labResultRepository.findById(id).orElseThrow();
+            row.setCriticalNotifiedAt(paged);
+            labResultRepository.save(row);
+        }
+
+        // The scheduled sweep: no request, no security context, lazy order proxies.
+        SecurityContextHolder.clearContext();
+        HospitalContextHolder.clear();
+        com.example.hms.service.CriticalValueNotificationService sweep =
+            applicationContext.getBean(com.example.hms.service.CriticalValueNotificationService.class);
+        assertThat(runSweep(sweep)).isEqualTo(1);
+
+        LabResult escalated = labResultRepository.findById(critical).orElseThrow();
+        assertThat(escalated.getCriticalNotifiedAt()).isNotNull();
+        assertThat(escalated.getCriticalEscalationLevel()).isEqualTo((short) 1);
+        assertThat(escalated.getCriticalEscalatedAt()).isNotNull();
+        assertThat(notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false))
+            .anyMatch(n -> "CRITICAL_LAB_RESULT_ESCALATION".equals(n.getType()));
+
+        LabResult dropped = labResultRepository.findById(normal).orElseThrow();
+        assertThat(dropped.getCriticalNotifiedAt()).isNull();
+        assertThat(dropped.getCriticalEscalationLevel()).isZero();
+
+        // Round 2 a further interval later: still critical, so it climbs.
+        escalated.setCriticalEscalatedAt(LocalDateTime.now().minusMinutes(35));
+        labResultRepository.save(escalated);
+        assertThat(runSweep(sweep)).isEqualTo(1);
+        assertThat(labResultRepository.findById(critical).orElseThrow().getCriticalEscalationLevel())
+            .isEqualTo((short) 2);
+    }
+
+    @Test
+    @DisplayName("QA D415: a French read-back with a decimal comma matches the reported value")
+    void readBackAcceptsTheFrenchDecimalComma() throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(30));
+        collectSpecimen(orderId);
+        UUID resultId = idOf(postResult(scientist, orderId, "28.5").andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString());
+
+        // QA D429: the write audit names the lab event and the patient, not a bare DATA_CREATE.
+        assertThat(applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll())
+            .anyMatch(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LAB_RESULT_CREATED
+                && patient.getId().equals(row.getPatientId())
+                && resultId.toString().equals(row.getResourceId()))
+            .anyMatch(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LAB_ORDER_CREATED
+                && patient.getId().equals(row.getPatientId()))
+            .noneMatch(row -> row.getEventType() == com.example.hms.enums.AuditEventType.DATA_CREATE
+                && String.valueOf(row.getEventDescription()).contains("/lab-"));
+
+        mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(readBack("28,5")))
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.acknowledged").value(true));
+    }
+
+    /**
+     * The sweep behind its real ShedLock: a run inside the previous run's
+     * lockAtLeastFor window (or the scheduler's) is skipped and answers null,
+     * so wait for the lock rather than read a skip as "nothing escalated".
+     */
+    private static Integer runSweep(com.example.hms.service.CriticalValueNotificationService sweep) {
+        long deadline = System.currentTimeMillis() + 20_000;
+        Integer escalated = sweep.escalateOverdue();
+        while (escalated == null && System.currentTimeMillis() < deadline) {
+            java.util.concurrent.locks.LockSupport.parkNanos(500_000_000L);
+            escalated = sweep.escalateOverdue();
+        }
+        return escalated;
+    }
+
     // ── HTTP helpers ─────────────────────────────────────────────────────
 
     /** D107: a hand-entered result needs a collected specimen first. */

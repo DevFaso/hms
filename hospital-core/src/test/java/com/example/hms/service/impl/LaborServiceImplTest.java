@@ -61,6 +61,9 @@ import com.example.hms.i18n.TestMessageSources;
 @ExtendWith(MockitoExtension.class)
 class LaborServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private LaborEpisodeRepository episodeRepository;
     @Mock private LaborPartographEntryRepository entryRepository;
     @Mock private DeliveryRecordRepository deliveryRecordRepository;
@@ -90,7 +93,7 @@ class LaborServiceImplTest {
     void setUp() {
         service = new LaborServiceImpl(
             episodeRepository, entryRepository, deliveryRecordRepository,
-            patientRepository, hospitalRepository, registrationRepository,
+            patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository);

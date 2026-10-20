@@ -6,7 +6,6 @@ import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.repository.LabResultRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -248,7 +247,7 @@ public class CriticalValueNotificationService {
         int escalated = 0;
         for (LabResult result : overdue) {
             try {
-                if (!isCritical(result, null)) {
+                if (noLongerCritical(result)) {
                     // QA D305: not critical any more, so nothing to chase.
                     leaveChain(result);
                     continue;
@@ -408,11 +407,16 @@ public class CriticalValueNotificationService {
      * "3.40" reads back "3.4" — a clinician repeating the number correctly must
      * not be told they got it wrong.
      */
-    private static String normalizeForComparison(String value) {
+    static String normalizeForComparison(String value) {
         if (value == null || value.isBlank()) {
             return null;
         }
         String trimmed = value.trim().toLowerCase(java.util.Locale.ROOT);
+        // QA D415: a French reader says and types "28,5"; one comma between
+        // digits is the decimal separator, not a mismatch.
+        if (trimmed.matches("[+-]?\\d+,\\d+")) {
+            trimmed = trimmed.replace(',', '.');
+        }
         try {
             return new java.math.BigDecimal(trimmed).stripTrailingZeros().toPlainString();
         } catch (NumberFormatException notNumeric) {
@@ -427,10 +431,48 @@ public class CriticalValueNotificationService {
         }
         String severity = knownSeverity;
         if (severity == null) {
-            LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-            severity = dto != null ? dto.getSeverityFlag() : null;
+            severity = gradeFromStoredDefinition(result);
         }
         return labResultMapper.raisesCriticalAlert(severity);
+    }
+
+    /**
+     * QA D402: whether the sweep may drop a result from the chain. Only a
+     * result that the stored test definition POSITIVELY grades as something
+     * other than critical leaves. A result that cannot be graded at all
+     * (no range, units differ, definition gone) was critical when it paged
+     * and keeps escalating: losing an unacknowledged critical value is the
+     * failure that matters, an extra page is not.
+     */
+    private boolean noLongerCritical(LabResult result) {
+        if (result.getAbnormalFlag() == AbnormalFlag.CRITICAL) {
+            return false;
+        }
+        String severity = gradeFromStoredDefinition(result);
+        if (severity == null || LabResultMapper.FLAG_UNSPECIFIED.equalsIgnoreCase(severity)) {
+            return false;
+        }
+        return !labResultMapper.raisesCriticalAlert(severity);
+    }
+
+    /**
+     * QA D402: the grade from the stored value and the stored test definition.
+     * The mapper deliberately reads only what is already loaded, and the
+     * sweep loads results with their order and definition as lazy proxies:
+     * graded that way every result came out UNSPECIFIED, so the D305 exit
+     * wiped the stamps of every still-critical result at its first sweep.
+     * Both proxies are initialised here, inside the caller's transaction.
+     */
+    private String gradeFromStoredDefinition(LabResult result) {
+        LabOrder order = result.getLabOrder();
+        if (order == null) {
+            return null;
+        }
+        org.hibernate.Hibernate.initialize(order);
+        if (order.getLabTestDefinition() != null) {
+            org.hibernate.Hibernate.initialize(order.getLabTestDefinition());
+        }
+        return labResultMapper.severityFlagOf(result);
     }
 
     private String resolveOrderingUsername(LabResult result) {

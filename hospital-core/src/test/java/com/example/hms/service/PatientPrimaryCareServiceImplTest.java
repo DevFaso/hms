@@ -51,6 +51,9 @@ class PatientPrimaryCareServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private MessageSource messageSource;
 
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @InjectMocks
     private PatientPrimaryCareServiceImpl service;
 

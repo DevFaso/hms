@@ -40,6 +40,9 @@ import com.example.hms.utility.ObstetricEligibility;
 @Service
 @RequiredArgsConstructor
 public class BirthPlanServiceImpl implements BirthPlanService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
 
     private static final Logger log = LoggerFactory.getLogger(BirthPlanServiceImpl.class);
 
@@ -76,6 +79,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             checkProviderAccess(user);
             patient = getPatientByIdOrThrow(request.getPatientId());
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
+            patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         }
         ObstetricEligibility.requireObstetricEligible(patient);
 

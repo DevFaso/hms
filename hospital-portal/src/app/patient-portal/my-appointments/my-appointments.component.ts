@@ -12,6 +12,7 @@ import {
   SchedulingProvider,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { localDateString } from '../../shared/date-utils';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 
 @Component({
@@ -118,15 +119,16 @@ export class MyAppointmentsComponent implements OnInit {
     this.portal.getMyAppointments().subscribe({
       next: (appts) => {
         this.appointments.set(appts);
-        const now = new Date();
-        this.upcoming.set(appts.filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now));
+        // QA D433: compare calendar days in the patient's own time zone.
+        // new Date('yyyy-MM-dd') is UTC midnight, which is already behind
+        // "now" on the day itself, so today's visit was listed as past.
+        const today = localDateString();
+        const isClosed = (a: PortalAppointment) =>
+          a.status === 'COMPLETED' || a.status === 'CANCELLED';
+        this.upcoming.set(appts.filter((a) => !isClosed(a) && a.date >= today));
         // Cancelled appointments land in Past (whatever their date) so they
         // stay visible after the patient cancels instead of vanishing.
-        this.past.set(
-          appts.filter(
-            (a) => a.status === 'COMPLETED' || a.status === 'CANCELLED' || new Date(a.date) < now,
-          ),
-        );
+        this.past.set(appts.filter((a) => isClosed(a) || a.date < today));
         this.loading.set(false);
         this.applyDeepLink(appts);
       },
@@ -355,6 +357,6 @@ export class MyAppointmentsComponent implements OnInit {
   }
 
   get todayDate(): string {
-    return new Date().toISOString().split('T')[0];
+    return localDateString();
   }
 }

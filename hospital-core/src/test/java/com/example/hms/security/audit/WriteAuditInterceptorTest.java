@@ -159,6 +159,20 @@ class WriteAuditInterceptorTest {
     }
 
     @Test
+    @DisplayName("QA D429: what the handler stated (event, resource, patient) wins over the route convention")
+    void honoursTheHandlerStatedDetail() throws Exception {
+        MockHttpServletRequest req = request("POST", "/lab-results", Map.of());
+        req.setAttribute(WriteAuditDetail.ATTRIBUTE,
+            new WriteAuditDetail.Detail(AuditEventType.LAB_RESULT_CREATED, RESOURCE, PATIENT));
+        interceptor.afterCompletion(req, ok(201), handler(Handlers.class, "plain"), null);
+
+        AuditEventRequestDTO row = emitted();
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.LAB_RESULT_CREATED);
+        assertThat(row.getResourceId()).isEqualTo(RESOURCE.toString());
+        assertThat(row.getPatientId()).isEqualTo(PATIENT);
+    }
+
+    @Test
     @DisplayName("PUT/PATCH are DATA_UPDATE with the resource from {id}; DELETE is DATA_DELETE")
     void recordsUpdateAndDelete() throws Exception {
         interceptor.afterCompletion(request("PATCH", "/micro-cultures/{id}", Map.of("id", RESOURCE.toString())),

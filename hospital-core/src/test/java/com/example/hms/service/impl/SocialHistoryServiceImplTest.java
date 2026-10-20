@@ -44,6 +44,9 @@ class SocialHistoryServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
 
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @InjectMocks
     private SocialHistoryServiceImpl service;
 

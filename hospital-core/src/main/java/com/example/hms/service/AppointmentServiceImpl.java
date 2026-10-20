@@ -95,6 +95,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private final AppointmentRepository appointmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -289,6 +290,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // auth scope
         requireHospitalScope(currentUser, hospital.getId(), locale);
+
+        // QA D401: staff book into the hospital's own schedule, so the patient
+        // must be registered there; otherwise the same 404 as an unknown id
+        // (the booking response used to hand back the patient's name and phone).
+        if (isStaffOrAdmin) {
+            patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+        }
 
         // --- Staff resolution ---
         final Staff staff = resolveStaff(request);
@@ -598,6 +606,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!staff.getHospital().getId().equals(hospital.getId())) {
             throw new AccessDeniedException("Staff does not belong to selected hospital");
         }
+        // QA D401: an update may move the appointment to another hospital or
+        // patient; the patient must be registered where it lands.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         UserRoleHospitalAssignment assignment = assignmentRepository
             .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())

@@ -30,6 +30,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService {
+    /** QA D401: a patient write lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     private static final String PRIMARY_CARE_LINK_NOT_FOUND_KEY = "primaryCare.link.notFound";
 
     private final PatientPrimaryCareRepository pcpRepo;
@@ -48,6 +51,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
 
         Hospital hospital = hospitalRepo.findClinicalById(req.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         UserRoleHospitalAssignment assignment = assignmentRepo.findById(req.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", req.getAssignmentId()));
@@ -87,6 +91,7 @@ public class PatientPrimaryCareServiceImpl implements PatientPrimaryCareService 
         if (req.getHospitalId() != null && !req.getHospitalId().equals(entity.getHospital().getId())) {
             Hospital h = hospitalRepo.findClinicalById(req.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", req.getHospitalId()));
+            patientRegistrationGuard.requireRegisteredAt(entity.getPatient().getId(), h.getId());
             entity.setHospital(h);
         }
         if (req.getAssignmentId() != null && !req.getAssignmentId().equals(entity.getAssignment().getId())) {

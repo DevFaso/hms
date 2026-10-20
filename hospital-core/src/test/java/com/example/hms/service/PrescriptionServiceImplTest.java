@@ -51,6 +51,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -66,6 +67,9 @@ class PrescriptionServiceImplTest {
     private static final String TEST_MEDICATION = "Ibuprofen";
     private static final String TEST_DOSAGE = "200mg";
     private static final String TEST_FREQUENCY = "BID";
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock
     private PrescriptionRepository prescriptionRepository;
@@ -410,6 +414,35 @@ class PrescriptionServiceImplTest {
         assertThat(generatedEncounter.getDepartment()).isEqualTo(staffDepartment);
 
         verify(prescriptionMapper).toEntity(request, patient, staff, generatedEncounter);
+    }
+
+    @Test
+    void createPrescriptionForPatientNotRegisteredAtTheHospitalIsRefusedAndSavesNothing() {
+        // QA D401: hospital B's doctor prescribed for a patient registered only
+        // at A; the prescription and an auto-created encounter were written at B.
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .build();
+        UUID currentUser = staff.getUser().getId();
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+            .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

@@ -51,6 +51,8 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final PatientVitalSignRepository vitalSignRepository;
     private final PatientVitalSignMapper vitalSignMapper;
+    /** QA D401: a vital lands only at a hospital the patient is registered at. */
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientChartAccess patientChartAccess;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -65,6 +67,9 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(request.getHospitalId(), registration, patient);
+        // A hospital named in the body (no registration found) is a claim: the
+        // patient must be registered there, as for every other chart write.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital == null ? null : hospital.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         UserRoleHospitalAssignment assignment = resolveAssignment(request.getRecordedByAssignmentId(), staff);
 

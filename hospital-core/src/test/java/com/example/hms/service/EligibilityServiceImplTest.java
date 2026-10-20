@@ -68,6 +68,7 @@ class EligibilityServiceImplTest {
     private AuditEventLogService auditService;
     private StubEligibilityProvider stubProvider;
     private IntegrationHealthRecorder healthRecorder;
+    private com.example.hms.service.support.PatientRegistrationGuard registrationGuard;
     private Clock fixedClock;
     private EligibilityServiceImpl service;
 
@@ -88,12 +89,13 @@ class EligibilityServiceImplTest {
         auditService = mock(AuditEventLogService.class);
         stubProvider = new StubEligibilityProvider();
         healthRecorder = mock(IntegrationHealthRecorder.class);
+        registrationGuard = mock(com.example.hms.service.support.PatientRegistrationGuard.class);
         fixedClock = Clock.fixed(Instant.parse("2026-05-01T08:30:00Z"), ZoneOffset.UTC);
 
         service = new EligibilityServiceImpl(
             checkRepository, patientRepository, hospitalRepository,
             patientInsuranceRepository, userRepository, auditService,
-            List.of(stubProvider), fixedClock, healthRecorder
+            List.of(stubProvider), fixedClock, healthRecorder, registrationGuard
         );
 
         userId = UUID.randomUUID();
@@ -289,7 +291,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(specific, stubProvider), fixedClock, healthRecorder
+                List.of(specific, stubProvider), fixedClock, healthRecorder, registrationGuard
             );
             stubLookups();
 
@@ -408,7 +410,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(noneMatch), fixedClock, healthRecorder
+                List.of(noneMatch), fixedClock, healthRecorder, registrationGuard
             );
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -434,7 +436,7 @@ class EligibilityServiceImplTest {
             service = new EligibilityServiceImpl(
                 checkRepository, patientRepository, hospitalRepository,
                 patientInsuranceRepository, userRepository, auditService,
-                List.of(throwing), fixedClock, healthRecorder
+                List.of(throwing), fixedClock, healthRecorder, registrationGuard
             );
             stubLookups();
 

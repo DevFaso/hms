@@ -1318,8 +1318,12 @@ public class UserServiceImpl implements UserService {
         }
         // The deleted view is the super-admin's: a scoped call never asks for it.
         boolean scoped = !scope.everyone();
-        Page<User> users = userRepository.findAllPaged(
-            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
+        // QA D430: a non-administrator lists colleagues only, never patient accounts.
+        Page<User> users = scope.seesPatientContacts()
+            ? userRepository.findAllPaged(
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
+            : userRepository.findStaffDirectoryPaged(
+                scoped, directoryHospitals(scope), !scoped && includeDeleted, !scoped && onlyDeleted, pageable);
         return users.map(u -> directoryRow(u, scope));
     }
 
@@ -1336,9 +1340,12 @@ public class UserServiceImpl implements UserService {
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
         // QA D198: a caller who cannot read contact details cannot search on them either.
-        Page<User> users = userRepository.searchUsers(name, phoneDigits(name), role, email,
-            scope.seesPatientContacts(),
-            !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
+        // QA D430: a non-administrator searches colleagues only, never patient accounts.
+        Page<User> users = scope.seesPatientContacts()
+            ? userRepository.searchUsers(name, phoneDigits(name), role, email, true,
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
+            : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
+                !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(u -> directoryRow(u, scope));
     }
 

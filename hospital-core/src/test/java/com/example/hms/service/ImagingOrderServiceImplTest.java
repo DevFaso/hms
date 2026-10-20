@@ -42,6 +42,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import java.util.Map;
 import java.util.Set;
@@ -266,6 +267,54 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getDuplicateOfRecentOrder()).isFalse();
         assertThat(order.getDuplicateReferenceOrderId()).isNull();
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void captureProviderSignatureRefusesASecondDoctorOnASignedOrder() {
+        // QA D407: DOCTOR2 re-signed DOCTOR's order and became its ordering provider.
+        UUID firstSigner = UUID.randomUUID();
+        LocalDateTime signedAt = LocalDateTime.now().minusHours(1);
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(firstSigner);
+        order.setOrderingProviderName("First Doctor");
+        order.setProviderSignedAt(signedAt);
+        UUID secondSigner = UUID.randomUUID();
+        signer(secondSigner, "Second", "Doctor");
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        ImagingOrderSignatureRequestDTO request = ImagingOrderSignatureRequestDTO.builder()
+            .signatureStatement("Electronically signed").attestationConfirmed(Boolean.TRUE).build();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> imagingOrderService.captureProviderSignature(orderId, request, secondSigner))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(firstSigner);
+        assertThat(order.getProviderSignedAt()).isEqualTo(signedAt);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void captureProviderSignatureBySameSignerIsANoOp() {
+        UUID firstSigner = UUID.randomUUID();
+        LocalDateTime signedAt = LocalDateTime.now().minusHours(1);
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(firstSigner);
+        order.setProviderSignedAt(signedAt);
+        signer(firstSigner, "First", "Doctor");
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(orderId).build();
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
+
+        ImagingOrderResponseDTO result = imagingOrderService.captureProviderSignature(orderId,
+            ImagingOrderSignatureRequestDTO.builder().attestationConfirmed(Boolean.TRUE).build(), firstSigner);
+
+        assertThat(result).isSameAs(responseDTO);
+        assertThat(order.getProviderSignedAt()).isEqualTo(signedAt);
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -665,7 +714,7 @@ class ImagingOrderServiceImplTest {
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(orderId, signature, UUID.randomUUID()))
             .isInstanceOfSatisfying(ResourceNotFoundException.class, e -> assertThat(e.getMessageKey()).isEqualTo(missingKey));
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -684,7 +733,7 @@ class ImagingOrderServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.updateOrder(orderId, request))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(order.getHospital()).isSameAs(hospital);
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -702,7 +751,7 @@ class ImagingOrderServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
             .isInstanceOf(ResourceNotFoundException.class);
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -759,7 +808,7 @@ class ImagingOrderServiceImplTest {
             .isInstanceOfSatisfying(ResourceNotFoundException.class,
                 e -> assertThat(e.getMessageKey()).isEqualTo("patient.notFound"));
         assertThat(order.getPatient()).isSameAs(patient);
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
@@ -819,7 +868,7 @@ class ImagingOrderServiceImplTest {
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         assertThat(order.getOrderingProviderUserId()).isNull();
         assertThat(order.getProviderSignedAt()).isNull();
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test

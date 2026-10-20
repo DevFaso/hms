@@ -243,7 +243,7 @@ class ExceptionProseRatchetTest {
 
     /** A literal handed to a refusal helper ({@code assert*}, {@code require*}) or a dispense check ({@code .fail}). */
     static final Pattern HELPER_PROSE = Pattern.compile(
-        "(\\bassert\\w*|\\brequire\\w*|\\.fail)\\s*\\((?:[^;\"]|\"(?:[^\"\\\\]|\\\\.)*\")*?\"((?:[^\"\\\\]|\\\\.)*)\"");
+        "(\\bassert\\w*|\\brequire\\w*|\\.fail)\\s*\\((?:[^;\"]++|\"(?:[^\"\\\\]|\\\\.)*+\")*?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     static int countHelperProse(String source) {
         int n = 0;

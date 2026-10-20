@@ -5172,6 +5172,8 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **De-identified "beds spoken for" feed for the admin bed board (QA D318 / D290 / D229).** Decision D5 is kept: `GET /transfers/pending` refuses HOSPITAL_ADMIN because the worklist names patients and the reason for each move (`HospitalAdminOffChartTest`). An admin view of which beds a pending transfer holds needs a new endpoint without patient data.
 - **Multi-role welcome mail content not verifiable on dev (QA D311).** The code path renders one block per role with its code AND its confirmation link (`EmailServiceImpl.welcomeRoleBlock`, covered by `OnboardingEmailRenderingTest`); dev has no mail transport and the outbox is encrypted, so the reporter could not read the mail and saw only the SMS. Owed: a QA read of a delivered multi-role mail once a transport is configured on dev.
 
+- **Payment reference in the native patient apps (QA D433, `fix/qa-r7-tenancy-security`).** The API now refuses a card, transfer or mobile-money declaration with no transaction reference (localized 400 on `referenceGivenForNonCashPayment`), and the web portal checks it before sending. The Android and iOS apps still let the field be empty and only show the server's refusal; a client-side check there needs a store release, so it waits for the next app release train.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

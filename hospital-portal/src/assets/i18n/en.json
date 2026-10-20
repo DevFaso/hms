@@ -3449,6 +3449,7 @@
     "PROVIDER_AUDIT": "Audit trail"
   },
   "NOTIFICATIONS": {
+    "CRITICAL_ALERT": "Critical alert",
     "ALL": "All",
     "ALL_CAUGHT_UP": "All caught up!",
     "ALL_MARKED_READ": "All notifications marked as read",
@@ -4652,6 +4653,7 @@
       "PAYMENT_METHOD": "Payment Method",
       "REFERENCE": "Reference / Transaction ID (optional)",
       "REFERENCE_PLACEHOLDER": "e.g. TXN-123456",
+      "REFERENCE_REQUIRED": "Enter the payment reference for a card, transfer or mobile money payment.",
       "ENTER_AMOUNT": "Enter amount",
       "CANCEL": "Cancel",
       "PROCESSING": "Processing...",
@@ -5418,6 +5420,10 @@
         "INVOICE_CREATED": "Invoice Created",
         "INVOICE_UPDATED": "Invoice Updated",
         "LAB_ORDER_CREATED": "Lab Order Created",
+        "LAB_ORDER_UPDATED": "Lab Order Updated",
+        "LAB_SPECIMEN_UPDATED": "Lab Specimen Updated",
+        "LAB_RESULT_CREATED": "Lab Result Created",
+        "LAB_RESULT_ACKNOWLEDGED": "Lab Result Acknowledged",
         "LAB_RESULT_RELEASED": "Lab Result Released",
         "LAB_RESULT_UPDATED": "Lab Result Updated",
         "LOGIN": "Login",
@@ -8330,7 +8336,8 @@
       "DRAFT": "Draft",
       "PENDING_QA": "Pending QA Review",
       "PENDING_DIRECTOR": "Pending Director Approval",
-      "APPROVED": "Approved, awaiting activation"
+      "APPROVED": "Approved, awaiting activation",
+      "REJECTED": "Rejected, to correct and resubmit"
     },
     "SEARCH_PLACEHOLDER": "Search by name, code or category…",
     "LOADING": "Loading queue…",

@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.pro.ProResponseSource;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.security.tenant.TenantOwnership;
 import com.example.hms.mapper.ProResponseMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
@@ -314,6 +315,9 @@ public class ProResponseService {
      */
     private UUID resolveHospitalId(Patient patient, UUID requested) {
         if (requested != null) {
+            // A claimed hospital is only honoured when it IS the acting one (QA D401):
+            // otherwise the registration check would run against the claim, not the caller.
+            TenantOwnership.requireOwnedByActingHospital(requested, PATIENT_NOT_FOUND, patient.getId());
             return requested;
         }
         UUID active = roleValidator.requireActiveHospitalId();
