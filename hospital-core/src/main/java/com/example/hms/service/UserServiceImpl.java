@@ -1331,15 +1331,15 @@ public class UserServiceImpl implements UserService {
     }
 
     /**
-     * QA D125/D198: a non-administrator sees a patient account in the directory (chat
-     * still needs its id, name and role) but never its e-mail or its username, which for
-     * a patient is commonly the e-mail address too. An account holding a patient profile
-     * is a patient's even when it also holds a staff record, so it is masked too.
+     * QA D125/D198/D347: a non-administrator gets the minimal directory row (chat
+     * needs the id, the name and the role) and never an e-mail or a username, on any
+     * account: the earlier patient-only mask keyed on the profile links, which an
+     * account without a loaded profile slipped past, and staff addresses are no
+     * business of a nurse's directory either. Administrators keep the full row.
      */
     private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
-        if (dto != null && !scope.seesPatientContacts()
-                && (user.getStaffProfile() == null || user.getPatientProfile() != null)) {
+        if (dto != null && !scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
         }

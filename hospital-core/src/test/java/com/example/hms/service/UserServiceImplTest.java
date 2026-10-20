@@ -2237,6 +2237,25 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D347: a non-administrator gets the minimal row for a staff account too")
+        void nonAdministratorGetsMinimalRowForStaffAccounts() {
+            User staffAccount = new User();
+            staffAccount.setStaffProfile(new com.example.hms.model.Staff());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
+            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(staffAccount)));
+            when(userMapper.toSummaryDTO(staffAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
+                    .builder().email("n@example.com").username("nurse.b").firstName("Nurse").roleName("ROLE_NURSE").build());
+
+            var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
+            assertThat(row.getEmail()).isNull();
+            assertThat(row.getUsername()).isNull();
+            assertThat(row.getFirstName()).isEqualTo("Nurse");
+            assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
+        }
+
+        @Test
         @DisplayName("QA D125: an administrator keeps a patient account's contact")
         void administratorSeesPatientContacts() {
             User patientAccount = new User();

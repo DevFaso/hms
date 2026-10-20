@@ -45,7 +45,7 @@ public class ImagingOrderController {
 		@Valid @RequestBody ImagingOrderRequestDTO request,
 		Authentication authentication
 	) {
-		UUID userId = extractUserId(authentication);
+		UUID userId = com.example.hms.security.PrincipalUserIds.of(authentication).orElse(null);
 		ImagingOrderResponseDTO responseDTO = imagingOrderService.createOrder(request, userId);
 		return ResponseEntity.status(HttpStatus.CREATED).body(responseDTO);
 	}
@@ -77,14 +77,16 @@ public class ImagingOrderController {
 	@Operation(summary = "Attach ordering provider signature/attestation")
 	public ResponseEntity<ImagingOrderResponseDTO> captureSignature(
 		@PathVariable UUID orderId,
-		@Valid @RequestBody ImagingOrderSignatureRequestDTO request
+		@Valid @RequestBody ImagingOrderSignatureRequestDTO request,
+		Authentication authentication
 	) {
-		ImagingOrderResponseDTO responseDTO = imagingOrderService.captureProviderSignature(orderId, request);
+		UUID signerUserId = com.example.hms.security.PrincipalUserIds.of(authentication).orElse(null);
+		ImagingOrderResponseDTO responseDTO = imagingOrderService.captureProviderSignature(orderId, request, signerUserId);
 		return ResponseEntity.ok(responseDTO);
 	}
 
 	@GetMapping("/orders/{orderId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST')")
 	@Operation(summary = "Retrieve imaging order by ID")
 	public ResponseEntity<ImagingOrderResponseDTO> getOrder(@PathVariable UUID orderId) {
 		ImagingOrderResponseDTO responseDTO = imagingOrderService.getOrder(orderId);
@@ -92,7 +94,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/patient/{patientId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
 	@Operation(summary = "List imaging orders for a patient")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByPatient(
 		@PathVariable UUID patientId,
@@ -113,7 +115,7 @@ public class ImagingOrderController {
 	}
 
 	@GetMapping("/orders/hospital/{hospitalId}")
-	@PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE')")
+	@PreAuthorize("hasAnyRole('SUPER_ADMIN','RADIOLOGIST','DOCTOR','NURSE','MIDWIFE')")
 	@Operation(summary = "List imaging orders for a hospital")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByHospital(
 		@PathVariable UUID hospitalId,
@@ -134,27 +136,5 @@ public class ImagingOrderController {
 	) {
 		List<ImagingOrderDuplicateMatchDTO> duplicates = imagingOrderService.previewDuplicates(patientId, modality, bodyRegion, lookbackDays);
 		return ResponseEntity.ok(duplicates);
-	}
-
-	private UUID extractUserId(Authentication authentication) {
-		if (authentication == null || authentication.getPrincipal() == null) {
-			return null;
-		}
-		Object principal = authentication.getPrincipal();
-		if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
-			try {
-				return UUID.fromString(userDetails.getUsername());
-			} catch (IllegalArgumentException ignored) {
-				return null;
-			}
-		}
-		if (principal instanceof String principalString) {
-			try {
-				return UUID.fromString(principalString);
-			} catch (IllegalArgumentException ignored) {
-				return null;
-			}
-		}
-		return null;
 	}
 }

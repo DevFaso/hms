@@ -65,7 +65,7 @@
       (click)="setTab('all')"
       [title]="'BILLING.TAB_ALL_TITLE' | translate"
     >
-      {{ 'COMMON.ALL' | translate }} ({{ invoices().length }})
+      {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
     </button>
     <button
       class="tab"
@@ -443,6 +443,7 @@
                     id="line-price"
                     type="number"
                     min="0"
+                    step="1"
                     [ngModel]="newItemUnitPrice()"
                     (ngModelChange)="newItemUnitPrice.set($event)"
                   />
@@ -609,6 +610,7 @@
               [(ngModel)]="form.totalAmount"
               [disabled]="editingHasLines()"
               min="0"
+              step="1"
             />
             <p class="field-hint">
               {{
