@@ -133,9 +133,10 @@ public class DispenseVerificationService {
             // Two scan boxes on one screen: scanning the wristband into the
             // product field is an easy slip, and saying so is more use than
             // "no match".
-            b.fail(DispenseCheck.DRUG, LotBarcode.looksLikeLotBarcode(scan)
-                ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.packOtherLot")
-                : com.example.hms.utility.MessageUtil.resolve("pharmacy.check.notPackLabel"));
+            b.fail(DispenseCheck.DRUG, com.example.hms.utility.MessageUtil.resolve(
+                LotBarcode.looksLikeLotBarcode(scan)
+                    ? "pharmacy.check.packOtherLot"
+                    : "pharmacy.check.notPackLabel"));
         }
         // A match is not recorded as a pass here: verifyDrug still has to
         // agree that the lot is the PRESCRIBED drug. Scanning the pack you
