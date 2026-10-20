@@ -64,6 +64,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final PatientSubjectReadGuard subjectReadGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
+    private final com.example.hms.repository.StaffRepository staffRepository;
 
     @Override
     public ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId) {
@@ -78,9 +80,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireNotInThePast(request.getScheduledDate(), null);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
-        if (orderingUserId != null) {
-            imagingOrder.setOrderingProviderUserId(orderingUserId);
-        }
+        // QA D302: the ordering provider is whoever is signed in. A free-text
+        // name in the request is a claim, never shown as if a user had placed
+        // the order; without a resolved user the order carries no provider.
+        com.example.hms.model.User orderingUser = resolveOrderingUser(orderingUserId);
+        imagingOrder.setOrderingProviderUserId(orderingUser != null ? orderingUser.getId() : null);
+        imagingOrder.setOrderingProviderName(orderingUser != null ? displayName(orderingUser) : null);
 
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(patient.getId(), request.getModality(), request.getBodyRegion(), request.getDuplicateLookbackDays());
         if (!duplicateMatches.isEmpty()) {
@@ -169,6 +174,22 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
      * order already carries is left alone, so a status change on a past
      * appointment (completing it, say) is not refused.
      */
+    private com.example.hms.model.User resolveOrderingUser(UUID id) {
+        if (id == null) {
+            return null;
+        }
+        // The order-set dispatcher hands a staff id; the REST path a user id.
+        return userRepository.findById(id)
+            .orElseGet(() -> staffRepository.findById(id).map(com.example.hms.model.Staff::getUser).orElse(null));
+    }
+
+    private static String displayName(com.example.hms.model.User user) {
+        String name = java.util.stream.Stream.of(user.getFirstName(), user.getLastName())
+            .filter(part -> part != null && !part.isBlank())
+            .collect(java.util.stream.Collectors.joining(" "));
+        return name.isBlank() ? user.getUsername() : name;
+    }
+
     static void requireNotInThePast(java.time.LocalDate requested, java.time.LocalDate current) {
         if (requested != null && !requested.equals(current) && requested.isBefore(java.time.LocalDate.now())) {
             throw new com.example.hms.exception.BusinessException("imaging.scheduledDate.past");
@@ -176,13 +197,24 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     }
 
     @Override
-    public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request) {
+    public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request,
+                                                            UUID signerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
-        order.setOrderingProviderName(request.getProviderName());
+        // QA D302: the signer and the signing time come from the session. A
+        // body naming someone else is refused; a body-supplied time is ignored.
+        com.example.hms.model.User signer = signerUserId == null ? null
+            : userRepository.findById(signerUserId).orElse(null);
+        if (signer == null) {
+            throw new org.springframework.security.access.AccessDeniedException("imaging.signature.signerUnknown");
+        }
+        if (request.getProviderUserId() != null && !request.getProviderUserId().equals(signer.getId())) {
+            throw new org.springframework.security.access.AccessDeniedException("imaging.signature.otherSigner");
+        }
+        order.setOrderingProviderName(displayName(signer));
         order.setOrderingProviderNpi(request.getProviderNpi());
-        order.setOrderingProviderUserId(request.getProviderUserId());
+        order.setOrderingProviderUserId(signer.getId());
         order.setProviderSignatureStatement(request.getSignatureStatement());
-        order.setProviderSignedAt(request.getSignedAt() != null ? request.getSignedAt() : LocalDateTime.now());
+        order.setProviderSignedAt(LocalDateTime.now());
         order.setAttestationConfirmed(request.getAttestationConfirmed());
         if (order.getStatus() == ImagingOrderStatus.DRAFT) {
             order.setStatus(ImagingOrderStatus.ORDERED);

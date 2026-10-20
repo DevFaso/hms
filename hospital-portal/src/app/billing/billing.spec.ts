@@ -385,6 +385,16 @@ describe('BillingComponent', () => {
     expect(stats.balance).toBe(12900);
   });
 
+  it('QA D325: the All tab counts every invoice in scope, not the loaded page', () => {
+    billingSpy.getSummary.and.returnValue(
+      of({ total: 41, paid: 20, outstanding: 9, overdue: 2, totalRevenue: 0, balance: 0 }),
+    );
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice({ id: 'a' })])));
+    fixture.detectChanges();
+    const tab = (fixture.nativeElement as HTMLElement).querySelector('.tabs .tab') as HTMLElement;
+    expect(tab.textContent).toContain('(41)');
+  });
+
   it('maps statuses to badge classes', () => {
     expect(component.getStatusClass('PAID')).toContain('status-paid');
     expect(component.getStatusClass('PARTIALLY_PAID')).toContain('status-partial');
