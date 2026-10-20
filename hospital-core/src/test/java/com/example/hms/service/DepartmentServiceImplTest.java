@@ -54,6 +54,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
@@ -325,7 +326,7 @@ class DepartmentServiceImplTest {
     void deleteDepartment_stillReferenced_saysWhy_D435() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
-        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
                 .when(departmentRepository).flush();
         when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("department.r7.deleteInUse"), any(), any(Locale.class)))
                 .thenReturn("still used");

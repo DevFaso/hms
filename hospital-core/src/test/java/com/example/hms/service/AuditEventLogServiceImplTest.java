@@ -299,7 +299,7 @@ class AuditEventLogServiceImplTest {
         }
 
         var captor = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
-        verify(auditRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        verify(auditRepository, times(2)).save(captor.capture());
         assertThat(captor.getAllValues()).extracting(AuditEventLog::getResourceName)
             .containsExactly("CONSENT", "ORGANIZATION");
     }

@@ -40,6 +40,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1414,7 +1416,7 @@ class AuthControllerTest {
         com.example.hms.model.UserRoleHospitalAssignment done = pendingAssignment(java.util.UUID.randomUUID());
         done.setActive(true);
         com.example.hms.service.UserRoleHospitalAssignmentService notifier =
-                org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
         when(authNotificationFacade.assignments()).thenReturn(notifier);
         when(userRepository.findByPhoneNumber("+22670000000")).thenReturn(java.util.Optional.of(user));
         when(assignmentRepository.findByUserId(userId))
@@ -1424,7 +1426,7 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
 
         verify(notifier).sendNotifications(pendingId);
-        verify(notifier, org.mockito.Mockito.times(1)).sendNotifications(any(java.util.UUID.class));
+        verify(notifier, times(1)).sendNotifications(any(java.util.UUID.class));
     }
 
     @Test
@@ -1436,7 +1438,7 @@ class AuthControllerTest {
         user.setActive(false);
         java.util.UUID pendingId = java.util.UUID.randomUUID();
         com.example.hms.service.UserRoleHospitalAssignmentService notifier =
-                org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
         when(authNotificationFacade.assignments()).thenReturn(notifier);
         when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(java.util.Optional.of(user));
         when(assignmentRepository.findByUserId(userId))
@@ -1448,13 +1450,13 @@ class AuthControllerTest {
         }
 
         // One SMS, however often an anonymous caller asks within the cooldown.
-        verify(notifier, org.mockito.Mockito.times(1)).sendNotifications(pendingId);
+        verify(notifier, times(1)).sendNotifications(pendingId);
     }
 
     @Test
     void resendVerification_unknownPhone_answersTheSameWithoutSending_D418() throws Exception {
         com.example.hms.service.UserRoleHospitalAssignmentService notifier =
-                org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
         when(authNotificationFacade.assignments()).thenReturn(notifier);
         when(userRepository.findByPhoneNumber(any())).thenReturn(java.util.Optional.empty());
 
@@ -1479,9 +1481,9 @@ class AuthControllerTest {
         user.setActive(false);
         java.util.UUID pendingId = java.util.UUID.randomUUID();
         com.example.hms.service.EmailService email =
-                org.mockito.Mockito.mock(com.example.hms.service.EmailService.class);
+                mock(com.example.hms.service.EmailService.class);
         com.example.hms.service.UserRoleHospitalAssignmentService notifier =
-                org.mockito.Mockito.mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
         when(authNotificationFacade.email()).thenReturn(email);
         when(authNotificationFacade.assignments()).thenReturn(notifier);
         when(userRepository.findByEmail("nurse9@example.com")).thenReturn(java.util.Optional.of(user));
