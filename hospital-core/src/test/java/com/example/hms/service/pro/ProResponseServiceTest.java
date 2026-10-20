@@ -321,7 +321,8 @@ class ProResponseServiceTest {
                 assertThatThrownBy(() -> service.record(patientId, dto))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
-                assertThatThrownBy(() -> service.acknowledge(patientId, UUID.randomUUID(), hospitalId, null))
+                UUID responseId = UUID.randomUUID();
+                assertThatThrownBy(() -> service.acknowledge(patientId, responseId, hospitalId, null))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasFieldOrPropertyWithValue("messageKey", "patient.notfound");
                 verify(responseRepository, never()).saveAndFlush(any());

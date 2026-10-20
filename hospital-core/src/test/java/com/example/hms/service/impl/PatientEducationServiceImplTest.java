@@ -49,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -343,7 +344,7 @@ class PatientEducationServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        org.mockito.Mockito.doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+        doThrow(new ResourceNotFoundException("patient.notfound", patientId))
             .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
 
         assertThatThrownBy(() -> service.trackProgress(patientId, requestDTO, hospitalId))

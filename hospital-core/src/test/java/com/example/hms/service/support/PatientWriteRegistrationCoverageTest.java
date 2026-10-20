@@ -132,7 +132,7 @@ class PatientWriteRegistrationCoverageTest {
         "private\\s++(?:static\\s++)?(?:final\\s++)?[\\w<>\\[\\],.?]++(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(([^)]*+)\\)"
             + "\\s*+(?:throws\\s++[\\w.,\\s]++)?\\{");
     /** An unqualified call ({@code helper(..)}, not {@code repo.helper(..)}): only those reach a same-class helper. */
-    private static final Pattern CALL = Pattern.compile("(?<![.\\w])(\\w++)\\s*+\\(");
+    private static final Pattern CALL = Pattern.compile("\\b(\\w++)\\s*+\\(");
     private static final Pattern SERVICE_ANNOTATION = Pattern.compile("(?m)^@Service\\b");
     private static final Pattern PATIENT_ID_FIELD = Pattern.compile("\\bUUID\\s+patientId\\b");
     private static final Pattern PATIENT_ID_PARAM = Pattern.compile("UUID\\s+patientId\\b");
@@ -292,6 +292,9 @@ class PatientWriteRegistrationCoverageTest {
             }
             Matcher call = CALL.matcher(next);
             while (call.find()) {
+                if (call.start() > 0 && next.charAt(call.start() - 1) == '.') {
+                    continue; // a qualified call (repo.helper(..)) never reaches a same-class helper
+                }
                 String callee = call.group(1);
                 if (bodies.containsKey(callee) && seen.add(callee)) {
                     pending.addAll(bodies.get(callee));
