@@ -53,6 +53,28 @@ export function currentLocale(): string {
   return localeFor(storedLang());
 }
 
+/**
+ * A wall-clock "HH:mm[:ss]" time in the active locale: "08:30" in French and
+ * Spanish, "8:30 AM" in English (QA D348). Unparseable input is returned as is.
+ */
+export function formatClockTime(time: string, locale: string = currentLocale()): string {
+  const [h, m] = time.split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return time;
+  // English keeps its 12-hour "8:30 AM"; French and Spanish read "08:30".
+  const hour = locale.startsWith('en') ? 'numeric' : '2-digit';
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(locale, { hour, minute: '2-digit' });
+}
+
+/**
+ * Decimal numbers inside a display string written with the locale's
+ * separator: "37.9" reads "37,9" in French and Spanish (QA D344). Only a dot
+ * between two digits is touched, so "mg/dL", dates and ids are left alone.
+ */
+export function localizeDecimals(text: string, locale: string = currentLocale()): string {
+  const separator = (1.5).toLocaleString(locale).charAt(1);
+  return separator === '.' ? text : text.replaceAll(/(\d)\.(\d)/g, `$1${separator}$2`);
+}
+
 /** Specs that set `localStorage.lang` between cases must drop the cache. */
 export function resetStoredLangForTests(): void {
   cached = undefined;

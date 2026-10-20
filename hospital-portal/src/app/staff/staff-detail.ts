@@ -22,7 +22,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
@@ -256,10 +256,7 @@ export class StaffDetailComponent implements OnInit {
 
   formatTime(time?: string): string {
     if (!time) return '—';
-    const [h, m] = time.split(':').map(Number);
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    const hr = h % 12 || 12;
-    return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+    return formatClockTime(time);
   }
 
   /**

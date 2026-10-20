@@ -679,7 +679,8 @@ class UserServiceImplTest {
             AdminSignupRequest req1 = patientRequest(null, "qa.reception@test.com", null, hospitalId);
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req1))
                 .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("staff account");
+                // QA D317: a key the handler resolves in the caller's language.
+                .hasMessageContaining(".notForPatient");
 
             assertThat(user.isForcePasswordChange()).isFalse();
             verify(userRepository, never()).save(any());

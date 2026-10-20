@@ -99,7 +99,7 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         verify(notificationService).createNotification(
-            contains("Potassium 7.1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+            contains("Potassium 7,1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
         assertThat(result.getCriticalNotifiedAt()).isNotNull();
         verify(labResultRepository).save(result);
     }

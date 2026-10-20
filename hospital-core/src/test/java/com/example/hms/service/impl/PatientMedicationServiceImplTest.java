@@ -440,6 +440,31 @@ class PatientMedicationServiceImplTest {
     }
 
     @Test
+    void D316_aSameDayVisitPrescription_isStillActive_whenAStayOpenedAndClosedThatDay() {
+        // QA round 6: admitted and discharged the same morning, then seen in
+        // clinic; the clinic's prescription read "Terminé" the day it was written.
+        LocalDateTime admitted = LocalDateTime.now().minusHours(6);
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setAdmissionId(null);
+        visit.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        Prescription clinicOrder = new Prescription(); clinicOrder.setId(UUID.randomUUID());
+        clinicOrder.setCreatedAt(admitted.plusHours(1)); clinicOrder.setMedicationName("Amoxicillin");
+        clinicOrder.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        clinicOrder.setEncounter(visit);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setAdmissionDateTime(admitted);
+        stay.setActualDischargeDateTime(admitted.plusHours(3));
+        when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(clinicOrder)));
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of(stay));
+
+        List<PatientMedicationResponseDTO> result = service.getMedicationsForPatientPortal(patientId, null, 10);
+
+        assertThat(result).extracting(PatientMedicationResponseDTO::getStatus).containsExactly("ACTIVE");
+    }
+
+    @Test
     void portalRead_withNoHospitalScope_returnsThePatientsOwnRows_withoutTheStaffGate() {
         Prescription own = new Prescription(); own.setId(UUID.randomUUID());
         own.setCreatedAt(LocalDateTime.now()); own.setMedicationName("Amlodipine");

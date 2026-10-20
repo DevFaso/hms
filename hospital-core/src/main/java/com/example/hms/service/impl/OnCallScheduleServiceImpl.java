@@ -47,13 +47,13 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
     public List<OnCallScheduleResponseDTO> listForHospital(OffsetDateTime from, OffsetDateTime to) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to read the on-call rota.");
+            throw new BusinessException("onCall.rota.hospitalRequired");
         }
         OffsetDateTime now = OffsetDateTime.now(clock);
         OffsetDateTime start = from != null ? from : now.minusDays(1);
         OffsetDateTime end = to != null ? to : now.plusDays(7);
         if (end.isBefore(start)) {
-            throw new BusinessException("The rota window ends before it starts.");
+            throw new BusinessException("onCall.rota.windowInverted");
         }
         return onCallRepository.findByHospitalAndWindow(hospitalId, start, end).stream()
             .map(entry -> toResponse(entry, now))
@@ -167,7 +167,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private void validateWindow(OnCallScheduleRequestDTO request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("An on-call shift must end after it starts.");
+            throw new BusinessException("onCall.shift.endBeforeStart");
         }
     }
 
@@ -179,8 +179,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
         List<OnCallSchedule> clashes = onCallRepository.findOverlapping(
             request.getStaffId(), request.getStartTime(), request.getEndTime(), excludeId);
         if (!clashes.isEmpty()) {
-            throw new BusinessException(
-                "This staff member is already on call over part of that window.");
+            throw new BusinessException("onCall.shift.overlap");
         }
     }
 

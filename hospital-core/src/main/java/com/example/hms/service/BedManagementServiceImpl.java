@@ -73,7 +73,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCase(hospitalId, code)) {
-            throw new BusinessException("A ward with code '" + code + "' already exists in this hospital.");
+            throw new BusinessException("ward.code.duplicate", code);
         }
 
         Ward ward = Ward.builder()
@@ -100,7 +100,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String code = request.getCode().trim();
         if (wardRepository.existsByHospital_IdAndCodeIgnoreCaseAndIdNot(hospitalId, code, wardId)) {
-            throw new BusinessException("A ward with code '" + code + "' already exists in this hospital.");
+            throw new BusinessException("ward.code.duplicate", code);
         }
 
         ward.setName(request.getName().trim());
@@ -123,8 +123,7 @@ public class BedManagementServiceImpl implements BedManagementService {
         Ward ward = wardRepository.findByIdAndHospital_Id(wardId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(WARD_NOT_FOUND_KEY, wardId));
         if (!bedRepository.findByWard_Id(wardId).isEmpty()) {
-            throw new BusinessException(
-                "Ward '" + ward.getCode() + "' still has beds. Delete its beds first or deactivate the ward.");
+            throw new BusinessException("ward.delete.hasBeds", ward.getCode());
         }
         wardRepository.delete(ward);
     }
@@ -143,8 +142,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     public List<BedResponseDTO> getAvailableBeds() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "Hospital context required to list available beds. Super-admins must pin a hospital (X-Hospital-Id).");
+            throw new BusinessException("bed.hospitalContextRequired");
         }
         return bedRepository
             .findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(hospitalId, BedStatus.AVAILABLE)
@@ -162,8 +160,7 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCase(wardId, bedNumber)) {
-            throw new BusinessException(
-                "Bed '" + bedNumber + "' already exists in ward '" + ward.getCode() + "'.");
+            throw new BusinessException("bed.number.duplicate", bedNumber, ward.getCode());
         }
 
         Bed bed = Bed.builder()
@@ -189,11 +186,10 @@ public class BedManagementServiceImpl implements BedManagementService {
 
         String bedNumber = request.getBedNumber().trim();
         if (bedRepository.existsByWard_IdAndBedNumberIgnoreCaseAndIdNot(bed.getWard().getId(), bedNumber, bedId)) {
-            throw new BusinessException(
-                "Bed '" + bedNumber + "' already exists in ward '" + bed.getWard().getCode() + "'.");
+            throw new BusinessException("bed.number.duplicate", bedNumber, bed.getWard().getCode());
         }
         if (Boolean.FALSE.equals(request.getActive()) && bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("An occupied bed cannot be retired. Discharge or reassign the patient first.");
+            throw new BusinessException("bed.occupied.cannotRetire");
         }
 
         bed.setBedNumber(bedNumber);
@@ -215,10 +211,10 @@ public class BedManagementServiceImpl implements BedManagementService {
             .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
 
         if (request.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("OCCUPIED is set by bed assignment, not manually.");
+            throw new BusinessException("bed.occupied.manualStatus");
         }
         if (bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("Bed is occupied. Discharge or unassign the patient first.");
+            throw new BusinessException("bed.occupied.unassignFirst");
         }
         bed.setStatus(request.getStatus());
         if (request.getNotes() != null) {
@@ -234,7 +230,7 @@ public class BedManagementServiceImpl implements BedManagementService {
         Bed bed = bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
         if (bed.getStatus() == BedStatus.OCCUPIED) {
-            throw new BusinessException("An occupied bed cannot be deleted. Discharge or reassign the patient first.");
+            throw new BusinessException("bed.occupied.cannotDelete");
         }
         bedRepository.delete(bed);
     }
@@ -244,8 +240,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     private UUID requireWriteScope() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "Hospital context required to manage wards and beds. Super-admins must pin a hospital (X-Hospital-Id).");
+            throw new BusinessException("ward.hospitalContextRequired");
         }
         return hospitalId;
     }

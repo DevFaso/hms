@@ -3,7 +3,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DashboardComponent } from './dashboard';
+import { DashboardComponent, currentMedications } from './dashboard';
+import type { MedicationSummary } from '../services/patient-portal.service';
 import { routes as appRoutes } from '../app.routes';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -1909,5 +1910,18 @@ describe('Dashboard invoice aging (QA D283)', () => {
     expect(text).toContain('1 à 30 jours');
     expect(text).not.toContain('Current');
     expect(text).not.toContain('$');
+  });
+});
+
+describe('QA D316: dashboard current medications', () => {
+  it('keeps only the courses still running', () => {
+    const med = (id: string, status: string) => ({ id, status }) as unknown as MedicationSummary;
+    const out = currentMedications([
+      med('a', 'ACTIVE'),
+      med('b', 'COMPLETED'),
+      med('c', 'DISCONTINUED'),
+      med('d', 'ON_HOLD'),
+    ]);
+    expect(out.map((m) => m.id)).toEqual(['a']);
   });
 });

@@ -129,6 +129,15 @@ interface NavTile {
 
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * QA D316: the patient dashboard card is "current" medications, so only the
+ * courses still running; a completed or discontinued one stays on the
+ * medications page.
+ */
+export function currentMedications(meds: MedicationSummary[]): MedicationSummary[] {
+  return meds.filter((m) => m.status === 'ACTIVE');
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -2653,7 +2662,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       pending++;
       this.portalService.getMyMedications().subscribe({
         next: (meds) => {
-          this.myMedications.set(meds);
+          // QA D316: the card is "current" medications; a completed or
+          // discontinued course stays on the medications page, not here.
+          this.myMedications.set(currentMedications(meds));
           done();
         },
         error: () => done(),

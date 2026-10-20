@@ -102,7 +102,8 @@ describe('MyLabResultsComponent', () => {
     );
     expect(el.querySelector('.abnormal-badge')).toBeTruthy();
     expect(el.querySelector('.pending-badge')).toBeFalsy();
-    expect(el.querySelector('.pli-sub')?.textContent).toContain('17.2');
+    // QA D344: the French default writes the decimal with a comma.
+    expect(el.querySelector('.pli-sub')?.textContent).toContain('17,2');
     expect(component.interpretation(component.results()[0])).toBe(
       'PORTAL.LAB_RESULTS.ABNORMAL_RESULT',
     );
@@ -115,7 +116,8 @@ describe('MyLabResultsComponent', () => {
       'check_circle',
     );
     expect(el.querySelector('.pending-badge')).toBeFalsy();
-    expect(el.querySelector('.pli-sub')?.textContent).toContain('13.7');
+    expect(el.querySelector('.pli-sub')?.textContent).toContain('13,7');
+    expect(el.querySelector('.pli-sub')?.textContent).toContain('15,5');
     expect(component.interpretation(component.results()[0])).toBe(
       'PORTAL.LAB_RESULTS.NORMAL_RESULT',
     );

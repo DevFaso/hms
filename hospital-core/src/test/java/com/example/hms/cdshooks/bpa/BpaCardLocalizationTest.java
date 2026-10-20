@@ -73,7 +73,7 @@ class BpaCardLocalizationTest {
         assertThat(card.summary()).startsWith("NEWS2 — score d'alerte précoce");
         assertThat(card.detail()).contains("risque élevé").contains("non renseigné")
             .doesNotContain("English").doesNotContain("vitals recorded").doesNotContain("INCOMPLETE");
-        assertThat(card.source().label()).isEqualTo("Alerte de bonnes pratiques HMS");
+        assertThat(card.source().label()).isEqualTo("Alerte de bonnes pratiques e-Keneya");
     }
 
     @Test

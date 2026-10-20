@@ -238,6 +238,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         return EffectiveRoles.holds(user, assignmentRepository.findAllByUserId(user.getId()), roleCode);
     }
 
+    /**
+     * QA D351: the booked reason and notes. The reason was never stored on a
+     * staff booking, so the reception queue and the doctor's worklist fell
+     * back to the chief complaint triage recorded.
+     */
+    static void applyBookingText(Appointment appointment, AppointmentRequestDTO request) {
+        appointment.setNotes(request.getNotes());
+        appointment.setReason(request.getReason());
+    }
+
     /* =======================
        CREATE
        ======================= */
@@ -342,7 +352,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setStartTime(request.getStartTime());
         appointment.setEndTime(endTime);
-    appointment.setNotes(request.getNotes());
+        applyBookingText(appointment, request);
     AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
     appointment.setStatus(status);
         appointment.setCreatedBy(currentUser);

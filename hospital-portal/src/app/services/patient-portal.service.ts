@@ -189,7 +189,7 @@ function flattenVitals(raw: PatientVitalSignRaw[]): VitalSignSummary[] {
 
   const entries: VitalSignSummary[] = [];
   for (const r of raw) {
-    const base = { recordedAt: r.recordedAt, source: r.source ?? 'Nurse Station' };
+    const base = { recordedAt: r.recordedAt, source: r.source ?? 'NURSE_STATION' };
     for (const f of fields) {
       if (r[f.key] != null) {
         entries.push({
