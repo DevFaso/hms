@@ -322,6 +322,17 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D329: the patient role next to a staff role is refused before anything is written")
+        void patientRoleWithStaffRolesIsRefused() {
+            AdminSignupRequest req = buildRequest("mixed", "mixed@hospital.com", "+1234567811");
+            req.setRoleNames(Set.of("ROLE_RECEPTIONIST", "ROLE_PATIENT"));
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(userRepository, never()).saveAndFlush(any(User.class));
+        }
+
+        @Test
         @DisplayName("an admin-registered staff account starts INACTIVE - the emailed code gates something real")
         void staffStartInactiveUntilVerified() {
             // Option A (2026-09-02). Until then staff were activated up
@@ -929,18 +940,18 @@ class UserServiceImplTest {
         }
 
         @Test
-        @DisplayName("D21: a second delete keeps what the first delete recorded")
+        @DisplayName("D21 / QA D327: a second delete is refused and keeps what the first delete recorded")
         void repeatDeleteKeepsRecordedAnswer() {
             user.setDeleted(true);
             user.setActive(false);
             user.setActivatedBeforeDelete(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
 
-            userService.deleteUser(userId);
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
 
             assertThat(user.getActivatedBeforeDelete()).isTrue();
+            verify(userRepository, never()).save(any(User.class));
         }
 
         @Test
@@ -1082,6 +1093,32 @@ class UserServiceImplTest {
     @Nested
     @DisplayName("restoreUser")
     class RestoreUser {
+
+        @Test
+        @DisplayName("QA D327: restoring an account that is not deleted is refused and not audited")
+        void restoreOfALiveAccountIsRefused() {
+            user.setDeleted(false);
+            user.setActive(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> userService.restoreUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(userRepository, never()).save(any(User.class));
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D327: deleting an already deleted account is refused and not audited again")
+        void repeatDeleteIsRefused() {
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(userRepository, never()).save(any(User.class));
+            verify(auditEventLogService, never()).logEvent(any());
+        }
 
         @Test
         @DisplayName("restores a deleted user: sets isDeleted=false, isActive=true and saves")

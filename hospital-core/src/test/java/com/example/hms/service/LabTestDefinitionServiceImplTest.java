@@ -1000,6 +1000,78 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /**
+     * QA D314: a hospital with a single lab director. The director did the QA
+     * review and now approves: allowed, and the audit row records the exception.
+     */
+    @Test
+    void processApproval_approve_bySoleDirectorWhoReviewed_isAllowedAndAudited() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
+            .thenReturn(1L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("APPROVE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> e.getEventDescription().contains("single-director exception")));
+        }
+    }
+
+    /** QA D314: with two directors the reviewer still cannot approve. */
+    @Test
+    void processApproval_approve_byReviewerWhenTwoDirectors_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        holdsRolesAtHospital(director);
+        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
+            .thenReturn(2L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
+    /** QA D314: the single-director exception never lets the submitter approve. */
+    @Test
+    void processApproval_approve_bySoleDirectorWhoSubmitted_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(director.getId());
+        holdsRolesAtHospital(director);
+        lenient().when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
+            .thenReturn(1L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
     /** QA D213: the submitter cannot complete the QA review of their own submission. */
     @Test
     void processApproval_completeQaReview_bySubmitter_isRefused() {

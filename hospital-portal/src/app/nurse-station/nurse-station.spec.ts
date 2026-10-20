@@ -286,6 +286,16 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
   });
 
+  it('submitCreateHandoff refuses an empty Situation (QA D331)', () => {
+    component.openHandoffCreate();
+    component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
+    component.updateHandoffField('situation', '   ');
+    component.submitCreateHandoff();
+    expect(toastSpy.error).toHaveBeenCalledWith('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED');
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+  });
+
   it('submitCreateHandoff posts the SBAR form, toasts, and closes the dialog', () => {
     const created: NurseHandoff = {
       id: 'h9',

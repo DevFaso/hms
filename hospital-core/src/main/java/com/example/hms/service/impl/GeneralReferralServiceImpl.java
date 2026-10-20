@@ -67,6 +67,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final ReferralEventRepository eventRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D309: each referral step is audited here, with its patient (the generic write audit is skipped). */
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AuditEventLogService> auditServiceProvider;
 
     @Override
     @Transactional
@@ -113,6 +115,9 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         // QA D205: the referrer is the signed-in clinician of the sending hospital,
         // and a named receiver works at the hospital the referral is addressed to.
         requireReferrerIsCaller(referringProvider, hospital.getId());
+        // QA D319 (D205): the referrer is a physician or a midwife. A nurse
+        // naming herself as the referring clinician passed the caller check.
+        requireReferrerMayRefer(referringProvider, hospital.getId());
         if (receivingProvider != null) {
             UUID addressedTo = receivingHospital != null ? receivingHospital.getId() : hospital.getId();
             if (!worksAt(receivingProvider, addressedTo)) {
@@ -156,6 +161,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.setPriorityScore(calculatePriorityScore(request.getUrgency()));
 
         referral = referralRepository.save(referral);
+        auditStep(referral, "CREATE", null);
         return toResponse(referral);
     }
 
@@ -172,6 +178,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.submit();
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.SUBMIT, before, null);
+        auditStep(referral, "SUBMIT", before);
         return toResponse(referral);
     }
 
@@ -192,6 +199,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.ACKNOWLEDGE, before, notes);
+        auditStep(referral, "ACKNOWLEDGE", before);
         return toResponse(referral);
     }
 
@@ -214,6 +222,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             + (request.getLocation() == null ? "" : ", location=" + request.getLocation())
             + (appointment == null ? ", appointment=none" : ", appointmentId=" + appointment.getId());
         eventRecorder.recordUserEvent(referral, ReferralEventType.SCHEDULE, before, note);
+        auditStep(referral, "SCHEDULE", before);
         return toResponse(referral);
     }
 
@@ -293,6 +302,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.start();
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.START, before, null);
+        auditStep(referral, "START", before);
         return toResponse(referral);
     }
 
@@ -305,6 +315,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.complete(summary, followUp);
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.COMPLETE, before, summary);
+        auditStep(referral, "COMPLETE", before);
         return toResponse(referral);
     }
 
@@ -317,6 +328,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.reject(request.getReason());
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.REJECT, before, request.getReason());
+        auditStep(referral, "REJECT", before);
         return toResponse(referral);
     }
 
@@ -328,6 +340,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         referral.cancel(reason);
         referral = referralRepository.save(referral);
         eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, reason);
+        auditStep(referral, "CANCEL", before);
     }
 
     @Override
@@ -490,8 +503,9 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         UUID targetId = target != null ? target.getId() : null;
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null && !activeHospitalId.equals(targetId)) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                "Only the hospital this referral is addressed to can act on it.");
+            // QA D332: a refusal the caller can read, in its own language.
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receivingSide.required"));
         }
         return targetId;
     }
@@ -657,6 +671,57 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             && callerId.equals(referringProvider.getUser().getId());
         if (!isCaller || !worksAt(referringProvider, sendingHospitalId)) {
             throw BusinessRuleException.ofKey("generalReferral.referringProvider.notCaller");
+        }
+    }
+
+    /** QA D319: the referring clinician holds a physician or midwife role at the sending hospital. */
+    private void requireReferrerMayRefer(Staff provider, UUID hospitalId) {
+        UUID userId = provider.getUser() != null ? provider.getUser().getId() : null;
+        boolean mayRefer = userId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId)
+            || roleValidator.isMidwife(userId, hospitalId));
+        if (!mayRefer) {
+            throw BusinessRuleException.ofKey("generalReferral.referringProvider.prescriber.required");
+        }
+    }
+
+    /**
+     * QA D309 (D260): one audit row per referral step, typed by what happened
+     * (a creation, or a change of status), naming the referral and keyed on
+     * its patient. Ids and statuses only: no name, no clinical text.
+     * The generic write audit was "DATA_CREATE" for every POST with no
+     * patient and an "Unknown Resource" name.
+     */
+    private void auditStep(GeneralReferral referral, String step, ReferralStatus before) {
+        com.example.hms.service.AuditEventLogService audit =
+            auditServiceProvider != null ? auditServiceProvider.getIfAvailable() : null;
+        if (audit == null || referral == null || referral.getId() == null) {
+            return;
+        }
+        try {
+            UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+            Hospital acting = referral.getReceivingHospital() != null && activeHospitalId != null
+                && activeHospitalId.equals(referral.getReceivingHospital().getId())
+                ? referral.getReceivingHospital() : referral.getHospital();
+            boolean created = "CREATE".equals(step);
+            audit.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                .eventType(created ? com.example.hms.enums.AuditEventType.DATA_CREATE
+                    : com.example.hms.enums.AuditEventType.DATA_UPDATE)
+                .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                .userId(roleValidator.getCurrentUserId())
+                .hospitalName(acting != null ? acting.getName() : null)
+                .entityType("REFERRAL")
+                .resourceId(referral.getId().toString())
+                .resourceName("Referral " + referral.getId().toString().substring(0, 8))
+                .patientId(referral.getPatient() != null ? referral.getPatient().getId() : null)
+                .eventDescription("Referral " + step
+                    + (created ? " -> " + referral.getStatus() : ": " + before + " -> " + referral.getStatus()))
+                .build());
+        } catch (RuntimeException ex) {
+            org.slf4j.LoggerFactory.getLogger(GeneralReferralServiceImpl.class)
+                .warn("Referral step audit not written for {} ({}): {}", referral.getId(), step,
+                    ex.getClass().getSimpleName());
         }
     }
 

@@ -20,6 +20,13 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
 
     Page<StockLot> findByInventoryItemId(UUID inventoryItemId, Pageable pageable);
 
+    /** QA D315: whether this lot number was already received for the item with another expiry. */
+    @Query("SELECT (COUNT(s) > 0) FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+         + "AND UPPER(s.lotNumber) = UPPER(:lotNumber) AND s.expiryDate <> :expiryDate")
+    boolean existsOtherExpiryForLot(@Param("inventoryItemId") UUID inventoryItemId,
+                                    @Param("lotNumber") String lotNumber,
+                                    @Param("expiryDate") LocalDate expiryDate);
+
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
 

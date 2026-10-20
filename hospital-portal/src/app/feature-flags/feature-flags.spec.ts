@@ -49,4 +49,17 @@ describe('FeatureFlagsComponent', () => {
     expect(text).toContain('FLAGS.NO_FLAGS');
     expect(text).not.toContain('""');
   });
+
+  it('shows the server reason when a flag cannot be created (QA D310)', () => {
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    component.newFlagKey.set('qa.r6.newflag');
+    component.createFlag();
+    httpMock
+      .expectOne((r) => r.method === 'PUT' && r.url === '/feature-flags/qa.r6.newflag')
+      .flush(
+        { message: 'Drapeau de fonctionnalité inconnu.' },
+        { status: 400, statusText: 'Bad Request' },
+      );
+    expect(toast.error).toHaveBeenCalledWith('Drapeau de fonctionnalité inconnu.');
+  });
 });

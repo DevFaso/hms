@@ -470,6 +470,23 @@ class GlobalExceptionHandlerTest {
     }
 
     @Nested
+    @DisplayName("handleMissingParameter (QA D332)")
+    class HandleMissingParameter {
+
+        @Test
+        @DisplayName("a missing required parameter answers 400 with a message naming it, not an empty body")
+        void namesTheMissingParameter() {
+            var ex = new org.springframework.web.bind.MissingServletRequestParameterException("summary", "String");
+
+            var response = handler.handleMissingParameter(ex, request);
+
+            org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(400);
+            org.assertj.core.api.Assertions.assertThat(String.valueOf(response.getBody()))
+                .contains("summary").contains("message");
+        }
+    }
+
+    @Nested
     @DisplayName("handlePatientAlreadyRegistered")
     class HandlePatientAlreadyRegistered {
 

@@ -43,6 +43,7 @@ public class GlobalExceptionHandler {
     private static final String FIELD_MESSAGE   = "message";
     private static final String FIELD_PATH      = "path";
     private static final String FIELD_CODE      = "code";
+    private static final String FIELD_FIELD     = "field";
 
     /** Machine-readable codes the portal maps onto its own translated text (D53). */
     static final String CODE_MALFORMED_REQUEST = "MALFORMED_REQUEST";
@@ -119,7 +120,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
         body.put(FIELD_MESSAGE, passThrough(message));
-        if (field != null) body.put("field", field);
+        if (field != null) body.put(FIELD_FIELD, field);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
@@ -298,7 +299,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
-            body.put("field", field);
+            body.put(FIELD_FIELD, field);
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -378,6 +379,23 @@ public class GlobalExceptionHandler {
                 "A referenced record could not be found. This may indicate a data integrity issue. "
                 + "Please contact support if this persists."),
             request);
+    }
+
+    /**
+     * QA D332: a required query parameter left out (a referral completed with
+     * no {@code summary}) answered 400 with Spring's empty body, so the portal
+     * had nothing to show. The caller is told which value is missing, in its
+     * own language.
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<Object> handleMissingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
+        String message = localized("error.request.missingParameter",
+            "A required value is missing: \"{0}\".", ex.getParameterName());
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
+        body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
+        body.put(FIELD_FIELD, ex.getParameterName());
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     /**

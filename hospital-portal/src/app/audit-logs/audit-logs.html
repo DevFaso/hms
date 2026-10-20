@@ -10,14 +10,16 @@
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
         <span class="card-value">{{ totalElements() }}</span
-        ><span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
+        >{{ ' ' }}
+        <span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon types">category</span>
       <div class="card-info">
         <span class="card-value">{{ eventTypes().length }}</span
-        ><span class="card-label">{{ 'AUDIT.EVENT_TYPES' | translate }}</span>
+        >{{ ' ' }}
+        <span class="card-label">{{ 'AUDIT.EVENT_TYPES' | translate }}</span>
       </div>
     </div>
   </div>
@@ -112,8 +114,8 @@
                   l.eventType | enumLabel: 'auditEventType'
                 }}</span>
               </td>
-              <td class="desc-cell">{{ l.eventDescription || '--' }}</td>
-              <td>{{ l.entityType || '--' }}</td>
+              <td class="desc-cell" [title]="l.eventDescription || ''">{{ describe(l) }}</td>
+              <td>{{ entityLabel(l.entityType) }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(l.status) }}">{{
                   l.status | enumLabel: 'auditStatus'

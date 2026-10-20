@@ -42,6 +42,13 @@ const ADJUSTMENT_REASON_CODES = [
   'CONTROLLED_DISCREPANCY',
 ] as const;
 
+/** QA D337: reason codes written by other clients, mapped to the form's codes. */
+const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
+  DAMAGED: 'DAMAGE',
+  EXPIRED: 'EXPIRY_WRITE_OFF',
+  EXPIRY: 'EXPIRY_WRITE_OFF',
+};
+
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
@@ -410,8 +417,11 @@ export class StockAdjustmentComponent implements OnInit {
     m = /^TRANSFER to (.+)$/i.exec(reason);
     if (m) return t('LEDGER_REASON_TRANSFER', { dest: m[1] });
     m = /^([A-Z_]+)(?::\s*([\s\S]*))?$/.exec(reason);
-    if (m && (ADJUSTMENT_REASON_CODES as readonly string[]).includes(m[1])) {
-      const label = t(`ADJ_REASON_${m[1]}`);
+    // QA D337: the API also takes the common spellings DAMAGED and EXPIRED
+    // (scripts and older clients); they read as the form's own codes.
+    const code = m ? (LEGACY_REASON_CODES[m[1]] ?? m[1]) : '';
+    if (m && (ADJUSTMENT_REASON_CODES as readonly string[]).includes(code)) {
+      const label = t(`ADJ_REASON_${code}`);
       return m[2] ? `${label} : ${m[2]}` : label;
     }
     return reason;

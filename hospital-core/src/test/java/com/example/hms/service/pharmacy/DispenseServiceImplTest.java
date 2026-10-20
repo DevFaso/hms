@@ -2206,6 +2206,27 @@ class DispenseServiceImplTest {
             return lot;
         }
 
+        /** QA D335: an expired lot is not offered, and the rest come shortest-dated first. */
+        @Test
+        void expiredLotsAreDroppedAndTheRestAreFefoOrdered() {
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            StockLot late = lot("paracetamol", "PCM-LATE", BigDecimal.valueOf(10));
+            late.setExpiryDate(java.time.LocalDate.now().plusYears(2));
+            StockLot expired = lot("paracetamol", "PCM-OLD", BigDecimal.valueOf(10));
+            expired.setExpiryDate(java.time.LocalDate.now().minusDays(1));
+            StockLot soon = lot("paracetamol", "PCM-SOON", BigDecimal.valueOf(10));
+            soon.setExpiryDate(java.time.LocalDate.now().plusDays(10));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
+                    .thenReturn(new PageImpl<>(List.of(late, expired, soon)));
+
+            assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
+                    .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)
+                    .containsExactly("PCM-SOON", "PCM-LATE");
+        }
+
         @Test
         void onlyLotsOfThePrescribedDrugWithStockLeftAreListed() {
             prescription.setMedicationName("Paracétamol 500 mg comprimé");

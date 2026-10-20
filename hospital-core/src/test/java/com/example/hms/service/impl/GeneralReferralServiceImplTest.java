@@ -37,6 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,6 +73,9 @@ class GeneralReferralServiceImplTest {
 
     /** QA D263: the referred patient is registered at the sending hospital unless a test says otherwise. */
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepository;
+
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AuditEventLogService> auditServiceProvider;
+    @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
 
     @InjectMocks
     private GeneralReferralServiceImpl generalReferralService;
@@ -248,6 +252,44 @@ class GeneralReferralServiceImplTest {
         GeneralReferral saved = captor.getValue();
         assertThat(saved.getReceivingHospital()).isNull();
         assertThat(saved.getSourceDepartment()).isNull();
+    }
+
+    /** QA D309 (D260): a step is audited as an update of the referral, with its patient, never "Unknown". */
+    @Test
+    void submitReferral_isAuditedAsAnUpdateKeyedOnThePatient_D309() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+        when(auditServiceProvider.getIfAvailable()).thenReturn(auditEventLogService);
+
+        generalReferralService.submitReferral(referralId);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> captor =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+        com.example.hms.payload.dto.AuditEventRequestDTO event = captor.getValue();
+        assertEquals(com.example.hms.enums.AuditEventType.DATA_UPDATE, event.getEventType());
+        assertEquals(referral.getPatient().getId(), event.getPatientId());
+        assertEquals("REFERRAL", event.getEntityType());
+        assertEquals(referralId.toString(), event.getResourceId());
+        assertNotNull(event.getResourceName());
+        assertTrue(event.getEventDescription().contains("SUBMIT"));
+        assertTrue(event.getEventDescription().contains("DRAFT -> SUBMITTED"));
+    }
+
+    /** QA D332: the referring side completing gets a refusal it can read. */
+    @Test
+    void completeReferral_byTheReferringSide_isRefusedWithAReadableMessage_D332() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setReceivingHospital(buildHospital(UUID.randomUUID(), "Receiving Hospital"));
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(referral.getHospital().getId());
+
+        assertThrows(com.example.hms.exception.ClientSafeAccessDeniedException.class, () ->
+            generalReferralService.completeReferral(referralId, "done", null));
+        verify(referralRepository, never()).save(any());
     }
 
     @Test
@@ -547,6 +589,24 @@ class GeneralReferralServiceImplTest {
         request.setUrgency(ReferralUrgency.ROUTINE);
         request.setReferralReason("QA D205");
         return request;
+    }
+
+    /** QA D319: a nurse naming herself as the referring clinician is refused. */
+    @Test
+    void createReferral_refusesANurseAsTheReferrer_D319() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        Hospital sending = buildHospital(hospitalId, "A");
+        GeneralReferralRequestDTO request = d205Request(hospitalId, me);
+        when(patientRepository.findByIdUnscoped(request.getPatientId())).thenReturn(Optional.of(buildPatient(request.getPatientId(), "P", "Q")));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(sending));
+        when(staffRepository.findById(me)).thenReturn(Optional.of(staffAt(me, "Nurse Me", sending, CALLER_ID)));
+        when(roleValidator.getCurrentUserId()).thenReturn(CALLER_ID);
+        when(roleValidator.isDoctor(CALLER_ID, hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> generalReferralService.createReferral(request))
+            .isInstanceOf(com.example.hms.exception.BusinessRuleException.class);
+        verify(referralRepository, never()).save(any());
     }
 
     @Test
