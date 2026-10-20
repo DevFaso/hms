@@ -226,7 +226,7 @@ class LabResultServiceImplLifecycleTest {
     @Test
     @DisplayName("D339 — a result timed one minute before its order is stored at the order time")
     void aResultInsideTheSkewIsMovedUpToTheOrderTime() {
-        // QA D339: r6f.js sent resultDate = now - 60 s right after ordering;
+        // QA D339: the QA script sent a result time one minute before the order;
         // the 5-minute skew tolerance stored it BEFORE the order.
         stubEntryPath();
         order.setOrderDatetime(LocalDateTime.now().minusSeconds(5));

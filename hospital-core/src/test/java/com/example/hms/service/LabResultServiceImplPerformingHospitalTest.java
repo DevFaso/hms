@@ -436,7 +436,7 @@ class LabResultServiceImplPerformingHospitalTest {
         when(labResultRepository.findHandledByHospitals(List.of(performing.getId())))
             .thenReturn(List.of(result));
         when(labResultMapper.toResponseDTO(result)).thenReturn(critical);
-        when(labResultMapper.raisesCriticalAlert(result, "CRITICAL")).thenReturn(true);
+        when(labResultMapper.raisesCriticalAlert("CRITICAL")).thenReturn(true);
 
         assertThat(service.getCriticalResults(ordering.getId(), LocalDateTime.now().minusDays(1), Locale.ENGLISH))
             .containsExactly(critical);

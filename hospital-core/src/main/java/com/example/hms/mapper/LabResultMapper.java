@@ -150,7 +150,7 @@ public class LabResultMapper {
      * 3.9-6.1 paged the doctor as a panic value. Out of range is abnormal (HIGH
      * or LOW), not critical; a laboratory that wants a page sets the limits.
      */
-    public boolean raisesCriticalAlert(LabResult result, String severityFlag) {
+    public boolean raisesCriticalAlert(String severityFlag) {
         return FLAG_CRITICAL.equalsIgnoreCase(severityFlag);
     }
 

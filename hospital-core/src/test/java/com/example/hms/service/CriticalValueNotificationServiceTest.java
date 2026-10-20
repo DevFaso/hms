@@ -108,7 +108,7 @@ class CriticalValueNotificationServiceTest {
     void notifiesForComputedHighSeverity() {
         when(labResultMapper.toResponseDTO(result))
             .thenReturn(LabResultResponseDTO.builder().severityFlag("HIGH").build());
-        when(labResultMapper.raisesCriticalAlert(result, "HIGH")).thenReturn(true);
+        when(labResultMapper.raisesCriticalAlert("HIGH")).thenReturn(true);
 
         service.notifyIfCritical(result);
 
@@ -177,7 +177,7 @@ class CriticalValueNotificationServiceTest {
         assertThat(result.getCriticalNotifiedAt()).isNull();
         verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
         assertThat(mapper.severityFlagOf(result)).isEqualTo("LOW");
-        assertThat(mapper.raisesCriticalAlert(result, "LOW")).isFalse();
+        assertThat(mapper.raisesCriticalAlert("LOW")).isFalse();
     }
 
     /** QA D271: once critical limits exist, a value below the range but above them stays LOW. */
@@ -395,6 +395,21 @@ class CriticalValueNotificationServiceTest {
         service.escalateOverdue();
 
         verify(labResultRepository).findCriticalAwaitingEscalation(any(LocalDateTime.class), eq((short) 12));
+    }
+
+    @Test
+    void escalateOverdueStopsAtTheRoundCap() {
+        // QA D305: the round that reaches the cap still pages, and is the last.
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        result.setCriticalNotifiedAt(LocalDateTime.now().minusHours(1));
+        result.setCriticalEscalationLevel((short) 11);
+        when(labResultRepository.findCriticalAwaitingEscalation(any(LocalDateTime.class), org.mockito.ArgumentMatchers.anyShort()))
+            .thenReturn(List.of(result));
+
+        Integer escalated = service.escalateOverdue();
+
+        assertThat(escalated).isEqualTo(1);
+        assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 12);
     }
 
     @Test

@@ -2095,7 +2095,7 @@ public class LabResultServiceImpl implements LabResultService {
         for (LabResult result : candidates) {
             if (queueFilter.test(result)) {
                 LabResultResponseDTO dto = labResultMapper.toResponseDTO(result);
-                if (dto != null && labResultMapper.raisesCriticalAlert(result, dto.getSeverityFlag())) {
+                if (dto != null && labResultMapper.raisesCriticalAlert(dto.getSeverityFlag())) {
                     surfaced.add(result);
                     answer.add(dto);
                 }
