@@ -2246,7 +2246,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public boolean resendPendingActivationCode(UUID assignmentId, java.time.Duration cooldown) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
         int claimed = assignmentRepository.claimActivationResend(
             assignmentId, generateConfirmationCode(), now, now.minus(cooldown));
         if (claimed == 0) {
