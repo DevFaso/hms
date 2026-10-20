@@ -51,6 +51,7 @@ public class LabSpecimenController {
         // Override labOrderId with path variable to avoid inconsistency
         requestDTO.setLabOrderId(id);
         LabSpecimenResponseDTO created = labSpecimenService.createSpecimen(requestDTO, locale);
+        auditSpecimen(created);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -106,6 +107,15 @@ public class LabSpecimenController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabSpecimenResponseDTO received = labSpecimenService.receiveSpecimen(id, locale);
+        auditSpecimen(received);
         return ResponseEntity.ok(ApiResponseWrapper.success(received));
+    }
+
+    /** QA D429: the lab audit row names the event, the specimen and its patient. Ids only. */
+    private static void auditSpecimen(LabSpecimenResponseDTO specimen) {
+        if (specimen != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(
+                com.example.hms.enums.AuditEventType.LAB_SPECIMEN_UPDATED, specimen.getId(), specimen.getPatientId());
+        }
     }
 }

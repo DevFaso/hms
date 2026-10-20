@@ -86,6 +86,7 @@ public class LabResultController {
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         LabResultResponseDTO created = labResultService.createLabResult(requestDTO, locale);
         WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
+        auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_CREATED, created);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
 
@@ -134,7 +135,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @Valid @RequestBody LabResultRequestDTO requestDTO,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.updateLabResult(id, requestDTO, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_UPDATED,
+            labResultService.updateLabResult(id, requestDTO, locale)));
     }
 
     // Releasing is the laboratory attesting that a number is correct and may
@@ -155,7 +157,8 @@ public class LabResultController {
                 + "without a second reviewer. Without it a self-release answers 409.")
             @RequestParam(name = "selfRelease", defaultValue = "false") boolean selfRelease,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.releaseLabResult(id, selfRelease, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED,
+            labResultService.releaseLabResult(id, selfRelease, locale)));
     }
 
     @PostMapping("/{id}/sign")
@@ -165,7 +168,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @RequestBody(required = false) LabResultSignatureRequestDTO request,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.signLabResult(id, request, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_UPDATED,
+            labResultService.signLabResult(id, request, locale)));
     }
 
     @PostMapping("/{id}/acknowledge")
@@ -198,7 +202,8 @@ public class LabResultController {
             @PathVariable UUID id,
             @Valid @RequestBody CriticalValueReadBackRequestDTO request,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.recordCriticalReadBack(id, request, locale));
+        return ResponseEntity.ok(auditLabResult(com.example.hms.enums.AuditEventType.LAB_RESULT_ACKNOWLEDGED,
+            labResultService.recordCriticalReadBack(id, request, locale)));
     }
 
     @DeleteMapping("/{id}")
@@ -260,5 +265,14 @@ public class LabResultController {
             @PathVariable UUID hospitalId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         return ResponseEntity.ok(labResultService.getCriticalResultsRequiringAcknowledgment(hospitalId, locale));
+    }
+
+    /** QA D429: the lab audit row names the event, the result and its patient. Ids only. */
+    private static LabResultResponseDTO auditLabResult(com.example.hms.enums.AuditEventType type,
+                                                       LabResultResponseDTO result) {
+        if (result != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(type, result.getId(), result.getPatientId());
+        }
+        return result;
     }
 }

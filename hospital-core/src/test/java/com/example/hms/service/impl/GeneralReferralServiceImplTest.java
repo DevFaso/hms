@@ -262,8 +262,10 @@ class GeneralReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(referral)).thenReturn(referral);
         when(auditServiceProvider.getIfAvailable()).thenReturn(auditEventLogService);
+        signedInAsReferrer(referral);
 
         generalReferralService.submitReferral(referralId);
+
 
         org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> captor =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
@@ -297,6 +299,7 @@ class GeneralReferralServiceImplTest {
         UUID referralId = UUID.randomUUID();
         GeneralReferral referral = buildReferral(referralId);
         referral.setUrgency(ReferralUrgency.URGENT);
+        signedInAsReferrer(referral);
 
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(referral)).thenReturn(referral);
@@ -681,6 +684,14 @@ class GeneralReferralServiceImplTest {
         department.setId(id);
         department.setName(name);
         return department;
+    }
+
+    /** QA D412: only the referring clinician submits; sign the test in as them. */
+    private void signedInAsReferrer(GeneralReferral referral) {
+        com.example.hms.model.User referrerUser = new com.example.hms.model.User();
+        referrerUser.setId(CALLER_ID);
+        referral.getReferringProvider().setUser(referrerUser);
+        when(roleValidator.getCurrentUserId()).thenReturn(CALLER_ID);
     }
 
     private GeneralReferral buildReferral(UUID referralId) {

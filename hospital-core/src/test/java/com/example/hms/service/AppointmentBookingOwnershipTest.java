@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -44,6 +45,9 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("POST /appointments: a patient naming someone else is answered as a miss")
 class AppointmentBookingOwnershipTest {
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;
@@ -144,6 +148,47 @@ class AppointmentBookingOwnershipTest {
 
         assertThat(stoppedLater.getMessage()).isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
         verify(patientRepository).findByIdUnscoped(own.getId());
+    }
+
+    @Test
+    @DisplayName("QA D401: staff booking for a patient not registered at the hospital answers 404 and saves nothing")
+    void staffBookingForUnregisteredPatientIsRefused() {
+        User admin = user("platform.admin", "ROLE_SUPER_ADMIN");
+        when(userRepository.findByUsername(admin.getUsername())).thenReturn(Optional.of(admin));
+        Patient onlyAtA = new Patient();
+        onlyAtA.setId(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(onlyAtA.getId())).thenReturn(Optional.of(onlyAtA));
+        AppointmentRequestDTO request = forPatientId(onlyAtA.getId());
+        com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
+        hospitalB.setId(request.getHospitalId());
+        when(hospitalRepository.findClinicalById(hospitalB.getId())).thenReturn(Optional.of(hospitalB));
+        doThrow(new ResourceNotFoundException("patient.notfound", onlyAtA.getId()))
+            .when(patientRegistrationGuard).requireRegisteredAt(onlyAtA.getId(), hospitalB.getId());
+
+        ResourceNotFoundException refused = refusal(request, admin);
+
+        assertThat(refused).isNotNull();
+        verify(patientRegistrationGuard).requireRegisteredAt(onlyAtA.getId(), hospitalB.getId());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D401: a patient booking for themselves is not put through the staff registration check")
+    void ownBookingSkipsStaffRegistrationCheck() {
+        Patient own = new Patient();
+        own.setId(UUID.randomUUID());
+        own.setUser(patientUser);
+        when(patientRepository.existsByIdAndUserId(own.getId(), patientUser.getId())).thenReturn(true);
+        when(patientRepository.findByIdUnscoped(own.getId())).thenReturn(Optional.of(own));
+        AppointmentRequestDTO request = forPatientId(own.getId());
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(request.getHospitalId());
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+
+        catchThrowableOfType(RuntimeException.class,
+            () -> service.createAppointment(request, locale, patientUser.getUsername()));
+
+        verify(patientRegistrationGuard, never()).requireRegisteredAt(any(), any());
     }
 
     @Test

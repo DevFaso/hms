@@ -32,6 +32,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
 
     private final FamilyHistoryRepository familyHistoryRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final FamilyHistoryMapper familyHistoryMapper;
@@ -47,6 +48,8 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestDTO.getHospitalId()));
         // QA r5 tenancy sweep: the row is written at the caller's acting hospital; the body's id is a claim.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         Staff recordedBy = null;
         if (requestDTO.getRecordedByStaffId() != null) {

@@ -243,7 +243,8 @@ class ChatMessageServiceImplTest {
         doReturn(patientId).when(service).getCurrentUserId();
         ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientId(doctorId).content("hi").build();
 
-        assertThrows(org.springframework.security.access.AccessDeniedException.class,
+        // QA D433: a refusal the patient can read (client-safe 403), not the opaque default.
+        assertThrows(com.example.hms.exception.ClientSafeAccessDeniedException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
         verify(chatMessageRepository, never()).save(any());
     }
@@ -693,8 +694,12 @@ class ChatMessageServiceImplTest {
         UUID doctor2A = UUID.randomUUID();
         doReturn(outsider).when(service).getCurrentUserId();
 
-        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+        com.example.hms.exception.ResourceNotFoundException historyRefusal = assertThrows(
+            com.example.hms.exception.ResourceNotFoundException.class,
             () -> service.getChatHistory(patientA2, doctor2A, 0, 20, Locale.ENGLISH));
+        // QA D433: the 404 names the conversation, never another user's id.
+        org.assertj.core.api.Assertions.assertThat(historyRefusal.getMessage())
+            .doesNotContain(patientA2.toString()).doesNotContain(outsider.toString());
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
             () -> service.searchMessages(patientA2, doctor2A, "docteur", 0, 20));
         assertThrows(com.example.hms.exception.ResourceNotFoundException.class,

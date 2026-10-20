@@ -664,6 +664,11 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   color: $primary;
 }
 
+// QA D423: a critical clinical alert does not share the routine icon colour.
+.notif-icon-critical {
+  color: #b91c1c;
+}
+
 .notif-content {
   flex: 1;
   min-width: 0;

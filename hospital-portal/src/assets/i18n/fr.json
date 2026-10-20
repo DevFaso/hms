@@ -3450,6 +3450,7 @@
     "PROVIDER_AUDIT": "Journal d'audit"
   },
   "NOTIFICATIONS": {
+    "CRITICAL_ALERT": "Alerte critique",
     "ALL": "Tout",
     "ALL_CAUGHT_UP": "Vous êtes à jour !",
     "ALL_MARKED_READ": "Toutes les notifications ont été marquées comme lues",
@@ -4653,6 +4654,7 @@
       "PAYMENT_METHOD": "Mode de paiement",
       "REFERENCE": "Référence / ID de transaction (facultatif)",
       "REFERENCE_PLACEHOLDER": "ex. TXN-123456",
+      "REFERENCE_REQUIRED": "Indiquez la référence du paiement par carte, virement ou mobile money.",
       "ENTER_AMOUNT": "Saisir le montant",
       "CANCEL": "Annuler",
       "PROCESSING": "Traitement en cours…",
@@ -5381,6 +5383,10 @@
         "INVOICE_CREATED": "Facture créée",
         "INVOICE_UPDATED": "Facture modifiée",
         "LAB_ORDER_CREATED": "Examen prescrit",
+        "LAB_ORDER_UPDATED": "Demande d'examen modifiée",
+        "LAB_SPECIMEN_UPDATED": "Prélèvement mis à jour",
+        "LAB_RESULT_CREATED": "Résultat d'examen saisi",
+        "LAB_RESULT_ACKNOWLEDGED": "Résultat d'examen pris en compte",
         "LAB_RESULT_RELEASED": "Résultat d'examen validé",
         "LAB_RESULT_UPDATED": "Résultat d'examen modifié",
         "LOGIN": "Connexion",
@@ -8371,7 +8377,8 @@
       "DRAFT": "Brouillon",
       "PENDING_QA": "En attente d'examen AQ",
       "PENDING_DIRECTOR": "En attente d'approbation du directeur",
-      "APPROVED": "Approuvés, en attente d'activation"
+      "APPROVED": "Approuvés, en attente d'activation",
+      "REJECTED": "Rejetés, à corriger et resoumettre"
     },
     "SEARCH_PLACEHOLDER": "Rechercher par nom, code ou catégorie…",
     "LOADING": "Chargement de la file d'attente…",

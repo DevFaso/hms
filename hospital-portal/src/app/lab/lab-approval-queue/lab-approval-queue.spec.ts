@@ -20,6 +20,7 @@ describe('LabApprovalQueueComponent (D124)', () => {
         content: [
           { id: 'a', approvalStatus: 'APPROVED' } as LabTestDefinition,
           { id: 'b', approvalStatus: 'ACTIVE' } as LabTestDefinition,
+          { id: 'c', approvalStatus: 'REJECTED' } as LabTestDefinition,
         ],
       } as unknown as SearchPage),
     );
@@ -43,12 +44,19 @@ describe('LabApprovalQueueComponent (D124)', () => {
 
   it('keeps an approved definition in the queue so it can be activated', () => {
     const c = create(['ROLE_LAB_MANAGER']);
-    expect(c.definitions().map((d) => d.id)).toEqual(['a']);
+    expect(c.definitions().map((d) => d.id)).toEqual(['a', 'c']);
     expect(c.canActivate).toBeTrue();
   });
 
   it('does not offer activation to a role the server refuses', () => {
     const c = create(['ROLE_LAB_SCIENTIST']);
     expect(c.canActivate).toBeFalse();
+  });
+
+  it('QA D417: keeps a rejected definition so it can be corrected and resubmitted', () => {
+    const c = create(['ROLE_LAB_SCIENTIST']);
+    c.setStatusFilter('REJECTED');
+    expect(c.filtered().map((d) => d.id)).toEqual(['c']);
+    expect(c.countByStatus('REJECTED')).toBe(1);
   });
 });

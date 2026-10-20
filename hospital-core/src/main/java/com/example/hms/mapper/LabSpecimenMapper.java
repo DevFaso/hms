@@ -12,6 +12,8 @@ public class LabSpecimenMapper {
         return LabSpecimenResponseDTO.builder()
             .id(specimen.getId())
             .labOrderId(specimen.getLabOrder() != null ? specimen.getLabOrder().getId() : null)
+            .patientId(specimen.getLabOrder() != null && specimen.getLabOrder().getPatient() != null
+                ? specimen.getLabOrder().getPatient().getId() : null)
             .accessionNumber(specimen.getAccessionNumber())
             .barcodeValue(specimen.getBarcodeValue())
             .specimenType(specimen.getSpecimenType())

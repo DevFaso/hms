@@ -24,6 +24,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { roleSatisfies } from '../core/role-equivalence';
 import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
+import { isCriticalNotification, notificationIcon } from '../core/notification-icon';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
 import { ImpersonationBannerComponent } from '../impersonation/impersonation-banner';
@@ -92,6 +93,9 @@ function isMobileViewport(): boolean {
   styleUrl: './shell.scss',
 })
 export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+  /** QA D423: critical alerts get their own icon and spoken label in the bell panel. */
+  protected readonly notificationIcon = notificationIcon;
+  protected readonly isCriticalNotification = isCriticalNotification;
   /**
    * v1.0 row 11: target for the skip-link and the programmatic focus
    * landing on every route change. Carries tabindex="-1" so it can

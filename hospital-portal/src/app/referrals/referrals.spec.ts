@@ -49,13 +49,14 @@ describe('ReferralsComponent', () => {
     // bypasses interceptors entirely so we don't need to stub it.
     roleContextStub = jasmine.createSpyObj(
       'RoleContextService',
-      ['scopeToHospital', 'enableGlobalView'],
+      ['scopeToHospital', 'enableGlobalView', 'hasAnyActiveRole'],
       {
         isSuperAdmin: signal(false),
         globalView: signal(false),
         selectedHospitalId: signal<string | null>(null),
       },
     );
+    roleContextStub.hasAnyActiveRole.and.returnValue(true);
     authStub = jasmine.createSpyObj('AuthService', ['getUserProfile']);
     authStub.getUserProfile.and.returnValue({ staffId: 'staff-1' } as any);
 
@@ -92,6 +93,28 @@ describe('ReferralsComponent', () => {
   it('should create', () => {
     flushInitRequests();
     expect(component).toBeTruthy();
+  });
+
+  it('QA D427: a nurse is not offered New referral, which the API refuses', () => {
+    roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_NURSE'),
+    );
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll('.page-actions .btn-primary'),
+    );
+    expect(buttons.length).toBe(0);
+  });
+
+  it('QA D412/D427: only the author of a draft is offered Submit', () => {
+    flushInitRequests();
+    const draft = (referringProviderId: string, status = 'DRAFT') =>
+      ({ id: 'r', status, referringProviderId }) as any;
+    expect(component.isMyDraft(draft('staff-1'))).toBeTrue();
+    expect(component.isMyDraft(draft('doctor-2'))).toBeFalse();
+    expect(component.isMyDraft(draft('staff-1', 'SUBMITTED'))).toBeFalse();
   });
 
   it('QA D36: the destination picker reads the hospital directory, not the scoped list', () => {

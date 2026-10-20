@@ -83,6 +83,9 @@ class BirthPlanServiceImplTest {
     @Mock
     private com.example.hms.utility.RoleValidator roleValidator;
 
+    @org.mockito.Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @InjectMocks
     private BirthPlanServiceImpl birthPlanService;
 

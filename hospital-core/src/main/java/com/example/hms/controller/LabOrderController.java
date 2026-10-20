@@ -66,6 +66,7 @@ public class LabOrderController {
 
         LabOrderResponseDTO created = labOrderService.createLabOrder(requestDTO, locale);
         WriteAuditInterceptor.describeWrite(created.getId(), created.getPatientId());
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_CREATED, created);
         return ResponseEntity.status(201).body(ApiResponseWrapper.success(created));
     }
 
@@ -139,6 +140,7 @@ public class LabOrderController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         LabOrderResponseDTO updated = labOrderService.updateLabOrder(id, requestDTO, locale);
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, updated);
         return ResponseEntity.ok(ApiResponseWrapper.success(updated));
     }
 
@@ -187,6 +189,7 @@ public class LabOrderController {
             throw new com.example.hms.exception.BusinessException("lab.order.unknownStatus", rawStatus);
         }
         LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
+        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, result);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
@@ -197,5 +200,12 @@ public class LabOrderController {
 
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
+    }
+
+    /** QA D429: the lab audit row names the event, the order and its patient. Ids only. */
+    private static void auditLabOrder(com.example.hms.enums.AuditEventType type, LabOrderResponseDTO order) {
+        if (order != null) {
+            com.example.hms.security.audit.WriteAuditDetail.describe(type, order.getId(), order.getPatientId());
+        }
     }
 }

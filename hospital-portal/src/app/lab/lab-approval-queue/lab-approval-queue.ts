@@ -132,7 +132,9 @@ export class LabApprovalQueueComponent implements OnInit {
             d.approvalStatus === 'PENDING_QA_REVIEW' ||
             d.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' ||
             d.approvalStatus === 'APPROVED' ||
-            d.approvalStatus === 'DRAFT',
+            d.approvalStatus === 'DRAFT' ||
+            // QA D417: a rejected definition is corrected and resubmitted from here.
+            d.approvalStatus === 'REJECTED',
         );
         this.definitions.set(pending);
         this.applyFilter();

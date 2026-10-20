@@ -49,6 +49,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -56,6 +57,9 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings({"java:S100", "java:S1450", "java:S1192"})
 class PatientEducationServiceImplTest {
+
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     @Mock
     private EducationResourceRepository resourceRepository;
@@ -107,6 +111,7 @@ class PatientEducationServiceImplTest {
             documentationRepository,
             questionRepository,
             patientRepository,
+            patientRegistrationGuard,
             staffRepository,
             hospitalRepository,
             encounterRepository,
@@ -330,6 +335,23 @@ class PatientEducationServiceImplTest {
     }
 
     // ==================== Progress Tracking Tests ====================
+
+    @Test
+    void trackProgress_patientNotRegisteredAtTheActingHospital_isNotFoundAndSavesNothing() {
+        // findById is registration-scoped to ANY of the caller's hospitals (QA D401).
+        PatientEducationProgressRequestDTO requestDTO = PatientEducationProgressRequestDTO.builder()
+            .resourceId(resourceId).progressPercentage(50).build();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(resourceRepository.findById(resourceId)).thenReturn(Optional.of(resource));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+            .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+
+        assertThatThrownBy(() -> service.trackProgress(patientId, requestDTO, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(progressWrites, never()).insertIfAbsent(any(), any(), any(), any());
+        verify(progressRepository, never()).save(any());
+    }
 
     @Test
     void trackProgress_shouldCreateNewProgressWhenNotExists() {
@@ -665,7 +687,7 @@ class PatientEducationServiceImplTest {
         PatientEducationQuestionMapper nullingMapper = mock(PatientEducationQuestionMapper.class);
         PatientEducationServiceImpl serviceWithNullingMapper = new PatientEducationServiceImpl(
             resourceRepository, progressRepository, documentationRepository, questionRepository,
-            patientRepository, staffRepository, hospitalRepository, encounterRepository,
+            patientRepository, patientRegistrationGuard, staffRepository, hospitalRepository, encounterRepository,
             progressWrites, resourceMapper, progressMapper, documentationMapper, nullingMapper);
 
         PatientEducationQuestionRequestDTO requestDTO = PatientEducationQuestionRequestDTO.builder()

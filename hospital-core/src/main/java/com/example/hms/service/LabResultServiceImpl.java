@@ -993,6 +993,10 @@ public class LabResultServiceImpl implements LabResultService {
         // result by guessing the UUID.
         requireResultInActiveHospital(labResult);
         acknowledgeResult(labResult, currentUserId);
+        // QA D429: the acknowledge route returns no body; name the patient here.
+        com.example.hms.security.audit.WriteAuditDetail.describe(AuditEventType.LAB_RESULT_ACKNOWLEDGED, labResult.getId(),
+            labResult.getLabOrder() != null && labResult.getLabOrder().getPatient() != null
+                ? labResult.getLabOrder().getPatient().getId() : null);
     }
 
     @Override

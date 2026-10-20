@@ -66,6 +66,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     private final ObgynReferralRepository referralRepository;
     private final ObgynReferralMessageRepository messageRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final ObgynReferralMapper referralMapper;
@@ -82,6 +83,8 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
         // QA r5 tenancy sweep: the referral is written at the caller's acting hospital.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         User midwife = resolveUserByUsername(username);
 

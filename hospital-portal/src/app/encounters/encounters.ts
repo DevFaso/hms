@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -67,6 +74,31 @@ export class EncountersComponent implements OnInit {
    */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+
+  /**
+   * QA D427: the actions the API admits, so a reader (a pharmacist or another
+   * consulting clinician) is not offered a button that ends in a 403. POST
+   * /encounters admits the clinical roles and reception; PUT the clinical
+   * roles; DELETE is the super-admin's.
+   */
+  protected readonly canCreateEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole([
+      'ROLE_SUPER_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+    ]),
+  );
+  protected readonly canEditEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole([
+      'ROLE_SUPER_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+    ]),
+  );
+  protected readonly canDeleteEncounter = computed(() => this.roleContext.isSuperAdmin());
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */

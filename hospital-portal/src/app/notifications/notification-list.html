@@ -52,8 +52,13 @@
           type="button"
         >
           <div class="notif-icon-wrap" [class]="getTypeClass(notif.type)">
-            <span class="material-symbols-outlined">{{ getTypeIcon(notif.type) }}</span>
+            <span class="material-symbols-outlined" aria-hidden="true">{{
+              getTypeIcon(notif.type)
+            }}</span>
           </div>
+          @if (isCritical(notif.type)) {
+            <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
+          }
           <div class="notif-content">
             <h4 class="notif-title">{{ notif.title || notif.message }}</h4>
             <p class="notif-message">{{ notif.message }}</p>
