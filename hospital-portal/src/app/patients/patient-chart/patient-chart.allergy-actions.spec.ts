@@ -46,9 +46,11 @@ describe('PatientChartComponent — allergy actions (QA D527)', () => {
       'listChartUpdates',
       'getDoctorTimeline',
     ]);
-    patientService.listAllergies.and.returnValue(of(opts.allergies));
-    patientService.listDiagnoses.and.returnValue(of([]));
-    patientService.listChartUpdates.and.returnValue(of({ content: [], totalElements: 0 }));
+    patientService.listAllergies.and.returnValue(of({ items: opts.allergies, withheld: false }));
+    patientService.listDiagnoses.and.returnValue(of({ items: [], withheld: false }));
+    patientService.listChartUpdates.and.returnValue(
+      of({ items: { content: [], totalElements: 0 }, withheld: false }),
+    );
     const roleContext = roleContextStub({
       superAdmin: false,
       hospitalId: opts.hospitalId,
