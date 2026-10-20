@@ -60,6 +60,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    private static final String NOT_ON_STAY_CARE_TEAM =
+        "The prescriber is not on the care team of this patient's stay.";
+
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
     private static final String SIGNATURE_ALGORITHM = "SHA-256";
@@ -1081,8 +1084,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // several (consultants, the doctor on call). Only a visit is the
         // prescriber's own; the prescription carries its prescriber either way,
         // and the hospital check below still pins them to the stay's hospital.
-        if (!isPrescribersEncounter(encounter, staff) && encounter.getAdmissionId() == null) {
-            throw new BusinessException("prescription.encounter.staff.mismatch");
+        if (!isPrescribersEncounter(encounter, staff)) {
+            if (encounter.getAdmissionId() == null) {
+                throw new BusinessException("prescription.encounter.staff.mismatch");
+            }
+            // The waiver covers the stay's care team only: an unrelated doctor
+            // at the same hospital may not attach an order to someone's stay.
+            requireStayCareTeam(encounter, staff);
         }
         if (staff.getHospital() == null || !staff.getHospital().getId().equals(encounter.getHospital().getId())) {
             throw new BusinessException("prescription.encounter.staff.hospital.mismatch");
@@ -1184,10 +1192,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
                 patient.getId(), hospitalId,
                 java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+        // The caller must be on that stay's care team: ensureContextConsistency
+        // refuses anyone else (verification GAP-1) for every path, this one too.
         if (anyStay.isPresent()) {
             return anyStay.get();
         }
-        Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId);
+        Encounter openedStay = openStayForActiveAdmission(patient.getId(), hospitalId, staff);
         if (openedStay != null) {
             return openedStay;
         }
@@ -1208,18 +1218,61 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * stays had encounters, or with no lead at the time) still makes the patient
      * an inpatient; the order opens the stay instead of a completed consultation.
      */
-    private Encounter openStayForActiveAdmission(UUID patientId, UUID hospitalId) {
+    private Encounter openStayForActiveAdmission(UUID patientId, UUID hospitalId, Staff staff) {
         if (admissionRepository == null || stayEncounters == null) {
             return null;
         }
-        return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+        Optional<com.example.hms.model.Admission> admission = admissionRepository
+            .findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
                 java.util.EnumSet.of(com.example.hms.enums.AdmissionStatus.ACTIVE,
                     com.example.hms.enums.AdmissionStatus.ON_LEAVE,
                     com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE))
             .stream()
-            .findFirst()
-            .map(stayEncounters::openStayEncounter)
-            .orElse(null);
+            .findFirst();
+        if (admission.isEmpty()) {
+            return null;
+        }
+        // Checked before the stay is opened: opening another doctor's stay is
+        // itself a write an unrelated prescriber may not cause.
+        if (!isOnAdmissionCareTeam(admission.get(), staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+        return stayEncounters.openStayEncounter(admission.get());
+    }
+
+    /**
+     * QA D414 (verification GAP-1): an order on a stay led by another doctor is
+     * allowed only for its care team: the stay lead, the admission's attending
+     * or admitting physician, or a consultant recorded on the admission.
+     */
+    private void requireStayCareTeam(Encounter stay, Staff staff) {
+        if (isPrescribersEncounter(stay, staff)) {
+            return;
+        }
+        com.example.hms.model.Admission admission = admissionRepository == null || stay.getAdmissionId() == null
+            ? null : admissionRepository.findById(stay.getAdmissionId()).orElse(null);
+        if (admission == null || !isOnAdmissionCareTeam(admission, staff)) {
+            throw new AccessDeniedException(NOT_ON_STAY_CARE_TEAM);
+        }
+    }
+
+    private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
+        UUID staffId = staff != null ? staff.getId() : null;
+        if (staffId == null) {
+            return false;
+        }
+        if (sameStaff(admission.getAttendingPhysician(), staffId)
+            || sameStaff(admission.getAdmittingProvider(), staffId)) {
+            return true;
+        }
+        List<java.util.Map<String, String>> consultants = admission.getConsultingPhysicians();
+        String id = staffId.toString();
+        return consultants != null && consultants.stream()
+            .anyMatch(c -> c != null && id.equalsIgnoreCase(c.get("staffId")));
+    }
+
+    private static boolean sameStaff(Staff member, UUID staffId) {
+        return member != null && staffId.equals(member.getId());
     }
 
     private UUID determineHospitalId(Staff staff, Patient patient) {
