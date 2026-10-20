@@ -103,6 +103,9 @@ class LabTestDefinitionServiceImplTest {
                 .build();
         definition.setId(defId);
         definition.setHospital(hospital);
+        // QA D417: review requires a range; tests that need none clear it.
+        definition.setReferenceRanges(new java.util.ArrayList<>(java.util.List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(1.0).maxValue(2.0).build())));
 
         requestDTO = LabTestDefinitionRequestDTO.builder()
                 .testCode("CBC")
@@ -981,38 +984,18 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
-    /** QA D213: the director who did the QA review cannot also approve. */
-    @Test
-    void processApproval_approve_byTheQaReviewer_isRefused() {
-        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
-        User director = userWithRole("ROLE_LAB_DIRECTOR");
-        definition.setReviewedById(director.getId());
-        holdsRolesAtHospital(director);
-
-        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
-            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
-            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
-            when(repository.findById(defId)).thenReturn(Optional.of(definition));
-
-            var req = approvalReq("APPROVE");
-            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                .isInstanceOf(com.example.hms.exception.BusinessException.class);
-        }
-    }
-
     /**
-     * QA D314: a hospital with a single lab director. The director did the QA
-     * review and now approves: allowed, and the audit row records the exception.
+     * QA D314 / D417: the director who did the QA review approves, even with a
+     * second director at the hospital: two people (author and reviewer-approver)
+     * suffice, and the audit row records the combined review.
      */
     @Test
-    void processApproval_approve_bySoleDirectorWhoReviewed_isAllowedAndAudited() {
+    void processApproval_approve_byDirectorWhoReviewed_isAllowedAndAudited() {
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
         definition.setReviewedById(director.getId());
         definition.setSubmittedById(UUID.randomUUID());
         holdsRolesAtHospital(director);
-        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
-            .thenReturn(1L);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -1025,28 +1008,7 @@ class LabTestDefinitionServiceImplTest {
 
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
             verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
-                e -> e.getEventDescription().contains("single-director exception")));
-        }
-    }
-
-    /** QA D314: with two directors the reviewer still cannot approve. */
-    @Test
-    void processApproval_approve_byReviewerWhenTwoDirectors_isRefused() {
-        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
-        User director = userWithRole("ROLE_LAB_DIRECTOR");
-        definition.setReviewedById(director.getId());
-        holdsRolesAtHospital(director);
-        when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
-            .thenReturn(2L);
-
-        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
-            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
-            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
-            when(repository.findById(defId)).thenReturn(Optional.of(definition));
-
-            var req = approvalReq("APPROVE");
-            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+                e -> e.getEventDescription().contains("also completed the QA review")));
         }
     }
 
@@ -1058,8 +1020,6 @@ class LabTestDefinitionServiceImplTest {
         definition.setReviewedById(director.getId());
         definition.setSubmittedById(director.getId());
         holdsRolesAtHospital(director);
-        lenient().when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
-            .thenReturn(1L);
 
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
@@ -1548,5 +1508,47 @@ class LabTestDefinitionServiceImplTest {
 
         assertThat(service.exportPdf()).isNotEmpty();
         verify(repository, never()).findAll();
+    }
+
+    /** QA D417: a definition without a range cannot enter review (it would come out stuck). */
+    @Test
+    void processApproval_submit_withoutReferenceRanges_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessageContaining("reference range");
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+        }
+    }
+
+    /** QA D417: an APPROVED definition with no range can be sent back, then resubmitted. */
+    @Test
+    void processApproval_reject_fromApproved_isAllowed() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.getReferenceRanges().clear();
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("REJECT", "Range missing"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.REJECTED);
+        }
     }
 }

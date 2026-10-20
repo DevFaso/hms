@@ -45,6 +45,13 @@
     >
       {{ 'LAB_APPROVAL.TAB.APPROVED' | translate }} ({{ countByStatus('APPROVED') }})
     </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'REJECTED'"
+      (click)="setStatusFilter('REJECTED')"
+    >
+      {{ 'LAB_APPROVAL.TAB.REJECTED' | translate }} ({{ countByStatus('REJECTED') }})
+    </button>
   </div>
 
   <div class="search-box">
@@ -106,8 +113,8 @@
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
 
-                  <!-- DRAFT → submit for QA -->
-                  @if (def.approvalStatus === 'DRAFT') {
+                  <!-- DRAFT or REJECTED (QA D417: resubmission) → submit for QA -->
+                  @if (def.approvalStatus === 'DRAFT' || def.approvalStatus === 'REJECTED') {
                     <button
                       class="btn-action btn-submit"
                       [title]="'LAB_APPROVAL.ACTION.SUBMIT_TITLE' | translate"
@@ -173,6 +180,21 @@
                     >
                       <span class="material-symbols-outlined">play_circle</span>
                       {{ 'LAB_APPROVAL.ACTION.ACTIVATE' | translate }}
+                    </button>
+                  }
+
+                  <!-- QA D417: an approved definition can be sent back for correction -->
+                  @if (
+                    def.approvalStatus === 'APPROVED' &&
+                    (isLabDirector || isQualityManager || isSuperAdmin)
+                  ) {
+                    <button
+                      class="btn-action btn-reject"
+                      [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
+                      (click)="openApprovalModal(def, 'REJECT')"
+                    >
+                      <span class="material-symbols-outlined">cancel</span>
+                      {{ 'LAB_APPROVAL.ACTION.REJECT' | translate }}
                     </button>
                   }
                 </div>
