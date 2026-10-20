@@ -679,13 +679,6 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     /**
-     * QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer.
-     * QA D412: a draft is sent by the clinician who wrote it. A nurse could
-     * submit a doctor's draft, sending it out under the doctor's name. The
-     * referral was resolved in the caller's scope (findReferral), so the
-     * refusal names only what the caller would need to be.
-     */
-    /**
      * QA D509 — has this referral ever been sent to the receiving hospital? A
      * draft has not, and neither has a draft cancelled before submission
      * (status CANCELLED, never stamped {@code submittedAt}).
@@ -708,6 +701,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
     }
 
+    /**
+     * QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer.
+     * QA D412: a draft is sent by the clinician who wrote it. A nurse could
+     * submit a doctor's draft, sending it out under the doctor's name. The
+     * referral was resolved in the caller's scope (findReferral), so the
+     * refusal names only what the caller would need to be.
+     */
     private void requireCallerIsReferrer(GeneralReferral referral) {
         requireCallerIsReferrer(referral, "generalReferral.submit.referrerOnly");
     }

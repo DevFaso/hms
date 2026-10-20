@@ -414,7 +414,7 @@ class GeneralReferralServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verify(referralRepository, org.mockito.Mockito.never()).save(any(GeneralReferral.class));
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
     }
 
     /** QA D510: DOCTOR_B at the receiving hospital cancels hospital A's submitted referral. */
@@ -430,7 +430,7 @@ class GeneralReferralServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verify(referralRepository, org.mockito.Mockito.never()).save(any(GeneralReferral.class));
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
     }
 
     /** D509/D510 path re-verified: the referrer at the sending hospital still cancels. */

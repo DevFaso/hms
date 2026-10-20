@@ -635,9 +635,9 @@ class ImagingOrderServiceImplTest {
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
 
+        var statusUpdate = new com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO();
         org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
-            () -> imagingOrderService.updateOrderStatus(orderId,
-                new com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO()));
+            () -> imagingOrderService.updateOrderStatus(orderId, statusUpdate));
     }
 
     @Test

@@ -11,7 +11,6 @@ import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
-import com.example.hms.payload.dto.assignment.UserRoleAssignmentBatchResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
@@ -116,6 +115,9 @@ class AssignmentGrantScopeTest {
             registrationRepository, staffRepository, roleValidator);
         ReflectionTestUtils.setField(service, "roleValidator", roleValidator);
         ReflectionTestUtils.setField(service, "accountAccess", access);
+        // Refusals carry message keys; resolve them against the real bundles so the
+        // assertions on wording hold whatever test ran before in this JVM.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
 
         when(messageSource.getMessage(anyString(), any(), anyString(), any()))
             .thenAnswer(inv -> inv.getArgument(2));
