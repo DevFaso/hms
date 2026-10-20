@@ -233,8 +233,12 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
         if (staffId != null) {
-            return staffRepository.findByIdAndActiveTrue(staffId)
+            Staff staff = staffRepository.findByIdAndActiveTrue(staffId)
                 .orElseThrow(() -> new ResourceNotFoundException("staff.not.found.or.inactive", staffId));
+            // QA D503 class: the recorder is the caller, not a colleague named in the body.
+            // (the hospital check on the recorder follows, with its own message)
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
+            return staff;
         }
         if (recorderUserId == null) {
             return null;

@@ -67,6 +67,11 @@ class PatientVitalSignServiceImplTest {
     @InjectMocks
     private PatientVitalSignServiceImpl patientVitalSignService;
 
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
+
     @Test
     void recordVital_persistsMeasurementWithResolvedContext() {
         UUID patientId = UUID.randomUUID();
@@ -114,6 +119,7 @@ class PatientVitalSignServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
         when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(invocation -> {
             PatientVitalSign entity = invocation.getArgument(0);
@@ -233,6 +239,7 @@ class PatientVitalSignServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registration.getId())).thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
 
         assertThrows(BusinessException.class,

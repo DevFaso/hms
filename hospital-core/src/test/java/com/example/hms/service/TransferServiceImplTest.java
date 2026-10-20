@@ -397,6 +397,27 @@ class TransferServiceImplTest {
     }
 
     @Test
+    void cancellingInAColleaguesNameIsRefusedAndKeepsTheBed_D503() {
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        com.example.hms.model.Staff colleague = new com.example.hms.model.Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(order.getHospital());
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID orderId = order.getId();
+        TransferCancellationRequestDTO request = TransferCancellationRequestDTO.builder()
+            .cancellationReason("Patient improved").cancelledByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.cancelTransfer(orderId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isNotEqualTo(TransferOrderStatus.CANCELLED);
+        verify(bedAssignmentService, org.mockito.Mockito.never()).releaseReservation(any());
+    }
+
+    @Test
     void cancellingNeedsAReasonBecauseTheBedWasHeldOutOfCirculation() {
         TransferOrder order = pendingOrder(destinationBed);
         when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));

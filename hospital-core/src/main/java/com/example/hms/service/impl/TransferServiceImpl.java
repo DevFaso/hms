@@ -190,6 +190,10 @@ public class TransferServiceImpl implements TransferService {
             throw new BusinessException("transfer.r7.notPending");
         }
 
+        // QA D503 class: the canceller is the caller, checked before anything changes.
+        com.example.hms.model.Staff cancelledBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getCancelledByStaffId(), order.getHospital().getId());
+
         // Hand the bed back. releaseReservation only touches a RESERVED bed,
         // so if somebody has since been put in it this cannot evict them.
         bedAssignmentService.releaseReservation(order.getToBed());
@@ -197,8 +201,7 @@ public class TransferServiceImpl implements TransferService {
         order.setStatus(TransferOrderStatus.CANCELLED);
         order.setCancelledAt(LocalDateTime.now(clock));
         order.setCancellationReason(request.getCancellationReason());
-        order.setCancelledBy(
-            resolveStaff(request.getCancelledByStaffId(), order.getHospital().getId()));
+        order.setCancelledBy(cancelledBy);
 
         TransferOrder saved = transferOrderRepository.save(order);
         return mapper.toDto(saved, activePrecautions(saved));

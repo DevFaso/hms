@@ -45,7 +45,6 @@ class ClientSuppliedIdentityGuardTest {
 
     private static final String CHECKED = "checked: CallerIdentity, must be the caller's own staff record (QA D503 class)";
     private static final String SUBJECT = "subject, not actor: the staff member the schedule/booking is FOR";
-    private static final String DEBT = "debt: pre-existing actor id from the client, not yet derived from the session (tasklist.md, QA D503 class)";
 
     /**
      * Known endpoints → why they are acceptable. Only shrink this map.
@@ -53,7 +52,7 @@ class ClientSuppliedIdentityGuardTest {
      * others are recorded debt (tasklist.md, Standing platform debt).
      */
     private static final Map<String, String> ALLOWED = Map.ofEntries(
-        Map.entry("AdmissionController#dischargePatient{dischargingProviderId}", DEBT),
+        Map.entry("AdmissionController#dischargePatient{dischargingProviderId}", CHECKED),
         Map.entry("AppointmentController#createAppointment{staffId}", SUBJECT),
         Map.entry("AppointmentController#searchAppointments{staffId}", "read: a search filter sent as a POST body"),
         Map.entry("AppointmentController#updateAppointment{staffId}", SUBJECT),
@@ -71,28 +70,28 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("EncounterController#update{staffId}", "subject, not actor: the clinician the encounter is assigned to"),
         Map.entry("EncounterController#upsertEncounterNote{authorStaffId}", "checked: QA D406, resolveSessionNoteAuthor"),
         Map.entry("EncounterController#upsertEncounterNote{authorUserId}", "checked: QA D406, resolveSessionNoteAuthor"),
-        Map.entry("EncounterTreatmentController#addTreatmentToEncounter{staffId}", DEBT),
+        Map.entry("EncounterTreatmentController#addTreatmentToEncounter{staffId}", CHECKED),
         Map.entry("ImagingOrderController#updateStatus{performedByUserId}", "ignored: the session is recorded (QA D503 class, this PR)"),
-        Map.entry("ImagingResultController#createReport{performedByStaffId}", DEBT),
-        Map.entry("ImagingResultController#updateReport{performedByStaffId}", DEBT),
-        Map.entry("IsolationController#startPrecaution{orderedByStaffId}", DEBT),
-        Map.entry("LabTestValidationStudyController#create{performedByUserId}", DEBT),
-        Map.entry("LabTestValidationStudyController#update{performedByUserId}", DEBT),
-        Map.entry("LaborController#addEntry{recordedByStaffId}", DEBT),
-        Map.entry("MaternalHistoryController#createMaternalHistory{recordedByStaffId}", DEBT),
-        Map.entry("MaternalHistoryController#updateMaternalHistory{recordedByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#createFamilyHistory{recordedByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#createImmunization{administeredByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#createSocialHistory{recordedByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#updateFamilyHistory{recordedByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#updateImmunization{administeredByStaffId}", DEBT),
-        Map.entry("MedicalHistoryController#updateSocialHistory{recordedByStaffId}", DEBT),
-        Map.entry("NewbornAssessmentController#recordAssessment{recordedByStaffId}", DEBT),
+        Map.entry("ImagingResultController#createReport{performedByStaffId}", "subject, not actor: the technologist who acquired the study, named by the reporting radiologist; same-hospital check"),
+        Map.entry("ImagingResultController#updateReport{performedByStaffId}", "subject, not actor: the technologist who acquired the study, named by the reporting radiologist; same-hospital check"),
+        Map.entry("IsolationController#startPrecaution{orderedByStaffId}", CHECKED),
+        Map.entry("LabTestValidationStudyController#create{performedByUserId}", "checked: CallerIdentity.resolveActorUserId, must be the caller (QA D503 class)"),
+        Map.entry("LabTestValidationStudyController#update{performedByUserId}", "checked: CallerIdentity.resolveActorUserId, a new performer must be the caller (QA D503 class)"),
+        Map.entry("LaborController#addEntry{recordedByStaffId}", CHECKED),
+        Map.entry("MaternalHistoryController#createMaternalHistory{recordedByStaffId}", "ignored: the recorder is the session user's staff record"),
+        Map.entry("MaternalHistoryController#updateMaternalHistory{recordedByStaffId}", "ignored: the recorder is the session user's staff record"),
+        Map.entry("MedicalHistoryController#createFamilyHistory{recordedByStaffId}", CHECKED),
+        Map.entry("MedicalHistoryController#createImmunization{administeredByStaffId}", CHECKED),
+        Map.entry("MedicalHistoryController#createSocialHistory{recordedByStaffId}", CHECKED),
+        Map.entry("MedicalHistoryController#updateFamilyHistory{recordedByStaffId}", CHECKED),
+        Map.entry("MedicalHistoryController#updateImmunization{administeredByStaffId}", CHECKED),
+        Map.entry("MedicalHistoryController#updateSocialHistory{recordedByStaffId}", CHECKED),
+        Map.entry("NewbornAssessmentController#recordAssessment{recordedByStaffId}", CHECKED),
         Map.entry("OnCallScheduleController#create{staffId}", SUBJECT),
         Map.entry("OnCallScheduleController#update{staffId}", SUBJECT),
         Map.entry("PatientPortalController#scheduleMyAppointment{staffId}", "subject, not actor: the clinician the patient books with"),
-        Map.entry("PatientVitalSignController#recordVital{recordedByStaffId}", DEBT),
-        Map.entry("PostpartumCareController#recordObservation{recordedByStaffId}", DEBT),
+        Map.entry("PatientVitalSignController#recordVital{recordedByStaffId}", CHECKED),
+        Map.entry("PostpartumCareController#recordObservation{recordedByStaffId}", CHECKED),
         Map.entry("PrenatalSchedulingController#generateSchedule{staffId}", SUBJECT),
         Map.entry("PrescriptionController#create{staffId}", "checked: QA D84, prescription.prescriber.must.be.self"),
         Map.entry("PrescriptionController#update{staffId}", "checked: QA D84, prescription.prescriber.must.be.self"),
@@ -103,10 +102,10 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("StaffSchedulingController#requestLeave{staffId}", SUBJECT),
         Map.entry("StaffSchedulingController#scheduleShift{staffId}", SUBJECT),
         Map.entry("StaffSchedulingController#updateShift{staffId}", SUBJECT),
-        Map.entry("TransferController#cancelTransfer{cancelledByStaffId}", DEBT),
-        Map.entry("TransfusionController#startAdministration{verifiedByStaffId}", DEBT),
-        Map.entry("TreatmentPlanController#create{authorStaffId}", DEBT),
-        Map.entry("TreatmentPlanController#update{authorStaffId}", DEBT)
+        Map.entry("TransferController#cancelTransfer{cancelledByStaffId}", CHECKED),
+        Map.entry("TransfusionController#startAdministration{verifiedByStaffId}", "checked: the independent second checker, an active staff member at this hospital and never the caller"),
+        Map.entry("TreatmentPlanController#create{authorStaffId}", CHECKED),
+        Map.entry("TreatmentPlanController#update{authorStaffId}", "checked: an edit keeps the author; a new author must be the caller")
     );
 
     @Test

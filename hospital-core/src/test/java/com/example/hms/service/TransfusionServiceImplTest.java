@@ -589,6 +589,37 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void theSecondCheckerCannotBeTheCallerUnderAnotherStaffRecord_D503() {
+        com.example.hms.model.User same = new com.example.hms.model.User();
+        same.setId(callerUserId);
+        caller.setUser(same);
+        second.setUser(same);
+        UUID verifierId = second.getId();
+
+        assertThatThrownBy(() -> hang(BloodUnitStatus.ISSUED, verifierId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("requires two people");
+    }
+
+    @Test
+    void theSecondCheckerMustBeStaffAtThisHospital_D503() {
+        second.setHospital(null);
+        UUID verifierId = second.getId();
+
+        assertThatThrownBy(() -> hang(BloodUnitStatus.ISSUED, verifierId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void anInactiveSecondCheckerIsRefused_D503() {
+        second.setActive(false);
+        UUID verifierId = second.getId();
+
+        assertThatThrownBy(() -> hang(BloodUnitStatus.ISSUED, verifierId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     void hangingAnIssuedUnitWithASecondVerifierSucceeds() {
         hang(BloodUnitStatus.ISSUED, second.getId());
         verify(administrationRepository).save(any(TransfusionAdministration.class));

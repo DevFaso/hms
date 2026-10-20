@@ -74,6 +74,11 @@ class ImmunizationServiceImplTest {
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
+
     @Test
     void createImmunization_success() {
         ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
@@ -102,6 +107,7 @@ class ImmunizationServiceImplTest {
         dto.setEncounterId(encounterId);
 
         Staff staff = new Staff(); staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         Encounter encounter = new Encounter(); encounter.setId(encounterId);
         PatientImmunization entity = new PatientImmunization();
         entity.setId(immunizationId);

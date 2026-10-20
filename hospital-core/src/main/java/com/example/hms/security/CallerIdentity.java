@@ -65,4 +65,68 @@ public final class CallerIdentity {
         return com.example.hms.security.tenant.ActingScopeResolver.currentScope()
             instanceof com.example.hms.security.tenant.ActingScope.Global;
     }
+
+    /**
+     * The acting staff member for a write that records who did it (the
+     * recorder, the performer, the author, the canceller). A claimed staff id
+     * must be a staff record at {@code hospitalId} and, unless the caller is a
+     * super-admin in global view, the caller's own; with no claim the caller's
+     * own staff record at that hospital is used (or {@code null} when the
+     * caller has none there). QA D503 class.
+     */
+    public static Staff resolveActor(com.example.hms.repository.StaffRepository staffRepository,
+                                     UUID claimedStaffId, UUID hospitalId) {
+        if (claimedStaffId == null) {
+            UUID caller = currentUserId();
+            if (caller == null || hospitalId == null) {
+                return null;
+            }
+            return staffRepository.findByUserIdAndHospitalId(caller, hospitalId).orElse(null);
+        }
+        Staff claimed = staffRepository.findById(claimedStaffId)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("staff.notFound", claimedStaffId));
+        return confirmActor(staffRepository, claimed, hospitalId);
+    }
+
+    /**
+     * Confirm an already-loaded claimed actor: the caller's own record at
+     * {@code hospitalId} (a caller who sent their staff record at another
+     * hospital gets their record at this one), or, for a super-admin in global
+     * view, any staff record at that hospital.
+     */
+    public static Staff confirmActor(com.example.hms.repository.StaffRepository staffRepository,
+                                     Staff claimed, UUID hospitalId) {
+        if (isCaller(claimed) && hospitalId != null && (claimed.getHospital() == null
+            || !hospitalId.equals(claimed.getHospital().getId()))) {
+            return staffRepository.findByUserIdAndHospitalId(currentUserId(), hospitalId)
+                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("staff.notFound", claimed.getId()));
+        }
+        requireAtHospital(claimed, hospitalId);
+        requireCallerUnlessSuperAdmin(claimed);
+        return claimed;
+    }
+
+    /** Refuse a staff record that is not at {@code hospitalId} (a null hospital is never a match). */
+    public static void requireAtHospital(Staff staff, UUID hospitalId) {
+        if (hospitalId != null && (staff == null || staff.getHospital() == null
+            || !hospitalId.equals(staff.getHospital().getId()))) {
+            throw new com.example.hms.exception.ResourceNotFoundException("staff.notFound",
+                staff == null ? null : staff.getId());
+        }
+    }
+
+    /**
+     * A user id the client names as the one who performed something must be the
+     * caller's (super-admin in global view excepted); with none, the caller's.
+     */
+    public static UUID resolveActorUserId(UUID claimedUserId) {
+        UUID caller = currentUserId();
+        if (claimedUserId == null) {
+            return caller;
+        }
+        if (!claimedUserId.equals(caller) && !isGlobalSuperAdmin()) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("identity.notCaller"));
+        }
+        return claimedUserId;
+    }
 }

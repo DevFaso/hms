@@ -56,11 +56,8 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", requestDTO.getHospitalId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        Staff recordedBy = null;
-        if (requestDTO.getRecordedByStaffId() != null) {
-            recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
-        }
+        // QA D503 class: the recorder is the caller, not a colleague named in the body.
+        Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(), hospital.getId());
 
         // If this is a new active record, deactivate previous ones
         if (requestDTO.getActive() == null || Boolean.TRUE.equals(requestDTO.getActive())) {
@@ -147,8 +144,8 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
         if (requestDTO.getRecordedByStaffId() != null && 
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
-            Staff recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
+            Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(),
+                    existingHistory.getHospital() == null ? null : existingHistory.getHospital().getId());
             existingHistory.setRecordedBy(recordedBy);
         }
 

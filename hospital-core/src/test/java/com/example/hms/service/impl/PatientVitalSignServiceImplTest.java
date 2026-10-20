@@ -95,6 +95,11 @@ class PatientVitalSignServiceImplTest {
             news2EscalationService);
     }
 
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+    }
+
     @Test
     void recordVitalResolvesContextFromRegistrationAndRecorderUser() {
         UUID patientId = UUID.randomUUID();
@@ -195,6 +200,7 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(registration));
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, null);
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
 
         UUID randomId = UUID.randomUUID();

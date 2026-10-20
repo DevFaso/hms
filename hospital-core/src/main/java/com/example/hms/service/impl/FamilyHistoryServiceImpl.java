@@ -51,11 +51,8 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        Staff recordedBy = null;
-        if (requestDTO.getRecordedByStaffId() != null) {
-            recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
-        }
+        // QA D503 class: the recorder is the caller, not a colleague named in the body.
+        Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(), hospital.getId());
 
         PatientFamilyHistory familyHistory = familyHistoryMapper.toEntity(requestDTO, patient, hospital, recordedBy);
         PatientFamilyHistory savedHistory = familyHistoryRepository.save(familyHistory);
@@ -154,8 +151,8 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         if (requestDTO.getRecordedByStaffId() != null && 
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
-            Staff recordedBy = staffRepository.findById(requestDTO.getRecordedByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getRecordedByStaffId()));
+            Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(),
+                    existingHistory.getHospital() == null ? null : existingHistory.getHospital().getId());
             existingHistory.setRecordedBy(recordedBy);
         }
 

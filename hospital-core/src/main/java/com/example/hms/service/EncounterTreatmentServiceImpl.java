@@ -41,11 +41,9 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
         // QA r5 tenancy sweep: the encounter is the caller's hospital's, and so is the treatment.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(encounter.getHospital(), ENCOUNTER_NOT_FOUND_KEY, dto.getEncounterId());
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
-        Staff staff = null;
-        if (dto.getStaffId() != null) {
-            staff = staffRepository.findById(dto.getStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", dto.getStaffId()));
-        }
+        // QA D503 class: the clinician who gave the treatment is the caller.
+        Staff staff = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, dto.getStaffId(),
+                encounter.getHospital() == null ? null : encounter.getHospital().getId());
         EncounterTreatment entity = mapper.toEntity(dto, encounter, treatment, staff);
         return mapper.toDto(encounterTreatmentRepository.save(entity));
     }

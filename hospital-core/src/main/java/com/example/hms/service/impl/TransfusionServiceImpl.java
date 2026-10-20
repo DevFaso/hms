@@ -538,8 +538,18 @@ public class TransfusionServiceImpl implements TransfusionService {
                 "Only a clinician with a staff profile at this hospital can transfuse.");
         }
         Staff verifier = staffRepository.findById(request.getVerifiedByStaffId())
-            .filter(s -> s.getHospital() == null || Objects.equals(s.getHospital().getId(), hospitalId))
+            // QA D503 class: the second checker is an active staff member AT this hospital
+            // (a record with no hospital is not one), and a different person from the caller.
+            .filter(s -> s.getHospital() != null && Objects.equals(s.getHospital().getId(), hospitalId))
+            .filter(Staff::isActive)
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getVerifiedByStaffId()));
+        // Another staff record of the same person (a second hospital's, say) is still one person.
+        if (administering.getUser() != null && verifier.getUser() != null
+            && Objects.equals(administering.getUser().getId(), verifier.getUser().getId())) {
+            throw new BusinessException(
+                "The bedside check requires two people. Name the second clinician who independently "
+                    + "verified this unit against this patient.");
+        }
 
         // The independent second check. A transfusion is the one administration
         // where a single signature is not accepted practice anywhere.
