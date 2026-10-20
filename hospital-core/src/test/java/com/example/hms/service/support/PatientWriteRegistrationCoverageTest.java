@@ -109,7 +109,7 @@ class PatientWriteRegistrationCoverageTest {
         "private\\s++(?:static\\s++)?(?:final\\s++)?[\\w<>\\[\\],.?]++(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(([^)]*+)\\)"
             + "\\s*+(?:throws\\s++[\\w.,\\s]++)?\\{");
     /** An unqualified call ({@code helper(..)}, not {@code repo.helper(..)}): only those reach a same-class helper. */
-    private static final Pattern CALL = Pattern.compile("(?<![.\\w])(\\w+)\\s*\\(");
+    private static final Pattern CALL = Pattern.compile("(?<![.\\w])(\\w++)\\s*+\\(");
     private static final Pattern PATIENT_ID_FIELD = Pattern.compile("\\bUUID\\s+patientId\\b");
     private static final Pattern PATIENT_ID_PARAM = Pattern.compile("UUID\\s+patientId\\b");
 
