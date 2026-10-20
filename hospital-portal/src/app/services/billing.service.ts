@@ -103,6 +103,11 @@ export interface BillingInvoiceRequest {
   notes?: string;
   /** Idempotency key, one per create form: a double submit is one invoice. */
   clientRequestId?: string;
+  /**
+   * QA D529: confirms a deliberate second invoice for a visit or stay that
+   * already has one (the server answers 409 otherwise).
+   */
+  supplementary?: boolean;
 }
 
 /** Backend PaymentMethod values the staff modal offers. */

@@ -255,6 +255,33 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D512: POST /pharmacy/dispense with no pharmacist verification is refused, and it can still be done after")
+    void d512_aFillWithoutVerificationIsRefused() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        tools.jackson.databind.node.ObjectNode unverified = (tools.jackson.databind.node.ObjectNode)
+                tools.jackson.databind.json.JsonMapper.builder().build()
+                        .readTree(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null));
+        unverified.remove("verifiedBy");
+
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(unverified.toString()))
+                .andExpect(status().isBadRequest());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SIGNED);
+        assertThat(dispenseRepository.findByPrescriptionId(rxId, org.springframework.data.domain.Pageable.unpaged()))
+                .isEmpty();
+
+        // The refused fill left the order verifiable and fillable.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null)))
+                .andExpect(status().isCreated());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.DISPENSED);
+    }
+
+    @Test
     @DisplayName("G12: an in-house dispense cannot be booked against a partner or community pharmacy row")
     void inHouseDispenseRefusesNonDispensary() throws Exception {
         UUID rxId = createAndSignPrescription();
@@ -708,6 +735,8 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         body.put("patientId", patient.getId());
         body.put("pharmacyId", pharmacy.getId());
         body.put("dispensedBy", dispensedBy.getId());
+        // QA D512: the dispensing pharmacist attests the verification.
+        body.put("verifiedBy", dispensedBy.getId());
         body.put("medicationName", MEDICATION);
         body.put("quantityRequested", quantity);
         body.put("quantityDispensed", quantity);

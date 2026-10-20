@@ -204,6 +204,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final FiveRightsVerificationService fiveRightsVerificationService;
     private final ObjectMapper objectMapper;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -225,44 +226,55 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseVitalTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
-            if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
-
-            // Find the most recent vital sign for this patient at this hospital
-            Optional<PatientVitalSign> last = vitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
-
-            // Compute when the next vitals check is due
-            LocalDateTime dueTime;
-            boolean overdue;
-            NewsScoreCalculator.NewsScoreResult news = null;
-            if (last.isEmpty() || last.get().getRecordedAt() == null) {
-                // No vitals ever recorded — overdue now
-                dueTime = now.minusMinutes(30);
-                overdue = true;
-            } else {
-                // QA D207: the NEWS2 band of the last set shortens the interval.
-                news = NewsScoreCalculator.score(last.get());
-                dueTime = last.get().getRecordedAt().plus(
-                    com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
-                overdue = dueTime.isBefore(now);
-            }
-
-            // Only include if within the lookahead window or already overdue
-            if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
-                tasks.add(NurseVitalTaskResponseDTO.builder()
-                    .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
-                    .patientId(ctx.patientId())
-                    .patientName(ctx.displayName())
-                    .type(vitalsRoundType(news, overdue))
-                    .dueTime(dueTime)
-                    .overdue(overdue)
-                    .news2Score(news != null ? news.total() : null)
-                    .build());
+            if (ctx.patientId() != null && admitted.contains(ctx.patientId())) {
+                NurseVitalTaskResponseDTO task = vitalTaskFor(ctx, hospitalId, now, effectiveWindow);
+                if (task != null) {
+                    tasks.add(task);
+                }
             }
         }
 
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
         return tasks.stream().limit(MAX_LIMIT).toList();
+    }
+
+    /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
+    private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
+                                                   Duration effectiveWindow) {
+        // Find the most recent vital sign for this patient at this hospital
+        Optional<PatientVitalSign> last = vitalSignRepository
+            .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
+
+        // Compute when the next vitals check is due
+        LocalDateTime dueTime;
+        boolean overdue;
+        NewsScoreCalculator.NewsScoreResult news = null;
+        if (last.isEmpty() || last.get().getRecordedAt() == null) {
+            // No vitals ever recorded — overdue now
+            dueTime = now.minusMinutes(30);
+            overdue = true;
+        } else {
+            // QA D207: the NEWS2 band of the last set shortens the interval.
+            // QA D518: the adult score does not set a child's interval.
+            news = NewsScoreCalculator.applies(last.get()) ? NewsScoreCalculator.score(last.get()) : null;
+            dueTime = last.get().getRecordedAt().plus(
+                com.example.hms.service.vitals.News2EscalationService.observationInterval(news, effectiveWindow));
+            overdue = dueTime.isBefore(now);
+        }
+
+        // Only include if within the lookahead window or already overdue
+        if (overdue || dueTime.isBefore(now.plus(effectiveWindow))) {
+            return NurseVitalTaskResponseDTO.builder()
+                .id(UUID.nameUUIDFromBytes((ctx.patientId() + ":VITAL:" + hospitalId).getBytes()))
+                .patientId(ctx.patientId())
+                .patientName(ctx.displayName())
+                .type(vitalsRoundType(news, overdue))
+                .dueTime(dueTime)
+                .overdue(overdue)
+                .news2Score(news != null ? news.total() : null)
+                .build();
+        }
+        return null;
     }
 
     /* ═══════════════════════════════════════════════════════════════════
@@ -274,9 +286,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
         LocalDateTime now = LocalDateTime.now();
 
+        // QA D514: the eMAR is the ward's dose list. It listed the take-home
+        // prescriptions of outpatients nobody admitted as due doses.
+        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
         List<NurseMedicationTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
-            tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now));
+            tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now, admitted));
         }
 
         return tasks.stream().limit(MAX_LIMIT).toList();
@@ -284,7 +299,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Build medication tasks for a single patient from their real prescriptions. */
     private List<NurseMedicationTaskResponseDTO> buildMedicationTasksForPatient(
-        PatientContext ctx, UUID hospitalId, String statusFilter, LocalDateTime now
+        PatientContext ctx, UUID hospitalId, String statusFilter, LocalDateTime now, Set<UUID> admitted
     ) {
         if (ctx.patientId() == null || hospitalId == null) return List.of();
 
@@ -294,8 +309,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
 
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
+        boolean inBed = admitted.contains(ctx.patientId());
         for (Prescription rx : prescriptions) {
-            if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
+            if (!onWardMar(rx, closedStays, inBed)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -315,6 +331,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
         return result;
+    }
+
+    /**
+     * QA D514: a patient with no bed here only has eMAR doses while an
+     * emergency visit the order was written in is still open (treatment in
+     * the department, before any admission). An outpatient's take-home
+     * prescription is never a nursing dose.
+     */
+    static boolean givenDuringOpenEmergencyVisit(Prescription rx) {
+        com.example.hms.model.Encounter encounter = rx.getEncounter();
+        return encounter != null
+            && encounter.getEncounterType() == com.example.hms.enums.EncounterType.EMERGENCY
+            && encounter.getStatus() != com.example.hms.enums.EncounterStatus.COMPLETED
+            && encounter.getStatus() != com.example.hms.enums.EncounterStatus.CANCELLED;
     }
 
     /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */
@@ -358,6 +388,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
             validateHospitalMatch(rx.getHospital(), hospitalId);
+            requireOrderNotEndedByDischarge(rx, hospitalId);
             requirePharmacistVerification(rx, marStatus);
             return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason);
         }
@@ -367,6 +398,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
             validateHospitalMatch(marRecord.getHospital(), hospitalId);
+            requireOrderNotEndedByDischarge(marRecord.getPrescription(), hospitalId);
             requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             requireScanByAdministeringNurse(marRecord, marStatus, nurseUserId, hospitalId);
@@ -924,17 +956,26 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .toList();
     }
 
+    /** Whether an order belongs on the ward MAR (QA D514): active, not ended by a stay, and the patient is in a bed or an open emergency visit. */
+    private boolean onWardMar(Prescription rx, List<Admission> closedStays, boolean inBed) {
+        return ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !endedWithAStay(rx, closedStays)
+            && (inBed || givenDuringOpenEmergencyVisit(rx));
+    }
+
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
     private long[] countMedicationStatuses(List<PatientContext> patients, UUID hospitalId, LocalDateTime now) {
         long due = 0;
         long overdue = 0;
+        // QA D514: counted on the same rule as the eMAR list itself.
+        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
         for (PatientContext ctx : patients) {
             if (ctx.patientId() == null || hospitalId == null) continue;
             List<Prescription> prescriptions = prescriptionRepository
                 .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
             List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
+            boolean inBed = admitted.contains(ctx.patientId());
             for (Prescription rx : prescriptions) {
-                if (!ACTIVE_RX_STATUSES.contains(rx.getStatus()) || endedWithAStay(rx, closedStays)) continue;
+                if (!onWardMar(rx, closedStays, inBed)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
@@ -1212,24 +1253,24 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * care here. A patient never admitted (an outpatient) is not affected.
      */
     private void requireNotDischargedWithoutVisit(UUID patientId, UUID hospitalId) {
-        List<com.example.hms.model.Admission> stays =
-            admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
-                EnumSet.allOf(com.example.hms.enums.AdmissionStatus.class));
-        if (stays.isEmpty()) {
+        requireNotDischargedWithoutVisit(patientId, hospitalId, "nurse.vitals.patientDischarged");
+    }
+
+    private void requireNotDischargedWithoutVisit(UUID patientId, UUID hospitalId, String messageKey) {
+        dischargedPatientGuard.requireNotDischargedWithoutVisit(patientId, hospitalId, messageKey);
+    }
+
+    /**
+     * QA D525: a dose of an order the discharge ended was refused with a
+     * "not due" reason, as if the timing were the problem.
+     */
+    private void requireOrderNotEndedByDischarge(Prescription rx, UUID hospitalId) {
+        if (rx == null || rx.getPatient() == null || hospitalId == null) {
             return;
         }
-        boolean openStay = stays.stream().anyMatch(a -> a.getStatus() == com.example.hms.enums.AdmissionStatus.PENDING
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ACTIVE
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ON_LEAVE
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);
-        if (openStay) {
-            return;
-        }
-        boolean openVisit = !encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
-            EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
-                com.example.hms.enums.EncounterStatus.CANCELLED)).isEmpty();
-        if (!openVisit) {
-            throw new BusinessException("nurse.vitals.patientDischarged");
+        List<Admission> closedStays = closedStaysFor(rx.getPatient().getId(), hospitalId, List.of(rx));
+        if (!closedStays.isEmpty() && endedWithAStay(rx, closedStays)) {
+            throw new BusinessException("nurse.mar.patientDischarged");
         }
     }
 
@@ -1521,7 +1562,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         // NEWS2 aggregate reaches MEDIUM (P3 #25b) — the aggregate catches
         // the multi-parameter deterioration the per-vital ranges miss.
         boolean clinicallySig = isClinicallySignificant(request)
-            || com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5;
+            || (com.example.hms.utility.NewsScoreCalculator.applies(vital)
+                && com.example.hms.utility.NewsScoreCalculator.score(vital).total() >= 5);
         vital.setClinicallySignificant(clinicallySig);
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(staff -> {
@@ -1689,6 +1731,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");
         }
+        // QA D525: a ward task for a patient who went home sat in the list.
+        requireNotDischargedWithoutVisit(patient.getId(), hospitalId, "nurse.task.patientDischarged");
 
         // QA D294: a task due in 2020 was accepted and sat overdue for ever.
         // A task is for this shift onward; a little back-dating is allowed.

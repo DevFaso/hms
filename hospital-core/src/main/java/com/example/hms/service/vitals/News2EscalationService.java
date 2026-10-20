@@ -86,7 +86,9 @@ public class News2EscalationService {
     public NewsScoreResult escalateIfNeeded(PatientVitalSign vital, UUID patientId, UUID hospitalId,
                                             String recorderUsername, String visitPhysicianUsername) {
         NewsScoreResult score = NewsScoreCalculator.score(vital);
-        if (!needsEscalation(score) || patientId == null || hospitalId == null) {
+        // QA D518: an adult NEWS2 band never pages anyone about a child.
+        if (!NewsScoreCalculator.applies(vital)
+                || !needsEscalation(score) || patientId == null || hospitalId == null) {
             return score;
         }
         Set<String> recipients = new LinkedHashSet<>();

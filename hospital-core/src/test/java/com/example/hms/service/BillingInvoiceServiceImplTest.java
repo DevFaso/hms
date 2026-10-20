@@ -1608,4 +1608,64 @@ class BillingInvoiceServiceImplTest {
 
         assertEquals(patient.getId().toString(), response.getPatientId());
     }
+
+    // ---- QA D529: a second invoice for a stay already invoiced ----
+
+    @Test
+    void createInvoice_aSecondInvoiceForAPaidStayIsRefusedWithTheExistingNumber_D529() {
+        // QA D529: BILLING_A POSTed /billing-invoices for the stay's encounter
+        // code when the stay's invoice was already PAID; a second invoice was
+        // created with no warning.
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter stay = visitOf(a2, "ENC-STAY-1");
+        BillingInvoice paid = new BillingInvoice();
+        paid.setId(UUID.randomUUID());
+        paid.setInvoiceNumber("RHA-2026-000012");
+        paid.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(stay.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(paid));
+        BillingInvoiceRequestDTO request = requestFor(a2).encounterReference("ENC-STAY-1")
+            .clientRequestId(UUID.randomUUID()).build();
+
+        com.example.hms.exception.ConflictException refused = assertThrows(
+            com.example.hms.exception.ConflictException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        assertTrue(refused.getMessage().contains("RHA-2026-000012") || refused.getMessage().contains("encounterAlreadyInvoiced"));
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createInvoice_aConfirmedSupplementaryInvoiceIsCreated_D529() {
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter stay = visitOf(a2, "ENC-STAY-2");
+        BillingInvoice paid = new BillingInvoice();
+        paid.setInvoiceNumber("RHA-2026-000013");
+        paid.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        org.mockito.Mockito.lenient().when(invoiceRepository.findByEncounter_IdAndStatusNot(
+                stay.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(paid));
+
+        billingInvoiceService.createInvoice(requestFor(a2).encounterReference("ENC-STAY-2")
+            .supplementary(true).build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
+    }
+
+    @Test
+    void createInvoice_aFoldedCheckInCopayDoesNotBlockTheVisitInvoice_D529() {
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter visit = visitOf(a2, "ENC-VISIT-3");
+        BillingInvoice copay = new BillingInvoice();
+        copay.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        copay.setCheckInCopay(true);
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(copay));
+
+        billingInvoiceService.createInvoice(requestFor(a2).encounterReference("ENC-VISIT-3").build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
+    }
 }

@@ -81,6 +81,7 @@ class MortalityServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
     @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
 
@@ -180,6 +181,8 @@ class MortalityServiceImplTest {
         // AdmissionStatus.DECEASED has existed since V1 with no writer at all.
         assertThat(open.getStatus()).isEqualTo(AdmissionStatus.DECEASED);
         assertThat(result.getClosure().getAdmissionsClosed()).isEqualTo(1);
+        // QA D515: the bed (and any pending transfer's reservation) goes back.
+        verify(bedAssignmentService).releaseBed(open);
     }
 
     @Test
@@ -195,6 +198,7 @@ class MortalityServiceImplTest {
 
         assertThat(done.getStatus()).isEqualTo(AdmissionStatus.DISCHARGED);
         assertThat(result.getClosure().getAdmissionsClosed()).isZero();
+        verify(bedAssignmentService, never()).releaseBed(done);
     }
 
     @Test

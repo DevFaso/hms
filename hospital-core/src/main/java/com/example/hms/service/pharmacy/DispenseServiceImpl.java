@@ -727,6 +727,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         ActorPair actors = resolveActors(dto);
+        requirePharmacistVerification(prescription, actors);
 
         // Tier 2 item 34: verify BEFORE any stock moves. The lot is loaded
         // and checked here; it is decremented only once verification has
@@ -813,6 +814,37 @@ public class DispenseServiceImpl implements DispenseService {
         if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
             throw new ConflictException(MessageUtil.resolve(messageKey));
         }
+    }
+
+    /**
+     * QA D512 (regression of D156). The D156 fix reused the MAR's scoped gate
+     * (controlled or co-sign prescriptions only), so an ordinary prescription
+     * was still filled with nobody verifying it — and once filled it left
+     * SIGNED/TRANSMITTED, so the verification could never be recorded after.
+     * At the counter the person filling IS a pharmacist, so the reason the MAR
+     * gate is scoped (no dispensary cover at night) does not apply: every fill
+     * needs a verification. The dispensing pharmacist attests it in the same
+     * request ({@code verifiedBy} = themselves, already checked against the
+     * session) and it is stamped on the prescription; a controlled or co-sign
+     * prescription still needs the separate verification step first
+     * ({@link #loadAndValidatePrescription}).
+     */
+    private void requirePharmacistVerification(Prescription prescription, ActorPair actors) {
+        // Same null tolerance as the D156 gate above (hand-built test wiring).
+        if (pharmacistVerificationService == null || pharmacistVerificationService.isVerified(prescription)) {
+            return;
+        }
+        if (actors.verifiedBy() == null) {
+            throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
+        }
+        // #922 review: the dispense endpoints also admit HOSPITAL_ADMIN, but
+        // the verification is a pharmacist's attestation — the same roles
+        // POST /prescriptions/{id}/pharmacist-verify admits, no wider.
+        if (!roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                "Only a pharmacist can verify a prescription.");
+        }
+        pharmacistVerificationService.verifyAtCounter(prescription, actors.verifiedBy());
     }
 
     private ActorPair resolveActors(DispenseRequestDTO dto) {

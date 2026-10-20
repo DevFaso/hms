@@ -84,4 +84,11 @@ public class BillingInvoiceRequestDTO {
      * a second create with the same key returns the first invoice.
      */
     private UUID clientRequestId;
+
+    /**
+     * QA D529: the visit or stay named by {@code encounterReference} already
+     * has an invoice. A second one is refused (409) unless the clerk confirms
+     * it is a deliberate supplementary invoice.
+     */
+    private Boolean supplementary;
 }

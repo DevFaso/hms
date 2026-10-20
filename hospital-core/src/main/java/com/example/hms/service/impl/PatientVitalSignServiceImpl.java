@@ -57,6 +57,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     @Override
     public PatientVitalSignResponseDTO recordVital(UUID patientId,
@@ -70,6 +71,16 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         // A hospital named in the body (no registration found) is a claim: the
         // patient must be registered there, as for every other chart write.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital == null ? null : hospital.getId());
+        // QA D525: the chart's vitals endpoint skipped the nurse station's
+        // discharged-patient check; both now go through the same guard. A
+        // patient reporting their own home reading (the portal path) is not
+        // being charted on a ward, so it is not refused.
+        boolean selfReported = recorderUserId != null && patient.getUser() != null
+            && recorderUserId.equals(patient.getUser().getId());
+        if (hospital != null && !selfReported) {
+            dischargedPatientGuard.requireNotDischargedWithoutVisit(
+                patient.getId(), hospital.getId(), "nurse.vitals.patientDischarged");
+        }
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         UserRoleHospitalAssignment assignment = resolveAssignment(request.getRecordedByAssignmentId(), staff);
 
@@ -95,7 +106,8 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         // NEWS2 MEDIUM+ auto-flags the bundle significant (P3 #25b): the
         // aggregate catches multi-parameter deterioration that no single
         // caller-supplied flag or per-vital threshold would.
-        if (com.example.hms.utility.NewsScoreCalculator.score(entity).total() >= 5) {
+        if (com.example.hms.utility.NewsScoreCalculator.applies(entity)
+                && com.example.hms.utility.NewsScoreCalculator.score(entity).total() >= 5) {
             entity.setClinicallySignificant(true);
         }
 

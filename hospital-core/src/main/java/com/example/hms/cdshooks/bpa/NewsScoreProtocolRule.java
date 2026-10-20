@@ -73,6 +73,10 @@ public class NewsScoreProtocolRule implements BpaRule {
 
         Optional<PatientVitalSign> latest = latestClinicalVitals(context.recentVitals());
         if (latest.isEmpty()) return List.of();
+        // QA D518: no adult NEWS2 card for a child.
+        if (!NewsScoreCalculator.appliesTo(context.patient()) || !NewsScoreCalculator.applies(latest.get())) {
+            return List.of();
+        }
 
         NewsScoreResult score = NewsScoreCalculator.score(latest.get());
         if (score.riskBand() == NewsScoreCalculator.RiskBand.LOW) return List.of();

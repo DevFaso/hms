@@ -512,6 +512,22 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(toastSpy.error).toHaveBeenCalledWith('SpO2 out of range');
   });
 
+  it('QA D530: glucose is typed in mmol/L like the lab and sent in mg/dL', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    component.recordVitals('p1', 'Awa');
+    component.updateGlucoseMmol('5.6');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { bloodGlucoseMgDl: 101 });
+  });
+
+  it('QA D530: the vitals modal names the patient, never the English word Patient', () => {
+    component.recordVitals('p1', 'Awa Kabore');
+    expect(component.vitalsCaptureFor()?.patientName).toBe('Awa Kabore');
+    component.recordVitals('p2');
+    expect(component.vitalsCaptureFor()?.patientName).not.toBe('Patient');
+    expect(component.vitalsCaptureFor()?.patientName).toBe('NURSE.THIS_PATIENT');
+  });
+
   it('picks the task patient by name instead of a raw UUID (QA D45)', () => {
     component.openTaskCreate();
     expect(component.taskForm().patientId).toBeUndefined();

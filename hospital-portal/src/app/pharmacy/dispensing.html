@@ -143,6 +143,20 @@
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
             </label>
           </div>
+          <!-- QA D512: every fill is verified by a pharmacist; the dispensing
+               pharmacist attests it here, recorded under their own name. -->
+          <div class="field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                data-testid="verify-attest"
+                [ngModel]="verifyAttested()"
+                (ngModelChange)="verifyAttested.set($event)"
+                name="verifyAttested"
+              />
+              {{ 'PHARMACY.VERIFY_ATTEST' | translate }}
+            </label>
+          </div>
         </div>
 
         <!--
@@ -224,7 +238,7 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0"
+            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -238,7 +252,7 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="saving() || form.quantityDispensed <= 0"
+              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}

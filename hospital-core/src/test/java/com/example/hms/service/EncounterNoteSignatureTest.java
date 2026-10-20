@@ -409,4 +409,45 @@ class EncounterNoteSignatureTest {
         assertThat(saved.getValue().getAuthorStaff()).isEqualTo(nurse);
         assertThat(saved.getValue().getAuthor()).isEqualTo(nurse.getUser());
     }
+
+    /* ── QA D513: a checked-out visit's note is closed ─────────────────── */
+
+    @Test
+    void d513_theNoteOfACheckedOutVisitCannotBeRewritten() {
+        // QA round 8: DOCTOR_A POSTed /encounters/{id}/notes after checkout and
+        // the unsigned note was rewritten in place, updatedAt unchanged.
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        encounter.setEncounterNote(note);
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder()
+            .assessment("Rewritten after checkout")
+            .build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, true, null))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> ((BusinessException) e).getMessageKey().equals("encounter.note.closedLocked"));
+        assertThat(note.getAssessment()).isNotEqualTo("Rewritten after checkout");
+    }
+
+    @Test
+    void d513_aCancelledVisitsNoteIsClosedToo() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.CANCELLED);
+        encounter.setEncounterNote(note);
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("x").build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, true, null))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void d513_anOpenVisitsNoteStaysEditable_andTheResponseIsFlushed() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterNote(note);
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Revised").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, true, null);
+
+        assertThat(note.getAssessment()).isEqualTo("Revised");
+        // updatedAt is stamped at flush; the response must be mapped after it.
+        verify(encounterNoteRepository).flush();
+    }
 }
