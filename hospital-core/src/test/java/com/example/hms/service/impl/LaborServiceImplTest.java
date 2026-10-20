@@ -408,6 +408,33 @@ class LaborServiceImplTest {
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
     }
 
+    /**
+     * QA D516 (self-review of #921): inside a transaction the charge waits
+     * for the delivery to commit and then runs in its own transaction, so a
+     * charge whose invoice save throws leaves the committed birth intact.
+     */
+    @Test
+    void recordDeliveryPostsTheChargeOnlyAfterCommitAndSurvivesItsFailure() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("invoice save failed"));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+            org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
+            org.mockito.Mockito.verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+            org.mockito.Mockito.verify(deliveryChargeService).chargeDelivery(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(recorderUserId));
+            assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
     /** QA D516: no second charge when the episode already has a delivery. */
     @Test
     void recordDeliverySecondAttemptPostsNoCharge() {

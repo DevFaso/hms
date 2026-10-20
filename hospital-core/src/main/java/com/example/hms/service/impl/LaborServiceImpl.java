@@ -93,13 +93,29 @@ public class LaborServiceImpl implements LaborService {
     static final int TERM_WEEKS = 40;
     static final int PRETERM_WEEKS = 37;
     /**
-     * QA D516: a birth reaches billing as a draft charge. A failure to post it
-     * is logged (ids only) and never undoes the clinical record.
+     * QA D516: a birth reaches billing as a draft charge. The charge is
+     * posted after the delivery commits, in its own transaction, so a failure
+     * to post it (logged, ids only) can never mark the delivery's transaction
+     * rollback-only and undo the clinical record.
      */
     private void chargeDelivery(DeliveryRecord saved, UUID recorderUserId) {
         if (deliveryChargeService == null) {
             return;
         }
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                new org.springframework.transaction.support.TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        postDeliveryCharge(saved, recorderUserId);
+                    }
+                });
+        } else {
+            postDeliveryCharge(saved, recorderUserId);
+        }
+    }
+
+    private void postDeliveryCharge(DeliveryRecord saved, UUID recorderUserId) {
         try {
             deliveryChargeService.chargeDelivery(saved, recorderUserId);
         } catch (RuntimeException ex) {

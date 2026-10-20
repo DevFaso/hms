@@ -440,7 +440,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 // it is then recorded in the audit row. With two directors, or
                 // for anyone else (the super-admin included), the approver
                 // must be someone other than the QA reviewer.
-                if (singleDirectorException && !isSoleDirector(definition)) {
+                if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
                     throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
                 }
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
@@ -497,9 +497,15 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             && definition.getReviewedById().equals(user.getId());
     }
 
-    /** QA D523: the definition's hospital has exactly one active lab director. */
-    private boolean isSoleDirector(LabTestDefinition definition) {
+    /**
+     * QA D523: the caller is the definition's hospital's one active lab
+     * director. A one-director hospital does not let a super-admin (or anyone
+     * else) who did the QA review approve it too.
+     */
+    private boolean isSoleDirector(User user, LabTestDefinition definition) {
         return !isGlobalDefinition(definition)
+            && assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                user.getId(), definition.getHospital().getId(), Set.of(ROLE_LAB_DIRECTOR))
             && assignmentRepository.countActiveUsersWithRoleCodeAtHospital(
                 definition.getHospital().getId(), ROLE_LAB_DIRECTOR) == 1;
     }

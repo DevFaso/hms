@@ -14,6 +14,8 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -32,8 +34,9 @@ import java.util.UUID;
  * the delivery. The line takes the price of the hospital's own priced service
  * for the delivery mode (caesarean or vaginal), when exactly one active
  * service of the catalog names it; otherwise it is posted at zero for the
- * billing clerk to price, so the charge is never lost. It runs in the
- * delivery's transaction: one delivery per labour episode, so one charge.
+ * billing clerk to price, so the charge is never lost. It runs in its own
+ * transaction, after the delivery commits: a failed charge never rolls the
+ * birth back. One delivery per labour episode, so one charge.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,6 +60,7 @@ public class DeliveryChargeService {
      * hospital. Returns the draft invoice, or empty when the recorder holds no
      * active assignment there (nothing can own the line).
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<BillingInvoice> chargeDelivery(DeliveryRecord delivery, UUID recorderUserId) {
         if (delivery == null || delivery.getHospital() == null || delivery.getPatient() == null
                 || recorderUserId == null) {

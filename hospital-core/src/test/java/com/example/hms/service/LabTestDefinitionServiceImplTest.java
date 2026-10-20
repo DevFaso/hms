@@ -1093,6 +1093,28 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D523: a one-director hospital does not let the super-admin who reviewed also approve. */
+    @Test
+    void processApproval_approve_bySuperAdminWhoReviewed_atOneDirectorHospital_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        definition.setReviewedById(admin.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(admin);
+        lenient().when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR")).thenReturn(1L);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.fourEyes.approverNotReviewer");
+        }
+    }
+
     /** QA D314: the single-director exception never lets the submitter approve. */
     @Test
     void processApproval_approve_bySoleDirectorWhoSubmitted_isRefused() {
