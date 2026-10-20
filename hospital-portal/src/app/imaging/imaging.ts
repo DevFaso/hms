@@ -27,6 +27,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { actionRoles } from '../core/action-permissions';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -159,24 +160,31 @@ export class ImagingComponent implements OnInit {
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
 
-  readonly canSeeResults = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canSeeResults = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportsByHospital'),
+  );
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
-  readonly canAuthorReports = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canUpdateReportStatus = this.canAuthorReports;
+  readonly canAuthorReports = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportCreate'));
+  readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportStatus'),
+  );
+  /** QA D527: POST /imaging/orders — the ordering clinicians, not the radiologist. */
+  readonly canCreateOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderCreate')),
+  );
+  /** QA D527: PUT /imaging/orders/{id} — the ordering clinicians. */
+  readonly canEditOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderUpdate')),
+  );
+  /**
+   * QA D527: cancelling goes through PUT /imaging/orders/{id}/status, which a
+   * midwife or nurse is refused; she was offered the button and got a 403.
+   */
+  readonly canCancelOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
+  );
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
-  readonly canAckCritical = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 
   modalities: ImagingModality[] = [
     'XRAY',

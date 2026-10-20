@@ -30,6 +30,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 
 @Component({
   selector: 'app-referrals',
@@ -59,8 +60,10 @@ export class ReferralsComponent implements OnInit {
    * /referrals refuses a nurse as referrer, QA D319), so nobody else is
    * offered the button the API would refuse.
    */
-  protected readonly canWriteReferral = computed(() =>
-    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']),
+  protected readonly canWriteReferral = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole(actionRoles('referralCreate')) &&
+      this.roleContext.hasAnyActiveRole([...SERVICE_RULE_ROLES.referralReferrer]),
   );
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */

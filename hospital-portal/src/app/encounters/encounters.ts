@@ -35,6 +35,7 @@ import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/elig
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
+import { actionRoles } from '../core/action-permissions';
 
 @Component({
   selector: 'app-encounters',
@@ -82,23 +83,14 @@ export class EncountersComponent implements OnInit {
    * roles; DELETE is the super-admin's.
    */
   protected readonly canCreateEncounter = computed(() =>
-    this.roleContext.hasAnyActiveRole([
-      'ROLE_SUPER_ADMIN',
-      'ROLE_RECEPTIONIST',
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ]),
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCreate')),
   );
   protected readonly canEditEncounter = computed(() =>
-    this.roleContext.hasAnyActiveRole([
-      'ROLE_SUPER_ADMIN',
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ]),
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterUpdate')),
   );
-  protected readonly canDeleteEncounter = computed(() => this.roleContext.isSuperAdmin());
+  protected readonly canDeleteEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterDelete')),
+  );
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */
@@ -209,6 +201,7 @@ export class EncountersComponent implements OnInit {
     // signal) because this branch existed before the cross-tenant
     // refactor and changing its source would alter the dropdown logic
     // below — kept as-is to avoid scope creep.
+    // rbac-inline-ok: a scope question (which hospitals to list), not a write button.
     const isSuperAdminUser = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
     const permitted = this.roleContext.permittedHospitalIds;
 
@@ -641,8 +634,7 @@ export class EncountersComponent implements OnInit {
   /** D96: a doctor picks up a patient who is waiting for one. */
   canStartEncounter(enc: EncounterResponse): boolean {
     return (
-      enc.status === 'WAITING_FOR_PHYSICIAN' &&
-      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'])
+      enc.status === 'WAITING_FOR_PHYSICIAN' && this.auth.hasAnyRole(actionRoles('encounterStart'))
     );
   }
 

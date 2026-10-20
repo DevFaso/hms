@@ -8,9 +8,11 @@
       <!-- Cross-tenant scope chip — super-admin only
            (docs/super-admin-cross-tenant-design.md). -->
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'ADMISSIONS.NEW' | translate }}
-      </button>
+      @if (canAdmit()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> {{ 'ADMISSIONS.NEW' | translate }}
+        </button>
+      }
     </div>
   </div>
   <div class="summary-cards">
@@ -166,30 +168,36 @@
               <td>
                 <div class="action-group">
                   @if (a.status === 'ACTIVE') {
-                    <button
-                      class="action-link discharge-link"
-                      (click)="confirmDischarge(a)"
-                      [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
-                    >
-                      <span class="material-symbols-outlined">exit_to_app</span>
-                    </button>
-                    <button
-                      class="action-link"
-                      (click)="openOrderSetPicker(a)"
-                      [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
-                      data-testid="open-order-set-picker"
-                    >
-                      <span class="material-symbols-outlined">playlist_add_check</span>
-                    </button>
-                    <button
-                      class="action-link"
-                      (click)="openBedAssign(a)"
-                      [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
-                      data-testid="open-bed-assign"
-                    >
-                      <span class="material-symbols-outlined">bed</span>
-                    </button>
-                    @if (a.bedId) {
+                    @if (canDischarge()) {
+                      <button
+                        class="action-link discharge-link"
+                        (click)="confirmDischarge(a)"
+                        [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
+                      >
+                        <span class="material-symbols-outlined">exit_to_app</span>
+                      </button>
+                    }
+                    @if (canApplyOrderSets()) {
+                      <button
+                        class="action-link"
+                        (click)="openOrderSetPicker(a)"
+                        [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
+                        data-testid="open-order-set-picker"
+                      >
+                        <span class="material-symbols-outlined">playlist_add_check</span>
+                      </button>
+                    }
+                    @if (canAssignBed()) {
+                      <button
+                        class="action-link"
+                        (click)="openBedAssign(a)"
+                        [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
+                        data-testid="open-bed-assign"
+                      >
+                        <span class="material-symbols-outlined">bed</span>
+                      </button>
+                    }
+                    @if (a.bedId && canUnassignBed()) {
                       <button
                         class="action-link"
                         (click)="unassignBed(a)"
@@ -199,12 +207,16 @@
                       </button>
                     }
                   }
-                  <button class="action-link edit-link" (click)="openEdit(a)">
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button class="action-link delete-link" (click)="confirmDelete(a)">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (canEditAdmission()) {
+                    <button class="action-link edit-link" (click)="openEdit(a)">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canCancelAdmission()) {
+                    <button class="action-link delete-link" (click)="confirmDelete(a)">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

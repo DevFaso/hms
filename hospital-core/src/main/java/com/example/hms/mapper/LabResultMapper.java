@@ -34,7 +34,6 @@ public class LabResultMapper {
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
-        "",
         null,
         null,
         null,
@@ -65,7 +64,8 @@ public class LabResultMapper {
                 && result.getLabOrder().getPatient().getId() != null
                 ? result.getLabOrder().getPatient().getId().toString() : null)
             .patientFullName(context.patientFullName())
-            .patientEmail(context.patientEmail())
+            // QA D527: no staff or patient screen reads the patient's e-mail off a result; it is not sent.
+            .patientEmail(null)
             .hospitalId(context.hospitalId())
             .hospitalName(context.hospitalName())
             .performingHospitalId(context.performingHospitalId())
@@ -377,7 +377,6 @@ public class LabResultMapper {
 
         return new OrderContext(
             patientInfo.fullName(),
-            patientInfo.email(),
             hospitalId,
             hospitalName,
             performingHospitalId,
@@ -392,7 +391,6 @@ public class LabResultMapper {
 
     private record OrderContext(
             String patientFullName,
-            String patientEmail,
             String hospitalId,
             String hospitalName,
             String performingHospitalId,
@@ -405,7 +403,7 @@ public class LabResultMapper {
             String testUnit
     ) {}
 
-    private record PatientInfo(String fullName, String email) {}
+    private record PatientInfo(String fullName) {}
 
     private record LabTestMetadata(String name, String testCode, List<LabTestReferenceRange> referenceRanges,
                                    String unit) {}
@@ -413,7 +411,7 @@ public class LabResultMapper {
     private PatientInfo resolvePatientInfo(LabOrder order) {
         Patient patient = order.getPatient();
         if (patient == null || !Hibernate.isInitialized(patient)) {
-            return new PatientInfo("", "");
+            return new PatientInfo("");
         }
         String fullName = Optional.ofNullable(patient.getFullName())
             .filter(Predicate.not(String::isBlank))
@@ -421,8 +419,7 @@ public class LabResultMapper {
         if (fullName == null) {
             fullName = (nullToEmpty(patient.getFirstName()) + " " + nullToEmpty(patient.getLastName())).trim();
         }
-        String email = Optional.ofNullable(patient.getEmail()).orElse("");
-        return new PatientInfo(fullName, email);
+        return new PatientInfo(fullName);
     }
 
     private String resolveHospitalId(LabOrder order) {

@@ -1,5 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -22,6 +29,7 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
 import { AuthService } from '../auth/auth.service';
+import { ActionKey, actionRoles } from '../core/action-permissions';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -66,6 +74,22 @@ export class AdmissionsComponent implements OnInit {
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+  /**
+   * QA D427/D527: each admission action mirrors its endpoint (core/action-permissions):
+   * a nurse may update, apply order sets and move beds, but only a doctor admits,
+   * discharges or cancels; she was offered Delete and got a 403.
+   */
+  protected readonly canAdmit = computed(() => this.can('admissionCreate'));
+  protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
+  protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
+  protected readonly canAssignBed = computed(() => this.can('admissionAssignBed'));
+  protected readonly canUnassignBed = computed(() => this.can('admissionUnassignBed'));
+  protected readonly canDischarge = computed(() => this.can('admissionDischarge'));
+  protected readonly canCancelAdmission = computed(() => this.can('admissionCancel'));
+
+  private can(action: ActionKey): boolean {
+    return this.roleContext.hasAnyActiveRole(actionRoles(action));
+  }
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);

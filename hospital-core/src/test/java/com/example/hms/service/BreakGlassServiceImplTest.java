@@ -698,6 +698,26 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
+        @DisplayName("D532: the declared session's stamps carry the server offset, so the browser countdown is exact")
+        void declaredSessionStampsCarryOffset() throws Exception {
+            ZoneId lagos = ZoneId.of("Africa/Lagos");
+            BreakGlassServiceImpl lagosService = new BreakGlassServiceImpl(sessionRepository, userRepository,
+                patientRepository, hospitalRepository, assignmentRepository, auditService,
+                Clock.fixed(now.atZone(lagos).toInstant(), lagos), null);
+            stubAuthenticatedDoctor();
+            when(sessionRepository.save(any(BreakGlassSession.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            var out = lagosService.declare(BreakGlassDeclareRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).reason("Unconscious, no family reachable.").build());
+
+            String json = tools.jackson.databind.json.JsonMapper.builder().build()
+                .writeValueAsString(out);
+            assertThat(json).contains("\"expiresAt\":\"2026-03-01T14:00:00+01:00\"")
+                .contains("\"startedAt\":\"2026-03-01T10:00:00+01:00\"");
+            assertThat(out.getExpiresAt().toInstant()).isEqualTo(now.plusMinutes(240).atZone(lagos).toInstant());
+        }
+
+        @Test
         @DisplayName("the live lookup reads at the injected now, and a session expiring exactly then is not live")
         void liveLookupReadsFromInjectedClock() {
             when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));

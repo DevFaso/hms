@@ -112,8 +112,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         boolean hasSigned = signatureRepository.existsSignedByStaff(
             request.getReportId(), request.getReportType(), staff.getId());
         if (hasSigned) {
-            throw new BusinessException(
-                "Staff member has already signed this report. Use revoke first to re-sign.");
+            throw new BusinessException("signature.r8.alreadySigned");
         }
 
         // Create signature entity
@@ -229,7 +228,8 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(signature.getHospital(), SIGNATURE_NOT_FOUND_KEY, signatureId);
 
         if (!signature.canRevoke()) {
-            throw new BusinessException("Signature cannot be revoked. Current status: " + signature.getStatus());
+            // QA D528: a key, not "Current status: REVOKED" in English.
+            throw new BusinessException("signature.r8.notRevocable");
         }
 
         UUID currentUserId = authService.getCurrentUserId();

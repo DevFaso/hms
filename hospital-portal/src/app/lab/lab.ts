@@ -31,6 +31,7 @@ import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { shortOrderCode } from '../shared/lab/order-code';
+import { actionRoles } from '../core/action-permissions';
 
 @Component({
   selector: 'app-lab',
@@ -61,8 +62,14 @@ export class LabComponent implements OnInit {
    * and RoleValidator.canOrderLabTests). D106: a midwife was offered the form
    * and then refused by the server, so the button is not shown to her.
    */
-  readonly canCreateOrder = computed(() =>
-    this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN']),
+  readonly canCreateOrder = computed(() => this.auth.hasAnyRole(actionRoles('labOrderCreate')));
+  /** QA D527: PUT /lab-orders/{id} is the ordering clinicians'; the lab bench is refused. */
+  readonly canEditOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('labOrderUpdate')),
+  );
+  /** QA D527: DELETE /lab-orders/{id} is an admin's only; a lab technician was offered it. */
+  readonly canDeleteOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('labOrderDelete')),
   );
 
   /**
@@ -128,14 +135,9 @@ export class LabComponent implements OnInit {
   printingSpecimenId = signal<string | null>(null);
 
   /** Matches the specimen create/receive @PreAuthorize (lab staff; E9 #67: no admins). */
-  readonly canManageSpecimens = this.roleContext.hasAnyActiveRole([
-    'ROLE_LAB_TECHNICIAN',
-    'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
-    'ROLE_LAB_DIRECTOR',
-    'ROLE_QUALITY_MANAGER',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canManageSpecimens = this.roleContext.hasAnyActiveRole(
+    actionRoles('labSpecimenCollect'),
+  );
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
@@ -397,7 +399,6 @@ export class LabComponent implements OnInit {
       id: '',
       firstName: o.patientFullName?.split(' ')[0] ?? '',
       lastName: o.patientFullName?.split(' ').slice(1).join(' ') ?? '',
-      email: o.patientEmail ?? '',
     } as PatientResponse);
     this.editing.set(true);
     this.editingId.set(o.id);

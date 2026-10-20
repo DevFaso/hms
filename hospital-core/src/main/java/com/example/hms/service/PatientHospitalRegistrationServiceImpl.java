@@ -211,6 +211,18 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
     @Override
     @Transactional(readOnly = true)
+    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatientAndHospital(
+        UUID patientId, UUID hospitalId, Boolean active
+    ) {
+        return scopeToActiveHospital(registrationRepository.findByPatientId(patientId)).stream()
+            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+            .filter(r -> active == null || r.isActive() == active)
+            .map(mapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByHospital(
         UUID hospitalId, int page, int size, Boolean active
     ) {

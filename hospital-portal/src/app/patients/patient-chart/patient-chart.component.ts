@@ -37,6 +37,8 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { actionRoles } from '../../core/action-permissions';
+import { RegistrationService } from '../../services/registration.service';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
@@ -82,6 +84,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly registrations = inject(RegistrationService);
 
   section = signal<ChartSection>('allergies');
 
@@ -97,7 +100,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
   );
   readonly canEditAllergies = computed(() =>
-    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]),
+    this.roleContext.hasAnyActiveRole(actionRoles('allergyCreate')),
+  );
+  /**
+   * QA D527: an allergy is written in the acting hospital, and the API refuses
+   * it when the patient is not registered there (a doctor of hospital B reading
+   * a hospital-A patient was offered "Add" and got a refusal). Null while
+   * unknown, or for a role that cannot read registrations (the pharmacist):
+   * the role gate alone then decides, as before.
+   */
+  readonly registeredHere = signal<boolean | null>(null);
+  readonly canAddAllergy = computed(
+    () => this.canEditAllergies() && this.registeredHere() !== false,
   );
   readonly canViewProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
@@ -321,6 +335,59 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
+    this.loadRegistrationHere();
+  }
+
+  /**
+   * Whether the patient is registered in the hospital the allergy write acts
+   * in (`hospitalId()`). Asked for that ONE hospital, not read off the first
+   * page of every registration, and re-asked on every access refresh: a stale
+   * answer offered Add the API refuses, or hid it from someone now entitled.
+   * A reply that lands after a newer question is dropped.
+   */
+  private loadRegistrationHere(): void {
+    const seq = ++this.registrationSeq;
+    this.registeredHere.set(null);
+    const scope = this.hospitalId();
+    if (!scope || !this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere])) {
+      return;
+    }
+    this.registrations
+      .list({ patientId: this.patientId, hospitalId: scope, active: true })
+      .subscribe({
+        next: (rows) => {
+          if (seq !== this.registrationSeq) return;
+          this.registeredHere.set((rows ?? []).some((r) => r.hospitalId === scope && r.active));
+        },
+        error: () => {
+          if (seq === this.registrationSeq) this.registeredHere.set(null);
+        },
+      });
+  }
+
+  private registrationSeq = 0;
+
+  /**
+   * The acting hospital (and the role reading it) can move with no navigation
+   * — a scope or role switch — and nothing else re-asks the question then.
+   * Skips its first run: ngOnInit has just asked.
+   */
+  private readonly registrationScopeWatcher = effect(() => {
+    const key =
+      this.hospitalId() +
+      '|' +
+      this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere]);
+    const previous = this.watchedRegistrationKey;
+    this.watchedRegistrationKey = key;
+    if (previous === undefined || previous === key) return;
+    untracked(() => this.loadRegistrationHere());
+  });
+
+  private watchedRegistrationKey: string | undefined = undefined;
+
+  /** QA D527: an allergy recorded at another hospital is edited there, not here. */
+  canChangeAllergy(row: { hospitalId?: string }): boolean {
+    return this.canEditAllergies() && !this.isForeignRow(row);
   }
 
   /**
@@ -1022,6 +1089,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labsLoadedFor.set(null);
     this.labResultsError.set(false);
     this.labOrdersError.set(false);
+    this.loadRegistrationHere();
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

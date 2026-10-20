@@ -111,7 +111,6 @@
               </td>
               <td>
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
-                <div class="cell-secondary">{{ order.patientEmail || '' }}</div>
               </td>
               <td>
                 <div class="cell-primary">{{ order.labTestName || '—' }}</div>
@@ -150,7 +149,7 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (!isIncomingExternal(order)) {
+                  @if (canEditOrder() && !isIncomingExternal(order)) {
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
@@ -168,7 +167,7 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
-                  @if (!isIncomingExternal(order)) {
+                  @if (canDeleteOrder() && !isIncomingExternal(order)) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
@@ -214,10 +213,6 @@
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ o.patientFullName }}</span>
-            </div>
-            <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.EMAIL' | translate }}</span
-              ><span class="field-value">{{ o.patientEmail || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
@@ -624,7 +619,9 @@
                 @for (s of specimens(); track s.id) {
                   <tr>
                     <td>{{ s.accessionNumber || '—' }}</td>
-                    <td>{{ s.specimenType || '—' }}</td>
+                    <td>
+                      {{ s.specimenType ? (s.specimenType | enumLabel: 'specimenType') : '—' }}
+                    </td>
                     <td>{{ s.collectedAt ? (s.collectedAt | date: 'short') : '—' }}</td>
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>

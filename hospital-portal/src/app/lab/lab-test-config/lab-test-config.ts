@@ -13,11 +13,12 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',

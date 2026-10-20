@@ -7,7 +7,8 @@ export interface LabOrderResponse {
   labOrderCode: string;
   patientId: string;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent on lab orders (the worklist does not show it). */
+  patientEmail?: string | null;
   hospitalId?: string;
   hospitalName: string;
   /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
@@ -33,7 +34,8 @@ export interface LabResultResponse {
   labOrderCode: string;
   patientId: string | null;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent (always null); kept so older payloads still type. */
+  patientEmail?: string | null;
   hospitalName: string;
   /**
    * The laboratory that ran the order, when it was not this hospital's own

@@ -353,7 +353,7 @@ describe('LabComponent — performing laboratory', () => {
       .not.toBeNull();
   });
 
-  it('keeps Edit and Delete for the hospital that placed the order', async () => {
+  it('keeps Edit for the clinician of the hospital that placed the order', async () => {
     const outgoing = order({
       performingHospitalId: LAB_B,
       performingHospitalName: 'Central Laboratory B',
@@ -361,7 +361,35 @@ describe('LabComponent — performing laboratory', () => {
     await setup(['ROLE_DOCTOR'], [outgoing]);
 
     expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    // QA D527: DELETE /lab-orders/{id} admits ADMIN and SUPER_ADMIN only.
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('keeps Delete for the super-admin, whom DELETE /lab-orders/{id} admits', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({})]);
+
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D527: a lab technician is offered no Edit or Delete on her own hospital order', async () => {
+    await setup(['ROLE_LAB_TECHNICIAN'], [order({})]);
+
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.specimen-link'))
+      .withContext('the bench keeps its specimen action')
+      .not.toBeNull();
+  });
+
+  it('QA D527: the worklist and the detail panel never show the patient e-mail', async () => {
+    const o = order({});
+    await setup(['ROLE_LAB_TECHNICIAN'], [o]);
+    component.viewOrder(o);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'aminata@example.test',
+    );
   });
 
   it('labels the worklist by the hospital the chip is pinned to, not the primary one', async () => {

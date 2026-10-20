@@ -163,6 +163,12 @@ class ExceptionProseRatchetTest {
         assertTranslated("# QA round 7 (D424)", 70);
     }
 
+    @Test
+    @DisplayName("QA D528: the round-8 signature messages are really translated, not copied")
+    void roundEightKeysAreTranslated() throws IOException {
+        assertTranslated("# QA round 8 (D528)", 1);
+    }
+
     /**
      * QA D424: the check-in answer ("Patient X successfully checked in") and the
      * generic "Operation successful" reached French screens through a response
