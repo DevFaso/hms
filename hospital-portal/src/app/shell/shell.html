@@ -323,11 +323,16 @@
               (click)="onNotifItemClick(n)"
               type="button"
             >
-              <span class="material-symbols-outlined notif-icon" aria-hidden="true">
-                {{
-                  n.type === 'ALERT' ? 'warning' : n.type === 'SUCCESS' ? 'check_circle' : 'info'
-                }}
+              <span
+                class="material-symbols-outlined notif-icon"
+                [class.notif-icon-critical]="isCriticalNotification(n.type)"
+                aria-hidden="true"
+              >
+                {{ notificationIcon(n.type) }}
               </span>
+              @if (isCriticalNotification(n.type)) {
+                <span class="sr-only">{{ 'NOTIFICATIONS.CRITICAL_ALERT' | translate }}</span>
+              }
               <div class="notif-content">
                 <p class="notif-msg">{{ n.message }}</p>
                 <span class="notif-time">{{ n.createdAt | date: 'short' }}</span>

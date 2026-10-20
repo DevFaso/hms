@@ -144,10 +144,24 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         Map<String, String> pathVariables = uriTemplateVariables(request);
         UUID resourceId = resolveResourceId(pathVariables, annotation);
         UUID patientId = resolvePatientId(request, pathVariables, annotation);
+        // QA D429: what the handler stated about the write wins over what the route implies.
+        WriteAuditDetail.Detail detail = WriteAuditDetail.of(request);
+        AuditEventType eventType = eventTypeFor(request.getMethod());
+        if (detail != null) {
+            if (detail.eventType() != null) {
+                eventType = detail.eventType();
+            }
+            if (detail.resourceId() != null) {
+                resourceId = detail.resourceId();
+            }
+            if (detail.patientId() != null) {
+                patientId = detail.patientId();
+            }
+        }
         UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
 
         auditService.logEvent(AuditEventRequestDTO.builder()
-            .eventType(eventTypeFor(request.getMethod()))
+            .eventType(eventType)
             .status(AuditStatus.SUCCESS)
             .entityType(entityTypeFor(pattern, annotation))
             .resourceId(resourceId != null ? resourceId.toString() : null)

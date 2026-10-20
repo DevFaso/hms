@@ -393,6 +393,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "SUBMIT_FOR_QA" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
+                // QA D417: ranges lock from submission on, and activation needs
+                // one, so a definition submitted without a range came out of
+                // approval stuck: it could neither be activated nor edited.
+                requireRangesBeforeReview(definition);
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
                 definition.setRejectionReason(null);
                 definition.setSubmittedById(currentUser.getId());
@@ -418,15 +422,14 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             case "APPROVE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
-                // QA D314: the director may also have done the QA review when
-                // the hospital has only one director: otherwise a lab with a
-                // single director could never activate a test. The exception
-                // is recorded in the audit row. The submitter rule still holds.
-                singleDirectorException = isSoleDirectorWhoReviewed(currentUser, definition);
-                if (!singleDirectorException) {
-                    assertNotSameUser(currentUser, definition.getReviewedById(),
-                        "lab.definition.fourEyes.approverNotReviewer");
-                }
+                // QA D314 / D417: the director may also have done the QA review.
+                // Four eyes means two people, the author and an independent
+                // reviewer-approver; requiring a third (allowed only when the
+                // hospital had a single director) left a lab with a second,
+                // absent director unable to activate anything. The combined
+                // review is recorded in the audit row. The submitter rule holds.
+                requireRangesBeforeReview(definition);
+                singleDirectorException = reviewerIsApprover(currentUser, definition);
                 assertNotSameUser(currentUser, definition.getSubmittedById(),
                     "lab.definition.fourEyes.approverNotSubmitter");
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
@@ -445,9 +448,12 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             }
             case "REJECT" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                // QA D417: APPROVED too, so a definition approved before the
+                // range rule (no range, cannot activate) can go back to edit.
                 assertInStatus(definition, EnumSet.of(
                     LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
-                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+                    LabTestDefinitionApprovalStatus.APPROVED));
                 if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
                     throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.rejectionReasonRequired"));
                 }
@@ -470,19 +476,19 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     /**
-     * QA D314: true when the approver is the same person who completed the QA
-     * review AND is the only active lab director of the definition's
-     * hospital. A super-admin never needs it (assertNotSameUser exempts them).
+     * QA D314 / D417: true when the approver also completed the QA review,
+     * which the audit row then records. A super-admin is not flagged.
      */
-    private boolean isSoleDirectorWhoReviewed(User user, LabTestDefinition definition) {
-        if (isGlobalDefinition(definition) || isSuperAdmin(user)
-            || definition.getReviewedById() == null || !definition.getReviewedById().equals(user.getId())) {
-            return false;
+    private boolean reviewerIsApprover(User user, LabTestDefinition definition) {
+        return !isSuperAdmin(user) && definition.getReviewedById() != null
+            && definition.getReviewedById().equals(user.getId());
+    }
+
+    /** QA D417: no definition enters review without a reference range. */
+    private static void requireRangesBeforeReview(LabTestDefinition definition) {
+        if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+            throw new BusinessException("lab.definition.rangesRequiredForReview");
         }
-        UUID hospitalId = definition.getHospital().getId();
-        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
-                user.getId(), hospitalId, Set.of(ROLE_LAB_DIRECTOR))
-            && assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, ROLE_LAB_DIRECTOR) == 1;
     }
 
     /**
@@ -503,7 +509,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 .eventDescription("Lab test definition approval step " + action + " -> "
                     + definition.getApprovalStatus()
                     + (singleDirectorException
-                        ? " (single-director exception: the sole lab director also completed the QA review)"
+                        ? " (the approver also completed the QA review)"
                         : ""))
                 .entityType("LabTestDefinition")
                 .resourceId(definition.getId() != null ? definition.getId().toString() : null)

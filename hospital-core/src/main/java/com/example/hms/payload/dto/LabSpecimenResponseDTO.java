@@ -18,6 +18,8 @@ public class LabSpecimenResponseDTO {
 
     private UUID id;
     private UUID labOrderId;
+    /** QA D429: the order's patient, so the write audit can name it. */
+    private UUID patientId;
     private String accessionNumber;
     private String barcodeValue;
     private String specimenType;
