@@ -204,7 +204,7 @@ public class DispenseController {
     }
 
     @GetMapping("/pharmacy/{pharmacyId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'STORE_MANAGER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List dispenses by pharmacy",
             description = "Paginated list of dispenses at a pharmacy")
     @ApiResponse(responseCode = "200", description = "Dispenses retrieved")
