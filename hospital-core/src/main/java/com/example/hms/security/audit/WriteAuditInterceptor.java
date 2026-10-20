@@ -114,6 +114,14 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         }
     }
 
+    private static AuditEventType firstNonNull(AuditEventType stated, AuditEventType implied) {
+        return stated != null ? stated : implied;
+    }
+
+    private static UUID firstNonNull(UUID stated, UUID implied) {
+        return stated != null ? stated : implied;
+    }
+
     private void recordIfSuccessfulWrite(HttpServletRequest request, HttpServletResponse response,
                                          Object handler, Exception ex) {
         if (ex != null || !isSuccessfulWrite(request, response)) {
@@ -148,15 +156,9 @@ public class WriteAuditInterceptor implements HandlerInterceptor {
         WriteAuditDetail.Detail detail = WriteAuditDetail.of(request);
         AuditEventType eventType = eventTypeFor(request.getMethod());
         if (detail != null) {
-            if (detail.eventType() != null) {
-                eventType = detail.eventType();
-            }
-            if (detail.resourceId() != null) {
-                resourceId = detail.resourceId();
-            }
-            if (detail.patientId() != null) {
-                patientId = detail.patientId();
-            }
+            eventType = firstNonNull(detail.eventType(), eventType);
+            resourceId = firstNonNull(detail.resourceId(), resourceId);
+            patientId = firstNonNull(detail.patientId(), patientId);
         }
         UserRoleHospitalAssignment assignment = resolveAssignment(actorId);
 

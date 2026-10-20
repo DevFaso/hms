@@ -441,12 +441,11 @@ class LabOrderEndToEndIT extends BaseIT {
      * lockAtLeastFor window (or the scheduler's) is skipped and answers null,
      * so wait for the lock rather than read a skip as "nothing escalated".
      */
-    private static Integer runSweep(com.example.hms.service.CriticalValueNotificationService sweep)
-            throws InterruptedException {
+    private static Integer runSweep(com.example.hms.service.CriticalValueNotificationService sweep) {
         long deadline = System.currentTimeMillis() + 20_000;
         Integer escalated = sweep.escalateOverdue();
         while (escalated == null && System.currentTimeMillis() < deadline) {
-            Thread.sleep(500);
+            java.util.concurrent.locks.LockSupport.parkNanos(500_000_000L);
             escalated = sweep.escalateOverdue();
         }
         return escalated;

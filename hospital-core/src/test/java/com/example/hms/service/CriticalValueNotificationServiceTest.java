@@ -21,7 +21,6 @@ import com.example.hms.model.Notification;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
-import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.repository.LabResultRepository;
 import java.time.LocalDateTime;
 import java.util.List;
