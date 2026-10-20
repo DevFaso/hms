@@ -50,7 +50,13 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
         String normalizedCode = normalizedRequest.getCode();
 
         if (organizationRepository.existsByCode(normalizedCode)) {
-            throw new IllegalArgumentException("Organization with code '" + normalizedCode + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", normalizedCode);
+        }
+        // QA D435: a second organisation with the same name was accepted.
+        String name = normalizedRequest.getName();
+        if (name != null && !name.isBlank()
+                && organizationRepository.findByNameIgnoreCase(name.trim()).isPresent()) {
+            throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", name.trim());
         }
 
         OrganizationType type = normalizedRequest.getType();
@@ -127,7 +133,7 @@ public class SuperAdminOrganizationProvisioningServiceImpl implements SuperAdmin
 
     private String normalizeCode(String code) {
         if (code == null) {
-            throw new IllegalArgumentException("Organization code cannot be null");
+            throw new IllegalArgumentException("organization.r7.codeRequired");
         }
         return code.trim().toUpperCase(Locale.ENGLISH);
     }

@@ -84,6 +84,7 @@ import {
 } from './credential-renewal/credential-renewal.component';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -142,6 +143,7 @@ export function currentMedications(meds: MedicationSummary[]): MedicationSummary
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     RouterLink,
     DatePipe,

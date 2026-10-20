@@ -563,11 +563,16 @@ export class Login implements OnInit, AfterViewInit {
     if (!this.isBrowser || this.resendActivationLoading) return;
     this.error = '';
     this.resendActivationSuccess = '';
-    const email = this.resendActivationEmail.trim();
-    if (!email) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL');
+    const contact = this.resendActivationEmail.trim();
+    if (!contact) {
+      this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
       return;
     }
+    // QA D311/D418: a phone-only account has no address to type; the server
+    // re-sends its activation code by SMS when given the number instead.
+    const params: Record<string, string> = contact.includes('@')
+      ? { email: contact }
+      : { phone: contact };
     this.resendActivationLoading = true;
     // One answer whatever the backend said: it does not reveal whether the
     // address exists, and neither does this dialog.
@@ -576,7 +581,7 @@ export class Login implements OnInit, AfterViewInit {
       this.resendActivationSuccess = this.translate.instant('LOGIN.ACTIVATION_LINK_SENT');
     };
     this.http
-      .post<void>('/auth/resend-verification', null, { params: { email } })
+      .post<void>('/auth/resend-verification', null, { params })
       .subscribe({ next: done, error: done });
   }
 }

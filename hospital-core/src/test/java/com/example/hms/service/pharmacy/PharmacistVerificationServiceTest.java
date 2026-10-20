@@ -166,7 +166,7 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be verified by the clinician who prescribed it");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.selfVerification"));
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -182,7 +182,7 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Only a signed prescription");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.onlySignedVerifiable"));
     }
 
     @Test
@@ -194,7 +194,7 @@ class PharmacistVerificationServiceTest {
 
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already been verified");
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.alreadyVerified"));
     }
 
     @Test

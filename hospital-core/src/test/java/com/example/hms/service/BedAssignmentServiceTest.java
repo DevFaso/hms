@@ -115,7 +115,7 @@ class BedAssignmentServiceTest {
         UUID bedId = bed.getId();
         assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
     }
 
     @Test
@@ -229,7 +229,7 @@ class BedAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.reserveBed(bedId, hospitalId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
         assertThat(bed.getStatus()).isEqualTo(BedStatus.OCCUPIED);
     }
 
@@ -269,7 +269,7 @@ class BedAssignmentServiceTest {
 
         assertThatThrownBy(() -> service.assignBed(admission, bedId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not available");
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.r7.notAvailable"));
         assertThat(bed.getStatus()).isEqualTo(BedStatus.RESERVED);
     }
 

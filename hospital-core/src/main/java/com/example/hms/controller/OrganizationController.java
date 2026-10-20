@@ -119,8 +119,10 @@ public class OrganizationController {
         
         // Check if organization code already exists
         if (organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
         }
+        // QA D435: two organisations with the same name cannot be told apart in any picker.
+        requireNameFree(requestDTO.getName(), null);
 
         Organization organization = organizationMapper.toEntity(requestDTO);
         organization = organizationRepository.save(organization);
@@ -155,8 +157,9 @@ public class OrganizationController {
         // Check if new code conflicts with existing organization (excluding current one)
         if (!organization.getCode().equals(requestDTO.getCode()) && 
             organizationRepository.existsByCode(requestDTO.getCode())) {
-            throw new IllegalArgumentException("Organization with code '" + requestDTO.getCode() + "' already exists");
+            throw new com.example.hms.exception.BusinessException("organization.r7.codeExists", requestDTO.getCode());
         }
+        requireNameFree(requestDTO.getName(), organization.getId());
 
         organizationMapper.updateEntity(organization, requestDTO);
         organization = organizationRepository.save(organization);
@@ -215,5 +218,17 @@ public class OrganizationController {
         
         log.info("Applied default security policies to organization: {}", organization.getCode());
         return ResponseEntity.ok(new MessageResponse("Default security policies applied successfully"));
+    }
+
+    /** QA D435: an organisation name is unique, ignoring case and surrounding spaces. */
+    private void requireNameFree(String name, UUID self) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        organizationRepository.findByNameIgnoreCase(name.trim())
+            .filter(other -> self == null || !self.equals(other.getId()))
+            .ifPresent(other -> {
+                throw new com.example.hms.exception.BusinessException("organization.r7.nameExists", name.trim());
+            });
     }
 }

@@ -51,7 +51,7 @@
         <tbody>
           @for (entry of entries(); track entry.id) {
             <tr data-test="audit-row">
-              <td>{{ entry.eventTimestamp | date: 'medium' }}</td>
+              <td>{{ entry.eventTimestamp | serverTime | date: 'medium' }}</td>
               <td>
                 {{ entry.actorName || '—' }}
                 @if (entry.impersonatorUserId) {

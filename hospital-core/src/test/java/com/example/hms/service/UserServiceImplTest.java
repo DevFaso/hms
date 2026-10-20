@@ -141,7 +141,7 @@ class UserServiceImplTest {
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getMessage()).contains("not allowed");
+        assertThat(response.getMessage()).isEqualTo(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"));
     }
 
     @Test
@@ -158,7 +158,7 @@ class UserServiceImplTest {
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getMessage()).contains("not allowed");
+        assertThat(response.getMessage()).isEqualTo(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"));
     }
 
     @Test

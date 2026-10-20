@@ -94,6 +94,21 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
    * letting the user click and then hit a useless "missing patient/hospital"
    * error toast.
    */
+  /**
+   * QA D436: BreakGlassController#findMyLiveSession admits the declaring roles
+   * plus the front desk. Any other role (lab, pharmacy, billing...) got a 403
+   * on every chart open; such a caller can hold no session, so it does not ask.
+   */
+  private canAskForMySession(): boolean {
+    const roles = this.auth.getRoles?.() ?? [];
+    return roles.some(
+      (r) =>
+        BreakGlassBannerComponent.DECLARE_ROLES.has(r) ||
+        r === 'ROLE_RECEPTIONIST' ||
+        r === 'RECEPTIONIST',
+    );
+  }
+
   protected readonly canInvokeDeclare = computed(
     () => this.canDeclare() && !!this.patientId() && !!this.hospitalId(),
   );
@@ -220,7 +235,7 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
 
   private refreshFromInputs(): void {
     const id = this.patientId();
-    if (!id) {
+    if (!id || !this.canAskForMySession()) {
       this.mySession.set(null);
       this.state.set('idle');
       this.stopClock();

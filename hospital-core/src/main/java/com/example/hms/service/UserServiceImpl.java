@@ -190,7 +190,7 @@ public class UserServiceImpl implements UserService {
         if (existing > 0) {
             return BootstrapSignupResponse.builder()
                     .success(false)
-                    .message("Bootstrap not allowed; users already exist")
+                    .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapNotAllowed"))
                     .username(null)
                     .email(null)
                     .build();
@@ -255,7 +255,7 @@ public class UserServiceImpl implements UserService {
 
         return BootstrapSignupResponse.builder()
                 .success(true)
-                .message("Bootstrap Super Admin created — account is active, you can sign in now")
+                .message(com.example.hms.utility.MessageUtil.resolveOrRaw("auth.r7.bootstrapCreated"))
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();

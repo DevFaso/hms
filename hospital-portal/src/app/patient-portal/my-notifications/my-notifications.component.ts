@@ -4,11 +4,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-notifications',
   standalone: true,
-  imports: [DatePipe, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, DatePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],

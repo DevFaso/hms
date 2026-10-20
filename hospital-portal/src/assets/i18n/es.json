@@ -819,10 +819,10 @@
       "ADD_FAILED": "No se pudo añadir la asignación",
       "COL_ACTIVE": "Activa",
       "COL_COC": "Combo. cat.",
-      "COL_CODE": "Código HMS",
+      "COL_CODE": "Código e-Keneya",
       "COL_DATAELEMENT": "DataElement DHIS2",
       "COL_PERIOD": "Periodo",
-      "COL_SYSTEM": "Sistema HMS",
+      "COL_SYSTEM": "Sistema e-Keneya",
       "DELETED": "Asignación eliminada",
       "DELETE_FAILED": "No se pudo eliminar la asignación",
       "EMPTY": "Sin asignaciones para este conjunto.",
@@ -1661,7 +1661,7 @@
     "UNASSIGNED": "Sin asignar",
     "SYSTEM": "Sistema",
     "MINUTES_SHORT": "{{count}} min",
-    "COPYRIGHT_FOOTER": "© {{year}} HMS — Sistema de gestión hospitalaria",
+    "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Sistema de gestión hospitalaria",
     "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda."
   },
   "CONSULTATIONS": {
@@ -2577,7 +2577,8 @@
     "PROVINCE_PLACEHOLDER": "ej. Kadiogo",
     "REGION": "Región",
     "REGION_PLACEHOLDER": "ej. Centre, Île-de-France",
-    "REQUIRED_FIELDS": "El nombre, la ciudad, el país y el número de teléfono son obligatorios",
+    "REQUIRED_FIELDS": "El nombre, la ciudad, el país, el teléfono y una dirección o un apartado postal son obligatorios.",
+    "ADDRESS_OR_PO_BOX_HINT": "Indique la dirección o el apartado postal (uno de los dos es obligatorio).",
     "SEARCH_PLACEHOLDER": "Buscar hospitales…",
     "SECTOR": "Sector / Barrio",
     "SECTOR_PLACEHOLDER": "ej. Secteur 30",
@@ -3311,9 +3312,9 @@
     "ENTER_EMAIL": "Introduzca su dirección de correo electrónico.",
     "RESEND_ACTIVATION": "Reenviar el correo de activación",
     "RA_TITLE": "Activar su cuenta",
-    "RA_INSTRUCTION": "Introduzca la dirección de correo de su cuenta y le enviaremos un nuevo enlace de activación, válido durante 24 horas.",
+    "RA_INSTRUCTION": "Introduzca la dirección de correo o el número de teléfono de su cuenta y le enviaremos un nuevo enlace o código de activación, válido durante 24 horas.",
     "SEND_ACTIVATION_LINK": "Enviar el enlace de activación",
-    "ACTIVATION_LINK_SENT": "Si esta dirección pertenece a una cuenta aún no activa, un nuevo enlace de activación está en camino. Es válido durante 24 horas.",
+    "ACTIVATION_LINK_SENT": "Si esta dirección o este número pertenece a una cuenta aún no activa, un nuevo enlace o código de activación está en camino. Es válido durante 24 horas.",
     "RESET_LINK_SENT": "Si ese correo o número de teléfono está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada o sus SMS."
   },
   "NAV": {

@@ -222,7 +222,7 @@
             <tbody>
               @for (row of rows(); track row.id) {
                 <tr [class.row-impersonated]="row.impersonatorUserId">
-                  <td class="cell-time">{{ row.eventTimestamp | date: 'short' }}</td>
+                  <td class="cell-time">{{ row.eventTimestamp | serverTime | date: 'short' }}</td>
                   <td>
                     <span class="event-type-badge">{{
                       row.eventType | enumLabel: 'auditEventType'

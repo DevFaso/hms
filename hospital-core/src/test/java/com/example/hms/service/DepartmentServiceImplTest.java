@@ -322,6 +322,20 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void deleteDepartment_stillReferenced_saysWhy_D435() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+                .when(departmentRepository).flush();
+        when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("department.r7.deleteInUse"), any(), any(Locale.class)))
+                .thenReturn("still used");
+
+        assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("still used");
+    }
+
+    @Test
     void deleteDepartment_throwsWhenHasStaff() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(true);

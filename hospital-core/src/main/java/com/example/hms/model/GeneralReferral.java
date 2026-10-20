@@ -351,8 +351,7 @@ public class GeneralReferral {
 
     public void cancel(String reason) {
         if (isTerminal(this.status)) {
-            throw new IllegalStateException(
-                "Cannot cancel referral in terminal status " + this.status);
+            throw new IllegalStateException("referral.r7.cannotCancelTerminal");
         }
         this.status = ReferralStatus.CANCELLED;
         this.cancellationReason = reason;
@@ -379,8 +378,7 @@ public class GeneralReferral {
                 return;
             }
         }
-        throw new IllegalStateException(
-            "Cannot " + action + " referral in status " + this.status);
+        throw new IllegalStateException("referral.r7.wrongStatus");
     }
 
     private static boolean isTerminal(ReferralStatus s) {

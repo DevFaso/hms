@@ -71,6 +71,26 @@ describe('BreakGlassBannerComponent', () => {
     expect(fixture.nativeElement.querySelector('.bg-banner')).toBeNull();
   });
 
+  it('QA D436: a role the /me endpoint refuses does not call it on chart load', () => {
+    for (const role of ['ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST', 'ROLE_BILLING_SPECIALIST']) {
+      TestBed.resetTestingModule();
+      init([role]);
+      bgSpy.findMyLiveSession.and.returnValue(of(null));
+      setInputs('p1');
+      expect(bgSpy.findMyLiveSession).not.toHaveBeenCalled();
+    }
+  });
+
+  it('QA D436: the clinical roles and the front desk still ask for their session', () => {
+    for (const role of ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN', 'ROLE_RECEPTIONIST']) {
+      TestBed.resetTestingModule();
+      init([role]);
+      bgSpy.findMyLiveSession.and.returnValue(of(null));
+      setInputs('p1');
+      expect(bgSpy.findMyLiveSession).toHaveBeenCalledWith('p1');
+    }
+  });
+
   it('shows the prompt button when clinician has no active session', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));

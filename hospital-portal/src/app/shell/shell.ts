@@ -49,6 +49,7 @@ import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospit
 import { clearReportedSilent403s } from '../interceptors/error.interceptor';
 import { storedLang, switchLanguage } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 interface NavItem {
   icon: string;
@@ -70,6 +71,7 @@ function isMobileViewport(): boolean {
   selector: 'app-shell',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     RouterOutlet,
     RouterLink,

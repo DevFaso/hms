@@ -123,7 +123,7 @@ public class SuperAdminOrganizationController {
         Locale locale = LocaleContextHolder.getLocale();
         HospitalResponseDTO current = hospitalService.getHospitalById(hospitalId, locale);
         if (current.getOrganizationId() != null && !current.getOrganizationId().equals(organizationId)) {
-            throw new BusinessRuleException("Hospital is already assigned to a different organization");
+            throw BusinessRuleException.ofKey("organization.r7.hospitalInOtherOrg");
         }
 
         HospitalResponseDTO updated = hospitalService.assignHospitalToOrganization(hospitalId, organizationId, locale);
@@ -144,7 +144,7 @@ public class SuperAdminOrganizationController {
         Locale locale = LocaleContextHolder.getLocale();
         HospitalResponseDTO current = hospitalService.getHospitalById(hospitalId, locale);
         if (current.getOrganizationId() == null || !organizationId.equals(current.getOrganizationId())) {
-            throw new BusinessRuleException("Hospital is not assigned to the specified organization");
+            throw BusinessRuleException.ofKey("organization.r7.hospitalNotInOrg");
         }
 
         HospitalResponseDTO updated = hospitalService.unassignHospitalFromOrganization(hospitalId, locale);

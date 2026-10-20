@@ -387,7 +387,16 @@ public class DepartmentServiceImpl implements DepartmentService {
             );
         }
 
-        departmentRepository.delete(department);
+        // QA D435: a department still referenced elsewhere (wards, beds,
+        // encounters, appointments...) failed on the foreign key at commit and
+        // the admin read a generic error. Flush here so the refusal says why.
+        try {
+            departmentRepository.delete(department);
+            departmentRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException inUse) {
+            throw new BusinessRuleException(
+                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+        }
     }
 
     private Locale determineEffectiveLocale(Locale locale) {

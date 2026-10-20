@@ -178,7 +178,7 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
             : Instant.now(clock).plus(DEFAULT_PURGE_GRACE_DAYS, ChronoUnit.DAYS);
 
         if (scheduledFor.isBefore(Instant.now(clock))) {
-            throw new BusinessRuleException("Purge cannot be scheduled in the past.");
+            throw BusinessRuleException.ofKey("organization.r7.purgeInPast");
         }
         // Checked before the step-up, which would otherwise spend a backup code
         // on a request that cannot run.
@@ -223,16 +223,14 @@ public class OrganizationLifecycleServiceImpl implements OrganizationLifecycleSe
 
     private void requireTransition(Organization org, Set<OrganizationLifecycleState> allowed, String action) {
         if (!allowed.contains(org.getLifecycleState())) {
-            throw new BusinessRuleException(
-                "Cannot " + action + " organization in state " + org.getLifecycleState()
-                    + " (allowed: " + allowed + ")");
+            throw BusinessRuleException.ofKey("organization.r7.transitionRefused");
         }
     }
 
     private String requireReason(TenantLifecycleActionRequestDTO request, String action) {
         String reason = request != null ? request.getReason() : null;
         if (reason == null || reason.trim().isEmpty()) {
-            throw new BusinessRuleException("A reason is required to " + action + " an organization.");
+            throw BusinessRuleException.ofKey("organization.r7.reasonRequired");
         }
         return reason.trim();
     }
