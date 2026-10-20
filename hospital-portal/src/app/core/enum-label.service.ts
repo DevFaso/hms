@@ -929,6 +929,30 @@ export class EnumLabelService implements OnDestroy {
       LOCUM: 'Locum',
       INTERN: 'Intern',
     },
+    specimenType: {
+      BLOOD: 'Blood',
+      WHOLE_BLOOD: 'Whole blood',
+      SERUM: 'Serum',
+      URINE: 'Urine',
+      STOOL: 'Stool',
+      CSF: 'Cerebrospinal fluid',
+      SPUTUM: 'Sputum',
+      SWAB: 'Swab',
+      TISSUE: 'Tissue',
+      OTHER: 'Other',
+    },
+    platformServiceType: {
+      EHR: 'Electronic health record',
+      BILLING: 'Billing',
+      INVENTORY: 'Inventory',
+      LIMS: 'Laboratory information system',
+      ANALYTICS: 'Analytics',
+      CLINICAL_ANALYTICS: 'Clinical analytics',
+      REMOTE_MONITORING: 'Remote monitoring',
+      PEDIATRIC_MESSAGING: 'Paediatric messaging',
+      ORTHO_IMAGING: 'Orthopaedic imaging',
+      RESP_TELEMED: 'Respiratory telemedicine',
+    },
   };
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */
