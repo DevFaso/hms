@@ -160,18 +160,14 @@ export class ImagingComponent implements OnInit {
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
 
-  readonly canSeeResults = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canSeeResults = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportsByHospital'),
+  );
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
-  readonly canAuthorReports = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canUpdateReportStatus = this.canAuthorReports;
+  readonly canAuthorReports = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportCreate'));
+  readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportStatus'),
+  );
   /** QA D527: POST /imaging/orders — the ordering clinicians, not the radiologist. */
   readonly canCreateOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderCreate')),
@@ -188,11 +184,7 @@ export class ImagingComponent implements OnInit {
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
   );
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
-  readonly canAckCritical = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 
   modalities: ImagingModality[] = [
     'XRAY',

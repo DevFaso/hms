@@ -41,6 +41,44 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'ImagingOrderController#updateStatus',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
   },
+  labSpecimenCollect: {
+    endpoint: 'LabSpecimenController#collectSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  labSpecimenReceive: {
+    endpoint: 'LabSpecimenController#receiveSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
+  imagingReportsByHospital: {
+    endpoint: 'ImagingResultController#getReportsByHospital',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+  },
+  imagingReportCreate: {
+    endpoint: 'ImagingResultController#createReport',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  imagingReportStatus: {
+    endpoint: 'ImagingResultController#updateReportStatus',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_RADIOLOGIST', 'ROLE_DOCTOR'],
+  },
+  imagingCriticalAck: {
+    endpoint: 'ImagingResultController#acknowledgeCriticalResult',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
+  },
   admissionCreate: {
     endpoint: 'AdmissionController#admitPatient',
     roles: ['ROLE_DOCTOR'],
@@ -81,6 +119,14 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
+  encounterStart: {
+    endpoint: 'EncounterController#startEncounter',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+  },
+  referralCreate: {
+    endpoint: 'GeneralReferralController#createReferral',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
@@ -94,6 +140,18 @@ export const ACTION_PERMISSIONS = {
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
   },
 } as const satisfies Record<string, ActionPermission>;
+
+/**
+ * Service-layer rules the role gate cannot express, applied by the page on top
+ * of `actionRoles()`. Not mirrored by the backend test: each names the rule.
+ */
+export const SERVICE_RULE_ROLES = {
+  /**
+   * QA D319/D427: `GeneralReferralServiceImpl` refuses a referrer who is not a
+   * physician or a midwife, although `createReferral` admits ROLE_NURSE.
+   */
+  referralReferrer: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+} as const;
 
 export type ActionKey = keyof typeof ACTION_PERMISSIONS;
 

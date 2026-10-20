@@ -66,24 +66,32 @@ class ActionPermissionsMirrorTest {
         List<Entry> out = new ArrayList<>();
         String action = null;
         String[] endpoint = null;
+        // A long list is wrapped one role per line by the formatter, so the
+        // roles run from `roles: [` to the line that closes the bracket.
+        Set<String> roles = null;
         for (String raw : source.split("\n")) {
             String line = raw.strip();
             Matcher a = ACTION_LINE.matcher(line);
             Matcher e = ENDPOINT_LINE.matcher(line);
-            if (a.matches()) {
+            if (roles == null && a.matches()) {
                 action = a.group(1);
                 endpoint = null;
-            } else if (action != null && e.matches()) {
+            } else if (roles == null && action != null && e.matches()) {
                 endpoint = new String[] {e.group(1), e.group(2)};
-            } else if (endpoint != null && line.startsWith("roles:")) {
-                Set<String> roles = new TreeSet<>();
+            } else if (endpoint != null && (roles != null || line.startsWith("roles:"))) {
+                if (roles == null) {
+                    roles = new TreeSet<>();
+                }
                 Matcher q = QUOTED.matcher(line);
                 while (q.find()) {
                     roles.add(q.group(1));
                 }
-                out.add(new Entry(action, endpoint[0], endpoint[1], roles));
-                action = null;
-                endpoint = null;
+                if (line.contains("]")) {
+                    out.add(new Entry(action, endpoint[0], endpoint[1], roles));
+                    action = null;
+                    endpoint = null;
+                    roles = null;
+                }
             }
         }
         return out;

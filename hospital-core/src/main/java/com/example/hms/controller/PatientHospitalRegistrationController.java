@@ -101,6 +101,10 @@ public class PatientHospitalRegistrationController {
         @RequestParam(defaultValue = "10") int size,
         @RequestParam(required = false) Boolean active
     ) {
+        if (patientId != null && hospitalId != null) {
+            return ResponseEntity.ok(
+                registrationService.getRegistrationsByPatientAndHospital(patientId, hospitalId, active));
+        }
         if (patientId != null) {
             return ResponseEntity.ok(registrationService.getRegistrationsByPatient(patientId, page, size, active));
         }

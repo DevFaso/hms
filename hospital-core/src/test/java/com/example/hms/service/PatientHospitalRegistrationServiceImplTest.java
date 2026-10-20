@@ -289,6 +289,22 @@ class PatientHospitalRegistrationServiceImplTest {
         assertThat(result).hasSize(1);
     }
 
+    /** QA D527: the chart's "registered here?" read is narrowed to the one hospital asked for. */
+    @Test
+    void getRegistrationsByPatientAndHospital_keepsOnlyThatHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        PatientHospitalRegistration elsewhere = PatientHospitalRegistration.builder().active(true).build();
+        elsewhere.setHospital(other);
+        registration.setActive(true);
+        when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(elsewhere, registration));
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        assertThat(service.getRegistrationsByPatientAndHospital(patientId, hospitalId, true))
+            .containsExactly(responseDTO);
+        assertThat(service.getRegistrationsByPatientAndHospital(patientId, other.getId(), false)).isEmpty();
+    }
+
     // ---- getRegistrationsByHospital ----
 
     /**

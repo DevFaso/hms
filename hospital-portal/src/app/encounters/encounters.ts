@@ -201,6 +201,7 @@ export class EncountersComponent implements OnInit {
     // signal) because this branch existed before the cross-tenant
     // refactor and changing its source would alter the dropdown logic
     // below — kept as-is to avoid scope creep.
+    // rbac-inline-ok: a scope question (which hospitals to list), not a write button.
     const isSuperAdminUser = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
     const permitted = this.roleContext.permittedHospitalIds;
 
@@ -633,8 +634,7 @@ export class EncountersComponent implements OnInit {
   /** D96: a doctor picks up a patient who is waiting for one. */
   canStartEncounter(enc: EncounterResponse): boolean {
     return (
-      enc.status === 'WAITING_FOR_PHYSICIAN' &&
-      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'])
+      enc.status === 'WAITING_FOR_PHYSICIAN' && this.auth.hasAnyRole(actionRoles('encounterStart'))
     );
   }
 

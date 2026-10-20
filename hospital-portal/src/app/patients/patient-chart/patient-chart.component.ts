@@ -330,16 +330,52 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.loadRegistrationHere();
   }
 
-  /** Mirrors GET /registrations' roles that may also write an allergy. */
+  /**
+   * Whether the patient is registered in the hospital the allergy write acts
+   * in (`hospitalId()`). Asked for that ONE hospital, not read off the first
+   * page of every registration, and re-asked on every access refresh: a stale
+   * answer offered Add the API refuses, or hid it from someone now entitled.
+   * A reply that lands after a newer question is dropped.
+   */
   private loadRegistrationHere(): void {
+    const seq = ++this.registrationSeq;
+    this.registeredHere.set(null);
     const scope = this.hospitalId();
-    if (!scope || !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE'])) return;
-    this.registrations.list({ patientId: this.patientId, active: true, size: 50 }).subscribe({
-      next: (rows) =>
-        this.registeredHere.set((rows ?? []).some((r) => r.hospitalId === scope && r.active)),
-      error: () => this.registeredHere.set(null),
-    });
+    if (!scope || !this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere])) {
+      return;
+    }
+    this.registrations
+      .list({ patientId: this.patientId, hospitalId: scope, active: true })
+      .subscribe({
+        next: (rows) => {
+          if (seq !== this.registrationSeq) return;
+          this.registeredHere.set((rows ?? []).some((r) => r.hospitalId === scope && r.active));
+        },
+        error: () => {
+          if (seq === this.registrationSeq) this.registeredHere.set(null);
+        },
+      });
   }
+
+  private registrationSeq = 0;
+
+  /**
+   * The acting hospital (and the role reading it) can move with no navigation
+   * — a scope or role switch — and nothing else re-asks the question then.
+   * Skips its first run: ngOnInit has just asked.
+   */
+  private readonly registrationScopeWatcher = effect(() => {
+    const key =
+      this.hospitalId() +
+      '|' +
+      this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere]);
+    const previous = this.watchedRegistrationKey;
+    this.watchedRegistrationKey = key;
+    if (previous === undefined || previous === key) return;
+    untracked(() => this.loadRegistrationHere());
+  });
+
+  private watchedRegistrationKey: string | undefined = undefined;
 
   /** QA D527: an allergy recorded at another hospital is edited there, not here. */
   canChangeAllergy(row: { hospitalId?: string }): boolean {
@@ -1041,6 +1077,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labsLoadedFor.set(null);
     this.labResultsError.set(false);
     this.labOrdersError.set(false);
+    this.loadRegistrationHere();
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

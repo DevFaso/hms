@@ -135,14 +135,9 @@ export class LabComponent implements OnInit {
   printingSpecimenId = signal<string | null>(null);
 
   /** Matches the specimen create/receive @PreAuthorize (lab staff; E9 #67: no admins). */
-  readonly canManageSpecimens = this.roleContext.hasAnyActiveRole([
-    'ROLE_LAB_TECHNICIAN',
-    'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
-    'ROLE_LAB_DIRECTOR',
-    'ROLE_QUALITY_MANAGER',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canManageSpecimens = this.roleContext.hasAnyActiveRole(
+    actionRoles('labSpecimenCollect'),
+  );
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 

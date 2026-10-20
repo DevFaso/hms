@@ -90,6 +90,12 @@ export const CHART_ROLES = {
   createUpdates: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   viewTimeline: [...DOCTOR_ROLES],
   /**
+   * QA D527: the allergy writers who may also read GET /registrations (whose
+   * annotation names receptionists and admins too, but not the pharmacist), so
+   * the chart can tell whether the patient is registered where they act.
+   */
+  checkRegistrationHere: ['ROLE_DOCTOR', 'ROLE_NURSE'],
+  /**
    * B6 — the Labs section reads TWO backends, and they do not admit the same
    * roles, so each read carries its own list instead of one combined flag: a
    * combined flag would 403 half the roles on one of the two calls and render
