@@ -128,4 +128,48 @@ class PatientControllerTest {
 
         assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, null, auth));
     }
+
+    // QA D504: an allergy list narrowed by the patient's sharing opt-out says so in a header;
+    // without it the chart shows a silent, complete-looking list.
+    private JwtAuthenticationToken clinician(UUID userId) {
+        Jwt jwt = Jwt.withTokenValue("token").header("alg", "none")
+            .claim("sub", userId.toString()).build();
+        return new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_DOCTOR")));
+    }
+
+    @Test
+    void allergyListNarrowedByAnOptOutCarriesTheWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(patientService.getPatientAllergies(patientId, hospitalId, userId)).thenReturn(List.of());
+        when(patientService.foreignAllergiesWithheld(patientId, hospitalId, userId)).thenReturn(true);
+
+        ResponseEntity<List<com.example.hms.payload.dto.PatientAllergyResponseDTO>> response =
+            controller.getPatientAllergies(patientId, null, auth);
+
+        assertEquals(PatientController.RECORDS_WITHHELD_OTHER_HOSPITALS,
+            response.getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+    }
+
+    @Test
+    void allergyListUnderBreakGlassHasNoWithheldHeader() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        JwtAuthenticationToken auth = clinician(userId);
+        when(authUtils.resolveUserId(auth)).thenReturn(java.util.Optional.of(userId));
+        when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(hospitalId);
+        when(patientService.getPatientAllergies(patientId, hospitalId, userId)).thenReturn(List.of());
+        when(patientService.foreignAllergiesWithheld(patientId, hospitalId, userId)).thenReturn(false);
+
+        ResponseEntity<List<com.example.hms.payload.dto.PatientAllergyResponseDTO>> response =
+            controller.getPatientAllergies(patientId, null, auth);
+
+        org.junit.jupiter.api.Assertions.assertNull(
+            response.getHeaders().getFirst(PatientController.RECORDS_WITHHELD_HEADER));
+    }
 }

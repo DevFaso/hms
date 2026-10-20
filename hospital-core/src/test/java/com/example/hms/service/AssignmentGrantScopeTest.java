@@ -61,6 +61,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -444,8 +445,8 @@ class AssignmentGrantScopeTest {
         }
 
         @Test
-        @DisplayName("multi-scope: a hospital the admin does not administer is reported, the others still go through")
-        void multiScopeReportsTheRefusedScope() {
+        @DisplayName("multi-scope (QA D541): one hospital the admin does not administer refuses the whole request, audited, nothing saved")
+        void multiScopeRefusesTheWholeRequest() {
             signInAsHospitalAdminOfA();
             UserRoleAssignmentMultiRequestDTO request = new UserRoleAssignmentMultiRequestDTO();
             request.setUserId(assignee.getId());
@@ -453,14 +454,14 @@ class AssignmentGrantScopeTest {
             request.setHospitalIds(List.of(hospitalA.getId(), hospitalB.getId()));
             request.setSkipConflicts(true);
 
-            UserRoleAssignmentBatchResponseDTO result = service.assignRoleToMultipleScopes(request);
+            assertThatThrownBy(() -> service.assignRoleToMultipleScopes(request))
+                .isInstanceOf(AccessDeniedException.class);
 
-            assertThat(result.getCreatedAssignments()).isEqualTo(1);
-            assertThat(result.getFailures()).singleElement()
-                .satisfies(f -> assertThat(f.getHospitalId()).isEqualTo(hospitalB.getId()));
-            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
-            verify(assignmentRepository).save(saved.capture());
-            assertThat(saved.getValue().getHospital()).isSameAs(hospitalA);
+            assertNothingWritten();
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+            assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
         }
 
         @Test

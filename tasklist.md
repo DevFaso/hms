@@ -5175,6 +5175,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **A delivery creates no charge (QA D420, round 7; D355 / D225 / D163 / D105).** The same gap as "A stay or visit does not charge itself" (D148) above: nothing posts a priced line for a clinical act because no charge-capture rule and no priced-service catalog exist, so there is no price for a delivery to post. Deferred as that feature, not built per order type. Newborn registration as its own patient (D163) stays deferred as before. `fix/qa-r7-clinical-inpatient` fixed the clinical bugs of the round (note authorship, triage path, eMAR scanner, obstetric age, inpatient prescriptions, break-glass, discharge summary, bed fit, vitals after discharge, task re-completion, allergy severity, lab ordering message).
 - **Payment reference in the native patient apps (QA D433, `fix/qa-r7-tenancy-security`).** The API now refuses a card, transfer or mobile-money declaration with no transaction reference (localized 400 on `referenceGivenForNonCashPayment`), and the web portal checks it before sending. The Android and iOS apps still let the field be empty and only show the server's refusal; a client-side check there needs a store release, so it waits for the next app release train.
 
+- **QA D504 residual: only the allergy list says when a sharing opt-out withheld other hospitals' rows.**
+  (fix/qa-r8-tenancy-privacy, #918.) `GET /patients/{id}/allergies` sends
+  `X-Records-Withheld: OTHER_HOSPITALS` and the chart shows it. The timeline,
+  storyboard, snapshot, patient-list allergy column and nurse dashboard honour
+  break-glass the same way (`AllergySharingVisibility`) but, without it, narrow
+  to this hospital's rows with no flag. Nothing leaks (rows are withheld by the
+  patient's choice); the gap is that those five views can look complete. Fix:
+  an `allergiesWithheld` flag on their DTOs from `foreignRowsWithheld`, and a
+  notice on each of the five screens (EN/FR/ES) - a cross-screen UI change kept
+  out of this tenancy PR.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
