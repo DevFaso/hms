@@ -30,8 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ActionPermissionsMirrorTest {
 
     private static final Path MAP = Path.of("..", "hospital-portal", "src", "app", "core", "action-permissions.ts");
-    private static final Pattern ENTRY = Pattern.compile(
-        "(\\w++):\\s*+\\{\\s*+endpoint:\\s*+'(\\w++)#(\\w++)',\\s*+roles:\\s*+\\[([^\\]]*+)\\]", Pattern.DOTALL);
+    private static final Pattern ACTION_LINE = Pattern.compile("(\\w+): \\{");
+    private static final Pattern ENDPOINT_LINE = Pattern.compile("endpoint: '(\\w+)#(\\w+)',");
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
     private static final Pattern SIMPLE_EXPRESSION = Pattern.compile(
         "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole)\\(\\s*'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
@@ -64,14 +64,27 @@ class ActionPermissionsMirrorTest {
         assertThat(Files.exists(MAP)).as("portal action map at %s", MAP.toAbsolutePath()).isTrue();
         String source = Files.readString(MAP, StandardCharsets.UTF_8);
         List<Entry> out = new ArrayList<>();
-        Matcher m = ENTRY.matcher(source);
-        while (m.find()) {
-            Set<String> roles = new TreeSet<>();
-            Matcher q = QUOTED.matcher(m.group(4));
-            while (q.find()) {
-                roles.add(q.group(1));
+        String action = null;
+        String[] endpoint = null;
+        for (String raw : source.split("\n")) {
+            String line = raw.strip();
+            Matcher a = ACTION_LINE.matcher(line);
+            Matcher e = ENDPOINT_LINE.matcher(line);
+            if (a.matches()) {
+                action = a.group(1);
+                endpoint = null;
+            } else if (action != null && e.matches()) {
+                endpoint = new String[] {e.group(1), e.group(2)};
+            } else if (endpoint != null && line.startsWith("roles:")) {
+                Set<String> roles = new TreeSet<>();
+                Matcher q = QUOTED.matcher(line);
+                while (q.find()) {
+                    roles.add(q.group(1));
+                }
+                out.add(new Entry(action, endpoint[0], endpoint[1], roles));
+                action = null;
+                endpoint = null;
             }
-            out.add(new Entry(m.group(1), m.group(2), m.group(3), roles));
         }
         return out;
     }
