@@ -242,6 +242,44 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                             @Param("hospitalIds") Collection<UUID> hospitalIds,
                             Pageable pageable);
 
+    /**
+     * QA D430 (D347): a non-administrator's directory lists colleagues only.
+     * Chat and hand-offs need staff ids and names; a patient-only account (no
+     * staff row) is no business of a nurse's, pharmacist's or receptionist's
+     * directory. A colleague is an account with a staff row or a non-patient
+     * role assignment (an admin-registered nurse waiting for her code has the
+     * assignment before the staff row). A staff member who is also a patient is
+     * still a colleague.
+     */
+    String DIRECTORY_STAFF_ONLY = """
+          AND ( EXISTS (SELECT 1 FROM Staff sd WHERE sd.user = u)
+                OR EXISTS (SELECT 1 FROM UserRoleHospitalAssignment sa JOIN sa.role sr
+                           WHERE sa.user = u AND UPPER(sr.code) <> 'ROLE_PATIENT') )
+        """;
+
+    /** {@link #findAllPaged} for a non-administrator: staff accounts only (QA D430). */
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_STAFF_ONLY)
+    Page<User> findStaffDirectoryPaged(@Param("scoped") boolean scoped,
+                                       @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                       @Param("includeDeleted") boolean includeDeleted,
+                                       @Param("onlyDeleted") boolean onlyDeleted,
+                                       Pageable pageable);
+
+    /** {@link #searchUsers} for a non-administrator: staff accounts only (QA D430). */
+    @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY,
+        countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY)
+    Page<User> searchStaffDirectory(@Param("name") String name,
+                                    @Param("phoneDigits") String phoneDigits,
+                                    @Param("role") String role,
+                                    @Param("email") String email,
+                                    @Param("contactSearch") boolean contactSearch,
+                                    @Param("includeDeleted") boolean includeDeleted,
+                                    @Param("onlyDeleted") boolean onlyDeleted,
+                                    @Param("scoped") boolean scoped,
+                                    @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                    Pageable pageable);
+
   List<User> findByIsDeletedFalse();
 
     /* ---------- Data-quality helpers ---------- */

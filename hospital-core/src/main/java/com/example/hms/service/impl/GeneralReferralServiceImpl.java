@@ -174,6 +174,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Transactional
     public GeneralReferralResponseDTO submitReferral(UUID referralId) {
         GeneralReferral referral = findReferral(referralId);
+        requireCallerIsReferrer(referral);
         ReferralStatus before = referral.getStatus();
         referral.submit();
         referral = referralRepository.save(referral);
@@ -366,7 +367,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public List<GeneralReferralResponseDTO> getReferralsForPortalPatient(UUID patientId) {
+        // QA D430: a draft is the clinician's unfinished work, not yet a
+        // referral; the patient sees it once it is sent.
         return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
+            .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
             .map(this::toResponse)
             .toList();
     }
@@ -665,6 +669,23 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     /** QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer. */
+    /**
+     * QA D412: a draft is sent by the clinician who wrote it. A nurse could
+     * submit a doctor's draft, sending it out under the doctor's name. The
+     * referral was resolved in the caller's scope (findReferral), so the
+     * refusal names only what the caller would need to be.
+     */
+    private void requireCallerIsReferrer(GeneralReferral referral) {
+        UUID callerId = roleValidator.getCurrentUserId();
+        Staff referrer = referral.getReferringProvider();
+        boolean isReferrer = callerId != null && referrer != null && referrer.getUser() != null
+            && callerId.equals(referrer.getUser().getId());
+        if (!isReferrer) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.submit.referrerOnly"));
+        }
+    }
+
     private void requireReferrerIsCaller(Staff referringProvider, UUID sendingHospitalId) {
         UUID callerId = roleValidator.getCurrentUserId();
         boolean isCaller = callerId != null && referringProvider.getUser() != null

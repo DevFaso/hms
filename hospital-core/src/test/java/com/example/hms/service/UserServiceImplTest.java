@@ -2194,17 +2194,17 @@ class UserServiceImplTest {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(onePage);
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
                     any(), any())).thenReturn(onePage);
 
             // Even if a deleted flag reached the service, the scoped path has no deleted view.
             userService.getAllUsers(0, 10, true, true);
             userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
 
-            verify(userRepository).findAllPaged(eq(false), eq(false), eq(true), eq(hospitals), any());
-            verify(userRepository).searchUsers(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
+            verify(userRepository).searchStaffDirectory(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
                     eq(false), eq(true), eq(hospitals), any());
         }
 
@@ -2227,7 +2227,7 @@ class UserServiceImplTest {
             patientAccount.setId(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(patientAccount)));
             when(userMapper.toSummaryDTO(patientAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
@@ -2246,12 +2246,12 @@ class UserServiceImplTest {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
-            when(userRepository.searchUsers(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
                     anyBoolean(), any(), any())).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of()));
 
             userService.searchUsers("p@example.com", null, "p@example.com", 0, 10, false, false);
 
-            verify(userRepository).searchUsers(eq("p@example.com"), isNull(), isNull(), eq("p@example.com"),
+            verify(userRepository).searchStaffDirectory(eq("p@example.com"), isNull(), isNull(), eq("p@example.com"),
                     eq(false), eq(false), eq(false), eq(true), eq(hospitals), any());
         }
 
@@ -2263,7 +2263,7 @@ class UserServiceImplTest {
             account.setPatientProfile(new com.example.hms.model.Patient());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(account)));
             when(userMapper.toSummaryDTO(account)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("p@example.com").username("p@example.com").build());
@@ -2280,7 +2280,7 @@ class UserServiceImplTest {
             staffAccount.setStaffProfile(new com.example.hms.model.Staff());
             when(accountAccess.requireDirectoryAccess())
                     .thenReturn(new UserAccountAccess.DirectoryScope(false, Set.of(UUID.randomUUID()), false));
-            when(userRepository.findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any()))
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(staffAccount)));
             when(userMapper.toSummaryDTO(staffAccount)).thenAnswer(inv -> com.example.hms.payload.dto.UserSummaryDTO
                     .builder().email("n@example.com").username("nurse.b").firstName("Nurse").roleName("ROLE_NURSE").build());
@@ -2290,6 +2290,26 @@ class UserServiceImplTest {
             assertThat(row.getUsername()).isNull();
             assertThat(row.getFirstName()).isEqualTo("Nurse");
             assertThat(row.getRoleName()).isEqualTo("ROLE_NURSE");
+        }
+
+        @Test
+        @DisplayName("QA D430: a non-administrator's directory and search never run the all-accounts queries")
+        void nonAdministratorListsStaffOnly() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(onePage);
+            when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), any(), any())).thenReturn(onePage);
+
+            userService.getAllUsers(0, 10, false, false);
+            userService.searchUsers("ami", null, null, 0, 10, false, false);
+
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
+            verify(userRepository, org.mockito.Mockito.never()).findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
+            verify(userRepository, org.mockito.Mockito.never()).searchUsers(any(), any(), any(), any(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test

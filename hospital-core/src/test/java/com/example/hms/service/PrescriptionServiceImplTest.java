@@ -68,6 +68,9 @@ class PrescriptionServiceImplTest {
     private static final String TEST_FREQUENCY = "BID";
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private PrescriptionRepository prescriptionRepository;
     @Mock
     private PatientRepository patientRepository;
@@ -410,6 +413,35 @@ class PrescriptionServiceImplTest {
         assertThat(generatedEncounter.getDepartment()).isEqualTo(staffDepartment);
 
         verify(prescriptionMapper).toEntity(request, patient, staff, generatedEncounter);
+    }
+
+    @Test
+    void createPrescriptionForPatientNotRegisteredAtTheHospitalIsRefusedAndSavesNothing() {
+        // QA D401: hospital B's doctor prescribed for a patient registered only
+        // at A; the prescription and an auto-created encounter were written at B.
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .build();
+        UUID currentUser = staff.getUser().getId();
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        org.mockito.Mockito.doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+            .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        verify(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

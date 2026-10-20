@@ -68,6 +68,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     private final TreatmentPlanFollowUpRepository treatmentPlanFollowUpRepository;
     private final TreatmentPlanReviewRepository treatmentPlanReviewRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
     private final StaffRepository staffRepository;
@@ -87,6 +88,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
         validateEncounterContext(encounter, hospital, patient);
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
         TreatmentPlan plan = treatmentPlanMapper.toEntity(requestDTO, patient, context);
@@ -108,6 +111,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
         validateEncounterContext(encounter, hospital, patient);
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
         plan.setPatient(patient);

@@ -63,6 +63,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     private final VisitEducationDocumentationRepository documentationRepository;
     private final PatientEducationQuestionRepository questionRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
@@ -389,6 +390,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(requestDTO.getPatientId(), hospitalId);
 
         VisitEducationDocumentation documentation = Objects.requireNonNull(
             documentationMapper.toEntity(requestDTO), "visit education request is required");

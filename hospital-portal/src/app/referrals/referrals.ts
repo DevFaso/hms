@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -46,6 +53,21 @@ export class ReferralsComponent implements OnInit {
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+
+  /**
+   * QA D427: only a physician or a midwife may write a referral (POST
+   * /referrals refuses a nurse as referrer, QA D319), so nobody else is
+   * offered the button the API would refuse.
+   */
+  protected readonly canWriteReferral = computed(() =>
+    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']),
+  );
+
+  /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
+  isMyDraft(r: ReferralResponse): boolean {
+    const staffId = this.auth.getUserProfile()?.staffId;
+    return r.status === 'DRAFT' && !!staffId && r.referringProviderId === staffId;
+  }
 
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);

@@ -330,6 +330,34 @@ class GeneralReferralServiceImplTest {
         assertThat(result.getStatus()).isEqualTo(ReferralStatus.SUBMITTED);
     }
 
+    @Test
+    @DisplayName("QA D412: a nurse cannot submit a doctor's draft referral")
+    void submitReferralByAnotherClinicianIsRefused() {
+        GeneralReferral referral = buildReferral();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submitReferral(referralId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(referral.getStatus()).isEqualTo(ReferralStatus.DRAFT);
+        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D430: the patient portal never lists a draft referral")
+    void portalPatientDoesNotSeeDrafts() {
+        GeneralReferral draft = buildReferral();
+        GeneralReferral sent = buildReferral();
+        sent.setId(UUID.randomUUID());
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        UUID portalPatientId = draft.getPatient().getId();
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(portalPatientId)).thenReturn(List.of(draft, sent));
+
+        List<GeneralReferralResponseDTO> visible = service.getReferralsForPortalPatient(portalPatientId);
+
+        assertThat(visible).extracting(GeneralReferralResponseDTO::getStatus).containsExactly(ReferralStatus.SUBMITTED);
+    }
+
     // ── acknowledgeReferral ─────────────────────────────────────────────────
 
     @Test

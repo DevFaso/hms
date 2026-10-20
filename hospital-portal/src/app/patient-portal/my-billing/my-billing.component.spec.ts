@@ -153,10 +153,22 @@ describe('MyBillingComponent', () => {
     expect(portal.payInvoice).not.toHaveBeenCalled();
   });
 
+  it('refuses a card payment with no reference without calling the server (QA D433)', () => {
+    create([invoice()]);
+    openDialog();
+    component.payMethod = 'CARD';
+    component.payReference = '   ';
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(text('.pay-error')).toBeTruthy();
+  });
+
   it('shows the translated failure when the server gives no message', () => {
     portal.payInvoice.and.returnValue(throwError(() => ({ status: 500 })));
     create([invoice()]);
     openDialog();
+    component.payReference = 'CARD-1';
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();
     expect(text('.pay-error')).toBe('Le paiement a échoué');

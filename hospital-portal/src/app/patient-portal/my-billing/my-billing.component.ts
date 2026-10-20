@@ -90,6 +90,12 @@ export class MyBillingComponent implements OnInit {
       return;
     }
 
+    // QA D433: only cash is declared without a reference staff can check.
+    if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
+      this.payError.set(this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED'));
+      return;
+    }
+
     this.payProcessing.set(true);
     this.payError.set('');
 

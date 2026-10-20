@@ -58,6 +58,9 @@ import static org.mockito.Mockito.when;
 class PatientEducationServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private EducationResourceRepository resourceRepository;
     @Mock
     private PatientEducationProgressRepository progressRepository;
@@ -107,6 +110,7 @@ class PatientEducationServiceImplTest {
             documentationRepository,
             questionRepository,
             patientRepository,
+            patientRegistrationGuard,
             staffRepository,
             hospitalRepository,
             encounterRepository,
@@ -665,7 +669,7 @@ class PatientEducationServiceImplTest {
         PatientEducationQuestionMapper nullingMapper = mock(PatientEducationQuestionMapper.class);
         PatientEducationServiceImpl serviceWithNullingMapper = new PatientEducationServiceImpl(
             resourceRepository, progressRepository, documentationRepository, questionRepository,
-            patientRepository, staffRepository, hospitalRepository, encounterRepository,
+            patientRepository, patientRegistrationGuard, staffRepository, hospitalRepository, encounterRepository,
             progressWrites, resourceMapper, progressMapper, documentationMapper, nullingMapper);
 
         PatientEducationQuestionRequestDTO requestDTO = PatientEducationQuestionRequestDTO.builder()
