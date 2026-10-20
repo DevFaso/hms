@@ -49,7 +49,8 @@ class CallerIdentityTest {
         UUID hospitalId = hospital.getId();
         assertThatThrownBy(() -> CallerIdentity.resolveActor(repo, colleagueId, hospitalId))
             .isInstanceOf(RuntimeException.class);
-        assertThatThrownBy(() -> CallerIdentity.requireAtHospital(me, UUID.randomUUID()))
+        UUID elsewhere = UUID.randomUUID();
+        assertThatThrownBy(() -> CallerIdentity.requireAtHospital(me, elsewhere))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }
