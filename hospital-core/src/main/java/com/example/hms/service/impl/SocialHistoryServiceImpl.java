@@ -145,7 +145,7 @@ public class SocialHistoryServiceImpl implements SocialHistoryService {
             (existingHistory.getRecordedBy() == null || 
              !existingHistory.getRecordedBy().getId().equals(requestDTO.getRecordedByStaffId()))) {
             Staff recordedBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getRecordedByStaffId(),
-                    existingHistory.getHospital() == null ? null : existingHistory.getHospital().getId());
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingHistory.getHospital()));
             existingHistory.setRecordedBy(recordedBy);
         }
 

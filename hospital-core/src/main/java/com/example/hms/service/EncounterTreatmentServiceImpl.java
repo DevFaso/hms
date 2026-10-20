@@ -43,7 +43,7 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(treatment.getHospital(), "treatment.notfound", dto.getTreatmentId());
         // QA D503 class: the clinician who gave the treatment is the caller.
         Staff staff = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, dto.getStaffId(),
-                encounter.getHospital() == null ? null : encounter.getHospital().getId());
+                com.example.hms.security.CallerIdentity.hospitalIdOf(encounter.getHospital()));
         EncounterTreatment entity = mapper.toEntity(dto, encounter, treatment, staff);
         return mapper.toDto(encounterTreatmentRepository.save(entity));
     }

@@ -232,7 +232,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
             (existingImmunization.getAdministeredBy() == null || 
              !existingImmunization.getAdministeredBy().getId().equals(requestDTO.getAdministeredByStaffId()))) {
             Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(),
-                    existingImmunization.getHospital() == null ? null : existingImmunization.getHospital().getId());
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingImmunization.getHospital()));
             existingImmunization.setAdministeredBy(administeredBy);
         }
 

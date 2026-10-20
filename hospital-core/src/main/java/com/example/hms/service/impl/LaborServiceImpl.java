@@ -240,7 +240,7 @@ public class LaborServiceImpl implements LaborService {
         if (recordedBy != null) {
             // QA D503 class: the recorder is the caller, not a colleague named in the body.
             recordedBy = com.example.hms.security.CallerIdentity.confirmActor(staffRepository, recordedBy,
-                episode.getHospital() == null ? null : episode.getHospital().getId());
+                com.example.hms.security.CallerIdentity.hospitalIdOf(episode.getHospital()));
         }
         User documentedBy = resolveUser(recorderUserId);
 

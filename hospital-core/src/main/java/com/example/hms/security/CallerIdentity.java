@@ -106,6 +106,11 @@ public final class CallerIdentity {
         return claimed;
     }
 
+    /** The id of a record's hospital, or {@code null} when the record has none. */
+    public static UUID hospitalIdOf(com.example.hms.model.Hospital hospital) {
+        return hospital == null ? null : hospital.getId();
+    }
+
     /** Refuse a staff record that is not at {@code hospitalId} (a null hospital is never a match). */
     public static void requireAtHospital(Staff staff, UUID hospitalId) {
         if (hospitalId != null && (staff == null || staff.getHospital() == null

@@ -108,13 +108,14 @@ public class FileUploadService {
     public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
     /** Shown in refusals; must describe {@link #MAX_UPLOAD_BYTES}. */
     public static final String MAX_UPLOAD_LABEL = "10 MB";
+    private static final String EXT_JPEG = ".jpeg";
     private static final String EXT_TIFF = ".tiff";
     private static final String EXT_DOCX = ".docx";
     private static final String MIME_PNG = "image/png";
     private static final String MIME_JPEG = "image/jpeg";
     private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
-        ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
+        ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
         EXT_DOCX
     );
 
@@ -359,7 +360,7 @@ public class FileUploadService {
         return switch (extension) {
             case ".pdf" -> startsWith(head, "%PDF-".getBytes(StandardCharsets.US_ASCII));
             case ".png" -> startsWith(head, new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
-            case ".jpg", ".jpeg" -> startsWith(head, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
+            case ".jpg", EXT_JPEG -> startsWith(head, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
             case ".gif" -> startsWith(head, "GIF87a".getBytes(StandardCharsets.US_ASCII))
                 || startsWith(head, "GIF89a".getBytes(StandardCharsets.US_ASCII));
             case ".bmp" -> startsWith(head, "BM".getBytes(StandardCharsets.US_ASCII));
@@ -529,7 +530,7 @@ public class FileUploadService {
         return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
             case ".pdf" -> "application/pdf";
             case ".png" -> MIME_PNG;
-            case ".jpg", ".jpeg" -> MIME_JPEG;
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".gif" -> "image/gif";
             case ".bmp" -> "image/bmp";
             case EXT_TIFF -> "image/tiff";
@@ -561,7 +562,7 @@ public class FileUploadService {
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
     private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", ".jpeg", ".png", ".webp"
+        ".jpg", EXT_JPEG, ".png", ".webp"
     );
     private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
         MIME_JPEG, MIME_PNG, "image/webp"
@@ -697,7 +698,7 @@ public class FileUploadService {
 
     private String resolveChatContentTypeFromExtension(String extension) {
         return switch (extension) {
-            case ".jpg", ".jpeg" -> MIME_JPEG;
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
             case ".png" -> MIME_PNG;
             case ".webp" -> "image/webp";
             case ".webm" -> "audio/webm";
