@@ -399,7 +399,7 @@ class AdmissionServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
-        org.mockito.Mockito.verify(admissionRepository, org.mockito.Mockito.never()).save(org.mockito.ArgumentMatchers.any());
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test

@@ -74,11 +74,6 @@ class ImmunizationServiceImplTest {
         hospital = Hospital.builder().build(); hospital.setId(hospitalId);
     }
 
-    @org.junit.jupiter.api.AfterEach
-    void clearCallerIdentity() {
-        com.example.hms.security.CallerIdentityTestSupport.clear();
-    }
-
     @Test
     void createImmunization_success() {
         ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
@@ -246,6 +241,7 @@ class ImmunizationServiceImplTest {
     @AfterEach
     void clearHospitalContext() {
         HospitalContextHolder.clear();
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test

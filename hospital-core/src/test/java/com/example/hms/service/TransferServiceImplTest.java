@@ -414,7 +414,7 @@ class TransferServiceImplTest {
         assertThatThrownBy(() -> service.cancelTransfer(orderId, request))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(order.getStatus()).isNotEqualTo(TransferOrderStatus.CANCELLED);
-        verify(bedAssignmentService, org.mockito.Mockito.never()).releaseReservation(any());
+        verify(bedAssignmentService, never()).releaseReservation(any());
     }
 
     @Test
