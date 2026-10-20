@@ -5892,6 +5892,14 @@
         "API_KEY": "Clé d’API",
         "ADMISSION": "Hospitalisation",
         "REFERRAL": "Orientation"
+      },
+      "TIMELINE_CATEGORY": {
+        "ALLERGY": "Allergie",
+        "ENCOUNTER": "Consultation",
+        "IMAGING": "Imagerie",
+        "LAB_RESULT": "Résultat de laboratoire",
+        "PRESCRIPTION": "Ordonnance",
+        "PROCEDURE": "Acte"
       }
     },
     "DOCUMENTS": {
@@ -6890,6 +6898,42 @@
       "PERMS_LOAD_FAILED": "Échec du chargement des autorisations",
       "PERMS_UPDATED": "Autorisations mises à jour",
       "PERMS_UPDATE_FAILED": "Échec de la mise à jour des autorisations"
+    },
+    "SYSTEM_DESC": {
+      "ACCOUNTANT": "Comptable chargé(e) des écritures, du suivi des dépenses et des rapprochements financiers",
+      "ADMIN": "Utilisateur administratif disposant de privilèges opérationnels étendus",
+      "ANESTHESIOLOGIST": "Spécialiste en anesthésie chargé(e) de la consultation préopératoire, de la sédation et de la prise en charge de la douleur",
+      "BILLING_SPECIALIST": "Chargé(e) de facturation : factures, demandes de remboursement, encaissements et rapports financiers",
+      "CLAIMS_REVIEWER": "Agent chargé de vérifier et de transmettre les demandes de remboursement pharmacie à l'AMU et aux assureurs",
+      "CLEANER": "Agent d'entretien chargé de l'hygiène et de la propreté des locaux de l'hôpital",
+      "DOCTOR": "Médecin habilité à poser des diagnostics, prescrire, demander des examens et gérer les plans de traitement",
+      "HOSPITAL_ADMIN": "Administrateur de l'hôpital, chargé du personnel, des services, de la facturation et de la configuration de l'hôpital",
+      "INVENTORY_CLERK": "Agent de pharmacie chargé des réceptions, des ajustements de stock et des inventaires",
+      "LAB_DIRECTOR": "Directeur(trice) du laboratoire, autorité finale d'approbation des définitions d'analyses selon CLIA/CAP/ISO 15189",
+      "LAB_MANAGER": "Responsable de laboratoire supervisant le travail des techniciens, la vérification des résultats, le contrôle qualité et le fonctionnement du laboratoire",
+      "LAB_SCIENTIST": "Biologiste chargé(e) du traitement des échantillons, de la réalisation des analyses et de la publication des résultats",
+      "LAB_TECHNICIAN": "Technicien de laboratoire chargé du prélèvement, de la réception et du traitement des échantillons, et de la saisie préliminaire des résultats",
+      "MANAGER": "Responsable de service ou d'exploitation, chargé de la coordination du personnel et de la planification des ressources",
+      "MIDWIFE": "Sage-femme spécialisée dans le suivi maternel, l'accompagnement du travail et l'examen du nouveau-né",
+      "MODERATOR": "Modérateur des contenus et des activités, avec des droits de supervision et de revue",
+      "NURSE": "Infirmier(ère) diplômé(e) assurant les soins, l'administration des médicaments et le relevé des constantes",
+      "PATIENT": "Patient inscrit, avec un accès en libre-service à son dossier, à ses rendez-vous et à ses ordonnances",
+      "PHARMACIST": "Pharmacien(ne) chargé(e) de la dispensation, de la vérification des interactions médicamenteuses et de la gestion des stocks",
+      "PHARMACY_VERIFIER": "Pharmacien(ne) habilité(e) à vérifier et contresigner la dispensation des substances contrôlées",
+      "PHYSICIAN": "Médecin généraliste disposant de privilèges cliniques pour la consultation et le traitement des patients",
+      "PHYSIOTHERAPIST": "Kinésithérapeute concevant les programmes de rééducation, les séances et les bilans de mobilité",
+      "PROVIDER_ADMIN": "Administrateur d'un établissement prestataire externe (pharmacie ou laboratoire)",
+      "QUALITY_MANAGER": "Responsable qualité chargé(e) de revoir la documentation de validation et la conformité CAP/CLIA/ISO avant l'approbation du directeur du laboratoire",
+      "RADIOLOGIST": "Radiologue interprétant les radiographies, scanners et IRM et rédigeant les comptes rendus",
+      "RECEPTIONIST": "Agent d'accueil chargé de l'enregistrement des patients, des rendez-vous et de l'accueil des visiteurs",
+      "SECURITY": "Agent de sécurité chargé du contrôle des accès, de la surveillance et de la sûreté des locaux",
+      "STAFF": "Personnel de soutien de l'hôpital, avec accès aux plannings et aux rendez-vous",
+      "STORE_MANAGER": "Responsable de pharmacie supervisant les stocks, les seuils de réapprovisionnement et les rapports de stock",
+      "SUPER_ADMIN": "Super-administrateur de la plateforme, avec accès complet à toutes les organisations, à tous les hôpitaux et aux paramètres du système",
+      "SUPPORT": "Agent de support aidant les utilisateurs en cas de problème ou de question sur le système",
+      "SURGEON": "Chirurgien(ne) réalisant les interventions, gérant les plans opératoires et les soins postopératoires",
+      "TECHNICIAN": "Technicien biomédical ou informatique chargé de la maintenance des équipements et du support technique",
+      "USER": "Utilisateur standard disposant des droits d'accès de base"
     }
   },
   "SCHEDULING": {
@@ -8269,7 +8313,7 @@
     "RECEIPT_LOT_EXPIRED": "Ce lot est périmé et ne peut pas être entré en stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "Cet article est suivi par lot : choisissez le lot concerné par le mouvement.",
     "SELECT_LOT_OPTION": "Sélectionnez un lot",
-    "UNIT_PRICE": "Prix unitaire (XOF)",
+    "UNIT_PRICE": "Prix unitaire (F CFA)",
     "PRICE_SAVED": "Prix enregistré.",
     "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
     "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré."

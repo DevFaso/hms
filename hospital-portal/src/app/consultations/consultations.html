@@ -725,7 +725,7 @@
                 <option [value]="s.id">
                   {{ s.name }} \u2014
                   {{
-                    s.specialization ||
+                    (s.specialization ? (s.specialization | enumLabel: 'specialization') : '') ||
                       (s.roleName | roleLabel) ||
                       (s.jobTitle | enumLabel: 'jobTitle')
                   }}

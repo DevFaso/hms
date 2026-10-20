@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
+import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelService } from '../../core/enum-label.service';
 import {
@@ -17,7 +17,7 @@ import {
 @Component({
   selector: 'app-my-pharmacy-invoices',
   standalone: true,
-  imports: [CommonModule, TranslateModule, DatePipe, DecimalPipe],
+  imports: [CommonModule, TranslateModule, DatePipe, CurrencyPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],

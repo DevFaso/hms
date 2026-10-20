@@ -1425,12 +1425,41 @@ class AuthControllerTest {
         mockMvc.perform(post("/auth/resend-verification").param("phone", " +22670000000 "))
                 .andExpect(status().isOk());
 
-        verify(notifier).sendNotifications(pendingId);
-        verify(notifier, times(1)).sendNotifications(any(java.util.UUID.class));
+        verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
+        verify(notifier, times(1)).resendPendingActivationCode(any(java.util.UUID.class), any());
     }
 
     @Test
-    void resendVerification_secondRequestWithinCooldown_sendsNothing_D418() throws Exception {
+    void resendVerification_phoneOnlyPatientWhoNeverActivated_getsANewCode_D418() throws Exception {
+        // A patient registered at the desk: a phone number, no e-mail, no
+        // staff role - only the PATIENT assignment still waiting for its code.
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("deskpatient").phoneNumber("+22670000002").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+        user.setActive(false);
+        java.util.UUID patientAssignmentId = java.util.UUID.randomUUID();
+        com.example.hms.model.UserRoleHospitalAssignment patientRow = pendingAssignment(patientAssignmentId);
+        com.example.hms.model.Role patientRole = new com.example.hms.model.Role();
+        patientRole.setCode("ROLE_PATIENT");
+        patientRow.setRole(patientRole);
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        // Typed as at the desk, stored in E.164.
+        when(userRepository.findByPhoneNumber("+22670000002")).thenReturn(java.util.Optional.of(user));
+        when(assignmentRepository.findByUserId(userId)).thenReturn(java.util.List.of(patientRow));
+
+        mockMvc.perform(post("/auth/resend-verification").param("phone", "70 00 00 02"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("If the number is registered, a new activation code has been sent."));
+
+        verify(notifier).resendPendingActivationCode(patientAssignmentId, AuthController.RESEND_COOLDOWN);
+        verify(userRepository, never()).findByEmail(any());
+    }
+
+    @Test
+    void resendVerification_everyRequestGoesThroughTheSharedCooldownClaim_D418() throws Exception {
         java.util.UUID userId = java.util.UUID.randomUUID();
         com.example.hms.model.User user = com.example.hms.model.User.builder()
                 .username("patient2").phoneNumber("+22670000001").build();
@@ -1449,8 +1478,10 @@ class AuthControllerTest {
                     .andExpect(status().isOk());
         }
 
-        // One SMS, however often an anonymous caller asks within the cooldown.
-        verify(notifier, times(1)).sendNotifications(pendingId);
+        // No per-instance memory: every request asks the database claim
+        // (claimActivationResend), which sends at most once per cooldown.
+        verify(notifier, times(3)).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
+        verify(notifier, never()).sendNotifications(any(java.util.UUID.class));
     }
 
     @Test
@@ -1463,7 +1494,7 @@ class AuthControllerTest {
         mockMvc.perform(post("/auth/resend-verification").param("phone", "+22679999999"))
                 .andExpect(status().isOk());
 
-        verify(notifier, never()).sendNotifications(any(java.util.UUID.class));
+        verify(notifier, never()).resendPendingActivationCode(any(java.util.UUID.class), any());
     }
 
     @Test
@@ -1493,6 +1524,6 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
 
         verify(email).sendActivationEmail(eq("nurse9@example.com"), any());
-        verify(notifier).sendNotifications(pendingId);
+        verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
     }
 }

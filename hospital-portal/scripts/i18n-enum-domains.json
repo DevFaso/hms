@@ -224,5 +224,8 @@
   "vitalType": {
     "reason": "vital types are composed portal-side from the reading fields, not sent as an enum"
   },
-  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" }
+  "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" },
+  "timelineCategory": {
+    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl writes from its CATEGORY_* constants (ENCOUNTER / PRESCRIPTION / LAB_RESULT / ALLERGY / IMAGING / PROCEDURE), all six keyed in PORTAL.ENUM.TIMELINE_CATEGORY; check by hand when a category is added there."
+  }
 }

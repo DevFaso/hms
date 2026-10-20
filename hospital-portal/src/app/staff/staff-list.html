@@ -306,7 +306,7 @@
                   <select id="sSpec" [(ngModel)]="form.specialization" name="specialization">
                     <option value="">{{ 'STAFF.SELECT_SPECIALIZATION' | translate }}</option>
                     @for (sp of specializations; track sp) {
-                      <option [value]="sp">{{ sp.replaceAll('_', ' ') }}</option>
+                      <option [value]="sp">{{ sp | enumLabel: 'specialization' }}</option>
                     }
                   </select>
                 } @else {

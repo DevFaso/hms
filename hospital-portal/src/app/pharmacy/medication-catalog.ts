@@ -41,6 +41,33 @@ export class MedicationCatalogComponent implements OnInit {
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
   );
 
+  /** The dosage forms the editor offers, each with a PHARMACY.FORM_OPTION key. */
+  static readonly DOSAGE_FORMS: readonly string[] = [
+    'TABLET',
+    'CAPSULE',
+    'SYRUP',
+    'INJECTION',
+    'CREAM',
+    'OINTMENT',
+    'DROPS',
+    'SUSPENSION',
+    'POWDER',
+    'INHALER',
+    'SUPPOSITORY',
+  ];
+
+  /**
+   * The catalog table's form column in the reader's language (QA D434): a
+   * known dosage form through its translation key, anything older typed as
+   * free text as it was stored, and a dash when there is none.
+   */
+  formLabel(form: string | null | undefined): string {
+    if (!form) return '—';
+    return MedicationCatalogComponent.DOSAGE_FORMS.includes(form)
+      ? this.translate.instant(`PHARMACY.FORM_OPTION.${form}`)
+      : form;
+  }
+
   items = signal<MedicationCatalogItemResponse[]>([]);
   filtered = signal<MedicationCatalogItemResponse[]>([]);
   loading = signal(true);

@@ -27,7 +27,9 @@
         <li class="payment-item">
           <div class="row-top">
             <span class="date">{{ p.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
-            <span class="amount">{{ p.amount | number: '1.0-0' }} {{ p.currency }}</span>
+            <span class="amount">{{
+              p.amount | currency: p.currency || 'XOF' : 'symbol' : '1.0-0'
+            }}</span>
           </div>
           <div class="row-meta">
             <span class="method">{{ methodLabel(p.paymentMethod) }}</span>
@@ -59,7 +61,9 @@
         <li class="payment-item">
           <div class="row-top">
             <span class="date">{{ c.submittedAt || c.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
-            <span class="amount">{{ c.amount | number: '1.0-0' }} {{ c.currency }}</span>
+            <span class="amount">{{
+              c.amount | currency: c.currency || 'XOF' : 'symbol' : '1.0-0'
+            }}</span>
           </div>
           <div class="row-meta">
             <span class="method">{{ statusLabel(c.claimStatus) }}</span>

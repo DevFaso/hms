@@ -42,7 +42,13 @@
             </div>
           </div>
           @if (role.description) {
-            <p class="role-desc">{{ role.description }}</p>
+            <p class="role-desc">
+              @if (descriptionKey(role); as key) {
+                {{ key | translate }}
+              } @else {
+                {{ role.description }}
+              }
+            </p>
           }
           <div class="role-footer">
             <span class="perm-count">

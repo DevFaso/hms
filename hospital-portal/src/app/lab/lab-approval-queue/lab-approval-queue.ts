@@ -21,7 +21,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { currentLocale } from '../../shared/i18n/app-locale';
+import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 
 interface QcPoint {
   x: number;
@@ -416,13 +416,13 @@ export class LabApprovalQueueComponent implements OnInit {
           day: 'numeric',
           year: 'numeric',
         });
-        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${v.toFixed(3)}` };
+        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${formatDecimal(v, 3)}` };
       });
 
       const polyline = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
       const prec = sd < 1 ? 3 : sd < 10 ? 2 : 1;
-      const f = (v: number) => v.toFixed(prec);
+      const f = (v: number) => formatDecimal(v, prec);
       const yAxisLabels = [
         { y: p3sY, label: `+3s (${f(mean + 3 * sd)})` },
         { y: p2sY, label: `+2s` },

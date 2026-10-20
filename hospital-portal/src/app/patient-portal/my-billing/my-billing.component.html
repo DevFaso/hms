@@ -188,7 +188,7 @@
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {
                   {{ 'PORTAL.BILLING.PAY' | translate }}
-                  {{ payAmount ? (payAmount | currency: 'XOF') : '' }}
+                  {{ payAmount ? (payAmount | currency: 'XOF' : 'symbol' : '1.0-0') : '' }}
                 }
               </button>
             </div>

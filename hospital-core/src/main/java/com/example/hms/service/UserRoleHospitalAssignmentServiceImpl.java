@@ -2245,6 +2245,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
+    public boolean resendPendingActivationCode(UUID assignmentId, java.time.Duration cooldown) {
+        LocalDateTime now = LocalDateTime.now();
+        int claimed = assignmentRepository.claimActivationResend(
+            assignmentId, generateConfirmationCode(), now, now.minus(cooldown));
+        if (claimed == 0) {
+            return false;
+        }
+        // The claim stands even when the delivery fails: the cooldown is what
+        // keeps this public endpoint from flooding a number.
+        try {
+            sendNotifications(assignmentId);
+        } catch (RuntimeException e) {
+            log.warn("Activation re-send failed for assignment {}: {}", assignmentId, e.getClass().getSimpleName());
+        }
+        return true;
+    }
+
+    @Override
     public void resendNotifications(UUID assignmentId) {
         notifyAssignee(findChangeable(assignmentId));
     }

@@ -312,6 +312,39 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(assignment.getTempPlainPassword()).isNull();
     }
 
+    // ---- QA D418: anonymous re-send of a pending activation code ----
+
+    @Test
+    void resendPendingActivationCode_claimRefused_sendsNothing_D418() {
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any())).thenReturn(0);
+
+        boolean sent = service.resendPendingActivationCode(assignment.getId(), java.time.Duration.ofMinutes(5));
+
+        assertThat(sent).isFalse();
+        verify(assignmentRepository, never()).findById(any());
+        verify(smsService, never()).send(anyString(), anyString());
+    }
+
+    @Test
+    void resendPendingActivationCode_claimed_sendsAFreshSixDigitCodeWithTheCooldownCutoff_D418() {
+        assignee.setPhoneNumber("+22670123456");
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any())).thenReturn(1);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.ArgumentCaptor<String> code = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> now = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+        org.mockito.ArgumentCaptor<LocalDateTime> cutoff = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
+
+        boolean sent = service.resendPendingActivationCode(assignment.getId(), java.time.Duration.ofMinutes(5));
+
+        assertThat(sent).isTrue();
+        verify(assignmentRepository).claimActivationResend(
+            org.mockito.ArgumentMatchers.eq(assignment.getId()), code.capture(), now.capture(), cutoff.capture());
+        assertThat(code.getValue()).matches("[0-9]{6}");
+        assertThat(cutoff.getValue()).isEqualTo(now.getValue().minusMinutes(5));
+        // The notification went out (it reloads the row the claim updated).
+        verify(assignmentRepository).findById(assignment.getId());
+    }
+
     // ---- Delivery report: the registrar must learn when nothing was sent ----
 
     @Test

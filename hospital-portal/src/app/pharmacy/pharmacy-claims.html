@@ -48,7 +48,7 @@
             <td>{{ c.createdAt | date: 'dd/MM/yyyy' }}</td>
             <td class="muted">{{ c.patientId.substring(0, 8) }}…</td>
             <td>{{ c.coverageReference || '—' }}</td>
-            <td>{{ c.amount | number: '1.0-2' }} {{ c.currency }}</td>
+            <td>{{ c.amount | currency: c.currency || 'XOF' : 'symbol' : '1.0-0' }}</td>
             <td>
               <span class="badge" [attr.data-status]="c.claimStatus">
                 {{ statusLabel(c.claimStatus) }}

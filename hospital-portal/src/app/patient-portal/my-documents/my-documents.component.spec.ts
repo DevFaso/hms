@@ -57,6 +57,11 @@ describe('MyDocumentsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('shows the document type through its translation key, never the raw enum (QA D434)', () => {
+    const badge = (fixture.nativeElement as HTMLElement).querySelector('.doc-type');
+    expect(badge?.textContent?.trim()).toBe('PORTAL.DOCUMENTS.TYPE_LAB_RESULT');
+  });
+
   it('should load documents on init', () => {
     expect(portalService.listDocuments).toHaveBeenCalled();
     expect(component.documents()).toEqual([mockDoc]);

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.NonNull;
@@ -28,6 +29,23 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
     long countByHospitalIsNull();
 
     long countByHospitalIsNullAndActiveTrue();
+
+    /**
+     * QA D418: claims the anonymous re-send of a pending activation code, in
+     * the database so the cooldown holds across instances. Succeeds (returns
+     * 1) only for a row still waiting for its code (inactive, code not
+     * revoked) whose last code went out before {@code cooldownCutoff}; it then
+     * stores a fresh code and stamps the send, so the re-sent code is valid
+     * for the full expiry window even when the first one had lapsed. Two
+     * parallel claims update the row once: the second sees the new stamp.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("UPDATE UserRoleHospitalAssignment a SET a.confirmationCode = :code, a.confirmationSentAt = :now "
+        + "WHERE a.id = :id AND a.active = false AND a.confirmationCode IS NOT NULL "
+        + "AND (a.confirmationSentAt IS NULL OR a.confirmationSentAt < :cooldownCutoff)")
+    int claimActivationResend(@Param("id") UUID id, @Param("code") String code,
+                              @Param("now") java.time.LocalDateTime now,
+                              @Param("cooldownCutoff") java.time.LocalDateTime cooldownCutoff);
 
     /* ------------ Basic lookups ------------ */
     List<UserRoleHospitalAssignment> findByUserId(UUID userId);

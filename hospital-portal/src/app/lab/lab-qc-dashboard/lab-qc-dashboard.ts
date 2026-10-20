@@ -16,7 +16,7 @@ import {
   LabValidationSummary,
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
-import { currentLocale } from '../../shared/i18n/app-locale';
+import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 
 interface QcPoint {
   x: number;
@@ -213,13 +213,13 @@ export class LabQcDashboardComponent implements OnInit {
           day: 'numeric',
           year: 'numeric',
         });
-        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${v.toFixed(3)}` };
+        return { x: xToSvg(i), y: yToSvg(v), zone, title: `${dateStr} | ${formatDecimal(v, 3)}` };
       });
 
       const polyline = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
 
       const prec = this.sdPrecision(sd);
-      const f = (v: number) => v.toFixed(prec);
+      const f = (v: number) => formatDecimal(v, prec);
       const yAxisLabels = [
         { y: p3sY, label: `+3s (${f(mean + 3 * sd)})` },
         { y: p2sY, label: `+2s` },

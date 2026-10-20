@@ -5926,6 +5926,14 @@
         "API_KEY": "API key",
         "ADMISSION": "Admission",
         "REFERRAL": "Referral"
+      },
+      "TIMELINE_CATEGORY": {
+        "ALLERGY": "Allergy",
+        "ENCOUNTER": "Encounter",
+        "IMAGING": "Imaging",
+        "LAB_RESULT": "Lab result",
+        "PRESCRIPTION": "Prescription",
+        "PROCEDURE": "Procedure"
       }
     },
     "DOCUMENTS": {
@@ -6890,6 +6898,42 @@
       "PERMS_LOAD_FAILED": "Failed to load permissions",
       "PERMS_UPDATED": "Permissions updated",
       "PERMS_UPDATE_FAILED": "Failed to update permissions"
+    },
+    "SYSTEM_DESC": {
+      "ACCOUNTANT": "Financial accountant managing ledger entries, expense tracking, and financial reconciliation",
+      "ADMIN": "General administrative user with elevated operational privileges",
+      "ANESTHESIOLOGIST": "Anesthesia specialist managing pre-operative assessment, sedation, and pain management",
+      "BILLING_SPECIALIST": "Billing specialist handling invoicing, insurance claims, payment processing, and financial reports",
+      "CLAIMS_REVIEWER": "Staff reviewing and submitting pharmacy insurance claims for AMU/insurers",
+      "CLEANER": "Facility maintenance staff responsible for sanitation and cleanliness of hospital premises",
+      "DOCTOR": "Licensed physician authorized to diagnose, prescribe, order tests, and manage patient treatment plans",
+      "HOSPITAL_ADMIN": "Hospital administrator responsible for managing staff, departments, billing, and hospital-level configuration",
+      "INVENTORY_CLERK": "Pharmacy staff managing goods receipt, stock adjustments, and inventory counts",
+      "LAB_DIRECTOR": "Laboratory Director with ultimate approval authority over lab test definitions under CLIA/CAP/ISO 15189 regulations",
+      "LAB_MANAGER": "Lab manager overseeing technician workflows, result verification, quality control, and lab operations",
+      "LAB_SCIENTIST": "Laboratory scientist responsible for processing specimens, running tests, and publishing results",
+      "LAB_TECHNICIAN": "Lab technician responsible for specimen collection, receipt, bench processing, and preliminary result entry",
+      "MANAGER": "Department or operational manager overseeing staff coordination and resource planning",
+      "MIDWIFE": "Certified midwife specializing in maternal care, labor support, and newborn assessment",
+      "MODERATOR": "Content and activity moderator with oversight and review capabilities",
+      "NURSE": "Registered nurse providing patient care, administering medications, and documenting vital signs",
+      "PATIENT": "Registered patient with self-service access to medical records, appointments, and prescriptions",
+      "PHARMACIST": "Licensed pharmacist handling medication dispensing, drug interaction checks, and inventory management",
+      "PHARMACY_VERIFIER": "Pharmacist authorized to verify and co-sign controlled-substance dispensing",
+      "PHYSICIAN": "General physician with clinical privileges for patient consultation and treatment",
+      "PHYSIOTHERAPIST": "Physical therapist designing rehabilitation programs, therapy sessions, and mobility assessments",
+      "PROVIDER_ADMIN": "Administrator of an external provider facility (pharmacy or laboratory)",
+      "QUALITY_MANAGER": "Quality/QA Manager responsible for validation documentation review and compliance with CAP/CLIA/ISO standards before Lab Director approval",
+      "RADIOLOGIST": "Imaging specialist interpreting X-rays, CT scans, MRIs, and generating radiology reports",
+      "RECEPTIONIST": "Front-desk receptionist managing patient check-in, appointments, and visitor coordination",
+      "SECURITY": "Security personnel managing access control, surveillance, and facility safety protocols",
+      "STAFF": "General hospital support staff with schedule and appointment visibility",
+      "STORE_MANAGER": "Senior pharmacy staff overseeing inventory operations, reorder thresholds, and stock reports",
+      "SUPER_ADMIN": "System-wide super administrator with full access to all organizations, hospitals, and system settings",
+      "SUPPORT": "Technical or customer support staff assisting users with system issues and inquiries",
+      "SURGEON": "Surgical specialist performing operations, managing surgical plans, and post-operative care",
+      "TECHNICIAN": "Medical or IT technician responsible for equipment maintenance and technical support",
+      "USER": "Standard system user with basic access permissions"
     }
   },
   "SCHEDULING": {
@@ -8269,7 +8313,7 @@
     "RECEIPT_LOT_EXPIRED": "This lot is past its expiry date and cannot be received into stock.",
     "LOT_REQUIRED_FOR_MOVEMENT": "This item is tracked by lot: choose the lot the movement applies to.",
     "SELECT_LOT_OPTION": "Select a lot",
-    "UNIT_PRICE": "Unit price (XOF)",
+    "UNIT_PRICE": "Unit price (F CFA)",
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
     "PRICE_SAVE_FAILED": "The price could not be saved."

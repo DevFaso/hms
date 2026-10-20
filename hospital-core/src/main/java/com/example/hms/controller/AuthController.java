@@ -137,15 +137,13 @@ public class AuthController {
     private final AuthControllerProperties authProps;
 
     /**
-     * QA D418 self-review: the anonymous re-send of an activation code may
-     * reach a given assignment at most once per cooldown, so the endpoint
-     * cannot be used to flood a number with SMS (or run up their cost). Kept
-     * per instance; the per-IP limit of {@code RateLimitFilter} also applies.
+     * QA D418: the anonymous re-send of an activation code may reach a given
+     * assignment at most once per cooldown, so the endpoint cannot be used to
+     * flood a number with SMS (or run up their cost). Enforced on the
+     * assignment row ({@code claimActivationResend}), so it holds across
+     * instances; the per-IP limit of {@code RateLimitFilter} also applies.
      */
     static final java.time.Duration RESEND_COOLDOWN = java.time.Duration.ofMinutes(5);
-    private static final int RESEND_COOLDOWN_MAX_ENTRIES = 10_000;
-    private final java.util.concurrent.ConcurrentHashMap<UUID, java.time.Instant> lastCodeResend =
-            new java.util.concurrent.ConcurrentHashMap<>();
     /**
      * The provider MFA gate (provider plan AC-13). Through an
      * {@link ObjectProvider}: a {@code @WebMvcTest} slice has no such bean,
@@ -669,37 +667,16 @@ public class AuthController {
             boolean pending = !Boolean.TRUE.equals(assignment.getActive())
                     && assignment.getConfirmationCode() != null
                     && !assignment.getConfirmationCode().isBlank();
-            if (!pending || !claimResendSlot(assignment.getId())) {
+            if (!pending) {
                 continue;
             }
             try {
-                assignments.sendNotifications(assignment.getId());
+                assignments.resendPendingActivationCode(assignment.getId(), RESEND_COOLDOWN);
             } catch (RuntimeException e) {
                 log.warn("Activation re-send failed for assignment {}: {}",
                         assignment.getId(), e.getClass().getSimpleName());
             }
         }
-    }
-
-    /**
-     * True when this assignment may be re-sent now, and records the send;
-     * false while its previous anonymous re-send is younger than
-     * {@link #RESEND_COOLDOWN}. Atomic, so two parallel requests send once.
-     */
-    private boolean claimResendSlot(UUID assignmentId) {
-        java.time.Instant now = java.time.Instant.now();
-        if (lastCodeResend.size() > RESEND_COOLDOWN_MAX_ENTRIES) {
-            lastCodeResend.values().removeIf(at -> at.plus(RESEND_COOLDOWN).isBefore(now));
-        }
-        boolean[] claimed = {false};
-        lastCodeResend.compute(assignmentId, (id, last) -> {
-            if (last != null && last.plus(RESEND_COOLDOWN).isAfter(now)) {
-                return last;
-            }
-            claimed[0] = true;
-            return now;
-        });
-        return claimed[0];
     }
 
     @WriteAudited(skip = true, reason = "emits LOGOUT / TOKEN_REFRESH itself, or is a check that mutates nothing")
