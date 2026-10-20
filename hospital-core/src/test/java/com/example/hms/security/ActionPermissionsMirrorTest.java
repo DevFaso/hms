@@ -31,7 +31,7 @@ class ActionPermissionsMirrorTest {
 
     private static final Path MAP = Path.of("..", "hospital-portal", "src", "app", "core", "action-permissions.ts");
     private static final Pattern ENTRY = Pattern.compile(
-        "(\\w+):\\s*\\{\\s*endpoint:\\s*'(\\w+)#(\\w+)',\\s*roles:\\s*\\[([^\\]]*)\\]", Pattern.DOTALL);
+        "(\\w++):\\s*+\\{\\s*+endpoint:\\s*+'(\\w++)#(\\w++)',\\s*+roles:\\s*+\\[([^\\]]*+)\\]", Pattern.DOTALL);
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
     private static final Pattern SIMPLE_EXPRESSION = Pattern.compile(
         "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole)\\(\\s*'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
