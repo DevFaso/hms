@@ -43,6 +43,9 @@ import org.springframework.data.domain.PageRequest;
 class PatientVitalSignServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private PatientRepository patientRepository;
 
     @Mock
@@ -85,6 +88,7 @@ class PatientVitalSignServiceImplTest {
             assignmentRepository,
             vitalSignRepository,
             mapper,
+            patientRegistrationGuard,
             patientChartAccess,
             recordAccessPolicy,
             reachRecorder,

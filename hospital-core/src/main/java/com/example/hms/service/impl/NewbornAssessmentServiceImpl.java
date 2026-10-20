@@ -49,6 +49,8 @@ import java.util.Locale;
 @Transactional
 public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
+    private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
+
     private static final int LOW_APGAR_THRESHOLD = 7;
     private static final double LOW_TEMP_THRESHOLD = 36.5;
     private static final double HIGH_TEMP_THRESHOLD = 37.5;
@@ -67,6 +69,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
     private final NewbornAssessmentRepository assessmentRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
@@ -99,6 +102,10 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
 
         PatientHospitalRegistration registration = resolveRegistration(patient, request.getRegistrationId(), request.getHospitalId());
         Hospital hospital = resolveHospital(patient, registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
 
@@ -474,11 +481,11 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         }
         if (requestedHospitalId != null) {
             return hospitalRepository.findClinicalById(requestedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", requestedHospitalId));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, requestedHospitalId));
         }
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", patient.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, patient.getHospitalId()));
         }
         throw new BusinessException("maternity.newborn.hospitalUnresolved");
     }

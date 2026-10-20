@@ -44,6 +44,9 @@ import org.junit.jupiter.api.AfterEach;
 @ExtendWith(MockitoExtension.class)
 class ImmunizationServiceImplTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private ImmunizationRepository immunizationRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private HospitalRepository hospitalRepository;

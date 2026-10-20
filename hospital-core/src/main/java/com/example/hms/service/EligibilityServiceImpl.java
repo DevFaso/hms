@@ -60,6 +60,7 @@ public class EligibilityServiceImpl implements EligibilityService {
     private final List<EligibilityProvider> providers;
     private final Clock clock;
     private final IntegrationHealthRecorder healthRecorder;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
 
     public EligibilityServiceImpl(EligibilityCheckRepository checkRepository,
                                   PatientRepository patientRepository,
@@ -69,7 +70,8 @@ public class EligibilityServiceImpl implements EligibilityService {
                                   AuditEventLogService auditService,
                                   List<EligibilityProvider> providers,
                                   Clock clock,
-                                  IntegrationHealthRecorder healthRecorder) {
+                                  IntegrationHealthRecorder healthRecorder,
+                                  com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard) {
         this.checkRepository = checkRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -79,6 +81,7 @@ public class EligibilityServiceImpl implements EligibilityService {
         this.providers = providers;
         this.clock = clock;
         this.healthRecorder = healthRecorder;
+        this.patientRegistrationGuard = patientRegistrationGuard;
     }
 
     @Override
@@ -91,6 +94,10 @@ public class EligibilityServiceImpl implements EligibilityService {
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", request.getHospitalId()));
+        // QA D401: the check is recorded at the caller's acting hospital (the
+        // body's id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         PatientInsurance insurance = null;
         if (request.getPatientInsuranceId() != null) {
             insurance = patientInsuranceRepository.findById(request.getPatientInsuranceId())

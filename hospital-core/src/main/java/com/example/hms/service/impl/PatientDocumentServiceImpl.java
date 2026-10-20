@@ -74,6 +74,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(
                     "documents.notes.tooLong", String.valueOf(PatientDocumentRequestDTO.NOTES_MAX_LENGTH)));
         }
+        // QA D433: a document cannot have been collected in the future.
+        if (request.getCollectionDate() != null
+                && request.getCollectionDate().isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault()))) {
+            throw new IllegalArgumentException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("portal.document.futureDate"));
+        }
 
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
 

@@ -42,6 +42,7 @@ class AppointmentCalendarServiceTest {
             null,                       // emailService
             appointmentRepository,      // appointmentRepository
             null,                       // patientRepository
+            null,                       // patientRegistrationGuard
             null,                       // staffRepository
             null,                       // hospitalRepository
             null,                       // assignmentRepository

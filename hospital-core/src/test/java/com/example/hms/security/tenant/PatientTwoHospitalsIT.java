@@ -262,7 +262,7 @@ class PatientTwoHospitalsIT {
 
         ResponseEntity<String> pay = send(HttpMethod.POST,
             "/me/patient/billing/invoices/" + siteB.invoice().getId() + "/pay",
-            "{\"amount\":25.00,\"paymentMethod\":\"MOBILE_MONEY\"}", token);
+            "{\"amount\":25.00,\"paymentMethod\":\"MOBILE_MONEY\",\"transactionReference\":\"MM-TEST-1\"}", token);
         assertThat(pay.getStatusCode().value()).as(pay.getBody()).isEqualTo(200);
         BillingInvoice paid = invoiceRepository.findById(siteB.invoice().getId()).orElseThrow();
         // QA D140: a patient's self-payment is PENDING until the cashier confirms it,

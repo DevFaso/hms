@@ -53,6 +53,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
 
     private final MaternalHistoryRepository maternalHistoryRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
@@ -71,7 +72,11 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Hospital hospital = hospitalRepository.findClinicalById(request.getHospitalId())
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId()));
-        
+        // QA D401: written at the caller's acting hospital (the body's id is a
+        // claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND_WITH_ID, request.getHospitalId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
+
         // Check if maternal history already exists for this patient
         if (maternalHistoryRepository.existsByPatient_Id(request.getPatientId())) {
             throw new BusinessException("Maternal history already exists for patient. Use update to create a new version.");

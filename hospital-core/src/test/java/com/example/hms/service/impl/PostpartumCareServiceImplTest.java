@@ -63,6 +63,9 @@ import com.example.hms.i18n.TestMessageSources;
 class PostpartumCareServiceImplTest {
 
     @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
+    @Mock
     private PostpartumObservationRepository observationRepository;
     @Mock
     private PostpartumCarePlanRepository carePlanRepository;
@@ -99,7 +102,7 @@ class PostpartumCareServiceImplTest {
         service = new PostpartumCareServiceImpl(
             observationRepository,
             carePlanRepository,
-            patientRepository,
+            patientRepository, patientRegistrationGuard,
             registrationRepository,
             hospitalRepository,
             staffRepository,

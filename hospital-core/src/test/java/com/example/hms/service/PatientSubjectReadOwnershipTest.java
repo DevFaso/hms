@@ -163,6 +163,9 @@ class PatientSubjectReadOwnershipTest {
     @MockitoSettings(strictness = Strictness.LENIENT)
     @DisplayName("GET /consultations/patient/{patientId}")
     class Consultations {
+        @Mock
+        private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
         @Mock private ConsultationRepository consultationRepository;
         @Mock private RoleValidator roleValidator;
         @Spy private PatientSubjectReadGuard subjectReadGuard = realGuard();

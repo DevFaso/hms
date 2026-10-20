@@ -104,6 +104,7 @@ public class LaborServiceImpl implements LaborService {
     private final LaborPartographEntryRepository entryRepository;
     private final DeliveryRecordRepository deliveryRecordRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final MaternalHistoryRepository maternalHistoryRepository;
@@ -136,6 +137,10 @@ public class LaborServiceImpl implements LaborService {
         ObstetricEligibility.requireObstetricEligible(patient);
         PatientHospitalRegistration registration = resolveRegistration(request.getRegistrationId());
         Hospital hospital = resolveHospital(registration, request.getHospitalId());
+        // QA D401: the record is written at the caller's acting hospital (the
+        // body's hospital id is a claim), for a patient registered there.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, "hospital.notFound", hospital.getId());
+        patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         if (episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospital.getId(), LaborStatus.ACTIVE)) {
             throw new BusinessException("maternity.labor.alreadyActive");

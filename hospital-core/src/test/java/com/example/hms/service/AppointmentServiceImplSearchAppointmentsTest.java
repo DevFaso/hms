@@ -47,6 +47,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AppointmentServiceImplSearchAppointmentsTest {
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private EmailService emailService;
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private PatientRepository patientRepository;

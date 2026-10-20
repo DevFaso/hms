@@ -63,6 +63,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     private final VisitEducationDocumentationRepository documentationRepository;
     private final PatientEducationQuestionRepository questionRepository;
     private final PatientRepository patientRepository;
+    private final com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final EncounterRepository encounterRepository;
@@ -229,6 +230,9 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // findById admits a patient registered at ANY of the caller's hospitals (QA D401):
+        // the progress row is written at this hospital, so the patient must be registered here.
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospital.getId());
 
         PatientEducationProgress progress = progressRowFor(patientId, resource.getId(), hospital.getId(),
             requestDTO.getComprehensionStatus() != null
@@ -389,6 +393,8 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // QA D401: the patient must be registered at the hospital the row is written in.
+        patientRegistrationGuard.requireRegisteredAt(requestDTO.getPatientId(), hospitalId);
 
         VisitEducationDocumentation documentation = Objects.requireNonNull(
             documentationMapper.toEntity(requestDTO), "visit education request is required");
@@ -462,6 +468,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
 
         hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        patientRegistrationGuard.requireRegisteredAt(patientId, hospitalId);
 
         PatientEducationQuestion question = questionMapper.toEntity(requestDTO);
         if (question == null) {

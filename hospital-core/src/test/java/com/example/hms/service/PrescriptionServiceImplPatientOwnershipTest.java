@@ -58,6 +58,9 @@ class PrescriptionServiceImplPatientOwnershipTest {
 
     private static final String NOT_FOUND_KEY = "Prescription not found";
 
+    @Mock
+    private com.example.hms.service.support.PatientRegistrationGuard patientRegistrationGuard;
+
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;

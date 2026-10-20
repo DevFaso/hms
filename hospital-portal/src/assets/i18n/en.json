@@ -4653,6 +4653,7 @@
       "PAYMENT_METHOD": "Payment Method",
       "REFERENCE": "Reference / Transaction ID (optional)",
       "REFERENCE_PLACEHOLDER": "e.g. TXN-123456",
+      "REFERENCE_REQUIRED": "Enter the payment reference for a card, transfer or mobile money payment.",
       "ENTER_AMOUNT": "Enter amount",
       "CANCEL": "Cancel",
       "PROCESSING": "Processing...",

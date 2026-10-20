@@ -164,6 +164,17 @@ export class PrescriptionsComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
 
+  /**
+   * QA D427: the actions the API admits for this caller, so nobody is offered
+   * a button that ends in a 403. POST/PUT /prescriptions admit the
+   * prescribing roles (a surgeon or physician holds ROLE_DOCTOR by expansion);
+   * DELETE is the super-admin's hard delete.
+   */
+  protected readonly canWrite = computed(() =>
+    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
+  );
+  protected readonly canHardDelete = computed(() => this.roleContext.isSuperAdmin());
+
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;

@@ -4653,6 +4653,7 @@
       "PAYMENT_METHOD": "Mode de paiement",
       "REFERENCE": "Référence / ID de transaction (facultatif)",
       "REFERENCE_PLACEHOLDER": "ex. TXN-123456",
+      "REFERENCE_REQUIRED": "Indiquez la référence du paiement par carte, virement ou mobile money.",
       "ENTER_AMOUNT": "Saisir le montant",
       "CANCEL": "Annuler",
       "PROCESSING": "Traitement en cours…",
