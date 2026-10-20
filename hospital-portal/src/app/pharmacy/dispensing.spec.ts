@@ -1497,6 +1497,17 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     expect(component.form.notes).toBe('typed already');
   });
 
+  it('QA D432: the dispense form starts at the prescribed quantity, not 0', async () => {
+    await render();
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(30);
+    expect(component.form.quantityDispensed).toBe(30);
+  });
+
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
     await render();
     twoRows();

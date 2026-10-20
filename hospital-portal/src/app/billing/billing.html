@@ -185,6 +185,13 @@
                 <span class="status-badge" [class]="getStatusClass(inv.status)">{{
                   (inv.status | enumLabel: 'invoiceStatus') || '—'
                 }}</span>
+                @if (inv.creditedToInvoiceNumber) {
+                  <!-- QA D428: a folded copay names the invoice it was credited to -->
+                  <span class="field-hint">{{
+                    'PORTAL.BILLING.CREDITED_TO'
+                      | translate: { number: inv.creditedToInvoiceNumber }
+                  }}</span>
+                }
               </td>
               <td class="actions-cell">
                 <div class="action-group">
@@ -322,6 +329,11 @@
               ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
+              @if (inv.creditedToInvoiceNumber) {
+                <span class="field-hint">{{
+                  'PORTAL.BILLING.CREDITED_TO' | translate: { number: inv.creditedToInvoiceNumber }
+                }}</span>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'BILLING.TOTAL_AMOUNT' | translate }}</span

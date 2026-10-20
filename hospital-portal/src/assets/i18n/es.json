@@ -4666,7 +4666,11 @@
       "MOBILE_MONEY": "Dinero móvil",
       "CASH": "Efectivo",
       "PAYMENT_PENDING": "Su pago de {{amount}} ha sido declarado. Aparecerá en su factura en cuanto la caja del hospital lo confirme.",
-      "PAYMENT_PENDING_NOTE": "Los pagos declarados aquí los confirma el hospital antes de que cambie su saldo."
+      "PAYMENT_PENDING_NOTE": "Los pagos declarados aquí los confirma el hospital antes de que cambie su saldo.",
+      "PENDING_DECLARED": "Ya declarado, pendiente de confirmación",
+      "LEFT_TO_DECLARE": "Queda por declarar",
+      "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}} F CFA: {{pending}} F CFA ya declarados están pendientes de confirmación.",
+      "CREDITED_TO": "Abonado en la factura {{number}}"
     },
     "CARE_TEAM": {
       "TITLE": "Mi equipo de atención",
@@ -10856,7 +10860,11 @@
     "PRINT": "Imprimir",
     "NEW_PAYMENT": "Nuevo pago",
     "RECEIPT_NO_PATIENT": "No registrado",
-    "NO_PRICE": "La farmacia aún no ha fijado el precio de este medicamento: indique su precio unitario en el inventario antes de cobrar."
+    "NO_PRICE": "La farmacia aún no ha fijado el precio de este medicamento: indique su precio unitario en el inventario antes de cobrar.",
+    "DISPENSE_PICK": "Dispensación a cobrar",
+    "DISPENSE_PICK_PLACEHOLDER": "Elija una dispensación",
+    "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
+    "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",
@@ -10866,7 +10874,8 @@
     "NO_PAYMENTS": "Aún no hay pagos en farmacia.",
     "CLAIMS_TITLE": "Reclamaciones al seguro",
     "NO_CLAIMS": "Aún no hay reclamaciones de farmacia.",
-    "REF": "Ref.: {{ref}}"
+    "REF": "Ref.: {{ref}}",
+    "VOIDED": "Anulado con la dispensación: a reembolsar"
   },
   "VITAL_LIMITS": {
     "TEMPERATURE": "La temperatura debe estar entre {{min}} y {{max}} °C.",

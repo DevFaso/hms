@@ -4666,7 +4666,11 @@
       "MOBILE_MONEY": "Mobile Money",
       "CASH": "Cash",
       "PAYMENT_PENDING": "Your payment of {{amount}} has been declared. It will appear on your invoice once the hospital cashier confirms it.",
-      "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes."
+      "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes.",
+      "PENDING_DECLARED": "Already declared, awaiting confirmation",
+      "LEFT_TO_DECLARE": "Left to declare",
+      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}} F CFA: {{pending}} F CFA already declared is awaiting confirmation.",
+      "CREDITED_TO": "Credited to invoice {{number}}"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -10856,7 +10860,11 @@
     "PRINT": "Print",
     "NEW_PAYMENT": "New payment",
     "RECEIPT_NO_PATIENT": "Not on file",
-    "NO_PRICE": "The pharmacy has not priced this medication yet: set its unit price in the inventory before taking payment."
+    "NO_PRICE": "The pharmacy has not priced this medication yet: set its unit price in the inventory before taking payment.",
+    "DISPENSE_PICK": "Dispense to collect",
+    "DISPENSE_PICK_PLACEHOLDER": "Choose a dispense",
+    "NO_DISPENSES": "No dispense to collect at this pharmacy.",
+    "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",
@@ -10866,7 +10874,8 @@
     "NO_PAYMENTS": "No pharmacy payments yet.",
     "CLAIMS_TITLE": "Insurance claims",
     "NO_CLAIMS": "No pharmacy claims yet.",
-    "REF": "Ref: {{ref}}"
+    "REF": "Ref: {{ref}}",
+    "VOIDED": "Cancelled with the dispense: to be refunded"
   },
   "VITAL_LIMITS": {
     "TEMPERATURE": "Temperature must be between {{min}} and {{max}} °C.",

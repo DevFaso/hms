@@ -432,6 +432,10 @@ export interface InvoiceApiResponse {
   hospitalName?: string | null;
   encounterDescription?: string | null;
   notes?: string | null;
+  /** QA D421: declared by the patient, not yet confirmed by staff. */
+  pendingDeclaredAmount?: number | null;
+  /** QA D428: the visit invoice a folded check-in copay was credited to. */
+  creditedToInvoiceNumber?: string | null;
 }
 
 export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
@@ -454,6 +458,8 @@ export function mapPortalInvoice(api: InvoiceApiResponse): PortalInvoice {
     status: api.status ?? '',
     facility: api.hospitalName ?? '',
     description: api.encounterDescription ?? '',
+    pending: Number(api.pendingDeclaredAmount ?? 0),
+    creditedTo: api.creditedToInvoiceNumber ?? null,
   };
 }
 
@@ -468,6 +474,10 @@ export interface PortalInvoice {
   status: string;
   facility: string;
   description: string;
+  /** QA D421: already declared and awaiting confirmation; it counts against the balance. */
+  pending?: number;
+  /** QA D428: the invoice a folded check-in copay was credited to. */
+  creditedTo?: string | null;
 }
 
 /**

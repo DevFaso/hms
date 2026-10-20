@@ -551,6 +551,10 @@ export interface PharmacyPaymentResponse {
   referenceNumber?: string;
   receivedBy: string;
   notes?: string;
+  /** QA D404: POSTED, or VOIDED once the dispense it paid for was cancelled. */
+  status?: 'POSTED' | 'VOIDED';
+  voidedAt?: string | null;
+  voidReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -53,6 +53,8 @@ export interface BillingInvoiceResponse {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  /** QA D428: the visit invoice a folded check-in copay was credited to. */
+  creditedToInvoiceNumber?: string | null;
 }
 
 export interface InvoiceItemResponse {
