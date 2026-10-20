@@ -1099,6 +1099,95 @@ class BillingInvoiceServiceImplTest {
         verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
     }
 
+    // ---- QA D403: an invoice may only carry a visit of the patient it bills ----
+
+    private com.example.hms.model.Encounter visitOf(Patient owner, String code) {
+        Hospital acting = new Hospital();
+        acting.setId(HOSPITAL_ID);
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setCode(code);
+        encounter.setHospital(acting);
+        encounter.setPatient(owner);
+        when(encounterRepository.findByCode(code)).thenReturn(Optional.of(encounter));
+        return encounter;
+    }
+
+    @Test
+    void createInvoice_anotherPatientsEncounterIsRefused_D403() {
+        pinnedHospital();
+        Patient a1 = registeredPatient();
+        Patient a2 = new Patient();
+        a2.setId(UUID.randomUUID());
+        visitOf(a2, "ENC-20261020-214014");
+        BillingInvoiceRequestDTO request = requestFor(a1).encounterReference("ENC-20261020-214014").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        assertEquals("billing.encounter.otherPatient", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createInvoice_thePatientsOwnEncounterIsLinked_D403() {
+        pinnedHospital();
+        Patient a1 = registeredPatient();
+        com.example.hms.model.Encounter own = visitOf(a1, "ENC-OWN");
+
+        billingInvoiceService.createInvoice(requestFor(a1).encounterReference("ENC-OWN").build(), Locale.ENGLISH);
+
+        ArgumentCaptor<BillingInvoice> saved = ArgumentCaptor.forClass(BillingInvoice.class);
+        verify(invoiceRepository).saveAndFlush(saved.capture());
+        assertEquals(own, saved.getValue().getEncounter());
+    }
+
+    @Test
+    void updateInvoice_anotherPatientsEncounterIsRefused_D403() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        Patient a2 = new Patient();
+        a2.setId(UUID.randomUUID());
+        visitOf(a2, "ENC-A2");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().encounterReference("ENC-A2").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+        assertEquals("billing.encounter.otherPatient", refused.getMessageKey());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_movingToAnotherPatientWhileKeepingTheVisitIsRefused_D403() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        com.example.hms.model.Encounter visit = visitOf(invoice.getPatient(), "ENC-A1");
+        invoice.setEncounter(visit);
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID)).thenReturn(true);
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().patientId(other.getId()).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+        assertEquals("billing.encounter.otherPatient", refused.getMessageKey());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_thePatientsOwnEncounterIsLinked_D403() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        com.example.hms.model.Encounter own = visitOf(invoice.getPatient(), "ENC-A1B");
+
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().encounterReference("ENC-A1B").build(),
+            Locale.ENGLISH);
+
+        assertEquals(own, invoice.getEncounter());
+    }
+
     @Test
     void createInvoice_unknownEncounterCodeIsRefusedNotDropped_D219() {
         pinnedHospital();
@@ -1111,6 +1200,40 @@ class BillingInvoiceServiceImplTest {
             () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
         assertEquals("billing.invoice.encounterNotFound", refused.getMessageKey());
         verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void recordPatientPayment_theRefusalNamesWhatThePatientTypedAndWhatIsPending_D421() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId); // owes 100
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(
+            invoice.getId(), com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("80"));
+        UUID invoiceId = invoice.getId();
+        UUID userId = UUID.randomUUID();
+        var forty = payment("CARD"); // 40 typed, 80 pending, 20 left to declare
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, userId, forty, Locale.ENGLISH));
+
+        assertEquals("billing.payment.exceedsWithPending", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void portalInvoicesCarryWhatIsAlreadyDeclared_D421() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findByPatient_IdAndStatusNot(eq(patientId), eq(InvoiceStatus.DRAFT), any()))
+            .thenReturn(new PageImpl<>(List.of(invoice)));
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(
+            invoice.getId(), com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("150"));
+
+        BillingInvoiceResponseDTO dto = billingInvoiceService
+            .getInvoicesForPortalPatient(patientId, PageRequest.of(0, 10), Locale.ENGLISH).getContent().get(0);
+
+        assertEquals(0, new BigDecimal("150").compareTo(dto.getPendingDeclaredAmount()));
     }
 
     @Test
@@ -1161,6 +1284,8 @@ class BillingInvoiceServiceImplTest {
         assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
         assertEquals(0, BigDecimal.ZERO.compareTo(copay.getAmountPaid()));
         assertEquals(visit.getId(), String.valueOf(row.getInvoice().getId()));
+        // QA D428: the copay says where it went instead of only "cancelled".
+        assertEquals(visit.getId(), String.valueOf(copay.getCreditedToInvoice().getId()));
     }
 
     @Test

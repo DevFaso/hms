@@ -306,31 +306,20 @@ public class InventoryServiceImpl implements InventoryService {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.identity.immutable"));
         }
-        // QA D341: a count cannot go below zero.
-        if (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0) {
+        // QA D405 (D82, D341 did not hold): the lot edit set any count, above
+        // what was received, with no reason and no witness even for a
+        // controlled substance. A count now moves only through a stock
+        // transaction (ADJUSTMENT), which requires a reason, a witness for a
+        // controlled substance, and stays within what the lot received. The
+        // count the lot already has is accepted, so a form that echoes it
+        // back still saves its other fields.
+        if (dto.getRemainingQuantity() != null
+                && (remainingBefore == null || dto.getRemainingQuantity().compareTo(remainingBefore) != 0)) {
             throw new BusinessException(
-                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.negative"));
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.useAdjustment"));
         }
         stockLotMapper.updateEntity(lot, dto);
         StockLot saved = stockLotRepository.save(lot);
-        if (dto.getRemainingQuantity() != null) {
-            // A count correction, applied atomically (#825 round 5).
-            LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
-            stockLotRepository.setRemaining(saved.getId(), dto.getRemainingQuantity(), now);
-            refreshIfManaged(saved);
-            // D82: the item total moves with the lot, and the correction is a
-            // recorded ADJUSTMENT. It used to change the lot alone, silently,
-            // so the lots and the item total drifted apart.
-            BigDecimal delta = remainingBefore != null
-                    ? dto.getRemainingQuantity().subtract(remainingBefore) : BigDecimal.ZERO;
-            if (delta.signum() != 0) {
-                InventoryItem item = lot.getInventoryItem();
-                inventoryItemRepository.incrementOnHand(item.getId(), delta, now);
-                refreshIfManaged(item);
-                recordStockTransaction(item, saved, StockTransactionType.ADJUSTMENT, delta,
-                        "Lot count correction: lot " + saved.getLotNumber());
-            }
-        }
         return stockLotMapper.toResponseDTO(saved);
     }
 

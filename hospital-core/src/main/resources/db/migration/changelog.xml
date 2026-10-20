@@ -2951,4 +2951,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V213 (QA D404): billing.pharmacy_payments.status (POSTED/VOIDED) with
+         voided_at/voided_by/void_reason; payments on already-cancelled
+         dispenses backfilled to VOIDED; QA D416: dispenses from a lot with no
+         catalog medication take the lot's; QA D228: payment_transactions.
+         invoice_total_at_receipt; QA D428: billing_invoices.credited_to_invoice_id
+         (FK, backfilled for folded copays). Plain statements, no DO block. -->
+    <changeSet id="V213-pharmacy-payment-void-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V213__pharmacy_payment_void_status.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

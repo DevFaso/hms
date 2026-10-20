@@ -83,6 +83,10 @@ public class PaymentTransaction extends BaseEntity {
     @Column(name = "confirmed_at")
     private java.time.LocalDateTime confirmedAt;
 
+    /** QA D228: the invoice total when this money was received (V213); null on older rows. */
+    @Column(name = "invoice_total_at_receipt", precision = 12, scale = 2)
+    private java.math.BigDecimal invoiceTotalAtReceipt;
+
     @Column(name = "reversed_by")
     private UUID reversedBy;
 

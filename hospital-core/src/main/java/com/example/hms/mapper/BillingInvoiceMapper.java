@@ -86,6 +86,12 @@ public class BillingInvoiceMapper {
 
     private void populateInvoiceDetails(BillingInvoiceResponseDTO dto, BillingInvoice invoice) {
         dto.setInvoiceNumber(invoice.getInvoiceNumber());
+        // QA D428: a folded check-in copay names the invoice it went to.
+        if (invoice.getCreditedToInvoice() != null) {
+            dto.setCreditedToInvoiceNumber(invoice.getCreditedToInvoice().getInvoiceNumber());
+        }
+        // QA D428: who created it, when the creator is on file.
+        dto.setCreatedByName(creatorName(invoice.getCreatedByUser()));
         dto.setInvoiceDate(invoice.getInvoiceDate() != null ? invoice.getInvoiceDate().toString() : null);
         dto.setDueDate(invoice.getDueDate() != null ? invoice.getDueDate().toString() : null);
         dto.setTotalAmount(invoice.getTotalAmount());
@@ -176,5 +182,15 @@ public class BillingInvoiceMapper {
         String last   = p.getLastName()   == null ? "" : p.getLastName().trim();
         String full   = (first + " " + middle + " " + last).replaceAll("\\s+", " ").trim();
         return full.isEmpty() ? null : full;
+    }
+
+    /** QA D428: "First Last", the username when no name is on file, or null. */
+    private static String creatorName(com.example.hms.model.User user) {
+        if (user == null) {
+            return null;
+        }
+        String name = ((user.getFirstName() != null ? user.getFirstName() : "") + " "
+            + (user.getLastName() != null ? user.getLastName() : "")).trim();
+        return name.isEmpty() ? user.getUsername() : name;
     }
 }
