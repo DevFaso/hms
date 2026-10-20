@@ -204,6 +204,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final FiveRightsVerificationService fiveRightsVerificationService;
     private final ObjectMapper objectMapper;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
+    private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -1256,43 +1257,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private void requireNotDischargedWithoutVisit(UUID patientId, UUID hospitalId, String messageKey) {
-        List<com.example.hms.model.Admission> stays =
-            admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
-                EnumSet.allOf(com.example.hms.enums.AdmissionStatus.class));
-        if (stays.isEmpty()) {
-            return;
-        }
-        boolean openStay = stays.stream().anyMatch(a -> a.getStatus() == com.example.hms.enums.AdmissionStatus.PENDING
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ACTIVE
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.ON_LEAVE
-            || a.getStatus() == com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);
-        if (openStay) {
-            return;
-        }
-        // QA D525 (D431 did not hold): ANY open visit used to count, so a
-        // stale visit left open from before the stay (never checked out)
-        // kept the discharged patient chartable. Only a visit that began
-        // after the last discharge is a new episode of care.
-        LocalDateTime lastDischarge = stays.stream()
-            .map(com.example.hms.model.Admission::getActualDischargeDateTime)
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder())
-            .orElse(null);
-        boolean openVisit = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
-            EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
-                com.example.hms.enums.EncounterStatus.CANCELLED)).stream()
-            .anyMatch(e -> lastDischarge == null || startedAfter(e, lastDischarge));
-        if (!openVisit) {
-            throw new BusinessException(messageKey);
-        }
-    }
-
-    private static boolean startedAfter(com.example.hms.model.Encounter encounter, LocalDateTime instant) {
-        LocalDateTime start = encounter.getEncounterDate();
-        if (start == null) {
-            start = encounter.getArrivalTimestamp() != null ? encounter.getArrivalTimestamp() : encounter.getCreatedAt();
-        }
-        return start != null && start.isAfter(instant);
+        dischargedPatientGuard.requireNotDischargedWithoutVisit(patientId, hospitalId, messageKey);
     }
 
     /**

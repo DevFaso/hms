@@ -2128,10 +2128,13 @@ public class EncounterServiceImpl implements EncounterService {
         // the desk finally sees "Dr Ouédraogo wants this patient back in two
         // weeks" without the patient having to remember it.
         java.time.LocalDate recallDue = createRecallFromCheckout(encounter, request, actorUsername);
+        // QA D526: a follow-up asked for a date is also booked as a tentative
+        // (PENDING) appointment, so it shows on the patient's appointment list.
+        UUID followUpAppointmentId = createFollowUpAppointmentFromCheckout(encounter, request);
 
         // (d) Build and return AVS
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
-            checkOutMapper.toAfterVisitSummary(encounter, request, null);
+            checkOutMapper.toAfterVisitSummary(encounter, request, followUpAppointmentId);
         // QA D321: the AVS shows the follow-up date the recall was filed with
         // (the defaulted one too, when no date was given).
         if (recallDue != null) {
@@ -2185,6 +2188,64 @@ public class EncounterServiceImpl implements EncounterService {
             return null;
         }
     }
+
+    /**
+     * QA D526: the tentative appointment behind a dated checkout follow-up.
+     * Every precondition of {@code Appointment#validate} is checked first, so
+     * the save never throws inside the checkout transaction (a repository
+     * exception would mark it rollback-only); when one is missing the recall
+     * alone carries the follow-up. Time is a placeholder the desk confirms.
+     */
+    private UUID createFollowUpAppointmentFromCheckout(
+            Encounter encounter,
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
+        if (request == null || request.getFollowUpAppointment() == null) {
+            return null;
+        }
+        var followUp = request.getFollowUpAppointment();
+        if (followUp.getPreferredDate() == null || followUp.getPreferredDate().isBlank()) {
+            return null;
+        }
+        java.time.LocalDate date;
+        try {
+            date = java.time.LocalDate.parse(followUp.getPreferredDate().trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
+        }
+        com.example.hms.model.Hospital hospital = encounter.getHospital();
+        com.example.hms.model.Staff staff = encounter.getStaff();
+        com.example.hms.model.UserRoleHospitalAssignment assignment = encounter.getAssignment();
+        com.example.hms.model.Department department = encounter.getDepartment() != null
+                ? encounter.getDepartment() : (staff != null ? staff.getDepartment() : null);
+        if (encounter.getPatient() == null || hospital == null || hospital.getId() == null
+                || staff == null || staff.getHospital() == null
+                || !hospital.getId().equals(staff.getHospital().getId())
+                || assignment == null || assignment.getHospital() == null
+                || !hospital.getId().equals(assignment.getHospital().getId())
+                || department == null) {
+            log.debug("Follow-up for encounter {} kept as a recall only (incomplete booking context)",
+                    encounter.getId());
+            return null;
+        }
+        String reason = checkoutFollowUpReason(followUp);
+        String notes = followUp.getNotes();
+        Appointment saved = appointmentRepository.save(Appointment.builder()
+                .patient(encounter.getPatient())
+                .staff(staff)
+                .assignment(assignment)
+                .hospital(hospital)
+                .department(department)
+                .appointmentDate(date)
+                .startTime(FOLLOW_UP_PLACEHOLDER_START)
+                .endTime(FOLLOW_UP_PLACEHOLDER_START.plusMinutes(30))
+                .status(com.example.hms.enums.AppointmentStatus.PENDING)
+                .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
+                .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
+                .build());
+        return saved != null ? saved.getId() : null;
+    }
+
+    private static final java.time.LocalTime FOLLOW_UP_PLACEHOLDER_START = java.time.LocalTime.of(8, 0);
 
     /** The follow-up date asked at checkout, or two weeks out when absent or unparseable. */
     private static java.time.LocalDate checkoutFollowUpDueDate(

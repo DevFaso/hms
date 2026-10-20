@@ -77,6 +77,10 @@ class PatientVitalSignServiceImplTest {
     private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
     private final PatientVitalSignMapper mapper = new PatientVitalSignMapper();
+    @Mock
+    private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock
+    private com.example.hms.repository.EncounterRepository encounterRepository;
 
     @BeforeEach
     void setUp() {
@@ -92,7 +96,8 @@ class PatientVitalSignServiceImplTest {
             patientChartAccess,
             recordAccessPolicy,
             reachRecorder,
-            news2EscalationService);
+            news2EscalationService,
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
     }
 
     @Test
@@ -528,6 +533,66 @@ class PatientVitalSignServiceImplTest {
 
         assertThat(snapshot).isPresent();
         assertThat(snapshot.get().getHeartRate()).isEqualTo(75);
+    }
+
+    private void dischargedWithAStaleVisit(UUID patientId, UUID hospitalId) {
+        LocalDateTime discharged = LocalDateTime.now().minusDays(1);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        stay.setActualDischargeDateTime(discharged);
+        org.mockito.Mockito.lenient().when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any()))
+            .thenReturn(List.of(stay));
+        com.example.hms.model.Encounter stale = new com.example.hms.model.Encounter();
+        stale.setEncounterDate(discharged.minusDays(5));
+        org.mockito.Mockito.lenient().when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(any(), any(), any()))
+            .thenReturn(List.of(stale));
+    }
+
+    @Test
+    void d525_theChartVitalsEndpointRefusesADischargedPatientWhoseOnlyOpenVisitPredatesTheDischarge() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        dischargedWithAStaleVisit(patientId, hospitalId);
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).heartRateBpm(80).build();
+
+        assertThatThrownBy(() -> service.recordVital(patientId, request, nurseUserId))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> "nurse.vitals.patientDischarged".equals(((BusinessException) e).getMessageKey()));
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void d525_aDischargedPatientMayStillReportAHomeReading() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        User user = new User();
+        user.setId(patientUserId);
+        patient.setUser(user);
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        dischargedWithAStaleVisit(patientId, hospitalId);
+        when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> {
+            PatientVitalSign e = inv.getArgument(0);
+            e.setId(UUID.randomUUID());
+            return e;
+        });
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).source("PATIENT_REPORTED").recordedAt(LocalDateTime.now()).heartRateBpm(80).build();
+
+        service.recordVital(patientId, request, patientUserId);
+
+        verify(vitalSignRepository).save(any(PatientVitalSign.class));
     }
 
     private Patient minimalPatient(UUID id) {

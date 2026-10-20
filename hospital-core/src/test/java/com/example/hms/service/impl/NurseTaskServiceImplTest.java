@@ -162,7 +162,8 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, objectMapper, news2EscalationService));
+            fiveRightsService, objectMapper, news2EscalationService,
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository)));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -2948,7 +2949,8 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, failingMapper, news2EscalationService);
+            fiveRightsService, failingMapper, news2EscalationService,
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -3424,6 +3426,31 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(rx));
 
         assertThat(service.getMedicationTasks(nurseId, hospitalId, null)).isEmpty();
+    }
+
+    @Test
+    void d514_theDueCountsExcludeAnOutpatientsTakeHomePrescription() {
+        // QA D514: the dashboard's due/overdue counts follow the eMAR list's
+        // rule, so a consultation's take-home order is not counted either.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(consultation);
+        UUID patientId = rx.getPatient().getId();
+        doReturn(java.util.Set.of()).when(service).activelyAdmittedPatientIds(hospitalId);
+        lenient().when(nurseDashboardService.getPatientsForNurse(eq(nurseId), eq(hospitalId), any()))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+
+        NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+        assertThat(summary.getMedicationsDue()).isZero();
+        assertThat(summary.getMedicationsOverdue()).isZero();
     }
 
     @Test
