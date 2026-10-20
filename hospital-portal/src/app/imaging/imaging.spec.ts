@@ -358,3 +358,79 @@ describe('ImagingComponent', () => {
     expect(component.getReportStatusClass('CANCELLED')).toBe('status-cancelled');
   });
 });
+
+/**
+ * QA D427/D527: a midwife pressed Cancel on an imaging order and the page
+ * turned into a 403 — PUT /imaging/orders/{id}/status admits SUPER_ADMIN,
+ * DOCTOR and RADIOLOGIST only. Each order action follows core/action-permissions.
+ */
+describe('ImagingComponent — order actions by role (QA D527)', () => {
+  function render(role: string): HTMLElement {
+    const imaging = jasmine.createSpyObj('ImagingService', [
+      'getAllOrders',
+      'getReportsByHospital',
+    ]);
+    imaging.getAllOrders.and.returnValue(of([mockOrder()]));
+    imaging.getReportsByHospital.and.returnValue(of([]));
+    const hospital = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
+    hospital.getMyHospitalAsResponse.and.returnValue(
+      of({ id: 'h1', name: 'City Hospital' } as HospitalResponse),
+    );
+    const auth = jasmine.createSpyObj('AuthService', ['getHospitalId', 'getUserProfile']);
+    auth.getHospitalId.and.returnValue('h1');
+    auth.getUserProfile.and.returnValue({ staffId: 'st1' } as never);
+    const patients = jasmine.createSpyObj('PatientService', ['list']);
+    patients.list.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      imports: [ImagingComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: ImagingService, useValue: imaging },
+        { provide: HospitalService, useValue: hospital },
+        { provide: PatientService, useValue: patients },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: AuthService, useValue: auth },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: () => false,
+            activeHospitalId: 'h1',
+            hasAnyActiveRole: (roles: string[]) => roles.includes(role),
+          } as unknown as RoleContextService,
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(ImagingComponent);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  function titles(el: HTMLElement): string[] {
+    return Array.from(el.querySelectorAll('.action-link')).map(
+      (b) => b.getAttribute('title') ?? '',
+    );
+  }
+
+  it('a midwife may edit an order but is offered no Cancel', () => {
+    const el = render('ROLE_MIDWIFE');
+    expect(titles(el)).toContain('IMAGING.EDIT_ORDER');
+    expect(titles(el)).not.toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it('a doctor keeps Edit and Cancel', () => {
+    const el = render('ROLE_DOCTOR');
+    expect(titles(el)).toContain('IMAGING.EDIT_ORDER');
+    expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it('a radiologist may cancel but is offered no Edit or New order', () => {
+    const el = render('ROLE_RADIOLOGIST');
+    expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
+    expect(titles(el)).not.toContain('IMAGING.EDIT_ORDER');
+    expect(el.textContent).not.toContain('IMAGING.NEW_ORDER');
+  });
+});

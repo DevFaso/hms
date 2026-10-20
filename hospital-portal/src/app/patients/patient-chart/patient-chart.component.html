@@ -55,7 +55,7 @@
   <!-- ══ Allergies ══ -->
   @if (section() === 'allergies' && canViewAllergies()) {
     <div class="section-toolbar">
-      @if (canEditAllergies()) {
+      @if (canAddAllergy()) {
         <button type="button" class="btn-primary btn-sm" (click)="openAddAllergy()">
           <span class="material-symbols-outlined">add</span>
           {{ 'CHART.ADD_ALLERGY' | translate }}
@@ -110,23 +110,25 @@
                 @if (canEditAllergies()) {
                   <td>
                     <div class="action-group">
-                      <button
-                        type="button"
-                        class="action-link"
-                        (click)="openEditAllergy(a)"
-                        [title]="'COMMON.EDIT' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      @if (a.active !== false) {
+                      @if (canChangeAllergy(a)) {
                         <button
                           type="button"
-                          class="action-link delete-link"
-                          (click)="openDeactivateAllergy(a)"
-                          [title]="'CHART.DEACTIVATE' | translate"
+                          class="action-link"
+                          (click)="openEditAllergy(a)"
+                          [title]="'COMMON.EDIT' | translate"
                         >
-                          <span class="material-symbols-outlined">block</span>
+                          <span class="material-symbols-outlined">edit</span>
                         </button>
+                        @if (a.active !== false) {
+                          <button
+                            type="button"
+                            class="action-link delete-link"
+                            (click)="openDeactivateAllergy(a)"
+                            [title]="'CHART.DEACTIVATE' | translate"
+                          >
+                            <span class="material-symbols-outlined">block</span>
+                          </button>
+                        }
                       }
                     </div>
                   </td>

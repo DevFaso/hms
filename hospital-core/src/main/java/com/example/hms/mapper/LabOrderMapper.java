@@ -46,7 +46,6 @@ public class LabOrderMapper {
         String patientFullName = patient != null
             ? buildFullName(patient.getFirstName(), patient.getLastName())
             : null;
-        String patientEmail = patient != null ? patient.getEmail() : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
         String labTestName = labTestDefinition != null ? labTestDefinition.getName() : null;
         String labOrderCode = orderCodeOf(labOrder);
@@ -58,7 +57,8 @@ public class LabOrderMapper {
         .patientId(patient != null && patient.getId() != null
             ? patient.getId().toString() : null)
         .patientFullName(patientFullName)
-        .patientEmail(patientEmail)
+        // QA D527: the lab worklist has no use for the patient's e-mail; it is not sent.
+        .patientEmail(null)
         .hospitalId(hospital != null && hospital.getId() != null ? hospital.getId().toString() : null)
         .hospitalName(hospitalName)
         .performingHospitalId(performingHospital != null && performingHospital.getId() != null

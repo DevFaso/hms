@@ -160,7 +160,8 @@ class LabOrderMapperResilienceTest {
         LabOrderResponseDTO dto = mapper.toLabOrderResponseDTO(order);
 
         assertThat(dto.getPatientFullName()).isEqualTo("Jane Roe");
-        assertThat(dto.getPatientEmail()).isEqualTo("jane.roe@example.com");
+        // QA D527: the patient's e-mail never reaches the lab worklist.
+        assertThat(dto.getPatientEmail()).isNull();
         assertThat(dto.getHospitalName()).isEqualTo("Test Hospital");
         assertThat(dto.getLabTestName()).isEqualTo("CBC");
         assertThat(dto.getLabTestCode()).isEqualTo("CBC-01");

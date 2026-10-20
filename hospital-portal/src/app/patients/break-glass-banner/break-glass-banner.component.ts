@@ -22,6 +22,9 @@ import {
 } from '../../services/break-glass.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+const SERVER_TIME = new ServerTimePipe();
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -290,7 +293,10 @@ export class BreakGlassBannerComponent implements OnChanges, OnDestroy {
       this.stopClock();
       return;
     }
-    const ms = new Date(session.expiresAt).getTime() - Date.now();
+    // QA D532: a zone-less stamp is the server's UTC wall clock (the
+    // serverTime convention); parsed raw, the browser read it as local time and
+    // the countdown was off by the browser's UTC offset.
+    const ms = new Date(SERVER_TIME.transform(session.expiresAt)).getTime() - Date.now();
     if (ms <= 0) {
       this.remainingLabel.set(this.translate.instant('BREAK_GLASS.EXPIRED'));
       this.mySession.set({ ...session, live: false });

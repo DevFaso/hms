@@ -415,14 +415,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .hospitalId(s.getHospital() != null ? s.getHospital().getId() : null)
             .hospitalName(s.getHospital() != null ? s.getHospital().getName() : null)
             .reason(s.getReason())
-            .startedAt(s.getStartedAt())
-            .expiresAt(s.getExpiresAt())
-            .revokedAt(s.getRevokedAt())
+            .startedAt(withServerOffset(s.getStartedAt()))
+            .expiresAt(withServerOffset(s.getExpiresAt()))
+            .revokedAt(withServerOffset(s.getRevokedAt()))
             .revokedByUserId(s.getRevokedBy() != null ? s.getRevokedBy().getId() : null)
             .revokeReason(s.getRevokeReason())
             .auditCount(s.getAuditCount())
             .live(s.isLiveAt(LocalDateTime.now(clock)))
-            .reviewedAt(s.getReviewedAt())
+            .reviewedAt(withServerOffset(s.getReviewedAt()))
             .reviewedByUserId(s.getReviewedByUserId())
             .reviewedByUserName(s.getReviewedByUserId() == null ? null
                 : userRepository.findById(s.getReviewedByUserId()).map(User::getUsername).orElse(null))
@@ -430,5 +430,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .reviewNote(s.getReviewNote())
             .reviewed(s.isReviewed())
             .build();
+    }
+
+    /**
+     * D532: the session stamps are wall-clock {@code LocalDateTime}s in the
+     * clock's zone. Sent zone-less, a browser in another zone parsed them as
+     * its own local time and the expiry countdown was off by the UTC offset.
+     */
+    private java.time.OffsetDateTime withServerOffset(LocalDateTime value) {
+        return value == null ? null : value.atZone(clock.getZone()).toOffsetDateTime();
     }
 }

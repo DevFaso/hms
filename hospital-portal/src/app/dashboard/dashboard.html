@@ -984,9 +984,11 @@
                 </span>
                 <div style="flex: 1; min-width: 0">
                   <div style="font-size: 13px; font-weight: 600; color: #0f172a">
-                    {{ svc.provider ?? svc.serviceType }}
+                    {{ svc.provider ?? (svc.serviceType | enumLabel: 'platformServiceType') }}
                   </div>
-                  <div style="font-size: 11px; color: #64748b">{{ svc.serviceType }}</div>
+                  <div style="font-size: 11px; color: #64748b">
+                    {{ svc.serviceType | enumLabel: 'platformServiceType' }}
+                  </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px">
                   @if (svc.enabled) {

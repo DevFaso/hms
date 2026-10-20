@@ -82,7 +82,7 @@ export const CHART_ROLES = {
     'ROLE_ANESTHESIOLOGIST',
     'ROLE_PHYSIOTHERAPIST',
   ],
-  editAllergies: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+  // editAllergies moved to core/action-permissions (allergyCreate/Update/Deactivate), QA D527.
   // E9 #69: the pharmacist reads the problem list to verify a prescription.
   viewProblems: [...DOCTOR_ROLES, 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_PHARMACIST'],
   editProblems: [...DOCTOR_ROLES],

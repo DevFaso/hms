@@ -35,6 +35,7 @@ describe('AdmissionsComponent', () => {
   let toast: jasmine.SpyObj<ToastService>;
   let superAdmin: ReturnType<typeof signal<boolean>>;
   let queryTab: string | null;
+  let activeRoles: string[];
 
   const member = (id: string, roleCode: string) => ({ id, roleCode }) as StaffResponse;
   const adm = (overrides: Partial<AdmissionResponse> = {}) =>
@@ -56,6 +57,7 @@ describe('AdmissionsComponent', () => {
   beforeEach(() => {
     queryTab = null;
     superAdmin = signal(false);
+    activeRoles = ['ROLE_DOCTOR'];
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -111,7 +113,12 @@ describe('AdmissionsComponent', () => {
         { provide: ToastService, useValue: toast },
         {
           provide: RoleContextService,
-          useValue: { activeHospitalId: 'h1', isSuperAdmin: superAdmin, globalView: signal(false) },
+          useValue: {
+            activeHospitalId: 'h1',
+            isSuperAdmin: superAdmin,
+            globalView: signal(false),
+            hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
+          },
         },
         { provide: HospitalScopeUrlService, useValue: { applyUrlScopeSync: () => undefined } },
         {
@@ -130,6 +137,50 @@ describe('AdmissionsComponent', () => {
       ],
     });
     component = TestBed.runInInjectionContext(() => new AdmissionsComponent());
+  });
+
+  describe('actions by role (QA D427/D527)', () => {
+    function gates() {
+      return {
+        admit: component['canAdmit'](),
+        edit: component['canEditAdmission'](),
+        orderSets: component['canApplyOrderSets'](),
+        assignBed: component['canAssignBed'](),
+        unassignBed: component['canUnassignBed'](),
+        discharge: component['canDischarge'](),
+        cancel: component['canCancelAdmission'](),
+      };
+    }
+
+    it('a nurse is offered no Delete, Discharge or New admission (DOCTOR-only endpoints)', () => {
+      activeRoles = ['ROLE_NURSE'];
+      expect(gates()).toEqual({
+        admit: false,
+        edit: true,
+        orderSets: true,
+        assignBed: true,
+        unassignBed: true,
+        discharge: false,
+        cancel: false,
+      });
+    });
+
+    it('a doctor keeps every admission action', () => {
+      activeRoles = ['ROLE_DOCTOR'];
+      expect(Object.values(gates()).every(Boolean)).toBeTrue();
+    });
+
+    it('a midwife reads admissions but is offered no write', () => {
+      activeRoles = ['ROLE_MIDWIFE'];
+      expect(Object.values(gates()).some(Boolean)).toBeFalse();
+    });
+
+    it('a super-admin moves beds only (PUT, discharge, cancel and admit refuse her)', () => {
+      activeRoles = ['ROLE_SUPER_ADMIN'];
+      const g = gates();
+      expect(g.assignBed && g.unassignBed).toBeTrue();
+      expect(g.edit || g.cancel || g.discharge || g.admit || g.orderSets).toBeFalse();
+    });
   });
 
   describe('provider picker and refusals (QA D176)', () => {

@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Data
@@ -39,13 +39,13 @@ public class BreakGlassSessionResponseDTO {
     private String reason;
 
     @Schema(description = "When the session began.")
-    private LocalDateTime startedAt;
+    private OffsetDateTime startedAt;
 
-    @Schema(description = "When the session expires (or expired).")
-    private LocalDateTime expiresAt;
+    @Schema(description = "When the session expires (or expired), with the server offset so a browser in another zone counts down correctly.")
+    private OffsetDateTime expiresAt;
 
     @Schema(description = "When the session was revoked early; null if it ran to expiry or is still live.")
-    private LocalDateTime revokedAt;
+    private OffsetDateTime revokedAt;
 
     @Schema(description = "User who revoked the session (may differ from declaring user).")
     private UUID revokedByUserId;
@@ -60,7 +60,7 @@ public class BreakGlassSessionResponseDTO {
     private boolean live;
 
     @Schema(description = "E8 #54 — when a compliance reviewer signed the session off; null until reviewed.")
-    private LocalDateTime reviewedAt;
+    private OffsetDateTime reviewedAt;
     @Schema(description = "The reviewer.")
     private UUID reviewedByUserId;
     @Schema(description = "The reviewer's username.")

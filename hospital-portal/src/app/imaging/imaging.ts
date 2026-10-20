@@ -27,6 +27,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { actionRoles } from '../core/action-permissions';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -171,6 +172,21 @@ export class ImagingComponent implements OnInit {
     'ROLE_SUPER_ADMIN',
   ]);
   readonly canUpdateReportStatus = this.canAuthorReports;
+  /** QA D527: POST /imaging/orders — the ordering clinicians, not the radiologist. */
+  readonly canCreateOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderCreate')),
+  );
+  /** QA D527: PUT /imaging/orders/{id} — the ordering clinicians. */
+  readonly canEditOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderUpdate')),
+  );
+  /**
+   * QA D527: cancelling goes through PUT /imaging/orders/{id}/status, which a
+   * midwife or nurse is refused; she was offered the button and got a 403.
+   */
+  readonly canCancelOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
+  );
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
   readonly canAckCritical = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',

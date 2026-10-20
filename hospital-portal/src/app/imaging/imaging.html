@@ -5,7 +5,7 @@
       <p class="page-subtitle">{{ 'IMAGING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      @if (view() === 'orders') {
+      @if (view() === 'orders' && canCreateOrder()) {
         <button class="btn-primary" (click)="openCreate()">
           <span class="material-symbols-outlined">add</span> {{ 'IMAGING.NEW_ORDER' | translate }}
         </button>
@@ -177,20 +177,24 @@
                       </button>
                     }
                     @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
-                      <button
-                        class="action-link"
-                        (click)="openEdit(o)"
-                        [title]="'IMAGING.EDIT_ORDER' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        class="action-link delete"
-                        (click)="confirmCancel(o)"
-                        [title]="'IMAGING.CANCEL_ORDER' | translate"
-                      >
-                        <span class="material-symbols-outlined">cancel</span>
-                      </button>
+                      @if (canEditOrder()) {
+                        <button
+                          class="action-link"
+                          (click)="openEdit(o)"
+                          [title]="'IMAGING.EDIT_ORDER' | translate"
+                        >
+                          <span class="material-symbols-outlined">edit</span>
+                        </button>
+                      }
+                      @if (canCancelOrder()) {
+                        <button
+                          class="action-link delete"
+                          (click)="confirmCancel(o)"
+                          [title]="'IMAGING.CANCEL_ORDER' | translate"
+                        >
+                          <span class="material-symbols-outlined">cancel</span>
+                        </button>
+                      }
                     }
                   </div>
                 </td>
