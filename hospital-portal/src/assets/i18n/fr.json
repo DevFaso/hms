@@ -118,7 +118,9 @@
     "WARD_CODE": "Code de l'unité",
     "WARD_CODE_PLACEHOLDER": "ex. MAT01",
     "WARD_NAME": "Nom de l'unité",
-    "WARD_TYPE": "Type d'unité"
+    "WARD_TYPE": "Type d'unité",
+    "DEPARTMENT": "Service",
+    "NO_DEPARTMENT": "Aucun service"
   },
   "ERROR_403": {
     "BACK": "Retour au tableau de bord",
@@ -3488,6 +3490,7 @@
     "VIEW_ALL": "Voir tout"
   },
   "NURSE": {
+    "AWAITING_TRIAGE": "En attente de triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Saisir l'action...",
     "ACTIVE_ADMISSIONS_HERE": "Les admissions actives apparaîtront ici",

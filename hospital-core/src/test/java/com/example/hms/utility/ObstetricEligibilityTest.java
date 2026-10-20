@@ -40,4 +40,32 @@ class ObstetricEligibilityTest {
     void aMissingPatientIsNotRecordedMale() {
         assertThat(ObstetricEligibility.isRecordedMale(null)).isFalse();
     }
+
+    /* D413 (D46 regression): a labour episode was accepted for a 5-year-old. */
+
+    private static Patient bornYearsAgo(int years) {
+        Patient patient = withGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(years).minusDays(1));
+        return patient;
+    }
+
+    @Test
+    void d413_refusesAChildOfFive() {
+        Patient child = bornYearsAgo(5);
+        assertThatThrownBy(() -> ObstetricEligibility.requireObstetricEligible(child))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void d413_acceptsAnAdolescentAndAWoman() {
+        assertThatCode(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(15)))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> ObstetricEligibility.requireObstetricEligible(bornYearsAgo(30)))
+            .doesNotThrowAnyException();
+    }
+
+    @Test
+    void d413_aMissingBirthDateIsLetThrough() {
+        assertThat(ObstetricEligibility.isRecordedChild(withGender("FEMALE"))).isFalse();
+    }
 }

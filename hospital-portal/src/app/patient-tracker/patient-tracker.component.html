@@ -85,6 +85,13 @@
                   @if (col.key === 'triage' || col.key === 'arrived') {
                     <button
                       class="btn-complete-triage"
+                      (click)="openTriage(item)"
+                      [title]="'TRIAGE.TITLE' | translate"
+                    >
+                      {{ 'TRIAGE.TITLE' | translate }}
+                    </button>
+                    <button
+                      class="btn-complete-triage"
                       (click)="completeTriage(item)"
                       [disabled]="triageInProgress()"
                       [title]="'TRACKER.COMPLETE_TRIAGE' | translate"
@@ -136,6 +143,14 @@
     </div>
   }
 
+  <!-- Triage form (D408): where the nurse triages an arrived outpatient -->
+  @if (triageEncounter()) {
+    <app-triage-form
+      [encounter]="triageEncounter()!"
+      (dismissed)="onTriageDismissed()"
+      (triageCompleted)="onTriageCompleted()"
+    ></app-triage-form>
+  }
   <!-- Check-Out Dialog (MVP 6) -->
   @if (showCheckoutDialog()) {
     <app-checkout-dialog

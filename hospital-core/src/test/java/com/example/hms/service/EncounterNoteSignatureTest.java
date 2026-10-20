@@ -47,6 +47,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -148,6 +150,9 @@ class EncounterNoteSignatureTest {
         when(encounterNoteRepository.save(any(EncounterNote.class))).thenAnswer(i -> i.getArgument(0));
         when(roleValidator.getCurrentUserId()).thenReturn(authorUserId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        // D406: the note's author is resolved from the session.
+        lenient().when(staffRepository.findByUserIdAndHospitalId(authorUserId, hospitalId))
+            .thenReturn(Optional.of(authorStaff));
     }
 
     /* ── sign ──────────────────────────────────────────────────────────── */
@@ -303,5 +308,105 @@ class EncounterNoteSignatureTest {
         service.upsertEncounterNote(encounterId, request, LOCALE, true, null);
 
         assertThat(note.isRequiresCosign()).isTrue();
+    }
+
+    /* ── D406: a note is its author's; a second clinician appends ─────── */
+
+    private Staff nurseStaff() {
+        User nurse = new User();
+        nurse.setId(UUID.randomUUID());
+        nurse.setFirstName("Mariam");
+        nurse.setLastName("Sawadogo");
+        nurse.setEmail("nurse@example.test");
+        Staff staff = Staff.builder().user(nurse).hospital(encounter.getHospital()).build();
+        staff.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(nurse.getId());
+        when(staffRepository.findByUserIdAndHospitalId(nurse.getId(), hospitalId)).thenReturn(Optional.of(staff));
+        return staff;
+    }
+
+    @Test
+    void d406_aNurseCannotOverwriteTheDoctorsNote() {
+        encounter.setEncounterNote(note);
+        note.setAssessment("Pneumopathie");
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().subjective("nurse note").build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("addendum");
+        assertThat(note.getAuthor()).isEqualTo(authorUser);
+        assertThat(note.getAssessment()).isEqualTo("Pneumopathie");
+        verify(encounterNoteRepository, never()).save(any(EncounterNote.class));
+    }
+
+    @Test
+    void d406_aNurseCannotWriteUnderTheDoctorsStaffId() {
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder()
+            .subjective("nurse note")
+            .authorStaffId(authorStaff.getId())
+            .build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId))
+            .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    void d406_theNursesAddendumIsHersAndTheHistorySaysSo() {
+        Staff nurse = nurseStaff();
+        when(encounterNoteAddendumRepository.save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder()
+                .content("Surveillance infirmière")
+                .authorName("Dr Issa Ouédraogo")
+                .build();
+
+        service.addEncounterNoteAddendum(encounterId, request, LOCALE, false, hospitalId);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteAddendum> added =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteAddendum.class);
+        verify(encounterNoteAddendumRepository).save(added.capture());
+        assertThat(added.getValue().getAuthorStaff()).isEqualTo(nurse);
+        // The body's name is not the author's: the server's is.
+        assertThat(added.getValue().getAuthorName()).isEqualTo("Mariam Sawadogo");
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangedBy()).isEqualTo("nurse@example.test");
+        // The doctor's note itself is unchanged.
+        assertThat(note.getAuthor()).isEqualTo(authorUser);
+    }
+
+    @Test
+    void d406_theAuthorStillRevisesTheirOwnNoteWithHistory() {
+        encounter.setEncounterNote(note);
+        authorUser.setEmail("doctor@example.test");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Revised").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Revised");
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangedBy()).isEqualTo("doctor@example.test");
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_UPDATED");
+    }
+
+    @Test
+    void d406_aNurseWritesTheFirstNoteInHerOwnName() {
+        encounter.setEncounterNote(null);
+        when(encounterNoteRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.empty());
+        Staff nurse = nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().subjective("Patiente calme").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        org.mockito.ArgumentCaptor<EncounterNote> saved = org.mockito.ArgumentCaptor.forClass(EncounterNote.class);
+        verify(encounterNoteRepository).save(saved.capture());
+        assertThat(saved.getValue().getAuthorStaff()).isEqualTo(nurse);
+        assertThat(saved.getValue().getAuthor()).isEqualTo(nurse.getUser());
     }
 }

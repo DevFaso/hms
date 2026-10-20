@@ -154,6 +154,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   triageEncounter = signal<EncounterResponse | null>(null);
   intakeEncounter = signal<EncounterResponse | null>(null);
   encounterLookupInProgress = signal(false);
+  /**
+   * QA D408: outpatients who have ARRIVED or are in TRIAGE have no admission,
+   * so the admission-based workboard never listed them and a nurse working
+   * here had no way to triage them (only /patient-tracker did).
+   */
+  awaitingTriage = signal<EncounterResponse[]>([]);
 
   private static readonly FAST_REFRESH_MS = 60_000;
   private static readonly SLOW_REFRESH_MS = 300_000;
@@ -310,8 +316,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         pendingAdmissions: this.nurseService
           .getPendingAdmissions()
           .pipe(catchError(() => of([] as NurseAdmissionSummary[]))),
+        awaitingTriage: this.loadAwaitingTriage$(),
       }).pipe(
         tap((results) => {
+          this.awaitingTriage.set(results.awaitingTriage);
           this.orders.set(results.orders ?? []);
           this.handoffs.set(results.handoffs ?? []);
           this.announcements.set(Array.isArray(results.announcements) ? results.announcements : []);
@@ -347,8 +355,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       pendingAdmissions: this.nurseService
         .getPendingAdmissions()
         .pipe(catchError(() => of([] as NurseAdmissionSummary[]))),
+      awaitingTriage: this.loadAwaitingTriage$(),
     }).pipe(
       tap((results) => {
+        this.awaitingTriage.set(results.awaitingTriage);
         if (results.summary) this.summary.set(results.summary);
         this.workboard.set(results.workboard ?? []);
         if (results.flowBoard) this.flowBoard.set(results.flowBoard);
@@ -860,6 +870,35 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       'ARRIVED',
       'TRIAGE',
     ]);
+  }
+
+  /** Triage is recorded by a nurse (POST /encounters/{id}/triage). */
+  canTriage(): boolean {
+    return this.auth.hasAnyRole(['ROLE_NURSE']);
+  }
+
+  /** Outpatient visits waiting to be triaged in the active hospital (D408). */
+  loadAwaitingTriage$(): Observable<EncounterResponse[]> {
+    if (!this.canTriage()) return of([]);
+    // Today's visits only (stale ARRIVED rows from earlier days are not a
+    // queue), and one page large enough that a busy clinic hides no one.
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00:00`;
+    const byStatus = (status: 'ARRIVED' | 'TRIAGE') =>
+      this.encounterService
+        .list({ status, fromDate, size: 100 })
+        .pipe(catchError(() => of([] as EncounterResponse[])));
+    return forkJoin([byStatus('ARRIVED'), byStatus('TRIAGE')]).pipe(
+      map(([arrived, triage]) =>
+        [...arrived, ...triage].filter((e) => e.encounterType !== 'INPATIENT'),
+      ),
+    );
+  }
+
+  /** Open the triage form on the exact encounter listed (no lookup needed). */
+  openTriageForEncounter(encounter: EncounterResponse): void {
+    this.triageEncounter.set(encounter);
   }
 
   onTriageCompleted(): void {

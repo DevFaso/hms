@@ -118,7 +118,9 @@
     "WARD_CODE": "Ward Code",
     "WARD_CODE_PLACEHOLDER": "e.g. MAT01",
     "WARD_NAME": "Ward Name",
-    "WARD_TYPE": "Ward Type"
+    "WARD_TYPE": "Ward Type",
+    "DEPARTMENT": "Department",
+    "NO_DEPARTMENT": "No department"
   },
   "ERROR_403": {
     "BACK": "Back to dashboard",
@@ -3488,6 +3490,7 @@
     "VIEW_ALL": "View all"
   },
   "NURSE": {
+    "AWAITING_TRIAGE": "Awaiting triage",
     "ACTION": "Action",
     "ACTION_PLACEHOLDER": "Enter action...",
     "ACTIVE_ADMISSIONS_HERE": "Active admissions will appear here",
