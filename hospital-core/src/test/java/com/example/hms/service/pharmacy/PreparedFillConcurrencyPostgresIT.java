@@ -192,6 +192,10 @@ class PreparedFillConcurrencyPostgresIT {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> seed());
+        // QA D512: every fill needs a pharmacist verification; these races are
+        // about the claim and the preparation, so the order counts as verified.
+        org.mockito.Mockito.lenient().when(pharmacistVerificationService.isVerified(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospital.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(pharmacist.getId());
         when(support.resolveCurrentUser()).thenReturn(pharmacist);

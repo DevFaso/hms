@@ -20,7 +20,9 @@ public class PatientVitalSignMapper {
         // NEWS2 is computed on read, never stored — a stored score would go
         // stale the moment the scoring table changed (P3 #25b). Explicitly
         // partial: missing parameters are named, not silently zeroed.
-        NewsScoreCalculator.NewsScoreResult news = NewsScoreCalculator.score(entity);
+        // QA D518: no adult score is shown for a child.
+        NewsScoreCalculator.NewsScoreResult news = NewsScoreCalculator.applies(entity)
+            ? NewsScoreCalculator.score(entity) : null;
 
         return PatientVitalSignResponseDTO.builder()
             .id(entity.getId())
@@ -47,10 +49,10 @@ public class PatientVitalSignMapper {
             .clinicallySignificant(entity.isClinicallySignificant())
             .onOxygen(entity.getOnOxygen())
             .consciousnessLevel(entity.getConsciousnessLevel())
-            .newsScore(news.total())
-            .newsRiskBand(news.riskBand().name())
-            .newsComplete(news.complete())
-            .newsMissing(news.missingParameters())
+            .newsScore(news != null ? news.total() : null)
+            .newsRiskBand(news != null ? news.riskBand().name() : null)
+            .newsComplete(news != null ? news.complete() : null)
+            .newsMissing(news != null ? news.missingParameters() : null)
             .recordedAt(entity.getRecordedAt())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())

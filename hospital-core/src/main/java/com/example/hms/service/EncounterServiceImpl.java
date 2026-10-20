@@ -93,6 +93,7 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
 
+    private static final String CHECKOUT_FOLLOW_UP_TYPE = "FOLLOW_UP";
     private static final String NOTE_HISTORY_CREATED = "NOTE_CREATED";
     private static final String NOTE_HISTORY_UPDATED = "NOTE_UPDATED";
     private static final String NOTE_HISTORY_ADDENDUM = "NOTE_ADDENDUM";
@@ -498,9 +499,19 @@ public class EncounterServiceImpl implements EncounterService {
         // D406: the author is the session user, never the encounter's attending
         // nor a staff id the body names, and a note is its author's alone: a
         // second clinician appends an addendum instead of overwriting it.
+        // QA D513: once the visit is checked out (or cancelled) its note is
+        // part of the closed record. Rewriting it in place left it unsigned
+        // with no trace; a late correction is an addendum, which is attributed
+        // and dated.
+        if (isClosedEncounter(encounter) && hasExistingNote(encounter)) {
+            throw new BusinessException("encounter.note.closedLocked");
+        }
         NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
         EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null);
+        // QA D513: updatedAt is stamped at flush; the response was mapped
+        // before it and reported the previous edit's time.
+        encounterNoteRepository.flush();
         return encounterMapper.toEncounterNoteResponseDTO(note);
     }
 
@@ -713,6 +724,16 @@ public class EncounterServiceImpl implements EncounterService {
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
         }
+    }
+
+    private static boolean isClosedEncounter(Encounter encounter) {
+        return encounter.getStatus() == EncounterStatus.COMPLETED
+            || encounter.getStatus() == EncounterStatus.CANCELLED;
+    }
+
+    private boolean hasExistingNote(Encounter encounter) {
+        return encounter.getEncounterNote() != null
+            || encounterNoteRepository.findByEncounter_Id(encounter.getId()).isPresent();
     }
 
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
@@ -1744,6 +1765,12 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
             throw new BusinessException("encounter.triage.submitWrongStatus", String.valueOf(current));
         }
+        // QA D511: no acuity, no triage — the patient would reach the doctor's
+        // queue unranked. The DTO refuses it at the edge; this keeps any other
+        // caller of the service honest.
+        if (request == null || request.getEsiScore() == null) {
+            throw new BusinessException("triage.esi.required");
+        }
 
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
@@ -2131,17 +2158,8 @@ public class EncounterServiceImpl implements EncounterService {
         }
         var followUp = request.getFollowUpAppointment();
         try {
-            java.time.LocalDate dueDate = java.time.LocalDate.now().plusWeeks(2);
-            if (followUp.getPreferredDate() != null && !followUp.getPreferredDate().isBlank()) {
-                try {
-                    dueDate = java.time.LocalDate.parse(followUp.getPreferredDate().trim());
-                } catch (java.time.format.DateTimeParseException ex) {
-                    log.warn("Unparseable follow-up date '{}' on encounter {} — defaulting to two weeks",
-                            followUp.getPreferredDate(), encounter.getId());
-                }
-            }
-            String reason = followUp.getReason() != null && !followUp.getReason().isBlank()
-                    ? followUp.getReason() : "Follow-up after visit";
+            java.time.LocalDate dueDate = checkoutFollowUpDueDate(encounter, followUp);
+            String reason = checkoutFollowUpReason(followUp);
             patientRecallRepository.save(
                     com.example.hms.model.scheduling.PatientRecall.builder()
                             .patient(encounter.getPatient())
@@ -2161,6 +2179,60 @@ public class EncounterServiceImpl implements EncounterService {
             log.warn("Could not create a recall for encounter {}: {}", encounter.getId(), ex.getMessage());
             return null;
         }
+    }
+
+    /** The follow-up date asked at checkout, or two weeks out when absent or unparseable. */
+    private static java.time.LocalDate checkoutFollowUpDueDate(
+            Encounter encounter,
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.FollowUpAppointmentRequest followUp) {
+        java.time.LocalDate dueDate = java.time.LocalDate.now().plusWeeks(2);
+        if (followUp.getPreferredDate() != null && !followUp.getPreferredDate().isBlank()) {
+            try {
+                dueDate = java.time.LocalDate.parse(followUp.getPreferredDate().trim());
+            } catch (java.time.format.DateTimeParseException ex) {
+                log.warn("Unparseable follow-up date on encounter {} — defaulting to two weeks", encounter.getId());
+            }
+        }
+        return dueDate;
+    }
+
+    private static String checkoutFollowUpReason(
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.FollowUpAppointmentRequest followUp) {
+        return followUp.getReason() != null && !followUp.getReason().isBlank()
+                ? followUp.getReason().trim() : "Follow-up after visit";
+    }
+
+    /**
+     * QA D526 (D321/D426): the follow-up asked at checkout reached only the
+     * recall worklist; the visit's discharge summary — what the chart's
+     * discharge view and the patient portal read — carried no follow-up, so
+     * the request looked dropped. It is now written there too, once.
+     */
+    private static void addCheckoutFollowUp(
+            DischargeSummary summary,
+            Encounter encounter,
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
+        if (request == null || request.getFollowUpAppointment() == null) {
+            return;
+        }
+        var followUp = request.getFollowUpAppointment();
+        java.time.LocalDate due = checkoutFollowUpDueDate(encounter, followUp);
+        String reason = checkoutFollowUpReason(followUp);
+        String purpose = reason.length() > 1000 ? reason.substring(0, 1000) : reason;
+        boolean already = summary.getFollowUpAppointments() != null && summary.getFollowUpAppointments().stream()
+            .anyMatch(f -> CHECKOUT_FOLLOW_UP_TYPE.equals(f.getAppointmentType()) && due.equals(f.getAppointmentDate()));
+        if (already) {
+            return;
+        }
+        String notes = followUp.getNotes();
+        summary.addFollowUpAppointment(com.example.hms.model.discharge.FollowUpAppointmentEntry.builder()
+            .appointmentType(CHECKOUT_FOLLOW_UP_TYPE)
+            .appointmentDate(due)
+            .providerName(encounter.getStaff() != null ? encounter.getStaff().getName() : null)
+            .purpose(purpose)
+            .specialInstructions(notes != null && notes.length() > 1000 ? notes.substring(0, 1000) : notes)
+            .isConfirmed(false)
+            .build());
     }
 
     private void upsertDischargeSummaryForCheckout(
@@ -2187,6 +2259,7 @@ public class EncounterServiceImpl implements EncounterService {
             keepIfGiven(request.getPrescriptionSummary(), 3000, summary::setPrescriptionSummary);
             keepIfGiven(request.getReferralSummary(), 3000, summary::setReferralSummary);
             keepIfGiven(request.getPatientEducationMaterials(), 2000, summary::setPatientEducationProvided);
+            addCheckoutFollowUp(summary, encounter, request);
         }
 
         // Encounter notes → hospitalCourse (visit summary)

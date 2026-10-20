@@ -1,3 +1,4 @@
+import { glucoseMgDlToMmol } from '../shared/glucose-units';
 import {
   Component,
   computed,
@@ -605,6 +606,16 @@ export class PatientDetailComponent implements OnInit {
   /** True for a real measurement, including 0 — but not null/undefined.
    *  (A missing JSON key parses to undefined, which `=== null` misses; that
    *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
+  /** QA D530: glucose shown in mmol/L, the unit the lab reports. */
+  glucoseMmol(mgDl: number | null | undefined): string {
+    return mgDl == null
+      ? ''
+      : glucoseMgDlToMmol(mgDl).toLocaleString(this.translate.currentLang || 'fr', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        });
+  }
+
   hasValue(value: number | null | undefined): boolean {
     return value !== null && value !== undefined;
   }

@@ -150,6 +150,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         Encounter encounter = resolveEncounter(dto, hospitalId);
         // QA D403: the visit billed must be this patient's visit.
         rejectEncounterOfOtherPatient(encounter, patient);
+        rejectUnconfirmedSecondInvoice(encounter, dto);
 
         BillingInvoice invoice = invoiceMapper.toBillingInvoice(dto, patient, hospital, encounter);
         // QA D91: nothing is paid until a payment is recorded.
@@ -319,6 +320,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** QA D403: an invoice may only carry a visit of the patient it bills. */
+    /**
+     * QA D529: a second invoice for a stay already invoiced (and paid) was
+     * created with no warning, billing the patient twice. A check-in copay is
+     * folded into the visit invoice and does not count; a cancelled invoice
+     * does not either.
+     */
+    private void rejectUnconfirmedSecondInvoice(Encounter encounter, BillingInvoiceRequestDTO dto) {
+        if (encounter == null || encounter.getId() == null || Boolean.TRUE.equals(dto.getSupplementary())) {
+            return;
+        }
+        invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED).stream()
+            .filter(existing -> !existing.isCheckInCopay())
+            .findFirst()
+            .ifPresent(existing -> {
+                throw new com.example.hms.exception.ConflictException(com.example.hms.utility.MessageUtil.resolve("billing.invoice.encounterAlreadyInvoiced",
+                    existing.getInvoiceNumber(), String.valueOf(existing.getStatus())));
+            });
+    }
+
     private static void rejectEncounterOfOtherPatient(Encounter encounter, Patient patient) {
         if (encounter == null || patient == null || encounter.getPatient() == null) {
             return;

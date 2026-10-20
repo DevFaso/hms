@@ -2482,4 +2482,76 @@ class EncounterServiceImplTest {
             verify(encounterNoteRepository, never()).save(any());
         }
     }
+
+    /* ── QA round 8 ──────────────────────────────────────────────────── */
+
+    @Test
+    void d511_aTriageWithNoEsiScoreIsRefused() {
+        // QA D511: POST /encounters/{id}/triage with vitals but no esiScore
+        // returned 200 and queued the patient for the doctor with no acuity.
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
+            .temperatureCelsius(38.5).heartRateBpm(96).chiefComplaint("Fièvre").build();
+
+        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> ((BusinessException) e).getMessageKey().equals("triage.esi.required"));
+        verify(patientVitalSignRepository, never()).save(any());
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+    }
+
+    @Test
+    void d526_theRealPortalCheckoutPayloadFilesTheFollowUpOnTheDischargeSummary() throws Exception {
+        // QA D526 (D321/D426 regression): the body the portal's checkout
+        // dialog sends (checkout-dialog.component.ts submit()). The recall was
+        // filed but the visit's discharge summary — what the discharge view
+        // and the patient portal read — carried no follow-up at all.
+        UUID encounterId = UUID.randomUUID();
+        checkoutRecallEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusDays(7);
+        String portalBody = """
+            {"followUpInstructions":"Revenir si la fièvre persiste plus de 48 h.",
+             "dischargeDiagnoses":["B54 Paludisme simple"],
+             "prescriptionSummary":"Paracétamol 500 mg 3 fois par jour pendant 3 jours",
+             "patientEducationMaterials":"Moustiquaire imprégnée",
+             "followUpAppointment":{"reason":"Contrôle paludisme","preferredDate":"%s"}}
+            """.formatted(preferred);
+        CheckOutRequestDTO request = tools.jackson.databind.json.JsonMapper.builder().build()
+            .readValue(portalBody, CheckOutRequestDTO.class);
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        AfterVisitSummaryDTO returned = service.checkOut(encounterId, request, "doctor1", true, null);
+
+        assertThat(returned.getFollowUpAppointmentDate()).isEqualTo(preferred.toString());
+        verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
+        org.mockito.ArgumentCaptor<DischargeSummary> summary = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(summary.capture());
+        assertThat(summary.getValue().getFollowUpAppointments())
+            .singleElement()
+            .satisfies(f -> {
+                assertThat(f.getAppointmentDate()).isEqualTo(preferred);
+                assertThat(f.getPurpose()).isEqualTo("Contrôle paludisme");
+                assertThat(f.getAppointmentType()).isEqualTo("FOLLOW_UP");
+            });
+    }
+
+    @Test
+    void d526_aCheckoutWithoutFollowUpAddsNoneToTheSummary() {
+        UUID encounterId = UUID.randomUUID();
+        checkoutRecallEncounter(encounterId);
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().followUpInstructions("Repos").build(),
+            "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<DischargeSummary> summary = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(summary.capture());
+        assertThat(summary.getValue().getFollowUpAppointments()).isEmpty();
+    }
 }

@@ -132,4 +132,18 @@ class News2EscalationServiceTest {
             5, false, NewsScoreCalculator.RiskBand.MEDIUM, java.util.List.of());
         assertThat(News2EscalationService.observationInterval(medium, routine)).isEqualTo(Duration.ofHours(1));
     }
+
+    @Test
+    void d518_aChildsVitalsPageNobodyWithTheAdultScore() {
+        // QA D518: a 5-year-old's normal heart and breathing rate scored HIGH
+        // on the adult table and paged the nurse and the doctor.
+        messages.addMessage("news2.escalation.high", Locale.getDefault(), "HIGH {0} {1} {2}");
+        Patient child = new Patient();
+        child.setId(UUID.randomUUID());
+        child.setDateOfBirth(java.time.LocalDate.now().minusYears(5));
+
+        service.escalateIfNeeded(qaSet(child), child.getId(), UUID.randomUUID(), "nurse_a", "dr_a");
+
+        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+    }
 }

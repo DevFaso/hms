@@ -166,6 +166,28 @@ public class PharmacistVerificationService {
         return prescriptionRepository.save(prescription);
     }
 
+    /**
+     * QA D512: the verification a dispensing pharmacist attests at the
+     * counter, in the dispense request itself. Same server clock and the same
+     * self-verification refusal as {@link #verify}; the caller has already
+     * established that {@code verifier} is the session user and holds the
+     * prescription row lock, and persists it with the fill.
+     */
+    public void verifyAtCounter(Prescription prescription, User verifier) {
+        if (prescription == null || verifier == null || isVerified(prescription)) {
+            return;
+        }
+        if (prescription.getStaff() != null
+                && prescription.getStaff().getUser() != null
+                && verifier.getId() != null
+                && verifier.getId().equals(prescription.getStaff().getUser().getId())) {
+            throw new BusinessException("pharmacy.r7.selfVerification");
+        }
+        prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
+        prescription.setPharmacistVerifiedBy(verifier);
+        prescription.setPharmacistVerificationNote(null);
+    }
+
     private static String trimToNull(String value) {
         if (value == null) {
             return null;

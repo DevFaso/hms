@@ -195,7 +195,7 @@
                     <td>
                       <button
                         class="action-btn action-record"
-                        (click)="recordVitals(v.patientId)"
+                        (click)="recordVitals(v.patientId, v.patientName)"
                         [disabled]="!v.patientId"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
@@ -1141,15 +1141,16 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-glucose">{{ 'NURSE.BLOOD_GLUCOSE' | translate }} (mg/dL)</label>
+          <label for="vf-glucose">{{ 'NURSE.BLOOD_GLUCOSE' | translate }} (mmol/L)</label>
           <input
             id="vf-glucose"
             type="number"
-            min="10"
-            max="1000"
+            step="0.1"
+            min="0.5"
+            max="55"
             [placeholder]="'NURSE.VITALS_PLACEHOLDER.GLUCOSE' | translate"
-            [value]="vitalsForm().bloodGlucoseMgDl ?? ''"
-            (input)="updateVitalsField('bloodGlucoseMgDl', $any($event.target).value)"
+            [value]="glucoseMmol()"
+            (input)="updateGlucoseMmol($any($event.target).value)"
           />
         </div>
         <div class="vitals-field">

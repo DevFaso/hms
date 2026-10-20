@@ -204,6 +204,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** The row whose Dispense claim request is in flight; a second click on it is ignored. */
   readonly claimPendingRowId = signal<string | null>(null);
   /** The row whose claim the dispense form made (renewed:false); released when the form is left. */
+  /** QA D512: the pharmacist attests the prescription was verified. */
+  readonly verifyAttested = signal(false);
   readonly formClaimedRowId = signal<string | null>(null);
   /** No background reload while the pharmacist is in a form or a dialog. */
   readonly pollPaused = computed(
@@ -737,13 +739,28 @@ export class DispensingComponent implements OnInit, OnDestroy {
     // Dispense disabled until the pharmacist retyped the quantity).
     this.form.quantityDispensed = rx.quantity ?? 0;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
+    this.verifyAttested.set(false);
     this.showForm.set(true);
     this.loadStockLots();
   }
 
+  /**
+   * QA D512: the pharmacist's own verification of the prescription, sent as
+   * `verifiedBy` (the server checks it is the session user). Without it the
+   * server refuses the fill.
+   */
+  private attestedForm(): DispenseRequest {
+    const body: DispenseRequest = { ...this.form };
+    delete body.verifiedBy;
+    if (this.verifyAttested()) {
+      body.verifiedBy = this.form.dispensedBy;
+    }
+    return body;
+  }
+
   submitDispense(): void {
     this.saving.set(true);
-    this.svc.createDispense(this.form).subscribe({
+    this.svc.createDispense(this.attestedForm()).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_SUCCESS'));
         this.formClaimedRowId.set(null);
@@ -766,7 +783,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
    */
   submitReady(): void {
     this.saving.set(true);
-    this.svc.markReady({ ...this.form, patientScanValue: '' }).subscribe({
+    this.svc.markReady({ ...this.attestedForm(), patientScanValue: '' }).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
         this.formClaimedRowId.set(null);

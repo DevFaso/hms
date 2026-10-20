@@ -627,8 +627,8 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">glucose</span>
                     <div>
-                      <strong>{{ v.bloodGlucoseMgDl }}</strong
-                      ><small> mg/dL</small>
+                      <strong>{{ glucoseMmol(v.bloodGlucoseMgDl) }}</strong
+                      ><small> mmol/L ({{ v.bloodGlucoseMgDl }} mg/dL)</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.BLOOD_GLUCOSE' | translate }}</span>
                   </div>

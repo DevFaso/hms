@@ -12,6 +12,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { firstImplausibleVital } from '../shared/vital-sign-limits';
+import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -501,13 +502,34 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   recordVitals(patientId: string, patientName?: string): void {
     if (!patientId) return;
-    this.vitalsCaptureFor.set({ patientId, patientName: patientName ?? 'Patient' });
+    // QA D530: the modal and the toast named "Patient" when the row had no
+    // name passed; the due-vitals list now passes it, and the fallback is
+    // translated rather than an English word.
+    this.vitalsCaptureFor.set({
+      patientId,
+      patientName: patientName?.trim() || this.translate.instant('NURSE.THIS_PATIENT'),
+    });
     this.vitalsForm.set({});
+    this.glucoseMmol.set('');
+  }
+
+  /** QA D530: glucose is typed in mmol/L, like the lab reports it; sent as mg/dL. */
+  readonly glucoseMmol = signal('');
+
+  updateGlucoseMmol(value: string): void {
+    this.glucoseMmol.set(value);
+    const mmol = value === '' ? undefined : Number(value);
+    this.vitalsForm.update((f) => ({
+      ...f,
+      bloodGlucoseMgDl:
+        mmol === undefined || Number.isNaN(mmol) ? undefined : glucoseMmolToMgDl(mmol),
+    }));
   }
 
   closeVitalsDialog(): void {
     this.vitalsCaptureFor.set(null);
     this.vitalsForm.set({});
+    this.glucoseMmol.set('');
   }
 
   updateVitalsField(field: keyof NurseVitalCaptureRequest, value: string): void {

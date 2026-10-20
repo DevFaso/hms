@@ -153,6 +153,8 @@ class DispenseReadyForCollectionTest {
         patient.setId(patientId);
 
         prescription = new Prescription();
+        // QA D512: a fill needs a pharmacist verification.
+        prescription.setPharmacistVerifiedAt(java.time.LocalDateTime.now());
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         prescription.setMedicationName("Amoxicillin");
@@ -996,6 +998,7 @@ class DispenseReadyForCollectionTest {
             Prescription rx = new Prescription();
             rx.setId(UUID.randomUUID());
             rx.setStatus(PrescriptionStatus.SIGNED);
+            rx.setPharmacistVerifiedAt(java.time.LocalDateTime.now());
             rx.setMedicationName("Paracetamol");
             return rx;
         }

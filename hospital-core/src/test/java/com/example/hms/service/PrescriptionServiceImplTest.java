@@ -4052,4 +4052,49 @@ class PrescriptionServiceImplTest {
             .hasMessageContaining("severity severe")
             .satisfies(ex -> assertThat(ex.getMessage()).doesNotContain("moderate"));
     }
+
+    @Test
+    void d525_aPrescriptionOnADischargedStayIsRefused() {
+        // QA D525 (D431): POST /prescriptions naming the stay's encounter
+        // after the discharge closed it was accepted.
+        PrescriptionRequestDTO request = buildRequest();
+        encounter.setAdmissionId(UUID.randomUUID());
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        UUID currentUser = staff.getUser().getId();
+        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        lenient().when(authService.getCurrentUserId()).thenReturn(currentUser);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> ((BusinessException) e).getMessageKey().equals("prescription.encounter.stayClosed"));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d525_aCompletedOutpatientVisitIsNotTreatedAsAClosedStay() {
+        // An outpatient prescription written after checkout keeps working:
+        // only a hospital stay (admissionId) is closed by the discharge.
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionRepository).save(mappedEntity);
+    }
 }
