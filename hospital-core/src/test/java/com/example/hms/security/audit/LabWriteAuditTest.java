@@ -99,7 +99,7 @@ class LabWriteAuditTest {
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
-    private AuditEventRequestDTO recordedAfter(Object controller, Method method) throws Exception {
+    private AuditEventRequestDTO recordedAfter(Object controller, Method method) {
         MockHttpServletResponse response = new MockHttpServletResponse();
         response.setStatus(201);
         interceptor.afterCompletion(request, response, new HandlerMethod(controller, method), null);
