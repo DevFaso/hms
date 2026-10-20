@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -161,7 +162,7 @@ class AppointmentBookingOwnershipTest {
         com.example.hms.model.Hospital hospitalB = new com.example.hms.model.Hospital();
         hospitalB.setId(request.getHospitalId());
         when(hospitalRepository.findClinicalById(hospitalB.getId())).thenReturn(Optional.of(hospitalB));
-        org.mockito.Mockito.doThrow(new ResourceNotFoundException("patient.notfound", onlyAtA.getId()))
+        doThrow(new ResourceNotFoundException("patient.notfound", onlyAtA.getId()))
             .when(patientRegistrationGuard).requireRegisteredAt(onlyAtA.getId(), hospitalB.getId());
 
         ResourceNotFoundException refused = refusal(request, admin);

@@ -544,8 +544,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
         // Paging: one row per page, the total still counts the whole scope.
         var first = page(get("/users").param("size", "1").param("page", "0"), nurse);
-        assertThat(ids(first)).hasSize(1);
-        assertThat(total(first)).isEqualTo(staffAtA.size());
+        assertThat(List.of((long) ids(first).size(), total(first)))
+            .containsExactly(1L, (long) staffAtA.size());
         var last = page(get("/users").param("size", "4").param("page", "1"), nurse);
         assertThat(ids(last)).hasSize(staffAtA.size() - 4);
 
@@ -560,8 +560,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
                 total(page(get("/users/search").param("name", "sa"), nurse))))
             .containsOnly(0L);
         var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
-        assertThat(total(doctors)).isEqualTo(1);
-        assertThat(ids(doctors)).containsExactly(dualAB.getId());
+        assertThat(List.<Object>of(total(doctors), ids(doctors)))
+            .containsExactly(1L, List.of(dualAB.getId()));
         // QA D198: none of these accounts holds a staff profile, so a nurse sees their
         // e-mails masked and cannot confirm one by searching; A's administrator can.
         assertThat(List.of(

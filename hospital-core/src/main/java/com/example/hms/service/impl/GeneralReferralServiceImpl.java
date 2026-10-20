@@ -668,8 +668,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return builder.isEmpty() ? null : builder.toString();
     }
 
-    /** QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer. */
     /**
+     * QA D205: only the signed-in clinician, at the sending hospital, may be named as the referrer.
      * QA D412: a draft is sent by the clinician who wrote it. A nurse could
      * submit a doctor's draft, sending it out under the doctor's name. The
      * referral was resolved in the caller's scope (findReferral), so the

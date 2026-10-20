@@ -269,6 +269,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /** {@link #searchUsers} for a non-administrator: staff accounts only (QA D430). */
     @Query(value = "SELECT u FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY,
         countQuery = "SELECT COUNT(u) FROM User u " + DIRECTORY_VISIBLE + DIRECTORY_SEARCH_FILTERS + DIRECTORY_STAFF_ONLY)
+    @SuppressWarnings("java:S107") // JPQL search: one bind parameter per filter, mirrors searchUsers
     Page<User> searchStaffDirectory(@Param("name") String name,
                                     @Param("phoneDigits") String phoneDigits,
                                     @Param("role") String role,

@@ -101,13 +101,13 @@ class PatientWriteRegistrationCoverageTest {
         entry("UltrasoundServiceImpl#updateOrder", UPDATE_OF_OWNED_ROW + " (getOrderInScope)"));
 
     private static final Pattern WRITE_METHOD = Pattern.compile(
-        "public\\s+[\\w<>\\[\\],.? ]+\\s+((?:create|book|add|record|submit|place|order|admit|register|save|upload"
+        "public\\s++[\\w<>\\[\\],.?]++(?:\\s*+[\\w<>\\[\\],.?]++)*?\\s++((?:create|book|add|record|submit|place|order|admit|register|save|upload"
             + "|log|start|schedule|update|document|administer|refer|sign|request|issue|amend|attach|assign"
-            + "|transfer|discharge|complete|initiate|capture|import|dispense|prescribe)\\w*)\\s*\\(([^)]*)\\)");
+            + "|transfer|discharge|complete|initiate|capture|import|dispense|prescribe)\\w*+)\\s*+\\(([^)]*+)\\)");
     /** A private method declaration: the same-class helpers a write may delegate its check to. */
     private static final Pattern ANY_METHOD = Pattern.compile(
-        "private\\s+(?:static\\s+)?(?:final\\s+)?[\\w<>\\[\\],.?]+(?:\\s*<[^>]*>)?\\s+(\\w+)\\s*\\(([^)]*)\\)"
-            + "\\s*(?:throws\\s+[\\w.,\\s]+)?\\{");
+        "private\\s++(?:static\\s++)?(?:final\\s++)?[\\w<>\\[\\],.?]++(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(([^)]*+)\\)"
+            + "\\s*+(?:throws\\s++[\\w.,\\s]++)?\\{");
     /** An unqualified call ({@code helper(..)}, not {@code repo.helper(..)}): only those reach a same-class helper. */
     private static final Pattern CALL = Pattern.compile("(?<![.\\w])(\\w+)\\s*\\(");
     private static final Pattern PATIENT_ID_FIELD = Pattern.compile("\\bUUID\\s+patientId\\b");

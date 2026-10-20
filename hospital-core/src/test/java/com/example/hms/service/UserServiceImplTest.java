@@ -2307,8 +2307,8 @@ class UserServiceImplTest {
             userService.searchUsers("ami", null, null, 0, 10, false, false);
 
             verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
-            verify(userRepository, org.mockito.Mockito.never()).findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
-            verify(userRepository, org.mockito.Mockito.never()).searchUsers(any(), any(), any(), any(), anyBoolean(),
+            verify(userRepository, never()).findAllPaged(anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
+            verify(userRepository, never()).searchUsers(any(), any(), any(), any(), anyBoolean(),
                     anyBoolean(), anyBoolean(), anyBoolean(), any(), any());
         }
 

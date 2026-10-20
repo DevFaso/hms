@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -340,7 +341,7 @@ class GeneralReferralServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.submitReferral(referralId))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(referral.getStatus()).isEqualTo(ReferralStatus.DRAFT);
-        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     @Test

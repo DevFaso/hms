@@ -23,8 +23,8 @@ class JsonAccessDeniedHandlerTest {
         String body = response.getContentAsString();
         assertThat(body).contains("\"message\":\"").contains("\"code\":\"ACCESS_DENIED\"")
             .contains("\"path\":\"/api/users/x/status\"")
-            .doesNotContain("secret");
-        assertThat(body).doesNotContain("\"message\":\"\"");
+            .doesNotContain("secret")
+            .doesNotContain("\"message\":\"\"");
     }
 
     @Test

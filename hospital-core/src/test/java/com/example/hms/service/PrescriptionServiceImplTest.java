@@ -51,6 +51,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -434,7 +435,7 @@ class PrescriptionServiceImplTest {
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        org.mockito.Mockito.doThrow(new ResourceNotFoundException("patient.notfound", patientId))
+        doThrow(new ResourceNotFoundException("patient.notfound", patientId))
             .when(patientRegistrationGuard).requireRegisteredAt(patientId, hospitalId);
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
