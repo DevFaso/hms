@@ -83,6 +83,7 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
                     com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
                     patient.getId(), hospitalId)) {
             dto.setAllergiesWithheld(true);
+            dto.setRecordsWithheld(true);
         }
         if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(

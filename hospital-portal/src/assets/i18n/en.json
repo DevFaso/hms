@@ -7828,6 +7828,7 @@
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Allergies recorded at other hospitals are withheld: this patient has opted out of record sharing. This list may be incomplete.",
+    "RECORDS_WITHHELD": "Records from other hospitals (problems, medications, labs, vitals, notes, encounters, imaging) are withheld: this patient has opted out of record sharing. These lists may be incomplete.",
     "ADD_ALLERGY": "Add allergy",
     "ADD_PROBLEM": "Add diagnosis",
     "ADD_SECTION": "Add section",

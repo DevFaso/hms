@@ -130,6 +130,8 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
             // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
             .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                 allergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+            // QA D504: the problems and encounters below are narrowed the same way.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
             .problems(problems)
             .activeEncounter(activeEncounter)
             .lastEncounter(lastEncounter)

@@ -7828,6 +7828,7 @@
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
+    "RECORDS_WITHHELD": "Les données des autres hôpitaux (problèmes, médicaments, examens, constantes, notes, consultations, imagerie) ne sont pas affichées : ce patient a refusé le partage de son dossier. Ces listes peuvent être incomplètes.",
     "ADD_ALLERGY": "Ajouter une allergie",
     "ADD_PROBLEM": "Ajouter un diagnostic",
     "ADD_SECTION": "Ajouter une section",

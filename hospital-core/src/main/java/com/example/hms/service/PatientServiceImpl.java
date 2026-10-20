@@ -905,6 +905,8 @@ public class PatientServiceImpl implements PatientService {
             .allergiesWithheld(shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)
                 && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                     patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId))
+            // QA D504: every other category is narrowed the same way; say so too.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(currentPrincipalUserId(), patientId, hospitalId))
             .totalEntries(entries.size())
             .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
@@ -1995,6 +1997,12 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional(readOnly = true)
+    public boolean foreignRecordsWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
         return com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
             patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId);
@@ -2764,6 +2772,8 @@ public class PatientServiceImpl implements PatientService {
                 && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                     patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patient.getId(), hospitalId)) {
             dto.setAllergiesWithheld(true);
+            // Same condition (opt-out, not overridden): every other list is narrowed too.
+            dto.setRecordsWithheld(true);
         }
         if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(

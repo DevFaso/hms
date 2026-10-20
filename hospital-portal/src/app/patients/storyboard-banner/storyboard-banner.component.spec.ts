@@ -72,6 +72,25 @@ describe('StoryboardBannerComponent', () => {
     );
   });
 
+  it('QA D504 — says when the opt-out narrowed every list, not only allergies', () => {
+    storyboardSpy.getStoryboard.and.returnValue(
+      of({ ...populatedSummary(), recordsWithheld: true }),
+    );
+    setPatient('p-123');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="storyboard-records-withheld"]')
+        ?.textContent,
+    ).toContain('CHART.RECORDS_WITHHELD');
+  });
+
+  it('QA D504 — no records notice when nothing is withheld', () => {
+    storyboardSpy.getStoryboard.and.returnValue(of(populatedSummary()));
+    setPatient('p-123');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="storyboard-records-withheld"]'),
+    ).toBeNull();
+  });
+
   it('QA D504 — no notice when nothing is withheld', () => {
     storyboardSpy.getStoryboard.and.returnValue(of(populatedSummary()));
     setPatient('p-123');

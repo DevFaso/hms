@@ -7828,6 +7828,7 @@
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
+    "RECORDS_WITHHELD": "Los registros de otros hospitales (problemas, medicamentos, laboratorio, signos vitales, notas, consultas, imágenes) no se muestran: este paciente rechazó compartir su historial. Estas listas pueden estar incompletas.",
     "ADD_ALLERGY": "Agregar alergia",
     "ADD_PROBLEM": "Agregar diagnóstico",
     "ADD_SECTION": "Agregar sección",

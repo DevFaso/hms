@@ -21,6 +21,11 @@
         {{ 'STORYBOARD.EMPTY' | translate }}
       </p>
     } @else if (summary(); as s) {
+      @if (s.recordsWithheld) {
+        <p class="storyboard__empty" role="note" data-testid="storyboard-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <div class="storyboard__sections">
         <!-- Allergies -->
         <div

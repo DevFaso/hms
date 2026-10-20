@@ -230,6 +230,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
                 .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
                         patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+                // QA D504: the diagnoses, medications, vitals and labs below are narrowed the same way.
+                .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))

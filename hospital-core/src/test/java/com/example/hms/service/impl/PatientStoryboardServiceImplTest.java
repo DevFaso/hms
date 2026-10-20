@@ -355,12 +355,16 @@ class PatientStoryboardServiceImplTest {
             eq(PATIENT_ID), eq(HOSPITAL_ID), any())).thenReturn(List.of());
         when(directiveRepo.findByPatient_IdAndHospital_IdIn(eq(PATIENT_ID), any())).thenReturn(List.of());
 
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
+
         PatientStoryboardDTO sb = service.getStoryboard(PATIENT_ID, HOSPITAL_ID);
 
         assertThat(sb.getAllergies())
             .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
             .containsExactly("Sulfa");
         assertThat(sb.isAllergiesWithheld()).isTrue();
+        // QA D504 (round 3): problems and encounters are narrowed too.
+        assertThat(sb.isRecordsWithheld()).isTrue();
     }
 
     @Test
@@ -393,6 +397,7 @@ class PatientStoryboardServiceImplTest {
                 .extracting(PatientStoryboardDTO.AllergySummaryDTO::getAllergenDisplay)
                 .containsExactly("Penicillin");
             assertThat(sb.isAllergiesWithheld()).isFalse();
+            assertThat(sb.isRecordsWithheld()).isFalse();
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();
         }

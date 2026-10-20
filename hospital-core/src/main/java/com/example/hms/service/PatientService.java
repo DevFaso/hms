@@ -113,6 +113,12 @@ public interface PatientService {
      */
     boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId);
 
+    /**
+     * QA D504: true when the patient's sharing opt-out narrows every clinical
+     * list read at this hospital to its own rows (nothing overrides it).
+     */
+    boolean foreignRecordsWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId);
+
     PatientAllergyResponseDTO createPatientAllergy(
         UUID patientId,
         UUID hospitalId,

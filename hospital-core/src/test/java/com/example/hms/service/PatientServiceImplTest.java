@@ -284,6 +284,8 @@ class PatientServiceImplTest {
         assertThat(read.getAllergies()).isEqualTo("Peanuts");
         // QA D504 (round 2): the narrowed column says it was narrowed.
         assertThat(read.isAllergiesWithheld()).isTrue();
+        // QA D504 (round 3): and every other list on the chart is flagged too.
+        assertThat(read.isRecordsWithheld()).isTrue();
     }
 
     // QA D504: break-the-glass overrides the opt-out on the allergy reads too.
@@ -1020,6 +1022,8 @@ class PatientServiceImplTest {
         // QA D504 (round 2): an opt-out with no break-glass narrows the allergy
         // entries, and the timeline says so instead of looking complete.
         when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        // QA D504 (round 3): the other categories are narrowed by the same opt-out.
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(patientId), eq(hospitalId))).thenReturn(true);
 
         PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
             patientId, hospitalId, doctorId, assignment,
@@ -1035,6 +1039,7 @@ class PatientServiceImplTest {
             assertThat(r.getCount()).isEqualTo(1L);
         });
         assertThat(response.isAllergiesWithheld()).isTrue();
+        assertThat(response.isRecordsWithheld()).isTrue();
     }
 
     @Test

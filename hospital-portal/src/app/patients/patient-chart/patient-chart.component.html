@@ -596,6 +596,9 @@
       @if (tl.allergiesWithheld) {
         <p class="labs-hint" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
       }
+      @if (tl.recordsWithheld) {
+        <p class="labs-hint" role="note">{{ 'CHART.RECORDS_WITHHELD' | translate }}</p>
+      }
       <!-- E9 #64 — what D3 withheld from this read, never a silent gap. -->
       <app-restricted-rows
         [rows]="tl.restrictedRows ?? []"

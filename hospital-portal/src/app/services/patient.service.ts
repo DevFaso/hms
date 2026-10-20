@@ -16,6 +16,8 @@ export interface PatientResponse {
   id: string;
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
   allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   firstName: string;
   lastName: string;
   middleName?: string;
@@ -327,6 +329,8 @@ export interface PatientTimeline {
   restrictedRows?: RestrictedRows[];
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
   allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
 }
 
 /** SMS OTP challenge issued by POST /patients/phone-verification. */

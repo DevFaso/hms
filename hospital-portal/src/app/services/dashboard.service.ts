@@ -241,6 +241,8 @@ export interface PatientSnapshot {
   allergies: string[];
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
   allergiesWithheld?: boolean;
+  /** QA D504 — the opt-out held back other hospitals' rows from every clinical list on this read. */
+  recordsWithheld?: boolean;
   codeStatus?: string;
   activeDiagnoses: string[];
   activeMedications: { name: string; dose: string; frequency: string }[];

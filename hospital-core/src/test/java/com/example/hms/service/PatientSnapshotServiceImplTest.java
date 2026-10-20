@@ -196,10 +196,14 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
 
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(patientId), eq(HOSPITAL_ID))).thenReturn(true);
+
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertTrue(result.getAllergies().contains("Peanuts"));
         assertTrue(result.isAllergiesWithheld());
+        // QA D504 (round 3): diagnoses, medications, vitals and labs are narrowed too.
+        assertTrue(result.isRecordsWithheld());
     }
 
     @Test
@@ -233,6 +237,7 @@ class PatientSnapshotServiceImplTest {
 
             assertTrue(result.getAllergies().contains("Penicillin"));
             assertFalse(result.isAllergiesWithheld());
+            assertFalse(result.isRecordsWithheld());
             verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();

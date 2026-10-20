@@ -269,6 +269,12 @@
 
     <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
+      <!-- QA D504: every chart section is narrowed by the opt-out, not only allergies. -->
+      @if (patient()!.recordsWithheld) {
+        <p class="info-row" role="note" data-testid="chart-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <app-patient-chart
         [patientId]="patient()!.id"
         [refreshToken]="accessEpoch()"
