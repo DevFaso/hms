@@ -2428,6 +2428,41 @@ class UserServiceImplTest {
             assertThat(req.getPassword()).hasSize(14);
         }
 
+        /**
+         * QA D522 (D311/D418), through the real registration: the welcome mail
+         * of a new staff account carries the assignment's code, so the
+         * afterCommit callback must report it as the ACTIVATION mail.
+         */
+        @Test
+        @DisplayName("QA D522: registration reports the code-carrying welcome mail as the activation")
+        void registrationReportsTheWelcomeMailAsTheActivation() {
+            stubCreation(superAdminRole);
+            UserRoleHospitalAssignment withCodes = new UserRoleHospitalAssignment();
+            withCodes.setId(UUID.randomUUID());
+            withCodes.setRole(superAdminRole);
+            withCodes.setAssignmentCode("ASSIGN-D522");
+            withCodes.setConfirmationCode("123456");
+            when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+                .thenReturn(Optional.of(withCodes));
+            lenient().when(assignmentLinkService.buildProfileCompletionUrl(any())).thenReturn("https://x/a");
+
+            com.example.hms.utility.ActivationDeliveryTracker.open();
+            List<com.example.hms.payload.dto.NotificationDeliveryStatusDTO> reports;
+            try {
+                userService.createUserWithRolesAndHospital(request("ROLE_SUPER_ADMIN", "a@hospital.bf", "70202020"));
+            } finally {
+                reports = com.example.hms.utility.ActivationDeliveryTracker.close();
+            }
+
+            assertThat(reports)
+                .filteredOn(r -> "EMAIL".equals(r.getChannel()))
+                .singleElement()
+                .satisfies(r -> {
+                    assertThat(r.getPurpose()).isEqualTo("ACTIVATION");
+                    assertThat(r.getOutcome()).isEqualTo("QUEUED");
+                });
+        }
+
         @Test
         @DisplayName("a username already taken is retried until a free one is found")
         void generatedUsernameAvoidsCollisions() {

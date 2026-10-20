@@ -1053,6 +1053,26 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D523: the super-admin has no exemption from the unknown-submitter refusal either. */
+    @Test
+    void processApproval_completeQaReview_bySuperAdmin_withUnknownSubmitter_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setSubmittedById(null);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "lab.definition.submitterUnknown");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
     /** QA D523: the super-admin who submitted cannot also complete the QA review. */
     @Test
     void processApproval_completeQaReview_bySuperAdminWhoSubmitted_isRefused() {

@@ -428,10 +428,14 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             }
             // QA D517: on the mother's chart the newborn comes from a birth
             // on file - her latest delivery at this hospital - or there is
-            // no newborn to assess.
+            // no newborn to assess. Only a birth within the neonatal period
+            // counts: a delivery from years ago has no newborn left.
+            java.time.LocalDateTime neonatalSince = java.time.LocalDateTime.now(java.time.ZoneId.systemDefault())
+                .minusDays(NEONATAL_PERIOD_DAYS);
             return (hospital == null ? java.util.Optional.<com.example.hms.model.labor.DeliveryRecord>empty()
                 : deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(
                     mother.getId(), hospital.getId()))
+                .filter(d -> d.getBirthDateTime() != null && !d.getBirthDateTime().isBefore(neonatalSince))
                 .orElseThrow(() -> new BusinessException("maternity.newborn.noDelivery"));
         }
         com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.findById(deliveryRecordId)

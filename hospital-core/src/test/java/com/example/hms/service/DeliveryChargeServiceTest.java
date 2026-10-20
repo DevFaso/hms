@@ -117,10 +117,32 @@ class DeliveryChargeServiceTest {
         assertThat(invoice.getTotalAmount()).isEqualByComparingTo("0");
     }
 
+    /** QA D516: a cross-hospital or super-admin recorder still bills the birth, under the billing desk. */
     @Test
-    void recorderWithoutAnAssignmentThere_postsNothing() {
+    void recorderWithoutAnAssignmentThere_filesTheLineUnderTheBillingDesk() {
+        UserRoleHospitalAssignment billingDesk = new UserRoleHospitalAssignment();
+        billingDesk.setHospital(hospital);
         when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(recorderId, hospital.getId()))
             .thenReturn(Optional.empty());
+        when(assignmentRepository.findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
+            hospital.getId(), List.of("ROLE_BILLING_SPECIALIST", "ROLE_HOSPITAL_ADMIN")))
+            .thenReturn(Optional.of(billingDesk));
+        when(invoiceNumberAllocator.next(any(), any())).thenReturn("GH-2026-000010");
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(treatmentRepository.findByHospital_Id(hospital.getId())).thenReturn(List.of());
+
+        BillingInvoice invoice = service.chargeDelivery(delivery, recorderId).orElseThrow();
+
+        assertThat(invoice.getCreatedBy()).isEqualTo(recorderId);
+        assertThat(invoice.getInvoiceItems().iterator().next().getAssignment()).isSameAs(billingDesk);
+    }
+
+    @Test
+    void nobodyAtTheHospitalCanOwnTheLine_postsNothing() {
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(recorderId, hospital.getId()))
+            .thenReturn(Optional.empty());
+        when(assignmentRepository.findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
+            any(), any())).thenReturn(Optional.empty());
 
         assertThat(service.chargeDelivery(delivery, recorderId)).isEmpty();
         verify(invoiceRepository, never()).save(any());

@@ -13,6 +13,7 @@ import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,10 +39,13 @@ import java.util.UUID;
  * transaction, after the delivery commits: a failed charge never rolls the
  * birth back. One delivery per labour episode, so one charge.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeliveryChargeService {
 
+    /** QA D516: who owns the line when the recorder has no assignment at the hospital. */
+    private static final List<String> FALLBACK_OWNER_ROLES = List.of("ROLE_BILLING_SPECIALIST", "ROLE_HOSPITAL_ADMIN");
     private static final Set<DeliveryMode> CAESAREAN =
         Set.of(DeliveryMode.CAESAREAN_ELECTIVE, DeliveryMode.CAESAREAN_EMERGENCY);
     /** Words a hospital's priced-service name uses for a caesarean (EN/FR/ES). */
@@ -57,8 +61,9 @@ public class DeliveryChargeService {
     /**
      * Posts the delivery charge. {@code recorderUserId} is the clinician who
      * recorded the birth; the line is filed under their assignment at the
-     * hospital. Returns the draft invoice, or empty when the recorder holds no
-     * active assignment there (nothing can own the line).
+     * hospital, or under the hospital's billing specialist or administrator
+     * when the recorder has none there. Returns the draft invoice, or empty
+     * (logged) when nobody at the hospital can own the line.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Optional<BillingInvoice> chargeDelivery(DeliveryRecord delivery, UUID recorderUserId) {
@@ -70,6 +75,15 @@ public class DeliveryChargeService {
         Optional<UserRoleHospitalAssignment> assignment =
             assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(recorderUserId, hospitalId);
         if (assignment.isEmpty()) {
+            // QA D516: a cross-hospital or super-admin recorder holds no
+            // assignment here. The line is filed under the hospital's billing
+            // desk (or its administrator) instead, so the birth is still billed.
+            assignment = assignmentRepository.findFirstByHospital_IdAndRole_CodeInAndActiveTrueOrderByCreatedAtAsc(
+                hospitalId, FALLBACK_OWNER_ROLES);
+        }
+        if (assignment.isEmpty()) {
+            log.warn("Delivery {} at hospital {} was not charged: no active assignment can own the line",
+                delivery.getId(), hospitalId);
             return Optional.empty();
         }
         boolean caesarean = delivery.getDeliveryMode() != null && CAESAREAN.contains(delivery.getDeliveryMode());
