@@ -117,6 +117,7 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("MllpAllowedSenderServiceImpl.deactivate#findById", SUPER_ADMIN),
         entry("MllpAllowedSenderServiceImpl.update#findById", SUPER_ADMIN),
         entry("MllpInboundAdtServiceImpl.processAdt#findByIdUnscoped", "HL7 inbound: bound to the sender's receiving hospital, not a user scope"),
+        entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
         entry("PatientEducationServiceImpl.incrementResourceViewCount#findById", SHARED),
         entry("PatientEducationServiceImpl.submitQuestion#findById", UNSWEPT),
