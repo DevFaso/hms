@@ -4,17 +4,24 @@ Runs in .github/workflows/claude-review.yml. Calls the Messages API directly
 (the Console's promotional credit covers the API, not Claude Code). Reads the
 diff and PR metadata with gh; never prints secrets.
 """
+import fnmatch
 import json
 import os
+import re
 import subprocess
 import sys
 
 import anthropic
 
 MARKER = "<!-- claude-review -->"
+BOT = "github-actions[bot]"
 MODEL = "claude-opus-5-5"
-# ~1M-token context; leave room for the prompt and the answer.
-MAX_DIFF_CHARS = 2_000_000
+# ~1M-token context; leave room for the prompt, the PR body and the answer.
+TOKEN_BUDGET = 600_000
+# GitHub rejects comment bodies over 65,536 characters.
+MAX_COMMENT_CHARS = 64_000
+# Generated files: large, unreviewable, and the source change is in the diff.
+GENERATED = ("package-lock.json", "*.lock", "*.min.js", "*.map")
 
 PROMPT = """You review pull requests for e-Keneya, a multi-hospital health system:
 Spring Boot 4 backend in hospital-core, Angular portal in hospital-portal, EN/FR/ES.
@@ -41,60 +48,161 @@ def gh(*args: str) -> str:
     return subprocess.run(["gh", *args], check=True, capture_output=True, text=True).stdout
 
 
-def post(pr: str, body: str) -> None:
-    body = f"{MARKER}\n{body}"
+def head_marker(sha: str) -> str:
+    return f"<!-- claude-review-head: {sha} -->"
+
+
+def sticky(pr: str):
+    """This workflow's own latest comment, or None."""
     repo = os.environ["GITHUB_REPOSITORY"]
     # --slurp wraps every page in one array, so more than 30 comments still parse.
     pages = json.loads(gh("api", f"repos/{repo}/issues/{pr}/comments", "--paginate", "--slurp"))
     # Only this workflow's own comment: anyone can type the marker on a public repo.
     mine = [c for page in pages for c in page
-            if c["user"]["login"] == "github-actions[bot]" and c["body"].startswith(MARKER)]
-    if mine:
-        gh("api", "-X", "PATCH", f"repos/{repo}/issues/comments/{mine[-1]['id']}", "-f", f"body={body}")
+            if c["user"]["login"] == BOT and c["body"].startswith(MARKER)]
+    return mine[-1] if mine else None
+
+
+def truncate(body: str) -> str:
+    if len(body) <= MAX_COMMENT_CHARS:
+        return body
+    note = "\n\n> Note: the review was cut to fit GitHub's comment size limit."
+    return body[:MAX_COMMENT_CHARS - len(note)] + note
+
+
+def post(pr: str, body: str, existing=None) -> None:
+    body = truncate(f"{MARKER}\n{body}")
+    if existing:
+        repo = os.environ["GITHUB_REPOSITORY"]
+        gh("api", "-X", "PATCH", f"repos/{repo}/issues/comments/{existing['id']}", "-f", f"body={body}")
     else:
         gh("pr", "comment", pr, "--body", body)
 
 
-def main() -> int:
-    pr = os.environ["PR_NUMBER"]
-    meta = json.loads(gh("pr", "view", pr, "--json", "title,body,headRefOid"))
-    diff = gh("pr", "diff", pr)
-    note = ""
-    if len(diff) > MAX_DIFF_CHARS:
-        note = (f"\n\n> Note: the diff is {len(diff):,} characters; only the first "
-                f"{MAX_DIFF_CHARS:,} were reviewed. Split the PR for a full review.")
-        diff = diff[:MAX_DIFF_CHARS]
+def split_files(diff: str):
+    """[(path, chunk)] in diff order."""
+    out = []
+    for chunk in re.split(r"(?m)^(?=diff --git )", diff):
+        if not chunk:
+            continue
+        m = re.match(r"diff --git a/(\S+) b/(\S+)", chunk)
+        out.append((m.group(2) if m else "", chunk))
+    return out
 
-    client = anthropic.Anthropic(
-        default_headers={"anthropic-workspace-id": os.environ["ANTHROPIC_WORKSPACE_ID"]}
+
+def is_generated(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    return any(fnmatch.fnmatch(name, pat) for pat in GENERATED)
+
+
+def filter_generated(diff: str):
+    kept, dropped = [], []
+    for path, chunk in split_files(diff):
+        (dropped if is_generated(path) else kept).append((path, chunk))
+    return kept, [p for p, _ in dropped]
+
+
+def fit(client, files, render, budget=TOKEN_BUDGET):
+    """Keep whole files, in diff order, until the request fits the token budget.
+
+    Returns (kept_files, left_out_paths)."""
+    kept = list(files)
+    for _ in range(6):
+        tokens = client.messages.count_tokens(
+            model=MODEL, system=PROMPT, messages=render(kept)).input_tokens
+        if tokens <= budget or not kept:
+            break
+        size = sum(len(c) for _, c in kept)
+        target = int(size * budget / tokens * 0.95)
+        acc, cut = 0, []
+        for path, chunk in kept:
+            if acc + len(chunk) > target:
+                break
+            acc += len(chunk)
+            cut.append((path, chunk))
+        kept = cut if len(cut) < len(kept) else kept[:-1]
+    kept_paths = {p for p, _ in kept}
+    return kept, [p for p, _ in files if p not in kept_paths]
+
+
+def left_out_note(generated, over_budget) -> str:
+    lines = []
+    if generated:
+        lines.append("generated files not reviewed: " + ", ".join(f"`{p}`" for p in generated))
+    if over_budget:
+        lines.append(f"{len(over_budget)} file(s) over the token budget not reviewed: "
+                     + ", ".join(f"`{p}`" for p in over_budget[:50])
+                     + (" ..." if len(over_budget) > 50 else "")
+                     + ". Split the PR for a full review.")
+    return "".join(f"\n\n> Note: {line}" for line in lines)
+
+
+def review(client, pr, meta, diff) -> str:
+    files, generated = filter_generated(diff)
+
+    def render(fs):
+        body = "".join(c for _, c in fs)
+        return [{"role": "user",
+                 "content": f"PR #{pr}: {meta['title']}\n\n{meta.get('body') or ''}\n\n<diff>\n{body}\n</diff>"}]
+
+    kept, over = fit(client, files, render)
+    response = client.beta.messages.create(
+        model=MODEL,
+        max_tokens=16000,
+        betas=["server-side-fallback-2026-07-01"],
+        fallbacks="default",
+        output_config={"effort": "high"},
+        system=PROMPT,
+        messages=render(kept),
     )
-    try:
-        response = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=16000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={"effort": "high"},
-            system=PROMPT,
-            messages=[{
-                "role": "user",
-                "content": f"PR #{pr}: {meta['title']}\n\n{meta.get('body') or ''}\n\n<diff>\n{diff}\n</diff>",
-            }],
-        )
-    except anthropic.APIStatusError as e:
-        print(f"Claude review failed: HTTP {e.status_code}: {e.message}", file=sys.stderr)
-        return 1
-
     if response.stop_reason == "refusal":
         text = "Claude declined to review this diff."
     else:
         text = "".join(b.text for b in response.content if b.type == "text").strip()
         if response.stop_reason == "max_tokens":
             text += "\n\n> Note: the review hit its length limit and may be incomplete."
-    head = meta["headRefOid"][:8]
-    post(pr, f"### Claude review of `{head}`\n\n{text}{note}\n\n<sub>{response.model}, "
-             f"{response.usage.input_tokens:,} in / {response.usage.output_tokens:,} out tokens</sub>")
-    return 0
+    sha = meta["headRefOid"]
+    return (f"{head_marker(sha)}\n### Claude review of `{sha[:8]}`\n\n{text}"
+            f"{left_out_note(generated, over)}\n\n<sub>{response.model}, "
+            f"{response.usage.input_tokens:,} in / {response.usage.output_tokens:,} out tokens</sub>")
+
+
+def default_client():
+    return anthropic.Anthropic(
+        default_headers={"anthropic-workspace-id": os.environ["ANTHROPIC_WORKSPACE_ID"]})
+
+
+def main(client_factory=default_client) -> int:
+    pr = os.environ["PR_NUMBER"]
+    try:
+        meta = json.loads(gh("pr", "view", pr, "--json", "title,body,headRefOid"))
+        existing = sticky(pr)
+        # Only a successful review carries the head marker, so a failure is retried.
+        if existing and head_marker(meta["headRefOid"]) in existing["body"]:
+            print(f"Head {meta['headRefOid'][:8]} already reviewed; skipping.")
+            return 0
+        diff = gh("pr", "diff", pr)
+    except subprocess.CalledProcessError as e:
+        print(f"gh failed ({e.returncode}): {e.stderr}", file=sys.stderr)
+        return 1
+
+    failed = None
+    try:
+        body = review(client_factory(), pr, meta, diff)
+    except anthropic.APIStatusError as e:
+        failed = f"HTTP {e.status_code}: {e.message}"
+    except anthropic.APIError as e:
+        failed = f"{type(e).__name__}: {e.message}"
+    if failed:
+        print(f"Claude review failed: {failed}", file=sys.stderr)
+        body = (f"### Claude review of `{meta['headRefOid'][:8]}` failed\n\n"
+                f"The API call failed ({failed}). Push again or re-run the workflow to retry.")
+    try:
+        post(pr, body, existing)
+    except subprocess.CalledProcessError as e:
+        print(f"gh failed ({e.returncode}): {e.stderr}", file=sys.stderr)
+        return 1
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

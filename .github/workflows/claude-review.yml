@@ -2,7 +2,7 @@
 # whose quota ran out on 2026-09-05). Calls the Claude API directly, billed to
 # the Console organisation behind the ANTHROPIC_API_KEY repository secret.
 #
-# Fork PRs and Dependabot PRs are skipped: they get no secrets, and this repo
+# Draft PRs are skipped (review once ready). Fork PRs and Dependabot PRs are skipped: they get no secrets, and this repo
 # is public. The job only reads the diff and posts one sticky comment.
 name: Claude PR review
 
@@ -23,15 +23,22 @@ jobs:
   review:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
+      && !github.event.pull_request.draft
       && github.actor != 'dependabot[bot]'
+      && github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
       - name: Install the Anthropic SDK
-        # Exact version (published 2026-10-08), wheels only: no setup scripts run.
+        # anthropic==1.12.1 and its dependencies, locked by hash
+        # (requirements.in -> uv pip compile --generate-hashes); wheels only.
         run: >-
-          pip install --quiet --only-binary ':all:' 'anthropic==1.12.1'
+          pip install --quiet --require-hashes --only-binary ':all:'
+          -r .github/scripts/requirements.txt
       - name: Review the diff
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
