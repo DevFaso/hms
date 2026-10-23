@@ -519,7 +519,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // so only a value that differs is refused.
         // The status move is judged first, so a refused move says why.
         InvoiceStatus nextStatus = requestedStatusOnUpdate(invoice.getStatus(), dto.getStatus(), hasPayments);
-        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+        boolean wasDraft = invoice.getStatus() == InvoiceStatus.DRAFT;
+        if (!wasDraft) {
             requireIssuedContentUnchanged(invoice, dto);
         }
         // QA D303/D308: a body without an encounter reference keeps the visit
@@ -543,7 +544,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D91: amountPaid is never taken from the form.
         invoice.setStatus(nextStatus);
-        invoice.setNotes(dto.getNotes());
+        // D656: an issued invoice keeps its notes (checked unchanged above).
+        if (wasDraft) {
+            invoice.setNotes(dto.getNotes());
+        }
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: issuing the visit invoice takes over the check-in copay.
@@ -552,19 +556,29 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /**
-     * QA D656: the dates, total and visit of an issued invoice do not change.
-     * Notes stay editable: they are the office's annotation, not what the
-     * patient is billed.
+     * QA D656: the dates, total, visit and notes of an issued invoice do not
+     * change (round-9 re-test: notes were still editable on a SENT invoice).
+     * Cancel or credit are the only ways forward.
      */
     private void requireIssuedContentUnchanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {
         boolean changed = !java.util.Objects.equals(dto.getInvoiceDate(), invoice.getInvoiceDate())
             || !java.util.Objects.equals(dto.getDueDate(), invoice.getDueDate())
             || (dto.getTotalAmount() != null && invoice.getTotalAmount() != null
                 && dto.getTotalAmount().compareTo(invoice.getTotalAmount()) != 0)
-            || encounterChanged(invoice, dto);
+            || encounterChanged(invoice, dto)
+            || notesChanged(invoice, dto);
         if (changed) {
             throw new BusinessException("billing.invoice.issuedLocked");
         }
+    }
+
+    /** D656: the edit form echoes the stored notes; null means "not sent". */
+    private static boolean notesChanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {
+        if (dto.getNotes() == null) {
+            return false;
+        }
+        String stored = invoice.getNotes() == null ? "" : invoice.getNotes().trim();
+        return !dto.getNotes().trim().equals(stored);
     }
 
     private static boolean encounterChanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {

@@ -817,10 +817,38 @@ class BillingInvoiceServiceImplTest {
         when(patientRepository.findById(same.getId())).thenReturn(Optional.of(same));
         when(registrationRepository.existsByPatientIdAndHospitalId(same.getId(), HOSPITAL_ID)).thenReturn(true);
 
-        billingInvoiceService.updateInvoice(invoice.getId(), editOf().patientId(same.getId()).notes("x").build(),
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().patientId(same.getId()).build(),
             Locale.ENGLISH);
 
-        assertEquals("x", invoice.getNotes());
+        assertEquals(same.getId(), invoice.getPatient().getId());
+        verify(invoiceRepository).save(invoice);
+    }
+
+    /** QA D656 re-test (bill3.js): PUT notes 'changed' on a SENT invoice returned 200. */
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsNotes_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        invoice.setNotes("QA-R9RT2");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().notes("changed").status(InvoiceStatus.SENT).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.issuedLocked", refused.getMessageKey());
+        assertEquals("QA-R9RT2", invoice.getNotes());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    /** D656: the edit form echoes the stored notes; that is not an edit. */
+    @Test
+    void updateInvoice_anIssuedInvoiceAcceptsItsEchoedNotes_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        invoice.setNotes("QA-R9RT2");
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().notes("QA-R9RT2").status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+        assertEquals("QA-R9RT2", invoice.getNotes());
     }
 
     /** QA D656: PUT invoiceDate on SENT invoice ae8e18f2 returned 200 and moved the date. */

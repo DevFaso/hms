@@ -82,6 +82,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
         requireMovementIsAccountable(dto, item, lot);
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
+            requireWholeUnitsWhenCounted(item, dto.getQuantity()); // QA D668
             // QA D604: the dispense row first (the lock its cancel takes), then the item.
             requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
@@ -267,11 +268,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      * transfer) keeps the lot / item bound below.
      */
     private void requireReturnWithinDispense(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
-        if (dispenseRepository == null) {
+        if (dto.getReferenceId() == null) {
+            attributeUnreferencedReturn(dto, item, lot);
             return;
         }
-        if (dto.getReferenceId() == null) {
-            attributeUnreferencedReturn(dto, lot);
+        if (dispenseRepository == null) {
             return;
         }
         com.example.hms.model.pharmacy.Dispense dispense =
@@ -301,54 +302,49 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     }
 
     /**
-     * QA D653: a return that names no dispense put 4 units back on a lot
-     * whose 4-unit fill was then cancelled, which put the same 4 back again.
-     * Every stock-in for a dispensed fill counts against that fill: an
-     * unreferenced return to a lot with fills still out is booked against
-     * the most recent fill that can take all of it (locked, as a referenced
-     * return and the cancel lock it), so the cancel of that fill only puts
-     * back what is still out. A return larger than any single open fill
-     * must be split, or name its dispense. A lot with no fill still out
-     * keeps the lot bound (transferred stock coming back).
+     * QA D653 then D668: a return that names no dispense was booked against
+     * whichever open fill could take it, another prescription's included
+     * (round-9 re-test). A return of a dispensed item names its dispense
+     * now; a return without one only gives back stock that left this lot
+     * (or item) by an unreferenced transfer and has not come back yet.
      */
-    private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, StockLot lot) {
-        if (lot == null) {
-            return;
+    private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        inventoryItemRepository.lockById(item.getId());
+        BigDecimal transferred;
+        BigDecimal returned;
+        if (lot != null) {
+            transferred = stockTransactionRepository.sumQuantityForLot(lot.getId(), TRANSFERRED_TYPES);
+            returned = stockTransactionRepository.sumUnreferencedQuantityForLot(lot.getId(), RETURNED_TYPES);
+        } else {
+            transferred = stockTransactionRepository.sumQuantityForItem(item.getId(), TRANSFERRED_TYPES);
+            returned = stockTransactionRepository.sumUnreferencedQuantityForItem(item.getId(), RETURNED_TYPES);
         }
-        List<com.example.hms.model.pharmacy.Dispense> open = dispenseRepository
-                .findByStockLot_IdAndStatusInOrderByCreatedAtDesc(lot.getId(), RETURNABLE_FILL_STATUSES);
-        if (open == null || open.isEmpty()) {
-            return;
-        }
-        BigDecimal largestOut = BigDecimal.ZERO;
-        for (com.example.hms.model.pharmacy.Dispense listed : open) {
-            // Re-read under the lock its cancel takes: a fill cancelled since
-            // the list was read has already gone back to stock.
-            BigDecimal out = stillOutUnderLock(listed.getId());
-            if (out.signum() > 0 && dto.getQuantity().compareTo(out) <= 0) {
-                dto.setReferenceId(listed.getId());
-                return;
-            }
-            largestOut = largestOut.max(out);
-        }
-        if (largestOut.signum() > 0) {
-            throw new BusinessException("stockTransaction.return.referenceRequired",
-                    largestOut.stripTrailingZeros().toPlainString());
+        if (dto.getQuantity().compareTo(nz(transferred).subtract(nz(returned))) > 0) {
+            throw new BusinessException("stockTransaction.return.dispenseRequired");
         }
     }
 
-    /** What a fill still has out, read under its lock; zero once it is no longer a returnable fill. */
-    private BigDecimal stillOutUnderLock(UUID dispenseId) {
-        return dispenseRepository.findLockedById(dispenseId)
-                .filter(d -> RETURNABLE_FILL_STATUSES.contains(d.getStatus()))
-                .map(d -> nz(d.getQuantityDispensed()).subtract(nz(
-                        stockTransactionRepository.sumQuantityForReference(d.getId(), RETURNED_TYPES))))
-                .orElse(BigDecimal.ZERO);
+    private static final Set<StockTransactionType> TRANSFERRED_TYPES =
+            java.util.EnumSet.of(StockTransactionType.TRANSFER);
+
+    /**
+     * QA D668: a return of 0.5 was accepted on a lot counted in tablets.
+     * An item whose unit is not a measure (ml, g, ...) is counted in whole
+     * units, so its returns are whole too.
+     */
+    static void requireWholeUnitsWhenCounted(InventoryItem item, BigDecimal quantity) {
+        if (quantity == null || quantity.stripTrailingZeros().scale() <= 0) {
+            return;
+        }
+        String unit = item.getUnit() == null ? "" : item.getUnit().trim().toLowerCase(java.util.Locale.ROOT);
+        if (!MEASURED_UNITS.contains(unit)) {
+            throw new BusinessException("stockTransaction.return.wholeUnitsOnly");
+        }
     }
 
-    private static final java.util.Set<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATUSES =
-            java.util.EnumSet.of(com.example.hms.enums.DispenseStatus.COMPLETED,
-                    com.example.hms.enums.DispenseStatus.PARTIAL);
+    /** Units a quantity is measured (not counted) in; anything else is counted. */
+    static final Set<String> MEASURED_UNITS = Set.of(
+            "ml", "l", "cl", "dl", "g", "mg", "kg", "mcg", "µg", "ug", "ui", "iu");
 
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;

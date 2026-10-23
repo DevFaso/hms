@@ -104,6 +104,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /** D414: an inpatient whose stay has no encounter yet gets it opened, never a phantom consultation. */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+    /** D654: a catalog pick carries its code into the order. */
+    private final com.example.hms.repository.MedicationCatalogItemRepository medicationCatalogItemRepository;
 
     @Override
     @Transactional
@@ -144,6 +146,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // DECISION SUPPORT: Check allergies before prescribing
         String allergyOverride = checkAllergyConflicts(patient, request);
+
+        applyCatalogPick(request, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
@@ -935,6 +939,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before updating prescription
         String allergyOverride = checkAllergyConflicts(patient, request);
 
+        applyCatalogPick(request, hospitalId);
+
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
@@ -1568,4 +1574,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return advisories;
     }
 
+
+    /**
+     * D654: a prescription created from a catalog pick (medicationCatalogItemId
+     * without medicationCode) takes the item's code, so the response reads the
+     * catalog's controlled flag. The item must belong to the order's hospital.
+     */
+    private void applyCatalogPick(PrescriptionRequestDTO request, UUID hospitalId) {
+        UUID itemId = request.getMedicationCatalogItemId();
+        if (itemId == null || medicationCatalogItemRepository == null) {
+            return;
+        }
+        com.example.hms.model.medication.MedicationCatalogItem item = medicationCatalogItemRepository
+            .findByIdAndHospital_Id(itemId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+        if ((request.getMedicationCode() == null || request.getMedicationCode().isBlank())
+            && item.getCode() != null && !item.getCode().isBlank()) {
+            request.setMedicationCode(item.getCode());
+        }
+    }
 }
