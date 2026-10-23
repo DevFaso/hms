@@ -140,6 +140,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds() {
         return getAvailableBeds(null);
     }

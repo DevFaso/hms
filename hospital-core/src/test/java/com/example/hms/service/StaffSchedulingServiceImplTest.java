@@ -441,7 +441,8 @@ class StaffSchedulingServiceImplTest {
         StaffShiftRequestDTO move = new StaffShiftRequestDTO(doctorA.getId(), hospitalB, null,
             TODAY.plusDays(1), LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
 
-        assertThatThrownBy(() -> service.updateShift(shift.getId(), move, Locale.ENGLISH))
+        UUID shiftId = shift.getId();
+        assertThatThrownBy(() -> service.updateShift(shiftId, move, Locale.ENGLISH))
             .isInstanceOf(BusinessRuleException.class)
             .hasMessageContaining("schedule.shift.hospital.immutable");
         verify(shiftRepository, never()).save(any(StaffShift.class));

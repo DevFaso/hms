@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -77,7 +78,7 @@ class GeneralReferralControllerTest {
     @AfterEach
     void resetMocks() {
         Mockito.reset(referralService, referralExpiryService, roleValidator);
-        Mockito.when(recordsWithheldHeaders.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
+        when(recordsWithheldHeaders.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
             .thenReturn(new org.springframework.http.HttpHeaders());
     }
 
@@ -472,24 +473,24 @@ class GeneralReferralControllerTest {
     static class ControllerTestConfig {
         @Bean
         GeneralReferralService referralService() {
-            return Mockito.mock(GeneralReferralService.class);
+            return mock(GeneralReferralService.class);
         }
 
         @Bean
         ReferralExpiryService referralExpiryService() {
-            return Mockito.mock(ReferralExpiryService.class);
+            return mock(ReferralExpiryService.class);
         }
 
         @Bean
         RoleValidator roleValidator() {
-            return Mockito.mock(RoleValidator.class);
+            return mock(RoleValidator.class);
         }
 
         @Bean
         com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheldHeaders() {
             com.example.hms.controller.support.RecordsWithheldHeaders headers =
-                Mockito.mock(com.example.hms.controller.support.RecordsWithheldHeaders.class);
-            Mockito.when(headers.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
+                mock(com.example.hms.controller.support.RecordsWithheldHeaders.class);
+            when(headers.forRead(Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(new org.springframework.http.HttpHeaders());
             return headers;
         }

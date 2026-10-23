@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -153,7 +154,7 @@ class RecordSharingOptOutServiceImplTest {
             service.revoke(patientId, actorUserId, Locale.ENGLISH);
 
             ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
-            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+            verify(auditEventLogService, times(2)).logEvent(audit.capture());
             assertThat(audit.getAllValues()).allSatisfy(row -> {
                 assertThat(row.getHospitalId()).isEqualTo(hospitalA);
                 assertThat(row.getHospitalName()).isEqualTo("Hopital A");

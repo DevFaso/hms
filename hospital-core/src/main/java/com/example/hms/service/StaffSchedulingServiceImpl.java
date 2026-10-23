@@ -57,6 +57,8 @@ import java.util.UUID;
 @Slf4j
 public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
+    private static final String SHIFT_TIME_RANGE_INVALID_KEY = "schedule.shift.timeRange.invalid";
+
     private static final String DATE_RANGE_INVALID_KEY = "schedule.dateRange.invalid";
     private static final Set<StaffLeaveStatus> ACTIVE_LEAVE_STATUSES =
         EnumSet.of(StaffLeaveStatus.PENDING, StaffLeaveStatus.APPROVED);
@@ -118,7 +120,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
         }
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", effectiveLocale));
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, effectiveLocale));
         }
         ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), effectiveLocale);
 
@@ -524,7 +526,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
         }
         ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), locale);
         // QA D282: two concurrent submits both passed the check below and both
@@ -611,7 +613,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
      */
     private void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end, Locale locale) {
         if (isCrossMidnight(start, end) && type != null && !CROSS_MIDNIGHT_TYPES.contains(type)) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
         }
     }
 

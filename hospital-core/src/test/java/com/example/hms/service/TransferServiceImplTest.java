@@ -188,8 +188,8 @@ class TransferServiceImplTest {
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .satisfies(e -> org.assertj.core.api.Assertions.assertThat(
                 ((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.ward.maternityMismatch"));
-        org.mockito.Mockito.verify(bedAssignmentService, org.mockito.Mockito.never()).reserveBed(any(), any());
-        org.mockito.Mockito.verify(transferOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+        verify(transferOrderRepository, never()).save(any());
     }
 
     /** QA D609 path re-verified: an adult woman may still be transferred to the maternity bed. */
@@ -200,7 +200,7 @@ class TransferServiceImplTest {
 
         service.requestTransfer(base().build());
 
-        org.mockito.Mockito.verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
     }
 
 
