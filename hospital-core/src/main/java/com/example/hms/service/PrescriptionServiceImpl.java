@@ -61,6 +61,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
         "The prescriber is not on the care team of this patient's stay.";
 
@@ -246,7 +247,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), hospitalId),
-            "Cross-hospital prescription read on the treatment relationship");
+            CROSS_HOSPITAL_READ);
         return true;
     }
 
@@ -879,7 +880,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-            "Cross-hospital prescription read on the treatment relationship");
+            CROSS_HOSPITAL_READ);
         return rows;
     }
 
@@ -1038,7 +1039,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId);
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                "Cross-hospital prescription read on the treatment relationship");
+                CROSS_HOSPITAL_READ);
             return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)
                 .toList();

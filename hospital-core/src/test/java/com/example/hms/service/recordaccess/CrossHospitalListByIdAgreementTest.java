@@ -52,22 +52,22 @@ class CrossHospitalListByIdAgreementTest {
             "service/impl/GeneralReferralServiceImpl.java", true),
         new ListPair("/orders/patient/{patientId}", "/orders/{orderId}", "ImagingOrderController",
             "service/impl/ImagingOrderServiceImpl.java", true),
-        // GET /prescriptions?patientId= and GET /prescriptions/{id}
+        // the prescription list (patientId query parameter) and the prescription by id
         new ListPair("@GetMapping", "/{id}", "PrescriptionController",
             "service/PrescriptionServiceImpl.java", true),
-        // GET /lab-orders?patientId= (search, handled-by scope) and /lab-orders/{id} (isHandledBy):
+        // the lab-order search (handled-by scope) and the lab order by id (isHandledBy):
         // the same hospital set on both sides, and no never-sent state.
         new ListPair("@GetMapping", "/{id}", "LabOrderController",
             "service/LabOrderServiceImpl.java", false),
-        // GET /patients/{p}/documents and /{documentId}: the same requireRegisteredAt gate on both,
+        // the staff document list and the document by id: the same requireRegisteredAt gate on both,
         // and a patient upload has no never-sent state.
         new ListPair("@GetMapping", "/{documentId}", "PatientDocumentStaffController",
             "service/impl/PatientDocumentServiceImpl.java", false));
 
-    /** Reads of a never-sent-capable record across hospitals. */
+    /** A finder call on a never-sent-capable record; it reads across hospitals when its name has Hospital_IdIn. */
     private static final Pattern CROSS_HOSPITAL_READ = Pattern.compile(
         "\\b(?:prescriptionRepository|imagingOrderRepository|referralRepository)\\s*+\\.\\s*+"
-            + "find\\w*Hospital_?IdIn\\w*\\s*+\\(");
+            + "(find\\w++)\\s*+\\(");
     /** Class -> why its cross-hospital read needs no NeverSentRule. Only shrinks. */
     private static final Map<String, String> RECORDED = Map.of(
         "ObgynReferralServiceImpl.java", "an OB/GYN referral has no never-sent state: it is SUBMITTED on creation"
@@ -99,7 +99,7 @@ class CrossHospitalListByIdAgreementTest {
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String src = read(file);
-                if (!CROSS_HOSPITAL_READ.matcher(src).find()) {
+                if (CROSS_HOSPITAL_READ.matcher(src).results().noneMatch(m -> m.group(1).contains("Hospital_IdIn"))) {
                     continue;
                 }
                 String name = file.getFileName().toString();

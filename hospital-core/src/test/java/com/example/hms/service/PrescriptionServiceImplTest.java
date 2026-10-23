@@ -3549,8 +3549,8 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
             .thenReturn(Set.of(hospitalId, hospitalA));
-        when(prescriptionRepository.findSentAcrossHospitals(eq(patientId), eq(Set.of(hospitalId, hospitalA)),
-            eq(hospitalId), eq(PrescriptionServiceImpl.NEVER_SENT), eq(pageable)))
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospitalId, hospitalA),
+            hospitalId, PrescriptionServiceImpl.NEVER_SENT, pageable))
             .thenReturn(new PageImpl<>(List.of()));
 
         prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
