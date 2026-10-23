@@ -5612,6 +5612,8 @@
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
         "LICENSE_EXPIRY": "Expiration de licence",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
+        "OBSTETRIC_ALERT": "Alerte obstétricale urgente",
+        "OBSTETRIC_ALERT_ESCALATION": "Escalade d’alerte obstétricale urgente",
         "POSITIVE_CULTURE_RESULT": "Culture positive",
         "PRO_CRITICAL_ITEM": "Élément PRO critique",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",

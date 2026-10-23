@@ -262,7 +262,13 @@ public class ObstetricAlertEscalationWorker {
 
     private void notifyQuietly(String message, String username, String type, UUID escalationId) {
         try {
-            notificationService.createNotification(message, username, type);
+            // Literal constants, so NotificationTypeLabelCoverageTest can see
+            // every type this worker emits and require a label for each.
+            if (ESCALATION_TYPE.equals(type)) {
+                notificationService.createNotification(message, username, ESCALATION_TYPE);
+            } else {
+                notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            }
         } catch (RuntimeException ex) {
             log.warn("Obstetric alert {} notification not created: {}", escalationId, ex.getClass().getSimpleName());
         }

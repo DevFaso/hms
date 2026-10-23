@@ -5646,6 +5646,8 @@
         "DISCHARGE_SUMMARY": "Informe de alta",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
+        "OBSTETRIC_ALERT": "Alerta obstétrica urgente",
+        "OBSTETRIC_ALERT_ESCALATION": "Escalamiento de alerta obstétrica urgente",
         "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
         "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
