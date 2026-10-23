@@ -1274,7 +1274,27 @@ public class DispenseServiceImpl implements DispenseService {
                 ? BigDecimal.ZERO : dispense.getQuantityDispensed();
         BigDecimal returned = stockTransactionRepository.sumQuantityForReference(
                 dispense.getId(), java.util.EnumSet.of(StockTransactionType.RETURN));
-        return dispensed.subtract(returned == null ? BigDecimal.ZERO : returned).max(BigDecimal.ZERO);
+        BigDecimal stillOut = dispensed.subtract(returned == null ? BigDecimal.ZERO : returned)
+                .max(BigDecimal.ZERO);
+        // #926 review: a return that names no dispense is bounded only by the
+        // lot, so it may already have given this fill back. The reversal is
+        // also capped at what left the lot and has not come back, counted
+        // under the item lock every return takes.
+        if (stillOut.signum() > 0 && dispense.getStockLot() != null) {
+            StockLot lot = dispense.getStockLot();
+            inventoryItemRepository.lockById(lot.getInventoryItem().getId());
+            stillOut = stillOut.min(lotStillOut(lot.getId()));
+        }
+        return stillOut.max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal lotStillOut(UUID lotId) {
+        BigDecimal issued = stockTransactionRepository.sumQuantityForLot(lotId,
+                java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER));
+        BigDecimal back = stockTransactionRepository.sumQuantityForLot(lotId,
+                java.util.EnumSet.of(StockTransactionType.RETURN));
+        return (issued == null ? BigDecimal.ZERO : issued)
+                .subtract(back == null ? BigDecimal.ZERO : back).max(BigDecimal.ZERO);
     }
 
     @Override

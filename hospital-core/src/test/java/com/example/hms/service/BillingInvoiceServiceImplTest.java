@@ -728,6 +728,53 @@ class BillingInvoiceServiceImplTest {
         verify(invoiceRepository, never()).deleteById(any());
     }
 
+    /** #926 review: PUT {status:DRAFT} then DELETE hard-deleted an issued invoice. */
+    @Test
+    void sentInvoiceCannotGoBackToDraftThenBeDeleted() {
+        for (InvoiceStatus issued : List.of(InvoiceStatus.SENT)) {
+            BillingInvoice invoice = existingInvoice(issued, "0");
+            UUID invoiceId = invoice.getId();
+            BillingInvoiceRequestDTO toDraft = editOf().status(InvoiceStatus.DRAFT).build();
+
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.updateInvoice(invoiceId, toDraft, Locale.ENGLISH));
+            assertEquals("billing.invoice.noReturnToDraft", refused.getMessageKey(), issued.name());
+            assertEquals(issued, invoice.getStatus());
+
+            assertThrows(com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.deleteInvoice(invoiceId, Locale.ENGLISH));
+        }
+        verify(invoiceRepository, never()).deleteById(any());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    /** #926 review: PUT {status:DRAFT} then PUT {patientId:other} swapped an issued invoice's patient. */
+    @Test
+    void sentInvoiceCannotGoBackToDraftThenChangePatient() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        UUID original = invoice.getPatient().getId();
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID))
+            .thenReturn(true);
+        BillingInvoiceRequestDTO toDraft = editOf().status(InvoiceStatus.DRAFT).build();
+        BillingInvoiceRequestDTO swap = editOf().patientId(other.getId()).build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, toDraft, Locale.ENGLISH));
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, swap, Locale.ENGLISH));
+
+        assertEquals("billing.invoice.patientLockedIssued", refused.getMessageKey());
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+        assertEquals(original, invoice.getPatient().getId());
+        verify(invoiceRepository, never()).save(any());
+    }
+
     /** QA D614: PUT on SENT invoice 22ae400f with patientId changed from A4 to A2 returned 200. */
     @Test
     void updateInvoice_anIssuedInvoiceKeepsItsPatient_D614() {

@@ -618,6 +618,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (requested == InvoiceStatus.PAID || requested == InvoiceStatus.PARTIALLY_PAID) {
             throw new BusinessException("billing.invoice.statusFollowsPayments");
         }
+        // QA D613/D614 (#926 review): an issued invoice holds its number and
+        // its patient; going back to DRAFT would reopen both (delete, patient
+        // swap). Once out of DRAFT it only moves on, or to CANCELLED.
+        if (requested == InvoiceStatus.DRAFT && current != InvoiceStatus.DRAFT) {
+            throw new BusinessException("billing.invoice.noReturnToDraft");
+        }
         // QA D142: a paid or partly paid invoice is cancelled or re-drafted
         // only once its payments are reversed; the message says so.
         if (hasPayments || current == InvoiceStatus.PAID || current == InvoiceStatus.PARTIALLY_PAID) {

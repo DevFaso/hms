@@ -213,6 +213,10 @@ class DispenseServiceImplTest {
                     stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(q));
                     return 1;
                 });
+        // #926 review: by default the lot has issued plenty, so the lot cap does not bind.
+        org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(any(),
+                eq(java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))))
+                .thenReturn(new BigDecimal("1000"));
         org.mockito.Mockito.lenient().when(stockLotRepository.incrementRemaining(any(), any(), any()))
                 .thenAnswer(inv -> {
                     stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().add(inv.getArgument(1)));
@@ -1431,6 +1435,38 @@ class DispenseServiceImplTest {
             verify(stockTransactionRepository).save(tx.capture());
             assertThat(tx.getValue().getReferenceId()).isEqualTo(dispenseId);
             assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("2");
+        }
+
+        /**
+         * #926 review: the portal RETURN form names no dispense, so a RETURN
+         * of 4 on a lot whose only issue is this 4-unit fill was not counted
+         * against the fill, and the cancel put 4 more back (8 for 4). The
+         * reversal is now capped at what is still out of the lot.
+         */
+        @Test
+        @DisplayName("D604: an unreferenced return of the whole fill leaves the cancel nothing to move")
+        void unreferencedReturnLeavesNothingToCancel() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setQuantityDispensed(new BigDecimal("4"));
+            dispense.setStockLot(stockLot);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(stockTransactionRepository.sumQuantityForReference(dispenseId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER)))
+                    .thenReturn(new BigDecimal("4"));
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("4"));
+
+            service.cancelDispense(dispenseId);
+
+            verify(inventoryItemRepository).lockById(inventoryItem.getId());
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
         }
 
         @Test
