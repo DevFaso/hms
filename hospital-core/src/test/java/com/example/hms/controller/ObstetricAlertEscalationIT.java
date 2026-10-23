@@ -19,6 +19,8 @@ import com.example.hms.payload.dto.clinical.labor.LaborEpisodeRequestDTO;
 import com.example.hms.payload.dto.clinical.labor.PartographEntryRequestDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InBasketItemRepository;
+import com.example.hms.repository.OnCallScheduleRepository;
+import com.example.hms.model.OnCallSchedule;
 import com.example.hms.repository.NotificationRepository;
 import com.example.hms.repository.ObstetricAlertEscalationRepository;
 import com.example.hms.repository.OrganizationRepository;
@@ -88,6 +90,7 @@ class ObstetricAlertEscalationIT extends BaseIT {
     @Autowired private InBasketItemRepository inBasketItemRepository;
     @Autowired private ObstetricAlertEscalationRepository escalationRepository;
     @Autowired private ObstetricAlertEscalationScheduler scheduler;
+    @Autowired private OnCallScheduleRepository onCallScheduleRepository;
 
     private final AtomicInteger sequence = new AtomicInteger();
 
@@ -214,6 +217,46 @@ class ObstetricAlertEscalationIT extends BaseIT {
         assertThat(notificationsOf(nurse)).hasSize((int) nurseBefore);
     }
 
+    @Test
+    @DisplayName("QA D605: a lab technician alone on call never takes the first notice; admins never get patient data")
+    void nonClinicalOnCallFallsBackToTheTeamAndAdminsHearNothing() throws Exception {
+        Actor labTech = staffActor("labtech", "ROLE_LAB_TECHNICIAN", JobTitle.LAB_TECHNICIAN, hospital);
+        Actor admin = staffActor("admin", "ROLE_HOSPITAL_ADMIN", JobTitle.HOSPITAL_ADMIN, hospital);
+        onCallScheduleRepository.save(OnCallSchedule.builder()
+            .staff(staffRepository.findAll().stream()
+                .filter(st -> st.getUser().getId().equals(labTech.user().getId())).findFirst().orElseThrow())
+            .startTime(java.time.OffsetDateTime.now().minusHours(1))
+            .endTime(java.time.OffsetDateTime.now().plusHours(8))
+            .build());
+
+        UUID episodeId = startEpisode();
+        PartographEntryRequestDTO entry = new PartographEntryRequestDTO();
+        entry.setObservationTime(LocalDateTime.now().withNano(0));
+        entry.setFetalHeartRateBpm(95);
+        mockMvc.perform(post(API + "/patients/{p}/labor/episodes/{e}/entries", patient.getId(), episodeId)
+                .contextPath(API).param("hospitalId", hospital.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(entry))
+                .with(signedInAs(midwife)).with(csrf()))
+            .andExpect(status().isCreated());
+
+        List<ObstetricAlertEscalation> rows = escalationRepository.findAll();
+        assertThat(rows).isNotEmpty();
+        assertThat(notificationsOf(doctor))
+            .filteredOn(n -> ObstetricAlertEscalationWorker.NOTIFICATION_TYPE.equals(n.getType()))
+            .as("the doctor hears at once, not 15 minutes later").hasSize(rows.size());
+        assertThat(inBasketOf(doctor)).hasSize(rows.size());
+        assertThat(notificationsOf(labTech)).isEmpty();
+        assertThat(inBasketOf(labTech)).isEmpty();
+
+        backdate(rows);
+        sweep();
+        assertThat(escalationRepository.findAll()).allSatisfy(r -> assertThat(r.getEscalationLevel()).isEqualTo((short) 1));
+        assertThat(notificationsOf(admin)).as("admins are off the chart (D5)").isEmpty();
+        assertThat(inBasketOf(admin)).as("admins are off the in-basket (D5)").isEmpty();
+        assertThat(notificationsOf(labTech)).isEmpty();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private UUID startEpisode() throws Exception {
@@ -267,6 +310,7 @@ class ObstetricAlertEscalationIT extends BaseIT {
 
     private void wipe() {
         escalationRepository.deleteAllInBatch();
+        onCallScheduleRepository.deleteAllInBatch();
         SharedClinicalRowsCleanup.deleteAll(applicationContext);
     }
 

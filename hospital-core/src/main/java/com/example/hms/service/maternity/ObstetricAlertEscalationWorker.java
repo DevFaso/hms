@@ -45,10 +45,13 @@ import java.util.UUID;
  *
  * <p>Who hears about an alert:
  * <ul>
- *   <li><b>First notice</b>: whoever is on call at the alert's hospital now;
- *       when nobody is on the rota, the hospital's doctors and midwives.</li>
+ *   <li><b>First notice</b>: the doctors and midwives on call at the alert's
+ *       hospital now; when none of them is on the rota (nobody, or only a lab
+ *       technician or pharmacist), every doctor and midwife of the hospital.</li>
  *   <li><b>Each reminder</b>: the same circle, plus every doctor, midwife and
- *       nurse of the hospital and its administrators.</li>
+ *       nurse of the hospital. Hospital administrators are deliberately left
+ *       out: they are off the chart and the in-basket (decision D5), and every
+ *       message here carries the patient's name and clinical text.</li>
  * </ul>
  * Recipients always come from the alert's own hospital, never the caller's.
  * The clinician who documented the alert is told separately by the module
@@ -63,9 +66,8 @@ public class ObstetricAlertEscalationWorker {
     public static final String NOTIFICATION_TYPE = "OBSTETRIC_ALERT";
     public static final String ESCALATION_TYPE = "OBSTETRIC_ALERT_ESCALATION";
 
-    private static final List<String> FIRST_NOTICE_FALLBACK_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE");
-    private static final List<String> REMINDER_ROLES =
-        List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE", "ROLE_HOSPITAL_ADMIN");
+    private static final List<String> FIRST_NOTICE_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE");
+    private static final List<String> REMINDER_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE");
     private static final int TITLE_MAX = 500;
 
     private final ObstetricAlertEscalationRepository escalationRepository;
@@ -157,20 +159,30 @@ public class ObstetricAlertEscalationWorker {
         return true;
     }
 
-    /** On call at the hospital now; the doctors and midwives when nobody is. */
+    /**
+     * The doctors and midwives on call at the hospital now; all its doctors and
+     * midwives when none of them is. An on-call lab technician or pharmacist
+     * never takes the first notice alone.
+     */
     Set<String> firstNoticeRecipients(UUID hospitalId) {
-        Set<String> recipients = new LinkedHashSet<>(onCallUsernames(hospitalId));
-        if (recipients.isEmpty()) {
-            for (String role : FIRST_NOTICE_FALLBACK_ROLES) {
-                recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
+        Set<String> obstetricTeam = new LinkedHashSet<>();
+        for (String role : FIRST_NOTICE_ROLES) {
+            obstetricTeam.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
+        }
+        Set<String> teamLower = new LinkedHashSet<>();
+        obstetricTeam.forEach(u -> teamLower.add(u.toLowerCase(Locale.ROOT)));
+        Set<String> recipients = new LinkedHashSet<>();
+        for (String username : onCallUsernames(hospitalId)) {
+            if (teamLower.contains(username.toLowerCase(Locale.ROOT))) {
+                recipients.add(username);
             }
         }
-        return recipients;
+        return recipients.isEmpty() ? obstetricTeam : recipients;
     }
 
-    /** The first circle widened to the hospital's clinical staff and administrators. */
+    /** The first circle widened to the hospital's doctors, midwives and nurses. */
     Set<String> reminderRecipients(UUID hospitalId) {
-        Set<String> recipients = new LinkedHashSet<>(onCallUsernames(hospitalId));
+        Set<String> recipients = new LinkedHashSet<>(firstNoticeRecipients(hospitalId));
         for (String role : REMINDER_ROLES) {
             recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
         }
