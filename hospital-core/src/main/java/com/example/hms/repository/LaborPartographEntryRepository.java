@@ -11,4 +11,7 @@ public interface LaborPartographEntryRepository extends JpaRepository<LaborParto
     List<LaborPartographEntry> findByEpisode_IdOrderByObservationTimeAsc(UUID episodeId);
 
     long countByEpisode_Id(UUID episodeId);
+
+    /** QA D605: the latest charted entry of an episode, to tell whether an urgent alert still stands. */
+    java.util.Optional<LaborPartographEntry> findFirstByEpisode_IdOrderByObservationTimeDesc(UUID episodeId);
 }

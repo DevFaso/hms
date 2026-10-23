@@ -191,6 +191,44 @@ class ObstetricAlertEscalationIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D605: a later normal partograph entry ends the reminders")
+    void laterNormalEntryStopsTheReminders() throws Exception {
+        UUID episodeId = startEpisode();
+        LocalDateTime urgentAt = LocalDateTime.now().minusMinutes(20).withNano(0);
+        PartographEntryRequestDTO urgent = new PartographEntryRequestDTO();
+        urgent.setObservationTime(urgentAt);
+        urgent.setFetalHeartRateBpm(95);
+        postEntry(episodeId, urgent);
+        assertThat(escalationRepository.findAll()).isNotEmpty();
+
+        PartographEntryRequestDTO normal = new PartographEntryRequestDTO();
+        normal.setObservationTime(urgentAt.plusMinutes(15));
+        normal.setFetalHeartRateBpm(140);
+        postEntry(episodeId, normal);
+
+        long nurseBefore = notificationsOf(nurse).size();
+        long doctorBefore = notificationsOf(doctor).size();
+        backdate(escalationRepository.findAll());
+        sweep();
+        assertThat(escalationRepository.findAll()).allSatisfy(r -> {
+            assertThat(r.getEscalationLevel()).isZero();
+            assertThat(r.getAcknowledgedAt()).isNotNull();
+            assertThat(r.getAcknowledgedBy()).as("closed by the record, not a person").isNull();
+        });
+        assertThat(notificationsOf(nurse)).hasSize((int) nurseBefore);
+        assertThat(notificationsOf(doctor)).hasSize((int) doctorBefore);
+    }
+
+    private void postEntry(UUID episodeId, PartographEntryRequestDTO entry) throws Exception {
+        mockMvc.perform(post(API + "/patients/{p}/labor/episodes/{e}/entries", patient.getId(), episodeId)
+                .contextPath(API).param("hospitalId", hospital.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(entry))
+                .with(signedInAs(midwife)).with(csrf()))
+            .andExpect(status().isCreated());
+    }
+
+    @Test
     @DisplayName("QA D605: escalation stops at the round cap")
     void escalationStopsAtTheCap() throws Exception {
         UUID episodeId = startEpisode();

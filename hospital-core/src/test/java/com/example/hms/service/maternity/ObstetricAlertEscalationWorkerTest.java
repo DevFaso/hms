@@ -61,6 +61,7 @@ class ObstetricAlertEscalationWorkerTest {
     @Mock private NotificationService notificationService;
     @Mock private InBasketService inBasketService;
     @Mock private MessageSource messageSource;
+    @Mock private ObstetricAlertCurrency currency;
 
     private ObstetricAlertEscalationWorker worker;
 
@@ -69,7 +70,7 @@ class ObstetricAlertEscalationWorkerTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-23T10:00:00Z"), ZoneOffset.UTC);
         worker = new ObstetricAlertEscalationWorker(escalationRepository, inBasketItemRepository,
             onCallScheduleRepository, staffRepository, userRepository, patientRepository,
-            notificationService, inBasketService, messageSource, clock);
+            notificationService, inBasketService, messageSource, clock, currency);
         when(userRepository.findById(DOCUMENTER)).thenReturn(Optional.of(user("documenter", DOCUMENTER)));
         when(messageSource.getMessage(any(), any(), any())).thenReturn("msg");
         when(staffRepository.findActiveUsernamesByHospitalAndRole(HOSPITAL, "ROLE_DOCTOR"))
@@ -174,6 +175,19 @@ class ObstetricAlertEscalationWorkerTest {
         assertThat(worker.escalateOne(r.getId())).isFalse();
         assertThat(r.getAcknowledgedBy()).isEqualTo(by);
         verify(escalationRepository).save(r);
+    }
+
+    @Test
+    void escalateOneClosesAnAlertTheRecordNoLongerSupports() {
+        ObstetricAlertEscalation r = row((short) 0);
+        when(escalationRepository.findById(r.getId())).thenReturn(Optional.of(r));
+        when(currency.noLongerUrgent(r)).thenReturn(true);
+        assertThat(worker.escalateOne(r.getId())).isFalse();
+        assertThat(r.getAcknowledgedAt()).isNotNull();
+        assertThat(r.getAcknowledgedBy()).isNull();
+        verify(escalationRepository).save(r);
+        verify(escalationRepository, never()).claimRound(any(), anyShort(), anyShort(), any());
+        verify(notificationService, never()).createNotification(any(), any(), any());
     }
 
     @Test

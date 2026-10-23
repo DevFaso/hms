@@ -80,6 +80,7 @@ public class ObstetricAlertEscalationWorker {
     private final InBasketService inBasketService;
     private final MessageSource messageSource;
     private final Clock clock;
+    private final ObstetricAlertCurrency currency;
 
     @Value("${hms.maternity.alert-escalation.max-rounds:3}")
     private short maxRounds = 3;
@@ -112,7 +113,9 @@ public class ObstetricAlertEscalationWorker {
     /**
      * One reminder for one alert, after re-reading its current state: an
      * alert acknowledged (here or through its in-basket items) or already
-     * escalated since the sweep listed it is left alone.
+     * escalated since the sweep listed it is left alone, and so is one the
+     * clinical record no longer supports ({@link ObstetricAlertCurrency}):
+     * it is closed with an empty acknowledgedBy.
      *
      * @return true when a reminder was sent
      */
@@ -131,6 +134,13 @@ public class ObstetricAlertEscalationWorker {
         if (!acks.isEmpty()) {
             row.setAcknowledgedAt(acks.get(0).getAcknowledgedAt());
             row.setAcknowledgedBy(acks.get(0).getAcknowledgedBy());
+            escalationRepository.save(row);
+            return false;
+        }
+        if (currency.noLongerUrgent(row)) {
+            // Closed by the record itself, not by a person: acknowledgedBy stays empty.
+            row.setAcknowledgedAt(LocalDateTime.now(clock));
+            row.setAcknowledgedBy(null);
             escalationRepository.save(row);
             return false;
         }
