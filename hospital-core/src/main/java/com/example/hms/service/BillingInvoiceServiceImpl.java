@@ -621,7 +621,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D613/D614 (#926 review): an issued invoice holds its number and
         // its patient; going back to DRAFT would reopen both (delete, patient
         // swap). Once out of DRAFT it only moves on, or to CANCELLED.
-        if (requested == InvoiceStatus.DRAFT && current != InvoiceStatus.DRAFT) {
+        if (requested == InvoiceStatus.DRAFT) {
             throw new BusinessException("billing.invoice.noReturnToDraft");
         }
         // QA D142: a paid or partly paid invoice is cancelled or re-drafted

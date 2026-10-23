@@ -11,7 +11,6 @@ import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.model.pharmacy.StockTransaction;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.StockTransactionRequestDTO;
 import com.example.hms.payload.dto.pharmacy.StockTransactionResponseDTO;
 import com.example.hms.repository.UserRepository;
@@ -696,7 +695,8 @@ class StockTransactionServiceImplTest {
             when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
 
-            assertThatThrownBy(() -> service.recordTransaction(returnAgainst(dispense, "3")))
+            StockTransactionRequestDTO request = returnAgainst(dispense, "3");
+            assertThatThrownBy(() -> service.recordTransaction(request))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
 
@@ -733,7 +733,8 @@ class StockTransactionServiceImplTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
 
-            assertThatThrownBy(() -> service.recordTransaction(returnAgainst(dispense, "1")))
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            assertThatThrownBy(() -> service.recordTransaction(request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessage(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
             verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
@@ -750,7 +751,8 @@ class StockTransactionServiceImplTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
 
-            assertThatThrownBy(() -> service.recordTransaction(returnAgainst(dispense, "1")))
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            assertThatThrownBy(() -> service.recordTransaction(request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessage(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
         }

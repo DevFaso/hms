@@ -31,7 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
@@ -215,16 +214,12 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (!quantityValid) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
         }
-        if (type != StockTransactionType.RECEIPT && (dto.getReason() == null || dto.getReason().isBlank())) {
+        if (dto.getReason() == null || dto.getReason().isBlank()) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
         }
         if (lot != null) {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
-            }
-            if (type == StockTransactionType.RECEIPT && lot.getExpiryDate() != null
-                    && lot.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
-                throw new BusinessException(MessageUtil.resolve("stockLot.expired"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
