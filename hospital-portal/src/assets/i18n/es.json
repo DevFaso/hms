@@ -8529,7 +8529,8 @@
       "CLOSE_TITLE": "Cerrar",
       "ACTIVATE": "Activar",
       "ACTIVATE_TITLE": "Activar para solicitudes",
-      "OWN_SUBMISSION_HINT": "Usted envió esta prueba: otro director de laboratorio o responsable de calidad debe revisarla y aprobarla (principio de los cuatro ojos)."
+      "OWN_SUBMISSION_HINT_QA": "Usted envió esta prueba: otro responsable de calidad o director de laboratorio debe completar su revisión de calidad (principio de los cuatro ojos).",
+      "OWN_SUBMISSION_HINT_APPROVE": "Usted envió esta prueba: otro director de laboratorio debe aprobarla (principio de los cuatro ojos)."
     },
     "EMPTY": {
       "TITLE": "La cola está vacía",

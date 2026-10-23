@@ -220,7 +220,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (!ingested) {
             request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
             request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
-        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
 
     UUID currentUserId = authService.getCurrentUserId();

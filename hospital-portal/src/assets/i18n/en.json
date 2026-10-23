@@ -8529,7 +8529,8 @@
       "CLOSE_TITLE": "Close",
       "ACTIVATE": "Activate",
       "ACTIVATE_TITLE": "Activate for ordering",
-      "OWN_SUBMISSION_HINT": "You submitted this definition: another lab director or quality manager must review and approve it (four-eyes rule)."
+      "OWN_SUBMISSION_HINT_QA": "You submitted this definition: another quality manager or lab director must complete its QA review (four-eyes rule).",
+      "OWN_SUBMISSION_HINT_APPROVE": "You submitted this definition: another lab director must approve it (four-eyes rule)."
     },
     "EMPTY": {
       "TITLE": "Queue is clear",
