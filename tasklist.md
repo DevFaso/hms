@@ -5080,16 +5080,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   (fix/qa-r9-tenancy-admissions), and its two displays (admissions list, nurse
   station pending admissions) read it as UTC through `fromServerDateTime`; the
   general fix is still open. Open.
-- **Break-the-glass still confirms a patient id inside one organisation (QA D624,
-  accepted).** fix/qa-r9-tenancy-admissions closed the oracle across organisations:
-  `BreakGlassServiceImpl.declare` answers 404 unless
-  `PatientRepository.isRegisteredWithinOrganizationOf` holds. A hospital of the same
-  organisation still gets 201 for a patient registered only at a sister hospital (the
-  QA round 9 setup, hospitals A and B of one organisation), because D409 asked for
-  break-glass on a patient the reader's hospital has not registered, and E9 #62
-  Tier B reaches the organisation. Narrowing to the declaring hospital would undo
-  D409. The privilege check runs first and every declaration is audited. Accepted
-  debt; revisit only if D409 is withdrawn. Open.
+- **Break-the-glass reach = the caller's patient search scope (QA D624, user decision).**
+  `BreakGlassServiceImpl.declare` answers 403 `breakGlass.patient.outOfScope` (same body
+  for an unknown id and an out-of-scope one) unless
+  `PatientRepository.isFindableByPatientSearch` holds, which uses the same tenant clause as
+  `searchPatientsExtended`. D409 is kept inside that scope. Closed.
 - **A one-person laboratory cannot activate its own test definitions.** Since D48 only
   an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
   SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded

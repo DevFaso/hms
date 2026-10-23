@@ -141,21 +141,28 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
 
     /**
-     * QA D624: whether the patient holds a registration at the hospital itself
-     * or at any hospital of the same organisation. Break-the-glass uses it so a
-     * patient known only to another organisation answers exactly like an
-     * unknown id (no existence oracle), while D409 still reaches a patient the
-     * reader's own hospital has not registered.
+     * QA D624 (user decision): would the caller's patient search find this
+     * patient? The same tenant clause as {@link #searchPatientsExtended}: an
+     * active registration, global view for an unpinned super-admin, otherwise
+     * a registration (or home hospital) among the caller's readable hospitals.
+     * Break-the-glass answers an id outside this scope exactly like an unknown
+     * one, so it reveals nothing the search does not already show.
      */
     @Query("""
         SELECT CASE WHEN COUNT(r) > 0 THEN true ELSE false END
-        FROM PatientHospitalRegistration r, Hospital h
-        WHERE r.patient.id = :patientId AND h.id = :hospitalId
-          AND (r.hospital.id = h.id
-               OR (h.organization IS NOT NULL AND r.hospital.organization = h.organization))
+        FROM PatientHospitalRegistration r JOIN r.patient p
+        WHERE p.id = :patientId
+          AND r.active = true
+          AND (
+                :#{@tenantContext.isGlobalView()} = true OR (
+                  :#{@tenantContext.hasHospitalScope()} = true AND (
+                    (p.hospitalId IS NOT NULL AND p.hospitalId IN :#{@tenantContext.effectiveHospitalIdsOrNone()})
+                    OR (r.hospital.id IS NOT NULL AND r.hospital.id IN :#{@tenantContext.effectiveHospitalIdsOrNone()})
+                  )
+                )
+              )
         """)
-    boolean isRegisteredWithinOrganizationOf(@Param("patientId") UUID patientId,
-                                             @Param("hospitalId") UUID hospitalId);
+    boolean isFindableByPatientSearch(@Param("patientId") UUID patientId);
 
     /**
      * QA D304: row lock on the patient, so two concurrent admissions of the

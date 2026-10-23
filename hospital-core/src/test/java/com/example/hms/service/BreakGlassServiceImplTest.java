@@ -93,8 +93,8 @@ class BreakGlassServiceImplTest {
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
-        // D624: the patient is registered within the hospital's organisation unless a test says otherwise.
-        lenient().when(patientRepository.isRegisteredWithinOrganizationOf(eq(patientId), any())).thenReturn(true);
+        // D624: the caller's patient search finds the patient unless a test says otherwise.
+        lenient().when(patientRepository.isFindableByPatientSearch(patientId)).thenReturn(true);
 
         caller = new User();
         caller.setId(userId);
@@ -328,31 +328,32 @@ class BreakGlassServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D624: DOCTOR_B on a patient known only to hospital A gets exactly the 404 of a random id")
-        void declareForAnotherOrganisationsPatientAnswersAsUnknown() {
+        @DisplayName("QA D624: DOCTOR_B on a patient outside search scope gets exactly the 403 of a random id")
+        void declareForPatientOutsideSearchScopeAnswersAsUnknown() {
             stubAuthenticatedDoctor();
-            UUID patientA1 = UUID.randomUUID();
+            UUID outOfScope = UUID.randomUUID();
             UUID randomId = UUID.randomUUID();
             Patient a1 = new Patient();
-            a1.setId(patientA1);
-            lenient().when(patientRepository.findByIdUnscoped(patientA1)).thenReturn(Optional.of(a1));
+            a1.setId(outOfScope);
+            lenient().when(patientRepository.findByIdUnscoped(outOfScope)).thenReturn(Optional.of(a1));
             lenient().when(patientRepository.findByIdUnscoped(randomId)).thenReturn(Optional.empty());
-            when(patientRepository.isRegisteredWithinOrganizationOf(patientA1, hospitalId)).thenReturn(false);
-            when(patientRepository.isRegisteredWithinOrganizationOf(randomId, hospitalId)).thenReturn(false);
+            when(patientRepository.isFindableByPatientSearch(outOfScope)).thenReturn(false);
+            when(patientRepository.isFindableByPatientSearch(randomId)).thenReturn(false);
 
             List<Throwable> answers = new java.util.ArrayList<>();
-            for (UUID probe : List.of(patientA1, randomId)) {
+            for (UUID probe : List.of(outOfScope, randomId)) {
                 BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
                     .patientId(probe).hospitalId(hospitalId).reason("Unconscious in the ED.").build();
                 Throwable t = org.assertj.core.api.Assertions.catchThrowable(() -> service.declare(req));
-                assertThat(t).isInstanceOf(ResourceNotFoundException.class);
+                assertThat(t).isInstanceOf(UnauthorizedAccessException.class);
                 answers.add(t);
             }
-            ResourceNotFoundException known = (ResourceNotFoundException) answers.get(0);
-            ResourceNotFoundException unknown = (ResourceNotFoundException) answers.get(1);
-            assertThat(known.getClass()).isEqualTo(unknown.getClass());
-            assertThat(known.getMessage().replace(patientA1.toString(), "<id>"))
-                .isEqualTo(unknown.getMessage().replace(randomId.toString(), "<id>"));
+            UnauthorizedAccessException known = (UnauthorizedAccessException) answers.get(0);
+            UnauthorizedAccessException unknown = (UnauthorizedAccessException) answers.get(1);
+            assertThat(known.getMessage()).isEqualTo("breakGlass.patient.outOfScope").isEqualTo(unknown.getMessage());
+            assertThat(known.getArgs()).isEmpty();
+            assertThat(unknown.getArgs()).isEmpty();
+            verify(patientRepository, never()).findByIdUnscoped(any());
             verify(sessionRepository, never()).save(any());
             verify(patientNotifier, never()).notifyIfOptedOut(any(), any());
         }

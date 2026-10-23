@@ -1,8 +1,6 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
@@ -50,9 +48,6 @@ class PatientRepositoryRegistrationScopeTest {
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private OrganizationRepository organizationRepository;
 
     private Hospital first;
     private Hospital second;
@@ -139,23 +134,42 @@ class PatientRepositoryRegistrationScopeTest {
     }
 
     @Test
-    @DisplayName("QA D624: break-the-glass reach is the hospital's registrations or its organisation's")
-    void registeredWithinOrganization() {
-        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
-        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, second.getId())).isTrue();
-        // C has no registration and no organisation: answered as for an unknown id.
-        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, elsewhere.getId())).isFalse();
-        assertThat(patientRepository.isRegisteredWithinOrganizationOf(UUID.randomUUID(), second.getId())).isFalse();
+    @DisplayName("QA D624: break-the-glass reach is exactly what the caller's patient search finds")
+    void findableByPatientSearch() {
+        // Caller working at C who also holds a role at A: the search finds the
+        // patient (registered at A), so C may break the glass (D409 kept).
+        scopedToHospitals(elsewhere, Set.of(elsewhere.getId(), first.getId()));
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(searchFinds()).isTrue();
 
-        // D409 kept: a sister hospital of A in the same organisation reaches the patient.
-        Organization org = organizationRepository.save(Organization.builder()
-            .name("Groupe A").code("GRPA").type(OrganizationType.HEALTH_SYSTEM).build());
-        first.setOrganization(org);
-        hospitalRepository.save(first);
-        Hospital sister = hospital("Hôpital A2", "HA2");
-        sister.setOrganization(org);
-        sister = hospitalRepository.save(sister);
-        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, sister.getId())).isTrue();
+        // Caller at C alone: search finds nothing, and neither id is reachable.
+        scopedTo(elsewhere);
+        assertThat(searchFinds()).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+
+        // No scope at all: nothing.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+
+        // Unpinned super-admin: global view, as in search.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+    }
+
+    private boolean searchFinds() {
+        return patientRepository.searchPatientsExtended(null, null, null, null, null, null, null,
+                org.springframework.data.domain.PageRequest.of(0, 10))
+            .stream().anyMatch(p -> p.getId().equals(patientId));
+    }
+
+    private static void scopedToHospitals(Hospital acting, Set<UUID> permitted) {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .activeHospitalId(acting.getId())
+            .permittedHospitalIds(permitted)
+            .build());
     }
 
     private static void scopedTo(Hospital hospital) {
