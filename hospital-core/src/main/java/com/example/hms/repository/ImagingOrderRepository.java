@@ -17,6 +17,16 @@ import java.util.UUID;
 @Repository
 public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID> {
 
+    /**
+     * QA D623 (D508 did not hold): the order by id WITHOUT the repository tenant
+     * filter. The scoped {@code findById} answers only for the acting hospital,
+     * so an order the by-patient list showed across hospitals 404'd before the
+     * service could apply the list's own readable-hospitals rule. Only the
+     * by-id READ uses this, and it then applies that rule itself.
+     */
+    @org.springframework.data.jpa.repository.Query("SELECT o FROM ImagingOrder o WHERE o.id = :id")
+    java.util.Optional<ImagingOrder> findByIdUnscoped(@org.springframework.data.repository.query.Param("id") UUID id);
+
     List<ImagingOrder> findByPatient_IdOrderByOrderedAtDesc(UUID patientId);
 
     List<ImagingOrder> findByPatient_IdAndStatusOrderByOrderedAtDesc(UUID patientId, ImagingOrderStatus status);

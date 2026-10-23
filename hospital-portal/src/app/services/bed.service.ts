@@ -96,8 +96,11 @@ export class BedService {
     return this.http.get<BedResponse[]>(`/wards/${wardId}/beds`);
   }
 
-  getAvailableBeds(): Observable<BedResponse[]> {
-    return this.http.get<BedResponse[]>('/beds/available');
+  /** QA D609: with a patient, the beds of a ward they cannot take are left out. */
+  getAvailableBeds(patientId?: string): Observable<BedResponse[]> {
+    return patientId
+      ? this.http.get<BedResponse[]>('/beds/available', { params: { patientId } })
+      : this.http.get<BedResponse[]>('/beds/available');
   }
 
   createBed(wardId: string, data: BedRequest): Observable<BedResponse> {

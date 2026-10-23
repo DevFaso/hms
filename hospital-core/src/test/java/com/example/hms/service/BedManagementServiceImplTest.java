@@ -43,6 +43,7 @@ class BedManagementServiceImplTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.PatientRepository patientRepository;
 
     @InjectMocks private BedManagementServiceImpl service;
 
@@ -278,5 +279,31 @@ class BedManagementServiceImplTest {
         assertThat(beds).singleElement()
             .extracting(BedResponseDTO::getLabel)
             .isEqualTo("MAT01/B02");
+    }
+
+    /** QA D609 (D431 in the picker): an adult man is not offered a maternity bed; a general bed stays. */
+    @Test
+    void d609_availableBedsForAPatient_leaveOutWardsTheyCannotTake() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        com.example.hms.model.Ward maternity = com.example.hms.model.Ward.builder()
+            .name("Maternity").code("MATA").wardType(com.example.hms.enums.WardType.MATERNITY).build();
+        com.example.hms.model.Ward general = com.example.hms.model.Ward.builder()
+            .name("General").code("GEN").wardType(com.example.hms.enums.WardType.GENERAL).build();
+        Bed m1 = Bed.builder().ward(maternity).bedNumber("M1").build();
+        m1.setId(UUID.randomUUID());
+        Bed g1 = Bed.builder().ward(general).bedNumber("G1").build();
+        g1.setId(UUID.randomUUID());
+        when(bedRepository.findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(
+            hospitalId, BedStatus.AVAILABLE)).thenReturn(List.of(m1, g1));
+        UUID patientId = UUID.randomUUID();
+        com.example.hms.model.Patient man = new com.example.hms.model.Patient();
+        man.setId(patientId);
+        man.setGender("MALE");
+        man.setDateOfBirth(java.time.LocalDate.now().minusYears(40));
+        when(patientRepository.findById(patientId)).thenReturn(java.util.Optional.of(man));
+
+        assertThat(service.getAvailableBeds(patientId)).extracting(BedResponseDTO::getBedNumber).containsExactly("G1");
+        // Without a patient the full list is unchanged (the bed board, the ward views).
+        assertThat(service.getAvailableBeds(null)).hasSize(2);
     }
 }

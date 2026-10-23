@@ -278,7 +278,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
      * acting across.
      */
     private ImagingOrder getOrderReadableHere(UUID orderId) {
-        ImagingOrder order = getOrderEntity(orderId);
+        // QA D623: the scoped findById filtered the foreign row out before the
+        // readable-hospitals rule below ever ran, so D508 never held for real.
+        ImagingOrder order = imagingOrderRepository.findByIdUnscoped(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("imaging.order.notFound", orderId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {

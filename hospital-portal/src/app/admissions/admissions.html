@@ -212,7 +212,7 @@
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                   }
-                  @if (canCancelAdmission()) {
+                  @if (canCancelAdmission() && isCancellable(a)) {
                     <button class="action-link delete-link" (click)="confirmDelete(a)">
                       <span class="material-symbols-outlined">delete</span>
                     </button>

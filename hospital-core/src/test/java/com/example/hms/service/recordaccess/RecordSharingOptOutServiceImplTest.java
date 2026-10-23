@@ -123,6 +123,47 @@ class RecordSharingOptOutServiceImplTest {
     }
 
     @Test
+    @DisplayName("D625: the PATIENT's own opt-out and opt-in name the patient's hospital on both CONSENT_UPDATE rows")
+    void d625_patientOwnOptOutAndRevokeNameTheHospital() {
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalA);
+        hospital.setName("Hopital A");
+        Patient own = new Patient();
+        own.setId(patientId);
+        own.setHospitalId(hospitalA);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        own.getHospitalRegistrations().add(registration);
+        // The patient acts on their own record: patient-owned scope, no pinned hospital.
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorUserId)
+                .patientOwned(true)
+                .build());
+        when(patientRepository.findByUserId(actorUserId)).thenReturn(Optional.of(own));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(own));
+        try {
+            when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(false);
+            service.optOut(patientId, null, actorUserId, Locale.ENGLISH);
+            when(optOutRepository.findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId))
+                .thenReturn(Optional.of(com.example.hms.model.PatientRecordSharingOptOut.builder()
+                    .patient(own).optedOutAt(java.time.LocalDateTime.now()).build()));
+            service.revoke(patientId, actorUserId, Locale.ENGLISH);
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, org.mockito.Mockito.times(2)).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).allSatisfy(row -> {
+                assertThat(row.getHospitalId()).isEqualTo(hospitalA);
+                assertThat(row.getHospitalName()).isEqualTo("Hopital A");
+            });
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     @DisplayName("a second opt-out is a 409, not a second row")
     void optOutTwiceConflicts() {
         when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(true);

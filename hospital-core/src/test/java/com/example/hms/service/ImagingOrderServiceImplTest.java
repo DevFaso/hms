@@ -401,7 +401,7 @@ class ImagingOrderServiceImplTest {
         order.setId(orderId);
         ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
 
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
 
         ImagingOrderResponseDTO result = imagingOrderService.getOrder(orderId);
@@ -411,7 +411,7 @@ class ImagingOrderServiceImplTest {
 
     @Test
     void getOrderThrowsWhenNotFound() {
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.empty());
 
         org.junit.jupiter.api.Assertions.assertThrows(
             ResourceNotFoundException.class,
@@ -617,7 +617,7 @@ class ImagingOrderServiceImplTest {
         order.setId(orderId);
         order.setHospital(hospital);
 
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
 
         org.junit.jupiter.api.Assertions.assertThrows(
@@ -636,7 +636,7 @@ class ImagingOrderServiceImplTest {
         order.setHospital(hospital);
         order.setPatient(patient);
         ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
         when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
         when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB))
@@ -656,7 +656,7 @@ class ImagingOrderServiceImplTest {
         order.setId(orderId);
         order.setHospital(hospital);
         order.setPatient(patient);
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
         when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
         when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB)).thenReturn(java.util.Set.of(hospitalB));
@@ -688,7 +688,7 @@ class ImagingOrderServiceImplTest {
         order.setHospital(hospital);
         ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
 
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
 
@@ -702,7 +702,7 @@ class ImagingOrderServiceImplTest {
         order.setHospital(hospital);
         ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
 
-        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
         when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
 

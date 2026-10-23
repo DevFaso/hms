@@ -5074,7 +5074,19 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   or in the future. The general fix (send instants with an offset, or one portal-wide
   conversion) touches every date the portal renders, so it is its own PR. The QA
   rounds' D182 and D236 (zone-less `datetime-local` inputs) are this item; deferred
-  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Open.
+  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Round 9's D622 (the
+  admission form) is converted like the lab result form, through the shared
+  `toServerDateTime` / `toLocalInputValue` in `shared/date-utils.ts`
+  (fix/qa-r9-tenancy-admissions); the general fix is still open. Open.
+- **Break-the-glass confirms that a patient id exists (QA D531, D624).** POST
+  /break-glass at hospital B for a patient known only to hospital A answers 201.
+  This is by design today: D409 asked that break-the-glass work for a patient the
+  reader's hospital does not know, and E9 #62 (decision D2, Tier B) lets a live
+  session stand in for the treatment relationship. The caller must hold a
+  declaring role at the hospital before the patient is looked up, and every
+  declaration is audited and, after an opt-out, notified to the patient. Refusing
+  the declaration (404, like an unknown id) would reverse D409, so it is a product
+  decision between the two QA asks, not a fix (fix/qa-r9-tenancy-admissions). Open.
 - **A one-person laboratory cannot activate its own test definitions.** Since D48 only
   an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
   SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded
