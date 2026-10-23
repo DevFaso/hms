@@ -43,10 +43,14 @@ def gh(*args: str) -> str:
 
 def post(pr: str, body: str) -> None:
     body = f"{MARKER}\n{body}"
-    comments = json.loads(gh("api", f"repos/{os.environ['GITHUB_REPOSITORY']}/issues/{pr}/comments", "--paginate"))
-    mine = [c for c in comments if c["body"].startswith(MARKER)]
+    repo = os.environ["GITHUB_REPOSITORY"]
+    # --slurp wraps every page in one array, so more than 30 comments still parse.
+    pages = json.loads(gh("api", f"repos/{repo}/issues/{pr}/comments", "--paginate", "--slurp"))
+    # Only this workflow's own comment: anyone can type the marker on a public repo.
+    mine = [c for page in pages for c in page
+            if c["user"]["login"] == "github-actions[bot]" and c["body"].startswith(MARKER)]
     if mine:
-        gh("api", "-X", "PATCH", f"repos/{os.environ['GITHUB_REPOSITORY']}/issues/comments/{mine[-1]['id']}", "-f", f"body={body}")
+        gh("api", "-X", "PATCH", f"repos/{repo}/issues/comments/{mine[-1]['id']}", "-f", f"body={body}")
     else:
         gh("pr", "comment", pr, "--body", body)
 
