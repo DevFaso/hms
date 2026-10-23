@@ -66,10 +66,29 @@ public class LabOrder extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_laborder_encounter"))
     private Encounter encounter;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "lab_test_definition_id", nullable = false,
+    /**
+     * QA D648: before D601 a definition could be hard-deleted under its
+     * orders (there is no FK on Postgres), and every read of such an order or
+     * of its results died on the dangling id with a 404 - a released critical
+     * value vanished from the chart. The missing row now reads as null and the
+     * mappers show a "deleted test" label; the column itself stays NOT NULL
+     * and keeps the old id. A NEW order still needs a definition (validate()).
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @org.hibernate.annotations.NotFound(action = org.hibernate.annotations.NotFoundAction.IGNORE)
+    @JoinColumn(name = "lab_test_definition_id", insertable = false, updatable = false,
         foreignKey = @ForeignKey(name = "fk_laborder_testdef"))
     private LabTestDefinition labTestDefinition;
+
+    /**
+     * QA D648: the column the association above reads. It is written from
+     * here, so an order whose definition was deleted keeps the id it was
+     * placed with when it is cancelled or corrected - writing the association
+     * would have nulled a NOT NULL column. Kept in step by
+     * {@link #setLabTestDefinition} and on every persist and update.
+     */
+    @Column(name = "lab_test_definition_id", nullable = false)
+    private UUID labTestDefinitionId;
 
     @NotNull
     @Column(name = "order_datetime", nullable = false)
@@ -222,9 +241,28 @@ public class LabOrder extends BaseEntity {
             || isPerformedAt(hospitalId);
     }
 
+    /** The association and the column it reads move together (QA D648). */
+    public void setLabTestDefinition(LabTestDefinition labTestDefinition) {
+        this.labTestDefinition = labTestDefinition;
+        if (labTestDefinition != null) {
+            this.labTestDefinitionId = labTestDefinition.getId();
+        }
+    }
+
     @PrePersist
+    private void validateNew() {
+        if (labTestDefinition == null) {
+            throw new IllegalStateException("Lab test definition must be provided");
+        }
+        validate();
+    }
+
     @PreUpdate
     private void validate() {
+        // A builder sets the association directly, not through the setter.
+        if (labTestDefinition != null && labTestDefinition.getId() != null) {
+            labTestDefinitionId = labTestDefinition.getId();
+        }
         ensureOrderDefaults();
         validateHospitalScope();
         validateEncounterConsistency();
@@ -256,15 +294,14 @@ public class LabOrder extends BaseEntity {
             || !Objects.equals(orderingStaff.getHospital().getId(), hospital.getId())) {
             throw new IllegalStateException("Ordering staff must belong to LabOrder.hospital");
         }
-        if (labTestDefinition == null) {
-            throw new IllegalStateException("Lab test definition must be provided");
-        }
         if (performingHospital != null && Objects.equals(performingHospital.getId(), hospital.getId())) {
             performingHospital = null;
         }
         // A hospital-owned definition must belong to the ordering hospital or,
         // for an order sent out, to the laboratory that performs it.
-        if (labTestDefinition.getHospital() != null
+        // QA D648: an order whose definition was deleted (null here) can still
+        // be cancelled or corrected; a new order is refused in validateNew().
+        if (labTestDefinition != null && labTestDefinition.getHospital() != null
             && !Objects.equals(labTestDefinition.getHospital().getId(), hospital.getId())
             && !Objects.equals(labTestDefinition.getHospital().getId(), resolvePerformingHospitalId())) {
             throw new IllegalStateException("Lab test definition must belong to LabOrder.hospital or its performing hospital");

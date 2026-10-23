@@ -1368,7 +1368,9 @@ public class LabResultServiceImpl implements LabResultService {
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.LAB_RESULT_RELEASED)
+                    // QA D638 (re-test): its own type, so the self-release is not one
+                    // of two indistinguishable LAB_RESULT_RELEASED rows per release.
+                    .eventType(AuditEventType.LAB_RESULT_SELF_RELEASED)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorId)
                     .hospitalId(hospitalId)

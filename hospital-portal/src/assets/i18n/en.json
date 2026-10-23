@@ -5433,6 +5433,7 @@
         "LAB_RESULT_CREATED": "Lab Result Created",
         "LAB_RESULT_ACKNOWLEDGED": "Lab Result Acknowledged",
         "LAB_RESULT_RELEASED": "Lab Result Released",
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_RESULT_UPDATED": "Lab Result Updated",
         "LOGIN": "Login",
         "LOGIN_FAILURE": "Login Failure",

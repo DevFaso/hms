@@ -5399,6 +5399,7 @@
         "LAB_RESULT_CREATED": "Résultat d'examen saisi",
         "LAB_RESULT_ACKNOWLEDGED": "Résultat d'examen pris en compte",
         "LAB_RESULT_RELEASED": "Résultat d'examen validé",
+        "LAB_RESULT_SELF_RELEASED": "Résultat d'examen autovalidé",
         "LAB_RESULT_UPDATED": "Résultat d'examen modifié",
         "LOGIN": "Connexion",
         "LOGIN_FAILURE": "Échec de connexion",

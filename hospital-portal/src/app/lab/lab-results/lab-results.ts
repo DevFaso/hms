@@ -284,9 +284,13 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
     // QA D645: an order whose test definition no longer resolves has nothing a
     // result can be entered against; it is not offered ("— — —" in the picker).
-    this.labService
-      .listOrders({ size: 500 })
-      .subscribe((list) => this.orders.set(list.filter((o) => !!(o.labTestName || o.labTestCode))));
+    this.labService.listOrders({ size: 500 }).subscribe((list) =>
+      // QA D645/D648: an order whose test definition was deleted carries a
+      // "deleted test" label but cannot take a result; it stays out of the picker.
+      this.orders.set(
+        list.filter((o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode)),
+      ),
+    );
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);

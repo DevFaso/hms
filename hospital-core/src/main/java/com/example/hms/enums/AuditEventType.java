@@ -71,6 +71,8 @@ public enum AuditEventType {
     LAB_RESULT_ACKNOWLEDGED,
     LAB_RESULT_UPDATED,
     LAB_RESULT_RELEASED,
+    /** QA D638: a result released by the person who entered it, without a second reviewer. */
+    LAB_RESULT_SELF_RELEASED,
     IMAGING_ORDER_CREATED,
     IMAGING_RESULT_UPDATED,
     // Disease-programme registries (Tier 2 item 35). Care-management

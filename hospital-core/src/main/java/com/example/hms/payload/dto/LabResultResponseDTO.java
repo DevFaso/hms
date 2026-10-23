@@ -34,6 +34,9 @@ public class LabResultResponseDTO {
     private String performingHospitalId;
     private String orderedByName;
     private String labTestName;
+
+    /** QA D648: the order's test definition no longer exists; labTestName is the "deleted test" label. */
+    private boolean labTestDefinitionMissing;
     private String resultValue;
     private String resultUnit;
     private LocalDateTime resultDate;

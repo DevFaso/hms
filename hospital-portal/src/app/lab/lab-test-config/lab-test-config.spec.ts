@@ -96,6 +96,26 @@ describe('LabTestConfigComponent', () => {
     expect(icons(row('DRF'))).toContain('delete');
   });
 
+  it('QA D650: renders no edit button on a RETIRED row, and one on an ACTIVE row', () => {
+    fixture.detectChanges();
+    flushInit(
+      [
+        mockDefinition({ id: 'def-active', testCode: 'ACT', approvalStatus: 'ACTIVE' }),
+        mockDefinition({ id: 'def-retired', testCode: 'RET', approvalStatus: 'RETIRED' }),
+      ],
+      2,
+    );
+    fixture.detectChanges();
+
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+    ) as HTMLElement[];
+    const row = (code: string) =>
+      rows.find((r) => r.querySelector('.code-cell')?.textContent?.trim() === code)!;
+    expect(row('ACT').querySelector('[data-testid="edit-def"]')).not.toBeNull();
+    expect(row('RET').querySelector('[data-testid="edit-def"]')).toBeNull();
+  });
+
   it('QA D617: offers range edit and delete only on a draft or rejected definition', () => {
     expect(component.isEditableDraft({ approvalStatus: 'DRAFT' })).toBeTrue();
     expect(component.isEditableDraft({ approvalStatus: 'REJECTED' })).toBeTrue();

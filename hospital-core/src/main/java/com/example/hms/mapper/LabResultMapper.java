@@ -70,7 +70,10 @@ public class LabResultMapper {
             .hospitalName(context.hospitalName())
             .performingHospitalId(context.performingHospitalId())
             .orderedByName(context.orderedByName())
-            .labTestName(context.labTestName())
+            .labTestName(context.labTestName() != null || !definitionMissing(result.getLabOrder())
+                ? context.labTestName()
+                : com.example.hms.utility.MessageUtil.resolveOrRaw(LabOrderMapper.DELETED_TEST_LABEL))
+            .labTestDefinitionMissing(definitionMissing(result.getLabOrder()))
             .resultValue(result.getResultValue())
             .resultUnit(result.getResultUnit())
             .resultDate(result.getResultDate())
@@ -186,6 +189,13 @@ public class LabResultMapper {
         // about a value that may since have been amended (79 -> 4.2), and
         // keying the label on it kept a corrected typo CRITICAL for good.
         if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
+            return FLAG_CRITICAL;
+        }
+        // QA D648: the definition this value was graded against was deleted
+        // (before D601), so no range can grade it any more. The page that went
+        // out when it could is the one stored record that it was critical; a
+        // released critical value must not drop off the critical list with it.
+        if (definitionMissing(result.getLabOrder()) && result.getCriticalNotifiedAt() != null) {
             return FLAG_CRITICAL;
         }
         // QA D313: a value outside a range that declares no critical limits
@@ -360,6 +370,14 @@ public class LabResultMapper {
                 .notes(dto.getNotes())
                 .assignment(assignment)
                 .build();
+    }
+
+    /**
+     * QA D648: the order points at a definition that no longer exists. Only an
+     * initialised order can say so; a lazy one is treated as unknown.
+     */
+    private static boolean definitionMissing(LabOrder order) {
+        return order != null && Hibernate.isInitialized(order) && order.getLabTestDefinition() == null;
     }
 
     private OrderContext extractOrderContext(LabOrder order) {

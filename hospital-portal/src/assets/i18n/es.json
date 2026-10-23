@@ -5433,6 +5433,7 @@
         "LAB_RESULT_CREATED": "Resultado de laboratorio registrado",
         "LAB_RESULT_ACKNOWLEDGED": "Resultado de laboratorio reconocido",
         "LAB_RESULT_RELEASED": "Resultado de laboratorio liberado",
+        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
         "LAB_RESULT_UPDATED": "Resultado de laboratorio actualizado",
         "LOGIN": "Inicio de sesión",
         "LOGIN_FAILURE": "Inicio de sesión fallido",

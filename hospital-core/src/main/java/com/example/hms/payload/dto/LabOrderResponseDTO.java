@@ -28,6 +28,9 @@ public class LabOrderResponseDTO {
     private String performingHospitalId;
     private String performingHospitalName;
     private String labTestName;
+
+    /** QA D648: the order's test definition no longer exists; labTestName is the "deleted test" label. */
+    private boolean labTestDefinitionMissing;
     private String labTestCode;
     private LocalDateTime orderDatetime;
     private String status;

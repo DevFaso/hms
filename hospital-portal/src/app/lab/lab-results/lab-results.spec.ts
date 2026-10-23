@@ -903,4 +903,29 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
   });
+
+  it('QA D648: an order flagged as missing its definition stays out of the picker despite its label', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-deleted',
+          labOrderCode: 'o-deleted',
+          patientId: 'p-1',
+          labTestName: 'Examen supprimé',
+          labTestDefinitionMissing: true,
+        },
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'p-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+        },
+      ],
+    );
+
+    expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
+  });
 });

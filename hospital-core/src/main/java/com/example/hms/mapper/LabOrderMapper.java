@@ -21,6 +21,8 @@ public class LabOrderMapper {
 
     /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
     private static final String OWNER = "LabOrder";
+    /** QA D645/D648: the label shown for an order whose test definition was deleted. */
+    public static final String DELETED_TEST_LABEL = "lab.definition.deletedLabel";
 
     public LabOrderMapper() {
         // No dependencies needed for human-readable mapping
@@ -47,7 +49,11 @@ public class LabOrderMapper {
             ? buildFullName(patient.getFirstName(), patient.getLastName())
             : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
-        String labTestName = labTestDefinition != null ? labTestDefinition.getName() : null;
+        // QA D645/D648: a definition deleted before D601 is not a blank cell.
+        boolean definitionMissing = labTestDefinition == null;
+        String labTestName = definitionMissing
+            ? com.example.hms.utility.MessageUtil.resolveOrRaw(DELETED_TEST_LABEL)
+            : labTestDefinition.getName();
         String labOrderCode = orderCodeOf(labOrder);
         String status = labOrder.getStatus() != null ? labOrder.getStatus().name() : null;
 
@@ -65,6 +71,7 @@ public class LabOrderMapper {
             ? performingHospital.getId().toString() : null)
         .performingHospitalName(performingHospital != null ? performingHospital.getName() : null)
         .labTestName(labTestName)
+        .labTestDefinitionMissing(definitionMissing)
             .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
         .orderDatetime(labOrder.getOrderDatetime())
         .status(status)

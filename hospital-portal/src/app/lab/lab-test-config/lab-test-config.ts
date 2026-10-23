@@ -338,6 +338,11 @@ export class LabTestConfigComponent implements OnInit {
    * active one is retired through the approval workflow instead. Mirrors
    * LabTestDefinitionServiceImpl (RANGES_LOCKED and delete).
    */
+  /** QA D650: a retired definition is read-only (the API answers 409 to an edit). */
+  isRetired(def: { approvalStatus?: string | null }): boolean {
+    return def.approvalStatus === 'RETIRED';
+  }
+
   isEditableDraft(def: { approvalStatus?: string | null }): boolean {
     const status = def.approvalStatus ?? 'DRAFT';
     return status === 'DRAFT' || status === 'REJECTED';

@@ -415,6 +415,17 @@ describe('LabComponent — performing laboratory', () => {
       .not.toBeNull();
   });
 
+  it('QA D645: an order whose test was deleted shows the API label, not a dash', async () => {
+    await setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      [order({ labTestName: 'Examen supprimé', labTestCode: '', labTestDefinitionMissing: true })],
+    );
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('tbody')?.textContent).toContain(
+      'Examen supprimé',
+    );
+  });
+
   it('QA D527: the worklist and the detail panel never show the patient e-mail', async () => {
     const o = order({});
     await setup(['ROLE_LAB_TECHNICIAN'], [o]);

@@ -271,7 +271,7 @@ class LabResultServiceImplWorkflowTest {
         ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED);
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LAB_RESULT_SELF_RELEASED);
         assertThat(audit.getValue().getUserId()).isEqualTo(actorId);
         assertThat(audit.getValue().getResourceId()).isEqualTo(labResultId.toString());
         assertThat(audit.getValue().getEventDescription()).startsWith("Self-release");
