@@ -90,6 +90,32 @@ class InvoiceItemServiceImplTest {
         verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
     }
 
+    /** QA D633: a line whose total overflows numeric(12,2) answered in English ("numeric value out of bounds"). */
+    @Test
+    void aLineTotalOutOfRangeIsRefusedInTheCallersLanguage_D633() {
+        InvoiceItemRequestDTO huge = line();
+        huge.setUnitPrice(new BigDecimal("9999999999"));
+        huge.setQuantity(5);
+        assertThatThrownBy(() -> service.createInvoiceItem(huge, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.totalOutOfRange");
+        org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateInvoiceItem(id, huge, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.totalOutOfRange");
+    }
+
+    @Test
+    void theLargestLineTotalStillFits_D633() {
+        InvoiceItemRequestDTO max = line();
+        max.setUnitPrice(new BigDecimal("4999999999"));
+        max.setQuantity(2);
+        service.createInvoiceItem(max, Locale.ENGLISH);
+        verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
+    }
+
     @Test
     void aDecimalXofPriceIsRefusedButZeroCentsAreWhole_D307() {
         InvoiceItemRequestDTO decimal = line();

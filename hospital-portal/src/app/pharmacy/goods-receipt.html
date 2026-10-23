@@ -165,7 +165,7 @@
               </td>
               <td>{{ lot.supplier ?? '—' }}</td>
               <td>
-                {{ lot.unitCost ? (lot.unitCost | currency: 'XOF' : 'symbol' : '1.0-0') : '—' }}
+                {{ lot.unitCost ? (lot.unitCost | cfa) : '—' }}
               </td>
             </tr>
           }

@@ -49,6 +49,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import com.example.hms.enums.StockTransactionType;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
@@ -1397,6 +1398,59 @@ class DispenseServiceImplTest {
             verify(stockTransactionRepository).save(any());
             // Undoing a fill is bookkeeping, not a pharmacy outcome: nothing is announced.
             verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        }
+
+        /**
+         * QA D604: dispense 63a1f3fb delivered 4, 2 came back by a RETURN
+         * referencing it; the cancel then put the whole 4 back (9 for 4).
+         * It now puts back only the 2 still out, and its reversal names the
+         * dispense so it counts as one of its returns.
+         */
+        @Test
+        @DisplayName("D604: a cancel puts back only what was not already returned against the fill")
+        void cancelReturnsOnlyTheRemainder() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setQuantityDispensed(new BigDecimal("4"));
+            dispense.setStockLot(stockLot);
+            stockLot.setRemainingQuantity(BigDecimal.valueOf(40));
+            inventoryItem.setQuantityOnHand(BigDecimal.valueOf(90));
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(stockTransactionRepository.sumQuantityForReference(dispenseId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            service.cancelDispense(dispenseId);
+
+            verify(stockLotRepository).incrementRemaining(eq(stockLotId), eq(new BigDecimal("2")), any());
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItem.getId()), eq(new BigDecimal("2")), any());
+            org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getReferenceId()).isEqualTo(dispenseId);
+            assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("2");
+        }
+
+        @Test
+        @DisplayName("D604: a fill returned in full is cancelled with no stock movement")
+        void cancelOfAFullyReturnedFillMovesNothing() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setQuantityDispensed(new BigDecimal("4"));
+            dispense.setStockLot(stockLot);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+            when(stockTransactionRepository.sumQuantityForReference(dispenseId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("4"));
+
+            service.cancelDispense(dispenseId);
+
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
         }
 
         @Test

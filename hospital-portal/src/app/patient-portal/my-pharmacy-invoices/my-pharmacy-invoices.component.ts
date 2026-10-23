@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelService } from '../../core/enum-label.service';
 import {
@@ -7,6 +7,7 @@ import {
   PharmacyService,
   PharmacyPaymentResponse,
 } from '../../services/pharmacy.service';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 
 /**
  * T-45: patient portal — pharmacy invoices & payment history.
@@ -17,7 +18,7 @@ import {
 @Component({
   selector: 'app-my-pharmacy-invoices',
   standalone: true,
-  imports: [CommonModule, TranslateModule, DatePipe, CurrencyPipe],
+  imports: [CommonModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],

@@ -1436,6 +1436,8 @@
     "PAYMENT_AMOUNT": "Montant",
     "PAYMENT_AMOUNT_REQUIRED": "Saisissez un montant supérieur à zéro",
     "PAYMENT_EXCEEDS_BALANCE": "Le montant dépasse le solde dû",
+    "PAYMENT_PENDING_DECLARED": "Un paiement de {{amount}} déclaré par le patient attend une confirmation. Confirmez-le ou rejetez-le avant d'encaisser ce montant à nouveau.",
+    "PATIENT_LOCKED_ISSUED": "Cette facture a été émise : son patient ne peut pas être changé. Annulez-la et émettez une nouvelle facture.",
     "PAYMENT_FAILED": "Échec du paiement",
     "PAYMENT_METHOD": "Mode de Paiement",
     "PAYMENT_NOTE": "Les paiements s’appliquent aux factures émises ou partiellement payées, dans la limite du solde dû, en francs entiers.",

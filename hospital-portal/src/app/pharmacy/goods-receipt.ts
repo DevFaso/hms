@@ -9,11 +9,12 @@ import {
   InventoryItemResponse,
   StockLotResponse,
 } from '../services/pharmacy.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',

@@ -1214,13 +1214,18 @@ public class DispenseServiceImpl implements DispenseService {
 
         dispense.setStatus(DispenseStatus.CANCELLED);
 
-        // Reverse stock if a lot was used
-        if (dispense.getStockLot() != null) {
+        // Reverse stock if a lot was used. QA D604: only what was not
+        // already returned against this fill goes back (a 4-unit fill with
+        // returns of 2 and 3 then put 4 more back on cancel), counted under
+        // the dispense row lock that a referenced return also takes, and the
+        // reversal names the dispense so it counts as one of its returns.
+        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
+        if (stillOut.signum() > 0) {
             StockLot lot = dispense.getStockLot();
             InventoryItem item = lot.getInventoryItem();
             LocalDateTime now = LocalDateTime.now(clock);
-            stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
-            inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
+            stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
+            inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
             refreshIfManaged(lot);
             refreshIfManaged(item);
 
@@ -1229,7 +1234,8 @@ public class DispenseServiceImpl implements DispenseService {
                     .inventoryItem(item)
                     .stockLot(lot)
                     .transactionType(StockTransactionType.RETURN)
-                    .quantity(dispense.getQuantityDispensed())
+                    .referenceId(dispense.getId())
+                    .quantity(stillOut)
                     .reason("Dispense cancelled — stock returned for prescription "
                             + dispense.getPrescription().getId())
                     .performedByUser(performer)
@@ -1260,6 +1266,15 @@ public class DispenseServiceImpl implements DispenseService {
                 saved.getId().toString());
 
         return dispenseMapper.toResponseDTO(saved);
+    }
+
+    /** QA D604: what a fill delivered minus what was already returned against it. */
+    private BigDecimal notYetReturned(Dispense dispense) {
+        BigDecimal dispensed = dispense.getQuantityDispensed() == null
+                ? BigDecimal.ZERO : dispense.getQuantityDispensed();
+        BigDecimal returned = stockTransactionRepository.sumQuantityForReference(
+                dispense.getId(), java.util.EnumSet.of(StockTransactionType.RETURN));
+        return dispensed.subtract(returned == null ? BigDecimal.ZERO : returned).max(BigDecimal.ZERO);
     }
 
     @Override

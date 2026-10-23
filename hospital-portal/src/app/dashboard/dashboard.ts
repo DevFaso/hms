@@ -83,7 +83,7 @@ import {
   CredentialRenewalTarget,
 } from './credential-renewal/credential-renewal.component';
 
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -2323,11 +2323,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Mirrors the billing page's XOF formatting so amounts read identically. */
   formatInvoiceAmount(amount: number): string {
-    return new Intl.NumberFormat(currentLocale(), {
-      style: 'currency',
-      currency: 'XOF',
-      maximumFractionDigits: 0,
-    }).format(amount ?? 0);
+    // QA D621: "4 000 F CFA" in every language, not XOF / F CFA4,000.
+    return formatCfa(amount);
   }
 
   private initProfile(): void {

@@ -53,6 +53,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             throw new BusinessException("invoiceitem.invoiceRequired");
         }
         requireWholePrice(dto.getUnitPrice());
+        requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());
         BillingInvoice invoice = writableInvoice(dto.getBillingInvoiceId());
         UserRoleHospitalAssignment assignment = resolveAssignment(dto.getAssignmentId(), invoice);
         Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
@@ -102,6 +103,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
         requireWholePrice(dto.getUnitPrice());
+        requireLineTotalInRange(dto.getUnitPrice(), dto.getQuantity());
         InvoiceItem item = invoiceItemRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY, id));
         // A line stays on its invoice: moving it would leave the old total stale.
@@ -215,6 +217,21 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private static void requireWholePrice(java.math.BigDecimal price) {
         if (price != null && price.stripTrailingZeros().scale() > 0) {
             throw new BusinessException("billing.payment.wholeAmountOnly");
+        }
+    }
+
+    /** The largest line total the column holds (numeric(12,2)). */
+    private static final java.math.BigDecimal MAX_LINE_TOTAL = new java.math.BigDecimal("9999999999.99");
+
+    /**
+     * QA D633: a line whose total does not fit the column was refused by the
+     * entity's own validation, in English ("numeric value out of bounds").
+     * Checked here first, with the caller's language.
+     */
+    private static void requireLineTotalInRange(java.math.BigDecimal unitPrice, Integer quantity) {
+        if (unitPrice != null && quantity != null
+                && unitPrice.multiply(java.math.BigDecimal.valueOf(quantity.longValue())).compareTo(MAX_LINE_TOTAL) > 0) {
+            throw new BusinessException("billing.item.totalOutOfRange");
         }
     }
 }

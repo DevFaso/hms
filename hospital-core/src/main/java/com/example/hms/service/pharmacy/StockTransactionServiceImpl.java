@@ -55,6 +55,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final StockTransactionRepository stockTransactionRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final StockLotRepository stockLotRepository;
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     private final PharmacyRepository pharmacyRepository;
     private final UserRepository userRepository;
     private final StockTransactionMapper stockTransactionMapper;
@@ -82,6 +83,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
         requireMovementIsAccountable(dto, item, lot);
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
+            // QA D604: the dispense row first (the lock its cancel takes), then the item.
+            requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
         }
 
@@ -198,6 +201,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (type == StockTransactionType.DISPENSE) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
+        // QA D615: a receipt here created no lot row, so an expired lot, a
+        // lot number re-used with another expiry and an item total above its
+        // lots all went through. Goods are received through the lot receipt
+        // (POST /pharmacy/inventory/lots), which owns those rules; the portal
+        // already uses it.
+        if (type == StockTransactionType.RECEIPT) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.receipt.viaLots"));
+        }
         BigDecimal quantity = dto.getQuantity();
         boolean quantityValid = quantity != null
                 && (type == StockTransactionType.ADJUSTMENT ? quantity.signum() != 0 : quantity.signum() > 0);
@@ -247,6 +258,45 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(issued).subtract(nz(returned));
         if (quantity.compareTo(returnable) > 0) {
             throw new BusinessException("stockTransaction.return.exceedsIssued",
+                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /**
+     * QA D604: a return that names a dispense ({@code referenceId}) gives
+     * back at most what that dispense delivered and was not returned yet
+     * (a 4-unit fill took returns of 2, 3 and 4). The dispense row is locked
+     * so two returns, or a return and the cancel of that fill, are counted
+     * in turn. A cancelled fill already went back to stock, so nothing more
+     * can be returned against it. A reference that is not a dispense (a
+     * transfer) keeps the lot / item bound below.
+     */
+    private void requireReturnWithinDispense(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        if (dto.getReferenceId() == null || dispenseRepository == null) {
+            return;
+        }
+        com.example.hms.model.pharmacy.Dispense dispense =
+                dispenseRepository.findLockedById(dto.getReferenceId()).orElse(null);
+        if (dispense == null) {
+            return;
+        }
+        if (dispense.getStatus() != com.example.hms.enums.DispenseStatus.COMPLETED
+                && dispense.getStatus() != com.example.hms.enums.DispenseStatus.PARTIAL) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
+        }
+        StockLot dispensedLot = dispense.getStockLot();
+        boolean sameStock = dispensedLot != null
+                ? lot != null && dispensedLot.getId().equals(lot.getId())
+                : lot == null && dispense.getPharmacy() != null && item.getPharmacy() != null
+                    && dispense.getPharmacy().getId() != null
+                    && dispense.getPharmacy().getId().equals(item.getPharmacy().getId());
+        if (!sameStock) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
+        }
+        BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
+                stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
+        if (dto.getQuantity().compareTo(returnable) > 0) {
+            throw new BusinessException("stockTransaction.return.exceedsDispensed",
                     returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
         }
     }

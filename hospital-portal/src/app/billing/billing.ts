@@ -21,7 +21,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
@@ -166,6 +166,16 @@ export class BillingComponent implements OnInit {
     const current = this.editingStatus();
     if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
     return ['DRAFT', 'SENT', 'CANCELLED'];
+  }
+
+  /** QA D614: an issued invoice keeps its patient; it is cancelled and re-issued instead. */
+  patientLocked(): boolean {
+    return this.editing() && this.editingStatus() !== 'DRAFT';
+  }
+
+  /** QA D632: an invoice is not dated in the future. */
+  maxInvoiceDate(): string {
+    return this.isoDay(new Date());
   }
 
   statusLocked(): boolean {
@@ -705,12 +715,33 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     );
   }
 
+  /** QA D634: what the patient declared on the open invoice and staff have not confirmed yet. */
+  paymentPending = signal(0);
+
   openPayment(inv: BillingInvoiceResponse): void {
     this.paymentInv.set(inv);
     this.paymentAmount.set(inv.balanceDue ?? null);
+    this.paymentPending.set(0);
     this.paymentMethod.set('CASH');
     this.paymentReference.set('');
     this.showPaymentModal.set(true);
+    // QA D634: the modal prefilled the whole balance and said nothing of a
+    // pending patient declaration, so the cashier took the money twice once
+    // the declaration was confirmed. The prefill leaves the declared part out.
+    this.billingService.listPayments(inv.id).subscribe({
+      next: (rows) => {
+        if (this.paymentInv()?.id !== inv.id) return;
+        const pending = (rows ?? [])
+          .filter((r) => r.status === 'PENDING')
+          .reduce((sum, r) => sum + (r.amount ?? 0), 0);
+        this.paymentPending.set(pending);
+        if (pending > 0 && this.paymentAmount() === (inv.balanceDue ?? null)) {
+          const rest = Math.max((inv.balanceDue ?? 0) - pending, 0);
+          this.paymentAmount.set(rest > 0 ? rest : null);
+        }
+      },
+      error: () => this.paymentPending.set(0),
+    });
   }
 
   closePayment(): void {
@@ -782,10 +813,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   }
 
   formatCurrency(amount: number): string {
-    return new Intl.NumberFormat(currentLocale(), {
-      style: 'currency',
-      currency: 'XOF',
-      maximumFractionDigits: 0,
-    }).format(amount ?? 0);
+    // QA D621: "4 000 F CFA" in every language, not XOF / F CFA4,000.
+    return formatCfa(amount);
   }
 }
