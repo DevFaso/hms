@@ -758,6 +758,62 @@ class StockTransactionServiceImplTest {
         }
 
         @Test
+        @DisplayName("D604: an item kept without lots is bounded by its partial dispense from the same pharmacy")
+        void acceptsNothingAbovePartialItemDispense() {
+            var dispense = dispenseOf(new BigDecimal("3"), com.example.hms.enums.DispenseStatus.PARTIAL, null);
+            StockTransactionRequestDTO request = returnAgainst(dispense, "3");
+            request.setStockLotId(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("1"));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+        }
+
+        @Test
+        @DisplayName("D604: a lot-less return naming a dispense of another pharmacy is refused")
+        void refusesAnItemReturnAgainstAnotherPharmacysDispense() {
+            Pharmacy elsewhere = Pharmacy.builder().hospital(hospital).name("Annex").build();
+            elsewhere.setId(UUID.randomUUID());
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, null);
+            dispense.setPharmacy(elsewhere);
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            request.setStockLotId(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D604: a reference that is no dispense (a transfer) keeps only the lot bound")
+        void aNonDispenseReferenceFallsBackToTheLotBound() {
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("9.00"));
+            UUID transferId = UUID.randomUUID();
+            request.setReferenceId(transferId);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(transferId)).thenReturn(Optional.empty());
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsIssued");
+            verify(stockTransactionRepository, never()).sumQuantityForReference(any(), any());
+        }
+
+        @Test
         @DisplayName("refuses any return on a lot nothing left")
         void refusesAReturnOnALotNothingLeft() {
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("100000"));
