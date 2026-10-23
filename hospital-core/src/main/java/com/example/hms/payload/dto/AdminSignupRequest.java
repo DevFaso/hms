@@ -70,4 +70,11 @@ public class AdminSignupRequest {
      * the patient form, which also creates the patient record.
      */
     private Boolean patientRegistration;       // optional
+
+    /**
+     * QA D626: the patient record, REQUIRED when {@link #patientRegistration}
+     * is true. The account and this record are written in one transaction.
+     * Validated after the account exists (its userId is set server-side).
+     */
+    private PatientRequestDTO patient;
 }

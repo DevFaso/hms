@@ -56,7 +56,7 @@ describe('PatientFormComponent', () => {
     patientSpy.create.and.returnValue(of({ id: 'p9' } as PatientResponse));
     patientSpy.phoneVerificationAvailability.and.returnValue(of({ available: false }));
     userSpy = jasmine.createSpyObj('UserService', ['adminRegister', 'delete']);
-    userSpy.adminRegister.and.returnValue(of({ id: 'u1' } as UserDetail));
+    userSpy.adminRegister.and.returnValue(of({ id: 'u1', patientId: 'p9' } as UserDetail));
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     registrationSpy = jasmine.createSpyObj('RegistrationService', ['create']);
     registrationSpy.create.and.returnValue(of({ id: 'r1' } as HospitalRegistration));
@@ -201,9 +201,11 @@ describe('PatientFormComponent', () => {
         email: undefined,
         roleNames: ['PATIENT'],
         patientRegistration: true,
+        patient: jasmine.objectContaining({ email: undefined, dateOfBirth: '1992-05-04' }),
       }),
     );
-    expect(patientSpy.create).toHaveBeenCalledWith(jasmine.objectContaining({ email: undefined }));
+    // QA D626: the record rides on the same call; no second create to fail.
+    expect(patientSpy.create).not.toHaveBeenCalled();
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);
   });
 
@@ -221,32 +223,14 @@ describe('PatientFormComponent', () => {
     });
   }
 
-  it('QA D24: discards the account it just created when the patient step fails', () => {
-    userSpy.adminRegister.and.returnValue(of({ id: 'u-new', newAccount: true } as UserDetail));
-    userSpy.delete.and.returnValue(of({ message: 'ok' }));
-    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
-    fillValidForm();
-    component.onSubmit();
-    expect(userSpy.delete).toHaveBeenCalledWith('u-new');
-  });
-
-  it('QA D24: never deletes an existing account the registration linked', () => {
-    userSpy.adminRegister.and.returnValue(
-      of({ id: 'u-existing', newAccount: false } as UserDetail),
-    );
-    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+  it('QA D626: a refused registration leaves nothing to compensate and keeps the form open', () => {
+    userSpy.adminRegister.and.returnValue(throwError(() => ({ status: 400, error: {} })));
     fillValidForm();
     component.onSubmit();
     expect(userSpy.delete).not.toHaveBeenCalled();
+    expect(patientSpy.create).not.toHaveBeenCalled();
     expect(toastSpy.error).toHaveBeenCalled();
-  });
-
-  it('QA D24: an answer that does not say the account is new is treated as existing', () => {
-    userSpy.adminRegister.and.returnValue(of({ id: 'u-unknown' } as UserDetail));
-    patientSpy.create.and.returnValue(throwError(() => ({ status: 400, error: {} })));
-    fillValidForm();
-    component.onSubmit();
-    expect(userSpy.delete).not.toHaveBeenCalled();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
   it('sends and confirms an SMS verification code, then attaches the challenge to the create payload', () => {
@@ -284,8 +268,10 @@ describe('PatientFormComponent', () => {
       hospitalId: 'h1',
     });
     component.onSubmit();
-    expect(patientSpy.create).toHaveBeenCalledWith(
-      jasmine.objectContaining({ phoneVerificationId: 'ch1' }),
+    expect(userSpy.adminRegister).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        patient: jasmine.objectContaining({ phoneVerificationId: 'ch1' }),
+      }),
     );
   });
 

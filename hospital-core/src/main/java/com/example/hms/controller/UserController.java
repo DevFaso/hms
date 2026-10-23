@@ -49,6 +49,7 @@ public class UserController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     private final UserService userService;
+    private final com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
 
@@ -88,6 +89,13 @@ public class UserController {
             && !Boolean.TRUE.equals(request.getPatientRegistration())) {
             throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
         }
+        // QA D626 (verification): the flag alone proves nothing, the client sets
+        // it. A patient registration carries the patient record and both are
+        // written in one transaction, so no PATIENT account is left without one.
+        final boolean patientRegistration = Boolean.TRUE.equals(request.getPatientRegistration());
+        if (patientRegistration && request.getPatient() == null) {
+            throw new com.example.hms.exception.BusinessException("users.patientRegistration.patientRequired");
+        }
 
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
         // Skip the hospital-presence check so the request reaches the service, which
@@ -106,7 +114,10 @@ public class UserController {
         // instead of a green 201 over a silent WARN log.
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
-            UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
+            UserResponseDTO dto = patientRegistration
+                ? patientAccountRegistrationService.registerPatient(request,
+                    org.springframework.context.i18n.LocaleContextHolder.getLocale())
+                : userService.createUserWithRolesAndHospital(request);
             dto.setActivationDelivery(com.example.hms.utility.ActivationDeliveryTracker.close());
             return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
         } finally {

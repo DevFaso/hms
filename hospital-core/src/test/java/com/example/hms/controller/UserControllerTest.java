@@ -53,6 +53,7 @@ class UserControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private UserService userService;
+    @MockitoBean private com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     @MockitoBean private HospitalRepository hospitalRepository;
     @MockitoBean private UserRepository userRepository;
     @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
@@ -197,12 +198,37 @@ class UserControllerTest {
     }
 
     @Test
-    void qaD626_thePatientFormStillRegistersAPatient() throws Exception {
+    void qaD626_thePatientFormRegistersTheAccountAndTheRecordTogether() throws Exception {
         UserResponseDTO response = new UserResponseDTO();
         response.setId(UUID.randomUUID());
-        when(userService.createUserWithRolesAndHospital(any())).thenReturn(response);
+        response.setPatientId(UUID.randomUUID());
+        when(patientAccountRegistrationService.registerPatient(any(), any())).thenReturn(response);
 
-        registerAs(patientSignup("PATIENT", true), "ROLE_HOSPITAL_ADMIN").andExpect(status().isCreated());
+        AdminSignupRequest req = patientSignup("PATIENT", true);
+        com.example.hms.payload.dto.PatientRequestDTO patient = new com.example.hms.payload.dto.PatientRequestDTO();
+        patient.setFirstName("QA");
+        patient.setLastName("Onb");
+        req.setPatient(patient);
+        registerAs(req, "ROLE_HOSPITAL_ADMIN")
+            .andExpect(status().isCreated())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.patientId").value(response.getPatientId().toString()));
+        // The account-only path is never taken for a patient registration.
+        verify(userService, never()).createUserWithRolesAndHospital(any());
+    }
+
+    // QA D626 (verification): the flag is the client's word; without the
+    // patient record it would mint a PATIENT account with no record.
+    @Test
+    void qaD626_patientRegistrationFlagWithoutThePatientRecord_isRefusedAndWritesNothing() throws Exception {
+        for (String authority : new String[] {"ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN"}) {
+            registerAs(patientSignup("PATIENT", true), authority)
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                    .jsonPath("$.message").isNotEmpty());
+        }
+        verify(userService, never()).createUserWithRolesAndHospital(any());
+        verify(patientAccountRegistrationService, never()).registerPatient(any(), any());
     }
 
     // The receptionist path (roles forced to PATIENT, no flag needed) is

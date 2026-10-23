@@ -63,6 +63,7 @@ public class UserGovernanceService {
     @Transactional
     public UserResponseDTO createUser(AdminSignupRequest request) {
         AdminSignupRequest normalized = normalizeRoles(request);
+        refusePatientRole(normalized.getRoleNames());
         return userService.createUserWithRolesAndHospital(normalized);
     }
 
@@ -373,6 +374,8 @@ public class UserGovernanceService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.csv.rowNoRoles", String.valueOf(rowNumber)));
         }
 
+        refusePatientRole(roleNames);
+
         UUID hospitalId = parseUuid(value(columns, headerIndex, "hospitalid"));
         if (hospitalId == null) {
             hospitalId = request.getDefaultHospitalId();
@@ -417,6 +420,19 @@ public class UserGovernanceService {
         }
 
         return builder.build();
+    }
+
+    /**
+     * QA D626 (verification): governance onboarding and the CSV import create
+     * accounts only, so a PATIENT role here would leave an account with no
+     * patient record. A patient is registered from the patient form.
+     */
+    private static void refusePatientRole(Set<String> roleNames) {
+        if (roleNames != null && roleNames.stream().filter(Objects::nonNull)
+            .map(r -> r.trim().toUpperCase(Locale.ROOT).replaceFirst("^ROLE_", ""))
+            .anyMatch("PATIENT"::equals)) {
+            throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
+        }
     }
 
     private AdminSignupRequest normalizeRoles(AdminSignupRequest request) {

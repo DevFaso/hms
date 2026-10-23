@@ -231,4 +231,38 @@ class UserGovernanceServiceTest {
         assertThat(response.getResults()).extracting(result -> result.getMessage())
             .containsExactly("users.csv.rowMissingFields", "users.csv.rowNoRoles", "users.csv.invalidUuid");
     }
+
+    // QA D626 (verification): governance onboarding creates accounts only, so a
+    // PATIENT role here would leave an account without a patient record.
+    @Test
+    void createUserRefusesThePatientRole() {
+        for (String role : new String[] {"PATIENT", "ROLE_PATIENT", "role_patient"}) {
+            AdminSignupRequest request = AdminSignupRequest.builder()
+                .username("pat").email("pat@example.com").password("Secret123!")
+                .firstName("Pat").lastName("Ient").phoneNumber("1234567890")
+                .roleNames(new java.util.HashSet<>(Set.of(role, "NURSE")))
+                .build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.createUser(request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessage("users.roles.patientFromPatientForm");
+        }
+        org.mockito.Mockito.verifyNoInteractions(userService);
+    }
+
+    @Test
+    void importUsersRefusesAPatientRow() {
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles
+            pat,pat@example.com,Pat,Ient,6666,PATIENT
+            pat2,pat2@example.com,Pat,Two,7777,ROLE_PATIENT;NURSE""";
+
+        SuperAdminUserBulkImportResponseDTO response = service.importUsers(
+            SuperAdminUserBulkImportRequestDTO.builder().csvContent(csv).build());
+
+        assertThat(response.getImported()).isZero();
+        assertThat(response.getFailed()).isEqualTo(2);
+        assertThat(response.getResults()).extracting(result -> result.getMessage())
+            .containsExactly("users.roles.patientFromPatientForm", "users.roles.patientFromPatientForm");
+        org.mockito.Mockito.verifyNoInteractions(userService);
+    }
 }

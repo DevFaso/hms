@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { ActivityKey, SuperAdminComponent } from './super-admin';
@@ -138,6 +138,18 @@ describe('SuperAdminComponent', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
+  it('reads an audit entity token in the reader language (D619)', () => {
+    dashboard.getSummary.and.returnValue(of(fakeSummary()));
+    platform.getSummary.and.returnValue(of(fakePlatformSummary()));
+    const c = setup();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { BILLING_INVOICE: 'Facture' } } },
+    });
+    translate.use('fr');
+    expect(c.entityLabel('BILLING_INVOICE')).toBe('Facture');
+    expect(c.entityLabel('Unknown Resource')).toBeNull();
+  });
   it('builds 8 stat tiles from a successful summary', () => {
     dashboard.getSummary.and.returnValue(of(fakeSummary()));
     platform.getSummary.and.returnValue(of(fakePlatformSummary()));
