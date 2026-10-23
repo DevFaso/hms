@@ -262,6 +262,7 @@ describe('PrescriptionsComponent — signing', () => {
       'list',
       'sign',
       'cosign',
+      'update',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -319,6 +320,50 @@ describe('PrescriptionsComponent — signing', () => {
     fixture = TestBed.createComponent(PrescriptionsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('QA D660: a refused edit of a signed prescription is reported inside the open modal', () => {
+    prescriptionService.update.and.returnValue(
+      throwError(() => ({ status: 403, error: { message: 'Access denied' } })),
+    );
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    component.submitForm();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const inline = el.querySelector('[data-testid="rx-form-error"]');
+    expect(component.showModal()).toBeTrue();
+    expect(inline?.textContent?.trim()).toBe('PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
+  it("QA D660: the server's reason for a refused save is shown in the modal, not only a toast", () => {
+    prescriptionService.update.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Cette ordonnance ne peut plus être modifiée dans son statut actuel.' },
+      })),
+    );
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+    } as PrescriptionResponse);
+    component.submitForm();
+    fixture.detectChanges();
+
+    const inline = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-form-error"]',
+    );
+    expect(inline?.textContent).toContain('ne peut plus être modifiée');
+    component.closeModal();
+    component.openEdit(rx('d', 'DRAFT'));
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="rx-form-error"]'),
+    ).toBeNull();
   });
 
   it('does not offer SIGNED in the editable status list', () => {

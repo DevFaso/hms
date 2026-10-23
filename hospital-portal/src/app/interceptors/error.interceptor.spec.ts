@@ -444,6 +444,28 @@ describe('errorInterceptor', () => {
     expect(error?.status).toBe(403);
   });
 
+  it('QA D660: a refused edit of a signed prescription stays in the open modal (no 403 page)', () => {
+    let error: HttpErrorResponse | undefined;
+    http.put('/prescriptions/5dd1633b', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/prescriptions/5dd1633b')
+      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D661: a refused referral cancel is reported by the page, not a 403 page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/referrals/r-1/cancel', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/referrals/r-1/cancel')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
   it('still redirects a 403 on reading an imaging order', () => {
     http.get('/imaging/orders/o-1').subscribe({ error: () => undefined });
     httpMock.expectOne('/imaging/orders/o-1').flush(null, { status: 403, statusText: 'Forbidden' });

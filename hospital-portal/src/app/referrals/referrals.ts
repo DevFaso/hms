@@ -30,7 +30,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 
 @Component({
   selector: 'app-referrals',
@@ -65,6 +65,23 @@ export class ReferralsComponent implements OnInit {
       this.roleContext.hasAnyActiveRole(actionRoles('referralCreate')) &&
       this.roleContext.hasAnyActiveRole([...SERVICE_RULE_ROLES.referralReferrer]),
   );
+
+  /**
+   * QA D661: acknowledge, schedule, start, complete, reject and cancel are
+   * physician-only at the API, so a nurse or a midwife is never offered a
+   * button that ends in a 403.
+   */
+  protected readonly canAct = computed(() => {
+    const allowed = (action: ActionKey) => this.roleContext.hasAnyActiveRole(actionRoles(action));
+    return {
+      acknowledge: allowed('referralAcknowledge'),
+      schedule: allowed('referralSchedule'),
+      start: allowed('referralStart'),
+      complete: allowed('referralComplete'),
+      reject: allowed('referralReject'),
+      cancel: allowed('referralCancel'),
+    };
+  });
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
   isMyDraft(r: ReferralResponse): boolean {

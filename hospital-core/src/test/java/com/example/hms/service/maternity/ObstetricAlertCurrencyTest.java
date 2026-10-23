@@ -60,6 +60,7 @@ class ObstetricAlertCurrencyTest {
         e.setId(UUID.randomUUID());
         e.setEpisode(episode);
         e.setObservationTime(at);
+        e.setFetalHeartRateBpm(severity == LaborAlertSeverity.URGENT ? 95 : 140);
         if (severity != null) {
             e.setAlerts(List.of(LaborAlert.builder().type(LaborAlertType.FETAL_HEART_RATE).severity(severity)
                 .message("m").build()));
@@ -83,8 +84,8 @@ class ObstetricAlertCurrencyTest {
     void laterNormalPartographEntryResolves() {
         LaborEpisode ep = episode(LaborStatus.ACTIVE);
         ObstetricAlertEscalation r = partographRow(entry(ep, T0, LaborAlertSeverity.URGENT));
-        when(partographRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(ep.getId()))
-            .thenReturn(Optional.of(entry(ep, T0.plusMinutes(15), null)));
+        when(partographRepository.findByEpisode_IdAndObservationTimeAfterOrderByObservationTimeDesc(ep.getId(), T0))
+            .thenReturn(List.of(entry(ep, T0.plusMinutes(15), null)));
         assertThat(currency.noLongerUrgent(r)).isTrue();
     }
 
@@ -92,22 +93,34 @@ class ObstetricAlertCurrencyTest {
     void laterStillUrgentPartographEntryKeepsTheAlert() {
         LaborEpisode ep = episode(LaborStatus.ACTIVE);
         ObstetricAlertEscalation r = partographRow(entry(ep, T0, LaborAlertSeverity.URGENT));
-        when(partographRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(ep.getId()))
-            .thenReturn(Optional.of(entry(ep, T0.plusMinutes(15), LaborAlertSeverity.URGENT)));
+        when(partographRepository.findByEpisode_IdAndObservationTimeAfterOrderByObservationTimeDesc(ep.getId(), T0))
+            .thenReturn(List.of(entry(ep, T0.plusMinutes(15), LaborAlertSeverity.URGENT)));
         assertThat(currency.noLongerUrgent(r)).isFalse();
     }
 
     @Test
-    void sourceStillLatestOrBackfilledEarlierKeepsTheAlert() {
+    void noLaterEntryKeepsTheAlert() {
         LaborEpisode ep = episode(LaborStatus.ACTIVE);
-        LaborPartographEntry source = entry(ep, T0, LaborAlertSeverity.URGENT);
-        ObstetricAlertEscalation r = partographRow(source);
-        when(partographRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(ep.getId()))
-            .thenReturn(Optional.of(source));
+        ObstetricAlertEscalation r = partographRow(entry(ep, T0, LaborAlertSeverity.URGENT));
+        when(partographRepository.findByEpisode_IdAndObservationTimeAfterOrderByObservationTimeDesc(ep.getId(), T0))
+            .thenReturn(List.of());
         assertThat(currency.noLongerUrgent(r)).isFalse();
-        when(partographRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(ep.getId()))
-            .thenReturn(Optional.of(entry(ep, T0.minusMinutes(5), null)));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D658: a later partograph entry that did not chart the FHR never closes an FHR alert")
+    void laterPartographEntryWithoutTheValueKeepsTheAlert() {
+        LaborEpisode ep = episode(LaborStatus.ACTIVE);
+        ObstetricAlertEscalation r = partographRow(entry(ep, T0, LaborAlertSeverity.URGENT));
+        LaborPartographEntry withoutFhr = entry(ep, T0.plusMinutes(15), null);
+        withoutFhr.setFetalHeartRateBpm(null);
+        when(partographRepository.findByEpisode_IdAndObservationTimeAfterOrderByObservationTimeDesc(ep.getId(), T0))
+            .thenReturn(List.of(withoutFhr));
         assertThat(currency.noLongerUrgent(r)).isFalse();
+        // The newest entry that re-measured it decides, even behind a blank one.
+        when(partographRepository.findByEpisode_IdAndObservationTimeAfterOrderByObservationTimeDesc(ep.getId(), T0))
+            .thenReturn(List.of(withoutFhr, entry(ep, T0.plusMinutes(10), null)));
+        assertThat(currency.noLongerUrgent(r)).isTrue();
     }
 
     @Test
@@ -135,6 +148,7 @@ class ObstetricAlertCurrencyTest {
         a.setId(UUID.randomUUID());
         a.setPatient(baby);
         a.setAssessmentTime(at);
+        a.setRespirationsPerMin(severity == NewbornAlertSeverity.URGENT ? 90 : 45);
         if (severity != null) {
             a.setAlerts(List.of(NewbornAssessmentAlert.builder().type(NewbornAlertType.RESPIRATORY)
                 .severity(severity).message("m").build()));
@@ -149,12 +163,36 @@ class ObstetricAlertCurrencyTest {
         NewbornAssessment source = assessment(baby, T0, NewbornAlertSeverity.URGENT);
         when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
         ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "RESPIRATORY");
-        when(newbornRepository.findFirstByPatient_IdOrderByAssessmentTimeDesc(baby.getId()))
-            .thenReturn(Optional.of(assessment(baby, T0.plusHours(1), null)));
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(baby.getId(), T0))
+            .thenReturn(List.of(assessment(baby, T0.plusHours(1), null)));
         assertThat(currency.noLongerUrgent(r)).isTrue();
-        when(newbornRepository.findFirstByPatient_IdOrderByAssessmentTimeDesc(baby.getId()))
-            .thenReturn(Optional.of(assessment(baby, T0.plusHours(1), NewbornAlertSeverity.URGENT)));
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(baby.getId(), T0))
+            .thenReturn(List.of(assessment(baby, T0.plusHours(1), NewbornAlertSeverity.URGENT)));
         assertThat(currency.noLongerUrgent(r)).isFalse();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D658: a later newborn assessment that measured SpO2 only never closes the glucose alert")
+    void newbornLaterAssessmentWithoutTheValueKeepsTheAlert() {
+        Patient baby = new Patient();
+        baby.setId(UUID.randomUUID());
+        NewbornAssessment source = assessment(baby, T0, null);
+        source.setGlucoseMgDl(30);
+        source.setAlerts(List.of(NewbornAssessmentAlert.builder().type(NewbornAlertType.GLUCOSE)
+            .severity(NewbornAlertSeverity.URGENT).message("m").build()));
+        when(newbornRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_NEWBORN, source.getId(), "GLUCOSE");
+        NewbornAssessment spo2Only = assessment(baby, T0.plusMinutes(5), null);
+        spo2Only.setRespirationsPerMin(null);
+        spo2Only.setOxygenSaturationPercent(84);
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(baby.getId(), T0))
+            .thenReturn(List.of(spo2Only));
+        assertThat(currency.noLongerUrgent(r)).isFalse();
+        NewbornAssessment normalGlucose = assessment(baby, T0.plusMinutes(30), null);
+        normalGlucose.setGlucoseMgDl(60);
+        when(newbornRepository.findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(baby.getId(), T0))
+            .thenReturn(List.of(normalGlucose, spo2Only));
+        assertThat(currency.noLongerUrgent(r)).isTrue();
     }
 
     private static PostpartumObservation observation(PostpartumCarePlan plan, LocalDateTime at,
@@ -163,6 +201,8 @@ class ObstetricAlertCurrencyTest {
         o.setId(UUID.randomUUID());
         o.setCarePlan(plan);
         o.setObservationTime(at);
+        o.setSystolicBpMmHg(severity == PostpartumAlertSeverity.URGENT ? 80 : 115);
+        o.setPulseBpm(severity == PostpartumAlertSeverity.URGENT ? 125 : 80);
         if (severity != null) {
             o.addAlert(PostpartumObservationAlert.builder().type(PostpartumAlertType.HEMORRHAGE)
                 .severity(severity).message("m").build());
@@ -178,13 +218,32 @@ class ObstetricAlertCurrencyTest {
         PostpartumObservation source = observation(plan, T0, PostpartumAlertSeverity.URGENT);
         when(postpartumRepository.findById(source.getId())).thenReturn(Optional.of(source));
         ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_POSTPARTUM, source.getId(), "HEMORRHAGE");
-        when(postpartumRepository.findFirstByCarePlan_IdOrderByObservationTimeDesc(plan.getId()))
-            .thenReturn(Optional.of(observation(plan, T0.plusMinutes(30), PostpartumAlertSeverity.URGENT)));
+        when(postpartumRepository.findByCarePlan_IdAndObservationTimeAfterOrderByObservationTimeDesc(plan.getId(), T0))
+            .thenReturn(List.of(observation(plan, T0.plusMinutes(30), PostpartumAlertSeverity.URGENT)));
         assertThat(currency.noLongerUrgent(r)).isFalse();
-        when(postpartumRepository.findFirstByCarePlan_IdOrderByObservationTimeDesc(plan.getId()))
-            .thenReturn(Optional.of(observation(plan, T0.plusMinutes(30), null)));
+        when(postpartumRepository.findByCarePlan_IdAndObservationTimeAfterOrderByObservationTimeDesc(plan.getId(), T0))
+            .thenReturn(List.of(observation(plan, T0.plusMinutes(30), null)));
         assertThat(currency.noLongerUrgent(r)).isTrue();
         plan.setActive(false);
         assertThat(currency.noLongerUrgent(r)).isTrue();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D658: a later postpartum observation without the vitals, or a checkbox trigger, keeps the alert")
+    void postpartumLaterObservationWithoutTheValuesKeepsTheAlert() {
+        PostpartumCarePlan plan = new PostpartumCarePlan();
+        plan.setId(UUID.randomUUID());
+        plan.setActive(true);
+        PostpartumObservation source = observation(plan, T0, PostpartumAlertSeverity.URGENT);
+        when(postpartumRepository.findById(source.getId())).thenReturn(Optional.of(source));
+        ObstetricAlertEscalation r = row(ObstetricAlertEscalationService.SOURCE_POSTPARTUM, source.getId(), "HEMORRHAGE");
+        PostpartumObservation painOnly = observation(plan, T0.plusMinutes(30), null);
+        painOnly.setSystolicBpMmHg(null);
+        painOnly.setPulseBpm(null);
+        when(postpartumRepository.findByCarePlan_IdAndObservationTimeAfterOrderByObservationTimeDesc(plan.getId(), T0))
+            .thenReturn(List.of(painOnly));
+        assertThat(currency.noLongerUrgent(r)).isFalse();
+        source.setUterineAtonySuspected(true);
+        assertThat(currency.noLongerUrgent(r)).as("a checkbox cannot be re-measured").isFalse();
     }
 }

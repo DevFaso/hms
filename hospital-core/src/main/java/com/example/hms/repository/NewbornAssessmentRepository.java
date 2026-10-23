@@ -47,4 +47,8 @@ public interface NewbornAssessmentRepository extends JpaRepository<NewbornAssess
         @Param("to") LocalDateTime to,
         Pageable pageable
     );
+
+    /** QA D658: the baby's assessments after the one that raised an alert, newest first. */
+    List<NewbornAssessment> findByPatient_IdAndAssessmentTimeAfterOrderByAssessmentTimeDesc(
+        UUID patientId, java.time.LocalDateTime after);
 }

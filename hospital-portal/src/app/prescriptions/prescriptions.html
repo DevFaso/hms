@@ -953,6 +953,9 @@
           </div>
         }
       </div>
+      @if (formError()) {
+        <p class="form-error" role="alert" data-testid="rx-form-error">{{ formError() }}</p>
+      }
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

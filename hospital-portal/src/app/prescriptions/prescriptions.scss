@@ -605,3 +605,13 @@
     color: #4b5563;
   }
 }
+
+// QA D660: a refused save, inside the open modal.
+.form-error {
+  margin: 0.75rem 1.5rem 0;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+}

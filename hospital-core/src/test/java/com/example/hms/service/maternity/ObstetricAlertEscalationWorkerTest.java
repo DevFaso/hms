@@ -206,7 +206,7 @@ class ObstetricAlertEscalationWorkerTest {
         r.setAlertMessage(null);
         when(escalationRepository.findById(r.getId())).thenReturn(Optional.of(r));
         when(escalationRepository.claimRound(eq(r.getId()), eq((short) 2), eq((short) 3), any())).thenReturn(1);
-        when(patientRepository.findById(PATIENT)).thenReturn(Optional.of(new Patient()));
+        when(patientRepository.findByIdUnscoped(PATIENT)).thenReturn(Optional.of(new Patient()));
         assertThat(worker.escalateOne(r.getId())).isTrue();
         verify(messageSource).getMessage(eq("patient.fallback.generic"), isNull(), any());
         verify(notificationService).createNotification("msg", "documenter", ObstetricAlertEscalationWorker.ESCALATION_TYPE);

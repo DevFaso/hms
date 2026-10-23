@@ -3226,7 +3226,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3282,7 +3282,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3364,7 +3364,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 

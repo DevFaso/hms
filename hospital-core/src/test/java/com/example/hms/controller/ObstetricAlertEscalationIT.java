@@ -170,7 +170,9 @@ class ObstetricAlertEscalationIT extends BaseIT {
         assertThat(escalationRepository.findAll()).allSatisfy(r -> assertThat(r.getEscalationLevel()).isEqualTo((short) 1));
         assertThat(notificationsOf(nurse))
             .filteredOn(n -> ObstetricAlertEscalationWorker.ESCALATION_TYPE.equals(n.getType()))
-            .hasSize(rows.size());
+            .hasSize(rows.size())
+            .as("QA D659: the reminder names the patient, as the first notice does")
+            .allSatisfy(n -> assertThat(n.getMessage()).contains("Awa Femme"));
         assertThat(notificationsOf(foreignDoctor)).isEmpty();
 
         // The doctor acknowledges every item: the next sweep sends nothing.
@@ -217,6 +219,106 @@ class ObstetricAlertEscalationIT extends BaseIT {
         });
         assertThat(notificationsOf(nurse)).hasSize((int) nurseBefore);
         assertThat(notificationsOf(doctor)).hasSize((int) doctorBefore);
+    }
+
+    @Test
+    @DisplayName("QA D658: a later newborn assessment with SpO2 only never auto-closes the temperature, HR and glucose alerts")
+    void laterNewbornAssessmentWithoutTheValueKeepsTheAlertsOpen() throws Exception {
+        LocalDateTime now = LocalDateTime.now().withNano(0);
+        UUID deliveryId = recordUneventfulDelivery(startEpisode(), now.minusMinutes(30));
+        escalationRepository.deleteAllInBatch();
+        com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentRequestDTO first =
+            new com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentRequestDTO();
+        first.setDeliveryRecordId(deliveryId);
+        first.setAssessmentTime(now.minusMinutes(8));
+        first.setTemperatureCelsius(35.2);
+        first.setHeartRateBpm(190);
+        first.setOxygenSaturationPercent(85);
+        first.setGlucoseMgDl(30);
+        postNewborn(first);
+        List<UUID> firstRows = escalationRepository.findAll().stream().map(ObstetricAlertEscalation::getId).toList();
+        assertThat(escalationRepository.findAll()).extracting(ObstetricAlertEscalation::getAlertType)
+            .contains("THERMOREGULATION", "CARDIOVASCULAR", "OXYGENATION", "GLUCOSE");
+
+        com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentRequestDTO second =
+            new com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentRequestDTO();
+        second.setDeliveryRecordId(deliveryId);
+        second.setAssessmentTime(now.minusMinutes(5));
+        second.setOxygenSaturationPercent(84);
+        postNewborn(second);
+
+        backdate(escalationRepository.findAll());
+        sweep();
+        assertThat(escalationRepository.findAllById(firstRows))
+            .filteredOn(r -> List.of("THERMOREGULATION", "CARDIOVASCULAR", "GLUCOSE").contains(r.getAlertType()))
+            .hasSize(3)
+            .allSatisfy(r -> {
+                assertThat(r.getAcknowledgedAt()).as(r.getAlertType() + " stays open").isNull();
+                assertThat(r.getEscalationLevel()).as(r.getAlertType() + " keeps escalating").isEqualTo((short) 1);
+            });
+    }
+
+    @Test
+    @DisplayName("QA D658: a later partograph entry with the FHR only closes the FHR alert, never the blood-pressure one")
+    void laterPartographEntryClosesOnlyWhatItRemeasured() throws Exception {
+        UUID episodeId = startEpisode();
+        LocalDateTime urgentAt = LocalDateTime.now().minusMinutes(20).withNano(0);
+        PartographEntryRequestDTO urgent = new PartographEntryRequestDTO();
+        urgent.setObservationTime(urgentAt);
+        urgent.setFetalHeartRateBpm(95);
+        urgent.setSystolicBpMmHg(165);
+        urgent.setDiastolicBpMmHg(112);
+        postEntry(episodeId, urgent);
+
+        PartographEntryRequestDTO fhrOnly = new PartographEntryRequestDTO();
+        fhrOnly.setObservationTime(urgentAt.plusMinutes(15));
+        fhrOnly.setFetalHeartRateBpm(140);
+        postEntry(episodeId, fhrOnly);
+
+        backdate(escalationRepository.findAll());
+        sweep();
+        List<ObstetricAlertEscalation> rows = escalationRepository.findAll();
+        assertThat(rows).filteredOn(r -> "FETAL_HEART_RATE".equals(r.getAlertType()))
+            .isNotEmpty().allSatisfy(r -> assertThat(r.getAcknowledgedAt()).isNotNull());
+        assertThat(rows).filteredOn(r -> "MATERNAL_VITALS".equals(r.getAlertType()))
+            .isNotEmpty().allSatisfy(r -> {
+                assertThat(r.getAcknowledgedAt()).as("BP was not re-measured").isNull();
+                assertThat(r.getEscalationLevel()).isEqualTo((short) 1);
+            });
+    }
+
+    private UUID recordUneventfulDelivery(UUID episodeId, LocalDateTime birth) throws Exception {
+        com.example.hms.payload.dto.clinical.labor.DeliveryRecordRequestDTO delivery =
+            new com.example.hms.payload.dto.clinical.labor.DeliveryRecordRequestDTO();
+        delivery.setBirthDateTime(birth);
+        delivery.setDeliveryMode(com.example.hms.enums.DeliveryMode.SPONTANEOUS_VAGINAL);
+        delivery.setLiveBirth(true);
+        delivery.setNumberOfInfants(1);
+        delivery.setBirthWeightGrams(3100);
+        delivery.setApgarOneMinute(9);
+        delivery.setApgarFiveMinute(9);
+        delivery.setPlacentaDeliveredAt(birth.plusMinutes(10));
+        delivery.setPlacentaComplete(true);
+        delivery.setUterotonicGiven(true);
+        delivery.setEstimatedBloodLossMl(300);
+        String body = mockMvc.perform(post(API + "/patients/{p}/labor/episodes/{e}/delivery", patient.getId(), episodeId)
+                .contextPath(API).param("hospitalId", hospital.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(delivery))
+                .with(signedInAs(midwife)).with(csrf()))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(objectMapper.readTree(body).get("id").asString());
+    }
+
+    private void postNewborn(com.example.hms.payload.dto.clinical.newborn.NewbornAssessmentRequestDTO request)
+        throws Exception {
+        mockMvc.perform(post(API + "/patients/{p}/postpartum/newborn-assessments", patient.getId())
+                .contextPath(API).param("hospitalId", hospital.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(request))
+                .with(signedInAs(midwife)).with(csrf()))
+            .andExpect(status().isCreated());
     }
 
     private void postEntry(UUID episodeId, PartographEntryRequestDTO entry) throws Exception {
@@ -380,6 +482,12 @@ class ObstetricAlertEscalationIT extends BaseIT {
     private void wipe() {
         escalationRepository.deleteAllInBatch();
         onCallScheduleRepository.deleteAllInBatch();
+        // The delivery in the D658 newborn test raises its charge (D608) and opens a postpartum plan.
+        applicationContext.getBean(com.example.hms.repository.InvoiceItemRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.BillingInvoiceRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.PostpartumObservationRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.NewbornAssessmentRepository.class).deleteAll();
+        applicationContext.getBean(com.example.hms.repository.PostpartumCarePlanRepository.class).deleteAll();
         SharedClinicalRowsCleanup.deleteAll(applicationContext);
     }
 

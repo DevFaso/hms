@@ -470,6 +470,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
+    this.formError.set('');
     this.showModal.set(true);
   }
 
@@ -497,16 +498,26 @@ export class PrescriptionsComponent implements OnInit {
     this.editing.set(true);
     this.editingId.set(p.id);
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
+    this.formError.set('');
     this.showModal.set(true);
   }
 
   closeModal(): void {
     this.showModal.set(false);
+    this.formError.set('');
     this.resetCdsState();
   }
 
+  /**
+   * QA D660: the server's refusal of a save, shown inside the open modal in
+   * the caller's language (a 403 used to replace the page with /error/403
+   * and lose the form; a 400 showed only in a toast).
+   */
+  protected readonly formError = signal('');
+
   submitForm(): void {
     this.saving.set(true);
+    this.formError.set('');
     const op = this.editing()
       ? this.prescriptionService.update(this.editingId()!, this.form)
       : this.prescriptionService.create(this.form);
@@ -543,11 +554,13 @@ export class PrescriptionsComponent implements OnInit {
           );
         } else {
           // The server's reason (e.g. "the prescriber must be you", QA D176)
-          // in the caller's language; the generic text only as a fallback.
-          this.toast.error(
+          // in the caller's language; a 403 says "not allowed", anything else
+          // the generic text, only as a fallback.
+          const reason =
             this.extractErrorMessage(err) ||
-              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
-          );
+            this.refusalText(err, 'PRESCRIPTIONS.TOAST.SAVE_FAILED');
+          this.formError.set(reason);
+          this.toast.error(reason);
         }
         this.saving.set(false);
       },

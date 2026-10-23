@@ -74,6 +74,11 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   // QA D611 (D527): editing a signed imaging order — the reason is shown in
   // the open modal, not on a 403 page.
   /\/imaging\/orders\/[^/?]+(\?|$)/,
+  // QA D660: a refused prescription edit is reported in the open modal; the
+  // redirect replaced the page and lost the form.
+  /\/prescriptions\/[^/?]+(\?|$)/,
+  // QA D661: a refused referral action is reported by the page's toast.
+  /\/referrals\/[^/?]+\/(acknowledge|schedule|start|complete|reject|cancel|submit)(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

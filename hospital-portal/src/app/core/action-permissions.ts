@@ -127,6 +127,31 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
+  // QA D661: the receiving-side and cancel actions are physician-only.
+  referralAcknowledge: {
+    endpoint: 'GeneralReferralController#acknowledgeReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralSchedule: {
+    endpoint: 'GeneralReferralController#scheduleReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralStart: {
+    endpoint: 'GeneralReferralController#startReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralComplete: {
+    endpoint: 'GeneralReferralController#completeReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralReject: {
+    endpoint: 'GeneralReferralController#rejectReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralCancel: {
+    endpoint: 'GeneralReferralController#cancelReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],

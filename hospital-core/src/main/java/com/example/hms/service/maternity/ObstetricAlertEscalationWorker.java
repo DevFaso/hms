@@ -150,7 +150,11 @@ public class ObstetricAlertEscalationWorker {
             return false;
         }
         Locale locale = NotificationLocales.STAFF;
-        String patientName = patientRepository.findById(row.getPatientId())
+        // QA D659: the sweep runs with no tenant context, where the tenant-scoped
+        // findById sees no patient and every reminder said "for patient". The row
+        // was raised at its hospital for this patient, and the reminder only goes
+        // to that hospital's staff, so the unscoped read discloses nothing new.
+        String patientName = patientRepository.findByIdUnscoped(row.getPatientId())
             .map(Patient::getFullName)
             .filter(n -> !n.isBlank())
             .orElseGet(() -> messageSource.getMessage("patient.fallback.generic", null, locale));

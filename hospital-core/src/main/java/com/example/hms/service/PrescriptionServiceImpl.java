@@ -612,10 +612,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectClientAssertedWorkflowStatus(PrescriptionRequestDTO request) {
         PrescriptionStatus status = request.getStatus();
         if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
-            throw new BusinessException(
-                "The status " + status + " cannot be set directly. Signing has its own endpoint "
-                    + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
-                    + "their own workflows.");
+            // QA D660: a key, so the refusal reaches the prescriber in her language.
+            throw new BusinessException("prescription.status.notAssertable");
         }
     }
 
@@ -761,14 +759,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
         if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
-            throw new BusinessException(
-                "This prescription is flagged as a controlled substance; the flag cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.controlled.flagLocked");
         }
         if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
-            throw new BusinessException(
-                "This prescription declares a co-signature requirement; the requirement cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.cosign.flagLocked");
         }
     }
 
