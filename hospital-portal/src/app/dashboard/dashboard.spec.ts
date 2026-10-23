@@ -1944,6 +1944,39 @@ describe('Dashboard invoice aging (QA D283)', () => {
     expect(text).not.toContain('Current');
     expect(text).not.toContain('$');
   });
+
+  it('recent activity shows the entity label, never a raw record id (QA D672)', () => {
+    const fixture = render();
+    TestBed.inject(TranslateService).setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { PATIENT: 'Patient' } } } },
+      true,
+    );
+    const evt = (id: string, resourceName: string) => ({
+      id,
+      eventType: 'DATA_CREATE',
+      status: 'SUCCESS',
+      entityType: 'PATIENT',
+      resourceName,
+      userName: 'QA Admin',
+      eventTimestamp: '2026-10-23T10:00:00',
+    });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      recentAuditEvents: [
+        evt('a1', '19ffd52b-aae7-4820-8408-6622564a3ac3'),
+        evt('a2', 'Patient 19ffd52b-aae7-4820-8408-6622564a3ac3'),
+      ],
+    } as any);
+    fixture.detectChanges();
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.audit-row .audit-summary'),
+    ).map((r) => r.textContent ?? '');
+    expect(rows.length).toBe(2);
+    for (const text of rows) {
+      expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+      expect(text).toContain('Patient');
+    }
+  });
 });
 
 describe('QA D316: dashboard current medications', () => {

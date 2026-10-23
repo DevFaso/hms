@@ -1150,10 +1150,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * PATIENT…) repeated what the translated event type already says, and the
    * audit writer's "Unknown Resource" placeholder is not a name (D260).
    */
-  auditResourceLabel(resourceName: string | null | undefined): string | null {
+  auditResourceLabel(
+    resourceName: string | null | undefined,
+    entityType?: string | null,
+  ): string | null {
     // QA D619: a write audit's resourceName is the entity token (TRANSFER,
     // BILLING_INVOICE); echoing it put English wire tokens on the FR/ES card.
-    return this.enumLabels.auditEntityLabel(resourceName);
+    // QA D672: a resourceName that is only a record id falls back to the
+    // row's entity type, so the line reads like its neighbours.
+    return (
+      this.enumLabels.auditEntityLabel(resourceName) ?? this.enumLabels.auditEntityLabel(entityType)
+    );
   }
 
   // ── MVP 17: Staffing by department ──────────────────────────

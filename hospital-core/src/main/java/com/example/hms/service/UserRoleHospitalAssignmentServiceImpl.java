@@ -1506,9 +1506,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 throw conflict;
             }
             return BulkImportOutcome.skipped(buildFailureResult(rowNumber, tokens, headerIndex, conflict.getMessage()));
-        } catch (BusinessException | ResourceNotFoundException | AccessDeniedException ex) {
+        } catch (AccessDeniedException denied) {
             // A row the caller may not grant fails on its own, nothing saved
-            // for it; the rest of the file still imports.
+            // for it; the rest of the file still imports. Only a
+            // ClientSafeAccessDeniedException carries a sentence written for
+            // the caller; any other refusal (UserAccountAccess's internal
+            // "Access denied") is answered in the request's language, as
+            // GlobalExceptionHandler does for a whole request (QA D671).
+            String message = denied instanceof com.example.hms.exception.ClientSafeAccessDeniedException
+                ? denied.getMessage()
+                : messageSource.getMessage("error.access.denied", null, "Access denied", LocaleContextHolder.getLocale());
+            return BulkImportOutcome.failed(buildFailureResult(rowNumber, tokens, headerIndex, message));
+        } catch (BusinessException | ResourceNotFoundException ex) {
             return BulkImportOutcome.failed(buildFailureResult(rowNumber, tokens, headerIndex, ex.getMessage()));
         }
     }

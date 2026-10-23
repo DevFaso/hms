@@ -2,6 +2,9 @@ import { Injectable, OnDestroy, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
+/** A UUID anywhere in a string (QA D672). */
+const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 /**
  * The enum-label vocabulary and its three-tier lookup, with no Angular
  * template machinery attached.
@@ -1002,6 +1005,9 @@ export class EnumLabelService implements OnDestroy {
   auditEntityLabel(raw: string | null | undefined): string | null {
     const name = raw?.trim();
     if (!name || name === 'Unknown Resource') return null;
+    // QA D672: several writers record the row's id as its resource name
+    // ("19ffd52b-…", "Patient 19ffd52b-…"); an id is not a label.
+    if (UUID_IN_TEXT.test(name)) return null;
     const upperSnake = /^[A-Z][A-Z0-9_]*$/.test(name);
     const pascal = /^(?:[A-Z][a-z0-9]+)+$/.test(name);
     if (!upperSnake && !pascal) return name;
