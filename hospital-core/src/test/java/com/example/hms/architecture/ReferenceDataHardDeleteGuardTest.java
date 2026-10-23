@@ -19,10 +19,11 @@ import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * QA D601: a hard delete of lab / microbiology data must never orphan the rows
+ * QA D601: a hard delete of reference data (lab and microbiology, wards, beds,
+ * departments, every *Definition / *Catalog / *OrderSet) must never orphan the rows
  * that point at it (dev carries no foreign key to stop it). Every main-code
- * method that calls a {@code delete*} method on a lab or microbiology
- * repository is found by a bytecode scan (lambdas included) and must, earlier
+ * method that calls a {@code delete*} method on one of those repositories
+ * is found by a bytecode scan (lambdas included) and must, earlier
  * in the same method, either:
  * <ul>
  *   <li>call an {@code existsBy*} reference check on any repository, or</li>
@@ -35,19 +36,32 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Swept paths (2026-10-23): LabTestDefinitionServiceImpl.delete
  * (status + existsByLabTestDefinition_Id), LabOrderServiceImpl.deleteLabOrder
  * (existsByLabOrder_Id), LabResultServiceImpl.deleteLabResult
- * (requireNotReleased), plus the recorded paths below.
+ * (requireNotReleased), BedManagementServiceImpl.deleteWard (transfers by ward)
+ * and deleteBed (admissions and transfers by bed), DepartmentServiceImpl
+ * .deleteDepartment (existsByClinicalReference), plus the recorded paths below.
  */
-class LabHardDeleteGuardCoverageTest {
+class ReferenceDataHardDeleteGuardTest {
 
     private static final String REPOSITORY_PACKAGE = "com/example/hms/repository/";
 
-    /** Lab and microbiology repositories; Labor* (obstetrics) is not lab data. */
+    /** Reference data the chart points at, by repository name. */
+    private static final Set<String> GUARDED_REFERENCE_REPOSITORIES =
+        Set.of("WardRepository", "BedRepository", "DepartmentRepository");
+
+    /**
+     * Lab and microbiology repositories (Labor* is obstetrics, not lab data),
+     * wards, beds and departments, and every *Definition / *Catalog / *OrderSet
+     * repository: reference data whose rows orders, results and admissions
+     * point at.
+     */
     private static boolean isGuardedRepository(String owner) {
         if (!owner.startsWith(REPOSITORY_PACKAGE)) {
             return false;
         }
-        String simple = owner.substring(REPOSITORY_PACKAGE.length());
-        return (simple.startsWith("Lab") && !simple.startsWith("Labor")) || simple.startsWith("Micro");
+        String simple = owner.substring(owner.lastIndexOf('/') + 1);
+        return (simple.startsWith("Lab") && !simple.startsWith("Labor")) || simple.startsWith("Micro")
+            || GUARDED_REFERENCE_REPOSITORIES.contains(simple)
+            || simple.contains("Definition") || simple.contains("Catalog") || simple.contains("OrderSet");
     }
 
     /** Helpers that refuse a delete once the row is referenced by the chart. */
@@ -64,8 +78,8 @@ class LabHardDeleteGuardCoverageTest {
             "a susceptibility row is a leaf; a final report needs a correction reason and is stamped CORRECTED"));
 
     @Test
-    @DisplayName("QA D601: every lab hard delete is preceded by a reference check or is recorded")
-    void everyLabHardDeleteIsGuarded() throws IOException {
+    @DisplayName("QA D601: every reference-data hard delete is preceded by a reference check or is recorded")
+    void everyReferenceDataHardDeleteIsGuarded() throws IOException {
         Set<String> unchecked = new TreeSet<>();
         Set<String> checked = new TreeSet<>();
         Resource[] classes = new PathMatchingResourcePatternResolver()
@@ -106,9 +120,12 @@ class LabHardDeleteGuardCoverageTest {
             .contains(
                 "com.example.hms.service.LabTestDefinitionServiceImpl#delete",
                 "com.example.hms.service.LabOrderServiceImpl#deleteLabOrder",
-                "com.example.hms.service.LabResultServiceImpl#deleteLabResult");
+                "com.example.hms.service.LabResultServiceImpl#deleteLabResult",
+                "com.example.hms.service.BedManagementServiceImpl#deleteWard",
+                "com.example.hms.service.BedManagementServiceImpl#deleteBed",
+                "com.example.hms.service.DepartmentServiceImpl#deleteDepartment");
         assertThat(unchecked)
-            .as("a lab hard delete with no reference check before it: add one, or record why it is safe")
+            .as("a reference-data hard delete with no reference check before it: add one, or record why it is safe")
             .isSubsetOf(RECORDED.keySet());
         assertThat(RECORDED.keySet())
             .as("a recorded delete that is now checked or gone: remove it (the map only shrinks)")

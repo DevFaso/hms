@@ -20,6 +20,9 @@ import java.util.UUID;
 @Repository
 public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
 
+    /** QA D601: any admission, current or past, that ever used this bed. */
+    boolean existsByBed_Id(UUID bedId);
+
     /**
      * Find admissions by patient
      */

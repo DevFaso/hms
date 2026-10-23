@@ -43,6 +43,8 @@ class BedManagementServiceImplTest {
     @Mock private DepartmentRepository departmentRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Mock private com.example.hms.repository.TransferOrderRepository transferOrderRepository;
 
     @InjectMocks private BedManagementServiceImpl service;
 
@@ -149,6 +151,62 @@ class BedManagementServiceImplTest {
 
         assertThatThrownBy(() -> service.updateWard(wardId, request))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void deleteWardRejectsWardUsedByTransfers_D601() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(wardRepository.findByIdAndHospital_Id(ward.getId(), hospitalId)).thenReturn(Optional.of(ward));
+        when(bedRepository.findByWard_Id(ward.getId())).thenReturn(List.of());
+        when(transferOrderRepository.existsByFromWard_IdOrToWard_Id(ward.getId(), ward.getId())).thenReturn(true);
+
+        UUID wardId = ward.getId();
+        assertThatThrownBy(() -> service.deleteWard(wardId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("transfers");
+        verify(wardRepository, never()).delete(any(Ward.class));
+    }
+
+    @Test
+    void deleteBedRejectsFreeBedWithAdmissionHistory_D601() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        Bed bed = Bed.builder().ward(ward).bedNumber("B07").status(BedStatus.AVAILABLE).build();
+        bed.setId(UUID.randomUUID());
+        UUID bedId = bed.getId();
+        when(bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)).thenReturn(Optional.of(bed));
+        when(admissionRepository.existsByBed_Id(bedId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteBed(bedId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("history");
+        verify(bedRepository, never()).delete(any(Bed.class));
+    }
+
+    @Test
+    void deleteBedRejectsFreeBedWithTransferHistory_D601() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        Bed bed = Bed.builder().ward(ward).bedNumber("B08").status(BedStatus.AVAILABLE).build();
+        bed.setId(UUID.randomUUID());
+        UUID bedId = bed.getId();
+        when(bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)).thenReturn(Optional.of(bed));
+        when(transferOrderRepository.existsByFromBed_IdOrToBed_Id(bedId, bedId)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deleteBed(bedId))
+            .isInstanceOf(BusinessException.class);
+        verify(bedRepository, never()).delete(any(Bed.class));
+    }
+
+    @Test
+    void deleteBedDeletesFreeBedWithNoHistory_D601() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        Bed bed = Bed.builder().ward(ward).bedNumber("B09").status(BedStatus.AVAILABLE).build();
+        bed.setId(UUID.randomUUID());
+        UUID bedId = bed.getId();
+        when(bedRepository.findByIdAndWard_Hospital_Id(bedId, hospitalId)).thenReturn(Optional.of(bed));
+
+        service.deleteBed(bedId);
+
+        verify(bedRepository).delete(bed);
     }
 
     @Test

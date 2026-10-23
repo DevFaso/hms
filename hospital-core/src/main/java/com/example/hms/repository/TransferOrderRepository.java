@@ -15,6 +15,12 @@ import java.util.UUID;
 @Repository
 public interface TransferOrderRepository extends JpaRepository<TransferOrder, UUID> {
 
+    /** QA D601: a transfer, any status, from or to this bed. */
+    boolean existsByFromBed_IdOrToBed_Id(UUID fromBedId, UUID toBedId);
+
+    /** QA D601: a transfer, any status, from or to this ward. */
+    boolean existsByFromWard_IdOrToWard_Id(UUID fromWardId, UUID toWardId);
+
     /**
      * The transfer worklist: everything ordered and not yet carried out,
      * oldest first because that is the order a porter works through them.

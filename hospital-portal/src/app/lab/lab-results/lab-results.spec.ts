@@ -806,3 +806,101 @@ describe('LabResultsComponent — QA lab-results defects', () => {
     ).not.toBeNull();
   });
 });
+
+/**
+ * QA D616 / D645 against the rendered page, not the computed alone: a spec that
+ * only calls canDeleteResult() passes with the template gate removed.
+ */
+describe('LabResultsComponent — rendered delete gate and order picker', () => {
+  let fixture: ComponentFixture<LabResultsComponent>;
+  let component: LabResultsComponent;
+  let httpMock: HttpTestingController;
+
+  function setup(activeRoles: string[]): void {
+    TestBed.configureTestingModule({
+      imports: [LabResultsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: { getUserId: () => 'user-1' } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            effectiveHospitalIdForRequest: () => 'h-1',
+            hasAnyActiveRole: (roles: string[]) =>
+              expandRoleEquivalents(activeRoles).some((r) => roles.includes(r)),
+            hasAnyActiveRoleExactly: (roles: string[]) =>
+              roles.some((r) => activeRoles.includes(r)),
+          },
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(LabResultsComponent);
+    component = fixture.componentInstance;
+    httpMock = TestBed.inject(HttpTestingController);
+  }
+
+  afterEach(() => httpMock.verify());
+
+  function flushInit(
+    results: Record<string, unknown>[],
+    orders: Partial<LabOrderResponse>[],
+  ): void {
+    fixture.detectChanges();
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: results, totalElements: results.length, totalPages: 1, number: 0 },
+        success: true,
+      });
+    httpMock
+      .expectOne((r) => r.url === '/lab-orders' && r.method === 'GET')
+      .flush({
+        data: { content: orders, totalElements: orders.length, totalPages: 1, number: 0 },
+        success: true,
+      });
+    httpMock
+      .expectOne((r) => r.url.includes('/assignments'))
+      .flush([{ id: 'assign-1', active: true }]);
+    fixture.detectChanges();
+  }
+
+  it('QA D616: a lab technician sees no delete button on an unreleased result', () => {
+    setup(['ROLE_LAB_TECHNICIAN']);
+    flushInit([mockResult({ id: 'r-1', released: false })], []);
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.compare-link')).withContext('the row is rendered').not.toBeNull();
+    expect(host.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('QA D616: a lab scientist sees the delete button on the same unreleased result', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit([mockResult({ id: 'r-1', released: false })], []);
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D645: an order whose test no longer resolves is not offered in the result picker', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        { id: 'o-orphan', labOrderCode: 'o-orphan', patientId: 'p-1' },
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'p-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+        },
+      ],
+    );
+
+    expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
+  });
+});

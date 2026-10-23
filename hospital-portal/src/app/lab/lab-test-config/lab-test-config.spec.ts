@@ -70,6 +70,32 @@ describe('LabTestConfigComponent', () => {
     flushAssignments();
   }
 
+  it('QA D617: renders no tune or delete on an ACTIVE row, and both on a DRAFT row', () => {
+    fixture.detectChanges();
+    flushInit(
+      [
+        mockDefinition({ id: 'def-active', testCode: 'ACT', approvalStatus: 'ACTIVE' }),
+        mockDefinition({ id: 'def-draft', testCode: 'DRF', approvalStatus: 'DRAFT' }),
+      ],
+      2,
+    );
+    fixture.detectChanges();
+
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+    ) as HTMLElement[];
+    const row = (code: string) =>
+      rows.find((r) => r.querySelector('.code-cell')?.textContent?.trim() === code)!;
+    const icons = (r: HTMLElement) =>
+      Array.from(r.querySelectorAll('.btn-icon .material-symbols-outlined')).map((i) =>
+        i.textContent?.trim(),
+      );
+    expect(icons(row('ACT'))).not.toContain('tune');
+    expect(icons(row('ACT'))).not.toContain('delete');
+    expect(icons(row('DRF'))).toContain('tune');
+    expect(icons(row('DRF'))).toContain('delete');
+  });
+
   it('QA D617: offers range edit and delete only on a draft or rejected definition', () => {
     expect(component.isEditableDraft({ approvalStatus: 'DRAFT' })).toBeTrue();
     expect(component.isEditableDraft({ approvalStatus: 'REJECTED' })).toBeTrue();
