@@ -220,10 +220,7 @@
                       <span class="material-symbols-outlined">check_circle</span>
                     </button>
                   }
-                  @if (
-                    canAct().cancel &&
-                    !['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status)
-                  ) {
+                  @if (canCancel(r)) {
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(r)"
@@ -441,10 +438,7 @@
                 {{ 'REFERRALS.ACTION_COMPLETE' | translate }}
               </button>
             }
-            @if (
-              canAct().cancel &&
-              !['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(ref.status)
-            ) {
+            @if (canCancel(ref)) {
               <button class="btn-danger" (click)="confirmCancel(ref)">
                 <span class="material-symbols-outlined">cancel</span>
                 {{ 'COMMON.CANCEL' | translate }}
@@ -736,6 +730,9 @@
             }}
           </p>
         </div>
+        @if (cancelError()) {
+          <p class="form-error" role="alert">{{ cancelError() }}</p>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDeleteAction()">

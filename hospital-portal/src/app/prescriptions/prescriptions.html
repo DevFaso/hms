@@ -183,7 +183,7 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (canWrite()) {
+                  @if (canEditRow(p)) {
                     <button
                       class="action-link edit-link"
                       (click)="openEdit(p)"
@@ -801,12 +801,17 @@
           </div>
           <div class="field">
             <label for="rx-staffId">{{ 'PRESCRIPTIONS.PRESCRIBER' | translate }}</label>
-            <select id="rx-staffId" [(ngModel)]="form.staffId" [disabled]="editingSigned()">
-              <option value="">{{ 'PRESCRIPTIONS.SELECT_PRESCRIBER' | translate }}</option>
-              @for (s of staffMembers(); track s.id) {
-                <option [value]="s.id">{{ s.name }}</option>
-              }
-            </select>
+            @if (editingSigned()) {
+              <!-- QA D670: the order's own prescriber, not the caller's name. -->
+              <input id="rx-staffId" type="text" [value]="editingPrescriberName()" readonly />
+            } @else {
+              <select id="rx-staffId" [(ngModel)]="form.staffId">
+                <option value="">{{ 'PRESCRIPTIONS.SELECT_PRESCRIBER' | translate }}</option>
+                @for (s of staffMembers(); track s.id) {
+                  <option [value]="s.id">{{ s.name }}</option>
+                }
+              </select>
+            }
           </div>
         </div>
         <div class="field">

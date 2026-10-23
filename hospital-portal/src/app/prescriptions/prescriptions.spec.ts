@@ -366,6 +366,22 @@ describe('PrescriptionsComponent — signing', () => {
     ).toBeNull();
   });
 
+  it('QA D670: the withdrawal form names the prescriber of record, not the caller', async () => {
+    component.openEdit({
+      ...rx('eda77c51', 'SIGNED'),
+      staffId: 'staff-doctor-a',
+      staffFullName: 'QA R9 Docteur-A',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const field = (fixture.nativeElement as HTMLElement).querySelector(
+      '#rx-staffId',
+    ) as HTMLInputElement;
+    expect(field.value).toBe('QA R9 Docteur-A');
+    expect(field.readOnly).toBeTrue();
+  });
+
   it('QA D660: a signed prescription opens read-only, offering only a withdrawal with a reason', async () => {
     component.openEdit({
       ...rx('5dd1633b', 'SIGNED'),
@@ -378,12 +394,19 @@ describe('PrescriptionsComponent — signing', () => {
 
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('[data-testid="rx-signed-hint"]')).not.toBeNull();
-    for (const id of ['rx-medName', 'rx-dosage', 'rx-frequency', 'rx-duration', 'rx-notes']) {
+    for (const id of [
+      'rx-medName',
+      'rx-dosage',
+      'rx-frequency',
+      'rx-duration',
+      'rx-notes',
+      'rx-staffId',
+    ]) {
       expect((el.querySelector('#' + id) as HTMLInputElement).readOnly)
         .withContext(id)
         .toBeTrue();
     }
-    for (const id of ['rx-staffId', 'rx-route', 'rx-cosign', 'rx-encounterId']) {
+    for (const id of ['rx-route', 'rx-cosign', 'rx-encounterId']) {
       expect((el.querySelector('#' + id) as HTMLInputElement).disabled)
         .withContext(id)
         .toBeTrue();
@@ -421,15 +444,19 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');
   });
 
-  it('offers only the withdrawn statuses when editing a withdrawn prescription', () => {
-    // Withdrawal is final on the server: a reopen to DRAFT would be refused.
+  it('QA D660: a withdrawn prescription opens no edit form and offers no Edit', () => {
+    // Withdrawal is final and read-only on the server, every field.
     for (const status of ['CANCELLED', 'DISCONTINUED']) {
       component.openEdit(rx('w', status));
-      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+      fixture.detectChanges();
+      expect(component.showModal()).withContext(status).toBeFalse();
+      expect((fixture.nativeElement as HTMLElement).querySelector('#rx-medName')).toBeNull();
+      expect(component.canEditRow(rx('w', status)))
+        .withContext(status)
+        .toBeFalse();
     }
     component.openEdit(rx('d', 'DRAFT'));
     expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
-    component.openEdit(rx('c', 'CANCELLED'));
     component.openEdit(rx('d2', 'DRAFT'));
     expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
     // D129: a new prescription is never offered a withdrawn status.
@@ -681,6 +708,40 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(host.querySelector('.page-actions .btn-primary')).toBeNull();
     expect(host.querySelector('.edit-link')).toBeNull();
     expect(host.querySelector('.delete-link')).toBeNull();
+  });
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+    it(`QA D670: ${role} is not offered Edit on a doctor's signed prescription`, () => {
+      activeRoles = [role];
+      prescriptionService.list.and.returnValue(
+        of([rx('eda77c51', 'SIGNED', { staffId: 'staff-doctor-a' })]),
+      );
+      component.ngOnInit();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).toBeNull();
+    });
+  }
+
+  for (const role of ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN']) {
+    it(`QA D670: ${role} is offered the withdrawal of another prescriber's signed order`, () => {
+      activeRoles = [role];
+      prescriptionService.list.and.returnValue(
+        of([rx('eda77c51', 'SIGNED', { staffId: 'staff-doctor-a' })]),
+      );
+      component.ngOnInit();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).not.toBeNull();
+    });
+  }
+
+  it('QA D660: a doctor is offered no Edit on a withdrawn prescription', () => {
+    activeRoles = ['ROLE_DOCTOR'];
+    prescriptionService.list.and.returnValue(
+      of([rx('eda77c51', 'DISCONTINUED', { staffId: 'staff-doctor-a' })]),
+    );
+    component.ngOnInit();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).toBeNull();
   });
 
   it('offers verification only for an in-scope prescription that reached SIGNED', () => {

@@ -354,6 +354,37 @@ export class PrescriptionsComponent implements OnInit {
    */
   editingSigned = signal(false);
 
+  /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
+  editingPrescriberName = signal('');
+
+  /**
+   * Roles that may withdraw a signed prescription someone else wrote (QA
+   * D670, coordinator decision): another doctor of the hospital or an admin.
+   * A nurse or a midwife may withdraw only an order they wrote themselves.
+   */
+  private static readonly SIGNED_WITHDRAW_ROLES = [
+    'ROLE_DOCTOR',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_SUPER_ADMIN',
+  ];
+
+  /**
+   * QA D660/D670: the Edit action a row offers. A withdrawn order is
+   * read-only, every field; a signed one only to whoever may withdraw it.
+   */
+  canEditRow(p: PrescriptionResponse): boolean {
+    if (isWithdrawnStatus(p.status)) return false;
+    if (p.status !== 'SIGNED') return this.canWrite();
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return true;
+    return (
+      this.roleContext.isSuperAdmin() ||
+      expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
+        PrescriptionsComponent.SIGNED_WITHDRAW_ROLES.includes(r),
+      )
+    );
+  }
+
   statusOptions(): { value: string; labelKey: string }[] {
     if (!this.editing()) {
       // A new order cannot be born withdrawn: offering Cancelled or
@@ -483,6 +514,9 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   openEdit(p: PrescriptionResponse): void {
+    // QA D660: a withdrawn order is read-only, every field; the server
+    // refuses any edit of it, so no form is opened on one.
+    if (isWithdrawnStatus(p.status)) return;
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -508,6 +542,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
+    this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
       this.form.status = undefined;

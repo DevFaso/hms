@@ -6814,6 +6814,7 @@
     "ACK_NOTES_PLACEHOLDER": "Escriba las notas de aceptación…",
     "ACTION_ACKNOWLEDGE": "Aceptar",
     "ACTION_COMPLETE": "Completar",
+    "ACTION_FORBIDDEN": "No está autorizado a hacer esto en esta derivación. Solo el profesional que la redactó puede cancelarla o enviarla.",
     "ACTION_REJECT": "Rechazar",
     "ACTION_SCHEDULE": "Programar",
     "ACTION_START": "Iniciar",

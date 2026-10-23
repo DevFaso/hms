@@ -253,7 +253,9 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // QA D670: an admin reaches the service only to withdraw a signed order;
+    // every other edit still needs a prescribing role there.
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,

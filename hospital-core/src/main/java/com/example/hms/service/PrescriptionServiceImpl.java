@@ -642,10 +642,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (requested == null) {
             return;
         }
-        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
-            rejectReopeningWithdrawn(requested);
-            return;
-        }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
             rejectClientAssertedWorkflowStatus(request);
             return;
@@ -893,6 +889,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
         }
+        // QA D660 (re-test 2): a withdrawn order is read-only, every field.
+        // It used to fall through to updateEntity below, so a signed order
+        // once withdrawn had its drug and dose rewritten under the signature.
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectAnyEditOfWithdrawn(request);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -979,9 +981,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID currentUserId = authService.getCurrentUserId();
         UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
-        if (hospitalId == null || !roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
-            throw new BusinessException("prescription.only.doctor.admin");
-        }
+        requireMayWithdrawSigned(existing, currentUserId, hospitalId);
         PrescriptionStatus statusBefore = existing.getStatus();
         existing.setStatus(requested);
         existing.setWithdrawalReason(reason);
@@ -989,6 +989,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
         return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+    }
+
+    /**
+     * QA D660 (re-test 2): a CANCELLED or DISCONTINUED order is final and
+     * read-only. Asking for a non-withdrawn status keeps the "cannot be
+     * reopened" answer; any other edit, its content or its status, is refused.
+     */
+    private static void rejectAnyEditOfWithdrawn(PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested != null && !requested.isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+        }
+        throw new BusinessException("prescription.withdrawn.readOnly");
+    }
+
+    /**
+     * QA D670 (coordinator decision): a signed order is withdrawn by the
+     * prescriber, another doctor of the same hospital, or a hospital or super
+     * admin. A nurse or a midwife may write a prescription but not withdraw a
+     * signed one; the refusal is a translated 403 naming who may.
+     */
+    private void requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
+        if (hospitalId == null || callerId == null) {
+            throw new BusinessException("prescription.only.doctor.admin");
+        }
+        boolean isPrescriber = existing.getStaff() != null && existing.getStaff().getUser() != null
+            && callerId.equals(existing.getStaff().getUser().getId());
+        boolean allowed = isPrescriber
+            || roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId)
+            || roleValidator.isHospitalAdmin(callerId, hospitalId)
+            || roleValidator.isSuperAdminFromAuth();
+        if (!allowed) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));
+        }
     }
 
     /** True when the request asks for anything on a signed order other than its status. */

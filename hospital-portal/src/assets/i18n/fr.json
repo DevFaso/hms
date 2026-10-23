@@ -6814,6 +6814,7 @@
     "ACK_NOTES_PLACEHOLDER": "Saisissez les notes de prise en compte…",
     "ACTION_ACKNOWLEDGE": "Prendre en compte",
     "ACTION_COMPLETE": "Clôturer",
+    "ACTION_FORBIDDEN": "Vous n'êtes pas autorisé à faire cela sur cette orientation. Seul le soignant qui l'a rédigée peut l'annuler ou l'envoyer.",
     "ACTION_REJECT": "Refuser",
     "ACTION_SCHEDULE": "Planifier",
     "ACTION_START": "Démarrer",

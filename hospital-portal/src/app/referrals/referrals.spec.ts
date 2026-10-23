@@ -127,7 +127,7 @@ describe('ReferralsComponent', () => {
     });
   }
 
-  it('QA D661: a doctor is still offered Cancel on an open referral', () => {
+  it('QA D661: a doctor is still offered Cancel on an open referral they wrote', () => {
     roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
       roles.includes('ROLE_DOCTOR'),
     );
@@ -135,11 +135,50 @@ describe('ReferralsComponent', () => {
     fixture.detectChanges();
     flushInitRequests();
     component.loading.set(false);
-    component.filtered.set([{ id: 'r-1', status: 'SUBMITTED' } as any]);
+    component.filtered.set([
+      { id: 'r-1', status: 'SUBMITTED', referringProviderId: 'staff-1' } as any,
+    ]);
     fixture.detectChanges();
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.action-link.delete'),
     ).not.toBeNull();
+  });
+
+  it('QA D611: DOCTOR2 is not offered Cancel on a DRAFT another doctor wrote', () => {
+    roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    component.loading.set(false);
+    const theirs = { id: 'r-2', status: 'DRAFT', referringProviderId: 'staff-other' } as any;
+    component.filtered.set([theirs]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.action-link.delete')).toBeNull();
+    component.selectedReferral.set(theirs);
+    fixture.detectChanges();
+    expect(el.querySelector('.btn-danger')).toBeNull();
+  });
+
+  it('QA D611: a refused cancel shows the server reason in the dialog', () => {
+    roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    component.confirmCancel({ id: 'r-3', status: 'DRAFT', referringProviderId: 'staff-1' } as any);
+    component.executeCancel();
+    const reason = "Seul le soignant qui a rédigé cette orientation peut l'annuler.";
+    httpMock
+      .expectOne((req) => req.method === 'POST' && req.url === '/referrals/r-3/cancel')
+      .flush({ message: reason }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+    const err = (fixture.nativeElement as HTMLElement).querySelector('.form-error');
+    expect(err?.textContent?.trim()).toBe(reason);
+    expect(component.showDeleteConfirm()).toBeTrue();
   });
 
   it('QA D412/D427: only the author of a draft is offered Submit', () => {

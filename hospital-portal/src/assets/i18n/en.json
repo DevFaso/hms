@@ -6814,6 +6814,7 @@
     "ACK_NOTES_PLACEHOLDER": "Enter acknowledgement notes…",
     "ACTION_ACKNOWLEDGE": "Acknowledge",
     "ACTION_COMPLETE": "Complete",
+    "ACTION_FORBIDDEN": "You are not allowed to do this on this referral. Only the clinician who wrote it can cancel or send it.",
     "ACTION_REJECT": "Reject",
     "ACTION_SCHEDULE": "Schedule",
     "ACTION_START": "Start",
