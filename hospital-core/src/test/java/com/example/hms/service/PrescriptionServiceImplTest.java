@@ -4227,22 +4227,4 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
     }
 
-    @Test
-    void qaD670_aHospitalAdminMayWithdrawASignedOrder() {
-        UUID id = UUID.randomUUID();
-        Prescription rx = signedRow(id);
-        UUID callerId = UUID.randomUUID();
-        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
-        when(authService.getCurrentUserId()).thenReturn(callerId);
-        when(roleValidator.isHospitalAdmin(callerId, hospitalId)).thenReturn(true);
-        when(prescriptionRepository.save(rx)).thenReturn(rx);
-        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
-        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
-            .status(com.example.hms.enums.PrescriptionStatus.CANCELLED).withdrawalReason("Duplicate").build();
-
-        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
-
-        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
-    }
 }

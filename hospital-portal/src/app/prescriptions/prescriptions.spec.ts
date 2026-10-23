@@ -710,7 +710,7 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(host.querySelector('.delete-link')).toBeNull();
   });
 
-  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN']) {
     it(`QA D670: ${role} is not offered Edit on a doctor's signed prescription`, () => {
       activeRoles = [role];
       prescriptionService.list.and.returnValue(
@@ -722,7 +722,7 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     });
   }
 
-  for (const role of ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN']) {
+  for (const role of ['ROLE_DOCTOR']) {
     it(`QA D670: ${role} is offered the withdrawal of another prescriber's signed order`, () => {
       activeRoles = [role];
       prescriptionService.list.and.returnValue(

@@ -1006,9 +1006,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     /**
      * QA D670 (coordinator decision): a signed order is withdrawn by the
-     * prescriber, another doctor of the same hospital, or a hospital or super
-     * admin. A nurse or a midwife may write a prescription but not withdraw a
-     * signed one; the refusal is a translated 403 naming who may.
+     * prescriber or another doctor of the same hospital. A nurse or a midwife
+     * may write a prescription but not withdraw a signed one; the refusal is
+     * a translated 403. Admins never reach PUT /prescriptions (E9 #67,
+     * HospitalAdminOffOrdersTest), so they have no arm here.
      */
     private void requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
         if (hospitalId == null || callerId == null) {
@@ -1019,9 +1020,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         boolean allowed = isPrescriber
             || roleValidator.isDoctor(callerId, hospitalId)
             || roleValidator.isPhysician(callerId, hospitalId)
-            || roleValidator.isSurgeon(callerId, hospitalId)
-            || roleValidator.isHospitalAdmin(callerId, hospitalId)
-            || roleValidator.isSuperAdminFromAuth();
+            || roleValidator.isSurgeon(callerId, hospitalId);
         if (!allowed) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));

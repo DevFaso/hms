@@ -359,14 +359,11 @@ export class PrescriptionsComponent implements OnInit {
 
   /**
    * Roles that may withdraw a signed prescription someone else wrote (QA
-   * D670, coordinator decision): another doctor of the hospital or an admin.
-   * A nurse or a midwife may withdraw only an order they wrote themselves.
+   * D670, coordinator decision): another doctor of the hospital. A nurse or
+   * a midwife may withdraw only an order they wrote themselves; admins never
+   * reach PUT /prescriptions (E9 #67).
    */
-  private static readonly SIGNED_WITHDRAW_ROLES = [
-    'ROLE_DOCTOR',
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_SUPER_ADMIN',
-  ];
+  private static readonly SIGNED_WITHDRAW_ROLES = ['ROLE_DOCTOR'];
 
   /**
    * QA D660/D670: the Edit action a row offers. A withdrawn order is
@@ -377,11 +374,8 @@ export class PrescriptionsComponent implements OnInit {
     if (p.status !== 'SIGNED') return this.canWrite();
     const own = this.ownPrescriberStaffId();
     if (own && p.staffId === own) return true;
-    return (
-      this.roleContext.isSuperAdmin() ||
-      expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
-        PrescriptionsComponent.SIGNED_WITHDRAW_ROLES.includes(r),
-      )
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
+      PrescriptionsComponent.SIGNED_WITHDRAW_ROLES.includes(r),
     );
   }
 
