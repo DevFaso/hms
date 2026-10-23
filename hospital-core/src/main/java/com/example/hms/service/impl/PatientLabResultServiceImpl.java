@@ -431,8 +431,11 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && !order.getLabTestDefinition().getName().isBlank()) {
             return order.getLabTestDefinition().getName();
         }
-        if (order != null && order.getClinicalIndication() != null && !order.getClinicalIndication().isBlank()) {
-            return order.getClinicalIndication();
+        // QA D648: a deleted definition reads "deleted test" here as it does in the
+        // orders table above; the clinical indication is not a test name.
+        if (order != null && order.getLabTestDefinition() == null) {
+            return com.example.hms.utility.MessageUtil.resolveOrRaw(
+                com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
         }
         if (mapped != null && mapped.getLabTestName() != null && !mapped.getLabTestName().isBlank()) {
             return mapped.getLabTestName();

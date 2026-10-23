@@ -454,7 +454,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private DoctorResultQueueItemDTO toQueueItem(LabOrder order, LabResult result, Locale locale) {
         String testName = order.getLabTestDefinition() != null
                 ? order.getLabTestDefinition().getName()
-                : text("lab.test.fallback", locale);
+                // QA D648: the same "deleted test" label as every other lab screen.
+                : text(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL, locale);
         // The queue exposes the three-value family: the portal buckets on
         // the exact strings NORMAL/ABNORMAL/CRITICAL, direction lives on the row.
         //

@@ -472,6 +472,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             if (order.getLabTestDefinition() != null) {
                 testName = order.getLabTestDefinition().getName();
                 testCode = order.getLabTestDefinition().getTestCode();
+            } else {
+                // QA D648: the same "deleted test" label as every other lab screen.
+                testName = com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
             }
             Staff os = order.getOrderingStaff();
             if (os != null) {

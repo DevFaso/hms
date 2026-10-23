@@ -456,6 +456,25 @@ class LabOrderServiceImplPerformingHospitalTest {
     }
 
     @Test
+    void labDirectorCancelsAnOrphanedOrder() {
+        // QA D666: LAB-000010 lost its definition and sat in ORDERED; the lab
+        // director at the ordering hospital was refused the cancel.
+        order.setStatus(LabOrderStatus.ORDERED);
+        order.setLabTestDefinition(null);
+        UUID directorId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(directorId);
+        when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);
+        when(labOrderRepository.save(order)).thenReturn(order);
+        when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
+
+        service.transitionLabOrderStatus(order.getId(), LabOrderStatus.CANCELLED, Locale.ENGLISH);
+
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+    }
+
+    @Test
     void transitionIs404ForAThirdHospital() {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
         when(roleValidator.requireActiveHospitalId()).thenReturn(third.getId());

@@ -1007,7 +1007,9 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         if (to == LabOrderStatus.CANCELLED) {
+            // QA D666: the lab director is the laboratory's senior manager.
             if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
+                    && !roleValidator.isLabDirector(currentUserId, orderingHospitalId)
                     && !roleValidator.isHospitalAdmin(currentUserId, orderingHospitalId)
                     && !roleValidator.isSuperAdminFromAuth()) {
                 throw new BusinessException("lab.order.cancelForbidden");

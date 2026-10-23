@@ -644,6 +644,22 @@ class PatientLabResultServiceImplTest {
         assertThat(results.get(0).getTestName()).isEqualTo("Lab Result");
     }
 
+    /** QA D648: GET /patients/{id}/lab-results named a deleted test by its clinical indication ("QA R9"). */
+    @Test
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getLabResults_deletedDefinition_isTheDeletedTestLabel_notTheIndication() {
+        LabResult lr = buildLabResult("7.9", null, true, false);
+        LabOrder order = new LabOrder();
+        order.setLabTestDefinition(null);
+        order.setClinicalIndication("QA R9");
+        lr.setLabOrder(order);
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(new LabResultResponseDTO());
+        givenTheOnlyStaffRowIs(lr);
+
+        List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
+        assertThat(results.get(0).getTestName()).isEqualTo("Deleted test");
+    }
+
     @Test void getLabResults_assignmentUserResolution() {
         LabResult lr = buildLabResult("5.0", "mg/dL", true, false);
         LabOrder order = new LabOrder(); order.setLabTestDefinition(new LabTestDefinition());

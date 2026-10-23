@@ -1330,7 +1330,10 @@ public class LabResultServiceImpl implements LabResultService {
                 ? com.example.hms.enums.InBasketPriority.URGENT
                 : com.example.hms.enums.InBasketPriority.NORMAL;
         };
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
+        String testName = order.getLabTestDefinition() != null
+            ? order.getLabTestDefinition().getName()
+            // QA D648: the same "deleted test" label as every other lab screen.
+            : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
         com.example.hms.model.Patient patient = order.getPatient();
         com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request =
             new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
