@@ -29,7 +29,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install the Anthropic SDK
-        run: pip install --quiet "anthropic>=0.75,<2"
+        # Exact version (published 2026-10-08), wheels only: no setup scripts run.
+        run: pip install --quiet --only-binary :all: "anthropic==1.12.1"
       - name: Review the diff
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
