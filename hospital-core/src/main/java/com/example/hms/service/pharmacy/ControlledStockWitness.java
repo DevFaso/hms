@@ -33,7 +33,7 @@ public class ControlledStockWitness {
     private final UserRepository userRepository;
 
     public static boolean isControlled(InventoryItem item) {
-        MedicationCatalogItem catalogItem = item == null ? null : item.getMedicationCatalogItem();
+        MedicationCatalogItem catalogItem = item.getMedicationCatalogItem();
         return catalogItem != null && catalogItem.isControlled();
     }
 

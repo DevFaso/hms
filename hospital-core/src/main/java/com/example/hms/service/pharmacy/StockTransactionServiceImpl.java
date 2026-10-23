@@ -324,18 +324,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         for (com.example.hms.model.pharmacy.Dispense listed : open) {
             // Re-read under the lock its cancel takes: a fill cancelled since
             // the list was read has already gone back to stock.
-            com.example.hms.model.pharmacy.Dispense candidate =
-                    dispenseRepository.findLockedById(listed.getId()).orElse(null);
-            if (candidate == null || !RETURNABLE_FILL_STATUSES.contains(candidate.getStatus())) {
-                continue;
-            }
-            BigDecimal out = nz(candidate.getQuantityDispensed()).subtract(nz(
-                    stockTransactionRepository.sumQuantityForReference(candidate.getId(), RETURNED_TYPES)));
-            if (out.signum() <= 0) {
-                continue;
-            }
-            if (dto.getQuantity().compareTo(out) <= 0) {
-                dto.setReferenceId(candidate.getId());
+            BigDecimal out = stillOutUnderLock(listed.getId());
+            if (out.signum() > 0 && dto.getQuantity().compareTo(out) <= 0) {
+                dto.setReferenceId(listed.getId());
                 return;
             }
             largestOut = largestOut.max(out);
@@ -344,6 +335,15 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             throw new BusinessException("stockTransaction.return.referenceRequired",
                     largestOut.stripTrailingZeros().toPlainString());
         }
+    }
+
+    /** What a fill still has out, read under its lock; zero once it is no longer a returnable fill. */
+    private BigDecimal stillOutUnderLock(UUID dispenseId) {
+        return dispenseRepository.findLockedById(dispenseId)
+                .filter(d -> RETURNABLE_FILL_STATUSES.contains(d.getStatus()))
+                .map(d -> nz(d.getQuantityDispensed()).subtract(nz(
+                        stockTransactionRepository.sumQuantityForReference(d.getId(), RETURNED_TYPES))))
+                .orElse(BigDecimal.ZERO);
     }
 
     private static final java.util.Set<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATUSES =
