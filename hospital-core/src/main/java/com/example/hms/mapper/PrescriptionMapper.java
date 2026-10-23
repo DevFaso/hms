@@ -13,6 +13,9 @@ import jakarta.persistence.EntityNotFoundException;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.repository.MedicationCatalogItemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +26,20 @@ public class PrescriptionMapper {
 
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Prescription";
+
+    /**
+     * D654: the catalog's controlled flag is shown on the prescription even
+     * when the prescriber did not tick it. Display only: the prescriber
+     * two-factor signing block stays on the prescriber's own tick until a
+     * two-factor step exists (tasklist standing debt). Optional so a plain
+     * {@code new PrescriptionMapper()} in unit tests still works.
+     */
+    private MedicationCatalogItemRepository catalogRepository;
+
+    @Autowired(required = false)
+    public void setCatalogRepository(MedicationCatalogItemRepository catalogRepository) {
+        this.catalogRepository = catalogRepository;
+    }
 
     /**
      * Statuses the pharmacy writes (gap G7). While the row is in one of these
@@ -90,7 +107,8 @@ public class PrescriptionMapper {
             .refillsUsed(p.getRefillsUsed())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
-            .controlledSubstance(p.isControlledSubstance())
+            .controlledSubstance(p.isControlledSubstance()
+                || catalogControlled(resolveHospitalId(hospital, enc), p.getMedicationCode()))
             .requiresCosign(p.isRequiresCosign())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -274,6 +292,16 @@ public class PrescriptionMapper {
             return null;
         }
         return safeInit(enc.getHospital(), "Encounter", enc.getId(), "hospital");
+    }
+
+    private boolean catalogControlled(java.util.UUID hospitalId, String medicationCode) {
+        if (catalogRepository == null || hospitalId == null
+            || medicationCode == null || medicationCode.isBlank()) {
+            return false;
+        }
+        return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())
+            .map(MedicationCatalogItem::isControlled)
+            .orElse(false);
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {
