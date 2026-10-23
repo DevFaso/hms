@@ -358,7 +358,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             // hospitals (untagged, V158); every foreign row is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
-            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+            // QA D623/D652: the same rule as the by-id read (findReferral) — a
+            // referral never sent exists only for the hospital that wrote it.
+            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable)
+                .stream()
+                .filter(r -> isSendingHospital(r, activeHospitalId) || wasSent(r))
+                .toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(referrals.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital referral read on the treatment relationship");
@@ -525,8 +530,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            boolean isSendingHospital = referral.getHospital() != null
-                && activeHospitalId.equals(referral.getHospital().getId());
+            boolean isSendingHospital = isSendingHospital(referral, activeHospitalId);
             boolean isReceivingHospital = referral.getReceivingHospital() != null
                 && activeHospitalId.equals(referral.getReceivingHospital().getId());
             if (!isSendingHospital && !isReceivingHospital) {
@@ -538,6 +542,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             }
         }
         return referral;
+    }
+
+    private static boolean isSendingHospital(GeneralReferral referral, UUID activeHospitalId) {
+        return referral.getHospital() != null && activeHospitalId.equals(referral.getHospital().getId());
     }
 
     private static final String OWNER = "GeneralReferral";
