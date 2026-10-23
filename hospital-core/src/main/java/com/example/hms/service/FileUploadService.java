@@ -31,6 +31,9 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class FileUploadService {
+    private static final String MSG_FILE_PATH_INVALID = "file.path.invalid";
+    private static final String MSG_FILE_EMPTY = "file.empty";
+    private static final String MSG_ATTACHMENT_KEY_INVALID = "file.attachment.keyInvalid";
     private static final String PROFILE_IMAGES_PATH = "profile-images";
 
 
@@ -145,7 +148,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.path.invalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -197,7 +200,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.path.invalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -224,7 +227,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.path.invalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         MessageDigest digest = createSha256Digest();
         try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
@@ -294,7 +297,7 @@ public class FileUploadService {
      */
     private void validateImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.empty"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         // Check file size (max 5MB)
@@ -323,7 +326,7 @@ public class FileUploadService {
 
     private void validateAttachmentFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.empty"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         if (file.getSize() > MAX_REFERRAL_ATTACHMENT_SIZE) {
@@ -487,7 +490,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.path.invalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
 
         MessageDigest digest = createSha256Digest();
@@ -511,7 +514,7 @@ public class FileUploadService {
 
     private void validatePatientDocumentFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.empty"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
@@ -596,7 +599,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.path.invalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         MessageDigest digest = createSha256Digest();
         try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
@@ -641,16 +644,16 @@ public class FileUploadService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
         }
         if (!storageKey.startsWith(CHAT_ATTACHMENT_KEY_PREFIX)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.keyInvalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         String filename = storageKey.substring(CHAT_ATTACHMENT_KEY_PREFIX.length());
         if (filename.isBlank() || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.keyInvalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH).toAbsolutePath().normalize();
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.keyInvalid"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.notFound"));
@@ -727,7 +730,7 @@ public class FileUploadService {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
         }
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.empty"));
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
         if (kind == ChatAttachmentKind.AUDIO) {
             validateChatAudio(file);

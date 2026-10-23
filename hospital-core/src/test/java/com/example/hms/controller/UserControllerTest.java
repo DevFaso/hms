@@ -25,6 +25,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -192,7 +193,7 @@ class UserControllerTest {
                     .jsonPath("$.message").isNotEmpty());
             registerAs(patientSignup(role, false), "ROLE_SUPER_ADMIN").andExpect(status().isBadRequest());
         }
-        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never()).createUserWithRolesAndHospital(any());
+        verify(userService, never()).createUserWithRolesAndHospital(any());
     }
 
     @Test

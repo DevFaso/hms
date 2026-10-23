@@ -55,10 +55,11 @@ class WardTerminologyTest {
     @Test
     void portalWardLabelsSayUnite() throws Exception {
         String json = Files.readString(PORTAL_FR, StandardCharsets.UTF_8);
-        Matcher entry = Pattern.compile("\"([A-Z_]*WARD[A-Z_]*)\"\\s*:\\s*\"([^\"]*)\"").matcher(json);
+        Matcher entry = Pattern.compile("\"([A-Z_]++)\"\\s*+:\\s*+\"([^\"]*+)\"").matcher(json);
         List<String> offenders = new ArrayList<>();
         int seen = 0;
         while (entry.find()) {
+            if (!entry.group(1).contains("WARD")) continue;
             seen++;
             if (SERVICE.matcher(entry.group(2)).find()) offenders.add(entry.group(1) + "=" + entry.group(2));
         }
