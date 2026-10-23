@@ -1,10 +1,9 @@
 # Automatic Claude review on every pull request (replaces the Copilot review
-# whose quota ran out on 2026-09-05). Billed to the Anthropic Console API key
-# stored in the ANTHROPIC_API_KEY repository secret.
+# whose quota ran out on 2026-09-05). Calls the Claude API directly, billed to
+# the Console organisation behind the ANTHROPIC_API_KEY repository secret.
 #
 # Fork PRs and Dependabot PRs are skipped: they get no secrets, and this repo
-# is public. The review only reads the diff and posts one sticky comment; it
-# never pushes.
+# is public. The job only reads the diff and posts one sticky comment.
 name: Claude PR review
 
 on:
@@ -26,46 +25,17 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
       && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+      - name: Install the Anthropic SDK
+        run: pip install --quiet "anthropic>=0.75,<2"
+      - name: Review the diff
         env:
-          # The key belongs to the organisation, so each request must name the
-          # workspace to bill (an identifier, not a secret). anthropic_workspace_id
-          # is only used for workload-identity auth, so send the header directly.
-          ANTHROPIC_CUSTOM_HEADERS: 'anthropic-workspace-id: wrkspc_017mpm6K5JXmC5MHwGH4WQr4'
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # The workflow's own token posts the comment, so no Claude GitHub App
-          # install (and no OIDC exchange) is needed.
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          use_sticky_comment: true
-          show_full_output: true
-          claude_args: >-
-            --model claude-sonnet-5-5
-            --max-turns 40
-            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git log:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-          prompt: |
-            Review pull request #${{ github.event.pull_request.number }} in ${{ github.repository }}
-            (base ${{ github.event.pull_request.base.ref }}). This is e-Keneya, a multi-hospital
-            health system: Spring Boot backend in hospital-core, Angular portal in hospital-portal.
-
-            Read the diff (gh pr diff) and the code around it. Report only real problems you
-            confirmed in the code, most severe first, each with file:line, why it is wrong and
-            the concrete fix:
-            - tenancy: every read or write of patient data must be scoped to the acting hospital;
-              a caller-supplied hospitalId, staffId, providerId or signer is a claim, never an identity;
-            - authorization: @PreAuthorize roles match what the portal shows;
-            - correctness and regressions on paths the changed code also serves;
-            - a Liquibase SQL file not registered in db/migration/changelog.xml, or an edit to an
-              already applied migration;
-            - user-facing text not translated in EN, FR and ES;
-            - patient data (names, MRN, phone, email, clinical text) written to logs;
-            - missing tests that would fail without the change.
-
-            Do not comment on style that the linters already enforce. If you find nothing that
-            holds, say so in one line. Never print secrets.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # The key belongs to the organisation, so each request names the
+          # workspace to bill. An identifier, not a secret.
+          ANTHROPIC_WORKSPACE_ID: wrkspc_017mpm6K5JXmC5MHwGH4WQr4
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python .github/scripts/claude_review.py
