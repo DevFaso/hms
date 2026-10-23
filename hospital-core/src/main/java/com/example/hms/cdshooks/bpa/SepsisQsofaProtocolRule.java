@@ -77,6 +77,10 @@ public class SepsisQsofaProtocolRule implements BpaRule {
     @Override
     public List<CdsCard> evaluate(BpaRuleContext context) {
         if (context == null || !context.hasPatient()) return List.of();
+        // QA D606: qSOFA is an adult score (Sepsis-3). A child's normal
+        // respiratory rate and blood pressure meet two adult criteria, so a
+        // healthy 6-year-old got a "start antibiotics" card. No card under 18.
+        if (!appliesTo(context.patient())) return List.of();
 
         QsofaScore score = scoreQsofa(context.recentVitals(), context.activeProblems());
         if (score.total() < QSOFA_TRIGGER) return List.of();
@@ -85,6 +89,21 @@ public class SepsisQsofaProtocolRule implements BpaRule {
         if (protocol.isEmpty()) return List.of();
 
         return List.of(buildCard(protocol.get(), score));
+    }
+
+    /** qSOFA is validated for adults only. */
+    public static final int MIN_AGE_YEARS = 18;
+
+    /**
+     * QA D606: whether qSOFA may be applied to this patient. A patient with
+     * no recorded birth date keeps the adult rule, as NEWS2 does (QA D518).
+     */
+    static boolean appliesTo(com.example.hms.model.Patient patient) {
+        if (patient == null || patient.getDateOfBirth() == null) {
+            return true;
+        }
+        return java.time.Period.between(patient.getDateOfBirth(),
+            java.time.LocalDate.now(java.time.ZoneId.systemDefault())).getYears() >= MIN_AGE_YEARS;
     }
 
     QsofaScore scoreQsofa(List<PatientVitalSign> vitals, List<PatientProblem> problems) {

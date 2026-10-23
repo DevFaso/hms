@@ -42,6 +42,10 @@ export interface ImagingOrderResponse {
   clinicalQuestion: string;
   orderingProviderId: string;
   orderingProviderName: string;
+  /** QA D611: the ordering clinician's user id; only they may edit an unsigned order. */
+  orderingProviderUserId?: string | null;
+  /** QA D611: set once the order is signed; a signed order is immutable. */
+  providerSignedAt?: string | null;
   orderedAt: string;
   scheduledDate: string;
   scheduledTime: string;

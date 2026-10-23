@@ -177,7 +177,7 @@
                       </button>
                     }
                     @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
-                      @if (canEditOrder()) {
+                      @if (canEditThisOrder(o)) {
                         <button
                           class="action-link"
                           (click)="openEdit(o)"
@@ -919,6 +919,9 @@
           </div>
         </div>
       </div>
+      @if (formError()) {
+        <p class="modal-error" role="alert" data-testid="imaging-form-error">{{ formError() }}</p>
+      }
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

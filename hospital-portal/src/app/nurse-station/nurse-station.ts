@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { glucoseMmolToMgDl } from '../shared/glucose-units';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -72,6 +73,7 @@ type SectionType =
     NursingIntakeFormComponent,
     EnumLabelPipe,
     PatientPickerComponent,
+    ServerTimePipe,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,

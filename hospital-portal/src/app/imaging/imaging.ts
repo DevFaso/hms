@@ -176,6 +176,26 @@ export class ImagingComponent implements OnInit {
   readonly canEditOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderUpdate')),
   );
+  /** The server's reason when a save is refused, shown in the open modal (QA D611). */
+  readonly formError = signal<string | null>(null);
+
+  /**
+   * QA D611 (regression of D527): the role alone is not enough. PUT
+   * /imaging/orders/{id} refuses a signed order (it is what the signer
+   * attested) and an unsigned order of another ordering clinician; the edit
+   * button was offered on a signed order and the save took the page to a 403.
+   */
+  canEditThisOrder(o: ImagingOrderResponse): boolean {
+    if (!this.canEditOrder() || o.providerSignedAt) {
+      return false;
+    }
+    if (this.roleContext.isSuperAdmin() && this.roleContext.globalView()) {
+      return true;
+    }
+    const me = this.auth.getUserProfile()?.id;
+    return !o.orderingProviderUserId || o.orderingProviderUserId === me;
+  }
+
   /**
    * QA D527: cancelling goes through PUT /imaging/orders/{id}/status, which a
    * midwife or nurse is refused; she was offered the button and got a 403.
@@ -294,6 +314,7 @@ export class ImagingComponent implements OnInit {
       mrn: o.patientMrn,
     } as PatientResponse);
     this.editId = o.id;
+    this.formError.set(null);
     this.editing.set(true);
     this.showModal.set(true);
   }
@@ -304,6 +325,7 @@ export class ImagingComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    this.formError.set(null);
     const payload: ImagingOrderRequest = {
       ...this.form,
       laterality: this.form.laterality || undefined,
@@ -322,8 +344,11 @@ export class ImagingComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
+      error: (err: { error?: { message?: string } } | null) => {
+        // QA D611: the server's reason stays in the open modal; nothing typed is lost.
+        const reason = err?.error?.message ?? null;
+        this.formError.set(reason);
+        this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
         this.saving.set(false);
       },
     });

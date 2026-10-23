@@ -429,14 +429,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private String summarizeVitals(PatientVitalSign v) {
-        StringBuilder s = new StringBuilder();
-        if (v.getTemperatureCelsius() != null) s.append("T:").append(v.getTemperatureCelsius()).append("°C ");
-        if (v.getHeartRateBpm() != null) s.append("HR:").append(v.getHeartRateBpm()).append(" ");
-        if (v.getSystolicBpMmHg() != null && v.getDiastolicBpMmHg() != null) {
-            s.append("BP:").append(v.getSystolicBpMmHg()).append("/").append(v.getDiastolicBpMmHg()).append(" ");
-        }
-        if (v.getSpo2Percent() != null) s.append("SpO2:").append(v.getSpo2Percent()).append("% ");
-        return s.toString().trim();
+        // QA D628: one summary, in the request locale, for every screen.
+        String text = com.example.hms.utility.VitalsSummaryText.of(v);
+        return text == null ? "" : text;
     }
 
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,

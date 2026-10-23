@@ -70,6 +70,22 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)).not.toBeNull();
   });
 
+  it("QA D647: shows the due time in the reader's local zone, not the server's UTC clock", () => {
+    // The server sends a zone-less UTC wall time; the header clock is local.
+    nurseSpy.getMedicationMAR.and.returnValue(
+      of([{ ...sampleTask, dueTime: '2026-04-30T08:00:00' }]),
+    );
+
+    fixture.detectChanges();
+
+    const local = new Date(Date.UTC(2026, 3, 30, 8, 0, 0));
+    const hh = String(local.getHours()).padStart(2, '0');
+    const mm = String(local.getMinutes()).padStart(2, '0');
+    const text =
+      root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)?.textContent ?? '';
+    expect(text).toContain(`${hh}:${mm}`);
+  });
+
   it('shows the error state when the MAR fetch fails', () => {
     nurseSpy.getMedicationMAR.and.returnValue(
       throwError(() => new Error('network')) as Observable<NurseMedicationTask[]>,

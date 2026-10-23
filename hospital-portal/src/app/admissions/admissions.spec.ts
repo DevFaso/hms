@@ -205,6 +205,27 @@ describe('AdmissionsComponent', () => {
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.SAVE_FAILED');
     });
 
+    it('QA D618: the discharge form offers the signed-in physician alone, not her colleagues', () => {
+      auth.getUserProfile.and.returnValue({ id: 'u1', staffId: 'doc' } as never);
+      component.ngOnInit();
+      component.confirmDischarge(adm());
+      expect(component.dischargeProviders().map((s) => s.id)).toEqual(['doc']);
+      expect(component.dischargeForm.dischargingProviderId).toBe('doc');
+    });
+
+    it('QA D618: a physician missing from the staff list is still offered as herself', () => {
+      auth.getUserProfile.and.returnValue({
+        id: 'u9',
+        staffId: 'st-9',
+        firstName: 'Aminata',
+        lastName: 'Sow',
+      } as never);
+      component.ngOnInit();
+      expect(component.dischargeProviders()).toEqual([
+        { id: 'st-9', name: 'Aminata Sow', email: '' },
+      ]);
+    });
+
     it("shows the server's reason when a discharge is refused, else the generic text", () => {
       component.confirmDischarge(adm());
       admissionService.discharge.and.returnValue(serverRefusal('Pas une infirmière.'));

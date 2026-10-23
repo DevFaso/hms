@@ -76,6 +76,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final NewbornAssessmentMapper mapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -381,9 +383,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (assessment.getAlerts() == null || assessment.getAlerts().isEmpty()) {
             return;
         }
-        if (documentedBy == null || documentedBy.getUsername() == null) {
-            return;
-        }
+        // QA D605: the team is told even when the documenter is unknown.
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
         // Read by the documenting clinician: staff locale, not the request locale.
         Locale locale = NotificationLocales.STAFF;
         String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
@@ -399,10 +400,21 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 String message = messageSource.getMessage("newborn.alert.notification",
                     new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
                     locale);
-                try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+                if (notifyDocumenter) {
+                    try {
+                        notificationService.createNotification(message, documentedBy.getUsername());
+                    } catch (RuntimeException ex) {
+                        log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+                    }
+                }
+                if (obstetricAlertEscalation != null && assessment.getHospital() != null
+                        && assessment.getPatient() != null) {
+                    obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                        assessment.getHospital().getId(), assessment.getPatient().getId(),
+                        patientName.isBlank() ? fallbackName : patientName,
+                        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
+                        alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                        documentedBy == null ? null : documentedBy.getId(), message));
                 }
             });
     }

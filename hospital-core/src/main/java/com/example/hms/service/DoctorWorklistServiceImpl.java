@@ -403,13 +403,8 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
             Optional<PatientVitalSign> vOpt =
                     patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patientId);
             if (vOpt.isPresent()) {
-                PatientVitalSign v = vOpt.get();
-                List<String> vParts = new ArrayList<>();
-                if (v.getHeartRateBpm() != null) vParts.add("HR: " + v.getHeartRateBpm());
-                if (v.getSystolicBpMmHg() != null && v.getDiastolicBpMmHg() != null)
-                    vParts.add("BP: " + v.getSystolicBpMmHg() + "/" + v.getDiastolicBpMmHg());
-                if (v.getSpo2Percent() != null) vParts.add("SpO2: " + v.getSpo2Percent() + "%");
-                if (!vParts.isEmpty()) return String.join(" \u00b7 ", vParts);
+                // QA D628: temperature included, labels in the request locale.
+                return com.example.hms.utility.VitalsSummaryText.of(vOpt.get());
             }
         } catch (Exception ex) {
             log.debug("Vitals query error for patient {}: {}", patientId, ex.getMessage());

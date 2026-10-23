@@ -2964,4 +2964,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V222 (QA D605): escalation rows for URGENT obstetric and neonatal alerts,
+         so the on-call team is told and a sweep re-notifies until someone
+         acknowledges. Plain statements, no DO block. -->
+    <changeSet id="V222-obstetric-alert-escalations" author="hms-team" runOnChange="false">
+        <sqlFile path="V222__obstetric_alert_escalations.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

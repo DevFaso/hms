@@ -365,12 +365,12 @@ describe('ImagingComponent', () => {
  * DOCTOR and RADIOLOGIST only. Each order action follows core/action-permissions.
  */
 describe('ImagingComponent — order actions by role (QA D527)', () => {
-  function render(role: string): HTMLElement {
+  function render(role: string, order: Partial<ImagingOrderResponse> = {}): HTMLElement {
     const imaging = jasmine.createSpyObj('ImagingService', [
       'getAllOrders',
       'getReportsByHospital',
     ]);
-    imaging.getAllOrders.and.returnValue(of([mockOrder()]));
+    imaging.getAllOrders.and.returnValue(of([mockOrder(order)]));
     imaging.getReportsByHospital.and.returnValue(of([]));
     const hospital = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
     hospital.getMyHospitalAsResponse.and.returnValue(
@@ -378,7 +378,7 @@ describe('ImagingComponent — order actions by role (QA D527)', () => {
     );
     const auth = jasmine.createSpyObj('AuthService', ['getHospitalId', 'getUserProfile']);
     auth.getHospitalId.and.returnValue('h1');
-    auth.getUserProfile.and.returnValue({ staffId: 'st1' } as never);
+    auth.getUserProfile.and.returnValue({ id: 'u-me', staffId: 'st1' } as never);
     const patients = jasmine.createSpyObj('PatientService', ['list']);
     patients.list.and.returnValue(of([]));
     TestBed.configureTestingModule({
@@ -425,6 +425,22 @@ describe('ImagingComponent — order actions by role (QA D527)', () => {
     const el = render('ROLE_DOCTOR');
     expect(titles(el)).toContain('IMAGING.EDIT_ORDER');
     expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it('QA D611: a signed order offers no Edit, even to its ordering doctor', () => {
+    const el = render('ROLE_DOCTOR', { providerSignedAt: '2026-10-23T09:00:00' });
+    expect(titles(el)).not.toContain('IMAGING.EDIT_ORDER');
+    expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it("QA D611: another clinician's unsigned order offers no Edit", () => {
+    const el = render('ROLE_DOCTOR', { orderingProviderUserId: 'someone-else' });
+    expect(titles(el)).not.toContain('IMAGING.EDIT_ORDER');
+  });
+
+  it('QA D611: the ordering doctor keeps Edit on her own unsigned order', () => {
+    const el = render('ROLE_DOCTOR', { orderingProviderUserId: 'u-me' });
+    expect(titles(el)).toContain('IMAGING.EDIT_ORDER');
   });
 
   it('a radiologist may cancel but is offered no Edit or New order', () => {

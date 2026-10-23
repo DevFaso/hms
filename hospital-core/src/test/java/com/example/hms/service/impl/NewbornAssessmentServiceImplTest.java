@@ -72,6 +72,9 @@ class NewbornAssessmentServiceImplTest {
     private UserRepository userRepository;
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
@@ -95,6 +98,7 @@ class NewbornAssessmentServiceImplTest {
             staffRepository,
             userRepository,
             notificationService,
+            obstetricAlertEscalation,
             new NewbornAssessmentMapper(),
             recordAccessPolicy,
             reachRecorder,
@@ -154,6 +158,9 @@ class NewbornAssessmentServiceImplTest {
         assertEquals(NewbornAlertSeverity.URGENT, response.getAlerts().get(1).getSeverity());
         assertTrue(response.getFollowUpActions().contains(NewbornFollowUpAction.NICU_CONSULT));
         verify(notificationService, times(2)).createNotification(anyString(), anyString());
+        // QA D605: each URGENT neonatal alert reaches the on-call team too.
+        verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(a.sourceType())));
 
         ArgumentCaptor<NewbornAssessment> assessmentCaptor = ArgumentCaptor.forClass(NewbornAssessment.class);
         verify(assessmentRepository).save(assessmentCaptor.capture());

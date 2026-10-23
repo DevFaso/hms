@@ -68,6 +68,12 @@ const SILENT_403_POST_PATTERNS = [
  */
 const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/prescriptions\/[^/?]+\/(sign|cosign|pharmacist-verify)(\?|$)/,
+  // QA D618 (D176/D527): a refused discharge is reported in the open form;
+  // the redirect replaced the page and lost everything typed.
+  /\/admissions\/[^/?]+\/discharge(\?|$)/,
+  // QA D611 (D527): editing a signed imaging order — the reason is shown in
+  // the open modal, not on a 403 page.
+  /\/imaging\/orders\/[^/?]+(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

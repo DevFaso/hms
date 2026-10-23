@@ -184,7 +184,7 @@
                       }
                     </td>
                     <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
-                    <td>{{ v.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ v.dueTime | serverTime | date: 'shortTime' }}</td>
                     <td>
                       @if (v.overdue) {
                         <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
@@ -251,7 +251,7 @@
                     </td>
                     <td>{{ m.dose }}</td>
                     <td>{{ m.route }}</td>
-                    <td>{{ m.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ m.dueTime | serverTime | date: 'shortTime' }}</td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status | enumLabel: 'marTaskStatus'
@@ -340,7 +340,7 @@
                         o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
-                    <td>{{ o.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ o.dueTime | serverTime | date: 'shortTime' }}</td>
                   </tr>
                 }
               </tbody>
@@ -437,7 +437,7 @@
                     @if (h.createdByName) {
                       {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
                     }
-                    {{ h.updatedAt | date: 'medium' }}
+                    {{ h.updatedAt | serverTime | date: 'medium' }}
                   </span>
                   @if (h.completedAt) {
                     <span
@@ -446,7 +446,8 @@
                     >
                       <span class="material-symbols-outlined">check_circle</span>
                       {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
-                      {{ h.completedByName || '—' }} · {{ h.completedAt | date: 'medium' }}
+                      {{ h.completedByName || '—' }} ·
+                      {{ h.completedAt | serverTime | date: 'medium' }}
                     </span>
                   } @else {
                     <button
@@ -905,7 +906,7 @@
                   } @else {
                     <span class="task-completed-info">
                       {{ 'NURSE.COMPLETED_PREFIX' | translate }}
-                      {{ task.completedAt | date: 'short' }}
+                      {{ task.completedAt | serverTime | date: 'short' }}
                       @if (task.completedByName) {
                         {{ 'NURSE.BY_PREFIX' | translate }} {{ task.completedByName }}
                       }
@@ -953,7 +954,7 @@
                 </div>
                 <div class="inbox-body">
                   <p class="inbox-message">{{ item.message }}</p>
-                  <span class="inbox-time">{{ item.createdAt | date: 'short' }}</span>
+                  <span class="inbox-time">{{ item.createdAt | serverTime | date: 'short' }}</span>
                 </div>
               </div>
             }
@@ -979,7 +980,7 @@
           <div class="announcement-card">
             <span class="announcement-category">{{ a.category }}</span>
             <p>{{ a.text }}</p>
-            <span class="announcement-time">{{ a.createdAt | date: 'short' }}</span>
+            <span class="announcement-time">{{ a.createdAt | serverTime | date: 'short' }}</span>
           </div>
         }
       </aside>
