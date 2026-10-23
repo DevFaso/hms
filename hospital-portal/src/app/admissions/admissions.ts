@@ -33,7 +33,7 @@ import { ActionKey, actionRoles } from '../core/action-permissions';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
-import { toLocalInputValue, toServerDateTime } from '../shared/date-utils';
+import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 
 interface OrderSetPickerCtx {
@@ -62,6 +62,8 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   styleUrl: './admissions.scss',
 })
 export class AdmissionsComponent implements OnInit {
+  /** D622: admission times are UTC wall clock; show them in the user's zone. */
+  protected readonly fromServerDateTime = fromServerDateTime;
   private readonly admissionService = inject(AdmissionService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);

@@ -36,3 +36,17 @@ export function toLocalInputValue(serverValue: string): string {
   }
   return `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
 }
+
+/**
+ * D622: a server (UTC, zone-less) time as an instant, for the `date` pipe.
+ * Passing the bare string to the pipe reads it as local time, so the shown
+ * time is off by the UTC offset. Null for an empty or unparsable value.
+ */
+export function fromServerDateTime(serverValue: string | null | undefined): Date | null {
+  if (!serverValue) {
+    return null;
+  }
+  const zoned = /(Z|[+-]\d{2}:\d{2})$/.test(serverValue) ? serverValue : serverValue + 'Z';
+  const instant = new Date(zoned);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}

@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -443,7 +444,7 @@ describe('AdmissionsComponent', () => {
  * flag test still green. These render the row and read the DOM.
  */
 describe('AdmissionsComponent row actions (rendered, D527)', () => {
-  function render(roles: string[], status = 'ACTIVE'): HTMLElement {
+  function render(roles: string[], status = 'ACTIVE', admissionDateTime?: string): HTMLElement {
     const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
     admissions.getAll.and.returnValue(
       of([
@@ -454,6 +455,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
           patientName: 'Awa Traore',
           status,
           chiefComplaint: 'Fever',
+          admissionDateTime,
         } as AdmissionResponse,
       ]),
     );
@@ -528,4 +530,13 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
       expect(el.querySelector('.delete-link')).toBeNull();
     });
   }
+
+  // QA D622: the admission time is stored as UTC wall clock; the row must show
+  // the user's local date of that instant, not the bare string read as local.
+  it('shows the admission date in the user zone (D622)', () => {
+    const el = render(['ROLE_DOCTOR'], 'ACTIVE', '2026-10-23T02:30:00');
+    const expected = formatDate(new Date(Date.UTC(2026, 9, 23, 2, 30)), 'mediumDate', 'en-US');
+    const cells = Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim());
+    expect(cells).toContain(expected);
+  });
 });
