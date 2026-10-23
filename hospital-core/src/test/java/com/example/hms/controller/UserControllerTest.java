@@ -157,6 +157,67 @@ class UserControllerTest {
             .andExpect(status().isCreated());
     }
 
+    // -------------------------------------------------------------------------
+    // QA D626 (regression of D329): staff onboarding must not register a patient
+    // -------------------------------------------------------------------------
+
+    private AdminSignupRequest patientSignup(String role, Boolean fromPatientForm) {
+        AdminSignupRequest req = new AdminSignupRequest();
+        req.setEmail("qa-onb@example.test");
+        req.setFirstName("QA");
+        req.setLastName("Onb");
+        req.setPhoneNumber("+22670027075");
+        req.setRoleNames(Set.of(role));
+        req.setHospitalId(UUID.randomUUID());
+        req.setPatientRegistration(fromPatientForm);
+        return req;
+    }
+
+    private org.springframework.test.web.servlet.ResultActions registerAs(AdminSignupRequest req, String authority)
+        throws Exception {
+        return mockMvc.perform(post("/users/admin-register")
+            .with(SecurityMockMvcRequestPostProcessors.authentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                    "qa", "pw", AuthorityUtils.createAuthorityList(authority))))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(req)));
+    }
+
+    @Test
+    void qaD626_hospitalAdminStaffOnboardingWithRolePatient_isRefusedAndWritesNothing() throws Exception {
+        for (String role : new String[] {"ROLE_PATIENT", "PATIENT", "role_patient"}) {
+            registerAs(patientSignup(role, null), "ROLE_HOSPITAL_ADMIN")
+                .andExpect(status().isBadRequest())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                    .jsonPath("$.message").isNotEmpty());
+            registerAs(patientSignup(role, false), "ROLE_SUPER_ADMIN").andExpect(status().isBadRequest());
+        }
+        org.mockito.Mockito.verify(userService, org.mockito.Mockito.never()).createUserWithRolesAndHospital(any());
+    }
+
+    @Test
+    void qaD626_thePatientFormStillRegistersAPatient() throws Exception {
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        when(userService.createUserWithRolesAndHospital(any())).thenReturn(response);
+
+        registerAs(patientSignup("PATIENT", true), "ROLE_HOSPITAL_ADMIN").andExpect(status().isCreated());
+    }
+
+    // The receptionist path (roles forced to PATIENT, no flag needed) is
+    // covered through the real filter chain by UserEndpointAuthorizationIT
+    // receptionistCompensationDelete: this slice runs without filters, so the
+    // controller's Authentication argument is null here.
+
+    @Test
+    void qaD626_staffOnboardingOfAStaffRoleIsUnchanged() throws Exception {
+        UserResponseDTO response = new UserResponseDTO();
+        response.setId(UUID.randomUUID());
+        when(userService.createUserWithRolesAndHospital(any())).thenReturn(response);
+
+        registerAs(patientSignup("ROLE_DOCTOR", null), "ROLE_HOSPITAL_ADMIN").andExpect(status().isCreated());
+    }
+
     @Test
     void adminRegister_hospitalAdmin_withoutHospital_returns400() throws Exception {
         // HOSPITAL_ADMIN *does* require a hospital — must still return 400 when missing.

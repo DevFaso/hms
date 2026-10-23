@@ -93,7 +93,8 @@ Content-Type: application/json
   "firstName": "Jane",
   "lastName": "Doe",
   "phoneNumber": "+1-555-400-0004",
-  "roleNames": ["ROLE_PATIENT"]
+  "roleNames": ["ROLE_PATIENT"],
+  "patientRegistration": true
 }
 
 ### Update user

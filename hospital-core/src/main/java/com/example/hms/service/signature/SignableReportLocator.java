@@ -29,6 +29,17 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SignableReportLocator {
 
+    /**
+     * The types {@link #owningHospitalId} can resolve, so the only ones that can
+     * be signed (QA D627). The portal's sign modal offers exactly these
+     * ({@code SIGNABLE_TYPES} in digital-signature.service.ts, mirrored by
+     * SignableTypesMirrorTest).
+     */
+    public static final java.util.Set<SignatureType> SIGNABLE = java.util.Collections.unmodifiableSet(
+        java.util.EnumSet.of(SignatureType.DISCHARGE_SUMMARY, SignatureType.LAB_RESULT,
+            SignatureType.IMAGING_REPORT, SignatureType.CONSULTATION_NOTE, SignatureType.PROGRESS_NOTE,
+            SignatureType.ED_NOTE, SignatureType.MEDICATION_ORDER, SignatureType.PROCEDURE_REPORT));
+
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final LabResultRepository labResultRepository;
     private final ImagingReportRepository imagingReportRepository;

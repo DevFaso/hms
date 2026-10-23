@@ -359,6 +359,8 @@ export class PatientFormComponent implements OnInit {
         roleNames: ['PATIENT'],
         hospitalId: this.form.hospitalId,
         forcePasswordChange: true,
+        // QA D626: the server registers a patient only when the patient form says so.
+        patientRegistration: true,
       })
       .pipe(
         switchMap((user) => {

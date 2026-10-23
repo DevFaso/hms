@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -543,6 +543,28 @@ describe('BedBoardComponent', () => {
     const [sent] = transferSpy.requestTransfer.calls.mostRecent().args;
     expect(sent.isolationOverride).toBeUndefined();
     expect(sent.isolationOverrideReason).toBeUndefined();
+  });
+
+  it('QA D631: a refused transfer shows the server reason, a crash keeps the generic text', () => {
+    const reason = 'Un transfert est déjà en attente pour cette admission.';
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: reason } })),
+    );
+    component.ngOnInit();
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith(reason);
+
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'NPE at x' } })),
+    );
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith('BED_BOARD.TRANSFER_ERROR');
   });
 
   it('reloads both the board and the worklist after a transfer is ordered', () => {

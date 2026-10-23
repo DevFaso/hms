@@ -17,6 +17,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import {
   DigitalSignatureService,
+  SIGNABLE_TYPES,
   SIGNATURE_TYPES,
   SignatureResponse,
   SignatureAuditEntry,
@@ -24,6 +25,8 @@ import {
 } from '../services/digital-signature.service';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
@@ -110,6 +113,8 @@ export class DigitalSignaturesComponent implements OnInit {
   lookupSignatures = signal<SignatureResponse[]>([]);
 
   readonly reportTypes = SIGNATURE_TYPES;
+  /** QA D627: the sign modal offers only what the server can sign. */
+  readonly signableTypes = SIGNABLE_TYPES;
   readonly statuses = ['PENDING', 'SIGNED', 'REVOKED', 'EXPIRED', 'INVALID'];
 
   filteredSignatures = computed(() => {
@@ -208,6 +213,11 @@ export class DigitalSignaturesComponent implements OnInit {
     const reportType = this.signReportType();
     if (!reportType || !this.signReportId().trim() || !this.signValue().trim()) {
       this.toast.error(this.translate.instant('SIGNATURES.SIGN_REQUIRED'));
+      return;
+    }
+    // QA D627: a record id is a UUID; anything else can only end in a 404.
+    if (!UUID_SHAPE.test(this.signReportId().trim())) {
+      this.toast.error(this.translate.instant('SIGNATURES.REPORT_ID_INVALID'));
       return;
     }
     if (!staffId || !hospitalId) {

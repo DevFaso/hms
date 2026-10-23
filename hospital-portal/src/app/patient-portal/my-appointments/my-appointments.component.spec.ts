@@ -211,7 +211,30 @@ describe('MyAppointmentsComponent', () => {
       component.ngOnInit();
 
       expect(component.upcoming().map((a) => a.id)).toEqual(['today']);
-      expect(component.past().map((a) => a.id)).toEqual(['old', 'done']);
+      // Newest first (QA D642).
+      expect(component.past().map((a) => a.id)).toEqual(['done', 'old']);
+    });
+
+    it('QA D642: lists upcoming visits soonest first, whatever order the server sent', () => {
+      const at = (id: string, date: string, time: string): PortalAppointment =>
+        ({
+          id,
+          date,
+          rawStartTime: time,
+          rawEndTime: time,
+          status: 'SCHEDULED',
+        }) as PortalAppointment;
+      portalService.getMyAppointments.and.returnValue(
+        of([
+          at('oct30', '2099-10-30', '09:00'),
+          at('oct28-late', '2099-10-28', '14:00'),
+          at('oct28', '2099-10-28', '08:30'),
+        ]),
+      );
+
+      component.ngOnInit();
+
+      expect(component.upcoming().map((a) => a.id)).toEqual(['oct28', 'oct28-late', 'oct30']);
     });
   });
 

@@ -448,7 +448,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<AppointmentResponseDTO> getMyAppointments(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
         String username = auth.getName();
-        return appointmentService.getAppointmentsByPatientId(patientId, locale, username);
+        // QA D642: the patient reads these as a schedule — soonest first, by
+        // date then start time (the web portal and the apps both list them as sent).
+        List<AppointmentResponseDTO> appointments =
+            new java.util.ArrayList<>(appointmentService.getAppointmentsByPatientId(patientId, locale, username));
+        appointments.sort(java.util.Comparator
+            .comparing(AppointmentResponseDTO::getAppointmentDate,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+            .thenComparing(AppointmentResponseDTO::getStartTime,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return appointments;
     }
 
     // ── Billing / invoices ───────────────────────────────────────────────

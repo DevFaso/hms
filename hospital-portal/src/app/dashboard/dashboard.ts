@@ -76,6 +76,7 @@ import { LabService } from '../services/lab.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
 import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
 import {
@@ -1150,9 +1151,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * audit writer's "Unknown Resource" placeholder is not a name (D260).
    */
   auditResourceLabel(resourceName: string | null | undefined): string | null {
-    const name = resourceName?.trim();
-    if (!name || name === 'Unknown Resource') return null;
-    return name;
+    // QA D619: a write audit's resourceName is the entity token (TRANSFER,
+    // BILLING_INVOICE); echoing it put English wire tokens on the FR/ES card.
+    return this.enumLabels.auditEntityLabel(resourceName);
   }
 
   // ── MVP 17: Staffing by department ──────────────────────────
@@ -2064,9 +2065,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Upcoming appointments for patient (computed from portal data) ────
   upcomingAppointments = computed(() => {
-    const now = new Date();
+    // QA D642: the NEXT three, in date order (the service sorts), counted in
+    // the patient's own calendar days (D433): new Date('yyyy-MM-dd') is UTC
+    // midnight, so today's visit used to drop off the card.
+    const today = localDateString();
     return this.myAppointments()
-      .filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now)
+      .filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && a.date >= today)
+      .sort((a, b) =>
+        `${a.date}T${a.rawStartTime ?? ''}`.localeCompare(`${b.date}T${b.rawStartTime ?? ''}`),
+      )
       .slice(0, 3);
   });
 

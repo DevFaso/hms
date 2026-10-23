@@ -786,13 +786,17 @@ export class EnumLabelService implements OnDestroy {
     /* ── Notification types (Notification.type, a String column) ─── */
     notificationType: {
       APPOINTMENT_REMINDER: 'Appointment Reminder',
+      BREAK_GLASS_OPT_OUT_OVERRIDE: 'Emergency access to your record',
       CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
       CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
       CRITICAL_LAB_RESULT: 'Critical Lab Result',
       CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
       DISCHARGE_SUMMARY: 'Discharge Summary',
+      LAB_ORDER_RECEIVED: 'Lab Order Received',
       LICENSE_EXPIRY: 'License Expiry',
       MEDICATION_REFILL: 'Medication Refill',
+      NEWS2_ESCALATION: 'NEWS2 Escalation',
+      PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
@@ -954,6 +958,23 @@ export class EnumLabelService implements OnDestroy {
       RESP_TELEMED: 'Respiratory telemedicine',
     },
   };
+
+  /**
+   * QA D528/D619: an audit row names its entity as a token — `BILLING_INVOICE`
+   * on a write audit, `BillingInvoice` from older emitters. Both become the
+   * keyed AUDIT_ENTITY_TYPE label. Anything that is not token-shaped (a
+   * resource someone named) is returned as it is; `'Unknown Resource'` and a
+   * blank are `null`, so a caller can hide the separator.
+   */
+  auditEntityLabel(raw: string | null | undefined): string | null {
+    const name = raw?.trim();
+    if (!name || name === 'Unknown Resource') return null;
+    const upperSnake = /^[A-Z][A-Z0-9_]*$/.test(name);
+    const pascal = /^(?:[A-Z][a-z0-9]+)+$/.test(name);
+    if (!upperSnake && !pascal) return name;
+    const code = name.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    return this.transform(code, 'auditEntityType');
+  }
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */
   transform(value: string | null | undefined, domain?: string): string {

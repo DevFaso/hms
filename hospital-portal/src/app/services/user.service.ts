@@ -68,6 +68,8 @@ export interface AdminRegisterRequest {
   departmentId?: string;
   specialization?: string;
   forcePasswordChange?: boolean;
+  /** QA D626: true only from the patient form; staff onboarding never registers a patient. */
+  patientRegistration?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

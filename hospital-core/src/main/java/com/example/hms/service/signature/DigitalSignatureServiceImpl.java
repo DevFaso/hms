@@ -92,6 +92,11 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         if (!staff.getId().equals(request.getSignedByStaffId())) {
             throw new AccessDeniedException("You can only sign in your own name.");
         }
+        // QA D627: a type with no record store can never be signed; say so
+        // instead of a 404 that reads as "wrong id".
+        if (request.getReportType() != null && !SignableReportLocator.SIGNABLE.contains(request.getReportType())) {
+            throw new BusinessException(text("signature.reportType.notSignable", LocaleContextHolder.getLocale()));
+        }
         UUID reportHospitalId = reportLocator.owningHospitalId(request.getReportType(), request.getReportId())
             .orElseThrow(() -> new ResourceNotFoundException("signature.report.notFound", request.getReportId()));
         if (!activeHospitalId.equals(reportHospitalId)) {

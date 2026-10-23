@@ -43,6 +43,23 @@ export const SIGNATURE_TYPES: SignatureType[] = [
   'GENERIC_REPORT',
 ];
 
+/**
+ * QA D627: the types the server can sign — SignableReportLocator.SIGNABLE,
+ * mirrored by SignableTypesMirrorTest. OPERATIVE_NOTE, PATHOLOGY_REPORT,
+ * CARE_PLAN and GENERIC_REPORT have no record store, so a signature over them
+ * is always refused; the sign modal does not offer them.
+ */
+export const SIGNABLE_TYPES: SignatureType[] = [
+  'DISCHARGE_SUMMARY',
+  'LAB_RESULT',
+  'IMAGING_REPORT',
+  'CONSULTATION_NOTE',
+  'PROGRESS_NOTE',
+  'PROCEDURE_REPORT',
+  'ED_NOTE',
+  'MEDICATION_ORDER',
+];
+
 export type SignatureStatus = 'PENDING' | 'SIGNED' | 'REVOKED' | 'EXPIRED' | 'INVALID';
 
 export interface SignatureResponse {

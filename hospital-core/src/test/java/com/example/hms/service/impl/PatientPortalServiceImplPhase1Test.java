@@ -611,6 +611,26 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result).isEqualTo(expected);
             verify(appointmentService).getAppointmentsByPatientId(patientId, Locale.ENGLISH, "patient.john");
         }
+
+        @Test
+        @DisplayName("QA D642: returns the appointments soonest first, by date then start time")
+        void getMyAppointments_inDateOrder() {
+            stubPatientResolution();
+            when(auth.getName()).thenReturn("patient.john");
+            AppointmentResponseDTO oct30 = new AppointmentResponseDTO();
+            oct30.setAppointmentDate(java.time.LocalDate.of(2026, 10, 30));
+            oct30.setStartTime(java.time.LocalTime.of(9, 0));
+            AppointmentResponseDTO oct28Late = new AppointmentResponseDTO();
+            oct28Late.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28Late.setStartTime(java.time.LocalTime.of(14, 0));
+            AppointmentResponseDTO oct28 = new AppointmentResponseDTO();
+            oct28.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28.setStartTime(java.time.LocalTime.of(8, 30));
+            when(appointmentService.getAppointmentsByPatientId(patientId, Locale.FRENCH, "patient.john"))
+                    .thenReturn(List.of(oct30, oct28Late, oct28));
+
+            assertThat(service.getMyAppointments(auth, Locale.FRENCH)).containsExactly(oct28, oct28Late, oct30);
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════

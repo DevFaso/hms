@@ -429,7 +429,7 @@
               (ngModelChange)="signReportType.set($event)"
             >
               <option value="">—</option>
-              @for (t of reportTypes; track t) {
+              @for (t of signableTypes; track t) {
                 <option [value]="t">{{ formatReportType(t) }}</option>
               }
             </select>

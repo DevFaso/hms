@@ -6,7 +6,7 @@ import { of } from 'rxjs';
 
 import { UserListComponent } from './user-list';
 import { UserService, UserDetail } from '../services/user.service';
-import { RoleService } from '../services/role.service';
+import { RoleResponse, RoleService } from '../services/role.service';
 import { HospitalService } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -226,6 +226,23 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
       'ROLE_NURSE',
       'ROLE_RECEPTIONIST',
     ]);
+  });
+
+  it('QA D626: never offers the patient role, however the row names it, even to a super-admin', () => {
+    const row = (code: string, name: string, authority = '') =>
+      ({ id: code + name, code, name, authority }) as unknown as RoleResponse;
+    component.availableRoles.set([
+      row('', 'ROLE_PATIENT'),
+      row('PATIENT', 'Patient'),
+      row('', 'Patient(e)', 'ROLE_PATIENT'),
+      row('ROLE_NURSE', 'ROLE_NURSE'),
+    ]);
+    expect(component.grantableRoles().map((r) => r.code)).toEqual(['ROLE_NURSE']);
+    (
+      TestBed.inject(RoleContextService) as unknown as { isSuperAdmin: () => boolean }
+    ).isSuperAdmin = () => true;
+    component.availableRoles.set([...component.availableRoles()]);
+    expect(component.grantableRoles().map((r) => r.code)).toEqual(['ROLE_NURSE']);
   });
 
   it('asks a medical specialization for a doctor, not for a nurse', () => {

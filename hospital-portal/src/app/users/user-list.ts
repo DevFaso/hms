@@ -176,9 +176,14 @@ export class UserListComponent implements OnInit, OnDestroy {
    * offered staff roles only.
    */
   readonly grantableRoles = computed(() => {
-    const roles = this.availableRoles();
+    // QA D626: never the patient role, for anyone — the server refuses it here
+    // (a patient is registered from the patient form, with its record).
+    // Every identifier is read: a role row whose `code` is blank but whose
+    // name or authority is ROLE_PATIENT must not slip through.
+    const ids = (r: RoleResponse) => [r.code, r.name, r.authority].map(bareRoleCode);
+    const roles = this.availableRoles().filter((r) => !ids(r).includes('PATIENT'));
     if (this.roleContext.isSuperAdmin()) return roles;
-    return roles.filter((r) => !STAFF_MODAL_EXCLUDED_ROLES.has(bareRoleCode(r.code)));
+    return roles.filter((r) => !ids(r).some((id) => STAFF_MODAL_EXCLUDED_ROLES.has(id)));
   });
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 

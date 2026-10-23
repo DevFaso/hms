@@ -783,6 +783,18 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
     private Map<String, Object> signup(String prefix, String role, Hospital hospital) {
         String suffix = next();
+        if ("PATIENT".equals(role)) {
+            // The patient form's step 1 says it is one (QA D626).
+            return Map.of(
+                "username", prefix + suffix,
+                "email", prefix + suffix + "@signup.test",
+                "firstName", prefix,
+                "lastName", "Signup" + suffix,
+                "phoneNumber", "+226770" + suffix,
+                "roleNames", List.of(role),
+                "hospitalId", hospital.getId().toString(),
+                "patientRegistration", true);
+        }
         return Map.of(
             "username", prefix + suffix,
             "email", prefix + suffix + "@signup.test",

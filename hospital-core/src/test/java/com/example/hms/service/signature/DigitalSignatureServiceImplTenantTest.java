@@ -134,6 +134,33 @@ class DigitalSignatureServiceImplTenantTest {
     }
 
     @Test
+    void qaD627_anUnsignableReportTypeIsRefusedInTheReaderLanguage() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            for (var type : new com.example.hms.enums.SignatureType[] {
+                    com.example.hms.enums.SignatureType.OPERATIVE_NOTE, com.example.hms.enums.SignatureType.PATHOLOGY_REPORT,
+                    com.example.hms.enums.SignatureType.CARE_PLAN, com.example.hms.enums.SignatureType.GENERIC_REPORT}) {
+                var req = request(staffId, hospital, UUID.randomUUID());
+                req.setReportType(type);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(req))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("Ce type de rapport ne peut pas être signé ici.");
+            }
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        verify(reportLocator, never()).owningHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void signatureValueMustBeTheSignerName() {
         UUID hospital = UUID.randomUUID();
         UUID user = UUID.randomUUID();

@@ -196,7 +196,12 @@ describe('PatientFormComponent', () => {
     });
     component.onSubmit();
     expect(userSpy.adminRegister).toHaveBeenCalledWith(
-      jasmine.objectContaining({ email: undefined, roleNames: ['PATIENT'] }),
+      // QA D626: the server registers a patient only when the patient form says so.
+      jasmine.objectContaining({
+        email: undefined,
+        roleNames: ['PATIENT'],
+        patientRegistration: true,
+      }),
     );
     expect(patientSpy.create).toHaveBeenCalledWith(jasmine.objectContaining({ email: undefined }));
     expect(routerSpy.navigate).toHaveBeenCalledWith(['/patients', 'p9']);

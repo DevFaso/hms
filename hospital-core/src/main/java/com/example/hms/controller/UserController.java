@@ -78,6 +78,17 @@ public class UserController {
         final boolean isPatientOnly = effectiveRoles.size() == 1 &&
             (effectiveRoles.contains(ROLE_PATIENT) || effectiveRoles.contains("ROLE_PATIENT"));
 
+        // QA D626 (regression of D329): D329 refused PATIENT only NEXT TO a
+        // staff role, so a staff onboarding that ticked the patient role alone
+        // still answered 201 with an account and no patient record. Only the
+        // patient form (which says so) or a receptionist (whose roles are
+        // forced to PATIENT above) registers a patient here.
+        if (!callerIsReceptionistOnly
+            && effectiveRoles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.replaceFirst("(?i)^ROLE_", "")))
+            && !Boolean.TRUE.equals(request.getPatientRegistration())) {
+            throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
+        }
+
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
         // Skip the hospital-presence check so the request reaches the service, which
         // correctly returns null for the hospitalId when registering a SUPER_ADMIN.

@@ -5177,6 +5177,9 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **Note signing at outpatient checkout (QA D513, round 8, `fix/qa-r8-clinical-inpatient`).** The checkout no longer lets the visit note be rewritten (400 refusal `encounter.note.closedLocked`, corrections go through an attributed addendum) and the edit response now carries the flushed `updatedAt`. Requiring the note to be signed before checkout, or signing it as part of checkout, changes the outpatient flow for every clinician and is a product decision (who signs a nurse-documented visit, what happens to a visit closed by the discharge path); an unsigned closed note is still shown as unsigned. Owed: decide and build the checkout-time signature step.
 
+- **Report picker in the sign modal (QA D627 / D123, round 9, `fix/qa-r9-i18n-admin-portal`).** The modal now offers only the types the server can sign (`SIGNABLE_TYPES` = `SignableReportLocator.SIGNABLE`, mirrored by `SignableTypesMirrorTest`), the server refuses an unsignable type with a translated 400, and a non-UUID id is refused before the call. Choosing the record by name instead of pasting its UUID needs a per-type search (discharge summaries, lab results, imaging reports, consultations, notes, prescriptions, procedures) in the acting hospital — a new picker feature, not a fix. Signing from each record's own page already passes the id.
+- **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:
