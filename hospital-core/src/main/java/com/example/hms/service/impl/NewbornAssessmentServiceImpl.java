@@ -388,35 +388,37 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         // Read by the documenting clinician: staff locale, not the request locale.
         Locale locale = NotificationLocales.STAFF;
         String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
-        String patientName = assessment.getPatient() != null
+        String fullName = assessment.getPatient() != null
             ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
             : fallbackName;
+        String patientName = fullName.isBlank() ? fallbackName : fullName;
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
-                if (notifyDocumenter) {
-                    try {
-                        notificationService.createNotification(message, documentedBy.getUsername());
-                    } catch (RuntimeException ex) {
-                        log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
-                    }
-                }
-                if (obstetricAlertEscalation != null && assessment.getHospital() != null
-                        && assessment.getPatient() != null) {
-                    obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
-                        assessment.getHospital().getId(), assessment.getPatient().getId(),
-                        patientName.isBlank() ? fallbackName : patientName,
-                        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
-                        alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
-                        documentedBy == null ? null : documentedBy.getId(), message));
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, assessment, documentedBy, patientName, notifyDocumenter));
+    }
+
+    private void publishUrgentAlert(NewbornAssessmentAlert alert, NewbornAssessment assessment, User documentedBy,
+                                    String patientName, boolean notifyDocumenter) {
+        Locale locale = NotificationLocales.STAFF;
+        // QA D216: the type is a translated label, never the raw enum.
+        String typeLabel = alert.getType() == null ? ""
+            : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
+        String message = messageSource.getMessage("newborn.alert.notification",
+            new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+        if (notifyDocumenter) {
+            try {
+                notificationService.createNotification(message, documentedBy.getUsername());
+            } catch (RuntimeException ex) {
+                log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+            }
+        }
+        if (obstetricAlertEscalation != null && assessment.getHospital() != null && assessment.getPatient() != null) {
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                assessment.getHospital().getId(), assessment.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message));
+        }
     }
 
     /**

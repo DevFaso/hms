@@ -736,27 +736,33 @@ public class LaborServiceImpl implements LaborService {
             : messageSource.getMessage("patient.fallback.generic", null, locale);
         alerts.stream()
             .filter(alert -> alert.getSeverity() == LaborAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D172 (D61/D121): the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("labor.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("labor.alert.notification",
-                    new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
-                if (notifyDocumenter) {
-                    try {
-                        notificationService.createNotification(message, documentedBy.getUsername());
-                    } catch (RuntimeException ex) {
-                        log.warn("Failed to create labor alert notification: {}", ex.getMessage());
-                    }
-                }
-                if (obstetricAlertEscalation != null && episode.getHospital() != null && episode.getPatient() != null) {
-                    obstetricAlertEscalation.raiseAfterCommit(
-                        new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
-                            episode.getHospital().getId(), episode.getPatient().getId(), patientName,
-                            sourceType, sourceId, alert.getType() == null ? null : alert.getType().name(),
-                            typeLabel, alert.getMessage(),
-                            documentedBy == null ? null : documentedBy.getId(), message));
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, episode, documentedBy, sourceType, sourceId,
+                patientName, notifyDocumenter));
+    }
+
+    private void publishUrgentAlert(com.example.hms.model.labor.LaborAlert alert, LaborEpisode episode,
+                                    User documentedBy, String sourceType, UUID sourceId,
+                                    String patientName, boolean notifyDocumenter) {
+        Locale locale = NotificationLocales.STAFF;
+        // QA D172 (D61/D121): the type is a translated label, never the raw enum.
+        String typeLabel = alert.getType() == null ? ""
+            : messageSource.getMessage("labor.alert.type." + alert.getType().name(), null, locale);
+        String message = messageSource.getMessage("labor.alert.notification",
+            new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+        if (notifyDocumenter) {
+            try {
+                notificationService.createNotification(message, documentedBy.getUsername());
+            } catch (RuntimeException ex) {
+                log.warn("Failed to create labor alert notification: {}", ex.getMessage());
+            }
+        }
+        if (obstetricAlertEscalation != null && episode.getHospital() != null && episode.getPatient() != null) {
+            obstetricAlertEscalation.raiseAfterCommit(
+                new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                    episode.getHospital().getId(), episode.getPatient().getId(), patientName,
+                    sourceType, sourceId, alert.getType() == null ? null : alert.getType().name(),
+                    typeLabel, alert.getMessage(),
+                    documentedBy == null ? null : documentedBy.getId(), message));
+        }
     }
 }

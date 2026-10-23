@@ -768,35 +768,37 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         // Read by the documenting clinician: staff locale, not the request locale.
         Locale locale = NotificationLocales.STAFF;
         String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
-        String patientName = observation.getPatient() != null
+        String fullName = observation.getPatient() != null
             ? (observation.getPatient().getFirstName() + " " + observation.getPatient().getLastName()).trim()
             : fallbackName;
+        String patientName = fullName.isBlank() ? fallbackName : fullName;
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
-                if (notifyDocumenter) {
-                    try {
-                        notificationService.createNotification(message, documentedBy.getUsername());
-                    } catch (RuntimeException ex) {
-                        log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
-                    }
-                }
-                if (obstetricAlertEscalation != null && observation.getHospital() != null
-                        && observation.getPatient() != null) {
-                    obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
-                        observation.getHospital().getId(), observation.getPatient().getId(),
-                        patientName.isBlank() ? fallbackName : patientName,
-                        com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM, observation.getId(),
-                        alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
-                        documentedBy == null ? null : documentedBy.getId(), message));
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, observation, documentedBy, patientName, notifyDocumenter));
+    }
+
+    private void publishUrgentAlert(PostpartumObservationAlert alert, PostpartumObservation observation, User documentedBy,
+                                    String patientName, boolean notifyDocumenter) {
+        Locale locale = NotificationLocales.STAFF;
+        // QA D216: the type is a translated label, never the raw enum.
+        String typeLabel = alert.getType() == null ? ""
+            : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
+        String message = messageSource.getMessage("postpartum.alert.notification",
+            new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+        if (notifyDocumenter) {
+            try {
+                notificationService.createNotification(message, documentedBy.getUsername());
+            } catch (RuntimeException ex) {
+                log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
+            }
+        }
+        if (obstetricAlertEscalation != null && observation.getHospital() != null && observation.getPatient() != null) {
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                observation.getHospital().getId(), observation.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM, observation.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message));
+        }
     }
 
     private record AlertEvaluation(List<PostpartumObservationAlert> alerts,
