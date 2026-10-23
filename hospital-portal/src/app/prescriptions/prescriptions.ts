@@ -347,13 +347,20 @@ export class PrescriptionsComponent implements OnInit {
    */
   editingWithdrawn = signal(false);
 
+  /**
+   * QA D660 (user decision): a signed prescription keeps its Edit action, but
+   * the only change it accepts is a withdrawal (Cancelled or Discontinued)
+   * with a reason. Every other field is read-only; the server refuses them.
+   */
+  editingSigned = signal(false);
+
   statusOptions(): { value: string; labelKey: string }[] {
     if (!this.editing()) {
       // A new order cannot be born withdrawn: offering Cancelled or
       // Discontinued at creation recorded an order nobody ever placed (D129).
       return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
     }
-    if (!this.editingWithdrawn()) {
+    if (!this.editingWithdrawn() && !this.editingSigned()) {
       return this.prescriptionStatuses;
     }
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
@@ -468,6 +475,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editing.set(false);
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
+    this.editingSigned.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -498,8 +506,23 @@ export class PrescriptionsComponent implements OnInit {
     this.editing.set(true);
     this.editingId.set(p.id);
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
+    const signed = p.status === 'SIGNED';
+    this.editingSigned.set(signed);
+    if (signed) {
+      // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
+      this.form.status = undefined;
+      this.form.withdrawalReason = '';
+    }
     this.formError.set('');
     this.showModal.set(true);
+  }
+
+  /** QA D660: what the Save button waits for on a signed prescription. */
+  signedWithdrawalIncomplete(): boolean {
+    return (
+      this.editingSigned() &&
+      (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())
+    );
   }
 
   closeModal(): void {

@@ -6340,6 +6340,9 @@
     "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
     "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua.",
     "ROUTE_NOT_RECORDED": "No registrada",
+    "SIGNED_EDIT_HINT": "Esta receta está firmada: solo puede cancelarse o suspenderse, con un motivo. Para cambiar cualquier otra cosa, redacte una receta nueva.",
+    "CHOOSE_WITHDRAWAL": "Elija Cancelada o Suspendida",
+    "WITHDRAWAL_REASON": "Motivo de la retirada",
     "ROUTES": {
       "PO": "Oral (PO)",
       "IV": "Intravenosa (IV)",

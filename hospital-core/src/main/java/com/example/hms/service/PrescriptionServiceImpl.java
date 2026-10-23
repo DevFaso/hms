@@ -889,6 +889,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        // QA D660: a signed order is no longer rewritten by edit.
+        if (existing.getStatus() == PrescriptionStatus.SIGNED) {
+            return withdrawSignedPrescription(existing, request);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -952,6 +956,81 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * QA D660 (user decision): the only edit a SIGNED prescription accepts is
+     * its withdrawal, to CANCELLED or DISCONTINUED, with a reason. The signed
+     * drug, dose, route, patient, prescriber and encounter are what the
+     * signature digest covers; rewriting them under the same signature is
+     * what the edit form used to allow. The portal echoes the whole form, so
+     * a field that equals the stored value (or is absent) is not a change;
+     * any other value is refused before anything is written.
+     */
+    private PrescriptionResponseDTO withdrawSignedPrescription(Prescription existing,
+                                                               PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null || !requested.isWithdrawn() || changesSignedContent(existing, request)) {
+            throw new BusinessException("prescription.signed.onlyWithdrawal");
+        }
+        String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+        if (reason == null || reason.isEmpty()) {
+            throw new BusinessException("prescription.signed.withdrawalReason.required");
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        if (hospitalId == null || !roleValidator.canCreatePrescription(currentUserId, hospitalId)) {
+            throw new BusinessException("prescription.only.doctor.admin");
+        }
+        PrescriptionStatus statusBefore = existing.getStatus();
+        existing.setStatus(requested);
+        existing.setWithdrawalReason(reason);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+    }
+
+    /** True when the request asks for anything on a signed order other than its status. */
+    private static boolean changesSignedContent(Prescription existing, PrescriptionRequestDTO request) {
+        java.util.List<Boolean> changes = java.util.List.of(
+            differs(request.getPatientId(), existing.getPatient() == null ? null : existing.getPatient().getId()),
+            request.getPatientId() == null && !isBlank(request.getPatientIdentifier()),
+            differs(request.getStaffId(), existing.getStaff() == null ? null : existing.getStaff().getId()),
+            differs(request.getEncounterId(), existing.getEncounter() == null ? null : existing.getEncounter().getId()),
+            textDiffers(request.getMedicationName(), existing.getMedicationName()),
+            !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
+            textDiffers(request.getDosage(), existing.getDosage()),
+            textDiffers(request.getFrequency(), existing.getFrequency()),
+            !isBlank(request.getRoute()) && !request.getRoute().trim().equalsIgnoreCase(String.valueOf(existing.getRoute())),
+            textDiffers(request.getDuration(), existing.getDuration()),
+            textDiffers(request.getNotes(), existing.getNotes()),
+            flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
+            flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
+            Boolean.TRUE.equals(request.getForceOverride()));
+        return changes.contains(Boolean.TRUE);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static boolean flagDiffers(Boolean requested, boolean stored) {
+        return requested != null && requested != stored;
+    }
+
+    private static boolean differs(UUID requested, UUID stored) {
+        return requested != null && !requested.equals(stored);
+    }
+
+    /** Blank and absent are the same "nothing recorded" the form echoes. */
+    private static boolean textDiffers(String requested, String stored) {
+        if (requested == null) {
+            return false;
+        }
+        String r = requested.trim();
+        String st = stored == null ? "" : stored.trim();
+        return !r.equals(st);
     }
 
     @Override

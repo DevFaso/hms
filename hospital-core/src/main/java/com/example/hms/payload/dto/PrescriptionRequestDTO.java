@@ -97,6 +97,13 @@ public class PrescriptionRequestDTO {
     /** Same contract as {@link #controlledSubstance}, for the co-sign gate. */
     private Boolean requiresCosign;
 
+    /**
+     * QA D660: required when a SIGNED prescription is cancelled or
+     * discontinued, the only edit a signed order accepts.
+     */
+    @Size(max = 1000)
+    private String withdrawalReason;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

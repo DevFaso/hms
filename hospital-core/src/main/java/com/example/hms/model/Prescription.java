@@ -292,6 +292,16 @@ public class Prescription extends BaseEntity {
     @Convert(converter = EncryptedStringConverter.class)
     private String clarificationReason;
 
+    /**
+     * QA D660: why a signed order was cancelled or discontinued. Mandatory on
+     * that withdrawal, the only change a signed order still accepts. Clinical
+     * narrative, so encrypted like {@code clarificationReason}.
+     */
+    @Size(max = 1000)
+    @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String withdrawalReason;
+
     @Column(name = "clarification_requested_at")
     private LocalDateTime clarificationRequestedAt;
 

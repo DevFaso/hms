@@ -2974,4 +2974,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V223 (QA D660): the mandatory reason a signed prescription was
+         cancelled or discontinued. Plain statements, no DO block. -->
+    <changeSet id="V223-prescription-withdrawal-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V223__prescription_withdrawal_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

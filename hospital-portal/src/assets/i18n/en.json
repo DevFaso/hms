@@ -6340,6 +6340,9 @@
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one.",
     "ROUTE_NOT_RECORDED": "Not recorded",
+    "SIGNED_EDIT_HINT": "This prescription is signed: it can only be cancelled or discontinued, with a reason. To change anything else, write a new prescription.",
+    "CHOOSE_WITHDRAWAL": "Choose Cancelled or Discontinued",
+    "WITHDRAWAL_REASON": "Reason for withdrawal",
     "ROUTES": {
       "PO": "Oral (PO)",
       "IV": "Intravenous (IV)",

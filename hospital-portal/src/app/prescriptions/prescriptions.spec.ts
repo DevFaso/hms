@@ -366,6 +366,56 @@ describe('PrescriptionsComponent — signing', () => {
     ).toBeNull();
   });
 
+  it('QA D660: a signed prescription opens read-only, offering only a withdrawal with a reason', async () => {
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+      dosage: '10mg',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-signed-hint"]')).not.toBeNull();
+    for (const id of ['rx-medName', 'rx-dosage', 'rx-frequency', 'rx-duration', 'rx-notes']) {
+      expect((el.querySelector('#' + id) as HTMLInputElement).readOnly)
+        .withContext(id)
+        .toBeTrue();
+    }
+    for (const id of ['rx-staffId', 'rx-route', 'rx-cosign', 'rx-encounterId']) {
+      expect((el.querySelector('#' + id) as HTMLInputElement).disabled)
+        .withContext(id)
+        .toBeTrue();
+    }
+    expect(el.querySelector('.chip-clear')).toBeNull();
+    const choices = Array.from(
+      (el.querySelector('#rx-status') as HTMLSelectElement).options,
+    ).filter((o) => !o.disabled);
+    expect(choices.map((o) => o.textContent?.trim())).toEqual([
+      'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED',
+      'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED',
+    ]);
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
+
+    const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
+    expect(save.disabled).withContext('nothing chosen yet').toBeTrue();
+    component.form.status = 'CANCELLED';
+    fixture.detectChanges();
+    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    component.form.withdrawalReason = 'Wrong patient';
+    fixture.detectChanges();
+    expect(save.disabled).toBeFalse();
+
+    component.closeModal();
+    component.openEdit(rx('d', 'DRAFT'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-signed-hint"]')).toBeNull();
+    expect((el.querySelector('#rx-dosage') as HTMLInputElement).readOnly).toBeFalse();
+  });
+
   it('does not offer SIGNED in the editable status list', () => {
     // The whole point of the ceremony: this status is reachable only by signing.
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');

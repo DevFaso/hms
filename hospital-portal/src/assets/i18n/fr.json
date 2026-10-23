@@ -6340,6 +6340,9 @@
     "REFILLS_VALUE": "{{remaining}} sur {{allowed}} restant(s)",
     "LIST_TRUNCATED": "Seules les ordonnances les plus récentes sont affichées : ces totaux sont donc un minimum. Utilisez la recherche pour en retrouver une plus ancienne.",
     "ROUTE_NOT_RECORDED": "Non renseignée",
+    "SIGNED_EDIT_HINT": "Cette ordonnance est signée : elle peut seulement être annulée ou interrompue, avec un motif. Pour modifier autre chose, rédigez une nouvelle ordonnance.",
+    "CHOOSE_WITHDRAWAL": "Choisissez Annulée ou Interrompue",
+    "WITHDRAWAL_REASON": "Motif du retrait",
     "ROUTES": {
       "PO": "Orale (PO)",
       "IV": "Intraveineuse (IV)",
