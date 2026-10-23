@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
+import { grantableRoles } from '../core/grantable-roles';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
@@ -36,19 +37,6 @@ const MEDICAL_ROLE_CODES = new Set([
   'ROLE_LAB_SCIENTIST',
   'ROLE_PHARMACIST',
 ]);
-
-/** Roles a non-super-admin is never offered in the create modal (QA D189). Bare codes. */
-const STAFF_MODAL_EXCLUDED_ROLES = new Set([
-  'SUPER_ADMIN',
-  'ADMIN',
-  'HOSPITAL_ADMIN',
-  'PROVIDER_ADMIN',
-  'PATIENT',
-]);
-
-function bareRoleCode(code: string | undefined | null): string {
-  return (code ?? '').toUpperCase().replace(/^ROLE_/, '');
-}
 
 /** Roles whose holders have a medical specialty (QA D195): not nurses, pharmacists or lab staff. */
 const SPECIALTY_ROLE_CODES = new Set([
@@ -175,16 +163,10 @@ export class UserListComponent implements OnInit, OnDestroy {
    * registered from the patient form, not here, so a hospital admin is
    * offered staff roles only.
    */
-  readonly grantableRoles = computed(() => {
-    // QA D626: never the patient role, for anyone — the server refuses it here
-    // (a patient is registered from the patient form, with its record).
-    // Every identifier is read: a role row whose `code` is blank but whose
-    // name or authority is ROLE_PATIENT must not slip through.
-    const ids = (r: RoleResponse) => [r.code, r.name, r.authority].map(bareRoleCode);
-    const roles = this.availableRoles().filter((r) => !ids(r).includes('PATIENT'));
-    if (this.roleContext.isSuperAdmin()) return roles;
-    return roles.filter((r) => !ids(r).some((id) => STAFF_MODAL_EXCLUDED_ROLES.has(id)));
-  });
+  // QA D189/D626: the shared grant rule (no patient role, no admin role below super-admin).
+  readonly grantableRoles = computed(() =>
+    grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin()),
+  );
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields

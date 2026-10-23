@@ -135,7 +135,6 @@
     "src/app/patient-portal/my-screenings/my-screenings.component.html::<option>lang",
     "src/app/patient-portal/my-summaries/my-summaries.component.html::m.frequency",
     "src/app/patient-portal/my-vitals/my-vitals.component.html::v.type",
-    "src/app/patient-tracker/patient-tracker.component.html::item.acuityLevel",
     "src/app/patients/chart-review/chart-review.component.html::i.studyType",
     "src/app/patients/chart-review/chart-review.component.html::m.frequency",
     "src/app/patients/chart-review/chart-review.component.html::m.route",
@@ -176,7 +175,6 @@
     "src/app/patients/storyboard-banner/storyboard-banner.component.html::d.directiveType",
     "src/app/pharmacy/dispensing.html::d.verificationOverrideReason",
     "src/app/pharmacy/dispensing.html::selectedPrescription?.frequency",
-    "src/app/pharmacy/medication-catalog.html::item.category",
     "src/app/pharmacy/pharmacy-checkout.html::r.paymentMethod",
     "src/app/pharmacy/pharmacy-claims.html::c.claimStatus",
     "src/app/pharmacy/stock-routing.html::d.noShowReason",
@@ -223,7 +221,6 @@
     "src/app/super-admin/providers/provider-detail/provider-detail.html::p.decisionReason",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::row.decisionReason",
     "src/app/transfusion/transfusion.html::<option>a",
-    "src/app/transfusion/transfusion.html::u.source",
-    "src/app/users/user-list.html::user.profileType"
+    "src/app/transfusion/transfusion.html::u.source"
   ]
 }

@@ -15,7 +15,9 @@ import {
   EncounterResponse,
   AfterVisitSummary,
 } from '../services/encounter.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 function mockItem(overrides: Partial<PatientTrackerItem> = {}): PatientTrackerItem {
   return {
@@ -397,5 +399,61 @@ describe('PatientTrackerComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     const readyBtns = el.querySelectorAll('.btn-ready-discharge');
     expect(readyBtns.length).toBeGreaterThan(0);
+  });
+});
+
+/** QA D528/D663 replay: HOSPITAL_ADMIN_A opens /patient-tracker in FR, then ES; the cards read ROUTINE / ESI-3. */
+describe('PatientTrackerComponent — the acuity badge is labelled (QA D528/D663)', () => {
+  function badgesIn(lang: 'fr' | 'es'): string[] {
+    const tracker = jasmine.createSpyObj('PatientTrackerService', ['getTrackerBoard']);
+    tracker.getTrackerBoard.and.returnValue(
+      of(
+        mockBoard({
+          arrived: [mockItem({ acuityLevel: 'ROUTINE' })],
+          inProgress: [mockItem({ encounterId: 'e2', acuityLevel: 'ESI-3' })],
+        }),
+      ),
+    );
+    const ws = jasmine.createSpyObj('PatientTrackerWsService', [
+      'connect',
+      'disconnect',
+      'getEvents',
+      'getConnectionState',
+    ]);
+    ws.getEvents.and.returnValue(of());
+    ws.getConnectionState.and.returnValue(of(false));
+    TestBed.configureTestingModule({
+      imports: [PatientTrackerComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PatientTrackerService, useValue: tracker },
+        { provide: PatientTrackerWsService, useValue: ws },
+        { provide: AuthService, useValue: { getHospitalId: () => 'h1' } },
+        { provide: EncounterService, useValue: {} },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('es', es);
+    translate.use(lang);
+    const fixture = TestBed.createComponent(PatientTrackerComponent);
+    fixture.detectChanges();
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.acuity-badge')).map(
+      (b) => b.textContent?.trim() ?? '',
+    );
+  }
+
+  it('shows French labels, never the wire token', () => {
+    const badges = badgesIn('fr');
+    expect(badges).toContain('Courant');
+    expect(badges).toContain('ESI 3 - Urgent');
+    expect(badges).not.toContain('ROUTINE');
+  });
+
+  it('shows Spanish labels, never the wire token', () => {
+    const badges = badgesIn('es');
+    expect(badges).toContain('Rutinario');
+    expect(badges).not.toContain('ROUTINE');
   });
 });

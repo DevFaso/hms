@@ -19,6 +19,7 @@ import {
 } from '../services/assignment-admin.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleService, RoleResponse } from '../services/role.service';
+import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
@@ -68,6 +69,22 @@ export class AdminAssignmentsComponent implements OnInit {
   /* Reference data */
   hospitals = signal<HospitalResponse[]>([]);
   roles = signal<RoleResponse[]>([]);
+  /**
+   * QA D664: the create, multi-scope and import dropdowns offer only what the
+   * caller may grant; the patient role and (below super-admin) admin roles
+   * were listed and then refused by the server.
+   */
+  readonly grantableRoles = computed(() =>
+    grantableRoles(this.roles(), this.roleContext.isSuperAdmin()),
+  );
+  /** The create/edit dropdown: the grantable roles, plus the edited row's own role so it can be kept. */
+  readonly formRoleOptions = computed(() => {
+    const options = this.grantableRoles();
+    const currentId = this.modal() === 'edit' ? this.selected()?.roleId : undefined;
+    if (!currentId || options.some((r) => r.id === currentId)) return options;
+    const current = this.roles().find((r) => r.id === currentId);
+    return current ? [current, ...options] : options;
+  });
 
   /* Modals */
   modal = signal<ModalKind>(null);

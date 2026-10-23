@@ -43,6 +43,8 @@ export interface TrackerColumn {
   colorClass: string;
 }
 
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+
 @Component({
   selector: 'app-patient-tracker',
   standalone: true,
@@ -53,6 +55,7 @@ export interface TrackerColumn {
     CheckoutDialogComponent,
     RovingFocusDirective,
     TriageFormComponent,
+    EnumLabelPipe,
   ],
   templateUrl: './patient-tracker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

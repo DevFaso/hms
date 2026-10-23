@@ -714,6 +714,51 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("Reactivate that assignment");
     }
 
+    /**
+     * QA D626/D664 replay: HOSPITAL_ADMIN_A POSTs /assignments
+     * {userId: NURSE2_A, hospitalId: A, roleName: 'ROLE_PATIENT'}; the grant
+     * check lets a hospital admin grant non-admin roles, so the row used to be
+     * saved (200, a pending patient assignment). Now the same 400 as admin-register.
+     */
+    @Test
+    void qaD664_postAssignmentsWithRolePatient_isRefusedAndSavesNothing() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        when(roleRepository.findByNameIgnoreCase("ROLE_PATIENT")).thenReturn(Optional.of(patient));
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setHospitalId(hospital.getId());
+        dto.setRoleName("ROLE_PATIENT");
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    /** QA D664, the update sibling: PUT /assignments/{id} turning a nurse row into a patient row. */
+    @Test
+    void qaD664_putAssignmentChangingTheRoleToPatient_isRefused() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(roleRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setRoleId(patient.getId());
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
     /** QA D521: hospital admin A asks for a role it may not grant; the FAILURE row reaches A's audit log. */
     @Test
     void d521_aRefusedGrantIsAnchoredAtTheActingHospital() {

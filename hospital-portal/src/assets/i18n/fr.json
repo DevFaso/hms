@@ -6032,6 +6032,38 @@
         "PEDIATRIC_MESSAGING": "Messagerie pédiatrique",
         "ORTHO_IMAGING": "Imagerie orthopédique",
         "RESP_TELEMED": "Télémédecine respiratoire"
+      },
+      "PROFILE_TYPE": {
+        "STAFF": "Personnel",
+        "PATIENT": "Patient(e)"
+      },
+      "TRACKER_ACUITY": {
+        "ESI-1": "ESI 1 - Réanimation",
+        "ESI-2": "ESI 2 - Très urgent",
+        "ESI-3": "ESI 3 - Urgent",
+        "ESI-4": "ESI 4 - Peu urgent",
+        "ESI-5": "ESI 5 - Non urgent",
+        "EMERGENT": "Très urgent",
+        "URGENT": "Urgent",
+        "ROUTINE": "Courant",
+        "LOW": "Faible"
+      },
+      "MEDICATION_CATEGORY": {
+        "ANALGESIC": "Analgésique",
+        "ANTIBIOTIC": "Antibiotique",
+        "ANTIMALARIAL": "Antipaludique",
+        "ANTIPYRETIC": "Antipyrétique",
+        "ANTI_INFLAMMATORY": "Anti-inflammatoire",
+        "ANTIHYPERTENSIVE": "Antihypertenseur",
+        "ANTIDIABETIC": "Antidiabétique",
+        "ANTIRETROVIRAL": "Antirétroviral",
+        "ANTIFUNGAL": "Antifongique",
+        "ANTIPARASITIC": "Antiparasitaire",
+        "ANTIHISTAMINE": "Antihistaminique",
+        "ANTICOAGULANT": "Anticoagulant",
+        "VITAMIN": "Vitamine",
+        "VACCINE": "Vaccin",
+        "OTHER": "Autre"
       }
     },
     "DOCUMENTS": {
