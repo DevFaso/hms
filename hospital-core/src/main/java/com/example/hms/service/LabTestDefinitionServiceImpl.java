@@ -67,6 +67,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final ActingScopeResolver actingScopeResolver;
     /** QA D213: each approval step is audited by name. */
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
     private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
@@ -223,6 +224,18 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
         assertCanManage(currentUser, existing);
         Objects.requireNonNull(existing, "Lab Test Definition reference cannot be null");
+        // QA D601: a definition is clinical reference data. Once it has been
+        // activated or ordered, its orders and released results point at it,
+        // so it may only be retired (soft), never hard-deleted.
+        if (!EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED)
+                .contains(existing.getApprovalStatus())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteRetireInstead"));
+        }
+        if (labOrderRepository.existsByLabTestDefinition_Id(existing.getId())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteHasOrders"));
+        }
         repository.delete(existing);
     }
 
@@ -232,9 +245,27 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         ActingScope scope = actingScopeResolver.current();
         UUID activeHospitalId = pinnedHospitalIdOf(scope);
         boolean everyHospital = scope instanceof ActingScope.Global;
+        // QA D639: only the lab's configuration roles see the catalogue's
+        // drafts and pending definitions; a clinician searching to order sees
+        // only what can actually be ordered.
+        if (!callerManagesCatalogue()) {
+            active = Boolean.TRUE;
+            approvalStatus = LabTestDefinitionApprovalStatus.ACTIVE;
+        }
         return repository.search(keyword, unit, category, active, approvalStatus,
                 everyHospital, activeHospitalId, normalizedPageable)
                 .map(mapper::toDto);
+    }
+
+    private static boolean callerManagesCatalogue() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(HOSPITAL_MANAGE_ROLES::contains);
     }
 
     private Pageable normalizePageable(Pageable pageable) {
@@ -532,11 +563,11 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 .status(com.example.hms.enums.AuditStatus.SUCCESS)
                 .userId(actor.getId())
                 .hospitalName(definition.getHospital() != null ? definition.getHospital().getName() : null)
-                .eventDescription("Lab test definition approval step " + action + " -> "
-                    + definition.getApprovalStatus()
-                    + (singleDirectorException
-                        ? " (the approver also completed the QA review)"
-                        : ""))
+                .hospitalId(definition.getHospital() != null ? definition.getHospital().getId() : null)
+                // QA D638: the row names the step and the definition, in the caller's language.
+                .eventDescription(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    singleDirectorException ? "lab.definition.audit.stepSingleDirector" : "lab.definition.audit.step",
+                    action, definition.getTestCode(), statusLabel(definition.getApprovalStatus())))
                 .entityType("LabTestDefinition")
                 .resourceId(definition.getId() != null ? definition.getId().toString() : null)
                 .build());

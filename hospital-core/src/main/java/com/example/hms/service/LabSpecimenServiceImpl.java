@@ -38,6 +38,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private final RoleValidator roleValidator;
     private final InstrumentOutboxService instrumentOutboxService;
 
+    private static final java.time.Duration COLLECTION_SKEW = java.time.Duration.ofMinutes(5);
+
     @Override
     @Transactional
     public LabSpecimenResponseDTO createSpecimen(LabSpecimenRequestDTO request, Locale locale) {
@@ -52,6 +54,14 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
+        // QA D637: a specimen cannot be collected before the test was ordered
+        // (a few minutes of clock skew between devices are tolerated).
+        LocalDateTime collectedAt = request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now();
+        LocalDateTime orderedAt = labOrder.getOrderDatetime();
+        if (orderedAt != null && collectedAt.isBefore(orderedAt.minus(COLLECTION_SKEW))) {
+            throw new BusinessException("lab.specimen.collectedBeforeOrder");
+        }
+
         String accessionNumber = generateAccessionNumber();
         String barcodeValue = "LAB-" + accessionNumber;
 
@@ -61,7 +71,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             .barcodeValue(barcodeValue)
             .specimenType(request.getSpecimenType())
             .currentLocation(request.getCurrentLocation())
-            .collectedAt(request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now())
+            .collectedAt(collectedAt)
             .collectedById(roleValidator.getCurrentUserId())
             .status(LabSpecimenStatus.COLLECTED)
             .notes(request.getNotes())

@@ -8528,7 +8528,8 @@
       "APPROVE_TITLE": "Approuver",
       "CLOSE_TITLE": "Fermer",
       "ACTIVATE": "Activer",
-      "ACTIVATE_TITLE": "Activer pour la prescription"
+      "ACTIVATE_TITLE": "Activer pour la prescription",
+      "OWN_SUBMISSION_HINT": "Vous avez soumis cet examen : un autre directeur de laboratoire ou responsable qualité doit le valider et l'approuver (principe des quatre yeux)."
     },
     "EMPTY": {
       "TITLE": "La file d'attente est vide",

@@ -70,6 +70,22 @@ describe('LabTestConfigComponent', () => {
     flushAssignments();
   }
 
+  it('QA D617: offers range edit and delete only on a draft or rejected definition', () => {
+    expect(component.isEditableDraft({ approvalStatus: 'DRAFT' })).toBeTrue();
+    expect(component.isEditableDraft({ approvalStatus: 'REJECTED' })).toBeTrue();
+    for (const st of [
+      'PENDING_QA_REVIEW',
+      'PENDING_DIRECTOR_APPROVAL',
+      'APPROVED',
+      'ACTIVE',
+      'RETIRED',
+    ]) {
+      expect(component.isEditableDraft({ approvalStatus: st }))
+        .withContext(st)
+        .toBeFalse();
+    }
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();

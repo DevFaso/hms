@@ -461,6 +461,19 @@ describe('LabComponent worklist tabs', () => {
     'CANCELLED',
   ];
 
+  it('QA D601/D616: never offers delete on an order that carries results', () => {
+    for (const st of ['RESULTED', 'VERIFIED', 'COMPLETED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeTrue();
+    }
+    for (const st of ['ORDERED', 'PENDING', 'COLLECTED', 'CANCELLED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeFalse();
+    }
+  });
+
   it('keeps an order on the Pending tab while its specimen is collected and received', () => {
     component.orders.set(lifecycle.map(order));
 

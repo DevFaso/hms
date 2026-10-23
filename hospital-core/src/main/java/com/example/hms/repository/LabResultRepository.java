@@ -523,6 +523,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      */
     long countByLabOrder_Hospital_Id(UUID hospitalId);
 
+    boolean existsByLabOrder_Id(UUID labOrderId);
+
     /**
      * B14 — the release worklist: every row of the hospital nobody has
      * released yet, hand-entered or analyzer-ingested alike. With

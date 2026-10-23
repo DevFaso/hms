@@ -8528,7 +8528,8 @@
       "APPROVE_TITLE": "Aprobar",
       "CLOSE_TITLE": "Cerrar",
       "ACTIVATE": "Activar",
-      "ACTIVATE_TITLE": "Activar para solicitudes"
+      "ACTIVATE_TITLE": "Activar para solicitudes",
+      "OWN_SUBMISSION_HINT": "Usted envió esta prueba: otro director de laboratorio o responsable de calidad debe revisarla y aprobarla (principio de los cuatro ojos)."
     },
     "EMPTY": {
       "TITLE": "La cola está vacía",

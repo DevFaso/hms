@@ -485,6 +485,14 @@ describe('LabResultsComponent — read-back role gate', () => {
     return TestBed.createComponent(LabResultsComponent).componentInstance;
   }
 
+  it('QA D616: offers result delete only to the roles DELETE /lab-results admits', () => {
+    expect(createWithRoles(['ROLE_LAB_TECHNICIAN']).canDeleteResult()).toBeFalse();
+    TestBed.resetTestingModule();
+    expect(createWithRoles(['ROLE_LAB_DIRECTOR']).canDeleteResult()).toBeFalse();
+    TestBed.resetTestingModule();
+    expect(createWithRoles(['ROLE_LAB_SCIENTIST']).canDeleteResult()).toBeTrue();
+  });
+
   it('offers neither read-back nor acknowledge to a hospital admin (E9 #67)', () => {
     // Read-back is the ordering clinician's act and acknowledge is the
     // lab's; a hospital admin is administrative on the chart and gets no

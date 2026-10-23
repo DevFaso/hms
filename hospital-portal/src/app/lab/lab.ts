@@ -209,6 +209,14 @@ export class LabComponent implements OnInit {
     return !!o.performingHospitalId && !!active && o.performingHospitalId === active;
   }
 
+  /**
+   * QA D601/D616: an order that carries results is part of the chart and the
+   * API refuses to delete it (409); the icon is not offered there.
+   */
+  hasResultsStage(o: LabOrderResponse): boolean {
+    return ['RESULTED', 'VERIFIED', 'COMPLETED'].includes(String(o.status ?? '').toUpperCase());
+  }
+
   isSentOut(o: LabOrderResponse): boolean {
     return !!o.performingHospitalId && !this.isIncomingExternal(o);
   }

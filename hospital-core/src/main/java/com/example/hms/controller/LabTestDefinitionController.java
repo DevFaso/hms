@@ -131,6 +131,8 @@ public class LabTestDefinitionController {
      */
     @PostMapping("/{id}/approval")
     @PreAuthorize(APPROVAL_ROLES)
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "QA D638: the service writes one CONFIGURATION_CHANGED row naming the step; a generic DATA_CREATE row would not")
     @Operation(summary = "Process an approval action on a Lab Test Definition")
     public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> processApproval(
         @PathVariable UUID id,

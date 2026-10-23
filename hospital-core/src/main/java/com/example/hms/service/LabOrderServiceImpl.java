@@ -761,6 +761,12 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         // ── Hospital scope enforcement: deletion stays with the ordering hospital ──
         requireOrderingHospital(labOrder);
+        // QA D601 class: an order that carries results is part of the chart;
+        // hard-deleting it would orphan them. It can only be cancelled.
+        if (labResultRepository.existsByLabOrder_Id(id)) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.deleteHasResults"));
+        }
 
         labOrderRepository.deleteById(id);
     }

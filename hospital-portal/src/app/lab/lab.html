@@ -167,7 +167,7 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
-                  @if (canDeleteOrder() && !isIncomingExternal(order)) {
+                  @if (canDeleteOrder() && !isIncomingExternal(order) && !hasResultsStage(order)) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"

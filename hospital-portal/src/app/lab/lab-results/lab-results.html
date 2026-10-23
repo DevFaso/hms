@@ -265,7 +265,7 @@
                   >
                     <span class="material-symbols-outlined">timeline</span>
                   </button>
-                  @if (!r.released) {
+                  @if (!r.released && canDeleteResult()) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
