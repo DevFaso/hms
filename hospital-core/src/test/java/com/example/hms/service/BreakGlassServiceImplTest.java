@@ -93,6 +93,8 @@ class BreakGlassServiceImplTest {
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
+        // D624: the patient is registered within the hospital's organisation unless a test says otherwise.
+        lenient().when(patientRepository.isRegisteredWithinOrganizationOf(eq(patientId), any())).thenReturn(true);
 
         caller = new User();
         caller.setId(userId);
@@ -323,6 +325,36 @@ class BreakGlassServiceImplTest {
             }
             verify(patientRepository, never()).findByIdUnscoped(any());
             verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D624: DOCTOR_B on a patient known only to hospital A gets exactly the 404 of a random id")
+        void declareForAnotherOrganisationsPatientAnswersAsUnknown() {
+            stubAuthenticatedDoctor();
+            UUID patientA1 = UUID.randomUUID();
+            UUID randomId = UUID.randomUUID();
+            Patient a1 = new Patient();
+            a1.setId(patientA1);
+            lenient().when(patientRepository.findByIdUnscoped(patientA1)).thenReturn(Optional.of(a1));
+            lenient().when(patientRepository.findByIdUnscoped(randomId)).thenReturn(Optional.empty());
+            when(patientRepository.isRegisteredWithinOrganizationOf(patientA1, hospitalId)).thenReturn(false);
+            when(patientRepository.isRegisteredWithinOrganizationOf(randomId, hospitalId)).thenReturn(false);
+
+            List<Throwable> answers = new java.util.ArrayList<>();
+            for (UUID probe : List.of(patientA1, randomId)) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Unconscious in the ED.").build();
+                Throwable t = org.assertj.core.api.Assertions.catchThrowable(() -> service.declare(req));
+                assertThat(t).isInstanceOf(ResourceNotFoundException.class);
+                answers.add(t);
+            }
+            ResourceNotFoundException known = (ResourceNotFoundException) answers.get(0);
+            ResourceNotFoundException unknown = (ResourceNotFoundException) answers.get(1);
+            assertThat(known.getClass()).isEqualTo(unknown.getClass());
+            assertThat(known.getMessage().replace(patientA1.toString(), "<id>"))
+                .isEqualTo(unknown.getMessage().replace(randomId.toString(), "<id>"));
+            verify(sessionRepository, never()).save(any());
+            verify(patientNotifier, never()).notifyIfOptedOut(any(), any());
         }
 
         @Test
@@ -741,7 +773,7 @@ class BreakGlassServiceImplTest {
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());
         // Pin the role-code set so a regression that drops the ROLE_ prefix

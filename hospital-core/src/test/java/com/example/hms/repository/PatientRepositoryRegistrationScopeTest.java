@@ -1,6 +1,8 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.OrganizationType;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
@@ -48,6 +50,9 @@ class PatientRepositoryRegistrationScopeTest {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private OrganizationRepository organizationRepository;
 
     private Hospital first;
     private Hospital second;
@@ -131,6 +136,26 @@ class PatientRepositoryRegistrationScopeTest {
         HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
 
         assertThat(patientRepository.findById(patientId)).isPresent();
+    }
+
+    @Test
+    @DisplayName("QA D624: break-the-glass reach is the hospital's registrations or its organisation's")
+    void registeredWithinOrganization() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, second.getId())).isTrue();
+        // C has no registration and no organisation: answered as for an unknown id.
+        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, elsewhere.getId())).isFalse();
+        assertThat(patientRepository.isRegisteredWithinOrganizationOf(UUID.randomUUID(), second.getId())).isFalse();
+
+        // D409 kept: a sister hospital of A in the same organisation reaches the patient.
+        Organization org = organizationRepository.save(Organization.builder()
+            .name("Groupe A").code("GRPA").type(OrganizationType.HEALTH_SYSTEM).build());
+        first.setOrganization(org);
+        hospitalRepository.save(first);
+        Hospital sister = hospital("Hôpital A2", "HA2");
+        sister.setOrganization(org);
+        sister = hospitalRepository.save(sister);
+        assertThat(patientRepository.isRegisteredWithinOrganizationOf(patientId, sister.getId())).isTrue();
     }
 
     private static void scopedTo(Hospital hospital) {

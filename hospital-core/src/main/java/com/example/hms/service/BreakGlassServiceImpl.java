@@ -110,6 +110,12 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // unprivileged caller could tell an existing patient id (403) from an
         // unknown one (404) at any hospital.
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
+        // D624: a patient registered nowhere in the hospital's organisation
+        // answers exactly like an unknown id (same 404, same body), so the
+        // declaration is no way to test whether a patient id exists elsewhere.
+        if (!patientRepository.isRegisteredWithinOrganizationOf(request.getPatientId(), hospital.getId())) {
+            throw new ResourceNotFoundException("patient.notFound", request.getPatientId());
+        }
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
 
