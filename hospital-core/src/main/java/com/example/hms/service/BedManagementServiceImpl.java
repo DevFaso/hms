@@ -142,12 +142,17 @@ public class BedManagementServiceImpl implements BedManagementService {
     @Override
     @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds() {
-        return getAvailableBeds(null);
+        return availableBeds(null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds(UUID patientId) {
+        return availableBeds(patientId);
+    }
+
+    /** Shared body of both overloads, so neither calls a transactional method through 'this'. */
+    private List<BedResponseDTO> availableBeds(UUID patientId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw new BusinessException("bed.hospitalContextRequired");
