@@ -38,6 +38,8 @@ jobs:
           # The workflow's own token posts the comment, so no Claude GitHub App
           # install (and no OIDC exchange) is needed.
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # The key belongs to the organisation, so the workspace to bill must be named.
+          anthropic_workspace_id: wrkspc_017mpm6K5JXmC5MHwGH4WQr4
           use_sticky_comment: true
           show_full_output: true
           claude_args: >-
