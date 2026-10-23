@@ -1,5 +1,6 @@
 package com.example.hms.fhir.everything;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import ca.uhn.fhir.rest.server.exceptions.ForbiddenOperationException;
 import ca.uhn.fhir.rest.server.exceptions.MethodNotAllowedException;
@@ -449,8 +450,11 @@ public class PatientEverythingService {
         Page<com.example.hms.model.Prescription> prescriptions = prescriptionRepository
             .findByPatient_IdAndHospital_IdIn(ctx.patientId(), ctx.readable(), ctx.pageRequest());
         ctx.notePageOverflow(prescriptions);
-        ctx.account(prescriptions.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
-        prescriptions.forEach(p -> {
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        List<com.example.hms.model.Prescription> shown =
+            NeverSentRule.prescriptionsReadableHere(prescriptions.getContent(), ctx.hospitalId());
+        ctx.account(shown.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList());
+        shown.forEach(p -> {
             if (ctx.passesSinceFilter(p.getUpdatedAt())) {
                 addEntry(bundle, medicationRequestMapper.toFhir(p));
             }

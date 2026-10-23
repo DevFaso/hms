@@ -786,6 +786,33 @@ class GeneralReferralServiceImplTest {
     }
 
     @Test
+    void getReferral_thirdHospitalSentReferralTheListShowsOpensById_butNoWrite_D652() {
+        // A sent referral from A to C, listed at B on the treatment relationship,
+        // must open by id at B; reading across is still not acting across.
+        UUID patientId = UUID.randomUUID();
+        UUID hospA = UUID.randomUUID();
+        UUID hospB = UUID.randomUUID();
+        GeneralReferral sent = buildReferral(UUID.randomUUID());
+        sent.getPatient().setId(patientId);
+        sent.setHospital(buildHospital(hospA, "R9 Hopital A2"));
+        sent.setReceivingHospital(buildHospital(UUID.randomUUID(), "R9 Hopital C"));
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        sent.setSubmittedAt(LocalDateTime.now());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospB);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospB))).thenReturn(Set.of(hospA, hospB));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospA, hospB)))
+            .thenReturn(List.of(sent));
+        when(referralRepository.findById(sent.getId())).thenReturn(Optional.of(sent));
+
+        assertThat(generalReferralService.getReferralsByPatient(patientId))
+            .extracting(GeneralReferralResponseDTO::getId).containsExactly(sent.getId());
+        assertThat(generalReferralService.getReferral(sent.getId()).getId()).isEqualTo(sent.getId());
+        UUID sentId = sent.getId();
+        assertThrows(ResourceNotFoundException.class, () -> generalReferralService.cancelReferral(sentId, "x"));
+    }
+
+    @Test
     void getReferralsByPatient_sendingHospitalStillListsItsOwnDraft() {
         UUID patientId = UUID.randomUUID();
         UUID hospA = UUID.randomUUID();

@@ -614,6 +614,7 @@ class MedicationHistoryServiceImplTest {
         UUID otherHospitalId = UUID.randomUUID();
         Hospital other = new Hospital(); other.setId(otherHospitalId); other.setName("Hôpital B");
         Prescription rx = new Prescription(); rx.setId(UUID.randomUUID()); rx.setHospital(other);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         rx.setMedicationName("Metformin"); rx.setCreatedAt(LocalDateTime.now().minusDays(3));
         PharmacyFill fill = PharmacyFill.builder().patient(patient).hospital(other)
             .medicationName("Metformin").fillDate(LocalDate.now().minusDays(2)).daysSupply(30).build();

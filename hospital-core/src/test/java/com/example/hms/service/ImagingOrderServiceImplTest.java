@@ -665,6 +665,37 @@ class ImagingOrderServiceImplTest {
             () -> imagingOrderService.getOrder(orderId));
     }
 
+    /** QA D652: GET /imaging/orders/patient/{A3} as DOCTOR_B leaves out hospital A's DRAFT, as its by-id read does. */
+    @Test
+    void d652_patientListAtB_leavesOutHospitalADraft_andTheByIdReadAgrees() {
+        UUID hospitalB = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        ImagingOrder draftAtA = new ImagingOrder();
+        draftAtA.setId(orderId);
+        draftAtA.setHospital(hospital);
+        draftAtA.setPatient(patient);
+        draftAtA.setStatus(ImagingOrderStatus.DRAFT);
+        ImagingOrder orderedAtA = new ImagingOrder();
+        orderedAtA.setId(UUID.randomUUID());
+        orderedAtA.setHospital(hospital);
+        orderedAtA.setPatient(patient);
+        orderedAtA.setStatus(ImagingOrderStatus.ORDERED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorB);
+        when(recordAccessPolicy.readableHospitalIds(doctorB, patientId, hospitalB))
+            .thenReturn(java.util.Set.of(hospitalB, hospitalId));
+        when(imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(
+            patientId, java.util.Set.of(hospitalB, hospitalId))).thenReturn(List.of(draftAtA, orderedAtA));
+        when(imagingOrderMapper.toResponseDTO(any(ImagingOrder.class))).thenAnswer(inv ->
+            ImagingOrderResponseDTO.builder().id(((ImagingOrder) inv.getArgument(0)).getId()).build());
+        when(imagingOrderRepository.findByIdUnscoped(orderId)).thenReturn(Optional.of(draftAtA));
+
+        assertThat(imagingOrderService.getOrdersByPatient(patientId, null))
+            .extracting(ImagingOrderResponseDTO::getId).containsExactly(orderedAtA.getId());
+        org.junit.jupiter.api.Assertions.assertThrows(ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId));
+    }
+
     /** D508 path re-verified: reading across is not acting across — a status write stays 404. */
     @Test
     void d508_updateStatus_onReadableForeignOrder_staysNotFound() {
