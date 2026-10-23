@@ -957,6 +957,39 @@ export class EnumLabelService implements OnDestroy {
       ORTHO_IMAGING: 'Orthopaedic imaging',
       RESP_TELEMED: 'Respiratory telemedicine',
     },
+    // QA D528/D663: tier-2 English for the domains #928 declared.
+    profileType: {
+      STAFF: 'Staff',
+      PATIENT: 'Patient',
+    },
+    medicationCategory: {
+      ANALGESIC: 'Analgesic',
+      ANTIBIOTIC: 'Antibiotic',
+      ANTIMALARIAL: 'Antimalarial',
+      ANTIPYRETIC: 'Antipyretic',
+      ANTI_INFLAMMATORY: 'Anti-inflammatory',
+      ANTIHYPERTENSIVE: 'Antihypertensive',
+      ANTIDIABETIC: 'Antidiabetic',
+      ANTIRETROVIRAL: 'Antiretroviral',
+      ANTIFUNGAL: 'Antifungal',
+      ANTIPARASITIC: 'Antiparasitic',
+      ANTIHISTAMINE: 'Antihistamine',
+      ANTICOAGULANT: 'Anticoagulant',
+      VITAMIN: 'Vitamin',
+      VACCINE: 'Vaccine',
+      OTHER: 'Other',
+    },
+    trackerAcuity: {
+      'ESI-1': 'ESI 1 - Resuscitation',
+      'ESI-2': 'ESI 2 - Emergent',
+      'ESI-3': 'ESI 3 - Urgent',
+      'ESI-4': 'ESI 4 - Less urgent',
+      'ESI-5': 'ESI 5 - Non-urgent',
+      EMERGENT: 'Emergent',
+      URGENT: 'Urgent',
+      ROUTINE: 'Routine',
+      LOW: 'Low',
+    },
   };
 
   /**
