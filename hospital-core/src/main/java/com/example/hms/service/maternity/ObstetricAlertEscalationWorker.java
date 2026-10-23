@@ -99,7 +99,8 @@ public class ObstetricAlertEscalationWorker {
             .documentedByUserId(alert.documentedByUserId())
             .lastEscalationAt(now)
             .build());
-        Set<String> recipients = firstNoticeRecipients(alert.hospitalId());
+        Set<String> recipients = firstNoticeRecipients(alert.hospitalId(),
+            usernameOf(alert.documentedByUserId()));
         int reached = deliver(row, alert.notificationText(), alert.patientName(), recipients, NOTIFICATION_TYPE);
         if (reached == 0) {
             log.warn("Urgent obstetric alert {} at hospital {} has nobody on call and no other doctor or midwife to notify",
@@ -162,9 +163,11 @@ public class ObstetricAlertEscalationWorker {
     /**
      * The doctors and midwives on call at the hospital now; all its doctors and
      * midwives when none of them is. An on-call lab technician or pharmacist
-     * never takes the first notice alone.
+     * never takes the first notice alone. The documenter is left out before
+     * that fallback: when she holds the only on-call shift, the notice goes
+     * to the rest of the team instead of to nobody.
      */
-    Set<String> firstNoticeRecipients(UUID hospitalId) {
+    Set<String> firstNoticeRecipients(UUID hospitalId, String documenter) {
         Set<String> obstetricTeam = new LinkedHashSet<>();
         for (String role : FIRST_NOTICE_ROLES) {
             obstetricTeam.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
@@ -173,7 +176,8 @@ public class ObstetricAlertEscalationWorker {
         obstetricTeam.forEach(u -> teamLower.add(u.toLowerCase(Locale.ROOT)));
         Set<String> recipients = new LinkedHashSet<>();
         for (String username : onCallUsernames(hospitalId)) {
-            if (teamLower.contains(username.toLowerCase(Locale.ROOT))) {
+            if (teamLower.contains(username.toLowerCase(Locale.ROOT))
+                    && (documenter == null || !username.equalsIgnoreCase(documenter))) {
                 recipients.add(username);
             }
         }
@@ -182,7 +186,7 @@ public class ObstetricAlertEscalationWorker {
 
     /** The first circle widened to the hospital's doctors, midwives and nurses. */
     Set<String> reminderRecipients(UUID hospitalId) {
-        Set<String> recipients = new LinkedHashSet<>(firstNoticeRecipients(hospitalId));
+        Set<String> recipients = new LinkedHashSet<>(firstNoticeRecipients(hospitalId, null));
         for (String role : REMINDER_ROLES) {
             recipients.addAll(staffRepository.findActiveUsernamesByHospitalAndRole(hospitalId, role));
         }

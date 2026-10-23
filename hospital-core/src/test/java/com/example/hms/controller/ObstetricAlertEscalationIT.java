@@ -257,6 +257,37 @@ class ObstetricAlertEscalationIT extends BaseIT {
         assertThat(notificationsOf(labTech)).isEmpty();
     }
 
+    @Test
+    @DisplayName("QA D605: the documenter alone on call still gets the first notice to the rest of the team")
+    void documenterAloneOnCallStillReachesTheTeam() throws Exception {
+        onCallScheduleRepository.save(OnCallSchedule.builder()
+            .staff(staffRepository.findAll().stream()
+                .filter(st -> st.getUser().getId().equals(midwife.user().getId())).findFirst().orElseThrow())
+            .startTime(java.time.OffsetDateTime.now().minusHours(1))
+            .endTime(java.time.OffsetDateTime.now().plusHours(8))
+            .build());
+
+        UUID episodeId = startEpisode();
+        PartographEntryRequestDTO entry = new PartographEntryRequestDTO();
+        entry.setObservationTime(LocalDateTime.now().withNano(0));
+        entry.setFetalHeartRateBpm(95);
+        mockMvc.perform(post(API + "/patients/{p}/labor/episodes/{e}/entries", patient.getId(), episodeId)
+                .contextPath(API).param("hospitalId", hospital.getId().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(entry))
+                .with(signedInAs(midwife)).with(csrf()))
+            .andExpect(status().isCreated());
+
+        List<ObstetricAlertEscalation> rows = escalationRepository.findAll();
+        assertThat(rows).isNotEmpty();
+        assertThat(notificationsOf(doctor))
+            .filteredOn(n -> ObstetricAlertEscalationWorker.NOTIFICATION_TYPE.equals(n.getType()))
+            .as("the on-call documenter is skipped, so the doctor hears at once").hasSize(rows.size());
+        assertThat(inBasketOf(doctor)).hasSize(rows.size());
+        assertThat(inBasketOf(midwife)).as("the documenter cannot acknowledge her own alert").isEmpty();
+        assertThat(notificationsOf(foreignDoctor)).isEmpty();
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private UUID startEpisode() throws Exception {
