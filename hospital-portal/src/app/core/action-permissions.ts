@@ -152,6 +152,24 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#cancelReferral',
     roles: ['ROLE_DOCTOR'],
   },
+  // QA D611/D677: signing is the prescriber's own act; nurses and midwives
+  // may draft and edit, but POST /sign and /cosign admit ROLE_DOCTOR only.
+  prescriptionCreate: {
+    endpoint: 'PrescriptionController#create',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  prescriptionUpdate: {
+    endpoint: 'PrescriptionController#update',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  prescriptionSign: {
+    endpoint: 'PrescriptionController#sign',
+    roles: ['ROLE_DOCTOR'],
+  },
+  prescriptionCosign: {
+    endpoint: 'PrescriptionController#cosign',
+    roles: ['ROLE_DOCTOR'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],

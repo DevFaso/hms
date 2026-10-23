@@ -2352,3 +2352,131 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
     expect(prescriptionService.list.calls.count()).toBeGreaterThan(1);
   });
 });
+
+/**
+ * QA D611/D677/D678 (round-9 re-test 3, r3/uisign.js and ui.js): the row
+ * actions follow the role POST /prescriptions/{id}/sign admits (ROLE_DOCTOR,
+ * mirrored by ActionPermissionsMirrorTest) and the row status.
+ */
+describe('PrescriptionsComponent — row actions per role and status (QA D611/D677)', () => {
+  const DRAFT_ID = '8b3ca231-1f81-4ad0-9293-f88703c401c4';
+  const PENDING_ID = 'pending-row';
+  const DISPENSED_ID = 'f98f8393-bfb5-4d4c-854e-a75c6384bd31';
+
+  async function render(role: string) {
+    const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+      'sign',
+      'cosign',
+      'update',
+    ]);
+    prescriptionService.list.and.returnValue(of([]));
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+    const pharmacies = jasmine.createSpyObj<CommunityPharmacyService>('CommunityPharmacyService', [
+      'list',
+    ]);
+    pharmacies.list.and.returnValue(of([]));
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: pharmacies },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (roles: string[]) => roles.includes(role),
+            activeRoles: [role],
+            activeRole: role,
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(PrescriptionsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    fixture.componentInstance.filtered.set([
+      { id: DRAFT_ID, status: 'DRAFT', requiresCosign: true } as PrescriptionResponse,
+      { id: PENDING_ID, status: 'PENDING_SIGNATURE' } as PrescriptionResponse,
+      { id: DISPENSED_ID, status: 'DISPENSED' } as PrescriptionResponse,
+    ]);
+    fixture.detectChanges();
+    return { fixture, prescriptionService, el: fixture.nativeElement as HTMLElement };
+  }
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+    it(`${role} is offered no Sign or Co-sign on a doctor's draft or pending row`, async () => {
+      const { el } = await render(role);
+      for (const id of [DRAFT_ID, PENDING_ID]) {
+        expect(el.querySelector(`[data-testid="rx-sign-${id}"]`))
+          .withContext(id)
+          .toBeNull();
+        expect(el.querySelector(`[data-testid="rx-cosign-${id}"]`))
+          .withContext(id)
+          .toBeNull();
+      }
+    });
+  }
+
+  it('ROLE_DOCTOR keeps Sign on draft and pending rows', async () => {
+    const { el } = await render('ROLE_DOCTOR');
+    expect(el.querySelector(`[data-testid="rx-sign-${DRAFT_ID}"]`)).not.toBeNull();
+    expect(el.querySelector(`[data-testid="rx-sign-${PENDING_ID}"]`)).not.toBeNull();
+    expect(el.querySelector(`[data-testid="rx-cosign-${DRAFT_ID}"]`)).not.toBeNull();
+  });
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR']) {
+    it(`QA D678: ${role} sees no Edit on a dispensed row, but keeps it on a draft`, async () => {
+      const { fixture } = await render(role);
+      const rows = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+      ) as HTMLElement[];
+      const edit = (r: HTMLElement) => r.querySelector('.edit-link');
+      expect(rows.length).toBe(3);
+      expect(edit(rows[0])).withContext('draft').not.toBeNull();
+      expect(edit(rows[2])).withContext('dispensed').toBeNull();
+    });
+  }
+
+  it('QA D677: a refused sign is shown translated inside the page, not only as a toast', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    TestBed.inject(TranslateService).setTranslation('fr', {
+      PRESCRIPTIONS: { TOAST: { ACTION_FORBIDDEN: 'Action non autorisée' } },
+    });
+    TestBed.inject(TranslateService).use('fr');
+    prescriptionService.sign.and.returnValue(
+      throwError(() => ({
+        status: 403,
+        error: { message: 'Accès refusé', code: 'ACCESS_DENIED' },
+      })),
+    );
+    fixture.componentInstance.signPrescription({
+      id: DRAFT_ID,
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-action-error"]')?.textContent?.trim()).toBe(
+      'Action non autorisée',
+    );
+  });
+});

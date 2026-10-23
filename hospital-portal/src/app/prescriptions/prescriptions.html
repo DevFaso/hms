@@ -119,6 +119,9 @@
   }
   @if (!loading() && filtered().length > 0) {
     <div class="data-table">
+      @if (actionError()) {
+        <p class="form-error" role="alert" data-testid="rx-action-error">{{ actionError() }}</p>
+      }
       <table>
         <thead>
           <tr>

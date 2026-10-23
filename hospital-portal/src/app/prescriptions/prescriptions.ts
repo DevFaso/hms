@@ -40,6 +40,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { AuthService } from '../auth/auth.service';
+import { actionRoles } from '../core/action-permissions';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -171,8 +172,17 @@ export class PrescriptionsComponent implements OnInit {
    * DELETE is the super-admin's hard delete.
    */
   protected readonly canWrite = computed(() =>
-    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionUpdate')),
   );
+  /** QA D611/D677: POST /sign and /cosign admit the doctor only. */
+  protected readonly canSignRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionSign')),
+  );
+  protected readonly canCosignRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionCosign')),
+  );
+  /** QA D677: a refused row action, shown translated inside the page. */
+  readonly actionError = signal('');
   protected readonly canHardDelete = computed(() => this.roleContext.isSuperAdmin());
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
@@ -365,12 +375,30 @@ export class PrescriptionsComponent implements OnInit {
    */
   private static readonly SIGNED_WITHDRAW_ROLES = ['ROLE_DOCTOR'];
 
+  /** QA D678: the statuses where the medication has left the pharmacy. */
+  private static readonly DISPENSED_STATUSES: readonly string[] = [
+    'DISPENSED',
+    'PARTNER_DISPENSED',
+  ];
+
+  /**
+   * QA D611/D677: the backend signs only for the prescription's own
+   * prescriber. When the caller's staff row is known and the row names
+   * another prescriber, the button would 403.
+   */
+  private isOtherPrescriber(p: PrescriptionResponse): boolean {
+    const own = this.ownPrescriberStaffId();
+    return !!own && !!p.staffId && p.staffId !== own;
+  }
+
   /**
    * QA D660/D670: the Edit action a row offers. A withdrawn order is
    * read-only, every field; a signed one only to whoever may withdraw it.
    */
   canEditRow(p: PrescriptionResponse): boolean {
     if (isWithdrawnStatus(p.status)) return false;
+    // QA D678: a dispensed order is history; every PUT there answers 400.
+    if (PrescriptionsComponent.DISPENSED_STATUSES.includes(p.status)) return false;
     if (p.status !== 'SIGNED') return this.canWrite();
     const own = this.ownPrescriberStaffId();
     if (own && p.staffId === own) return true;
@@ -702,6 +730,7 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
+    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 
@@ -732,6 +761,9 @@ export class PrescriptionsComponent implements OnInit {
    * doesn't carry enough to decide it here, so the refusal surfaces verbatim.
    */
   canCosign(p: PrescriptionResponse): boolean {
+    if (!this.canCosignRole()) return false;
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return false;
     return (
       !!p.requiresCosign &&
       !p.cosignedAt &&
@@ -740,6 +772,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   cosignPrescription(p: PrescriptionResponse): void {
+    this.actionError.set('');
     this.signingId.set(p.id);
     this.prescriptionService.cosign(p.id).subscribe({
       next: () => {
@@ -749,7 +782,9 @@ export class PrescriptionsComponent implements OnInit {
       },
       error: (err: unknown) => {
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
+        const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED');
+        this.actionError.set(text);
+        this.toast.error(text);
         this.signingId.set(null);
       },
     });
@@ -827,6 +862,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   signPrescription(p: PrescriptionResponse): void {
+    this.actionError.set('');
     this.signingId.set(p.id);
     this.prescriptionService.sign(p.id).subscribe({
       next: () => {
@@ -840,7 +876,9 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED'));
+        const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.actionError.set(text);
+        this.toast.error(text);
         this.signingId.set(null);
       },
     });
