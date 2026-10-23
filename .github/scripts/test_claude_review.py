@@ -102,7 +102,8 @@ def test_lookalike_marker_from_another_user_is_ignored(monkeypatch):
     fake = install(monkeypatch, FakeGh([[comment(1, "mallory", cr.MARKER + " fake")]]))
     assert cr.sticky("7") is None
     cr.post("7", "body", None)
-    assert fake.commented() and not fake.patched()
+    assert fake.commented()
+    assert not fake.patched()
 
 
 def test_last_bot_comment_is_patched(monkeypatch):
@@ -110,7 +111,8 @@ def test_last_bot_comment_is_patched(monkeypatch):
     fake = install(monkeypatch, FakeGh(pages, diff="diff --git a/x b/x\n+1\n"))
     assert cr.main(lambda: FakeClient()) == 0
     patched = fake.patched()
-    assert len(patched) == 1 and patched[0][3].endswith("/comments/2")
+    assert len(patched) == 1
+    assert patched[0][3].endswith("/comments/2")
 
 
 def test_head_already_reviewed_is_skipped(monkeypatch):
@@ -118,19 +120,23 @@ def test_head_already_reviewed_is_skipped(monkeypatch):
     fake = install(monkeypatch, FakeGh(pages))
     client = FakeClient()
     assert cr.main(lambda: client) == 0
-    assert client.sent is None and not fake.patched() and not fake.commented()
+    assert client.sent is None
+    assert not fake.patched()
+    assert not fake.commented()
 
 
 def test_api_failure_posts_a_note(monkeypatch):
     fake = install(monkeypatch, FakeGh([], diff="diff --git a/x b/x\n"))
     assert cr.main(lambda: FakeClient(error=cr.anthropic.APIError("boom"))) == 1
     body = fake.commented()[0][-1]
-    assert "failed" in body and cr.head_marker(SHA) not in body
+    assert "failed" in body
+    assert cr.head_marker(SHA) not in body
 
 
 def test_body_is_truncated():
     out = cr.truncate("x" * 100_000)
-    assert len(out) <= cr.MAX_COMMENT_CHARS and out.endswith("comment size limit.")
+    assert len(out) <= cr.MAX_COMMENT_CHARS
+    assert out.endswith("comment size limit.")
     assert cr.truncate("short") == "short"
 
 
@@ -152,5 +158,6 @@ def test_diff_is_trimmed_to_the_token_budget():
         return [{"role": "user", "content": "".join(c for _, c in fs)}]
 
     kept, over = cr.fit(FakeClient(), files, render, budget=4500)
-    assert len(kept) == 4 and over == [f"f{i}" for i in range(4, 10)]
+    assert len(kept) == 4
+    assert over == [f"f{i}" for i in range(4, 10)]
     assert "6 file(s) over the token budget" in cr.left_out_note([], over)
