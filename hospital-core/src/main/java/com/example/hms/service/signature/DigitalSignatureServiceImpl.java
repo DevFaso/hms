@@ -59,6 +59,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final MessageSource messageSource;
     private final SignableReportLocator reportLocator;
     private final com.example.hms.repository.UserRepository userRepository;
+    private final SignableReportFinder signableReportFinder;
 
     private static String normaliseName(String value) {
         return value == null ? "" : value.trim().replaceAll("\s+", " ").toLowerCase(Locale.ROOT);
@@ -148,6 +149,19 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             saved.getReportType(), saved.getReportId(), staff.getFullName());
 
         return signatureMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.signature.SignableReportDTO> listSignableReports() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID currentUserId = authService.getCurrentUserId();
+        if (activeHospitalId == null || currentUserId == null) {
+            return List.of();
+        }
+        return staffRepository.findByUserIdAndHospitalId(currentUserId, activeHospitalId)
+            .map(staff -> signableReportFinder.find(activeHospitalId, staff.getId(), currentUserId))
+            .orElseGet(List::of);
     }
 
     @Override

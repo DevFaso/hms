@@ -7364,7 +7364,7 @@
     "SIGN_VALUE_PLACEHOLDER": "e.g. Dr. Jane Doe",
     "SIGN_VALUE_HINT": "Type your full legal name exactly — verification matches this text character for character.",
     "EXPIRES_AT": "Expires at (optional)",
-    "SIGN_REQUIRED": "Report type, report ID and signature are required",
+    "SIGN_REQUIRED": "A report and a signature are required",
     "SIGN_NO_CONTEXT": "A staff profile and an active hospital are required to sign",
     "SIGNED_OK": "Report signed",
     "SIGN_ERROR": "Signing failed",
@@ -7378,7 +7378,12 @@
     "LOOKUP_ERROR": "Report lookup failed",
     "LOOKUP_NONE": "No signatures on this report",
     "REPORT_SIGNED": "Report is signed",
-    "REPORT_NOT_SIGNED": "Report is not signed"
+    "REPORT_NOT_SIGNED": "Report is not signed",
+    "REPORT": "Report",
+    "PICK_REPORT": "Choose a report to sign",
+    "SIGNABLE_LOADING": "Loading your reports…",
+    "NO_SIGNABLE_REPORTS": "You have no unsigned report to sign in this hospital.",
+    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",

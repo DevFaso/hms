@@ -18,6 +18,7 @@ import { EnumLabelService } from '../core/enum-label.service';
 import {
   DigitalSignatureService,
   SIGNABLE_TYPES,
+  SignableReport,
   SIGNATURE_TYPES,
   SignatureResponse,
   SignatureAuditEntry,
@@ -25,7 +26,6 @@ import {
 } from '../services/digital-signature.service';
 
 import { currentLocale } from '../shared/i18n/app-locale';
-const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @Component({
   selector: 'app-digital-signatures',
@@ -83,6 +83,10 @@ export class DigitalSignaturesComponent implements OnInit {
   showSignModal = signal(false);
   signReportType = signal<SignatureType | ''>('');
   signReportId = signal('');
+  /** QA D627: the picker's rows; the key is `${type}:${id}`. */
+  signableReports = signal<SignableReport[]>([]);
+  signableLoading = signal(false);
+  signPick = signal('');
   signValue = signal('');
   signNotes = signal('');
   signExpiresAt = signal('');
@@ -197,10 +201,46 @@ export class DigitalSignaturesComponent implements OnInit {
   openSign(): void {
     this.signReportType.set('');
     this.signReportId.set('');
+    this.signPick.set('');
     this.signValue.set('');
     this.signNotes.set('');
     this.signExpiresAt.set('');
+    this.signableReports.set([]);
     this.showSignModal.set(true);
+    this.signableLoading.set(true);
+    this.service.listSignable().subscribe({
+      next: (rows) => {
+        this.signableReports.set(rows ?? []);
+        this.signableLoading.set(false);
+      },
+      error: () => {
+        this.signableLoading.set(false);
+        this.toast.error(this.translate.instant('SIGNATURES.SIGNABLE_LOAD_ERROR'));
+      },
+    });
+  }
+
+  signableKey(r: SignableReport): string {
+    return `${r.reportType}:${r.reportId}`;
+  }
+
+  /** The visible label: type, patient, date. Never the id. */
+  signableLabel(r: SignableReport): string {
+    const parts = [this.formatReportType(r.reportType)];
+    if (r.patientName) {
+      parts.push(r.patientName);
+    }
+    if (r.createdAt) {
+      parts.push(new Date(r.createdAt).toLocaleDateString(currentLocale()));
+    }
+    return parts.join(' · ');
+  }
+
+  pickSignable(key: string): void {
+    this.signPick.set(key);
+    const row = this.signableReports().find((r) => this.signableKey(r) === key);
+    this.signReportType.set(row ? row.reportType : '');
+    this.signReportId.set(row ? row.reportId : '');
   }
 
   closeSign(): void {
@@ -213,11 +253,6 @@ export class DigitalSignaturesComponent implements OnInit {
     const reportType = this.signReportType();
     if (!reportType || !this.signReportId().trim() || !this.signValue().trim()) {
       this.toast.error(this.translate.instant('SIGNATURES.SIGN_REQUIRED'));
-      return;
-    }
-    // QA D627: a record id is a UUID; anything else can only end in a 404.
-    if (!UUID_SHAPE.test(this.signReportId().trim())) {
-      this.toast.error(this.translate.instant('SIGNATURES.REPORT_ID_INVALID'));
       return;
     }
     if (!staffId || !hospitalId) {

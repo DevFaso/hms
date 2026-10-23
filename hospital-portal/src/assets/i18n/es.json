@@ -7364,7 +7364,7 @@
     "SIGN_VALUE_PLACEHOLDER": "p. ej. Dra. Juana Pérez",
     "SIGN_VALUE_HINT": "Escriba su nombre legal completo exactamente: la verificación compara este texto carácter por carácter.",
     "EXPIRES_AT": "Expira el (opcional)",
-    "SIGN_REQUIRED": "Se requieren el tipo de informe, su ID y la firma",
+    "SIGN_REQUIRED": "Se requieren un informe y la firma",
     "SIGN_NO_CONTEXT": "Se requiere un perfil de personal y un hospital activo para firmar",
     "SIGNED_OK": "Informe firmado",
     "SIGN_ERROR": "Error al firmar",
@@ -7378,7 +7378,12 @@
     "LOOKUP_ERROR": "Error al buscar el informe",
     "LOOKUP_NONE": "Sin firmas en este informe",
     "REPORT_SIGNED": "Informe firmado",
-    "REPORT_NOT_SIGNED": "Informe sin firmar"
+    "REPORT_NOT_SIGNED": "Informe sin firmar",
+    "REPORT": "Informe",
+    "PICK_REPORT": "Elija un informe para firmar",
+    "SIGNABLE_LOADING": "Cargando sus informes…",
+    "NO_SIGNABLE_REPORTS": "No tiene ningún informe sin firmar en este hospital.",
+    "SIGNABLE_LOAD_ERROR": "No se pudieron cargar sus informes para firmar."
   },
   "STAFF": {
     "ADD_STAFF": "Agregar Personal",
