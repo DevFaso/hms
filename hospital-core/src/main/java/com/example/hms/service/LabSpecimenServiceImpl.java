@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -56,7 +57,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
         // QA D637: a specimen cannot be collected before the test was ordered
         // (a few minutes of clock skew between devices are tolerated).
-        LocalDateTime collectedAt = request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now();
+        LocalDateTime collectedAt = request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now(ZoneId.systemDefault());
         LocalDateTime orderedAt = labOrder.getOrderDatetime();
         if (orderedAt != null && collectedAt.isBefore(orderedAt.minus(COLLECTION_SKEW))) {
             throw new BusinessException("lab.specimen.collectedBeforeOrder");

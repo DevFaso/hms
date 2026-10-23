@@ -333,7 +333,7 @@ class DepartmentServiceImplTest {
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessage("still used");
-        verify(departmentRepository, org.mockito.Mockito.never()).delete(any(Department.class));
+        verify(departmentRepository, never()).delete(any(Department.class));
     }
 
     @Test
