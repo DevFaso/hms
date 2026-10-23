@@ -33,13 +33,16 @@ jobs:
           fetch-depth: 0
 
       - uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        env:
+          # The key belongs to the organisation, so each request must name the
+          # workspace to bill (an identifier, not a secret). anthropic_workspace_id
+          # is only used for workload-identity auth, so send the header directly.
+          ANTHROPIC_CUSTOM_HEADERS: 'anthropic-workspace-id: wrkspc_017mpm6K5JXmC5MHwGH4WQr4'
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           # The workflow's own token posts the comment, so no Claude GitHub App
           # install (and no OIDC exchange) is needed.
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # The key belongs to the organisation, so the workspace to bill must be named.
-          anthropic_workspace_id: wrkspc_017mpm6K5JXmC5MHwGH4WQr4
           use_sticky_comment: true
           show_full_output: true
           claude_args: >-
