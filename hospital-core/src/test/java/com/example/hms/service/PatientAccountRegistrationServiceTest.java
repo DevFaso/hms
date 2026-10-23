@@ -9,7 +9,6 @@ import com.example.hms.security.tenant.ActingScopeResolver;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,10 +43,6 @@ class PatientAccountRegistrationServiceTest {
         resolver = mock(ActingScopeResolver.class);
         when(resolver.current()).thenReturn(new ActingScope.Global(null));
         service = new PatientAccountRegistrationService(userService, patientService, validator, resolver);
-    }
-
-    @AfterEach
-    void tearDown() {
     }
 
     private static AdminSignupRequest signup(UUID hospitalId, PatientRequestDTO patient) {
