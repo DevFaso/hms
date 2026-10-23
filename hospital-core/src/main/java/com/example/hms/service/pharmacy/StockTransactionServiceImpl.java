@@ -42,7 +42,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 
@@ -64,8 +63,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     /** Roles whose holder may witness a controlled-substance movement (QA D157). */
-    static final Set<String> WITNESS_ROLE_CODES =
-            Set.of("ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN");
+    static final Set<String> WITNESS_ROLE_CODES = ControlledStockWitness.WITNESS_ROLE_CODES;
+    /** QA D655: the one copy of the controlled-stock witness rule. */
+    private final ControlledStockWitness controlledStockWitness;
     /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
     private final EntityManager entityManager;
 
@@ -267,7 +267,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      * transfer) keeps the lot / item bound below.
      */
     private void requireReturnWithinDispense(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
-        if (dto.getReferenceId() == null || dispenseRepository == null) {
+        if (dispenseRepository == null) {
+            return;
+        }
+        if (dto.getReferenceId() == null) {
+            attributeUnreferencedReturn(dto, lot);
             return;
         }
         com.example.hms.model.pharmacy.Dispense dispense =
@@ -296,41 +300,70 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
     }
 
+    /**
+     * QA D653: a return that names no dispense put 4 units back on a lot
+     * whose 4-unit fill was then cancelled, which put the same 4 back again.
+     * Every stock-in for a dispensed fill counts against that fill: an
+     * unreferenced return to a lot with fills still out is booked against
+     * the most recent fill that can take all of it (locked, as a referenced
+     * return and the cancel lock it), so the cancel of that fill only puts
+     * back what is still out. A return larger than any single open fill
+     * must be split, or name its dispense. A lot with no fill still out
+     * keeps the lot bound (transferred stock coming back).
+     */
+    private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, StockLot lot) {
+        if (lot == null) {
+            return;
+        }
+        List<com.example.hms.model.pharmacy.Dispense> open = dispenseRepository
+                .findByStockLot_IdAndStatusInOrderByCreatedAtDesc(lot.getId(), RETURNABLE_FILL_STATUSES);
+        if (open == null || open.isEmpty()) {
+            return;
+        }
+        BigDecimal largestOut = BigDecimal.ZERO;
+        for (com.example.hms.model.pharmacy.Dispense listed : open) {
+            // Re-read under the lock its cancel takes: a fill cancelled since
+            // the list was read has already gone back to stock.
+            com.example.hms.model.pharmacy.Dispense candidate =
+                    dispenseRepository.findLockedById(listed.getId()).orElse(null);
+            if (candidate == null || !RETURNABLE_FILL_STATUSES.contains(candidate.getStatus())) {
+                continue;
+            }
+            BigDecimal out = nz(candidate.getQuantityDispensed()).subtract(nz(
+                    stockTransactionRepository.sumQuantityForReference(candidate.getId(), RETURNED_TYPES)));
+            if (out.signum() <= 0) {
+                continue;
+            }
+            if (dto.getQuantity().compareTo(out) <= 0) {
+                dto.setReferenceId(candidate.getId());
+                return;
+            }
+            largestOut = largestOut.max(out);
+        }
+        if (largestOut.signum() > 0) {
+            throw new BusinessException("stockTransaction.return.referenceRequired",
+                    largestOut.stripTrailingZeros().toPlainString());
+        }
+    }
+
+    private static final java.util.Set<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATUSES =
+            java.util.EnumSet.of(com.example.hms.enums.DispenseStatus.COMPLETED,
+                    com.example.hms.enums.DispenseStatus.PARTIAL);
+
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
 
     /**
-     * QA D157 (D82 follow-up): a manual movement of a controlled substance
-     * is witnessed by a second person, not the performer, who holds an
-     * active stock role in the hospital that owns the stock. Any other
-     * movement records no witness, so the column means one thing.
+     * QA D157 (D82 follow-up), D655: a manual movement of a controlled
+     * substance, a receipt included, is witnessed (the rule lives in
+     * {@link ControlledStockWitness}).
      */
     private User resolveWitness(StockTransactionRequestDTO dto, InventoryItem item, User performer) {
-        boolean controlled = dto.getTransactionType() != StockTransactionType.RECEIPT && isControlled(item);
-        if (!controlled) {
+        if (!ControlledStockWitness.isControlled(item)) {
             return null;
         }
-        UUID witnessId = dto.getWitnessedBy();
-        if (witnessId == null) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.required"));
-        }
-        if (witnessId.equals(performer.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.notSelf"));
-        }
-        UUID hospitalId = item.getPharmacy() != null && item.getPharmacy().getHospital() != null
-                ? item.getPharmacy().getHospital().getId() : null;
-        if (hospitalId == null || !assignmentRepository.existsActiveWitness(
-                witnessId, hospitalId, WITNESS_ROLE_CODES)) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid"));
-        }
-        return userRepository.findById(witnessId)
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid")));
-    }
-
-    private static boolean isControlled(InventoryItem item) {
-        MedicationCatalogItem catalogItem = item.getMedicationCatalogItem();
-        return catalogItem != null && catalogItem.isControlled();
+        return controlledStockWitness.resolve(dto.getWitnessedBy(), item, performer);
     }
 
     private static String upper(String code) {

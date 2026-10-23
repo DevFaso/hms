@@ -513,6 +513,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         applyPatientChange(invoice, dto, hospitalId, patientLocked,
             invoice.getStatus() != InvoiceStatus.DRAFT);
 
+        // QA D656: an issued invoice is immutable apart from its status
+        // (cancel) and payments/credits: its date was moved and its total
+        // retyped on a SENT invoice. The edit form echoes the stored values,
+        // so only a value that differs is refused.
+        // The status move is judged first, so a refused move says why.
+        InvoiceStatus nextStatus = requestedStatusOnUpdate(invoice.getStatus(), dto.getStatus(), hasPayments);
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            requireIssuedContentUnchanged(invoice, dto);
+        }
         // QA D303/D308: a body without an encounter reference keeps the visit
         // link (the QA's PUT and older clients omit it); a blank one unlinks.
         if (dto.getEncounterReference() != null) {
@@ -533,13 +542,41 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             invoice.setTotalAmount(dto.getTotalAmount());
         }
         // QA D91: amountPaid is never taken from the form.
-        invoice.setStatus(requestedStatusOnUpdate(invoice.getStatus(), dto.getStatus(), hasPayments));
+        invoice.setStatus(nextStatus);
         invoice.setNotes(dto.getNotes());
 
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D210: issuing the visit invoice takes over the check-in copay.
         creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * QA D656: the dates, total and visit of an issued invoice do not change.
+     * Notes stay editable: they are the office's annotation, not what the
+     * patient is billed.
+     */
+    private void requireIssuedContentUnchanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {
+        boolean changed = !java.util.Objects.equals(dto.getInvoiceDate(), invoice.getInvoiceDate())
+            || !java.util.Objects.equals(dto.getDueDate(), invoice.getDueDate())
+            || (dto.getTotalAmount() != null && invoice.getTotalAmount() != null
+                && dto.getTotalAmount().compareTo(invoice.getTotalAmount()) != 0)
+            || encounterChanged(invoice, dto);
+        if (changed) {
+            throw new BusinessException("billing.invoice.issuedLocked");
+        }
+    }
+
+    private static boolean encounterChanged(BillingInvoice invoice, BillingInvoiceRequestDTO dto) {
+        if (dto.getEncounterReference() == null) {
+            return false;
+        }
+        String requested = dto.getEncounterReference().trim();
+        if (invoice.getEncounter() == null) {
+            return !requested.isEmpty();
+        }
+        return !requested.equals(String.valueOf(invoice.getEncounter().getId()))
+            && !requested.equals(invoice.getEncounter().getCode());
     }
 
     private void applyPatientChange(BillingInvoice invoice, BillingInvoiceRequestDTO dto,

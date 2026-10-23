@@ -222,7 +222,10 @@ public class DispenseController {
     @ApiResponse(responseCode = "200", description = "Dispense cancelled and stock reversed")
     @ApiResponse(responseCode = "400", description = "Cannot cancel this dispense")
     @ApiResponse(responseCode = "404", description = "Dispense record not found")
-    public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> cancelDispense(@PathVariable UUID id) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.cancelDispense(id)));
+    public ResponseEntity<ApiResponseWrapper<DispenseResponseDTO>> cancelDispense(
+            @PathVariable UUID id,
+            @RequestBody(required = false) com.example.hms.payload.dto.pharmacy.DispenseCancelRequestDTO request) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                dispenseService.cancelDispense(id, request != null ? request.getWitnessedBy() : null)));
     }
 }

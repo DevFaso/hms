@@ -173,6 +173,12 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         if (invoice.getStatus() == InvoiceStatus.PAID) {
             throw new BusinessException("billing.invoice.paidLinesLocked");
         }
+        // QA D656: an issued invoice is a document the patient may hold; a
+        // line added to it (2000 on a SENT invoice) changed what they were
+        // billed. It is cancelled (or credited) and re-issued instead.
+        if (invoice.getStatus() != InvoiceStatus.DRAFT) {
+            throw new BusinessException("billing.invoice.issuedLinesLocked");
+        }
         return invoice;
     }
 

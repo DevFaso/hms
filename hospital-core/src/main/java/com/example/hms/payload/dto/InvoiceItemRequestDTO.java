@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.config.WholeIntegerDeserializer;
 import com.example.hms.enums.ItemCategory;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Min;
@@ -7,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.AllArgsConstructor;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -32,6 +34,8 @@ public class InvoiceItemRequestDTO {
 
     @NotNull
     @Min(1)
+    // QA D657: 1.5 was silently stored as 1; a fraction is now refused.
+    @JsonDeserialize(using = WholeIntegerDeserializer.class)
     private Integer quantity;
 
     @NotNull

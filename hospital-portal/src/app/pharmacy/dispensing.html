@@ -137,6 +137,23 @@
               }
             </select>
           </div>
+          <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
+          @if (lotIsControlled()) {
+            <div class="field">
+              <label for="dispWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select id="dispWitness" [(ngModel)]="form.witnessedBy" name="dispWitness" required>
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+              @if (witnessCandidates().length === 0) {
+                <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
+              }
+            </div>
+          }
           <div class="field checkbox-field">
             <label>
               <input type="checkbox" [(ngModel)]="form.substitution" name="substitution" />
@@ -702,6 +719,32 @@
       <span class="material-symbols-outlined">history</span>
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
+
+    <!-- QA D654: a controlled fill goes back on the shelf in front of a witness -->
+    @if (cancelWitnessFor()) {
+      <div class="form-row" data-testid="cancel-witness">
+        <div class="field">
+          <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+          <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
+            <option [ngValue]="undefined">
+              {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+            </option>
+            @for (w of witnessCandidates(); track w.userId) {
+              <option [ngValue]="w.userId">{{ w.displayName }}</option>
+            }
+          </select>
+          <small class="field-hint">{{ 'PHARMACY.CANCEL_DISPENSE_CONFIRM' | translate }}</small>
+        </div>
+        <div class="field">
+          <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn btn-primary" (click)="confirmWitnessedCancel()">
+            {{ 'COMMON.CONFIRM' | translate }}
+          </button>
+        </div>
+      </div>
+    }
 
     @if (dispensesLoading()) {
       <div class="loading-bar"></div>

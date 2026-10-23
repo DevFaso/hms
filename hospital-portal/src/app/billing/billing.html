@@ -618,6 +618,7 @@
               type="date"
               [(ngModel)]="form.invoiceDate"
               [max]="maxInvoiceDate()"
+              [disabled]="issuedContentLocked()"
               required
             />
           </div>
@@ -628,6 +629,7 @@
               type="date"
               [(ngModel)]="form.dueDate"
               [min]="form.invoiceDate"
+              [disabled]="issuedContentLocked()"
               required
             />
           </div>
@@ -639,7 +641,7 @@
               id="bill-totalAmount"
               type="number"
               [(ngModel)]="form.totalAmount"
-              [disabled]="editingHasLines()"
+              [disabled]="editingHasLines() || issuedContentLocked()"
               min="0"
               step="1"
             />
@@ -657,6 +659,7 @@
             type="text"
             maxlength="64"
             [(ngModel)]="form.encounterReference"
+            [disabled]="issuedContentLocked()"
             [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
           />
           <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>

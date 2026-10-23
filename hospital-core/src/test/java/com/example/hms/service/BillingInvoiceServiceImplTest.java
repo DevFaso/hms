@@ -823,6 +823,47 @@ class BillingInvoiceServiceImplTest {
         assertEquals("x", invoice.getNotes());
     }
 
+    /** QA D656: PUT invoiceDate on SENT invoice ae8e18f2 returned 200 and moved the date. */
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsDate_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().invoiceDate(LocalDate.of(2026, 9, 30))
+            .status(InvoiceStatus.SENT).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.issuedLocked", refused.getMessageKey());
+        assertEquals(LocalDate.of(2026, 10, 1), invoice.getInvoiceDate());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsDueDateAndTotal_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO later = editOf().dueDate(LocalDate.of(2026, 12, 31)).build();
+        BillingInvoiceRequestDTO retyped = editOf().totalAmount(new BigDecimal("2000")).build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, later, Locale.FRENCH));
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, retyped, Locale.FRENCH));
+        assertEquals(new BigDecimal("500"), invoice.getTotalAmount());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceIsStillCancelledWithItsEchoedValues_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().totalAmount(new BigDecimal("500.00")).status(InvoiceStatus.CANCELLED).build(), Locale.FRENCH);
+
+        assertEquals(InvoiceStatus.CANCELLED, invoice.getStatus());
+    }
+
     /** QA D612: invoiceDate 2026-10-23, dueDate 2026-10-01 gave a 500. */
     @Test
     void createInvoice_dueBeforeTheInvoiceDateIsRefused_D612() {

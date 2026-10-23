@@ -149,6 +149,19 @@ class InvoiceItemServiceImplTest {
             .isInstanceOf(BusinessException.class);
     }
 
+    /** QA D656: POST /invoice-items on SENT invoice ae8e18f2 returned 201 and the total became 2000. */
+    @Test
+    void anIssuedInvoiceTakesNoNewLines_D656() {
+        invoice.setStatus(InvoiceStatus.SENT);
+
+        var request = line();
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("billing.invoice.issuedLinesLocked");
+        verify(itemRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+    }
+
     @Test
     void aPaidInvoiceTakesNoNewLines_D147() {
         invoice.setStatus(InvoiceStatus.PAID);

@@ -106,6 +106,8 @@ public class DispenseServiceImpl implements DispenseService {
     /** G15: the one owner of cancelling a prepared fill (rule 8). */
     private final PreparedFillVoider preparedFillVoider;
     private final PharmacyPaymentVoider paymentVoider;
+    /** QA D654: a controlled substance leaves and comes back only witnessed. */
+    private final ControlledStockWitness controlledStockWitness;
     /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
@@ -936,6 +938,10 @@ public class DispenseServiceImpl implements DispenseService {
         // stock writer (fills, returns, receipts, adjustments, transfers)
         // moves quantities this way, lot first then item, so none can
         // overwrite another. 0 rows = not enough left at this instant.
+        // QA D654: a controlled substance leaves the shelf in front of a
+        // witness, whatever the prescription's own flag says.
+        User witness = ControlledStockWitness.isControlled(inventoryItem)
+                ? controlledStockWitness.resolve(dto.getWitnessedBy(), inventoryItem, performer) : null;
         LocalDateTime now = LocalDateTime.now(clock);
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the
@@ -955,6 +961,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .quantity(requested)
                 .reason("Dispense for prescription " + prescription.getId())
                 .performedByUser(performer)
+                .witnessedByUser(witness)
                 .build();
         stockTransactionRepository.save(tx);
         return stockLot;
@@ -1183,7 +1190,7 @@ public class DispenseServiceImpl implements DispenseService {
 
     @Override
     @Transactional
-    public DispenseResponseDTO cancelDispense(UUID id) {
+    public DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy) {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         // Cancelling reverses a stock lot and rewrites the prescription's
@@ -1223,13 +1230,17 @@ public class DispenseServiceImpl implements DispenseService {
         if (stillOut.signum() > 0) {
             StockLot lot = dispense.getStockLot();
             InventoryItem item = lot.getInventoryItem();
+            User performer = resolveCurrentUser();
+            // QA D654: a controlled substance goes back on the shelf in front
+            // of a witness, as it left.
+            User witness = ControlledStockWitness.isControlled(item)
+                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
             LocalDateTime now = LocalDateTime.now(clock);
             stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
             inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
             refreshIfManaged(lot);
             refreshIfManaged(item);
 
-            User performer = resolveCurrentUser();
             StockTransaction reverseTx = StockTransaction.builder()
                     .inventoryItem(item)
                     .stockLot(lot)
@@ -1239,6 +1250,7 @@ public class DispenseServiceImpl implements DispenseService {
                     .reason("Dispense cancelled — stock returned for prescription "
                             + dispense.getPrescription().getId())
                     .performedByUser(performer)
+                    .witnessedByUser(witness)
                     .build();
             stockTransactionRepository.save(reverseTx);
         }

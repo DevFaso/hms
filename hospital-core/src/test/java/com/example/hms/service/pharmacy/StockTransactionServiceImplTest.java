@@ -125,6 +125,9 @@ class StockTransactionServiceImplTest {
         user.setId(userId);
         user.setUsername("pharmacist1");
         stockMovesLikeTheDatabase();
+        // QA D655: the witness rule is one shared component, run for real on the mocks.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "controlledStockWitness",
+                new ControlledStockWitness(assignmentRepository, userRepository));
     }
 
     /**
@@ -671,6 +674,53 @@ class StockTransactionServiceImplTest {
             d.setStockLot(lot);
             d.setPharmacy(pharmacy);
             return d;
+        }
+
+        /**
+         * QA D653, the exact replay: dispense 4 from lot 69e536f6, POST a
+         * RETURN of 4 with no referenceId, then cancel the dispense; the lot
+         * went 192 -> 196. The unreferenced return is now booked against the
+         * open fill, so its cancel finds nothing still out.
+         */
+        @Test
+        @DisplayName("D653: an unreferenced return is booked against the open fill of its lot")
+        void unreferencedReturnCountsAgainstTheOpenFill() {
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("4"));
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("40.00"), BigDecimal.ZERO);
+            when(dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+                    .thenReturn(List.of(dispense));
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+
+            service.recordTransaction(dto);
+
+            assertThat(dto.getReferenceId()).isEqualTo(dispense.getId());
+            verify(stockTransactionMapper).toEntity(
+                    org.mockito.ArgumentMatchers.argThat(d -> dispense.getId().equals(d.getReferenceId())),
+                    any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D653: an unreferenced return larger than any open fill of its lot is refused")
+        void unreferencedReturnAboveEveryOpenFillIsRefused() {
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+                    .thenReturn(List.of(dispense));
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ONE);
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("4"));
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.referenceRequired");
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
         }
 
         private StockTransactionRequestDTO returnAgainst(com.example.hms.model.pharmacy.Dispense d, String qty) {

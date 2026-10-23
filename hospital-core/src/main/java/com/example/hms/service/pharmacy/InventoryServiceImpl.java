@@ -64,6 +64,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final AuditEventLogService auditEventLogService;
     private final NotificationService notificationService;
     private final MessageSource messageSource;
+    /** QA D655: a controlled substance is received in front of a witness. */
+    private final ControlledStockWitness controlledStockWitness;
     /** Re-reads an entity after an atomic quantity UPDATE (#825 round 5). */
     private final EntityManager entityManager;
 
@@ -240,6 +242,11 @@ public class InventoryServiceImpl implements InventoryService {
                 com.example.hms.utility.MessageUtil.resolve("stockTransaction.performer.notSelf"));
         }
 
+        // QA D655: a controlled substance is received in front of a witness,
+        // as every other movement of it is (checked before anything is written).
+        User witness = ControlledStockWitness.isControlled(item)
+            ? controlledStockWitness.resolve(dto.getWitnessedBy(), item, receivedByUser) : null;
+
         StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
         StockLot savedLot = stockLotRepository.save(lot);
 
@@ -250,7 +257,7 @@ public class InventoryServiceImpl implements InventoryService {
 
         // Record stock transaction
         recordStockTransaction(item, savedLot, StockTransactionType.RECEIPT,
-                savedLot.getRemainingQuantity(), "Stock receipt: lot " + savedLot.getLotNumber());
+                savedLot.getRemainingQuantity(), "Stock receipt: lot " + savedLot.getLotNumber(), witness);
 
         // Audit
         logAudit(AuditEventType.STOCK_RECEIPT,
@@ -431,7 +438,8 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private void recordStockTransaction(InventoryItem item, StockLot lot,
-                                        StockTransactionType type, BigDecimal quantity, String reason) {
+                                        StockTransactionType type, BigDecimal quantity, String reason,
+                                        User witness) {
         User performer = resolveCurrentUser();
         StockTransaction tx = StockTransaction.builder()
                 .inventoryItem(item)
@@ -440,6 +448,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .quantity(quantity)
                 .reason(reason)
                 .performedByUser(performer)
+                .witnessedByUser(witness)
                 .build();
         stockTransactionRepository.save(tx);
     }

@@ -173,6 +173,11 @@ export class BillingComponent implements OnInit {
     return this.editing() && this.editingStatus() !== 'DRAFT';
   }
 
+  /** QA D656: an issued invoice keeps its dates, total and visit; only its status moves. */
+  issuedContentLocked(): boolean {
+    return this.patientLocked();
+  }
+
   /** QA D632: an invoice is not dated in the future. */
   maxInvoiceDate(): string {
     return this.isoDay(new Date());
@@ -459,9 +464,12 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.newItemUnitPrice.set(null);
   }
 
-  /** QA D147: a paid or cancelled invoice is closed; the server refuses line changes too. */
+  /**
+   * QA D147/D656: only a DRAFT takes line changes; an issued invoice is
+   * cancelled and re-issued instead (the server refuses them too).
+   */
   canEditLines(inv: BillingInvoiceResponse): boolean {
-    return this.canEdit && inv.status !== 'CANCELLED' && inv.status !== 'PAID';
+    return this.canEdit && inv.status === 'DRAFT';
   }
 
   canAddItem(): boolean {

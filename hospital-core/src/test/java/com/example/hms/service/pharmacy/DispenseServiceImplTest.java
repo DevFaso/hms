@@ -127,6 +127,8 @@ class DispenseServiceImplTest {
 
     /** QA D404: the money follows a cancelled dispense. */
     @Mock private PharmacyPaymentVoider paymentVoider;
+    /** QA D654: the controlled-stock witness rule. */
+    @Mock private ControlledStockWitness controlledStockWitness;
 
     @InjectMocks
     private DispenseServiceImpl service;
@@ -795,6 +797,66 @@ class DispenseServiceImplTest {
                     .hasMessageContaining("not in a dispensable state");
         }
 
+        private void stubUpToTheShelf(DispenseRequestDTO dto) {
+            dto.setStockLotId(stockLotId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+        }
+
+        /**
+         * QA D654, the exact replay: morphine (catalog item controlled) on a
+         * prescription whose own flag reads controlledSubstance:false,
+         * dispensed by PHARMACIST_A with no witness: 201 and witnessed_by
+         * NULL. The catalog decides, and nothing leaves the shelf unwitnessed.
+         */
+        @Test
+        @DisplayName("D654: a controlled substance is not dispensed without a witness, whatever the prescription flag")
+        void d654_controlledDispenseNeedsAWitness() {
+            catalogItem.setControlled(true);
+            prescription.setControlledSubstance(false);
+            DispenseRequestDTO dto = buildRequest();
+            stubUpToTheShelf(dto);
+            when(controlledStockWitness.resolve(null, inventoryItem, user))
+                    .thenThrow(new BusinessException("stockTransaction.witness.required"));
+
+            assertThatThrownBy(() -> service.createDispense(dto)).isInstanceOf(BusinessException.class);
+
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D654: a witnessed controlled dispense records its witness on the stock movement")
+        void d654_witnessedControlledDispenseIsRecorded() {
+            catalogItem.setControlled(true);
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setWitnessedBy(witnessId);
+            stubUpToTheShelf(dto);
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
+
+            service.createDispense(dto);
+
+            org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
+        }
+
         @Test
         @DisplayName("should reject when stock lot has insufficient quantity")
         void shouldRejectInsufficientLotStock() {
@@ -1402,6 +1464,55 @@ class DispenseServiceImplTest {
             verify(stockTransactionRepository).save(any());
             // Undoing a fill is bookkeeping, not a pharmacy outcome: nothing is announced.
             verify(prescriberNotifier, never()).notifyPrescriber(any(), any());
+        }
+
+        private Dispense controlledFillToCancel() {
+            catalogItem.setControlled(true);
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            dispense.setQuantityDispensed(new BigDecimal("3"));
+            dispense.setStockLot(stockLot);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            return dispense;
+        }
+
+        /**
+         * QA D654, the exact replay: POST /pharmacy/dispense/b0d16827/cancel
+         * on a morphine fill, no body: 200, 2 units back, witnessed_by NULL.
+         */
+        @Test
+        @DisplayName("D654: a controlled fill is not cancelled back onto the shelf without a witness")
+        void d654_controlledCancelNeedsAWitness() {
+            controlledFillToCancel();
+            when(controlledStockWitness.resolve(null, inventoryItem, user))
+                    .thenThrow(new BusinessException("stockTransaction.witness.required"));
+
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId)).isInstanceOf(BusinessException.class);
+
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D654: a witnessed controlled cancel records its witness on the return")
+        void d654_witnessedControlledCancelIsRecorded() {
+            Dispense dispense = controlledFillToCancel();
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+
+            service.cancelDispense(dispenseId, witnessId);
+
+            org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
+                    org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
+            assertThat(tx.getValue().getQuantity()).isEqualByComparingTo("3");
         }
 
         /**

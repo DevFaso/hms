@@ -187,9 +187,9 @@ export class StockAdjustmentComponent implements OnInit {
     return this.inventoryItems().find((i) => i.id === this.form.inventoryItemId);
   }
 
-  /** QA D157: a manual movement of a controlled substance (anything but a receipt) is witnessed. */
+  /** QA D157/D655: every movement of a controlled substance, a receipt included, is witnessed. */
   needsWitness(): boolean {
-    return !!this.txType() && !this.isReceipt() && !!this.selectedItem()?.controlled;
+    return !!this.txType() && !!this.selectedItem()?.controlled;
   }
 
   /**
@@ -291,6 +291,7 @@ export class StockAdjustmentComponent implements OnInit {
           unitCost: this.receiptCostPerUnit ?? undefined,
           receivedDate: this.today(),
           notes: this.receiptPoReference.trim() || undefined,
+          witnessedBy: this.form.witnessedBy,
         })
       : this.svc.recordTransaction(this.form);
     request$.subscribe({

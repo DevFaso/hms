@@ -230,6 +230,29 @@ describe('BillingComponent', () => {
     expect(component.patientLocked()).toBeFalse();
   });
 
+  it('QA D656: an issued invoice offers no line form and locks its dates, total and visit', async () => {
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    component.viewInvoice(mockInvoice({ status: 'SENT' }));
+    fixture.detectChanges();
+    expect(el.querySelector('.line-form')).toBeNull();
+    component.closeDetail();
+    component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+    fixture.detectChanges();
+    expect(el.querySelector('.line-form')).not.toBeNull();
+    component.closeDetail();
+
+    component.openEdit(mockInvoice({ status: 'SENT' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const date = el.querySelector<HTMLInputElement>('#bill-invoiceDate');
+    expect(date?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLInputElement>('#bill-dueDate')?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLInputElement>('#bill-encounter')?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeFalse();
+  });
+
   it('QA D621: amounts read "F CFA" whatever the language', () => {
     expect(component.formatCurrency(4000)).toContain('F\u00a0CFA');
     expect(component.formatCurrency(4000)).not.toContain('XOF');
@@ -284,7 +307,10 @@ describe('BillingComponent', () => {
 
   it('QA D147: a paid invoice takes no line changes', () => {
     expect(component.canEditLines(mockInvoice({ status: 'PAID' }))).toBeFalse();
-    expect(component.canEditLines(mockInvoice({ status: 'PARTIALLY_PAID' }))).toBeTrue();
+    // QA D656: an issued invoice, part-paid or not, takes no line changes.
+    expect(component.canEditLines(mockInvoice({ status: 'PARTIALLY_PAID' }))).toBeFalse();
+    expect(component.canEditLines(mockInvoice({ status: 'SENT' }))).toBeFalse();
+    expect(component.canEditLines(mockInvoice({ status: 'DRAFT' }))).toBeTrue();
   });
 
   it('QA D142: a reversal needs a reason and refreshes the invoice', () => {

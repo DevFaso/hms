@@ -26,6 +26,7 @@ import {
   ReadyCancelReason,
   QueueClaimFilter,
   WorkQueueClaim,
+  StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -164,6 +165,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   stockLots = signal<StockLotResponse[]>([]);
   readonly selectedLotId = signal('');
 
+  /** QA D654: colleagues who may witness a controlled substance leaving or coming back. */
+  witnessCandidates = signal<StockWitnessCandidate[]>([]);
+  /** QA D654: the controlled fill whose cancel waits for its witness. */
+  readonly cancelWitnessFor = signal<string | null>(null);
+  cancelWitnessId: string | undefined = undefined;
+
   // Dispensing form
   showForm = signal(false);
   saving = signal(false);
@@ -218,6 +225,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadPharmacies();
+    this.svc.listWitnessCandidates().subscribe({
+      next: (res) => this.witnessCandidates.set(res?.data ?? []),
+      error: () => this.witnessCandidates.set([]),
+    });
     this.loadDispenseSettings();
     this.startQueuePolling();
 
@@ -578,6 +589,24 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.stockLots().find((lot) => lot.id === this.selectedLotId()),
   );
 
+  /** QA D654: the chosen lot is of a controlled substance, so the fill is witnessed. */
+  readonly lotIsControlled = computed(() => {
+    const lot = this.selectedLot();
+    return (
+      !!lot && this.inventoryItems().some((i) => i.id === lot.inventoryItemId && !!i.controlled)
+    );
+  });
+
+  /** QA D654: a fill of a controlled substance from a lot, whose cancel is witnessed. */
+  isControlledFill(d: DispenseResponse): boolean {
+    return (
+      !!d.stockLotId &&
+      this.inventoryItems().some(
+        (i) => !!i.controlled && i.medicationCatalogItemId === d.medicationCatalogItemId,
+      )
+    );
+  }
+
   onLotChange(): void {
     this.selectedLotId.set(this.form.stockLotId ?? '');
     // A new lot invalidates a scan taken against the previous one.
@@ -752,13 +781,26 @@ export class DispensingComponent implements OnInit, OnDestroy {
   private attestedForm(): DispenseRequest {
     const body: DispenseRequest = { ...this.form };
     delete body.verifiedBy;
+    if (!this.lotIsControlled()) {
+      delete body.witnessedBy;
+    }
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
     }
     return body;
   }
 
+  /** QA D654: refuses a controlled fill with no witness before the server does. */
+  private missingWitness(): boolean {
+    if (this.lotIsControlled() && !this.form.witnessedBy) {
+      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+      return true;
+    }
+    return false;
+  }
+
   submitDispense(): void {
+    if (this.missingWitness()) return;
     this.saving.set(true);
     this.svc.createDispense(this.attestedForm()).subscribe({
       next: () => {
@@ -782,6 +824,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * form as a dispense; the wristband is checked at hand-over, not here.
    */
   submitReady(): void {
+    if (this.missingWitness()) return;
     this.saving.set(true);
     this.svc.markReady({ ...this.attestedForm(), patientScanValue: '' }).subscribe({
       next: () => {
@@ -865,9 +908,32 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   cancelDispense(id: string): void {
+    const fill = this.recentDispenses().find((d) => d.id === id);
+    if (fill && this.isControlledFill(fill)) {
+      // QA D654: the stock goes back in front of a witness, chosen first.
+      this.cancelWitnessId = undefined;
+      this.cancelWitnessFor.set(id);
+      return;
+    }
     if (!confirm(this.translate.instant('PHARMACY.CANCEL_DISPENSE_CONFIRM'))) return;
-    this.svc.cancelDispense(id).subscribe({
+    this.sendCancel(id);
+  }
+
+  /** QA D654: the witnessed cancel of a controlled fill. */
+  confirmWitnessedCancel(): void {
+    const id = this.cancelWitnessFor();
+    if (!id) return;
+    if (!this.cancelWitnessId) {
+      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+      return;
+    }
+    this.sendCancel(id, this.cancelWitnessId);
+  }
+
+  private sendCancel(id: string, witnessedBy?: string): void {
+    this.svc.cancelDispense(id, witnessedBy).subscribe({
       next: () => {
+        this.cancelWitnessFor.set(null);
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));
         this.loadRecentDispenses();
         this.loadWorkQueue();
