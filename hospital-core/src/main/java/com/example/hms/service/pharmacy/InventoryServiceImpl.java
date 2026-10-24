@@ -253,8 +253,8 @@ public class InventoryServiceImpl implements InventoryService {
         validateReceiptQuantitiesAndDates(dto);
         // QA D779: a receipt is a stock movement like any other (D668 guarded
         // only returns): 2.5 tablets left the item at 3001182.5 on hand.
-        StockTransactionServiceImpl.requireWholeUnitsWhenCounted(item, dto.getInitialQuantity());
-        StockTransactionServiceImpl.requireWholeUnitsWhenCounted(item, dto.getRemainingQuantity());
+        WholeUnitQuantity.require(item, dto.getInitialQuantity());
+        WholeUnitQuantity.require(item, dto.getRemainingQuantity());
         // QA D778: the DTO constraint is the first gate; this one holds for
         // any caller that skips bean validation.
         if (dto.getUnitCost() != null && dto.getUnitCost().signum() < 0) {

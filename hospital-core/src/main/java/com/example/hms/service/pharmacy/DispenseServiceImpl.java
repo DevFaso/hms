@@ -698,7 +698,8 @@ public class DispenseServiceImpl implements DispenseService {
      * the prescriber states one; any other is capped at its regimen
      * (dose x frequency x duration), or refused when that is unreadable.
      */
-    private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
+    private void requireWithinPrescribedQuantity(Prescription prescription, DispenseRequestDTO dto) {
+        BigDecimal requested = dto.getQuantityDispensed();
         if (prescription.getQuantity() == null) {
             if (controlledResolver.isControlled(prescription)) {
                 throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
@@ -713,7 +714,46 @@ public class DispenseServiceImpl implements DispenseService {
             }
         }
         BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
-        requireAtMost(requested, FillAccounting.remaining(prescription, dispensedToDate));
+        BigDecimal remaining = FillAccounting.remaining(prescription, dispensedToDate);
+        if (wholeUnitCeilingAllows(dto, prescription, requested, remaining)) {
+            return;
+        }
+        requireAtMost(requested, remaining);
+    }
+
+    /**
+     * QA D779: a counted item is filled in whole units, so a fractional
+     * remainder (7.5 tablets for a half-tablet regimen, or 9.5 left after a
+     * legacy 2.5 fill) is met by the next whole unit: 8, or 10. Without this
+     * the whole-unit rule would leave the half tablet owed for good. Only a
+     * whole request up to that ceiling, and only for a counted item; a
+     * measured item (ml) and a controlled substance keep the exact ceiling.
+     */
+    private boolean wholeUnitCeilingAllows(DispenseRequestDTO dto, Prescription prescription,
+                                           BigDecimal requested, BigDecimal remaining) {
+        if (requested == null || remaining == null || requested.compareTo(remaining) <= 0
+                || requested.stripTrailingZeros().scale() > 0
+                || remaining.stripTrailingZeros().scale() <= 0
+                || requested.compareTo(remaining.setScale(0, java.math.RoundingMode.CEILING)) > 0) {
+            return false;
+        }
+        // A controlled substance never leaves above what was prescribed,
+        // not even half a tablet: the remainder goes back to the prescriber.
+        return !controlledResolver.isControlled(prescription) && isCountedFill(dto, prescription);
+    }
+
+    /** Whether the fill's item is counted in whole units (the lot's item, else the unit named). */
+    private boolean isCountedFill(DispenseRequestDTO dto, Prescription prescription) {
+        if (dto.getStockLotId() != null) {
+            // Ownership is checked when the lot is loaded for the fill; a
+            // missing lot keeps the exact ceiling and fails there.
+            return stockLotRepository.findById(dto.getStockLotId())
+                    .map(StockLot::getInventoryItem)
+                    .map(item -> !WholeUnitQuantity.isMeasured(item.getUnit()))
+                    .orElse(false);
+        }
+        String unit = firstNonBlank(dto.getUnit(), prescription.getQuantityUnit());
+        return unit != null && !WholeUnitQuantity.isMeasured(unit);
     }
 
     private static void requireAtMost(BigDecimal requested, BigDecimal remaining) {
@@ -741,7 +781,7 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
         // Checked under the prescription lock taken just above.
         requireNoOpenPreparation(prescription, openPreparationKey);
-        requireWithinPrescribedQuantity(prescription, dto.getQuantityDispensed());
+        requireWithinPrescribedQuantity(prescription, dto);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -772,6 +812,7 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        requireWholeUnitsOfFill(dto, stockLot, prescription);
         MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
         // fill with no lot used to be accepted as DISPENSED with no stock
@@ -785,6 +826,33 @@ public class DispenseServiceImpl implements DispenseService {
         applyVerificationOutcome(dto, verification);
 
         return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification);
+    }
+
+    /**
+     * QA D779 (re-test): the fill is a stock movement like a receipt or a
+     * return, and it took 2.5 then 9.5 tablets because the whole-unit rule
+     * lived only on those paths. One rule ({@link WholeUnitQuantity}) for
+     * the one-step fill, the prepared fill and every partial fill, checked
+     * before anything is written. The unit is the lot's item when stock is
+     * kept in lots; otherwise the one the fill or the prescription names.
+     */
+    private static void requireWholeUnitsOfFill(DispenseRequestDTO dto, StockLot stockLot,
+                                                Prescription prescription) {
+        if (stockLot != null) {
+            WholeUnitQuantity.require(stockLot.getInventoryItem(), dto.getQuantityRequested());
+            WholeUnitQuantity.require(stockLot.getInventoryItem(), dto.getQuantityDispensed());
+            return;
+        }
+        String unit = firstNonBlank(dto.getUnit(), prescription.getQuantityUnit());
+        WholeUnitQuantity.requireForUnit(unit, dto.getQuantityRequested(), WholeUnitQuantity.DEFAULT_KEY);
+        WholeUnitQuantity.requireForUnit(unit, dto.getQuantityDispensed(), WholeUnitQuantity.DEFAULT_KEY);
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
     }
 
     /** What {@link #validateFill} established, for the half that writes. */

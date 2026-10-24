@@ -160,9 +160,12 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
+        // QA D785: the viewer is always the caller, whatever the list filter.
+        UUID viewerId = authUtils.resolveUserId(auth).orElse(null);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
-        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit, status));
+        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, viewerId, scopedHospital,
+            effectiveLimit, status));
     }
 
     @PostMapping("/handoffs")

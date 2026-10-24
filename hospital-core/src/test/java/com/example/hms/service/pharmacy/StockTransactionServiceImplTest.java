@@ -466,6 +466,42 @@ class StockTransactionServiceImplTest {
             assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("90.00"));
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("40.00"));
         }
+
+        /**
+         * QA D779 re-test: half-tablet fills left the item at 3001434.5. The
+         * whole-unit rule must not make that fraction impossible to write off.
+         */
+        @Test
+        @DisplayName("D779: an adjustment that clears a legacy half tablet goes through")
+        void anAdjustmentClearingALegacyFractionIsAccepted() {
+            inventoryItem.setUnit("comprimé");
+            inventoryItem.setQuantityOnHand(new BigDecimal("100.5"));
+            stockLot.setRemainingQuantity(new BigDecimal("47.5"));
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal("-0.5"));
+            stubCommonMocks(dto, true);
+
+            service.recordTransaction(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("47");
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo("100");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({"47, -0.5", "47.5, -1.25", "47.5, 0.25"})
+        @DisplayName("D779: a fractional adjustment that does not land on a whole count is still refused")
+        void aFractionalAdjustmentThatIsNotACorrectionIsRefused(String remaining, String quantity) {
+            inventoryItem.setUnit("comprimé");
+            stockLot.setRemainingQuantity(new BigDecimal(remaining));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.ADJUSTMENT, new BigDecimal(quantity));
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stock.quantity.wholeUnitsOnly");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
     }
 
     // ── QA D143 / D157: write-offs and the controlled-substance witness ─────
@@ -766,11 +802,11 @@ class StockTransactionServiceImplTest {
         void measuredUnitsAcceptFractions() {
             inventoryItem.setUnit("mL");
             org.assertj.core.api.Assertions.assertThatCode(() ->
-                    StockTransactionServiceImpl.requireWholeUnitsWhenCounted(inventoryItem, new BigDecimal("0.5")))
+                    WholeUnitQuantity.require(inventoryItem, new BigDecimal("0.5")))
                     .doesNotThrowAnyException();
             inventoryItem.setUnit("ampoule");
             org.assertj.core.api.Assertions.assertThatCode(() ->
-                    StockTransactionServiceImpl.requireWholeUnitsWhenCounted(inventoryItem, new BigDecimal("2.00")))
+                    WholeUnitQuantity.require(inventoryItem, new BigDecimal("2.00")))
                     .doesNotThrowAnyException();
         }
 

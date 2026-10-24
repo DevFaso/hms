@@ -358,7 +358,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(first, second));
 
         // limit 0 clamps to 1 — nurseUserId null means no assignee scope
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0, null);
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, null, hospitalId, 0, null);
 
         assertThat(handoffs).hasSize(1);
         NurseHandoffSummaryDTO dto = handoffs.get(0);
@@ -389,12 +389,44 @@ class NurseTaskServiceImplTest {
             eq(hospitalId), eq("PENDING"), any(Pageable.class)))
             .thenReturn(List.of(toMe, notMine));
 
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(me, hospitalId, 20, null);
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(me, me, hospitalId, 20, null);
 
         assertThat(handoffs).singleElement().satisfies(dto -> {
             assertThat(dto.getRecipientUserId()).isEqualTo(me);
             assertThat(dto.getCompletableByMe()).isTrue();
         });
+    }
+
+    /**
+     * QA D785 re-test: NURSE_A, the recipient of PENDING handoff e32e65ef,
+     * got completableByMe=true with assignee=me but false from
+     * GET /api/nurse/handoffs?hospitalId=A (no assignee): the flag was
+     * computed for the list filter, which is null without assignee=me.
+     */
+    @Test
+    void getHandoffSummaries_completableByMeFollowsTheCallerNotTheFilter_D785() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        UUID author = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        NurseHandoff toMe = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(me).build();
+        NurseHandoff toSomeoneElse = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(toMe, toSomeoneElse));
+
+        // hospitalId only: no assignee filter, the caller is the recipient
+        List<NurseHandoffSummaryDTO> whole = service.getHandoffSummaries(null, me, hospitalId, 20, null);
+
+        assertThat(whole).extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(true, false);
+        // the author and a bystander still read false on the same list
+        assertThat(service.getHandoffSummaries(null, author, hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
+        assertThat(service.getHandoffSummaries(null, UUID.randomUUID(), hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
     }
 
     @Test
@@ -419,7 +451,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(done));
 
         List<NurseHandoffSummaryDTO> handoffs =
-            service.getHandoffSummaries(null, hospitalId, 20, "COMPLETED");
+            service.getHandoffSummaries(null, null, hospitalId, 20, "COMPLETED");
 
         assertThat(handoffs).singleElement().satisfies(dto -> {
             assertThat(dto.getStatus()).isEqualTo("COMPLETED");
@@ -432,7 +464,7 @@ class NurseTaskServiceImplTest {
     @Test
     void getHandoffSummariesRefusesAnUnknownStatus() {
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> service.getHandoffSummaries(null, UUID.randomUUID(), 20, "ARCHIVED"))
+                () -> service.getHandoffSummaries(null, null, UUID.randomUUID(), 20, "ARCHIVED"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasMessageContaining("ARCHIVED");
     }

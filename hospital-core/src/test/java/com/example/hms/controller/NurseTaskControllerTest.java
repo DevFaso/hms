@@ -349,7 +349,7 @@ class NurseTaskControllerTest {
 
     @Test
     void getHandoffsDefault() {
-        when(nurseTaskService.getHandoffSummaries(null, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
             controller.getHandoffs(null, null, null, null, auth);
@@ -357,9 +357,22 @@ class NurseTaskControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
+    /** QA D785: every list variant computes completableByMe for the caller, not for the filter. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullSource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"all", "me", "  "})
+    void getHandoffsPassesTheCallerAsViewerOnEveryVariant(String assignee) {
+        UUID filter = "me".equals(assignee) ? NURSE_ID : null;
+        when(nurseTaskService.getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+
+        controller.getHandoffs(assignee, null, null, null, auth);
+
+        org.mockito.Mockito.verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null);
+    }
+
     @Test
     void getHandoffsWithLimit() {
-        when(nurseTaskService.getHandoffSummaries(NURSE_ID, HOSPITAL_ID, 3, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(NURSE_ID, NURSE_ID, HOSPITAL_ID, 3, null)).thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
             controller.getHandoffs("me", 3, null, null, auth);

@@ -725,7 +725,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        ═══════════════════════════════════════════════════════════════════ */
 
     @Override
-    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit, String status) {
+    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID viewerUserId, UUID hospitalId,
+                                                            int limit, String status) {
         if (hospitalId == null) return List.of();
         int effectiveLimit = clampLimit(limit);
         Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
@@ -746,7 +747,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D776: a handoff addressed to me is mine whoever the patient's nurse is.
             .filter(h -> inScope(h.getPatient(), scope) || addressedTo(h, nurseUserId))
             .limit(effectiveLimit)
-            .map(h -> toHandoffSummary(h, nurseUserId))
+            // QA D785: completableByMe is about the caller, not the filter.
+            // It was computed for nurseUserId, which is null unless
+            // assignee=me, so every other list said false to the recipient.
+            .map(h -> toHandoffSummary(h, viewerUserId))
             .toList();
     }
 
