@@ -104,7 +104,8 @@ describe('HospitalListComponent (QA D36)', () => {
     const label = (fixture.nativeElement as HTMLElement).querySelector('label[for="hAddress"]');
     expect(label === null || label.textContent!.includes('*')).toBeTrue();
   });
-  it('QA D734: the street is marked and enforced as required only while the P.O. box is empty', async () => {
+
+  it('QA D734/D747: the street is always marked and enforced, a P.O. box does not replace it', async () => {
     const hospitalService = jasmine.createSpyObj<HospitalService>('HospitalService', [
       'list',
       'create',
@@ -132,25 +133,28 @@ describe('HospitalListComponent (QA D36)', () => {
     const label = (id: string) => el.querySelector(`label[for="${id}"]`)!.textContent!;
     const required = (id: string) => (el.querySelector(`#${id}`) as HTMLInputElement).required;
 
-    // Both blank: either one will do, so both are marked.
+    // Round 10 re-test (hosp2.js): a P.O. box and an empty or blank street
+    // were saved. The street is required whatever the P.O. box holds.
     expect(label('hAddress')).toContain('*');
-    expect(label('hPoBox')).toContain('*');
-    expect(required('hAddress')).toBeTrue();
+    expect(label('hPoBox')).not.toContain('*');
+    for (const street of ['', '   ']) {
+      Object.assign(cmp.form, {
+        name: 'Centre Médical Saint-Camille de Koudougou',
+        city: 'Koudougou',
+        country: 'Burkina Faso',
+        phoneNumber: '+22625441122',
+        address: street,
+        poBox: '01 BP 1234',
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(required('hAddress')).toBeTrue();
+      cmp.submitForm();
+    }
+    expect(hospitalService.create).not.toHaveBeenCalled();
 
-    // The round-10 save: a P.O. box and no street. The street is not required.
-    Object.assign(cmp.form, {
-      name: 'CMA Pissy',
-      city: 'Ouagadougou',
-      country: 'BF',
-      phoneNumber: '+22670000000',
-      address: '',
-      poBox: 'BP 1234',
-    });
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(label('hAddress')).not.toContain('*');
-    expect(required('hAddress')).toBeFalse();
+    cmp.form.address = 'Avenue de la Nation';
     cmp.submitForm();
     expect(hospitalService.create).toHaveBeenCalled();
   });

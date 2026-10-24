@@ -31,11 +31,19 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './referrals.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './referrals.scss',

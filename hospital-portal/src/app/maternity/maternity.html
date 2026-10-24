@@ -1186,7 +1186,7 @@
                     <strong>{{
                       m.senderDisplayName || ('MATERNITY.UNKNOWN_SENDER' | translate)
                     }}</strong>
-                    <span class="muted">{{ m.sentAt | date: 'short' }}</span>
+                    <span class="muted">{{ m.sentAt | serverTime | date: 'short' }}</span>
                   </div>
                   <p>{{ m.body }}</p>
                 </div>

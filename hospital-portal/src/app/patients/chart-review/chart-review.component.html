@@ -242,7 +242,7 @@
               <tbody>
                 @for (r of c.results; track r.id) {
                   <tr>
-                    <td>{{ r.resultDate | date: 'medium' }}</td>
+                    <td>{{ r.resultDate | serverTime | date: 'medium' }}</td>
                     <td>
                       {{ r.testName || '—' }}
                       @if (r.testCode) {
@@ -298,7 +298,7 @@
               <tbody>
                 @for (m of c.medications; track m.id) {
                   <tr>
-                    <td>{{ m.createdAt | date: 'mediumDate' }}</td>
+                    <td>{{ m.createdAt | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ m.medicationName || '—' }}
                       @if (m.controlledSubstance) {

@@ -279,19 +279,14 @@
                 />
               </div>
               <div class="field">
-                <!-- QA D734: the street is required only while the P.O. box is empty
-                     (the server accepts either), so the asterisk follows that rule. -->
-                <label for="hAddress"
-                  >{{ 'HOSPITALS.ADDRESS' | translate }}
-                  @if (!hasText(form.poBox)) {
-                    <span aria-hidden="true"> *</span>
-                  }
-                </label>
+                <!-- QA D734/D747: the street is required for every hospital, on create
+                     and edit; the server refuses an empty one too. -->
+                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }} *</label>
                 <input
                   id="hAddress"
                   type="text"
                   [(ngModel)]="form.address"
-                  [required]="!hasText(form.poBox)"
+                  required
                   name="address"
                   [placeholder]="'HOSPITALS.ADDRESS_PLACEHOLDER' | translate"
                   aria-describedby="hAddressHint"
@@ -304,18 +299,11 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hPoBox"
-                  >{{ 'HOSPITALS.PO_BOX' | translate }}
-                  @if (!hasText(form.address)) {
-                    <span aria-hidden="true"> *</span>
-                  }
-                </label>
+                <label for="hPoBox">{{ 'HOSPITALS.PO_BOX' | translate }}</label>
                 <input
                   id="hPoBox"
                   type="text"
                   [(ngModel)]="form.poBox"
-                  [required]="!hasText(form.address)"
-                  aria-describedby="hAddressHint"
                   name="poBox"
                   [placeholder]="'HOSPITALS.PO_BOX_PLACEHOLDER' | translate"
                 />

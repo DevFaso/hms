@@ -125,15 +125,15 @@ export class HospitalListComponent implements OnInit {
     this.editing.set(null);
   }
 
-  /** QA D734: street address and P.O. box are each required only while the other is blank. */
+  /** QA D734/D747: a value counts only when it has more than spaces. */
   hasText(value: string | null | undefined): boolean {
     return !!value?.trim();
   }
 
   submitForm(): void {
-    // QA D435: the server refuses a hospital with neither an address nor a
-    // P.O. box; say so here instead of after the round trip.
-    const hasAddress = this.hasText(this.form.address) || this.hasText(this.form.poBox);
+    // QA D734/D747: the street is required (a P.O. box no longer stands in
+    // for it); say so here instead of after the round trip.
+    const hasAddress = this.hasText(this.form.address);
     if (
       !this.form.name ||
       !this.form.city ||

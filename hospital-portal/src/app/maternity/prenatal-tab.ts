@@ -13,7 +13,8 @@ import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { serverMessage } from '../services/provider.model';
+import { refusalReason } from '../shared/refusal-reason';
+import { localDateString } from '../shared/date-utils';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -36,6 +37,8 @@ export class PrenatalTabComponent implements OnInit {
 
   patient = signal<PatientResponse | null>(null);
   lmpDate = '';
+  /** QA D746: the date picker refuses an LMP after today (the server does too). */
+  readonly today = localDateString();
   highRisk = false;
   supplementalWeeks = '';
   notes = '';
@@ -201,9 +204,6 @@ export class PrenatalTabComponent implements OnInit {
 
   /** QA D732: a 4xx carries the backend's reason in the caller's language. */
   private reasonOr(err: unknown, fallbackKey: string): string {
-    const status = (err as { status?: unknown } | null)?.status;
-    const reason =
-      typeof status === 'number' && status >= 400 && status < 500 ? serverMessage(err) : null;
-    return reason ?? this.translate.instant(fallbackKey);
+    return refusalReason(err) ?? this.translate.instant(fallbackKey);
   }
 }

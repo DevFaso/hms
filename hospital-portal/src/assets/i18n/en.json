@@ -2584,7 +2584,7 @@
     "REGION": "Region",
     "REGION_PLACEHOLDER": "e.g., Centre, Île-de-France",
     "REQUIRED_FIELDS": "Name, city, country, phone number, and an address or a P.O. box are required.",
-    "ADDRESS_OR_PO_BOX_HINT": "Give the street address or the P.O. box (one of the two is required).",
+    "ADDRESS_OR_PO_BOX_HINT": "The street address is required; the P.O. box is optional.",
     "SEARCH_PLACEHOLDER": "Search hospitals…",
     "SECTOR": "Sector / Neighborhood",
     "SECTOR_PLACEHOLDER": "e.g., Secteur 30",

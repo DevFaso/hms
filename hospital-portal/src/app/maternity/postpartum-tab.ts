@@ -40,6 +40,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   ProInstrumentFormComponent,
@@ -49,6 +50,7 @@ import { nowLocalDatetime } from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 
@@ -56,6 +58,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
   selector: 'app-postpartum-tab',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -433,8 +436,10 @@ export class PostpartumTabComponent {
           else this.toast.info(alert.message);
         }
       },
-      error: () => {
-        this.toast.error(this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
+        );
         this.observationSaving.set(false);
       },
     });
@@ -482,8 +487,10 @@ export class PostpartumTabComponent {
           else this.toast.info(alert.message);
         }
       },
-      error: () => {
-        this.toast.error(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
+        );
         this.assessmentSaving.set(false);
       },
     });

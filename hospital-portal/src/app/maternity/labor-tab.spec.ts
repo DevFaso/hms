@@ -156,7 +156,7 @@ describe('LaborTabComponent', () => {
   it('D214: a refused start shows the server reason and sends the override', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     laborSpy.startEpisode.and.returnValue(
-      throwError(() => ({ error: { message: 'Naissance récente : motif requis' } })),
+      throwError(() => ({ status: 400, error: { message: 'Naissance récente : motif requis' } })),
     );
 
     component.openStartForm();
@@ -219,6 +219,25 @@ describe('LaborTabComponent', () => {
 
     expect(toastSpy.error).toHaveBeenCalled();
     expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
+  });
+
+  it('QA D745/D746: a delivery dated in the future shows the field reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    laborSpy.recordDelivery.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { birthDateTime: 'Cette heure ne peut pas être dans le futur.' },
+        },
+      })),
+    );
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.submitDelivery();
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Cette heure ne peut pas être dans le futur.');
   });
 
   it('submitDelivery posts and closes the form', () => {

@@ -174,7 +174,7 @@
                       }
                     } @else if (r.acknowledgedAt) {
                       {{ r.acknowledgedByDisplay || '—' }} ·
-                      {{ r.acknowledgedAt | date: 'short' }}
+                      {{ r.acknowledgedAt | serverTime | date: 'short' }}
                       @if (r.acknowledgementNote) {
                         <span class="muted" [title]="r.acknowledgementNote">
                           · {{ r.acknowledgementNote }}

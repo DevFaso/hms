@@ -36,7 +36,7 @@
               <td class="cell-main">{{ b.title }}</td>
               <td>{{ b.enforcementLevel }}</td>
               <td>{{ b.policyCount ?? 0 }}</td>
-              <td>{{ b.createdAt ? (b.createdAt | date: 'short') : '—' }}</td>
+              <td>{{ b.createdAt ? (b.createdAt | serverTime | date: 'short') : '—' }}</td>
             </tr>
           }
         </tbody>

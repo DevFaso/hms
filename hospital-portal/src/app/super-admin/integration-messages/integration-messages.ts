@@ -19,6 +19,7 @@ import {
   IntegrationMessagePage,
   IntegrationMessageStatus,
 } from '../../services/integration-messages.model';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -37,7 +38,7 @@ interface ReplayState {
 @Component({
   selector: 'app-super-admin-integration-messages',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './integration-messages.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-messages.scss',

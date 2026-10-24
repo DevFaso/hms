@@ -20,6 +20,7 @@ import {
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { refusalReason } from '../shared/refusal-reason';
 import { PartographChartComponent } from './partograph-chart.component';
 
 /**
@@ -168,12 +169,11 @@ export class LaborTabComponent {
         this.startFormOpen.set(false);
         this.loadEpisodes(patient.id);
       },
-      error: (err: { error?: { message?: string } }) => {
+      error: (err: unknown) => {
         // QA D214: the server's reason (e.g. a recent delivery needs an
-        // override) is shown, not hidden behind a generic failure.
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('LABOR.EPISODE_START_ERROR'),
-        );
+        // override) is shown, not hidden behind a generic failure; QA D746:
+        // a field reason (an admission in the future) included.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.EPISODE_START_ERROR'));
         this.saving.set(false);
       },
     });
@@ -220,8 +220,8 @@ export class LaborTabComponent {
         this.entryFormOpen.set(false);
         this.loadEpisodes(patient.id);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LABOR.ENTRY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.ENTRY_SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -261,8 +261,10 @@ export class LaborTabComponent {
           this.deliveryFormOpen.set(false);
           this.loadEpisodes(patient.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'),
+          );
           this.saving.set(false);
         },
       });

@@ -340,7 +340,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                rx.createdAt ? (rx.createdAt | date: 'medium') : '—'
+                rx.createdAt ? (rx.createdAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>
@@ -363,7 +363,7 @@
               @if (rx.signedAt) {
                 <div class="detail-field">
                   <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span
-                  ><span class="field-value">{{ rx.signedAt | date: 'medium' }}</span>
+                  ><span class="field-value">{{ rx.signedAt | serverTime | date: 'medium' }}</span>
                 </div>
               }
               @if (rx.requiresCosign) {

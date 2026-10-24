@@ -25,6 +25,7 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /** Same order as the patient's own upload form; labels reuse its keys. */
 export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: string }[] = [
@@ -62,7 +63,7 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 @Component({
   selector: 'app-documents-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './documents-tab.component.html',
   styleUrl: './documents-tab.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

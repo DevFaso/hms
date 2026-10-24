@@ -174,6 +174,32 @@ describe('PrenatalTabComponent', () => {
     expect(toast.error).toHaveBeenCalledWith(reason);
   });
 
+  it('QA D746: the real validation body shows the LMP field reason, and the picker stops at today', () => {
+    // Round 10 re-test: the 400 carries the generic text as `message` and the
+    // reason under `fieldErrors.lastMenstrualPeriodDate`.
+    const reason = 'La date des dernières règles ne peut pas être dans le futur';
+    service.schedule.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'La demande contient des erreurs de validation',
+              fieldErrors: { lastMenstrualPeriodDate: reason },
+            },
+          }),
+      ),
+    );
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.lmpDate = '2027-01-01';
+    component.generate();
+    expect(toast.error).toHaveBeenCalledWith(reason);
+
+    fixture.detectChanges();
+    const lmp = host().querySelector<HTMLInputElement>('#pn-lmp');
+    expect(lmp?.getAttribute('max')).toBe(component.today);
+  });
+
   it('QA D732: a 5xx body never leaks in place of the translated fallback', () => {
     service.schedule.and.returnValue(
       throwError(

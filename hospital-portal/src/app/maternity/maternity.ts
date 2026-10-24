@@ -31,6 +31,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { nowLocalDatetime } from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
@@ -38,6 +39,7 @@ import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type BoardWorklist =
   'high-risk' | 'pending-review' | 'specialist-referral' | 'psychosocial' | 'all';
@@ -49,6 +51,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -480,8 +483,10 @@ export class MaternityComponent implements OnInit {
         this.closeHistoryModal();
         this.loadBoard();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
+        );
         this.historySaving.set(false);
       },
     });
