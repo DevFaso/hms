@@ -412,8 +412,36 @@ class EncounterNoteSignatureTest {
         assertThat(note.getObjective()).isNull();
         org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        verify(encounterNoteHistoryRepository).save(history.capture());
-        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_CREATED");
+        verify(encounterNoteHistoryRepository, org.mockito.Mockito.times(2)).save(history.capture());
+        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
+        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
+    }
+
+    @Test
+    void d711_aDayOneAddendumStaysWithDayOneNotUnderTheDayTwoEntry() {
+        // #940 review: stay entries cleared the sections but not the addenda,
+        // so a day-1 correction showed under the day-2 entry and author, and
+        // the history kept only the addenda count.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        note.addAddendum(com.example.hms.model.encounter.EncounterNoteAddendum.builder()
+            .author(authorUser).authorName("Day 1 author")
+            .content("Correction: dose was 500 mg").documentedAt(LocalDateTime.now().minusHours(18)).build());
+        tools.jackson.databind.ObjectMapper realMapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        when(objectMapper.writeValueAsString(any())).thenAnswer(inv -> realMapper.writeValueAsString(inv.getArgument(0)));
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAddenda()).isEmpty();
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, org.mockito.Mockito.times(2)).save(history.capture());
+        String dayOne = history.getAllValues().get(0).getContentSnapshot();
+        assertThat(dayOne).contains("Day 1 assessment").contains("Correction: dose was 500 mg").contains("Day 1 author");
+        String dayTwo = history.getAllValues().get(1).getContentSnapshot();
+        assertThat(dayTwo).contains("Day 2: afebrile").doesNotContain("Correction: dose was 500 mg");
     }
 
     @Test

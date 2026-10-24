@@ -65,6 +65,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -780,6 +781,12 @@ public class EncounterServiceImpl implements EncounterService {
             note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
         }
         if (newStayEntry) {
+            // #940 review: the closing entry's addenda and links belong to it.
+            // Snapshot them (full content) into its history before detaching,
+            // or a day-1 correction shows under the day-2 entry and author.
+            String closedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
+                ? trimToNull(actorOverride) : author.actorIdentifier();
+            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED, closedBy);
             startNewStayEntry(note, request);
         }
 
@@ -819,6 +826,11 @@ public class EncounterServiceImpl implements EncounterService {
         note.setSignatureValue(null);
         note.setCosignedBy(null);
         note.setCosignedAt(null);
+        // Addenda and links were snapshotted into the closing entry's history.
+        if (note.getAddenda() != null) {
+            note.getAddenda().clear();
+        }
+        note.clearLinks();
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
@@ -1206,6 +1218,32 @@ public class EncounterServiceImpl implements EncounterService {
         snapshot.put("patientInstructions", note.getPatientInstructions());
         snapshot.put("summary", note.getSummary());
         snapshot.put("addenda", note.getAddenda() != null ? note.getAddenda().size() : 0);
+        List<Map<String, Object>> addendaEntries = new ArrayList<>();
+        if (note.getAddenda() != null) {
+            for (EncounterNoteAddendum addendum : note.getAddenda()) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("authorUserId", addendum.getAuthor() != null ? addendum.getAuthor().getId() : null);
+                entry.put("authorName", addendum.getAuthorName());
+                entry.put("authorCredentials", addendum.getAuthorCredentials());
+                entry.put("content", addendum.getContent());
+                entry.put("eventOccurredAt", addendum.getEventOccurredAt() != null ? addendum.getEventOccurredAt().toString() : null);
+                entry.put("documentedAt", addendum.getDocumentedAt() != null ? addendum.getDocumentedAt().toString() : null);
+                entry.put("signedAt", addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
+                addendaEntries.add(entry);
+            }
+        }
+        snapshot.put("addendaEntries", addendaEntries);
+        List<Map<String, Object>> linkEntries = new ArrayList<>();
+        for (EncounterNoteLink link : note.getLinks()) {
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("artifactType", link.getArtifactType() != null ? link.getArtifactType().name() : null);
+            entry.put("artifactId", link.getArtifactId());
+            entry.put("artifactCode", link.getArtifactCode());
+            entry.put("artifactDisplay", link.getArtifactDisplay());
+            entry.put("artifactStatus", link.getArtifactStatus());
+            linkEntries.add(entry);
+        }
+        snapshot.put("links", linkEntries);
         return toJson(snapshot);
     }
 
