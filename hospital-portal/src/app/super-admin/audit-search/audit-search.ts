@@ -40,7 +40,7 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 type ActiveTab = 'support' | 'aggregated';
 
 import { EnumLabelService } from '../../core/enum-label.service';
-import { toServerDateTime } from '../../shared/date-utils';
+import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
@@ -367,7 +367,9 @@ export class SuperAdminAuditSearchComponent implements OnInit {
 
   private fromIsoForInput(value: string | undefined): string {
     if (!value) return '';
-    return value.length === 19 && value.endsWith(':00') ? value.substring(0, 16) : value;
+    // #948 review: a saved filter keeps the UTC bounds the search was sent;
+    // shown raw, every apply-and-save moved the window by the reader's offset.
+    return toLocalInputValue(value);
   }
 
   private triggerBrowserDownload(blob: Blob, filename: string): void {

@@ -32,7 +32,6 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toServerDateTime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-referrals',
@@ -542,7 +541,11 @@ export class ReferralsComponent implements OnInit {
     this.referralService
       .schedule(
         ref.id,
-        toServerDateTime(this.scheduleAppointmentTime), // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        // #948 review: kept as the hospital's wall clock, NOT converted to UTC.
+        // The server copies it into the booked Appointment's date and start
+        // time, which are wall-clock fields (calendar, check-in, reminders,
+        // patient emails), so 10:00 must arrive as 10:00.
+        this.scheduleAppointmentTime,
         this.scheduleLocation || undefined,
       )
       .subscribe({

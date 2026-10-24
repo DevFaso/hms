@@ -311,9 +311,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.scheduledAppointmentAt
-                  ? (ref.scheduledAppointmentAt | serverTime | date: 'medium')
-                  : '—'
+                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">

@@ -295,8 +295,9 @@ describe('ReferralsComponent', () => {
     const req = httpMock.expectOne('/referrals/r1/schedule');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      // QA D777/D784: local wall time sent as the server's UTC.
-      appointmentTime: new Date(2026, 5, 1, 9, 30).toISOString().slice(0, 19),
+      // #948 review: the referral appointment is wall clock (the server books
+      // an Appointment at this date and start time), so it is sent unconverted.
+      appointmentTime: '2026-06-01T09:30',
       location: 'Clinic 4',
     });
     req.flush({ id: 'r1', status: 'SCHEDULED' });

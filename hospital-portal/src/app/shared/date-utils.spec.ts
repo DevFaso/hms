@@ -1,6 +1,7 @@
 import {
   fromServerDateTime,
   nowLocalDatetime,
+  serverDateOrInstant,
   serverInstant,
   withServerDateTimes,
 } from './date-utils';
@@ -58,5 +59,18 @@ describe('serverInstant (QA D777/D784)', () => {
 
   it('gives an Invalid Date for an unreadable value, as new Date would', () => {
     expect(Number.isNaN(serverInstant('not a date').getTime())).toBeTrue();
+  });
+});
+
+describe('serverDateOrInstant (#948 review)', () => {
+  it('reads a bare calendar date as local midnight of that day, not UTC midnight', () => {
+    const d = serverDateOrInstant('2026-10-24');
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 9, 24, 0]);
+  });
+
+  it('reads a zone-less date and time as the UTC server time', () => {
+    expect(serverDateOrInstant('2026-10-24T15:33:17').getTime()).toBe(
+      Date.UTC(2026, 9, 24, 15, 33, 17),
+    );
   });
 });

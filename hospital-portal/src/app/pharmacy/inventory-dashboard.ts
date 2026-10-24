@@ -13,6 +13,7 @@ import {
   MedicationCatalogItemResponse,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
 
 @Component({
   selector: 'app-inventory-dashboard',
@@ -252,7 +253,7 @@ export class InventoryDashboardComponent implements OnInit {
   }
 
   getDaysUntilExpiry(expiryDate: string): number {
-    const expiry = new Date(expiryDate);
+    const expiry = serverDateOrInstant(expiryDate); // a LocalDate: that local day
     const today = new Date();
     return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   }

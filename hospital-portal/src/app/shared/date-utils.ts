@@ -66,6 +66,22 @@ export function serverInstant(serverValue: string): Date {
   return new Date(NAIVE_DATE_TIME.test(serverValue) ? `${serverValue}Z` : serverValue);
 }
 
+/** A bare calendar date, as the API sends a `LocalDate` and `<input type="date">` gives one. */
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * #948 review: `new Date('2026-10-24')` is UTC midnight, which is still
+ * 23 October west of UTC, so a calendar date read that way showed the day
+ * before (staff dates, trend labels) or failed a "not in the past" check made
+ * against local midnight (appointment reschedule). A bare date is read here as
+ * local midnight of that day; anything else goes through `serverInstant`.
+ */
+export function serverDateOrInstant(serverValue: string): Date {
+  return BARE_DATE.test(serverValue)
+    ? new Date(`${serverValue}T00:00:00`)
+    : serverInstant(serverValue);
+}
+
 /**
  * #941 review: clinical-time forms (labor, delivery, postpartum, maternal
  * history) are checked against the server's UTC clock, so their

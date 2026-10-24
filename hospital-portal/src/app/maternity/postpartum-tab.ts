@@ -46,7 +46,12 @@ import {
   ProInstrumentFormComponent,
   unansweredItems,
 } from '../shared/pro-instrument-form/pro-instrument-form.component';
-import { nowLocalDatetime, withServerDateTimes, serverInstant } from '../shared/date-utils';
+import {
+  nowLocalDatetime,
+  withServerDateTimes,
+  serverInstant,
+  toServerDateTime,
+} from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -568,7 +573,11 @@ export class PostpartumTabComponent {
         instrumentCode: instrument.code,
         language: instrument.language,
         answers: this.screeningAnswers(),
-        administeredAt: this.screeningAdministeredAt || undefined,
+        // #948 review: wall clock in the picker, UTC on the server (which
+        // defaults it to its own UTC now when left empty).
+        administeredAt: this.screeningAdministeredAt
+          ? toServerDateTime(this.screeningAdministeredAt)
+          : undefined,
         notes: this.screeningNotes.trim() || undefined,
       })
       .subscribe({

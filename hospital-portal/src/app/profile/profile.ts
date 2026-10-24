@@ -983,7 +983,7 @@ export class ProfileComponent implements OnInit {
    */
   formatTimestamp(ts: string): string {
     if (!ts) return '';
-    const date = new Date(ts);
+    const date = serverInstant(ts); // #948 review: eventTimestamp is UTC, zone-less
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMin = Math.floor(diffMs / 60000);

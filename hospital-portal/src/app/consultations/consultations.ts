@@ -31,7 +31,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toServerDateTime } from '../shared/date-utils';
+import { serverInstant, toServerDateTime } from '../shared/date-utils';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -588,7 +588,8 @@ export class ConsultationsComponent implements OnInit {
   isOverdue(c: ConsultationResponse): boolean {
     if (!c.slaDueBy) return false;
     if (['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) return false;
-    return new Date(c.slaDueBy) < new Date();
+    // #948 review: slaDueBy is a zone-less UTC server time.
+    return serverInstant(c.slaDueBy) < new Date();
   }
 
   getTimelineEvents(c: ConsultationResponse): { label: string; date: string }[] {
@@ -607,7 +608,7 @@ export class ConsultationsComponent implements OnInit {
     if (c.cancelledAt)
       events.push({ label: label('CONSULTATIONS.CANCELLED'), date: c.cancelledAt });
     if (c.declinedAt) events.push({ label: label('CONSULTATIONS.DECLINED'), date: c.declinedAt });
-    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return events.sort((a, b) => serverInstant(a.date).getTime() - serverInstant(b.date).getTime());
   }
 
   /* ── Schedule workflow ── */

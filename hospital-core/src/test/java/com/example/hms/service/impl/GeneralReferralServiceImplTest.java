@@ -1250,7 +1250,12 @@ class GeneralReferralServiceImplTest {
         referral.setReceivingProvider(provider);
         referral.setTargetDepartment(department);
 
-        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(5).withHour(9).withMinute(0);
+        // #948 review: the referral time is the hospital's wall clock and is
+        // booked as such. 10:00 must become a 10:00 appointment, not the UTC
+        // time of day (the portal briefly sent UTC, booking 10:00 New York at
+        // 14:00 on the calendar, the check-in list and the reminders).
+        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(5)
+            .withHour(10).withMinute(0).withSecond(0).withNano(0);
         com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO request =
             com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
                 .appointmentTime(appointmentTime)
@@ -1275,7 +1280,8 @@ class GeneralReferralServiceImplTest {
         com.example.hms.model.Appointment created = captor.getValue();
 
         assertEquals(appointmentTime.toLocalDate(), created.getAppointmentDate());
-        assertEquals(appointmentTime.toLocalTime(), created.getStartTime());
+        assertEquals(java.time.LocalTime.of(10, 0), created.getStartTime());
+        assertEquals(java.time.LocalTime.of(10, 0).plusMinutes(30), created.getEndTime());
         assertEquals(com.example.hms.enums.AppointmentStatus.SCHEDULED, created.getStatus());
         assertEquals(provider, created.getStaff());
         assertEquals(department, created.getDepartment());

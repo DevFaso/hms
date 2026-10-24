@@ -18,7 +18,7 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toLocalInputValue, toServerDateTime } from '../shared/date-utils';
+import { toLocalInputValue, toServerDateTime, withServerDateTimes } from '../shared/date-utils';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -212,7 +212,9 @@ export class ProcedureOrdersComponent implements OnInit {
     }
     form.hospitalId = this.hospitalId ?? '';
     this.orderSaving.set(true);
-    this.orderService.create(form).subscribe({
+    // #948 review: the datetime-local is the user's wall clock; the server keeps
+    // UTC and the list reads it back through serverTime.
+    this.orderService.create(withServerDateTimes(form, ['scheduledDatetime'])).subscribe({
       next: (created) => {
         this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
         this.orderSaving.set(false);

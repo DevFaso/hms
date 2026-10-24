@@ -144,6 +144,9 @@ describe('MortalityComponent', () => {
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.immediateCause).toBe('Sepsis');
+    // #948 review: the picker's wall clock goes out as the UTC the list reads
+    // back through serverTime (not the raw '2026-08-24T10:00').
+    expect(payload.diedAt).toBe(new Date(2026, 7, 24, 10, 0).toISOString().slice(0, 19));
     expect(component.showRecordModal()).toBeFalse();
     // The cascade is reported, never silent.
     expect(component.lastClosure()?.appointmentsCancelled).toBe(3);

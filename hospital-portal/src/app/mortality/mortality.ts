@@ -19,6 +19,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
@@ -141,7 +142,9 @@ export class MortalityComponent implements OnInit {
     this.mortality
       .recordDeath({
         patientId: this.form.patientId,
-        diedAt: this.form.diedAt,
+        // #948 review: wall clock in the picker, UTC on the server (which also
+        // refuses a future death against its UTC clock).
+        diedAt: toServerDateTime(this.form.diedAt),
         placeOfDeath: this.form.placeOfDeath,
         mannerOfDeath: this.form.mannerOfDeath,
         immediateCause: this.form.immediateCause.trim(),
