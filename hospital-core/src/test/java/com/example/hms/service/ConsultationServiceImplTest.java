@@ -642,7 +642,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, consultantId))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.acknowledge.invalidStatus");
+                    .hasMessageContaining("ACKNOWLEDGED");
         }
     }
 
@@ -735,7 +735,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.alreadyCompleted");
+                    .hasMessageContaining("already completed");
         }
 
         @Test
@@ -748,7 +748,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.complete.cancelled");
+                    .hasMessageContaining("Cannot complete a cancelled");
         }
     }
 
@@ -779,7 +779,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.cancelConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.cancel.completed");
+                    .hasMessageContaining("Cannot cancel a completed");
         }
 
         @Test
@@ -790,7 +790,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.cancelConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.alreadyCancelled");
+                    .hasMessageContaining("already cancelled");
         }
     }
 
@@ -952,7 +952,7 @@ class ConsultationServiceImplTest {
             LocalDateTime now = LocalDateTime.now();
             assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.schedule.invalidStatus");
+                    .hasMessageContaining("Cannot schedule");
         }
 
         @Test
@@ -1030,7 +1030,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.startConsultation(consultationId))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.start.invalidStatus");
+                    .hasMessageContaining("ASSIGNED, ACKNOWLEDGED or SCHEDULED");
         }
     }
 
@@ -1081,7 +1081,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.declineConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.alreadyDeclined");
+                    .hasMessageContaining("already declined");
         }
     }
 
@@ -1121,7 +1121,7 @@ class ConsultationServiceImplTest {
             UUID assignedById = UUID.randomUUID();
             assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "consultation.workflow.assign.invalidStatus");
+                    .hasMessageContaining("Only REQUESTED");
         }
 
         @Test

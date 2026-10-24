@@ -14,7 +14,8 @@ import java.util.Properties;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * QA round 10: D727 (appointment and consultation workflow refusals answered
+ * QA round 10: D727 (appointment workflow refusals answered; the consultation
+ * workflow keys ship with the r10-security-consults group
  * in English) and D728 (shifts called "service" in French, the word the
  * portal uses for a department).
  */
@@ -50,19 +51,6 @@ class QaRound10BackendMessagesTest {
         "scheduling:appointment.patient.notChangeable",
         "maternity:maternity.partograph.futureTime",
         "patient:patient.registration.existingRecord",
-        "clinical:consultation.workflow.acknowledge.invalidStatus",
-        "clinical:consultation.workflow.alreadyCompleted",
-        "clinical:consultation.workflow.complete.cancelled",
-        "clinical:consultation.workflow.cancel.completed",
-        "clinical:consultation.workflow.alreadyCancelled",
-        "clinical:consultation.workflow.schedule.invalidStatus",
-        "clinical:consultation.workflow.start.invalidStatus",
-        "clinical:consultation.workflow.decline.completed",
-        "clinical:consultation.workflow.decline.cancelled",
-        "clinical:consultation.workflow.alreadyDeclined",
-        "clinical:consultation.workflow.assign.invalidStatus",
-        "clinical:consultation.workflow.reassign.completed",
-        "clinical:consultation.workflow.reassign.cancelled",
     })
     void qaD727EveryRefusalHasARealFrenchAndSpanishText(String spec) throws IOException {
         String[] parts = spec.split(":");

@@ -357,7 +357,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         if (consultation.getStatus() != ConsultationStatus.ASSIGNED &&
             consultation.getStatus() != ConsultationStatus.REQUESTED) {
-            throw new BusinessException("consultation.workflow.acknowledge.invalidStatus", consultation.getStatus());
+            throw new BusinessException("Consultation must be in ASSIGNED or REQUESTED status to acknowledge (current: " + consultation.getStatus() + ")");
         }
 
         // The caller here is the AUTHENTICATED principal, so what arrives is a
@@ -425,10 +425,10 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("consultation.workflow.alreadyCompleted");
+            throw new BusinessException("Consultation is already completed");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("consultation.workflow.complete.cancelled");
+            throw new BusinessException("Cannot complete a cancelled consultation");
         }
 
         consultation.setRecommendations(request.getRecommendations());
@@ -475,11 +475,11 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("consultation.workflow.cancel.completed");
+            throw new BusinessException("Cannot cancel a completed consultation");
         }
 
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("consultation.workflow.alreadyCancelled");
+            throw new BusinessException("Consultation is already cancelled");
         }
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
@@ -499,7 +499,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
             consultation.getStatus() == ConsultationStatus.CANCELLED ||
             consultation.getStatus() == ConsultationStatus.DECLINED) {
-            throw new BusinessException("consultation.workflow.schedule.invalidStatus", consultation.getStatus());
+            throw new BusinessException("Cannot schedule a " + consultation.getStatus() + " consultation");
         }
 
         consultation.setScheduledAt(scheduledAt);
@@ -521,7 +521,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
             consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
             consultation.getStatus() != ConsultationStatus.ASSIGNED) {
-            throw new BusinessException("consultation.workflow.start.invalidStatus", consultation.getStatus());
+            throw new BusinessException("Consultation must be ASSIGNED, ACKNOWLEDGED or SCHEDULED to start (current: " + consultation.getStatus() + ")");
         }
 
         consultation.setStatus(ConsultationStatus.IN_PROGRESS);
@@ -538,13 +538,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("consultation.workflow.decline.completed");
+            throw new BusinessException("Cannot decline a completed consultation");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("consultation.workflow.decline.cancelled");
+            throw new BusinessException("Cannot decline a cancelled consultation");
         }
         if (consultation.getStatus() == ConsultationStatus.DECLINED) {
-            throw new BusinessException("consultation.workflow.alreadyDeclined");
+            throw new BusinessException("Consultation is already declined");
         }
 
         consultation.setStatus(ConsultationStatus.DECLINED);
@@ -562,7 +562,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
-            throw new BusinessException("consultation.workflow.assign.invalidStatus", consultation.getStatus());
+            throw new BusinessException("Only REQUESTED consultations can be assigned (current status: " + consultation.getStatus() + ")");
         }
 
         Staff consultant = staffRepository.findById(consultantId)
@@ -602,10 +602,10 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("consultation.workflow.reassign.completed");
+            throw new BusinessException("Cannot reassign a completed consultation");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("consultation.workflow.reassign.cancelled");
+            throw new BusinessException("Cannot reassign a cancelled consultation");
         }
 
         Staff consultant = staffRepository.findById(consultantId)
