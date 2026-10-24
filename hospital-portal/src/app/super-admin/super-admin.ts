@@ -65,6 +65,7 @@ interface ActivityRow {
   timestamp: string | null;
 }
 
+import { EnumLabelService } from '../core/enum-label.service';
 @Component({
   selector: 'app-super-admin',
   standalone: true,
@@ -75,6 +76,12 @@ interface ActivityRow {
 })
 export class SuperAdminComponent implements OnInit {
   private readonly dashboard = inject(DashboardService);
+  private readonly enumLabels = inject(EnumLabelService);
+  /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
+  entityLabel(raw: string | null | undefined): string | null {
+    return this.enumLabels.auditEntityLabel(raw);
+  }
+
   private readonly platform = inject(PlatformService);
   private readonly destroyRef = inject(DestroyRef);
 

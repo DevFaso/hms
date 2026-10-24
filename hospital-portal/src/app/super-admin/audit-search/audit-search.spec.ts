@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { SuperAdminAuditSearchComponent } from './audit-search';
@@ -61,6 +61,16 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     residency.listAvailableRegions.and.returnValue(of([]));
   });
 
+  it('reads an audit entity token in the reader language (D619)', () => {
+    const c = setup();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { BILLING_INVOICE: 'Facture' } } },
+    });
+    translate.use('fr');
+    expect(c.entityLabel('BILLING_INVOICE')).toBe('Facture');
+    expect(c.entityLabel('Unknown Resource')).toBeNull();
+  });
   it('toggleAggregatedSource adds and removes a source from the active set', () => {
     const cmp = setup();
     // MVP-c3 — PLATFORM_CONFIG joined the default-on set, so the

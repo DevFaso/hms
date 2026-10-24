@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   PharmacyService,
   MedicationCatalogItemRequest,
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './medication-catalog.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medication-catalog.scss',

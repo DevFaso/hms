@@ -40,7 +40,7 @@ import com.example.hms.i18n.TestMessageSources;
 @ExtendWith(MockitoExtension.class)
 class CriticalValueNotificationServiceTest {
 
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private SmsService smsService;
     @Mock private LabResultRepository labResultRepository;
     @Mock private LabResultMapper labResultMapper;
@@ -86,7 +86,7 @@ class CriticalValueNotificationServiceTest {
         result.setResultValue("7.1");
         result.setResultUnit("mmol/L");
 
-        lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(false);
     }
@@ -97,7 +97,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             contains("Potassium 7,1 mmol/L"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
         assertThat(result.getCriticalNotifiedAt()).isNotNull();
         verify(labResultRepository).save(result);
@@ -110,7 +110,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), anyString());
+        verify(notificationService).created(anyString(), eq("dr.diallo"), anyString());
     }
 
     @Test
@@ -119,7 +119,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNull();
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
@@ -139,7 +139,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNull();
     }
 
@@ -157,7 +157,7 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         assertThat(result.getCriticalNotifiedAt()).isNull();
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(mapper.toResponseDTO(result).getSeverityFlag()).isEqualTo("HIGH");
         assertThat(mapper.severityFlagOf(result)).isEqualTo("HIGH");
     }
@@ -172,7 +172,7 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         assertThat(result.getCriticalNotifiedAt()).isNull();
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(mapper.severityFlagOf(result)).isEqualTo("LOW");
         assertThat(mapper.raisesCriticalAlert("LOW")).isFalse();
     }
@@ -185,7 +185,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(new LabResultMapper().severityFlagOf(result)).isEqualTo("LOW");
     }
 
@@ -213,7 +213,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -223,7 +223,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+        verify(notificationService).created(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
     }
 
     @Test
@@ -233,7 +233,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+        verify(notificationService).created(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
     }
 
     @Test
@@ -243,7 +243,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -254,7 +254,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -265,7 +265,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService).createNotification(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+        verify(notificationService).created(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
     }
 
     @Test
@@ -275,7 +275,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -288,7 +288,7 @@ class CriticalValueNotificationServiceTest {
         // retried — recoverable — where a critical result nobody was told
         // about is not.
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
-        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("broker down"));
 
         assertThatThrownBy(() -> service.notifyIfCritical(result))
@@ -356,7 +356,7 @@ class CriticalValueNotificationServiceTest {
 
         service.notifyIfCritical(result);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNotNull(); // sweep convergence
         verify(labResultRepository).save(result);
     }
@@ -377,7 +377,7 @@ class CriticalValueNotificationServiceTest {
         Integer escalated = service.escalateOverdue();
 
         assertThat(escalated).isZero();
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         assertThat(result.getCriticalNotifiedAt()).isNull();
         assertThat(result.getCriticalEscalatedAt()).isNull();
         assertThat(result.getCriticalEscalationLevel()).isZero();
@@ -433,7 +433,7 @@ class CriticalValueNotificationServiceTest {
         int escalated = service.escalateOverdue();
 
         assertThat(escalated).isEqualTo(1);
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             contains("ESCALADE"), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalatedAt()).isNotNull();
         verify(labResultRepository).save(result);
@@ -451,7 +451,7 @@ class CriticalValueNotificationServiceTest {
 
         assertThat(escalated).isEqualTo(1);
         assertThat(result.getCriticalEscalatedAt()).isNotNull();
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -506,11 +506,11 @@ class CriticalValueNotificationServiceTest {
 
         // The provider stays on the list — they can still act clinically — but
         // they are no longer the ONLY person told.
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("admin.sawadogo"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 2);
     }
@@ -547,7 +547,7 @@ class CriticalValueNotificationServiceTest {
         // There is deliberately no round cap. Going quiet on an unacknowledged
         // critical value is the exact failure this service exists to prevent, so
         // a cap would reintroduce it with extra steps.
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(), eq("admin.kabore"), eq("CRITICAL_LAB_RESULT_ESCALATION"));
         assertThat(result.getCriticalEscalationLevel()).isEqualTo((short) 9);
     }

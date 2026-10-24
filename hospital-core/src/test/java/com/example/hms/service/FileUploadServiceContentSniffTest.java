@@ -9,6 +9,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -71,5 +72,30 @@ class FileUploadServiceContentSniffTest {
         assertThat(FileUploadService.contentMatches("{\\rtf1".getBytes(StandardCharsets.US_ASCII), ".rtf")).isTrue();
         assertThat(FileUploadService.contentMatches("Blood pressure 120/80".getBytes(StandardCharsets.UTF_8), ".txt")).isTrue();
         assertThat(FileUploadService.contentMatches("<html><body>x".getBytes(StandardCharsets.UTF_8), ".txt")).isFalse();
+    }
+
+    @Test
+    void qaD643_anUnsupportedDocumentTypeIsRefusedInTheReaderLanguage() {
+        MockMultipartFile exe = new MockMultipartFile("file", "setup.exe", "application/octet-stream",
+            new byte[] {'M', 'Z', 0x00});
+        UUID userId = UUID.randomUUID();
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource)
+            ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            assertThatThrownBy(() -> service.uploadPatientDocument(exe, userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("Type de document non pris en charge");
+            MockMultipartFile empty = new MockMultipartFile("file", "x.pdf", "application/pdf", new byte[0]);
+            assertThatThrownBy(() -> service.uploadPatientDocument(empty, userId))
+                .hasMessage("Le fichier est vide.");
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+            assertThatThrownBy(() -> service.uploadPatientDocument(exe, userId))
+                .hasMessageStartingWith("Tipo de documento no admitido");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+        }
     }
 }

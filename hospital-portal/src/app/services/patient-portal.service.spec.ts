@@ -195,6 +195,51 @@ describe('PatientPortalService lab results', () => {
  * primaryCareHistory }. The portal declared `{ members }` for it and swallowed
  * every error as an empty team.
  */
+describe('PatientPortalService appointments (QA D642)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('returns my appointments in date and time order', () => {
+    let ids: string[] = [];
+    service.getMyAppointments().subscribe((a) => (ids = a.map((x) => x.id)));
+    httpMock
+      .expectOne((req) => req.url === '/me/patient/appointments')
+      .flush({
+        data: [
+          {
+            id: 'oct30',
+            appointmentDate: '2026-10-30',
+            startTime: '09:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28b',
+            appointmentDate: '2026-10-28',
+            startTime: '14:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28a',
+            appointmentDate: '2026-10-28',
+            startTime: '08:30:00',
+            status: 'SCHEDULED',
+          },
+        ],
+      });
+    expect(ids).toEqual(['oct28a', 'oct28b', 'oct30']);
+  });
+});
+
 describe('PatientPortalService care team', () => {
   let service: PatientPortalService;
   let httpMock: HttpTestingController;

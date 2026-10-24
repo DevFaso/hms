@@ -39,6 +39,7 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 
 type ActiveTab = 'support' | 'aggregated';
 
+import { EnumLabelService } from '../../core/enum-label.service';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
@@ -58,6 +59,12 @@ type ActiveTab = 'support' | 'aggregated';
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
+  private readonly enumLabels = inject(EnumLabelService);
+  /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
+  entityLabel(raw: string | null | undefined): string | null {
+    return this.enumLabels.auditEntityLabel(raw);
+  }
+
   private readonly residencyService = inject(DataResidencyService);
   private readonly savedSearchService = inject(AuditSavedSearchService);
 

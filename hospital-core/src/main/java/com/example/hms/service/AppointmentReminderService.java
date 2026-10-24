@@ -160,14 +160,12 @@ public class AppointmentReminderService {
         // who stated a language we can render gets it; everyone else is
         // unchanged.
         Locale locale = patientLocaleResolver.resolve(patient, Locale.forLanguageTag(reminderLocale));
-        String message = messageSource.getMessage(
-            "sms.appointment.reminder",
-            new Object[]{
-                startsAt.toLocalDate().format(DATE_FORMAT),
-                startsAt.toLocalTime().format(TIME_FORMAT),
-                hospitalName
-            },
-            locale);
+        Object[] reminderArgs = {
+            startsAt.toLocalDate().format(DATE_FORMAT),
+            startsAt.toLocalTime().format(TIME_FORMAT),
+            hospitalName
+        };
+        String message = messageSource.getMessage("sms.appointment.reminder", reminderArgs, locale);
         if (message.length() > MAX_SMS_LENGTH) {
             message = message.substring(0, MAX_SMS_LENGTH);
         }
@@ -177,7 +175,9 @@ public class AppointmentReminderService {
         if (portalUser != null && portalUser.getUsername() != null
             && channelEnabled(portalUser, NotificationChannel.IN_APP)) {
             try {
-                notificationService.createNotification(message, portalUser.getUsername(), "APPOINTMENT_REMINDER");
+                // The bell renders it in the reader's language when read (QA D665).
+                notificationService.createNotification("sms.appointment.reminder", reminderArgs,
+                    portalUser.getUsername(), "APPOINTMENT_REMINDER");
                 dispatched = true;
             } catch (RuntimeException ex) {
                 log.warn("In-app appointment reminder failed for {}: {}", appointment.getId(), ex.getMessage());

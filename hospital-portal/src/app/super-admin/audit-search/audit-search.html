@@ -122,7 +122,7 @@
           <select [ngModel]="status()" (ngModelChange)="status.set($event)">
             <option value="">{{ 'AUDIT_SEARCH.FILTER.ANY' | translate }}</option>
             @for (s of statusOptions; track s) {
-              <option [value]="s">{{ s }}</option>
+              <option [value]="s">{{ s | enumLabel: 'auditStatus' }}</option>
             }
           </select>
         </label>
@@ -234,8 +234,10 @@
                   </td>
                   <td>{{ row.hospitalName || '—' }}</td>
                   <td>
-                    <div class="cell-primary">{{ row.resourceName || row.resourceId || '—' }}</div>
-                    <div class="cell-secondary">{{ row.entityType || '' }}</div>
+                    <div class="cell-primary">
+                      {{ entityLabel(row.resourceName) || row.resourceId || '—' }}
+                    </div>
+                    <div class="cell-secondary">{{ entityLabel(row.entityType) || '' }}</div>
                   </td>
                   <td>
                     <span [class]="statusPillClass(row.status)">

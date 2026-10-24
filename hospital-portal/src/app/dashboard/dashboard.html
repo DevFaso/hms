@@ -1121,7 +1121,7 @@
                   }}</span>
                   <span class="audit-summary"
                     >{{ evt.eventType | enumLabel: 'auditEventType' }}
-                    @if (auditResourceLabel(evt.resourceName); as resource) {
+                    @if (auditResourceLabel(evt.resourceName, evt.entityType); as resource) {
                       — {{ resource }}
                     }
                   </span>

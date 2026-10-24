@@ -1,5 +1,7 @@
 package com.example.hms.service.pro;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.PanelAssignmentStatus;
 import com.example.hms.enums.PanelRole;
 import com.example.hms.model.PanelAssignment;
@@ -27,7 +29,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 /**
  * The "somebody must look at this" loop for a screening (Tier 2 item 47).
@@ -109,20 +110,20 @@ public class ProScreeningEscalationService {
             Set<String> recipients;
             if (response.isCriticalItemPositive()) {
                 recipients = recipients(response, 1);
-                String message = buildMessage(response, true, false);
+                NotificationText text = buildMessage(response, true, false);
                 for (String recipient : recipients) {
-                    notificationService.createNotification(message, recipient, CRITICAL_TYPE);
+                    notificationService.createNotification(text.key(), text.args(), recipient, CRITICAL_TYPE);
                 }
-                sendSmsBestEffort(response, message);
+                sendSmsBestEffort(response, text.render(messageSource, NotificationLocales.STAFF));
                 if (recipients.isEmpty()) {
                     log.warn("Critical PRO response {} has nobody to notify at hospital {}",
                         response.getId(), response.getHospital().getId());
                 }
             } else if (response.isScreenPositive()) {
                 recipients = recipients(response, 1);
-                String message = buildMessage(response, false, false);
+                NotificationText text = buildMessage(response, false, false);
                 for (String recipient : recipients) {
-                    notificationService.createNotification(message, recipient, SCREEN_POSITIVE_TYPE);
+                    notificationService.createNotification(text.key(), text.args(), recipient, SCREEN_POSITIVE_TYPE);
                 }
             } else {
                 return;
@@ -163,13 +164,13 @@ public class ProScreeningEscalationService {
 
     private void escalateOne(ProResponse response) {
         int round = response.getEscalationLevel() + 1;
-        String message = buildMessage(response, true, true);
+        NotificationText text = buildMessage(response, true, true);
         Set<String> recipients = recipients(response, round);
         for (String recipient : recipients) {
-            notificationService.createNotification(message, recipient, ESCALATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
         }
         // SMS once per round, not once per recipient (same reasoning as the lab chain).
-        sendSmsBestEffort(response, message);
+        sendSmsBestEffort(response, text.render(messageSource, NotificationLocales.STAFF));
 
         // Stamp the round even with no resolvable recipient so the interval
         // advances and the sweep does not reconsider the row every pass —
@@ -258,17 +259,16 @@ public class ProScreeningEscalationService {
      * No answers, no score, no item text in the message: a notification row and
      * an SMS are both plaintext. The recipient opens the chart. Read by the
      * recorder, the panel owners or the fallback role — clinical staff, never
-     * the caller (and the sweep has no request locale) — so the body is in the
-     * staff locale.
+     * the caller — each in the language they read it in (QA D665); the SMS is
+     * rendered once, in the staff locale.
      */
-    private String buildMessage(ProResponse response, boolean critical, boolean escalation) {
-        Locale locale = NotificationLocales.STAFF;
-        String instrument = response.getInstrument() != null
+    private NotificationText buildMessage(ProResponse response, boolean critical, boolean escalation) {
+        Object instrument = response.getInstrument() != null
             ? response.getInstrument().getCode()
-            : messageSource.getMessage("pro.screening.instrumentFallback", null, locale);
-        String patientName = response.getPatient() != null && response.getPatient().getFullName() != null
+            : NotificationLocalizer.key("pro.screening.instrumentFallback");
+        Object patientName = response.getPatient() != null && response.getPatient().getFullName() != null
             ? response.getPatient().getFullName()
-            : messageSource.getMessage("patient.fallback.generic", null, locale);
+            : NotificationLocalizer.key("patient.fallback.generic");
         String key;
         if (escalation) {
             key = "pro.screening.escalation";
@@ -277,6 +277,6 @@ public class ProScreeningEscalationService {
         } else {
             key = "pro.screening.positive.notification";
         }
-        return messageSource.getMessage(key, new Object[]{instrument, patientName}, locale);
+        return NotificationText.of(key, instrument, patientName);
     }
 }

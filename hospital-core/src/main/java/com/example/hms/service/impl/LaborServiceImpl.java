@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.DeliveryMode;
 import com.example.hms.enums.LaborAlertSeverity;
@@ -42,7 +43,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -57,7 +57,6 @@ import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.utility.GestationalDating;
 import com.example.hms.utility.ObstetricEligibility;
-import java.util.Locale;
 
 /**
  * Labor & Delivery (P1 #6, roadmap row 41). Follows the OB house pattern of
@@ -695,21 +694,19 @@ public class LaborServiceImpl implements LaborService {
         if (alerts == null || alerts.isEmpty() || documentedBy == null || documentedBy.getUsername() == null) {
             return;
         }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String patientName = episode.getPatient() != null
+        // Read by the documenting clinician, in their language (QA D665).
+        Object patientName = episode.getPatient() != null
             ? episode.getPatient().getFullName()
-            : messageSource.getMessage("patient.fallback.generic", null, locale);
+            : NotificationLocalizer.key("patient.fallback.generic");
         alerts.stream()
             .filter(alert -> alert.getSeverity() == LaborAlertSeverity.URGENT)
             .forEach(alert -> {
                 // QA D172 (D61/D121): the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("labor.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("labor.alert.notification",
-                    new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+                Object typeLabel = alert.getType() == null ? ""
+                    : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
                 try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
+                    notificationService.createNotification("labor.alert.notification",
+                        new Object[]{typeLabel, patientName, alert.getMessage()}, documentedBy.getUsername(), null);
                 } catch (RuntimeException ex) {
                     log.warn("Failed to create labor alert notification: {}", ex.getMessage());
                 }

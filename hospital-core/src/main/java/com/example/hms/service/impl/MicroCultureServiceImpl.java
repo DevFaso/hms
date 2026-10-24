@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.MicroCultureStatus;
 import com.example.hms.enums.MicroGrowthResult;
@@ -43,8 +44,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 /**
  * Culture report lifecycle (P3 #19): PRELIMINARY (freely editable by the
@@ -366,19 +365,17 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 .map(MicroIsolate::getOrganismName)
                 .collect(Collectors.joining(", "));
             String patientName = culture.getPatient() != null ? culture.getPatient().getFullName() : null;
-            // Read by the ordering provider: staff locale, not the request locale.
-            Locale locale = NotificationLocales.STAFF;
-            String message = messageSource.getMessage("microculture.positive.notification",
+            // Read by the ordering provider, in their language (QA D665).
+            notificationService.createNotification("microculture.positive.notification",
                 new Object[]{
                     patientName != null && !patientName.isBlank()
                         ? patientName
-                        : messageSource.getMessage("patient.fallback.yours", null, locale),
+                        : NotificationLocalizer.key("patient.fallback.yours"),
                     organisms.isBlank()
-                        ? messageSource.getMessage("microculture.positive.growthFallback", null, locale)
+                        ? NotificationLocalizer.key("microculture.positive.growthFallback")
                         : organisms
                 },
-                locale);
-            notificationService.createNotification(message, user.getUsername(), POSITIVE_CULTURE_TYPE);
+                user.getUsername(), POSITIVE_CULTURE_TYPE);
         } catch (RuntimeException ex) {
             log.warn("Positive-culture notification failed for culture {}: {}",
                 culture.getId(), ex.getMessage(), ex);

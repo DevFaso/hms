@@ -228,7 +228,7 @@
         >
           <option value="">{{ 'IMAGING.ALL_MODALITIES' | translate }}</option>
           @for (m of modalities; track m) {
-            <option [value]="m">{{ m }}</option>
+            <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
           }
         </select>
         <label class="critical-toggle">
@@ -857,7 +857,7 @@
               [title]="'IMAGING.MODALITY' | translate"
             >
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>
@@ -869,7 +869,7 @@
               [title]="'IMAGING.PRIORITY' | translate"
             >
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'imagingOrderPriority' }}</option>
               }
             </select>
           </div>

@@ -5643,13 +5643,17 @@
       },
       "NOTIFICATION_TYPE": {
         "APPOINTMENT_REMINDER": "Appointment Reminder",
+        "BREAK_GLASS_OPT_OUT_OVERRIDE": "Emergency access to your record",
         "CRITICAL_IMAGING_FINDING": "Critical Imaging Finding",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Critical Imaging Finding Escalation",
         "CRITICAL_LAB_RESULT": "Critical Lab Result",
         "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
         "DISCHARGE_SUMMARY": "Discharge Summary",
+        "LAB_ORDER_RECEIVED": "Lab order received",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
+        "NEWS2_ESCALATION": "NEWS2 escalation",
+        "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
@@ -6066,6 +6070,38 @@
         "PEDIATRIC_MESSAGING": "Paediatric messaging",
         "ORTHO_IMAGING": "Orthopaedic imaging",
         "RESP_TELEMED": "Respiratory telemedicine"
+      },
+      "PROFILE_TYPE": {
+        "STAFF": "Staff",
+        "PATIENT": "Patient"
+      },
+      "TRACKER_ACUITY": {
+        "ESI-1": "ESI 1 - Resuscitation",
+        "ESI-2": "ESI 2 - Emergent",
+        "ESI-3": "ESI 3 - Urgent",
+        "ESI-4": "ESI 4 - Less urgent",
+        "ESI-5": "ESI 5 - Non-urgent",
+        "EMERGENT": "Emergent",
+        "URGENT": "Urgent",
+        "ROUTINE": "Routine",
+        "LOW": "Low"
+      },
+      "MEDICATION_CATEGORY": {
+        "ANALGESIC": "Analgesic",
+        "ANTIBIOTIC": "Antibiotic",
+        "ANTIMALARIAL": "Antimalarial",
+        "ANTIPYRETIC": "Antipyretic",
+        "ANTI_INFLAMMATORY": "Anti-inflammatory",
+        "ANTIHYPERTENSIVE": "Antihypertensive",
+        "ANTIDIABETIC": "Antidiabetic",
+        "ANTIRETROVIRAL": "Antiretroviral",
+        "ANTIFUNGAL": "Antifungal",
+        "ANTIPARASITIC": "Antiparasitic",
+        "ANTIHISTAMINE": "Antihistamine",
+        "ANTICOAGULANT": "Anticoagulant",
+        "VITAMIN": "Vitamin",
+        "VACCINE": "Vaccine",
+        "OTHER": "Other"
       }
     },
     "DOCUMENTS": {
@@ -7327,11 +7363,12 @@
     "SIGN": "Sign",
     "SIGNING": "Signing...",
     "REPORT_ID": "Report ID",
+    "REPORT_ID_INVALID": "The report ID must be a record identifier (UUID), for example copied from the report page.",
     "REPORT_ID_PLACEHOLDER": "Report UUID",
     "SIGN_VALUE_PLACEHOLDER": "e.g. Dr. Jane Doe",
     "SIGN_VALUE_HINT": "Type your full legal name exactly — verification matches this text character for character.",
     "EXPIRES_AT": "Expires at (optional)",
-    "SIGN_REQUIRED": "Report type, report ID and signature are required",
+    "SIGN_REQUIRED": "A report and a signature are required",
     "SIGN_NO_CONTEXT": "A staff profile and an active hospital are required to sign",
     "SIGNED_OK": "Report signed",
     "SIGN_ERROR": "Signing failed",
@@ -7345,7 +7382,12 @@
     "LOOKUP_ERROR": "Report lookup failed",
     "LOOKUP_NONE": "No signatures on this report",
     "REPORT_SIGNED": "Report is signed",
-    "REPORT_NOT_SIGNED": "Report is not signed"
+    "REPORT_NOT_SIGNED": "Report is not signed",
+    "REPORT": "Report",
+    "PICK_REPORT": "Choose a report to sign",
+    "SIGNABLE_LOADING": "Loading your reports…",
+    "NO_SIGNABLE_REPORTS": "You have no unsigned report to sign in this hospital.",
+    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",

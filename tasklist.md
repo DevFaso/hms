@@ -5200,6 +5200,9 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 - **Prescriber two-factor step for controlled substances (D654, #926).** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog.
 
+- **Report picker in the sign modal (QA D627 / D123, round 9, `fix/qa-r9-i18n-admin-portal`).** The modal now offers only the types the server can sign (`SIGNABLE_TYPES` = `SignableReportLocator.SIGNABLE`, mirrored by `SignableTypesMirrorTest`), the server refuses an unsignable type with a translated 400, and a non-UUID id is refused before the call. Choosing the record by name instead of pasting its UUID needs a per-type search (discharge summaries, lab results, imaging reports, consultations, notes, prescriptions, procedures) in the acting hospital — a new picker feature, not a fix. Signing from each record's own page already passes the id.
+- **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them.
+
 ## Open clinical questions — kept open on purpose, not forgotten
 
 These are questions only a clinician can settle. None of them blocks anything:

@@ -79,8 +79,8 @@ class PostpartumCareServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
@@ -148,7 +148,7 @@ class PostpartumCareServiceImplTest {
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
         lenient().when(staffRepository.findByUserIdAndHospitalId(recorderId, hospitalId)).thenReturn(Optional.empty());
         lenient().when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)).thenReturn(Optional.empty());
-        lenient().when(notificationService.createNotification(anyString(), anyString())).thenReturn(null);
+        lenient().when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(null);
         lenient().when(observationRepository.save(any(PostpartumObservation.class))).thenAnswer(invocation -> {
             PostpartumObservation obs = invocation.getArgument(0);
             obs.setId(UUID.randomUUID());
@@ -203,7 +203,7 @@ class PostpartumCareServiceImplTest {
         assertTrue(response.getAlerts().get(0).getMessage().startsWith("Risque d"));
         assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hémorragie"));
 
-    verify(notificationService, times(1)).createNotification(anyString(), anyString());
+    verify(notificationService, times(1)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
 
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());
@@ -245,7 +245,7 @@ class PostpartumCareServiceImplTest {
         assertNotNull(existingPlan.getNextDueAt(), "Next due check should be scheduled");
         assertEquals(existingPlan.getNextDueAt(), response.getSchedule().getNextDueAt());
         assertEquals(observationTime.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), existingPlan.getNextDueAt());
-    verify(notificationService, never()).createNotification(anyString(), anyString());
+    verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -288,7 +288,7 @@ class PostpartumCareServiceImplTest {
     assertTrue(plan.isPainFollowupOutstanding(), "Pain follow-up should be tracked");
 
         assertTrue(response.getAlerts().stream().anyMatch(alert -> alert.getType() == PostpartumAlertType.INFECTION));
-        verify(notificationService, times(1)).createNotification(any(), anyString());
+        verify(notificationService, times(1)).created(any(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -497,7 +497,7 @@ class PostpartumCareServiceImplTest {
         PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), org.mockito.ArgumentMatchers.any());
         assertTrue(message.getValue().startsWith("Alerte post-partum (hémorragie)"), message.getValue());
         assertFalse(message.getValue().contains("HEMORRHAGE"), message.getValue());
         assertEquals("Évaluation des saignements", response.getAlerts().get(0).getTriggeredBy());

@@ -69,7 +69,6 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.QuestionnaireRepository;
 import com.example.hms.repository.QuestionnaireResponseRepository;
 import com.example.hms.service.AppointmentService;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.mapper.QuestionnaireMapper;
 import com.example.hms.model.Questionnaire;
 import com.example.hms.model.QuestionnaireResponse;
@@ -448,7 +447,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<AppointmentResponseDTO> getMyAppointments(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
         String username = auth.getName();
-        return appointmentService.getAppointmentsByPatientId(patientId, locale, username);
+        // QA D642: the patient reads these as a schedule — soonest first, by
+        // date then start time (the web portal and the apps both list them as sent).
+        List<AppointmentResponseDTO> appointments =
+            new java.util.ArrayList<>(appointmentService.getAppointmentsByPatientId(patientId, locale, username));
+        appointments.sort(java.util.Comparator
+            .comparing(AppointmentResponseDTO::getAppointmentDate,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+            .thenComparing(AppointmentResponseDTO::getStartTime,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return appointments;
     }
 
     // ── Billing / invoices ───────────────────────────────────────────────
@@ -1191,9 +1199,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         String patientName = formatPatientName(patient, locale);
 
         Recipients recipients = collectRefillRecipients(prescription);
-        String message = messageSource.getMessage(
-            "refill.request.notification", new Object[]{patientName, medicationName}, locale);
-        dispatchRefillInAppNotifications(recipients.usernames(), message, refill);
+        // The bell renders it in each reader's language when read (QA D665).
+        dispatchRefillInAppNotifications(recipients.usernames(),
+            new Object[]{patientName, medicationName}, refill);
         dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill, locale);
     }
 
@@ -1254,10 +1262,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    private void dispatchRefillInAppNotifications(Set<String> usernames, String message, RefillRequest refill) {
+    private void dispatchRefillInAppNotifications(Set<String> usernames, Object[] args, RefillRequest refill) {
         for (String username : usernames) {
             try {
-                notificationService.createNotification(message, username, MEDICATION_REFILL_NOTIFICATION_TYPE);
+                notificationService.createNotification("refill.request.notification", args, username,
+                    MEDICATION_REFILL_NOTIFICATION_TYPE);
             } catch (Exception e) {
                 log.warn("Failed to deliver refill notification to {} for refill {}", username, refill.getId());
             }

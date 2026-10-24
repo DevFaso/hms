@@ -377,17 +377,17 @@ public class InventoryServiceImpl implements InventoryService {
                     ? item.getMedicationCatalogItem().getNameFr() : unknown;
             String pharmacyName = item.getPharmacy() != null
                     ? item.getPharmacy().getName() : unknown;
-            String message = messageSource.getMessage("inventory.lowStock.notification",
-                    new Object[]{medicationName, pharmacyName,
-                        String.valueOf(item.getQuantityOnHand()), String.valueOf(item.getReorderThreshold())},
-                    locale);
+            Object[] alertArgs = {medicationName, pharmacyName,
+                String.valueOf(item.getQuantityOnHand()), String.valueOf(item.getReorderThreshold())};
+            String message = messageSource.getMessage("inventory.lowStock.notification", alertArgs, locale);
 
             try {
                 UUID currentUserId = roleValidator.getCurrentUserId();
                 if (currentUserId != null) {
                     User user = userRepository.findById(currentUserId).orElse(null);
                     if (user != null) {
-                        notificationService.createNotification(message, user.getUsername(), "REORDER_ALERT");
+                        notificationService.createNotification("inventory.lowStock.notification", alertArgs,
+                            user.getUsername(), "REORDER_ALERT");
                     }
                 }
             } catch (Exception e) {

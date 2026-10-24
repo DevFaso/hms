@@ -432,7 +432,9 @@ class TenantIsolationTest {
 
         @BeforeEach
         void setUp() {
-            controller = new com.example.hms.controller.NotificationWebSocketController(messagingTemplate);
+            controller = new com.example.hms.controller.NotificationWebSocketController(messagingTemplate,
+                new com.example.hms.security.StompLocaleRegistry(),
+                new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()));
         }
 
         @Test

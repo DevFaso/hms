@@ -63,4 +63,18 @@ public class AdminSignupRequest {
     private UUID departmentId;                 // optional
     private Specialization specialization;     // optional
     private Boolean forcePasswordChange;       // optional
+    /**
+     * QA D626: set by the patient form (step 1 of a patient registration).
+     * A PATIENT role on admin-register without it is a staff onboarding that
+     * picked the patient role, and is refused: a patient is registered from
+     * the patient form, which also creates the patient record.
+     */
+    private Boolean patientRegistration;       // optional
+
+    /**
+     * QA D626: the patient record, REQUIRED when {@link #patientRegistration}
+     * is true. The account and this record are written in one transaction.
+     * Validated after the account exists (its userId is set server-side).
+     */
+    private PatientRequestDTO patient;
 }

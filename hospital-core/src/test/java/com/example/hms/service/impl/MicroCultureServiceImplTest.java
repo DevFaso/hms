@@ -70,7 +70,7 @@ class MicroCultureServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
 
     private MicroCultureServiceImpl service;
 
@@ -236,7 +236,7 @@ class MicroCultureServiceImplTest {
         assertThat(culture.getFinalizedAt()).isNotNull();
         assertThat(culture.getFinalizedByUserId()).isEqualTo(actor);
         // No growth — nobody is paged about a negative.
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -258,7 +258,7 @@ class MicroCultureServiceImplTest {
 
         service.finalizeCulture(cultureId, hospitalId, null);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             org.mockito.ArgumentMatchers.contains("Escherichia coli"),
             eq("dr.traore"),
             eq("POSITIVE_CULTURE_RESULT"));
@@ -632,6 +632,6 @@ class MicroCultureServiceImplTest {
         // Best-effort by policy: the clinical write must survive a
         // notification dead end.
         assertThat(finalized.getStatus()).isEqualTo(MicroCultureStatus.FINAL);
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 }

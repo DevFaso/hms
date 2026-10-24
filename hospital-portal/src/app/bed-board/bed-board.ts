@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
@@ -344,8 +345,8 @@ export class BedBoardComponent implements OnInit {
           this.closePrecautions();
           this.loadBoard();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BED_BOARD.PRECAUTION_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(this.serverReason(err, 'BED_BOARD.PRECAUTION_ERROR'));
           this.savingPrecaution.set(false);
         },
       });
@@ -367,7 +368,8 @@ export class BedBoardComponent implements OnInit {
           }
           this.loadBoard();
         },
-        error: () => this.toast.error(this.translate.instant('BED_BOARD.DISCONTINUE_ERROR')),
+        error: (err: HttpErrorResponse) =>
+          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR')),
       });
   }
 
@@ -443,11 +445,23 @@ export class BedBoardComponent implements OnInit {
           this.closeTransfer();
           this.refreshAll();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_ERROR'));
           this.savingTransfer.set(false);
         },
       });
+  }
+
+  /**
+   * QA D631: a refused write (4xx) carries the server's reason, already in the
+   * reader's language ("a transfer is already pending"); a generic toast hid
+   * it. A 5xx or a network failure keeps the generic text.
+   */
+  private serverReason(err: HttpErrorResponse, fallbackKey: string): string {
+    const message = err?.status >= 400 && err.status < 500 ? err.error?.message : null;
+    return typeof message === 'string' && message.trim()
+      ? message
+      : this.translate.instant(fallbackKey);
   }
 
   completeTransfer(order: TransferOrderResponse): void {
@@ -456,7 +470,8 @@ export class BedBoardComponent implements OnInit {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_COMPLETED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_COMPLETE_ERROR')),
+      error: (err: HttpErrorResponse) =>
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_COMPLETE_ERROR')),
     });
   }
 
@@ -470,7 +485,8 @@ export class BedBoardComponent implements OnInit {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_CANCELLED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_CANCEL_ERROR')),
+      error: (err: HttpErrorResponse) =>
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR')),
     });
   }
 

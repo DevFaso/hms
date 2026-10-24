@@ -68,7 +68,7 @@
               <td>
                 <span class="code-chip">{{ item.atcCode ?? '—' }}</span>
               </td>
-              <td>{{ item.category ?? '—' }}</td>
+              <td>{{ item.category ? (item.category | enumLabel: 'medicationCategory') : '—' }}</td>
               <td>
                 <span class="status-badge" [class.active]="item.active">
                   {{

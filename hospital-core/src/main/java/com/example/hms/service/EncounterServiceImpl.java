@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.EncounterNoteLinkType;
 import com.example.hms.enums.EncounterNoteTemplate;
 import com.example.hms.enums.EncounterStatus;
@@ -2419,16 +2420,14 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         String recipientUsername = patient.getUser().getUsername();
-        // Read by the patient, so rendered in the patient's stated language —
-        // never in the discharging clinician's request locale.
-        Locale locale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
-        String hospitalName = encounter.getHospital() != null && encounter.getHospital().getName() != null
+        // Read by the patient, so rendered in the language they read it in —
+        // never in the discharging clinician's request locale (QA D665).
+        Object hospitalName = encounter.getHospital() != null && encounter.getHospital().getName() != null
             ? encounter.getHospital().getName()
-            : messageSource.getMessage("encounter.visitSummary.hospitalFallback", null, locale);
-        String message = messageSource.getMessage(
-            "encounter.visitSummary.notification", new Object[]{hospitalName}, locale);
+            : NotificationLocalizer.key("encounter.visitSummary.hospitalFallback");
         try {
-            notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+            notificationService.createNotification("encounter.visitSummary.notification",
+                new Object[]{hospitalName}, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
         } catch (Exception ignored) {
             // Do not fail checkout if in-app notification delivery is unavailable.
         }

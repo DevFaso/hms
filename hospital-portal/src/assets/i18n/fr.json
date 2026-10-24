@@ -1171,7 +1171,7 @@
     "TYPE": "Type",
     "UNASSIGN_BED": "Retirer le lit",
     "UPDATED": "Admission mise à jour",
-    "WARD": "Service"
+    "WARD": "Unité"
   },
   "ANALYTICS": {
     "APPOINTMENTS": "Rendez-vous",
@@ -2131,8 +2131,8 @@
     "VISIT": "Visite",
     "WAITING_LONG": "Attente > 30 min",
     "WAIT_MINUTES": "Attente {{minutes}} min",
-    "WARD": "Service",
-    "WARD_OCCUPANCY": "Occupation par Service",
+    "WARD": "Unité",
+    "WARD_OCCUPANCY": "Occupation par unité",
     "WELCOME_DESC": "Votre tableau de bord se remplira à mesure que vous utiliserez le système.",
     "WELCOME_HMS": "Bienvenue sur e-Keneya",
     "WL_STATUS": {
@@ -3519,7 +3519,7 @@
     "ALLERGIES": "Allergies",
     "ALL_ACUITY": "Tous les niveaux",
     "ALL_PATIENTS": "Tous les patients",
-    "ALL_WARDS": "Tous les services",
+    "ALL_WARDS": "Toutes les unités",
     "ANNOUNCEMENTS": "Annonces",
     "ASSESSMENT": "Évaluation",
     "ASSESSMENT_PLACEHOLDER": "Saisir l'évaluation...",
@@ -3714,7 +3714,7 @@
     "VITALS_DUE": "Signes vitaux à prendre",
     "VITALS_HISTORY": "Historique des signes vitaux",
     "VITALS_RECORDED": "Signes vitaux enregistrés",
-    "WARD": "Service",
+    "WARD": "Unité",
     "WEIGHT": "Poids",
     "WORKBOARD": "Tableau de travail",
     "WOUND_CARE": "Soins des plaies",
@@ -5609,13 +5609,17 @@
       },
       "NOTIFICATION_TYPE": {
         "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
+        "BREAK_GLASS_OPT_OUT_OVERRIDE": "Accès d’urgence à votre dossier",
         "CRITICAL_IMAGING_FINDING": "Découverte d'imagerie critique",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalade — découverte d'imagerie critique",
         "CRITICAL_LAB_RESULT": "Résultat de laboratoire critique",
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalade — résultat de laboratoire critique",
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
+        "LAB_ORDER_RECEIVED": "Demande d’analyse reçue",
         "LICENSE_EXPIRY": "Expiration de licence",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
+        "NEWS2_ESCALATION": "Escalade NEWS2",
+        "PHARMACY_EVENT": "Information de la pharmacie",
         "POSITIVE_CULTURE_RESULT": "Culture positive",
         "PRO_CRITICAL_ITEM": "Élément PRO critique",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
@@ -5653,7 +5657,7 @@
         "BREAK_COVER": "Remplacement pendant une pause",
         "PROCEDURE": "Vers un examen ou un acte",
         "SHIFT_CHANGE": "Relève de garde",
-        "WARD_TRANSFER": "Transfert de service"
+        "WARD_TRANSFER": "Transfert d’unité"
       },
       "VITAL_TASK_TYPE": {
         "FULL_SET": "Bilan complet",
@@ -6032,6 +6036,38 @@
         "PEDIATRIC_MESSAGING": "Messagerie pédiatrique",
         "ORTHO_IMAGING": "Imagerie orthopédique",
         "RESP_TELEMED": "Télémédecine respiratoire"
+      },
+      "PROFILE_TYPE": {
+        "STAFF": "Personnel",
+        "PATIENT": "Patient(e)"
+      },
+      "TRACKER_ACUITY": {
+        "ESI-1": "ESI 1 - Réanimation",
+        "ESI-2": "ESI 2 - Très urgent",
+        "ESI-3": "ESI 3 - Urgent",
+        "ESI-4": "ESI 4 - Peu urgent",
+        "ESI-5": "ESI 5 - Non urgent",
+        "EMERGENT": "Très urgent",
+        "URGENT": "Urgent",
+        "ROUTINE": "Courant",
+        "LOW": "Faible"
+      },
+      "MEDICATION_CATEGORY": {
+        "ANALGESIC": "Analgésique",
+        "ANTIBIOTIC": "Antibiotique",
+        "ANTIMALARIAL": "Antipaludique",
+        "ANTIPYRETIC": "Antipyrétique",
+        "ANTI_INFLAMMATORY": "Anti-inflammatoire",
+        "ANTIHYPERTENSIVE": "Antihypertenseur",
+        "ANTIDIABETIC": "Antidiabétique",
+        "ANTIRETROVIRAL": "Antirétroviral",
+        "ANTIFUNGAL": "Antifongique",
+        "ANTIPARASITIC": "Antiparasitaire",
+        "ANTIHISTAMINE": "Antihistaminique",
+        "ANTICOAGULANT": "Anticoagulant",
+        "VITAMIN": "Vitamine",
+        "VACCINE": "Vaccin",
+        "OTHER": "Autre"
       }
     },
     "DOCUMENTS": {
@@ -7327,11 +7363,12 @@
     "SIGN": "Signer",
     "SIGNING": "Signature...",
     "REPORT_ID": "ID du rapport",
+    "REPORT_ID_INVALID": "L’ID du rapport doit être un identifiant d’enregistrement (UUID), par exemple copié depuis la page du rapport.",
     "REPORT_ID_PLACEHOLDER": "UUID du rapport",
     "SIGN_VALUE_PLACEHOLDER": "ex. Dr Jeanne Dupont",
     "SIGN_VALUE_HINT": "Saisissez votre nom légal complet exactement — la vérification compare ce texte caractère par caractère.",
     "EXPIRES_AT": "Expire le (optionnel)",
-    "SIGN_REQUIRED": "Le type de rapport, son ID et la signature sont requis",
+    "SIGN_REQUIRED": "Un rapport et une signature sont requis",
     "SIGN_NO_CONTEXT": "Un profil de personnel et un hôpital actif sont requis pour signer",
     "SIGNED_OK": "Rapport signé",
     "SIGN_ERROR": "Échec de la signature",
@@ -7345,7 +7382,12 @@
     "LOOKUP_ERROR": "Échec de la recherche du rapport",
     "LOOKUP_NONE": "Aucune signature sur ce rapport",
     "REPORT_SIGNED": "Rapport signé",
-    "REPORT_NOT_SIGNED": "Rapport non signé"
+    "REPORT_NOT_SIGNED": "Rapport non signé",
+    "REPORT": "Rapport",
+    "PICK_REPORT": "Choisissez un rapport à signer",
+    "SIGNABLE_LOADING": "Chargement de vos rapports…",
+    "NO_SIGNABLE_REPORTS": "Vous n’avez aucun rapport non signé à signer dans cet établissement.",
+    "SIGNABLE_LOAD_ERROR": "Impossible de charger vos rapports à signer."
   },
   "STAFF": {
     "ADD_STAFF": "Ajouter un Membre",
@@ -10517,8 +10559,8 @@
     "DISCHARGES_TODAY": "Sorties prévues aujourd'hui",
     "ON_ISOLATION": "En isolement",
     "OUT_OF_SERVICE": "Hors service",
-    "FILTER_WARD": "Service",
-    "ALL_WARDS": "Tous les services",
+    "FILTER_WARD": "Unité",
+    "ALL_WARDS": "Toutes les unités",
     "ONLY_AVAILABLE": "Lits libres uniquement",
     "ONLY_ISOLATION": "Patients en isolement uniquement",
     "EMPTY": "Aucun lit ne correspond à ces filtres.",
@@ -10531,7 +10573,7 @@
     "DAYS": "{{count}}",
     "EDD": "Sortie",
     "ATTENDING": "Médecin référent",
-    "WRONG_WARD": "Mauvais service",
+    "WRONG_WARD": "Mauvaise unité",
     "MANAGE_PRECAUTIONS": "Précautions",
     "PRECAUTIONS": "Précautions d'isolement",
     "PRECAUTIONS_FOR": "Précautions d'isolement — {{name}}",
@@ -10540,7 +10582,7 @@
     "TYPE": "Type",
     "REASON": "Motif",
     "ORGANISM": "Germe suspecté",
-    "NEEDS_ISOLATION_WARD": "Nécessite un service d'isolement",
+    "NEEDS_ISOLATION_WARD": "Nécessite une unité d’isolement",
     "DISCONTINUE": "Lever",
     "START_PRECAUTION": "Instaurer la précaution",
     "AIRBORNE_HINT": "Les précautions aériennes limitent le placement du patient : il lui faut une chambre dont l'air ne se déverse pas dans le service.",

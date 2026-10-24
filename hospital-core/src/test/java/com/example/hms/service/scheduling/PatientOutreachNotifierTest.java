@@ -35,8 +35,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class PatientOutreachNotifierTest {
 
     @Mock private NotificationPreferenceRepository preferenceRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private SmsService smsService;
+
+    private static final com.example.hms.service.i18n.NotificationText RECALL =
+        com.example.hms.service.i18n.NotificationText.of("sms.recall.due", "CHU Yalgado");
+    private static final String RECALL_FR =
+        RECALL.render(com.example.hms.i18n.TestMessageSources.bundles(), java.util.Locale.FRENCH);
 
     private PatientOutreachNotifier notifier;
 
@@ -45,7 +50,8 @@ class PatientOutreachNotifierTest {
 
     @BeforeEach
     void setUp() {
-        notifier = new PatientOutreachNotifier(preferenceRepository, notificationService, smsService);
+        notifier = new PatientOutreachNotifier(preferenceRepository, notificationService, smsService,
+            com.example.hms.i18n.TestMessageSources.bundles());
 
         portalUser = new User();
         portalUser.setId(UUID.randomUUID());
@@ -56,7 +62,7 @@ class PatientOutreachNotifierTest {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setUser(portalUser);
 
-        lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
         lenient().when(preferenceRepository.findByUser_IdAndNotificationType(
@@ -66,12 +72,12 @@ class PatientOutreachNotifierTest {
 
     @Test
     void dispatchesOverBothChannels() {
-        boolean dispatched = notifier.notifyPatient(patient, "A slot opened up.");
+        boolean dispatched = notifier.notifyPatient(patient, RECALL, java.util.Locale.FRENCH);
 
         assertThat(dispatched).isTrue();
-        verify(notificationService).createNotification(
-            eq("A slot opened up."), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
-        verify(smsService).send("+22670707070", "A slot opened up.");
+        verify(notificationService).created(
+            eq(RECALL_FR), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
+        verify(smsService).send("+22670707070", RECALL_FR);
     }
 
     @Test
@@ -79,7 +85,7 @@ class PatientOutreachNotifierTest {
         // The mock transport logs bodies — it must never carry PHI.
         when(smsService.deliversRealSms()).thenReturn(false);
 
-        boolean dispatched = notifier.notifyPatient(patient, "A slot opened up.");
+        boolean dispatched = notifier.notifyPatient(patient, RECALL, java.util.Locale.FRENCH);
 
         verify(smsService, never()).send(anyString(), anyString());
         assertThat(dispatched).isTrue(); // in-app still went out
@@ -89,10 +95,10 @@ class PatientOutreachNotifierTest {
     void aPatientWithoutAPortalAccountStillGetsSms() {
         patient.setUser(null);
 
-        boolean dispatched = notifier.notifyPatient(patient, "A slot opened up.");
+        boolean dispatched = notifier.notifyPatient(patient, RECALL, java.util.Locale.FRENCH);
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
-        verify(smsService).send("+22670707070", "A slot opened up.");
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+        verify(smsService).send("+22670707070", RECALL_FR);
         assertThat(dispatched).isTrue();
     }
 
@@ -105,25 +111,26 @@ class PatientOutreachNotifierTest {
             portalUser.getId(), NotificationType.APPOINTMENT_REMINDER))
             .thenReturn(List.of(smsOff));
 
-        notifier.notifyPatient(patient, "A slot opened up.");
+        notifier.notifyPatient(patient, RECALL, java.util.Locale.FRENCH);
 
         verify(smsService, never()).send(anyString(), anyString());
-        verify(notificationService).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService).created(anyString(), anyString(), anyString());
     }
 
     @Test
     void longBodiesAreCappedForSms() {
         String longMessage = "x".repeat(500);
 
-        notifier.notifyPatient(patient, longMessage);
+        notifier.notifyPatient(patient,
+            com.example.hms.service.i18n.NotificationText.of("sms.recall.due", longMessage), java.util.Locale.FRENCH);
 
         verify(smsService).send(eq("+22670707070"), argThat(body -> body.length() == 320));
     }
 
     @Test
     void nothingToSayMeansNothingSent() {
-        assertThat(notifier.notifyPatient(patient, "  ")).isFalse();
-        assertThat(notifier.notifyPatient(null, "hello")).isFalse();
+        assertThat(notifier.notifyPatient(patient, null, java.util.Locale.FRENCH)).isFalse();
+        assertThat(notifier.notifyPatient(null, RECALL, java.util.Locale.FRENCH)).isFalse();
         verify(smsService, never()).send(anyString(), anyString());
     }
 }

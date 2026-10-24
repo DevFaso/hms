@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
 import com.example.hms.enums.NewbornFollowUpAction;
@@ -41,7 +42,6 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -384,23 +384,21 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (documentedBy == null || documentedBy.getUsername() == null) {
             return;
         }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
+        // Read by the documenting clinician, in their language (QA D665).
+        Object fallbackName = NotificationLocalizer.key("patient.fallback.generic");
         String patientName = assessment.getPatient() != null
             ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
-            : fallbackName;
+            : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
             .forEach(alert -> {
                 // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
+                Object typeLabel = alert.getType() == null ? ""
+                    : NotificationLocalizer.key("newborn.alert.type." + alert.getType().name());
                 try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
+                    notificationService.createNotification("newborn.alert.notification",
+                        new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                        documentedBy.getUsername(), null);
                 } catch (RuntimeException ex) {
                     log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
                 }

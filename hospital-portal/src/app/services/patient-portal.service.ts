@@ -1055,7 +1055,17 @@ export class PatientPortalService {
 
   getMyAppointments(): Observable<PortalAppointment[]> {
     return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
-      map((r) => (r.data ?? []).map(mapAppointment)),
+      // QA D642: chronological, on the raw wire date and 24 h time, before the
+      // time is formatted for display. Every list built from this keeps it.
+      map((r) =>
+        [...(r.data ?? [])]
+          .sort((a, b) =>
+            `${a.appointmentDate ?? ''}T${a.startTime ?? ''}`.localeCompare(
+              `${b.appointmentDate ?? ''}T${b.startTime ?? ''}`,
+            ),
+          )
+          .map(mapAppointment),
+      ),
       catchError(() => of([])),
     );
   }

@@ -33,7 +33,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
 
     private PrescriberPharmacyNotificationWriter writer;
 
@@ -43,7 +43,7 @@ class PrescriberPharmacyNotificationWriterTest {
     @BeforeEach
     void setUp() {
         writer = new PrescriberPharmacyNotificationWriter(prescriptionRepository, routingDecisionRepository,
-                notificationService, TestMessageSources.bundles());
+                notificationService);
 
         User account = new User();
         account.setUsername("dr.awa");
@@ -68,7 +68,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         assertThat(writer.write(prescriptionId, PrescriptionStatus.DISPENSED)).isTrue();
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : Amoxicilline 500 mg (Aminata Diallo) a été entièrement délivré.",
                 "dr.awa", "PHARMACY_EVENT");
     }
@@ -80,7 +80,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         writer.write(prescriptionId, PrescriptionStatus.PARTNER_REJECTED);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : Amoxicilline 500 mg (Aminata Diallo) a été refusé par la pharmacie "
                         + "partenaire Pharmacie du Marché et doit être réorienté.",
                 "dr.awa", "PHARMACY_EVENT");
@@ -94,7 +94,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         writer.write(prescriptionId, PrescriptionStatus.PENDING_CLARIFICATION);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : clarification demandée pour Amoxicilline 500 mg. Voir l'ordonnance.",
                 "dr.awa", "PHARMACY_EVENT");
     }
@@ -106,7 +106,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         assertThat(writer.write(prescriptionId, PrescriptionStatus.TRANSMISSION_FAILED)).isTrue();
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : le SMS transmettant Amoxicilline 500 mg (Aminata Diallo) à une pharmacie "
                         + "n'a pas pu être envoyé. Renvoyez-le ou orientez l'ordonnance autrement.",
                 "dr.awa", "PHARMACY_EVENT");
@@ -121,9 +121,9 @@ class PrescriberPharmacyNotificationWriterTest {
         writer.write(prescriptionId, PrescriptionStatus.DISPENSED);
 
         org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(body.capture(), org.mockito.ArgumentMatchers.eq("dr.awa"),
+        verify(notificationService).created(body.capture(), org.mockito.ArgumentMatchers.eq("dr.awa"),
                 org.mockito.ArgumentMatchers.eq("PHARMACY_EVENT"));
-        assertThat(body.getValue()).hasSize(PrescriberPharmacyNotificationWriter.MAX_MESSAGE_LENGTH)
+        assertThat(body.getValue()).hasSize(255)
                 .endsWith("\u2026");
     }
 
@@ -150,7 +150,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         writer.write(prescriptionId, PrescriptionStatus.PARTNER_REJECTED);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : Amoxicilline 500 mg (Aminata Diallo) a été refusé par la pharmacie "
                         + "partenaire Pharmacie du Marché et doit être réorienté.",
                 "dr.awa", "PHARMACY_EVENT");
@@ -165,7 +165,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         writer.write(prescriptionId, PrescriptionStatus.PARTNER_ACCEPTED);
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : Amoxicilline 500 mg (patient) a été accepté par la pharmacie partenaire "
                         + "la pharmacie partenaire.",
                 "dr.awa", "PHARMACY_EVENT");
@@ -205,7 +205,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         assertThat(writer.writePartnerTimedOut(prescriptionId)).isTrue();
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : la pharmacie partenaire Pharmacie du Marché n'a pas répondu à temps pour "
                         + "Amoxicilline 500 mg (Aminata Diallo) ; l'ordonnance doit être réorientée.",
                 "dr.awa", "PHARMACY_EVENT");
@@ -218,7 +218,7 @@ class PrescriberPharmacyNotificationWriterTest {
 
         assertThat(writer.writePartnerDispensedAfterWithdrawal(prescriptionId)).isTrue();
 
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
                 "Pharmacie : la pharmacie partenaire Pharmacie du Marché signale avoir délivré "
                         + "Amoxicilline 500 mg (Aminata Diallo), qui avait été retiré. Vérifiez auprès du patient.",
                 "dr.awa", "PHARMACY_EVENT");

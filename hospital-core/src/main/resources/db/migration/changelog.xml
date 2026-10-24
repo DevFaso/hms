@@ -2964,6 +2964,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V225 (QA D665): security.notifications.message_key + message_args, so a
+         notification body is rendered in the reader's language. Plain statements. -->
+    <changeSet id="V225-notification-message-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V225__notification_message_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V221 (QA D654): clinical.prescriptions.medication_catalog_item_id, the
          catalog pick the controlled flag is read from. Plain statements. -->
     <changeSet id="V221-prescription-catalog-item-id" author="hms-team" runOnChange="false">

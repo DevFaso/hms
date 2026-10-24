@@ -586,7 +586,7 @@
               [title]="'CONSULTATIONS.URGENCY' | translate"
             >
               @for (u of urgencies; track u) {
-                <option [value]="u">{{ u }}</option>
+                <option [value]="u">{{ u | enumLabel: 'consultationUrgency' }}</option>
               }
             </select>
           </div>

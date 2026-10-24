@@ -70,8 +70,8 @@ class NewbornAssessmentServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
@@ -128,7 +128,7 @@ class NewbornAssessmentServiceImplTest {
         lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
-        lenient().when(notificationService.createNotification(anyString(), anyString())).thenReturn(null);
+        lenient().when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(null);
         lenient().when(assessmentRepository.save(any(NewbornAssessment.class))).thenAnswer(invocation -> {
             NewbornAssessment assessment = invocation.getArgument(0);
             assessment.setId(UUID.randomUUID());
@@ -153,7 +153,7 @@ class NewbornAssessmentServiceImplTest {
         assertEquals(NewbornAlertSeverity.URGENT, response.getAlerts().get(0).getSeverity());
         assertEquals(NewbornAlertSeverity.URGENT, response.getAlerts().get(1).getSeverity());
         assertTrue(response.getFollowUpActions().contains(NewbornFollowUpAction.NICU_CONSULT));
-        verify(notificationService, times(2)).createNotification(anyString(), anyString());
+        verify(notificationService, times(2)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
 
         ArgumentCaptor<NewbornAssessment> assessmentCaptor = ArgumentCaptor.forClass(NewbornAssessment.class);
         verify(assessmentRepository).save(assessmentCaptor.capture());
@@ -177,7 +177,7 @@ class NewbornAssessmentServiceImplTest {
 
         assertNotNull(response);
         assertTrue(response.getAlerts().isEmpty(), "No alerts expected for stable assessment");
-        verify(notificationService, never()).createNotification(anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -420,7 +420,7 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), org.mockito.ArgumentMatchers.any());
         assertTrue(message.getValue().startsWith("Alerte nouveau-né (glycémie)"), message.getValue());
         assertTrue(message.getValue().contains("Hypoglycémie critique"), message.getValue());
         org.junit.jupiter.api.Assertions.assertFalse(message.getValue().contains("GLUCOSE"), message.getValue());
