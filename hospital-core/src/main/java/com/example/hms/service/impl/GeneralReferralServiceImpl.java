@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -167,7 +168,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public GeneralReferralResponseDTO getReferral(UUID referralId) {
-        return toResponse(findReferral(referralId));
+        return toResponse(findReferral(referralId, true));
     }
 
     @Override
@@ -358,7 +359,13 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             // hospitals (untagged, V158); every foreign row is accounted.
             UUID requesterUserId = roleValidator.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
-            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable);
+            // QA D623/D652: the same rule as the by-id read (findReferral) — a
+            // referral never sent exists only for the hospital that wrote it.
+            referrals = referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable)
+                .stream()
+                .filter(r -> NeverSentRule.readableHere(
+                    CrossHospitalReachRecorder.hospitalIdOf(r.getHospital()), activeHospitalId, wasSent(r)))
+                .toList();
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(referrals.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital referral read on the treatment relationship");
@@ -521,23 +528,60 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     private GeneralReferral findReferral(UUID referralId) {
+        return findReferral(referralId, false);
+    }
+
+    /**
+     * @param read a read by id ({@code getReferral}): it also opens a referral
+     *             the by-patient list shows on the treatment relationship (QA
+     *             D652). Every write passes {@code false}: reading across is not
+     *             acting across.
+     */
+    private GeneralReferral findReferral(UUID referralId, boolean read) {
         GeneralReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
-            boolean isSendingHospital = referral.getHospital() != null
-                && activeHospitalId.equals(referral.getHospital().getId());
+            boolean isSendingHospital = isSendingHospital(referral, activeHospitalId);
             boolean isReceivingHospital = referral.getReceivingHospital() != null
                 && activeHospitalId.equals(referral.getReceivingHospital().getId());
-            if (!isSendingHospital && !isReceivingHospital) {
+            if (!isSendingHospital && !isReceivingHospital
+                    && !(read && readableOnTheTreatmentRelationship(referral, activeHospitalId))) {
                 throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
             }
             // QA D509: a referral never sent does not exist for the receiving hospital.
-            if (!isSendingHospital && !wasSent(referral)) {
+            if (!NeverSentRule.readableHere(
+                    CrossHospitalReachRecorder.hospitalIdOf(referral.getHospital()), activeHospitalId, wasSent(referral))) {
                 throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
             }
         }
         return referral;
+    }
+
+    /**
+     * QA D652 - the by-patient list reads across {@code readableHospitalIds}, so a
+     * sent referral of a third hospital it lists must open by id too (the rule
+     * D508 gave imaging), once it was sent.
+     */
+    private boolean readableOnTheTreatmentRelationship(GeneralReferral referral, UUID activeHospitalId) {
+        UUID rowHospitalId = CrossHospitalReachRecorder.hospitalIdOf(referral.getHospital());
+        UUID patientId = referral.getPatient() != null ? referral.getPatient().getId() : null;
+        if (rowHospitalId == null || patientId == null
+                || !NeverSentRule.readableHere(rowHospitalId, activeHospitalId, wasSent(referral))) {
+            return false;
+        }
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), activeHospitalId),
+            "Cross-hospital referral read on the treatment relationship");
+        return true;
+    }
+
+    private static boolean isSendingHospital(GeneralReferral referral, UUID activeHospitalId) {
+        return referral.getHospital() != null && activeHospitalId.equals(referral.getHospital().getId());
     }
 
     private static final String OWNER = "GeneralReferral";

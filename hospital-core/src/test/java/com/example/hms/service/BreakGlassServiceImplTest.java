@@ -93,6 +93,8 @@ class BreakGlassServiceImplTest {
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
         patientId = UUID.randomUUID();
+        // D624: the caller's patient search finds the patient unless a test says otherwise.
+        lenient().when(patientRepository.isFindableByPatientSearch(patientId)).thenReturn(true);
 
         caller = new User();
         caller.setId(userId);
@@ -323,6 +325,37 @@ class BreakGlassServiceImplTest {
             }
             verify(patientRepository, never()).findByIdUnscoped(any());
             verify(sessionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D624: DOCTOR_B on a patient outside search scope gets exactly the 403 of a random id")
+        void declareForPatientOutsideSearchScopeAnswersAsUnknown() {
+            stubAuthenticatedDoctor();
+            UUID outOfScope = UUID.randomUUID();
+            UUID randomId = UUID.randomUUID();
+            Patient a1 = new Patient();
+            a1.setId(outOfScope);
+            lenient().when(patientRepository.findByIdUnscoped(outOfScope)).thenReturn(Optional.of(a1));
+            lenient().when(patientRepository.findByIdUnscoped(randomId)).thenReturn(Optional.empty());
+            when(patientRepository.isFindableByPatientSearch(outOfScope)).thenReturn(false);
+            when(patientRepository.isFindableByPatientSearch(randomId)).thenReturn(false);
+
+            List<Throwable> answers = new java.util.ArrayList<>();
+            for (UUID probe : List.of(outOfScope, randomId)) {
+                BreakGlassDeclareRequestDTO req = BreakGlassDeclareRequestDTO.builder()
+                    .patientId(probe).hospitalId(hospitalId).reason("Unconscious in the ED.").build();
+                Throwable t = org.assertj.core.api.Assertions.catchThrowable(() -> service.declare(req));
+                assertThat(t).isInstanceOf(UnauthorizedAccessException.class);
+                answers.add(t);
+            }
+            UnauthorizedAccessException known = (UnauthorizedAccessException) answers.get(0);
+            UnauthorizedAccessException unknown = (UnauthorizedAccessException) answers.get(1);
+            assertThat(known.getMessage()).isEqualTo("breakGlass.patient.outOfScope").isEqualTo(unknown.getMessage());
+            assertThat(known.getArgs()).isEmpty();
+            assertThat(unknown.getArgs()).isEmpty();
+            verify(patientRepository, never()).findByIdUnscoped(any());
+            verify(sessionRepository, never()).save(any());
+            verify(patientNotifier, never()).notifyIfOptedOut(any(), any());
         }
 
         @Test
@@ -741,7 +774,7 @@ class BreakGlassServiceImplTest {
     private void stubAuthenticatedDoctor() {
         when(userRepository.findByUsernameIgnoreCase("dr.alice")).thenReturn(Optional.of(caller));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        lenient().when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(assignmentRepository.findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, "ROLE_SUPER_ADMIN"))
             .thenReturn(Optional.empty());
         // Pin the role-code set so a regression that drops the ROLE_ prefix

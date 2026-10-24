@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -107,7 +108,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // hospitals; every foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
-            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            prescriptions = NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId());
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");

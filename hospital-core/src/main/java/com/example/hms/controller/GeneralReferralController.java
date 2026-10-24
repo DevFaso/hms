@@ -46,6 +46,7 @@ public class GeneralReferralController {
     private final GeneralReferralService referralService;
     private final ReferralExpiryService referralExpiryService;
     private final RoleValidator roleValidator;
+    private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
     @PostMapping
     @com.example.hms.security.audit.WriteAudited(skip = true,
@@ -147,8 +148,12 @@ public class GeneralReferralController {
     @GetMapping("/patient/{patientId}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE')")
     @Operation(summary = "Get referrals by patient", description = "Retrieve all referrals for a patient")
-    public ResponseEntity<List<GeneralReferralResponseDTO>> getReferralsByPatient(@PathVariable UUID patientId) {
-        return ResponseEntity.ok(referralService.getReferralsByPatient(patientId));
+    public ResponseEntity<List<GeneralReferralResponseDTO>> getReferralsByPatient(@PathVariable UUID patientId,
+                                                                                  org.springframework.security.core.Authentication auth) {
+        List<GeneralReferralResponseDTO> referrals = referralService.getReferralsByPatient(patientId);
+        // QA D610 (D504): a list narrowed by the patient's opt-out says so.
+        return org.springframework.http.ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId,
+            com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())).body(referrals);
     }
 
     @GetMapping("/provider/{providerId}/referring")

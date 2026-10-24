@@ -48,6 +48,7 @@ public class BedManagementServiceImpl implements BedManagementService {
     private final DepartmentRepository departmentRepository;
     private final HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
+    private final com.example.hms.repository.PatientRepository patientRepository;
 
     /* ═══════════════════════ Wards ═══════════════════════ */
 
@@ -139,16 +140,42 @@ public class BedManagementServiceImpl implements BedManagementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds() {
+        return availableBeds(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BedResponseDTO> getAvailableBeds(UUID patientId) {
+        return availableBeds(patientId);
+    }
+
+    /** Shared body of both overloads, so neither calls a transactional method through 'this'. */
+    private List<BedResponseDTO> availableBeds(UUID patientId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw new BusinessException("bed.hospitalContextRequired");
         }
+        // The tenant-scoped finder: a patient this hospital does not know
+        // narrows nothing (and the assignment itself refuses them).
+        com.example.hms.model.Patient patient = patientId == null ? null
+            : patientRepository.findById(patientId).orElse(null);
         return bedRepository
             .findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(hospitalId, BedStatus.AVAILABLE)
             .stream()
+            .filter(bed -> patient == null || fitsPatient(bed, patient))
             .map(this::toBedDto)
             .toList();
+    }
+
+    private static boolean fitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        try {
+            BedAssignmentService.requireWardFitsPatient(bed, patient);
+            return true;
+        } catch (BusinessException refused) {
+            return false;
+        }
     }
 
     @Override
