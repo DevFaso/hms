@@ -401,8 +401,6 @@ public class HospitalServiceImpl implements HospitalService {
 
     /**
      * Validates country-specific address rules.
-     */
-    /**
      * QA D734/D747: the street address is required for every hospital, on
      * create and on update (where an omitted field keeps the stored street,
      * but an empty one is refused). It used to be optional whenever a P.O.

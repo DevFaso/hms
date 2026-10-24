@@ -276,7 +276,7 @@ public class LaborServiceImpl implements LaborService {
         // allowance covers device clock skew; anything beyond it is rejected
         // before it can raise an alert or be drawn on the partograph.
         if (request.getObservationTime() != null
-                && request.getObservationTime().isAfter(LocalDateTime.now().plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
+                && request.getObservationTime().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
             throw new BusinessException("maternity.partograph.futureTime");
         }
         // QA D745: nor before the labour it charts began.
