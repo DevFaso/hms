@@ -73,7 +73,7 @@ class LaborServiceImplTest {
     @Mock private MaternalHistoryRepository maternalHistoryRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
@@ -276,7 +276,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-alert-line");
                 assertThat(alert.getSeverity()).isEqualTo("CAUTION");
             });
-        verify(notificationService, never()).createNotification(anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -293,7 +293,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).createNotification(contains("Alerte de travail"), eq("midwife.nina"));
+        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -307,7 +307,7 @@ class LaborServiceImplTest {
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
         // QA D172: a translated type label and French text, never the raw enum or English.
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(text.capture(), eq("midwife.nina"));
+        verify(notificationService).created(text.capture(), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
         assertThat(text.getValue())
             .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
             .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
@@ -360,7 +360,7 @@ class LaborServiceImplTest {
     void notificationFailureDoesNotFailTheEntrySave() {
         PartographEntryRequestDTO request = entryRequest();
         request.setFetalHeartRateBpm(90);
-        when(notificationService.createNotification(anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
             .thenThrow(new IllegalStateException("broker down"));
 
         PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
@@ -521,7 +521,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("hémorragie"), eq("midwife.nina"));
+        verify(notificationService).created(contains("hémorragie"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

@@ -51,8 +51,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.utility.GestationalDating;
 import com.example.hms.utility.ObstetricEligibility;
 
@@ -76,7 +74,6 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private final NotificationService notificationService;
     private final Clock clock;
     private final MessageSource messageSource;
-    private final PatientLocaleResolver patientLocaleResolver;
     private final DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
@@ -198,16 +195,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         }
 
         // The default body is read by the PATIENT, so it is rendered in the
-        // patient's stated language — the `locale` parameter is the
+        // language they read it in (QA D665) — the `locale` parameter is the
         // scheduler's request locale and only governs what the caller sees.
         // A custom message is the scheduler's own words and is stored as given.
-        String message = Optional.ofNullable(request.getCustomMessage())
-            .filter(msg -> !msg.isBlank())
-            .orElseGet(() -> buildDefaultReminderMessage(
-                appointment, request.getDaysBefore(),
-                patientLocaleResolver.resolve(appointment.getPatient(), NotificationLocales.PATIENT_FALLBACK)));
-
-        notificationService.createNotification(message, patientUsername);
+        String custom = request.getCustomMessage();
+        if (custom != null && !custom.isBlank()) {
+            notificationService.createLiteralNotification(custom, patientUsername, null);
+        } else {
+            notificationService.createNotification("prenatal.reminder.default",
+                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, null);
+        }
     }
 
     private void validateHospitalScope(UUID hospitalId, String username) {
@@ -573,14 +570,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         return appointment.getStaff() != null ? appointment.getStaff().getId() : null;
     }
 
-    private String buildDefaultReminderMessage(Appointment appointment, int daysBefore, Locale patientLocale) {
-        return messageSource.getMessage(
-            "prenatal.reminder.default",
-            new Object[]{
-                String.valueOf(appointment.getAppointmentDate()),
-                String.valueOf(appointment.getStartTime()),
-                String.valueOf(daysBefore)
-            },
-            patientLocale);
+    private static Object[] defaultReminderArgs(Appointment appointment, int daysBefore) {
+        return new Object[]{
+            String.valueOf(appointment.getAppointmentDate()),
+            String.valueOf(appointment.getStartTime()),
+            String.valueOf(daysBefore)
+        };
     }
 }

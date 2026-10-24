@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
@@ -784,14 +785,12 @@ public class ReceptionServiceImpl implements ReceptionService {
             // language we can render gets it.
             Locale locale = patientLocaleResolver.resolve(
                     entry.getPatient(), Locale.forLanguageTag(outreachLocale));
-            String message = messageSource.getMessage("sms.waitlist.offer",
-                    new Object[]{
-                        slot.getStartAt().toLocalDate().format(DATE_FMT),
-                        slot.getStartAt().toLocalTime().format(TIME_FMT),
-                        hospitalName,
-                        expiry.format(EXPIRY_FMT)
-                    }, locale);
-            outreachNotifier.notifyPatient(entry.getPatient(), message);
+            NotificationText text = NotificationText.of("sms.waitlist.offer",
+                    slot.getStartAt().toLocalDate().format(DATE_FMT),
+                    slot.getStartAt().toLocalTime().format(TIME_FMT),
+                    hospitalName,
+                    expiry.format(EXPIRY_FMT));
+            outreachNotifier.notifyPatient(entry.getPatient(), text, locale);
         } catch (RuntimeException ex) {
             // Outreach is best-effort: the desk can always phone the patient.
             log.warn("Waitlist offer notification failed for entry {}: {}",

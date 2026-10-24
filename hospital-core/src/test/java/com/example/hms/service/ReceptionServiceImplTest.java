@@ -977,8 +977,6 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             AppointmentWaitlist entry = waitingEntry(waitlistId);
             AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(7));
-            when(messageSource.getMessage(eq("sms.waitlist.offer"), any(), any(Locale.class)))
-                    .thenReturn("offer message");
 
             WaitlistEntryResponseDTO result =
                     service.offerWaitlistSlot(waitlistId, hospitalId, slot.getId(), 48);
@@ -987,7 +985,9 @@ class ReceptionServiceImplTest {
             verify(entry).setOfferedSlot(slot);
             verify(entry).setStatus("OFFERED");
             verify(entry).setOfferExpiresAt(any(LocalDateTime.class));
-            verify(outreachNotifier).notifyPatient(patient, "offer message");
+            verify(outreachNotifier).notifyPatient(eq(patient),
+                    org.mockito.ArgumentMatchers.argThat(text -> "sms.waitlist.offer".equals(text.key())),
+                    any(Locale.class));
             assertThat(result).isNotNull();
         }
 

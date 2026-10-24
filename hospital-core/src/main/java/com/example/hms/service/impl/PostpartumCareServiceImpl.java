@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.PostpartumAlertSeverity;
 import com.example.hms.enums.PostpartumAlertType;
 import com.example.hms.enums.PostpartumFundusTone;
@@ -49,7 +50,6 @@ import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.utility.ObstetricEligibility;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -764,23 +764,21 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (documentedBy == null || documentedBy.getUsername() == null) {
             return;
         }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
+        // Read by the documenting clinician, in their language (QA D665).
+        Object fallbackName = NotificationLocalizer.key("patient.fallback.generic");
         String patientName = observation.getPatient() != null
             ? (observation.getPatient().getFirstName() + " " + observation.getPatient().getLastName()).trim()
-            : fallbackName;
+            : "";
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
             .forEach(alert -> {
                 // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
+                Object typeLabel = alert.getType() == null ? ""
+                    : NotificationLocalizer.key("postpartum.alert.type." + alert.getType().name());
                 try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
+                    notificationService.createNotification("postpartum.alert.notification",
+                        new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
+                        documentedBy.getUsername(), null);
                 } catch (RuntimeException ex) {
                     log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
                 }

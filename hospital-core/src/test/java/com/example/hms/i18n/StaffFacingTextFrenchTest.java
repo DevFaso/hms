@@ -118,9 +118,13 @@ class StaffFacingTextFrenchTest {
         ReflectionTestUtils.setField(service, "messageSource", messageSource);
         LabResult critical = result("7.2", "mmol/L", LocalDateTime.now());
         critical.setLabOrder(new LabOrder());
-        String body = ReflectionTestUtils.invokeMethod(service, "buildMessage", critical, false);
+        com.example.hms.service.i18n.NotificationText text =
+            ReflectionTestUtils.invokeMethod(service, "buildText", critical, false);
+        String body = text.render(messageSource, java.util.Locale.FRENCH);
         assertThat(body).startsWith("Résultat de laboratoire critique : ").contains("7,2 mmol/L");
-        String escalation = ReflectionTestUtils.invokeMethod(service, "buildMessage", critical, true);
+        com.example.hms.service.i18n.NotificationText escalationText =
+            ReflectionTestUtils.invokeMethod(service, "buildText", critical, true);
+        String escalation = escalationText.render(messageSource, java.util.Locale.FRENCH);
         assertThat(escalation).startsWith("ESCALADE - résultat de laboratoire critique non acquitté : ");
     }
 }

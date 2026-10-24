@@ -9,8 +9,6 @@ import com.example.hms.utility.NewsScoreCalculator;
 import com.example.hms.utility.NewsScoreCalculator.NewsScoreResult;
 import com.example.hms.utility.NewsScoreCalculator.RiskBand;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -45,7 +43,6 @@ public class News2EscalationService {
 
     private final AdmissionRepository admissionRepository;
     private final NotificationService notificationService;
-    private final MessageSource messageSource;
 
     /** The minimum interval to the next set of observations for this NEWS2 result. */
     public static Duration observationInterval(NewsScoreResult score, Duration routine) {
@@ -103,13 +100,13 @@ public class News2EscalationService {
             return score;
         }
         String patientName = vital.getPatient() != null ? vital.getPatient().getFullName() : null;
-        String message = messageSource.getMessage(
-            score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium",
-            new Object[]{score.total(), patientName != null ? patientName : "-",
-                observationInterval(score, Duration.ofHours(12)).toMinutes()},
-            LocaleContextHolder.getLocale());
+        // Read by each recipient in their own language (QA D665), never the
+        // recorder's request locale.
+        Object[] args = {score.total(), patientName != null ? patientName : "-",
+            observationInterval(score, Duration.ofHours(12)).toMinutes()};
+        String key = score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium";
         for (String recipient : recipients) {
-            notificationService.createNotification(message, recipient, NOTIFICATION_TYPE);
+            notificationService.createNotification(key, args, recipient, NOTIFICATION_TYPE);
         }
         return score;
     }

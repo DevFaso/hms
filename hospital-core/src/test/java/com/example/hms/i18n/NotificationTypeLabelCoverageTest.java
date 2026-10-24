@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * English token.
  *
  * <p>This reads the vocabulary where it is born — every type argument passed to
- * {@code createNotification(message, recipient, type)} in the main sources, as
+ * {@code createNotification(messageKey, args, recipient, type)} in the main sources, as
  * a literal or as a {@code static final String} constant of the calling class
  * — and requires a PORTAL.ENUM.NOTIFICATION_TYPE label for each in EN, FR and
  * ES.
@@ -45,8 +45,8 @@ class NotificationTypeLabelCoverageTest {
                 Matcher call = CALL.matcher(src);
                 while (call.find()) {
                     List<String> args = arguments(src, call.end());
-                    if (args.size() != 3 || isDeclaration(src, call.start())) continue;
-                    String type = resolve(args.get(2), src);
+                    if (args.size() != 4 || isDeclaration(src, call.start())) continue;
+                    String type = resolve(args.get(3), src);
                     if (type != null) emitted.put(type, file.getFileName().toString());
                 }
             }
@@ -68,6 +68,7 @@ class NotificationTypeLabelCoverageTest {
     private static boolean isDeclaration(String src, int at) {
         int lineStart = src.lastIndexOf('\n', at) + 1;
         String before = src.substring(lineStart, at);
+        if (before.endsWith("#")) return true; // a Javadoc {@link #createNotification(...)}
         return before.matches(".*\\b(Notification|public|private|protected)\\s+$") || before.contains("Notification ");
     }
 

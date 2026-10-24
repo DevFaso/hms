@@ -59,7 +59,7 @@ class RefillApprovalServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private StaffRepository staffRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private RoleValidator roleValidator;
     @Mock private Authentication auth;
@@ -145,7 +145,7 @@ class RefillApprovalServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo("APPROVED");
         assertThat(result.getProviderNotes()).isEqualTo("Approved — pick up by Friday");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
     }
 
     @Test
@@ -160,7 +160,7 @@ class RefillApprovalServiceImplTest {
                 RefillDecisionRequestDTO.builder().providerNotes("Discontinued — see clinic").build());
 
         assertThat(result.getStatus()).isEqualTo("DENIED");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
     }
 
     @Test
@@ -174,7 +174,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("APPROVED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -255,9 +255,9 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
         assertThat(message.getValue())
-                .contains("on hold")
+                .contains("en attente")
                 .contains("Need an A1c before renewing");
     }
 
@@ -315,7 +315,7 @@ class RefillApprovalServiceImplTest {
                 RefillDecisionRequestDTO.builder().providerNotes("still waiting").build()))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("PAUSED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -390,13 +390,13 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
         // Approval puts the fill back in the pharmacy's queue (SIGNED): nothing
         // has been prepared yet, so "ready to collect" was a false promise that
         // sent patients to a counter with nothing waiting for them.
         assertThat(message.getValue())
-                .contains("sent to the pharmacy to prepare")
-                .doesNotContainIgnoringCase("ready");
+                .contains("transmise à la pharmacie pour préparation")
+                .doesNotContainIgnoringCase("prête");
     }
 
     @Test
@@ -431,7 +431,7 @@ class RefillApprovalServiceImplTest {
         // The whole point: never leave a request APPROVED with nothing behind it.
         assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
         verify(refillRequestRepository, never()).save(any(RefillRequest.class));
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test

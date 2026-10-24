@@ -65,8 +65,8 @@ class PrenatalSchedulingServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private AppointmentService appointmentService;
-    @Mock
-    private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
     private PatientLocaleResolver patientLocaleResolver;
     @Mock
@@ -93,7 +93,6 @@ class PrenatalSchedulingServiceImplTest {
             notificationService,
             fixedClock,
             TestMessageSources.bundles(),
-            patientLocaleResolver,
             deliveryRecordRepository
         );
         // The patient in these fixtures states no language: the resolver
@@ -260,7 +259,7 @@ class PrenatalSchedulingServiceImplTest {
             appointmentRepository, patientRepository, hospitalRepository, staffRepository,
             appointmentService, notificationService,
             Clock.fixed(Instant.parse("2024-04-07T10:00:00Z"), ZoneId.of("UTC")),
-            TestMessageSources.bundles(), patientLocaleResolver, deliveryRecordRepository);
+            TestMessageSources.bundles(), deliveryRecordRepository);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
@@ -385,7 +384,7 @@ class PrenatalSchedulingServiceImplTest {
 
     service.createReminder(request, Locale.US, SCHEDULER_USERNAME);
 
-    verify(notificationService).createNotification(any(String.class), eq(patient.getUser().getUsername()));
+    verify(notificationService).created(any(String.class), eq(patient.getUser().getUsername()), org.mockito.ArgumentMatchers.any());
     }
 
     @Test

@@ -110,7 +110,7 @@ class EncounterServiceImplTest {
     @Mock private ObgynReferralRepository obgynReferralRepository;
     @Mock private UserRepository userRepository;
     @Mock private DischargeSummaryRepository dischargeSummaryRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private EmailService emailService;
     @Mock private tools.jackson.databind.ObjectMapper objectMapper;
     @Mock private com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
@@ -915,7 +915,7 @@ class EncounterServiceImplTest {
         assertThat(encounter.getFollowUpInstructions()).isEqualTo("Follow up in 2 weeks");
         verify(encounterRepository).save(encounter);
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
-        verify(notificationService).createNotification(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
+        verify(notificationService).created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
     }
 
@@ -993,7 +993,7 @@ class EncounterServiceImplTest {
         when(checkOutMapper.serializeDiagnoses(List.of("Upper respiratory infection"))).thenReturn("[\"Upper respiratory infection\"]");
         when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any())).thenReturn(avs);
         doThrow(new RuntimeException("ws down")).when(notificationService)
-            .createNotification(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
+            .created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         doThrow(new RuntimeException("smtp down")).when(emailService)
             .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
 
@@ -1840,7 +1840,7 @@ class EncounterServiceImplTest {
         // The new branch must persist the AVS via the same path /checkout uses
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
         // …and the patient must be notified (in-app + email)
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             anyString(),
             org.mockito.ArgumentMatchers.eq("patient1"),
             org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
@@ -1942,7 +1942,7 @@ class EncounterServiceImplTest {
         service.updateEncounter(encounterId, request, locale, true, null);
 
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
         assertThat(merged.getCheckoutTimestamp()).isNull();
     }

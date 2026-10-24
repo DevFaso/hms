@@ -71,6 +71,10 @@ class NotificationServiceImplTest {
     @Mock
     private ProviderCallerResolver callerResolver;
 
+    @org.mockito.Spy
+    private com.example.hms.service.i18n.NotificationLocalizer localizer =
+        new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles());
+
     @InjectMocks
     private NotificationServiceImpl service;
 
@@ -246,7 +250,7 @@ class NotificationServiceImplTest {
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
             when(notificationRepository.save(captor.capture())).thenReturn(sampleNotification);
 
-            Notification result = service.createNotification("Hello", username);
+            Notification result = service.createLiteralNotification("Hello", username, null);
 
             assertThat(result).isSameAs(sampleNotification);
 

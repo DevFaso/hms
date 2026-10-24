@@ -74,7 +74,7 @@ class InventoryServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
     @InjectMocks
@@ -1011,7 +1011,7 @@ class InventoryServiceImplTest {
 
             service.triggerReorderAlerts();
 
-            verify(notificationService).createNotification(
+            verify(notificationService).created(
                     any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
@@ -1024,7 +1024,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(notificationService, never()).createNotification(any(), any(), any());
+            verify(notificationService, never()).created(any(), any(), any());
         }
 
         @Test
@@ -1046,7 +1046,7 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId))
                     .thenReturn(Optional.of(user))
                     .thenReturn(Optional.of(user));
-            when(notificationService.createNotification(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
+            when(notificationService.created(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
                     .thenThrow(new RuntimeException("Notification service down"))
                     .thenReturn(null);
 
