@@ -43,7 +43,21 @@ public class ObstetricAlertEscalationService {
      */
     public record UrgentAlert(UUID hospitalId, UUID patientId, String patientName,
                               String sourceType, UUID sourceId, String alertType, String typeLabel,
-                              String alertMessage, UUID documentedByUserId, String notificationText) {
+                              String alertMessage, UUID documentedByUserId, String notificationText,
+                              String alertMessageKey, java.util.List<Object> alertMessageArgs) {
+
+        /** QA D665: the alert sentence as a key and its arguments, so each reader gets it in her language. */
+        public UrgentAlert {
+            alertMessageArgs = alertMessageArgs == null ? null : java.util.List.copyOf(alertMessageArgs);
+        }
+
+        /** An alert with no message key: its notices carry the stored staff-locale sentence. */
+        public UrgentAlert(UUID hospitalId, UUID patientId, String patientName,
+                           String sourceType, UUID sourceId, String alertType, String typeLabel,
+                           String alertMessage, UUID documentedByUserId, String notificationText) {
+            this(hospitalId, patientId, patientName, sourceType, sourceId, alertType, typeLabel,
+                alertMessage, documentedByUserId, notificationText, null, null);
+        }
     }
 
     private final ObstetricAlertEscalationRepository escalationRepository;

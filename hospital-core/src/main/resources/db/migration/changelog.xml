@@ -2974,6 +2974,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V226 (QA D665): clinical.obstetric_alert_escalations.alert_message_key +
+         alert_message_args, so reminders render the alert sentence per reader. Plain statements. -->
+    <changeSet id="V226-obstetric-alert-message-key" author="hms-team" runOnChange="false">
+        <sqlFile path="V226__obstetric_alert_message_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V225 (QA D665): security.notifications.message_key + message_args, so a
          notification body is rendered in the reader's language. Plain statements. -->
     <changeSet id="V225-notification-message-key" author="hms-team" runOnChange="false">

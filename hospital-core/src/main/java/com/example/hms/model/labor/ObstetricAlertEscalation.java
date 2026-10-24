@@ -50,6 +50,15 @@ public class ObstetricAlertEscalation extends BaseEntity {
     @Column(name = "alert_message", columnDefinition = "TEXT")
     private String alertMessage;
 
+    /** QA D665 (V226): the alert sentence's message key, so reminders render it per reader. */
+    @Column(name = "alert_message_key", length = 150)
+    private String alertMessageKey;
+
+    /** QA D665 (V226): the arguments of {@link #alertMessageKey}, numbers and text only. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "alert_message_args", columnDefinition = "jsonb")
+    private java.util.List<Object> alertMessageArgs;
+
     @Column(name = "documented_by_user_id")
     private UUID documentedByUserId;
 

@@ -501,6 +501,22 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
     private MedicationEntryDTO toMedicationDto(Prescription p) {
         Staff prescriber = p.getStaff();
         return MedicationEntryDTO.builder()
@@ -515,7 +531,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .createdAt(p.getCreatedAt())
             .prescriberName(prescriber != null ? prescriber.getFullName() : null)
-            .controlledSubstance(p.isControlledSubstance())
+            .controlledSubstance(controlled(p))
             .inpatientOrder(p.isInpatientOrder())
             .build();
     }

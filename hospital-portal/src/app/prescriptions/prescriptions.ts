@@ -399,8 +399,16 @@ export class PrescriptionsComponent implements OnInit {
     if (isWithdrawnStatus(p.status)) return false;
     // QA D678: a dispensed order is history; every PUT there answers 400.
     if (PrescriptionsComponent.DISPENSED_STATUSES.includes(p.status)) return false;
-    if (p.status !== 'SIGNED') return this.canWrite();
     const own = this.ownPrescriberStaffId();
+    if (p.status !== 'SIGNED') {
+      // QA D611/D677: a DRAFT or PENDING_SIGNATURE order is rewritten only by
+      // its own prescriber. The server keeps the prescriber of record and
+      // refuses anyone else ("the prescriber must be you"), another doctor
+      // included, so a nurse or midwife offered Edit on a doctor's draft
+      // failed every save. An order with no prescriber on file stays open.
+      if (!this.canWrite()) return false;
+      return !p.staffId || (!!own && p.staffId === own);
+    }
     if (own && p.staffId === own) return true;
     return expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
       PrescriptionsComponent.SIGNED_WITHDRAW_ROLES.includes(r),

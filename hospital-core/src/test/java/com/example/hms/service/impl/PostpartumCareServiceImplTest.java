@@ -209,7 +209,8 @@ class PostpartumCareServiceImplTest {
     verify(notificationService, times(1)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
         // QA D605: the URGENT postpartum alert reaches the on-call team too.
         verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
-            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(a.sourceType())));
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(a.sourceType())
+                && "postpartum.alert.msg.postpartum-hemorrhage".equals(a.alertMessageKey())));
 
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());

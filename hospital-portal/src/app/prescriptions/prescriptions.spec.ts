@@ -2458,6 +2458,113 @@ describe('PrescriptionsComponent — row actions per role and status (QA D611/D6
     });
   }
 
+  /**
+   * QA D611/D677 re-test: a nurse or midwife was offered Edit on a doctor's
+   * draft, the form put them in as prescriber, and every save failed. The
+   * server keeps the prescriber of record and accepts the edit only from
+   * that prescriber, so a second doctor is refused too.
+   */
+  const PERSONAS: {
+    name: string;
+    role: string;
+    userId: string;
+    staffId: string;
+    edits: boolean;
+  }[] = [
+    {
+      name: 'DOCTOR_A',
+      role: 'ROLE_DOCTOR',
+      userId: 'u-doc-a',
+      staffId: 'staff-doc-a',
+      edits: true,
+    },
+    {
+      name: 'DOCTOR2_A',
+      role: 'ROLE_DOCTOR',
+      userId: 'u-doc-b',
+      staffId: 'staff-doc-b',
+      edits: false,
+    },
+    {
+      name: 'NURSE_A',
+      role: 'ROLE_NURSE',
+      userId: 'u-nurse',
+      staffId: 'staff-nurse',
+      edits: false,
+    },
+    { name: 'MIDWIFE_A', role: 'ROLE_MIDWIFE', userId: 'u-mw', staffId: 'staff-mw', edits: false },
+  ];
+
+  async function renderAs(persona: (typeof PERSONAS)[number]) {
+    const out = await render(persona.role);
+    spyOn(TestBed.inject(AuthService), 'getUserProfile').and.returnValue({
+      id: persona.userId,
+    } as LoginUserProfile);
+    const c = out.fixture.componentInstance;
+    c.staffMembers.set([
+      { id: persona.staffId, userId: persona.userId, name: persona.name } as StaffResponse,
+    ]);
+    c.filtered.set([
+      {
+        id: DRAFT_ID,
+        status: 'DRAFT',
+        staffId: 'staff-doc-a',
+        staffFullName: 'Dr Awa Diallo',
+      } as PrescriptionResponse,
+      {
+        id: PENDING_ID,
+        status: 'PENDING_SIGNATURE',
+        staffId: 'staff-doc-a',
+        staffFullName: 'Dr Awa Diallo',
+      } as PrescriptionResponse,
+    ]);
+    out.fixture.detectChanges();
+    return out;
+  }
+
+  for (const persona of PERSONAS) {
+    it(`QA D677: ${persona.name} ${persona.edits ? 'keeps' : 'is offered no'} Edit on DOCTOR_A's draft and pending rows`, async () => {
+      const { el } = await renderAs(persona);
+      const rows = Array.from(el.querySelectorAll('tbody tr')) as HTMLElement[];
+      expect(rows.length).toBe(2);
+      for (const [i, status] of ['DRAFT', 'PENDING_SIGNATURE'].entries()) {
+        const edit = rows[i].querySelector('.edit-link');
+        if (persona.edits) {
+          expect(edit).withContext(status).not.toBeNull();
+        } else {
+          expect(edit).withContext(status).toBeNull();
+        }
+      }
+    });
+  }
+
+  it("QA D677: DOCTOR_A's edit form shows the real prescriber, read-only, never a substitute", async () => {
+    const { fixture, el } = await renderAs(PERSONAS[0]);
+    fixture.componentInstance.openEdit(fixture.componentInstance.filtered()[0]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const field = el.querySelector('#rx-staffId') as HTMLInputElement;
+    expect(field.tagName).toBe('INPUT');
+    expect(field.readOnly).toBeTrue();
+    expect(field.value).toBe('Dr Awa Diallo');
+    expect(fixture.componentInstance.form.staffId).toBe('staff-doc-a');
+  });
+
+  it('QA D677: a refused save is shown translated inside the form', async () => {
+    const { fixture, prescriptionService, el } = await renderAs(PERSONAS[0]);
+    TestBed.inject(TranslateService).setTranslation('fr', {
+      PRESCRIPTIONS: { TOAST: { ACTION_FORBIDDEN: 'Action non autorisée' } },
+    });
+    TestBed.inject(TranslateService).use('fr');
+    prescriptionService.update.and.returnValue(throwError(() => ({ status: 403, error: {} })));
+    const c = fixture.componentInstance;
+    c.openEdit(c.filtered()[0]);
+    c.submitForm();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Action non autorisée');
+  });
+
   it('QA D677: a refused sign is shown translated inside the page, not only as a toast', async () => {
     const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
     TestBed.inject(TranslateService).setTranslation('fr', {

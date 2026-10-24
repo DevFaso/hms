@@ -362,6 +362,36 @@ class MedicationHistoryServiceImplTest {
         assertThat(result.getWarnings()).anyMatch(w -> w.contains("Polypharmacy"));
     }
 
+    @Test void qaD678CatalogControlledMorphineWithoutTheTickIsControlledInTheHistory() {
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        UUID item = UUID.randomUUID();
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(catalog.findByIdAndHospital_Id(item, hospitalId)).thenReturn(Optional.of(morphine));
+        service.setControlledResolver(new com.example.hms.service.pharmacy.PrescriptionControlledResolver(catalog));
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setMedicationName("Morphine");
+        rx.setCreatedAt(LocalDateTime.now().minusDays(1));
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(item);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+
+        when(patientChartAccess.require(patientId, hospitalId)).thenReturn(patient);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId))).thenReturn(List.of(rx));
+        when(pharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc(patientId, Set.of(hospitalId))).thenReturn(List.of());
+        when(drugInteractionRepository.findInteractionsAmongDrugs(any())).thenReturn(List.of());
+
+        MedicationTimelineResponseDTO result = service.getMedicationTimeline(patientId, hospitalId, null, null, Locale.ENGLISH);
+
+        assertThat(result.getTimeline()).singleElement()
+            .extracting(MedicationTimelineEntryDTO::isControlledSubstance).isEqualTo(true);
+        assertThat(result.getControlledSubstances()).isEqualTo(1);
+    }
+
     @Test void getMedicationTimeline_prescriptionWithDisplayName() {
         Prescription rx = new Prescription();
         rx.setId(UUID.randomUUID());

@@ -47,6 +47,15 @@ public class LaborAlert {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /**
+     * QA D665: the arguments {@link #message} was rendered with, kept in memory
+     * only so the alert's notices re-render the sentence in each reader's
+     * language. Never persisted: null on a row read back from the database.
+     */
+    @jakarta.persistence.Transient
+    @EqualsAndHashCode.Exclude
+    private transient Object[] messageArgs;
+
     @PrePersist
     void onCreate() {
         if (createdAt == null) {

@@ -67,6 +67,21 @@ public class PharmacistVerificationService {
     private final Clock clock;
 
     /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
+    /**
      * Whether this prescription may not be administered until a pharmacist
      * has verified it.
      *
@@ -77,7 +92,7 @@ public class PharmacistVerificationService {
      */
     public boolean requiresVerification(Prescription prescription) {
         return prescription != null
-            && (prescription.isControlledSubstance() || prescription.isRequiresCosign());
+            && (controlled(prescription) || prescription.isRequiresCosign());
     }
 
     /** Whether a pharmacist has verified the CURRENT version of this prescription. */

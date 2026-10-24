@@ -574,7 +574,10 @@ class LaborServiceImplTest {
         // QA D605: a PPH reaches the on-call team and escalates.
         verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
             hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(a.sourceType())
-                && a.alertMessage().toLowerCase().contains("hémorragie")));
+                && a.alertMessage().toLowerCase().contains("hémorragie")
+                // QA D665: the sentence also travels as its key and its numbers.
+                && "labor.alert.msg.labor-pph".equals(a.alertMessageKey())
+                && a.alertMessageArgs() != null && a.alertMessageArgs().size() == 1));
     }
 
     @Test

@@ -99,6 +99,8 @@ public class ObstetricAlertEscalationWorker {
             .alertType(alert.alertType())
             .typeLabel(alert.typeLabel())
             .alertMessage(alert.alertMessage())
+            .alertMessageKey(alert.alertMessageKey())
+            .alertMessageArgs(alert.alertMessageArgs())
             .documentedByUserId(alert.documentedByUserId())
             .lastEscalationAt(now)
             .build());
@@ -109,7 +111,7 @@ public class ObstetricAlertEscalationWorker {
         Object[] args = {typeLabelArg(alert.sourceType(), alert.alertType(), alert.typeLabel()),
             alert.patientName() == null || alert.patientName().isBlank()
                 ? NotificationLocalizer.key("patient.fallback.generic") : alert.patientName(),
-            alert.alertMessage() == null ? "" : alert.alertMessage()};
+            alertMessageArg(alert.alertMessageKey(), alert.alertMessageArgs(), alert.alertMessage())};
         int reached = deliver(row, firstNoticeKey(alert.sourceType()), args, alert.notificationText(),
             alert.patientName(), recipients, NOTIFICATION_TYPE);
         if (reached == 0) {
@@ -172,10 +174,11 @@ public class ObstetricAlertEscalationWorker {
             .orElseGet(() -> NotificationLocalizer.key("patient.fallback.generic"));
         Object[] reminderArgs = {String.valueOf(next),
             typeLabelArg(row.getSourceType(), row.getAlertType(), row.getTypeLabel()), patientArg,
-            row.getAlertMessage() == null ? "" : row.getAlertMessage()};
+            alertMessageArg(row.getAlertMessageKey(), row.getAlertMessageArgs(), row.getAlertMessage())};
         // Staff-locale text, only for the in-basket title; notifications are keyed (QA D665).
         String message = messageSource.getMessage(REMINDER_KEY, new Object[]{reminderArgs[0],
-            row.getTypeLabel() == null ? "" : row.getTypeLabel(), patientName, reminderArgs[3]}, locale);
+            row.getTypeLabel() == null ? "" : row.getTypeLabel(), patientName,
+            row.getAlertMessage() == null ? "" : row.getAlertMessage()}, locale);
         String documenter = usernameOf(row.getDocumentedByUserId());
         if (documenter != null) {
             // The documenter learns it is still unanswered; she cannot answer it herself.
@@ -293,6 +296,17 @@ public class ObstetricAlertEscalationWorker {
         } catch (RuntimeException ex) {
             log.warn("Obstetric alert {} notification not created: {}", escalationId, ex.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * QA D665: the alert sentence as a key the reader's locale renders, with its
+     * own arguments; the stored staff-locale sentence for a row raised without one.
+     */
+    public static Object alertMessageArg(String messageKey, List<Object> messageArgs, String storedMessage) {
+        if (messageKey == null || messageKey.isBlank()) {
+            return storedMessage == null ? "" : storedMessage;
+        }
+        return NotificationLocalizer.key(messageKey, messageArgs == null ? null : messageArgs.toArray());
     }
 
     /** The source module's own notification key: the first notice reads as it always did. */

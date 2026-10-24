@@ -446,12 +446,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-bradycardia",
                 alertText("labor-fetal-bradycardia", fhr, FHR_BRADYCARDIA_BPM),
-                "fetalHeartRateBpm");
+                "fetalHeartRateBpm", new Object[]{fhr, FHR_BRADYCARDIA_BPM});
         } else if (fhr != null && fhr > FHR_TACHYCARDIA_BPM) {
             entry.addAlert(LaborAlertType.FETAL_HEART_RATE, LaborAlertSeverity.URGENT,
                 "labor-fetal-tachycardia",
                 alertText("labor-fetal-tachycardia", fhr, FHR_TACHYCARDIA_BPM),
-                "fetalHeartRateBpm");
+                "fetalHeartRateBpm", new Object[]{fhr, FHR_TACHYCARDIA_BPM});
         }
         if (entry.getLiquorColour() == LiquorColour.MECONIUM_STAINED
             || entry.getLiquorColour() == LiquorColour.BLOOD_STAINED) {
@@ -483,12 +483,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.URGENT,
                 "labor-action-line",
                 alertText("labor-action-line", dilation, lagHours),
-                "cervicalDilationCm");
+                "cervicalDilationCm", new Object[]{dilation, lagHours});
         } else if (lagHours > 0) {
             entry.addAlert(LaborAlertType.LABOR_PROGRESS, LaborAlertSeverity.CAUTION,
                 "labor-alert-line",
                 alertText("labor-alert-line", dilation, lagHours),
-                "cervicalDilationCm");
+                "cervicalDilationCm", new Object[]{dilation, lagHours});
         }
     }
 
@@ -513,12 +513,12 @@ public class LaborServiceImpl implements LaborService {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.URGENT,
                 "labor-severe-hypertension",
                 alertText("labor-severe-hypertension", sys, dia),
-                "bloodPressure");
+                "bloodPressure", new Object[]{sys, dia});
         } else if (mild) {
             entry.addAlert(LaborAlertType.MATERNAL_VITALS, LaborAlertSeverity.CAUTION,
                 "labor-hypertension",
                 alertText("labor-hypertension", sys, dia),
-                "bloodPressure");
+                "bloodPressure", new Object[]{sys, dia});
         }
     }
 
@@ -550,38 +550,38 @@ public class LaborServiceImpl implements LaborService {
                 ga < VERY_PRETERM_WEEKS ? LaborAlertSeverity.URGENT : LaborAlertSeverity.CAUTION,
                 "labor-preterm",
                 alertText("labor-preterm", ga),
-                "gestationalAgeWeeksAtBirth");
+                "gestationalAgeWeeksAtBirth", new Object[]{ga});
         }
         Integer ebl = record.getEstimatedBloodLossMl();
         if (ebl != null && ebl >= PPH_BLOOD_LOSS_ML) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
                 "labor-pph",
                 alertText("labor-pph", ebl),
-                "estimatedBloodLossMl");
+                "estimatedBloodLossMl", new Object[]{ebl});
         }
         if (Boolean.FALSE.equals(record.getPlacentaComplete())) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
                 "labor-retained-placenta",
                 alertText("labor-retained-placenta"),
-                "placentaComplete");
+                "placentaComplete", new Object[]{});
         }
         Integer apgar5 = record.getApgarFiveMinute();
         if (apgar5 != null && apgar5 < APGAR_CRITICAL) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
                 "labor-apgar-critical",
                 alertText("labor-apgar-critical", apgar5),
-                "apgarFiveMinute");
+                "apgarFiveMinute", new Object[]{apgar5});
         } else if (apgar5 != null && apgar5 < APGAR_LOW) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
                 "labor-apgar-low",
                 alertText("labor-apgar-low", apgar5),
-                "apgarFiveMinute");
+                "apgarFiveMinute", new Object[]{apgar5});
         }
         if (!record.isLiveBirth()) {
             record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.URGENT,
                 "labor-stillbirth",
                 alertText("labor-stillbirth"),
-                "liveBirth");
+                "liveBirth", new Object[]{});
         }
     }
 
@@ -742,13 +742,20 @@ public class LaborServiceImpl implements LaborService {
     private void publishUrgentAlert(com.example.hms.model.labor.LaborAlert alert, LaborEpisode episode,
                                     User documentedBy, String sourceType, UUID sourceId,
                                     Object patientArg, boolean notifyDocumenter) {
+        // QA D665: the alert sentence travels as its key and arguments (no key when
+        // the arguments are not in memory: the stored sentence is used instead).
+        String messageKey = alert.getCode() == null || alert.getMessageArgs() == null
+            ? null : "labor.alert.msg." + alert.getCode();
+        List<Object> messageArgs = messageKey == null ? null : NotificationLocalizer.storable(alert.getMessageArgs());
         if (notifyDocumenter) {
             // QA D172 (D61/D121): the type is a translated label, never the raw enum.
             Object typeKey = alert.getType() == null ? ""
                 : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
             try {
                 notificationService.createNotification("labor.alert.notification",
-                    new Object[]{typeKey, patientArg, alert.getMessage()}, documentedBy.getUsername(), null);
+                    new Object[]{typeKey, patientArg,
+                        com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                            messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
             } catch (RuntimeException ex) {
                 log.warn("Failed to create labor alert notification: {}", ex.getMessage());
             }
@@ -766,7 +773,7 @@ public class LaborServiceImpl implements LaborService {
                     episode.getHospital().getId(), episode.getPatient().getId(), patientName,
                     sourceType, sourceId, alert.getType() == null ? null : alert.getType().name(),
                     typeLabel, alert.getMessage(),
-                    documentedBy == null ? null : documentedBy.getId(), message));
+                    documentedBy == null ? null : documentedBy.getId(), message, messageKey, messageArgs));
         }
     }
 }

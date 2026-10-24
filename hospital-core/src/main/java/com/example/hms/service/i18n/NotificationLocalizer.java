@@ -28,12 +28,24 @@ import java.util.Map;
 public class NotificationLocalizer {
 
     private static final String KEY = "key";
+    private static final String ARGS = "args";
 
     private final MessageSource messageSource;
 
     /** An argument that is a message key, rendered in the reader's locale. */
     public static Map<String, String> key(String messageKey) {
         return Map.of(KEY, messageKey);
+    }
+
+    /**
+     * An argument that is a message key with its own arguments (QA D665: an
+     * obstetric alert sentence inside the notice), rendered in the reader's locale.
+     */
+    public static Map<String, Object> key(String messageKey, Object[] args) {
+        if (args == null) {
+            return Map.of(KEY, messageKey);
+        }
+        return Map.of(KEY, messageKey, ARGS, storable(args));
     }
 
     /** The arguments as stored: numbers and booleans as is, keys as {@code {"key"}}, anything else as text. */
@@ -48,7 +60,7 @@ public class NotificationLocalizer {
             } else if (arg instanceof Number || arg instanceof Boolean) {
                 out.add(arg);
             } else if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
-                out.add(key(k));
+                out.add(map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k));
             } else {
                 out.add(String.valueOf(arg));
             }
@@ -57,12 +69,24 @@ public class NotificationLocalizer {
     }
 
     public String render(String messageKey, List<Object> args, Locale locale) {
-        Object[] resolved = args == null ? new Object[0] : args.stream()
-            .map(arg -> arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k
-                ? messageSource.getMessage(k, null, k, locale)
-                : arg)
+        return messageSource.getMessage(messageKey, resolve(args, locale, 0), locale);
+    }
+
+    /** Key arguments rendered in {@code locale}; nested ones at most two levels deep. */
+    private Object[] resolve(List<?> args, Locale locale, int depth) {
+        if (args == null) {
+            return new Object[0];
+        }
+        return args.stream()
+            .map(arg -> {
+                if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
+                    Object[] nested = depth < 2 && map.get(ARGS) instanceof List<?> list
+                        ? resolve(list, locale, depth + 1) : null;
+                    return messageSource.getMessage(k, nested, k, locale);
+                }
+                return arg;
+            })
             .toArray();
-        return messageSource.getMessage(messageKey, resolved, locale);
     }
 
     /**

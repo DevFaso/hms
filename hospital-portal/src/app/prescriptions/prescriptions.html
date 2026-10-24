@@ -804,8 +804,8 @@
           </div>
           <div class="field">
             <label for="rx-staffId">{{ 'PRESCRIPTIONS.PRESCRIBER' | translate }}</label>
-            @if (editingSigned()) {
-              <!-- QA D670: the order's own prescriber, not the caller's name. -->
+            @if (editingSigned() || (editing() && editingPrescriberName())) {
+              <!-- QA D670/D677: the order's own prescriber, never the caller's name. -->
               <input id="rx-staffId" type="text" [value]="editingPrescriberName()" readonly />
             } @else {
               <select id="rx-staffId" [(ngModel)]="form.staffId">

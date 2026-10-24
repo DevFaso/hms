@@ -775,6 +775,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
 
     private void publishUrgentAlert(PostpartumObservationAlert alert, PostpartumObservation observation, User documentedBy,
                                     String fullName, boolean notifyDocumenter) {
+        // QA D665: the alert sentence travels as its key, rendered per reader.
+        String messageKey = alert.getCode() == null ? null : "postpartum.alert.msg." + alert.getCode();
         if (notifyDocumenter) {
             // Read by the documenting clinician, in her language (QA D665).
             // QA D216: the type is a translated label, never the raw enum.
@@ -783,7 +785,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
             try {
                 notificationService.createNotification("postpartum.alert.notification",
-                    new Object[]{typeKey, patientArg, alert.getMessage()}, documentedBy.getUsername(), null);
+                    new Object[]{typeKey, patientArg,
+                        com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                            messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
             } catch (RuntimeException ex) {
                 log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
             }
@@ -801,7 +805,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                 observation.getHospital().getId(), observation.getPatient().getId(), patientName,
                 com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM, observation.getId(),
                 alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
-                documentedBy == null ? null : documentedBy.getId(), message));
+                documentedBy == null ? null : documentedBy.getId(), message, messageKey, null));
         }
     }
 

@@ -159,7 +159,8 @@ class NewbornAssessmentServiceImplTest {
         verify(notificationService, times(2)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
         // QA D605: each URGENT neonatal alert reaches the on-call team too.
         verify(obstetricAlertEscalation, times(2)).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
-            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(a.sourceType())));
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN.equals(a.sourceType())
+                && a.alertMessageKey() != null && a.alertMessageKey().startsWith("newborn.alert.msg.newborn-")));
 
         ArgumentCaptor<NewbornAssessment> assessmentCaptor = ArgumentCaptor.forClass(NewbornAssessment.class);
         verify(assessmentRepository).save(assessmentCaptor.capture());

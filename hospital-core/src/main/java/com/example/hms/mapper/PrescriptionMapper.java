@@ -74,6 +74,11 @@ public class PrescriptionMapper {
         Staff     staff    = safeInit(p.getStaff(),     ENTITY, p.getId(), "staff");
         Encounter enc      = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
         Hospital  hospital = safeInit(p.getHospital(),  ENTITY, p.getId(), "hospital");
+        // D654/D678: tick OR the catalog item at the order's hospital (the rule
+        // PrescriptionControlledResolver applies for verification, chart and history).
+        boolean controlled = p.isControlledSubstance()
+            || catalogControlled(resolveHospitalId(hospital, enc),
+                p.getMedicationCatalogItemId(), p.getMedicationCode());
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
@@ -107,9 +112,7 @@ public class PrescriptionMapper {
             .refillsUsed(p.getRefillsUsed())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
-            .controlledSubstance(p.isControlledSubstance()
-                || catalogControlled(resolveHospitalId(hospital, enc),
-                    p.getMedicationCatalogItemId(), p.getMedicationCode()))
+            .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -118,7 +121,8 @@ public class PrescriptionMapper {
             // sync deliberately rather than injecting the service into a
             // mapper; the service test pins the rule and the mapper test
             // pins this projection.
-            .requiresPharmacistVerification(p.isControlledSubstance() || p.isRequiresCosign())
+            // QA D678: the same controlled answer as the service, catalog included.
+            .requiresPharmacistVerification(controlled || p.isRequiresCosign())
             .pharmacistVerifiedAt(p.getPharmacistVerifiedAt())
             .pharmacistVerifiedByUserId(
                 p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getId() : null)
