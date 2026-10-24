@@ -90,6 +90,42 @@ describe('UserListComponent registration', () => {
     expect(users.getById).not.toHaveBeenCalled();
   });
 
+  it('D765: the edit dialog lists every role read-only and never sends roles', () => {
+    users.getById.and.returnValue(
+      of({
+        id: 'u5',
+        phoneNumber: '+22670202020',
+        roles: [{ code: 'ROLE_NURSE' }, { code: 'ROLE_MIDWIFE' }],
+      } as unknown as UserDetail),
+    );
+    users.update.and.returnValue(of({ id: 'u5' } as UserDetail));
+    component.openEdit({
+      id: 'u5',
+      username: 'awa',
+      email: 'awa@hopital.bf',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+      roleName: 'ROLE_NURSE',
+      deleted: false,
+    } as never);
+    fixture.detectChanges();
+    expect(component.editRoles()).toEqual(['ROLE_NURSE', 'ROLE_MIDWIFE']);
+    const chips = fixture.debugElement.queryAll(By.css('[data-testid="edit-roles"] .role-chip'));
+    expect(chips.length).toBe(2);
+    expect(fixture.debugElement.query(By.css('.role-checkbox input'))).toBeNull();
+
+    component.submitCreate();
+    expect(users.update).toHaveBeenCalledTimes(1);
+    expect(users.update.calls.mostRecent().args[1].roleNames).toBeUndefined();
+  });
+
+  it('D765 path re-verified: create still offers role checkboxes and sends the roles', () => {
+    openCreateWith(['ROLE_DOCTOR']);
+    component.createForm.email = 'awa@hopital.bf';
+    component.submitCreate();
+    expect(users.adminRegister.calls.mostRecent().args[0].roleNames).toEqual(['ROLE_DOCTOR']);
+  });
+
   it('asks for neither username nor password on create', () => {
     openCreateWith(['ROLE_DOCTOR']);
     expect(fixture.debugElement.query(By.css('#username'))).toBeNull();

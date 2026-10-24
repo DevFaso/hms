@@ -1458,6 +1458,71 @@ class UserServiceImplTest {
             assertThat(cap.getValue().isForceUsernameChange()).isTrue();
         }
 
+        private UserRoleHospitalAssignment activeRow(String code) {
+            Role r = new Role();
+            r.setCode(code);
+            r.setName(code);
+            UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+            a.setUser(user);
+            a.setRole(r);
+            a.setActive(true);
+            a.setId(UUID.randomUUID());
+            a.setAssignmentCode(code);
+            return a;
+        }
+
+        /**
+         * QA D765 replay: HOSPITAL_ADMIN PUTs /users/{id} with roleNames adding a
+         * role. It used to answer 200 and change nothing, so the dialog toasted
+         * "Utilisateur mis à jour". Now refused, nothing saved.
+         */
+        @Test
+        @DisplayName("D765: a role change through PUT /users/{id} is refused, not silently dropped")
+        void d765_roleChangeIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            java.util.Set<UserRoleHospitalAssignment> rows =
+                    new java.util.HashSet<>(java.util.List.of(activeRow("ROLE_NURSE"), activeRow("ROLE_MIDWIFE")));
+            when(assignmentRepository.findByUser(user)).thenReturn(rows);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Same");
+            dto.setRoleNames(java.util.Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR"));
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("D765: dropping one of two roles is refused as well")
+        void d765_roleRemovalIsRefused() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            java.util.Set<UserRoleHospitalAssignment> rows =
+                    new java.util.HashSet<>(java.util.List.of(activeRow("ROLE_NURSE"), activeRow("ROLE_MIDWIFE")));
+            when(assignmentRepository.findByUser(user)).thenReturn(rows);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setRoleNames(java.util.Set.of("ROLE_NURSE"));
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("D765 path re-verified: sending the current roles back (any prefix) is not a change")
+        void d765_currentRolesSentBackAreAccepted() {
+            stubHappyPath();
+            java.util.Set<UserRoleHospitalAssignment> rows =
+                    new java.util.HashSet<>(java.util.List.of(activeRow("ROLE_NURSE"), activeRow("ROLE_MIDWIFE")));
+            when(assignmentRepository.findByUser(user)).thenReturn(rows);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("NewFirst");
+            dto.setRoleNames(java.util.Set.of("NURSE", "ROLE_MIDWIFE"));
+
+            userService.updateUser(userId, dto);
+
+            verify(userRepository).save(any(User.class));
+        }
+
         @Test
         @DisplayName("a deleted account cannot be edited (D126)")
         void deletedAccountIsNotEditable() {
