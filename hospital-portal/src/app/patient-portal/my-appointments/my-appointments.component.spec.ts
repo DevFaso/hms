@@ -421,6 +421,9 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     // 375px viewport minus the 16px gutters: the width the round-10 phone gave it.
     card.style.width = '343px';
     card.style.maxWidth = '343px';
+    // CI's Linux fonts render wider than a dev laptop's; widen every glyph so the
+    // check does not depend on which font the headless browser picked.
+    card.style.letterSpacing = '2px';
     expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth);
     const right = card.getBoundingClientRect().right;
     for (const id of ['reschedDate', 'reschedStart', 'reschedEnd', 'reschedReason']) {

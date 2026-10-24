@@ -593,6 +593,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         requireAppointmentVisible(currentUser, existing);
+        // QA D727: a staff edit refuses an appointment that ends before it starts,
+        // exactly as create and the portal reschedule do.
+        if (!request.getEndTime().isAfter(request.getStartTime())) {
+            throw new BusinessException("appointment.timeRange.invalid");
+        }
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));

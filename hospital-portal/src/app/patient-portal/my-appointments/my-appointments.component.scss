@@ -255,6 +255,17 @@
   overflow-y: auto;
   box-shadow: 0 20px 60px rgb(0 0 0 / 20%);
   animation: slideUp 0.25s ease;
+
+  // QA D718: long labels and button captions (French, or a missing key)
+  // wrap instead of widening the dialog past a phone screen.
+  label,
+  button,
+  p,
+  .booking-error {
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-width: 100%;
+  }
 }
 
 .booking-header {
@@ -364,6 +375,9 @@
 
   // QA D718: three date/time inputs side by side need ~420px; on a phone
   // they wrap instead of pushing the dialog past the screen edge.
+  width: 100%;
+  min-width: 0;
+
   > .booking-field {
     flex: 1 1 140px;
   }
@@ -375,6 +389,16 @@
   gap: 12px;
   justify-content: flex-end;
   padding-top: 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+
+  > button {
+    min-width: 0;
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
 }
 
 .booking-cancel-btn {
