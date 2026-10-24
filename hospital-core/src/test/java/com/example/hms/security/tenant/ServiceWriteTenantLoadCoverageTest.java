@@ -67,7 +67,14 @@ class ServiceWriteTenantLoadCoverageTest {
         "\\.equals\\([^;]*getHospital", "Objects\\.equals\\([^;]*[Hh]ospital")));
 
     private static final Pattern SIGNATURE = Pattern.compile("^\\s*(public|private|protected)[^=;(]*\\s(\\w+)\\s*\\([^;]*$");
-    private static final Pattern BY_ID_CALL = Pattern.compile("\\b(\\w+)\\.(findById|findByIdUnscoped|existsById|deleteById)\\(");
+    /**
+     * QA D602: a named by-id loader ({@code findDetailedById}, ...) is a by-id load
+     * too; the shift PUT loaded through one and nothing saw it. Excluded are the
+     * re-reads of a row already loaded under a check (a lock, a status re-read)
+     * and {@code findAllById} of actors.
+     */
+    private static final Pattern BY_ID_CALL = Pattern.compile("\\b(\\w+)\\.(findById|findByIdUnscoped|existsById|deleteById"
+        + "|find(?!Locked|WithLock|Status|All)\\w*ById)\\(");
     private static final Pattern REPOSITORY_FIELD = Pattern.compile("private\\s+(?:final\\s+)?(\\w+Repository)\\s+(\\w+)\\s*;");
     private static final Pattern REPOSITORY_ENTITY = Pattern.compile("extends\\s+\\w*Repository<\\s*(\\w+)\\s*,");
     private static final Pattern HOSPITAL_FIELD = Pattern.compile("private (Hospital hospital|UUID hospitalId);");
@@ -202,6 +209,28 @@ class ServiceWriteTenantLoadCoverageTest {
         assertThat(scanSource("AdmissionServiceImpl", checked, fields, repos)).isEmpty();
         assertThat(scanSource("AdmissionServiceImpl", unchecked.replace("dischargePatient", "getAdmission"), fields, repos))
             .as("a public read is out of scope").isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D602: the scanner sees a named by-id loader (the shift PUT shape) and accepts the scoped one")
+    void scannerSeesTheD602Shape() {
+        Set<String> repos = Set.of("StaffShiftRepository");
+        Map<String, String> fields = Map.of("shiftRepository", "StaffShiftRepository");
+        String unchecked = """
+                private StaffShift loadShift(UUID id, Locale locale) {
+                    return shiftRepository.findDetailedById(id).orElseThrow();
+                }
+            """;
+        String checked = """
+                private StaffShift loadShift(UUID id, Locale locale) {
+                    return shiftRepository.findDetailedById(id)
+                        .filter(shift -> hospitalInScope(shift.getHospital()))
+                        .orElseThrow();
+                }
+            """;
+        assertThat(scanSource("StaffSchedulingServiceImpl", unchecked, fields, repos))
+            .containsExactly("StaffSchedulingServiceImpl.loadShift#findDetailedById");
+        assertThat(scanSource("StaffSchedulingServiceImpl", checked, fields, repos)).isEmpty();
     }
 
     private static Set<String> scan() throws IOException {

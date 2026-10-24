@@ -41,6 +41,15 @@ public class TenantContextAccessor {
         return ActingScopeResolver.readableHospitalIds(context());
     }
 
+    /**
+     * {@link #effectiveHospitalIds()}, or a single nil id when it is empty, so a
+     * JPQL {@code IN} never binds an empty list (it then matches nothing).
+     */
+    public Set<UUID> effectiveHospitalIdsOrNone() {
+        Set<UUID> ids = effectiveHospitalIds();
+        return ids.isEmpty() ? Set.of(new UUID(0L, 0L)) : ids;
+    }
+
     public boolean hasHospitalScope() {
         return !effectiveHospitalIds().isEmpty();
     }

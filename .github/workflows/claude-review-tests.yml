@@ -1,0 +1,31 @@
+# Unit tests for the Claude review script. A separate workflow so they run on
+# every PR touching the script, drafts included (the review job skips drafts).
+name: Claude review script tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/**'
+      - '.github/workflows/claude-review*.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install the pinned SDK and pytest
+        # requirements-dev.in -> uv pip compile --generate-hashes; wheels only.
+        run: >-
+          pip install --quiet --require-hashes --only-binary ':all:'
+          -r .github/scripts/requirements-dev.txt
+      - name: Run the tests
+        run: python -m pytest -q .github/scripts

@@ -25,6 +25,7 @@ import {
   IsolationService,
 } from '../services/isolation.service';
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
+import { BedService } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -59,6 +60,7 @@ export class BedBoardComponent implements OnInit {
   private readonly boardService = inject(BedBoardService);
   private readonly isolation = inject(IsolationService);
   private readonly transfers = inject(TransferService);
+  private readonly beds = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -132,6 +134,14 @@ export class BedBoardComponent implements OnInit {
     return tokenRoles.length === 0 || tokenRoles.some((r) => roleSatisfies(roles, r));
   }
 
+  /**
+   * QA D651: the beds this patient may take, from /beds/available?patientId=
+   * (the same rule the server applies when the order is placed). Empty while
+   * it loads, so a bed the server would refuse is never offered; null when the
+   * lookup failed, and the server's own refusal is then the backstop.
+   */
+  readonly eligibleBedIds = signal<Set<string> | null>(null);
+
   /** Transfer modal state. */
   showTransferModal = signal(false);
   transferTarget = signal<BedOccupant | null>(null);
@@ -157,10 +167,12 @@ export class BedBoardComponent implements OnInit {
         return [];
       }
       const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
+      const eligible = this.eligibleBedIds();
       return current.wards.flatMap((w) =>
         w.rooms
           .flatMap((r) => r.beds)
           .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
+          .filter((b) => eligible === null || eligible.has(b.bedId))
           .map((b) => ({
             bedId: b.bedId,
             label: `${w.wardName} — ${b.bedNumber}`,
@@ -369,12 +381,29 @@ export class BedBoardComponent implements OnInit {
       isolationOverride: false,
       isolationOverrideReason: '',
     };
+    this.eligibleBedIds.set(new Set());
+    this.beds
+      .getAvailableBeds(occupant.patientId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (this.transferTarget() === occupant) {
+            this.eligibleBedIds.set(new Set(list.map((b) => b.id)));
+          }
+        },
+        error: () => {
+          if (this.transferTarget() === occupant) {
+            this.eligibleBedIds.set(null);
+          }
+        },
+      });
     this.showTransferModal.set(true);
   }
 
   closeTransfer(): void {
     this.showTransferModal.set(false);
     this.transferTarget.set(null);
+    this.eligibleBedIds.set(null);
   }
 
   /** Blocked until the override is acknowledged with a reason. */

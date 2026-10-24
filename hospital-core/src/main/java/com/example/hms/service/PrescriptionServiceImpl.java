@@ -48,6 +48,7 @@ import java.util.UUID;
 import java.util.Locale;
 import java.util.Optional;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -60,6 +61,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
         "The prescriber is not on the care team of this patient's stay.";
 
@@ -184,6 +186,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Staff access: the clinical copy, clarification exchange included.
             return prescriptionMapper.toResponseDTO(prescription);
         }
+        if (readableAcrossHospitals(prescription, hospitalId)) {
+            // QA D652: the by-id read answers as the by-patient list does (the
+            // rule D508 gave imaging): another hospital's prescription the list
+            // shows is readable here; one it never sent is not, in either.
+            return prescriptionMapper.toResponseDTO(prescription);
+        }
         if (prescription.getHospital() != null && subjectReadGuard.ownsAsItsPatient(prescription.getPatient())) {
             // Staff who are also patients: the fallback #754 gave the
             // encounter reads. A nurse at hospital A who was a patient at
@@ -211,6 +219,36 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return prescriptionMapper.toResponseDTO(prescription).withoutClarificationExchange();
         }
         throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+    }
+
+    /** Statuses of a prescription never sent: its writing hospital's work in progress (QA D101, D652). */
+    static final List<PrescriptionStatus> NEVER_SENT = NeverSentRule.NEVER_SENT_PRESCRIPTION;
+
+    static boolean wasSent(Prescription prescription) {
+        return NeverSentRule.sent(prescription.getStatus());
+    }
+
+    /**
+     * QA D652 - a foreign prescription is readable by id exactly when the
+     * by-patient list would show it: its hospital is in the readable set for
+     * this caller and patient, and it was sent ({@link NeverSentRule}).
+     * Accounted as a cross-hospital read, as the list accounts it.
+     */
+    private boolean readableAcrossHospitals(Prescription prescription, UUID hospitalId) {
+        UUID rowHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        if (rowHospitalId == null || patientId == null
+                || !NeverSentRule.readableHere(rowHospitalId, hospitalId, wasSent(prescription))) {
+            return false;
+        }
+        UUID requesterUserId = authService.getCurrentUserId();
+        if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), hospitalId),
+            CROSS_HOSPITAL_READ);
+        return true;
     }
 
     private Prescription findPrescriptionOrNotFound(UUID id) {
@@ -817,12 +855,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID requesterUserId = authService.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        Page<Prescription> rows = filter.isEmpty()
-            ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
-            : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
+        Page<Prescription> rows;
+        if (readable.equals(Set.of(hospitalId))) {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+                : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
+        } else {
+            // QA D652: another hospital's never-sent prescription is not listed
+            // here, as its by-id read answers 404 here (NeverSentRule).
+            rows = filter.isEmpty()
+                ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+                : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                    patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
+        }
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-            "Cross-hospital prescription read on the treatment relationship");
+            CROSS_HOSPITAL_READ);
         return rows;
     }
 
@@ -1095,10 +1143,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // E9 #59c — see list(): the same widening, unpaged.
             UUID requesterUserId = authService.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-            List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            List<Prescription> rows = NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId);
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                "Cross-hospital prescription read on the treatment relationship");
+                CROSS_HOSPITAL_READ);
             return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)
                 .toList();

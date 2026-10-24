@@ -499,6 +499,9 @@ class GeneralReferralServiceImplTest {
         GeneralReferral foreign = buildReferral();
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(other);
+        // QA D623: a foreign row is listed once it was sent; its draft is not.
+        foreign.setStatus(ReferralStatus.SUBMITTED);
+        foreign.setSubmittedAt(java.time.LocalDateTime.now());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));

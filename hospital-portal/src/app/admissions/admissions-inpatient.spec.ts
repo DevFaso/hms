@@ -13,6 +13,7 @@ import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
+import { toLocalInputValue } from '../shared/date-utils';
 import { BedService } from '../services/bed.service';
 
 const adm = (over: Partial<AdmissionResponse> = {}): AdmissionResponse =>
@@ -213,7 +214,8 @@ describe('AdmissionsComponent (inpatient round 3: D153 departments and stay flow
     expect(admissions.create).toHaveBeenCalled();
     component.openEdit(adm({ admissionDateTime: '2026-10-01T10:00:00' }));
     expect(component.selectedPatient()?.lastName).toBe('Traore');
-    expect(component.form.admissionDateTime).toBe('2026-10-01');
+    // QA D622: the stored UTC time shown in the user's zone, hours included.
+    expect(component.form.admissionDateTime).toBe(toLocalInputValue('2026-10-01T10:00:00'));
     component.submitForm();
     expect(admissions.update).toHaveBeenCalledWith('a1', jasmine.any(Object));
     admissions.update.and.returnValue(throwError(() => new Error('x')));

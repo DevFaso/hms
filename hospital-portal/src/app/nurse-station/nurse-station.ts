@@ -42,6 +42,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { fromServerDateTime } from '../shared/date-utils';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
@@ -80,6 +81,8 @@ type SectionType =
   styleUrl: './nurse-station.scss',
 })
 export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecked {
+  /** D622: admission times are UTC wall clock; show them in the user's zone. */
+  protected readonly fromServerDateTime = fromServerDateTime;
   private readonly nurseService = inject(NurseTaskService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);

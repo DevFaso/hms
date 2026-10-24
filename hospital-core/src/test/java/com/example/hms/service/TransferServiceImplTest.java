@@ -178,6 +178,32 @@ class TransferServiceImplTest {
 
     // ── Ordering ────────────────────────────────────────────────────────
 
+    /** QA D609: NURSE_A transfers a 6-year-old girl to maternity bed MATA/M1 — refused at order time. */
+    @Test
+    void d609_requestTransfer_toAMaternityBedForAChild_isRefusedAndReservesNothing() {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+
+        assertThatThrownBy(() -> service.requestTransfer(base().build()))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(
+                ((com.example.hms.exception.BusinessException) e).getMessageKey()).isEqualTo("bed.ward.maternityMismatch"));
+        verify(bedAssignmentService, never()).reserveBed(any(), any());
+        verify(transferOrderRepository, never()).save(any());
+    }
+
+    /** QA D609 path re-verified: an adult woman may still be transferred to the maternity bed. */
+    @Test
+    void d609_requestTransfer_toAMaternityBedForAnAdultWoman_stillReserves() {
+        patient.setGender("FEMALE");
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(28));
+
+        service.requestTransfer(base().build());
+
+        verify(bedAssignmentService).reserveBed(destinationBed.getId(), hospitalId);
+    }
+
+
     @Test
     void orderingATransferHoldsTheDestinationBed() {
         TransferOrderResponseDTO result = service.requestTransfer(base().build());

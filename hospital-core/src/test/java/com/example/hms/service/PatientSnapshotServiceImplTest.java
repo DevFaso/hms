@@ -1087,6 +1087,7 @@ class PatientSnapshotServiceImplTest {
         Prescription rx = new Prescription();
         rx.setMedicationName("Metformin");
         rx.setHospital(other);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any()))

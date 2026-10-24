@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -582,5 +583,28 @@ describe('NurseStationComponent — two-tier polling', () => {
       component.onEscapeKey();
       expect(component.careNoteFor()).toBeNull();
     });
+  });
+
+  // QA D622: the admission time is stored as UTC wall clock; the pending
+  // admissions row must show that instant in the user's zone.
+  it('shows the admission time in the user zone (D622)', () => {
+    nurseServiceSpy.getPendingAdmissions.and.returnValue(
+      of([
+        {
+          admissionId: 'a1',
+          patientName: 'Awa Traore',
+          status: 'PENDING',
+          admissionDateTime: '2026-10-23T02:30:00',
+        } as any,
+      ]),
+    );
+    fixture.detectChanges();
+    component.activeSection.set('admissions');
+    fixture.detectChanges();
+    const expected = formatDate(new Date(Date.UTC(2026, 9, 23, 2, 30)), 'short', 'en-US');
+    const cells = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('td')).map(
+      (td) => td.textContent?.trim(),
+    );
+    expect(cells).toContain(expected);
   });
 });
