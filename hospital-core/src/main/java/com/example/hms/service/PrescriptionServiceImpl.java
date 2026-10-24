@@ -1399,6 +1399,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.isPresent() && isReusableOutpatientAnchor(existing.get())) {
             return existing.get();
         }
+        // QA D739 (r10 self-review): the anchor is completed by design (QA D41:
+        // never an open visit on a worklist), so the prescriber's earlier anchor
+        // is reused rather than minting a new phantom consultation per order. A
+        // real completed visit is never reused; only the auto-generated anchor.
+        Optional<Encounter> anchor = encounterRepository
+            .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndNotesAndAdmissionIdIsNullOrderByEncounterDateDesc(
+                patient.getId(), staff.getId(), hospitalId, Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        if (anchor.isPresent() && !isHospitalStay(anchor.get())
+            && anchor.get().getStatus() != EncounterStatus.CANCELLED) {
+            return anchor.get();
+        }
 
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
