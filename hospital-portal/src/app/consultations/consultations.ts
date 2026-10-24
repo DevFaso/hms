@@ -21,7 +21,7 @@ import {
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
+import { StaffService, isPhysician, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../core/role-equivalence';
@@ -30,6 +30,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -38,6 +39,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -501,7 +503,8 @@ export class ConsultationsComponent implements OnInit {
     this.assignStaffLoading.set(true);
     this.staffService.list(hospitalId).subscribe({
       next: (staff) => {
-        this.assignStaff.set(staff.filter((s) => s.active && isClinicalProvider(s)));
+        // QA D715: the backend accepts only a doctor at this hospital as consultant.
+        this.assignStaff.set(staff.filter((s) => s.active && isPhysician(s)));
         this.assignStaffLoading.set(false);
       },
       error: () => {

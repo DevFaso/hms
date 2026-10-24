@@ -469,6 +469,57 @@ class DischargeSummaryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D744: the patient AVS carries the signed note's instructions and plan")
+        void qaD744_portalFetch_addsSignedNoteInstructionsAndPlan() {
+            // Round 10 re-test (encounter 81b42d8d): the patient saw only the
+            // checkout follow-up; the staff AVS also showed the instructions and plan.
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setPatientInstructions("Marcher 30 minutes par jour.");
+            note.setPlan("Metformine 500 mg deux fois par jour.");
+            note.setSignedAt(java.time.LocalDateTime.of(2026, 10, 24, 8, 0));
+            encounter.setEncounterNote(note);
+            summary.setEncounter(encounter);
+            summary.setFollowUpInstructions("Revoir dans 3 mois avec le résultat HbA1c");
+            summary.setHospitalCourse("seen");
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId)).thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+            when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(summary.getFollowUpInstructions())
+                    .contains("Revoir dans 3 mois avec le résultat HbA1c")
+                    .contains("Marcher 30 minutes par jour.")
+                    .contains("Metformine 500 mg deux fois par jour.");
+            verify(dischargeSummaryRepository).save(summary);
+
+            // A second read adds nothing twice.
+            String once = summary.getFollowUpInstructions();
+            service.getDischargeSummariesForPortalPatient(patientId);
+            assertThat(summary.getFollowUpInstructions()).isEqualTo(once);
+        }
+
+        @Test
+        @DisplayName("QA D744: an unsigned draft never reaches the patient AVS")
+        void qaD744_portalFetch_ignoresUnsignedDraft() {
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setPatientInstructions("brouillon");
+            encounter.setEncounterNote(note);
+            summary.setEncounter(encounter);
+            summary.setFollowUpInstructions("Revoir dans 3 mois");
+
+            when(encounterRepository.findCompletedWithoutDischargeSummary(patientId)).thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                    .thenReturn(List.of(summary));
+
+            service.getDischargeSummariesForPortalPatient(patientId);
+
+            assertThat(summary.getFollowUpInstructions()).isEqualTo("Revoir dans 3 mois");
+        }
+
+        @Test
         @DisplayName("QA D151: a prescription's anchor consultation gets no after-visit summary, old or new")
         void portalFetch_prescriptionAnchor_isNeitherBackfilledNorShown() {
             Encounter anchor = new Encounter();

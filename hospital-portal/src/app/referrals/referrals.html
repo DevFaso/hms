@@ -327,13 +327,13 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
-                ref.completedAt ? (ref.completedAt | date: 'medium') : '—'
+                ref.completedAt ? (ref.completedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                ref.createdAt ? (ref.createdAt | date: 'medium') : '—'
+                ref.createdAt ? (ref.createdAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>

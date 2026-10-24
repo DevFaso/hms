@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.repository.PatientDiagnosisRepository;
@@ -99,6 +100,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** Prescriptions read to find the running ones; a chart never holds this many live courses. */
+    private static final int ACTIVE_MEDICATION_SCAN = 200;
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
     private final EncounterRepository encounterRepository;
@@ -397,9 +401,22 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
             // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            // QA D720/D737: "active" means a running course, by the rule the
+            // patient's own list uses (MedicationCourseStatus): no draft, no
+            // withdrawn or finished course, no order that ended with a
+            // discharged stay. Filtered before the cap, newest first, so the
+            // current stay's orders are not pushed off by finished ones.
+            List<com.example.hms.model.Admission> closedStays = admissionRepository
+                    .findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
+                    .filter(a -> a.getActualDischargeDateTime() != null)
+                    .toList();
             List<com.example.hms.model.Prescription> rows = NeverSentRule.prescriptionsReadableHere(
-                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10))
-                    .getContent(), hospitalId);
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable,
+                            PageRequest.of(0, ACTIVE_MEDICATION_SCAN, Sort.by(Sort.Direction.DESC, "createdAt")))
+                    .getContent(), hospitalId).stream()
+                    .filter(rx -> com.example.hms.service.MedicationCourseStatus.isActive(rx, closedStays))
+                    .limit(10)
+                    .toList();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
                             .name(rx.getMedicationName())
@@ -447,8 +464,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // guaranteed). Readable where its order is handled (#751): ordered
             // in the readable set, or performed by this hospital's laboratory,
             // as on the other staff lab views.
-            List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
-                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id")));
+            // QA D740/D741: released, current results only — a snapshot shows
+            // values, and an unreleased or superseded one is not a result.
+            List<LabResult> rows = ClinicalLabResultView.releasedAndCurrent(
+                    labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
+                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id"))));
             account(reach, hospitalId, rows.stream()
                     .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)

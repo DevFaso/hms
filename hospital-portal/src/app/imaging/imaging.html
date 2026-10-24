@@ -279,7 +279,7 @@
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
-                <td>{{ r.createdAt ? (r.createdAt | date: 'mediumDate') : '—' }}</td>
+                <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
                     'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
@@ -432,7 +432,9 @@
               <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
               ><span class="field-value"
                 >{{ rep.signedByName || '—' }}
-                {{ rep.signedAt ? '(' + (rep.signedAt | date: 'short') + ')' : '' }}</span
+                {{
+                  rep.signedAt ? '(' + (rep.signedAt | serverTime | date: 'short') + ')' : ''
+                }}</span
               >
             </div>
             <div class="detail-field">
@@ -743,7 +745,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.completedAt ? (ord.completedAt | date: 'medium') : '—'
+                ord.completedAt ? (ord.completedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>

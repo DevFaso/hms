@@ -2584,7 +2584,7 @@
     "REGION": "Región",
     "REGION_PLACEHOLDER": "ej. Centre, Île-de-France",
     "REQUIRED_FIELDS": "El nombre, la ciudad, el país, el teléfono y una dirección o un apartado postal son obligatorios.",
-    "ADDRESS_OR_PO_BOX_HINT": "Indique la dirección o el apartado postal (uno de los dos es obligatorio).",
+    "ADDRESS_OR_PO_BOX_HINT": "La dirección (calle) es obligatoria; el apartado postal es opcional.",
     "SEARCH_PLACEHOLDER": "Buscar hospitales…",
     "SECTOR": "Sector / Barrio",
     "SECTOR_PLACEHOLDER": "ej. Secteur 30",
@@ -4586,6 +4586,7 @@
       "EMPTY_TITLE": "No se encontraron medicamentos",
       "EMPTY_DESC": "No tiene ningún medicamento activo.",
       "ACTIVE": "Medicamentos activos",
+      "PAST": "Medicamentos anteriores",
       "PRESCRIPTIONS": "Recetas",
       "MEDICATION": "Medicamento",
       "DOSAGE": "Posología",
@@ -6255,6 +6256,11 @@
     "DRAFT": "Borrador",
     "DURATION": "Duración",
     "DURATION_PLACEHOLDER": "Ingrese la duración...",
+    "PRESCRIBED_QUANTITY": "Cantidad a dispensar",
+    "PRESCRIBED_QUANTITY_PLACEHOLDER": "p. ej. 3",
+    "PRESCRIBED_QUANTITY_UNIT": "Unidad",
+    "PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER": "p. ej. ampollas, comprimidos",
+    "PRESCRIBED_QUANTITY_REQUIRED": "Indique la cantidad a dispensar (mayor que cero).",
     "EDIT": "Editar receta",
     "EMPTY_MESSAGE": "No se encontraron recetas",
     "ENCOUNTER_ID": "Consulta",
@@ -8582,7 +8588,8 @@
       "ACTIVATE": "Activar",
       "ACTIVATE_TITLE": "Activar para solicitudes",
       "OWN_SUBMISSION_HINT_QA": "Usted envió esta prueba: otro responsable de calidad o director de laboratorio debe completar su revisión de calidad (principio de los cuatro ojos).",
-      "OWN_SUBMISSION_HINT_APPROVE": "Usted envió esta prueba: otro director de laboratorio debe aprobarla (principio de los cuatro ojos)."
+      "OWN_SUBMISSION_HINT_APPROVE": "Usted envió esta prueba: otro director de laboratorio debe aprobarla (principio de los cuatro ojos).",
+      "OWN_REVIEW_HINT_APPROVE": "Usted realizó la revisión de calidad de esta prueba: otro director de laboratorio, o su autor, debe aprobarla (principio de los cuatro ojos)."
     },
     "EMPTY": {
       "TITLE": "La cola está vacía",

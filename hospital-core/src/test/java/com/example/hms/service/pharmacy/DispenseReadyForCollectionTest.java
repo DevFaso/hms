@@ -121,6 +121,8 @@ class DispenseReadyForCollectionTest {
     /** QA D404: the money follows a cancelled dispense. */
     @Mock private PharmacyPaymentVoider paymentVoider;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private DispenseServiceImpl service;
 

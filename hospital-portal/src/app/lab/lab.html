@@ -133,7 +133,9 @@
                 }
               </td>
               <td class="date-cell">
-                {{ order.orderDatetime ? (order.orderDatetime | date: 'medium') : '—' }}
+                {{
+                  order.orderDatetime ? (order.orderDatetime | serverTime | date: 'medium') : '—'
+                }}
               </td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(order.status)">{{
@@ -230,7 +232,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
-              ><span class="field-value">{{ o.orderDatetime | date: 'medium' }}</span>
+              ><span class="field-value">{{ o.orderDatetime | serverTime | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
@@ -622,7 +624,9 @@
                     <td>
                       {{ s.specimenType ? (s.specimenType | enumLabel: 'specimenType') : '—' }}
                     </td>
-                    <td>{{ s.collectedAt ? (s.collectedAt | date: 'short') : '—' }}</td>
+                    <td>
+                      {{ s.collectedAt ? (s.collectedAt | serverTime | date: 'short') : '—' }}
+                    </td>
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>
                       <span [class]="getSpecimenStatusClass(s.status)">{{

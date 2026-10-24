@@ -2205,6 +2205,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D711 (round 10): one stored note row per daily progress entry.** The
+  encounter note is one row per encounter (`uk_encounter_note_encounter`,
+  `@OneToOne`), and signing, co-signing and addenda are keyed by encounter.
+  Fixed in `fix/qa-r10-inpatient-meds`: on a stay, each `POST /notes` is a new
+  entry (no section of yesterday's entry carries over, the history row is
+  `NOTE_CREATED`, every earlier entry kept whole in the note history). Owed:
+  a progress-note model with one row per entry, listed and signed per entry,
+  which is a schema change and a new notes screen, not a bug fix. Until then
+  a signed entry still closes the stay's note (next entries go in addenda).
+
 - **Claude PR review script (#924), round-5 findings, capped by the user 2026-10-23.**
   None is a logic or security bug in the product; all are about the CI
   helper itself: (1) a failure note can push most of a previous review past

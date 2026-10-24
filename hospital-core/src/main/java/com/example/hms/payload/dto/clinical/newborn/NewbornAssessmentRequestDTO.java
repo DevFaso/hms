@@ -39,8 +39,11 @@ public class NewbornAssessmentRequestDTO {
      */
     private UUID deliveryRecordId;
 
+    @com.example.hms.validation.NotInClinicalFuture
+
     private LocalDateTime assessmentTime;
     private Boolean lateEntry;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime originalEntryTime;
 
     @Min(0)

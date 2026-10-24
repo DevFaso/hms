@@ -2584,7 +2584,7 @@
     "REGION": "Region",
     "REGION_PLACEHOLDER": "e.g., Centre, Île-de-France",
     "REQUIRED_FIELDS": "Name, city, country, phone number, and an address or a P.O. box are required.",
-    "ADDRESS_OR_PO_BOX_HINT": "Give the street address or the P.O. box (one of the two is required).",
+    "ADDRESS_OR_PO_BOX_HINT": "The street address is required; the P.O. box is optional.",
     "SEARCH_PLACEHOLDER": "Search hospitals…",
     "SECTOR": "Sector / Neighborhood",
     "SECTOR_PLACEHOLDER": "e.g., Secteur 30",
@@ -4586,6 +4586,7 @@
       "EMPTY_TITLE": "No medications found",
       "EMPTY_DESC": "You don't have any active medications.",
       "ACTIVE": "Active Medications",
+      "PAST": "Past medications",
       "PRESCRIPTIONS": "Prescriptions",
       "MEDICATION": "Medication",
       "DOSAGE": "Dosage",
@@ -6255,6 +6256,11 @@
     "DRAFT": "Draft",
     "DURATION": "Duration",
     "DURATION_PLACEHOLDER": "Enter duration...",
+    "PRESCRIBED_QUANTITY": "Quantity to dispense",
+    "PRESCRIBED_QUANTITY_PLACEHOLDER": "e.g. 3",
+    "PRESCRIBED_QUANTITY_UNIT": "Unit",
+    "PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER": "e.g. ampoules, tablets",
+    "PRESCRIBED_QUANTITY_REQUIRED": "Enter the quantity to dispense (greater than zero).",
     "EDIT": "Edit Prescription",
     "EMPTY_MESSAGE": "No prescriptions found",
     "ENCOUNTER_ID": "Encounter",
@@ -8582,7 +8588,8 @@
       "ACTIVATE": "Activate",
       "ACTIVATE_TITLE": "Activate for ordering",
       "OWN_SUBMISSION_HINT_QA": "You submitted this definition: another quality manager or lab director must complete its QA review (four-eyes rule).",
-      "OWN_SUBMISSION_HINT_APPROVE": "You submitted this definition: another lab director must approve it (four-eyes rule)."
+      "OWN_SUBMISSION_HINT_APPROVE": "You submitted this definition: another lab director must approve it (four-eyes rule).",
+      "OWN_REVIEW_HINT_APPROVE": "You did the QA review of this definition: another lab director, or the submitter, must approve it (four-eyes rule)."
     },
     "EMPTY": {
       "TITLE": "Queue is clear",

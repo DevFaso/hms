@@ -16,6 +16,7 @@ import com.example.hms.model.MicroSusceptibility;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.MicroCultureResultRepository;
 import com.example.hms.repository.MicroIsolateRepository;
 import com.example.hms.repository.MicroSusceptibilityRepository;
@@ -102,7 +103,7 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
             if (uuid == null) throw new ResourceNotFoundException(id);
             return labOrderRepository.findById(uuid)
                 .filter(o -> o.getHospital() != null && hospitalId.equals(o.getHospital().getId()))
-                .map(o -> mapper.toFhir(o, labResultRepository.findByLabOrder_Id(o.getId())))
+                .map(o -> mapper.toFhir(o, ClinicalLabResultView.releasedAndCurrent(labResultRepository.findByLabOrder_Id(o.getId()))))
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }
         if (idPart.startsWith(MICRO_PREFIX)) {
@@ -146,7 +147,9 @@ public class DiagnosticReportFhirResourceProvider implements IResourceProvider {
             .getContent();
         Map<UUID, List<LabResult>> resultsByOrder = orders.isEmpty()
             ? Map.of()
-            : labResultRepository.findByLabOrder_IdIn(orders.stream().map(LabOrder::getId).toList())
+            // QA D740/D741: released, current results only.
+            : ClinicalLabResultView.releasedAndCurrent(
+                    labResultRepository.findByLabOrder_IdIn(orders.stream().map(LabOrder::getId).toList()))
                 .stream()
                 .filter(r -> r.getLabOrder() != null && r.getLabOrder().getId() != null)
                 .collect(Collectors.groupingBy(r -> r.getLabOrder().getId()));

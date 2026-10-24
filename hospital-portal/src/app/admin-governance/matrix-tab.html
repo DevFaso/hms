@@ -40,7 +40,7 @@
         <span class="badge badge-muted">{{ snap.label }}</span>
       }
       <span class="meta-text">
-        {{ snap.createdBy || '—' }} · {{ snap.createdAt | date: 'medium' }}
+        {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | date: 'medium' }}
       </span>
     </div>
     <div class="table-wrap">
@@ -108,7 +108,7 @@
               <td>v{{ snap.version }}</td>
               <td>{{ snap.label || '—' }}</td>
               <td>{{ snap.createdBy || '—' }}</td>
-              <td>{{ snap.createdAt | date: 'short' }}</td>
+              <td>{{ snap.createdAt | serverTime | date: 'short' }}</td>
               <td>
                 <button
                   type="button"
@@ -175,7 +175,7 @@
               </td>
               <td>{{ event.description || '—' }}</td>
               <td>{{ event.initiatedBy || '—' }}</td>
-              <td>{{ event.createdAt | date: 'short' }}</td>
+              <td>{{ event.createdAt | serverTime | date: 'short' }}</td>
             </tr>
           }
         </tbody>

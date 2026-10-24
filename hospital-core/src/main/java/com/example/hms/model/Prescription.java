@@ -466,8 +466,26 @@ public class Prescription extends BaseEntity {
         if (!Objects.equals(encounter.getPatient().getId(), patient.getId())) {
             throw new IllegalStateException("Encounter.patient must match Prescription.patient");
         }
-        if (!Objects.equals(encounter.getStaff().getId(), staff.getId())) {
+        // QA D703/D736: a hospital stay is ordered on by any treating
+        // prescriber of its hospital (the service checks who), not only the
+        // doctor leading it. This invariant refused every one of them with a
+        // 500 after the service had already allowed the order.
+        if (encounter.getAdmissionId() == null
+            && !Objects.equals(encounter.getStaff().getId(), staff.getId())) {
             throw new IllegalStateException("Encounter.staff must match Prescription.staff");
         }
+    }
+
+    /**
+     * QA D719: whether this prescription may be refilled at all. The status
+     * gate alone answered yes for a completed IV morphine order. A controlled
+     * substance is never refilled: it needs a new, signed prescription.
+     * Single source for the patient's button, the request and the approval.
+     */
+    public boolean allowsRefill() {
+        if (controlledSubstance) {
+            return false;
+        }
+        return status == null || status.isRefillable();
     }
 }

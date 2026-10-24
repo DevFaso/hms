@@ -310,6 +310,23 @@ describe('LabTestConfigComponent', () => {
     expect(component.defForm.testName).toBe('Complete Blood Count');
   });
 
+  it('QA D705/D721: locks code, unit, sample and LOINC on a submitted or live definition only', () => {
+    fixture.detectChanges();
+    flushInit();
+    const base = component.definitions()[0];
+
+    component.openEditDef({ ...base, approvalStatus: 'ACTIVE' } as never);
+    expect(component.clinicalFieldsLocked()).toBeTrue();
+    component.openEditDef({ ...base, approvalStatus: 'PENDING_DIRECTOR_APPROVAL' } as never);
+    expect(component.clinicalFieldsLocked()).toBeTrue();
+    component.openEditDef({ ...base, approvalStatus: 'DRAFT' } as never);
+    expect(component.clinicalFieldsLocked()).toBeFalse();
+    component.openEditDef({ ...base, approvalStatus: 'REJECTED' } as never);
+    expect(component.clinicalFieldsLocked()).toBeFalse();
+    component.openCreateDef();
+    expect(component.clinicalFieldsLocked()).toBeFalse();
+  });
+
   it('should close definition modal', () => {
     fixture.detectChanges();
     flushInit();

@@ -85,10 +85,24 @@ class CriticalValueNotificationServiceTest {
         result.setLabOrder(order);
         result.setResultValue("7.1");
         result.setResultUnit("mmol/L");
+        // QA D709: only a released result pages anyone.
+        result.setReleased(true);
 
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(false);
+    }
+
+    @Test
+    void d726_theCriticalNotificationNamesTheResultItIsAbout() {
+        result.setId(UUID.randomUUID());
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        Notification stored = new Notification();
+        when(notificationService.created(anyString(), anyString(), anyString())).thenReturn(stored);
+
+        service.notifyIfCritical(result);
+
+        assertThat(stored.getSubjectId()).isEqualTo(result.getId());
     }
 
     @Test
@@ -111,6 +125,20 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         verify(notificationService).created(anyString(), eq("dr.diallo"), anyString());
+    }
+
+    /** QA D709: the page went out on entry, before release, while GET answered 404. */
+    @Test
+    void anUnreleasedCriticalResultPagesNobodyAndIsNotStamped() {
+        result.setReleased(false);
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+
+        service.notifyIfCritical(result, "CRITICAL");
+
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+        verify(notificationService, never()).createNotification(any(), any(), any(), any());
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test
@@ -568,6 +596,9 @@ class CriticalValueNotificationServiceTest {
         assertThat(updated.getCriticalReadBackValue()).isEqualTo("7.1");
         assertThat(updated.getCriticalReadBackByDisplay()).isEqualTo("Dr Diallo");
         assertThat(updated.isAcknowledged()).isTrue();
+        // QA D726: the alert and its escalations no longer read as unread.
+        verify(notificationService).markReadForSubject(result.getId(),
+            java.util.List.of("CRITICAL_LAB_RESULT", "CRITICAL_LAB_RESULT_ESCALATION"));
     }
 
     @Test
@@ -602,6 +633,8 @@ class CriticalValueNotificationServiceTest {
         assertThat(reloaded.isAcknowledged()).isFalse();
         assertThat(result.getCriticalReadBackAt()).isNull();
         assertThat(result.isAcknowledged()).isFalse();
+        // QA D726: a wrong read-back answers nothing; the alert stays unread.
+        verify(notificationService, never()).markReadForSubject(any(), any());
     }
 
     @Test

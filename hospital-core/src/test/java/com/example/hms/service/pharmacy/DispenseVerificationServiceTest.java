@@ -90,13 +90,22 @@ class DispenseVerificationServiceTest {
     }
 
     @Test
-    void aLotExpiringTodayIsStillDispensable() {
-        // Medicines are labelled "use before end of", so the expiry date
-        // itself is the last good day. Off-by-one here would quietly bin
-        // a day of stock at every site.
+    void aLotExpiringTodayIsRefused() {
+        // QA D710: the expiry report showed this lot as EXPIRE while the
+        // receipt, the picker and this check let it through. One rule now:
+        // a lot is expired ON its expiry date.
         StockLot expiringToday = lotOf("AMOX500", "Amoxicillin", TODAY);
 
         DispenseVerificationResult result = service.verify(prescription, expiringToday, null, null);
+
+        assertThat(result.getOutcomes()).containsEntry(DispenseCheck.EXPIRY, false);
+    }
+
+    @Test
+    void aLotExpiringTomorrowIsDispensable() {
+        StockLot expiringTomorrow = lotOf("AMOX500", "Amoxicillin", TODAY.plusDays(1));
+
+        DispenseVerificationResult result = service.verify(prescription, expiringTomorrow, null, null);
 
         assertThat(result.failedChecks()).isEmpty();
         assertThat(result.getOutcomes()).containsEntry(DispenseCheck.EXPIRY, true);

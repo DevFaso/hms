@@ -191,7 +191,7 @@
       <ol>
         @for (v of versionHistory(); track v) {
           <li>
-            v{{ v.version }} — {{ v.updatedAt | date: 'short' }}
+            v{{ v.version }} — {{ v.updatedAt | serverTime | date: 'short' }}
             @if (!v.active) {
               <span class="badge">{{ 'ORDER_SETS.VERSION_RETIRED' | translate }}</span>
             }

@@ -146,7 +146,7 @@
                   <span class="badge">{{ p.relationship }}</span>
                 </td>
                 <td>{{ p.permissions }}</td>
-                <td>{{ p.createdAt | date: 'mediumDate' }}</td>
+                <td>{{ p.createdAt | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   {{
                     p.expiresAt
@@ -203,7 +203,7 @@
                   <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
                 </td>
                 <td>{{ p.permissions | enumLabel: 'permissions' }}</td>
-                <td>{{ p.createdAt | date: 'mediumDate' }}</td>
+                <td>{{ p.createdAt | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   {{
                     p.expiresAt

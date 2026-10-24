@@ -54,6 +54,8 @@ class PatientPortalServiceImplProxyTest {
     @Mock private UserRepository userRepository;
     @Mock private AppointmentService appointmentService;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 

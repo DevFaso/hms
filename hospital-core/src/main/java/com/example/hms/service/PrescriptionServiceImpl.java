@@ -63,7 +63,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
     private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
-        "The prescriber is not on the care team of this patient's stay.";
+        "The prescriber does not work at the hospital of this patient's stay.";
 
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
@@ -122,7 +122,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId, null);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -156,6 +156,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        requirePrescribedQuantityForControlled(entity);
         recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
@@ -914,6 +915,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
+    /**
+     * QA D706: a controlled substance states how much may be handed over,
+     * on every path that creates one (the form, order sets), because
+     * the pharmacy caps the dispense at it and refuses one without it.
+     */
+    private static void requirePrescribedQuantityForControlled(Prescription prescription) {
+        if (prescription.isControlledSubstance() && prescription.getQuantity() == null) {
+            throw new BusinessException("prescription.quantity.requiredControlled");
+        }
+    }
+
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
@@ -955,7 +967,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId,
+            existing.getEncounter() == null ? null : existing.getEncounter().getId());
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -996,6 +1009,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA D706: no quantity check on an edit - a legacy controlled row must
+        // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
@@ -1335,17 +1350,25 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
                                               Staff staff,
-                                              UUID actingHospitalId) {
+                                              UUID actingHospitalId,
+                                              UUID keptEncounterId) {
         if (request.getEncounterId() != null) {
             Encounter named = encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
             // QA D525 (D431): an order written into a hospital stay after the
             // discharge closed it was accepted, and would surface as a due
             // dose for a patient who has gone home.
-            if (named.getAdmissionId() != null
+            if (isHospitalStay(named)
                     && (named.getStatus() == EncounterStatus.COMPLETED
                         || named.getStatus() == EncounterStatus.CANCELLED)) {
                 throw new BusinessException("prescription.encounter.stayClosed");
+            }
+            // QA D739 (r10 re-test 3): the same rule for every encounter type.
+            // A finished consultation or ED visit named explicitly took the new
+            // order, which then showed in that closed visit's chart. An edit
+            // that keeps the order's own encounter is not a new attachment.
+            if (isClosedEncounter(named) && !named.getId().equals(keptEncounterId)) {
+                throw new BusinessException("prescription.encounter.closed");
             }
             return named;
         }
@@ -1388,12 +1411,28 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId);
-        if (existing.isPresent()) {
+        // QA D739: the prescriber's latest encounter may be a stay that has
+        // been discharged (an open one was taken above). An outpatient order
+        // filed there reads as a stay order: it is ended by the discharge and
+        // shows in the closed stay's chart. It gets an outpatient anchor.
+        // QA D739 (r10 re-test 2): nor is a finished outpatient visit reused:
+        // an order written after that consultation closed is not part of it,
+        // and would show in its chart and summary. Only a still-open visit of
+        // this prescriber anchors the order; otherwise it gets its own anchor.
+        if (existing.isPresent() && isReusableOutpatientAnchor(existing.get())) {
             return existing.get();
         }
-
+        // QA D739 (r10 self-review round 2): every order gets a fresh anchor.
+        // An earlier anchor is completed by design (QA D41) and may be of any
+        // age, so reusing it would file this order on an existing finished
+        // encounter, which is the defect QA reported.
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    private static boolean isClosedEncounter(Encounter encounter) {
+        return encounter.getStatus() == EncounterStatus.COMPLETED
+            || encounter.getStatus() == EncounterStatus.CANCELLED;
     }
 
     /**
@@ -1439,6 +1478,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
     }
 
+    /**
+     * QA D703: the stay is the hospital's, not the admitting doctor's. Any
+     * prescriber of the stay's hospital who treats the patient (the doctor on
+     * call at night, a colleague covering the ward) may order on it; the
+     * prescribing role itself is enforced on the endpoint. Tenant scoping is
+     * kept: a prescriber of another hospital is refused.
+     */
     private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
         UUID staffId = staff != null ? staff.getId() : null;
         if (staffId == null) {
@@ -1448,10 +1494,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             || sameStaff(admission.getAdmittingProvider(), staffId)) {
             return true;
         }
-        List<java.util.Map<String, String>> consultants = admission.getConsultingPhysicians();
-        String id = staffId.toString();
-        return consultants != null && consultants.stream()
-            .anyMatch(c -> c != null && id.equalsIgnoreCase(c.get("staffId")));
+        UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
+        UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        return stayHospital != null && stayHospital.equals(staffHospital);
+    }
+
+    /** An open, non-stay encounter: the only kind an unanchored order may join. */
+    private static boolean isReusableOutpatientAnchor(Encounter encounter) {
+        EncounterStatus status = encounter.getStatus();
+        return !isHospitalStay(encounter)
+            && status != EncounterStatus.COMPLETED
+            && status != EncounterStatus.CANCELLED;
+    }
+
+    /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */
+    private static boolean isHospitalStay(Encounter encounter) {
+        return encounter.getAdmissionId() != null || encounter.getEncounterType() == EncounterType.INPATIENT;
     }
 
     private static boolean sameStaff(Staff member, UUID staffId) {

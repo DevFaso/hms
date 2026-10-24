@@ -137,7 +137,7 @@
                 <span class="pli-title">{{ item.title }}</span>
                 <span class="pli-sub">
                   {{ 'PORTAL.EDUCATION.COMPLETED_ON' | translate }}
-                  {{ item.completedAt | date: 'mediumDate' }}
+                  {{ item.completedAt | serverTime | date: 'mediumDate' }}
                 </span>
               </div>
               <div class="pli-meta">
@@ -173,7 +173,7 @@
               </span>
               <div class="pli-body">
                 <span class="pli-title">{{ q.questionText }}</span>
-                <span class="pli-sub">{{ q.createdAt | date: 'medium' }}</span>
+                <span class="pli-sub">{{ q.createdAt | serverTime | date: 'medium' }}</span>
                 @if (q.isAnswered && q.answerText) {
                   <div class="edu-answer">
                     <strong>{{ 'PORTAL.EDUCATION.ANSWER' | translate }}</strong>

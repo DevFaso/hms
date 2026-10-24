@@ -6,7 +6,6 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.AuditEventLogSpecifications;
 import com.example.hms.security.context.HospitalContextHolder;
@@ -17,7 +16,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -35,8 +33,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -62,8 +58,15 @@ public class AuditEventLogController {
      * directors review access trails as part of CAP/ISO 15189 quality
      * audits. Before this gate the controller had NO authorization at all:
      * any authenticated user, patients included, could page the entire
-     * audit log. The POST (event emission) deliberately stays open to all
-     * authenticated users — clients record their own audit events.
+     * audit log.
+     *
+     * <p>There is no POST here any more (QA D701): it took the actor, the
+     * hospital and the event type from the request body, so any signed-in
+     * user, a patient included, could write a LOGIN row as a hospital admin or
+     * a DATA_DELETE row as a doctor, and hospital admins read them as real.
+     * No client called it. Audit rows are written by the server, for the
+     * authenticated caller; client telemetry goes to {@code /frontend-audit},
+     * whose actor is the principal. AuditWriteSurfaceGuardTest keeps it so.
      */
     private static final String AUDIT_READ_ROLES =
         "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
@@ -110,17 +113,6 @@ public class AuditEventLogController {
                 Sort.by(Sort.Direction.DESC, "eventTimestamp"));
         return auditRepository.findAll(AuditEventLogSpecifications.anchoredAt(scope).and(filter), ordered)
             .map(auditMapper::toDto);
-    }
-
-    @PostMapping
-    @Operation(summary = "Log an Audit Event", description = "Creates a new audit log entry and returns it.")
-    @ApiResponse(responseCode = "200", description = "Audit event logged successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid request body")
-    @ApiResponse(responseCode = "404", description = "User not found")
-    public ResponseEntity<AuditEventLogResponseDTO> logEvent(
-        @Valid @RequestBody AuditEventRequestDTO requestDTO) {
-        AuditEventLogResponseDTO response = auditService.logEvent(requestDTO);
-        return ResponseEntity.ok(response);
     }
 
     @GetMapping

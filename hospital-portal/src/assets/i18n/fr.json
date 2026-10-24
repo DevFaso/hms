@@ -2584,7 +2584,7 @@
     "REGION": "Région",
     "REGION_PLACEHOLDER": "ex. Centre, Île-de-France",
     "REQUIRED_FIELDS": "Le nom, la ville, le pays, le téléphone et une adresse ou une boîte postale sont obligatoires.",
-    "ADDRESS_OR_PO_BOX_HINT": "Indiquez l'adresse ou la boîte postale (l'une des deux est obligatoire).",
+    "ADDRESS_OR_PO_BOX_HINT": "L'adresse (rue) est obligatoire ; la boîte postale est facultative.",
     "SEARCH_PLACEHOLDER": "Rechercher des hôpitaux…",
     "SECTOR": "Secteur / Quartier",
     "SECTOR_PLACEHOLDER": "ex. Secteur 30",
@@ -4586,6 +4586,7 @@
       "EMPTY_TITLE": "Aucun médicament trouvé",
       "EMPTY_DESC": "Vous n'avez aucun médicament actif.",
       "ACTIVE": "Médicaments actifs",
+      "PAST": "Médicaments passés",
       "PRESCRIPTIONS": "Ordonnances",
       "MEDICATION": "Médicament",
       "DOSAGE": "Posologie",
@@ -6255,6 +6256,11 @@
     "DRAFT": "Brouillon",
     "DURATION": "Durée",
     "DURATION_PLACEHOLDER": "Saisir la durée...",
+    "PRESCRIBED_QUANTITY": "Quantité à délivrer",
+    "PRESCRIBED_QUANTITY_PLACEHOLDER": "ex. 3",
+    "PRESCRIBED_QUANTITY_UNIT": "Unité",
+    "PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER": "ex. ampoules, comprimés",
+    "PRESCRIBED_QUANTITY_REQUIRED": "Indiquez la quantité à délivrer (supérieure à zéro).",
     "EDIT": "Modifier l'ordonnance",
     "EMPTY_MESSAGE": "Aucune ordonnance trouvée",
     "ENCOUNTER_ID": "Consultation",
@@ -8582,7 +8588,8 @@
       "ACTIVATE": "Activer",
       "ACTIVATE_TITLE": "Activer pour la prescription",
       "OWN_SUBMISSION_HINT_QA": "Vous avez soumis cet examen : un autre responsable qualité ou directeur de laboratoire doit en effectuer la revue qualité (principe des quatre yeux).",
-      "OWN_SUBMISSION_HINT_APPROVE": "Vous avez soumis cet examen : un autre directeur de laboratoire doit l'approuver (principe des quatre yeux)."
+      "OWN_SUBMISSION_HINT_APPROVE": "Vous avez soumis cet examen : un autre directeur de laboratoire doit l'approuver (principe des quatre yeux).",
+      "OWN_REVIEW_HINT_APPROVE": "Vous avez fait la revue qualité de cet examen : un autre directeur de laboratoire, ou son auteur, doit l'approuver (principe des quatre yeux)."
     },
     "EMPTY": {
       "TITLE": "La file d'attente est vide",

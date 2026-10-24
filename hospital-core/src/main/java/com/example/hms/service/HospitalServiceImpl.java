@@ -156,7 +156,7 @@ public class HospitalServiceImpl implements HospitalService {
     @Transactional
     public HospitalResponseDTO createHospital(HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
-        validateAddressFields(dto, locale);
+        validateAddressFields(dto, null, locale);
         // QA D285: "Clinique  X " and "clinique x" are one hospital; the name
         // is stored as typed, minus stray blanks, and checked the same way.
         dto.setName(normalizeName(dto.getName()));
@@ -200,7 +200,7 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
         Hospital hospital = getClinicalHospitalOrThrow(id);
-        validateAddressFields(dto, locale);
+        validateAddressFields(dto, hospital.getAddress(), locale);
         // The create rule holds on update too: renaming onto another
         // hospital's name and zip code is a 409, not a silent duplicate (D223).
         if (dto.getName() != null) {
@@ -401,8 +401,18 @@ public class HospitalServiceImpl implements HospitalService {
 
     /**
      * Validates country-specific address rules.
+     * QA D734/D747: the street address is required for every hospital, on
+     * create and on update (where an omitted field keeps the stored street,
+     * but an empty one is refused). It used to be optional whenever a P.O.
+     * box was given, so the form's "Adresse / Rue *" was never enforced.
      */
-    private void validateAddressFields(HospitalRequestDTO dto, Locale locale) {
+    private void validateAddressFields(HospitalRequestDTO dto, String storedAddress, Locale locale) {
+        String street = dto.getAddress() != null ? dto.getAddress() : storedAddress;
+        if (street == null || street.isBlank()) {
+            throw new IllegalArgumentException(
+                    messageSource.getMessage("hospital.address.required", null,
+                            "The street address is required.", locale));
+        }
         String country = dto.getCountry() != null ? dto.getCountry().toUpperCase() : "";
 
         if (country.equals("US") || country.equals("USA")) {
@@ -415,16 +425,6 @@ public class HospitalServiceImpl implements HospitalService {
                 throw new IllegalArgumentException(
                         messageSource.getMessage("hospital.zipCode.required", null,
                                 "Zip Code is required for hospitals in the United States.", locale));
-            }
-        } else {
-            // Foreign Country Validation
-            boolean hasValidAddress = (dto.getAddress() != null && !dto.getAddress().isBlank()) ||
-                    (dto.getPoBox() != null && !dto.getPoBox().isBlank());
-
-            if (!hasValidAddress) {
-                throw new IllegalArgumentException(
-                        messageSource.getMessage("hospital.address.required", null,
-                                "Address or PO Box is required for foreign hospitals.", locale));
             }
         }
     }

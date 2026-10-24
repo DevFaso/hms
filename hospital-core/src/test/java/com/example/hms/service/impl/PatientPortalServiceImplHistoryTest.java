@@ -119,6 +119,8 @@ class PatientPortalServiceImplHistoryTest {
     @Mock private FamilyHistoryMapper familyHistoryMapper;
     @Mock private SocialHistoryMapper socialHistoryMapper;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks private PatientPortalServiceImpl service;
     @Mock private Authentication auth;
 

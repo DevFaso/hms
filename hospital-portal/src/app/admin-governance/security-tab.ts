@@ -12,12 +12,13 @@ import {
   SuperAdminGovernanceService,
 } from '../services/super-admin-governance.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /** Security baselines, pending approvals, rule-set templates + simulation. */
 @Component({
   selector: 'app-gov-security-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './security-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

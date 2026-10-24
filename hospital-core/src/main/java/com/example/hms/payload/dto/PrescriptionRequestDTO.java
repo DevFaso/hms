@@ -73,6 +73,21 @@ public class PrescriptionRequestDTO {
     @Size(max = 1024)
     private String notes;
 
+    /**
+     * QA D706: the quantity to hand over per fill (ampoules, tablets...).
+     * The pharmacy caps the cumulative dispense at it. Required on a new
+     * prescription from the prescribing form and on any controlled
+     * substance; on update, null leaves the stored value unchanged.
+     */
+    @jakarta.validation.constraints.DecimalMin(value = "0", inclusive = false,
+        message = "{prescription.quantity.positive}")
+    @jakarta.validation.constraints.DecimalMax(value = "100000", message = "{prescription.quantity.tooLarge}")
+    @jakarta.validation.constraints.Digits(integer = 10, fraction = 2, message = "{prescription.quantity.positive}")
+    private java.math.BigDecimal quantity;
+
+    @Size(max = 60)
+    private String quantityUnit;
+
     private PrescriptionStatus status;
 
     /**

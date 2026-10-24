@@ -36,11 +36,13 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

@@ -154,7 +154,12 @@ public class CriticalValueNotificationService {
         // warning (the #553 trap, and the same one the outbox enqueue had).
         // Failing loudly means the clinical write is retried, which is
         // recoverable; a critical result nobody was told about is not.
-        if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
+        // QA D709: a clinician is paged about a result they can read. Before
+        // release the result is the laboratory's draft (GET answers 404 to
+        // the ordering side), so the page waits for the release, which calls
+        // this again; the stamp is not written, so the sweep does not chase it.
+        if (!result.isReleased()
+            || result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
             return;
         }
         String username = resolveOrderingUsername(result);
@@ -166,7 +171,8 @@ public class CriticalValueNotificationService {
                 result.getId());
         } else {
             NotificationText text = buildText(result, false);
-            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE,
+                result.getId());
             String message = text.render(messageSource, NotificationLocales.STAFF);
             // The gateway call waits for the commit: a hung gateway must
             // not hold the clinical transaction's row locks, and an SMS
@@ -284,7 +290,8 @@ public class CriticalValueNotificationService {
         String message = text.render(messageSource, NotificationLocales.STAFF);
 
         for (String recipient : escalationRecipients(result, round)) {
-            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE,
+                result.getId());
         }
         // SMS once per round, not once per recipient: the transport targets the
         // result's chart context, so fanning it out would send the same text
@@ -403,7 +410,11 @@ public class CriticalValueNotificationService {
         result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
-        return labResultRepository.save(result);
+        LabResult saved = labResultRepository.save(result);
+        // QA D726: the alert is answered, so its notifications (to the
+        // orderer and to every escalation recipient) no longer read as unread.
+        notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
+        return saved;
     }
 
     /**

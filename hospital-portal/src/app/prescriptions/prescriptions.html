@@ -340,7 +340,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
-                rx.createdAt ? (rx.createdAt | date: 'medium') : '—'
+                rx.createdAt ? (rx.createdAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>
@@ -363,7 +363,7 @@
               @if (rx.signedAt) {
                 <div class="detail-field">
                   <span class="field-label">{{ 'PRESCRIPTIONS.SIGNED_AT' | translate }}</span
-                  ><span class="field-value">{{ rx.signedAt | date: 'medium' }}</span>
+                  ><span class="field-value">{{ rx.signedAt | serverTime | date: 'medium' }}</span>
                 </div>
               }
               @if (rx.requiresCosign) {
@@ -859,6 +859,34 @@
                 <option [value]="r">{{ 'PRESCRIPTIONS.ROUTES.' + r | translate }}</option>
               }
             </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="rx-quantity">{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }} *</label>
+            <input
+              id="rx-quantity"
+              type="number"
+              min="0.01"
+              step="any"
+              required
+              [(ngModel)]="form.quantity"
+              [readonly]="editingSigned()"
+              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="field">
+            <label for="rx-quantity-unit">{{
+              'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate
+            }}</label>
+            <input
+              id="rx-quantity-unit"
+              type="text"
+              maxlength="60"
+              [(ngModel)]="form.quantityUnit"
+              [readonly]="editingSigned()"
+              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
+            />
           </div>
         </div>
         <div class="form-row">

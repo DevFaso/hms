@@ -145,7 +145,8 @@
             <span class="field-label">{{ 'RECEPTION.ELIGIBILITY_VERIFIED' | translate }}</span>
             <span class="field-val attested-chip">
               <span class="material-symbols-outlined small">verified</span>
-              {{ s.insurance.verifiedBy }} · {{ s.insurance.verifiedAt | date: 'mediumDate' }}
+              {{ s.insurance.verifiedBy }} ·
+              {{ s.insurance.verifiedAt | serverTime | date: 'mediumDate' }}
             </span>
           </div>
         }

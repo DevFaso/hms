@@ -187,6 +187,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         // QA D98/D135: the stay opens its own INPATIENT encounter, so notes,
         // the discharge summary and the after-visit summary have a home.
         stayEncounters.openStayEncounter(admission);
+        // QA D712: the emergency visit / same-day consultation ends with the admission.
+        encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
         return admissionMapper.toResponseDTO(admission);
     }
 

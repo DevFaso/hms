@@ -544,4 +544,68 @@ class TransferServiceImplTest {
         assertThatThrownBy(() -> service.requestTransfer(request))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ── QA D713: the server records who requested and who completed ──────
+
+    private Staff signInAsStaffHere() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        Staff me = new Staff();
+        me.setId(UUID.randomUUID());
+        me.setHospital(hospital);
+        me.setUser(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
+        when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospitalId)).thenReturn(Optional.of(me));
+        return me;
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSession() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void d713_aTransferOrderedFromTheBedBoardRecordsTheCallerAsRequester() {
+        // bed-board.ts sends no requestedByStaffId: the row was anonymous.
+        Staff me = signInAsStaffHere();
+
+        service.requestTransfer(base().build());
+
+        org.mockito.ArgumentCaptor<TransferOrder> saved = org.mockito.ArgumentCaptor.forClass(TransferOrder.class);
+        verify(transferOrderRepository).save(saved.capture());
+        assertThat(saved.getValue().getRequestedBy()).isEqualTo(me);
+    }
+
+    @Test
+    void d713_completingATransferRecordsTheCallerAsCompleter() {
+        Staff me = signInAsStaffHere();
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+
+        service.completeTransfer(order.getId(), TransferCompletionRequestDTO.builder().build());
+
+        assertThat(order.getCompletedBy()).isEqualTo(me);
+    }
+
+    @Test
+    void d713_completingInAColleaguesNameIsRefused() {
+        signInAsStaffHere();
+        TransferOrder order = pendingOrder(destinationBed);
+        when(transferOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        colleague.setHospital(hospital);
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+        UUID orderId = order.getId();
+        TransferCompletionRequestDTO request = TransferCompletionRequestDTO.builder()
+            .completedByStaffId(colleague.getId()).build();
+
+        assertThatThrownBy(() -> service.completeTransfer(orderId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(bedAssignmentService, never()).assignBed(any(), any(), any());
+    }
 }

@@ -21,6 +21,7 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientRepository;
@@ -421,7 +422,8 @@ public class PatientEverythingService {
         ctx.account(labResults.getContent().stream()
             .map(r -> r.getLabOrder() == null ? null : CrossHospitalReachRecorder.hospitalIdOf(r.getLabOrder().getHospital()))
             .toList());
-        labResults.forEach(r -> {
+        // QA D740/D741: released, current results only.
+        ClinicalLabResultView.releasedAndCurrent(labResults.getContent()).forEach(r -> {
             if (ctx.passesSinceFilter(r.getUpdatedAt())) {
                 addEntry(bundle, observationMapper.toFhir(r));
             }

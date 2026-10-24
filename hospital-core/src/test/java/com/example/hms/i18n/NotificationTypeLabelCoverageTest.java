@@ -45,7 +45,7 @@ class NotificationTypeLabelCoverageTest {
                 Matcher call = CALL.matcher(src);
                 while (call.find()) {
                     List<String> args = arguments(src, call.end());
-                    if (args.size() != 4 || isDeclaration(src, call.start())) continue;
+                    if ((args.size() != 4 && args.size() != 5) || isDeclaration(src, call.start())) continue;
                     String type = resolve(args.get(3), src);
                     if (type != null) emitted.put(type, file.getFileName().toString());
                 }
@@ -98,7 +98,8 @@ class NotificationTypeLabelCoverageTest {
                 continue;
             }
             if (c == '"') { inString = true; cur.append(c); continue; }
-            if (c == '(') depth++;
+            if (c == '(' || c == '{' || c == '[') depth++;
+            if (c == '}' || c == ']') depth--;
             if (c == ')') {
                 if (depth == 0) { args.add(cur.toString()); return args; }
                 depth--;

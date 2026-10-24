@@ -214,14 +214,18 @@
                       <span class="material-symbols-outlined">person_add</span>
                     </button>
                   }
-                  @if (c.status === 'ASSIGNED') {
+                  @if (
+                    ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status)
+                  ) {
                     <button
-                      class="action-link assign"
+                      class="action-link assign reassign-btn"
                       (click)="openAssign(c, true)"
                       [title]="'CONSULTATIONS.REASSIGN_CONSULTANT' | translate"
                     >
                       <span class="material-symbols-outlined">person_search</span>
                     </button>
+                  }
+                  @if (c.status === 'ASSIGNED') {
                     <button
                       class="action-link"
                       (click)="acknowledgeConsultation(c)"
@@ -349,7 +353,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
-                con.completedAt ? (con.completedAt | date: 'medium') : '—'
+                con.completedAt ? (con.completedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             @if (con.assignedAt) {
@@ -367,7 +371,9 @@
             @if (con.acknowledgedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.ACKNOWLEDGED' | translate }}</span
-                ><span class="field-value">{{ con.acknowledgedAt | date: 'medium' }}</span>
+                ><span class="field-value">{{
+                  con.acknowledgedAt | serverTime | date: 'medium'
+                }}</span>
               </div>
             }
             @if (con.scheduledAt) {

@@ -118,4 +118,16 @@ class PrescriptionControllerTest {
         return extractRolesFromMethod("list",
                 UUID.class, UUID.class, UUID.class, List.class, Pageable.class, Locale.class);
     }
+
+    @org.junit.jupiter.api.Test
+    void qaD706_createWithoutQuantityIsRefusedBeforeTheService() {
+        PrescriptionController controller = org.mockito.Mockito.mock(PrescriptionController.class,
+            org.mockito.Mockito.CALLS_REAL_METHODS);
+        com.example.hms.payload.dto.PrescriptionRequestDTO request = new com.example.hms.payload.dto.PrescriptionRequestDTO();
+        request.setMedicationName("Morphine 10 mg");
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.create(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .matches(e -> "prescription.quantity.required".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
 }

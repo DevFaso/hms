@@ -41,6 +41,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -136,6 +137,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -438,6 +440,8 @@ export class PrescriptionsComponent implements OnInit {
       frequency: '',
       route: 'PO',
       duration: '',
+      quantity: null,
+      quantityUnit: '',
       notes: '',
       status: 'DRAFT',
     };
@@ -498,7 +502,12 @@ export class PrescriptionsComponent implements OnInit {
       next: (list) => {
         if (this.form.patientId !== patientId) return;
         this.patientEncounters.set(
-          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+          // QA D739 (r10 re-test 3): a completed or cancelled encounter
+          // cannot take a new order (the server refuses it), so it is not
+          // offered. An edit keeps its own encounter as "linked encounter".
+          list
+            .filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED')
+            .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },
       error: () => this.patientEncounters.set([]),
@@ -556,6 +565,8 @@ export class PrescriptionsComponent implements OnInit {
       frequency: p.frequency ?? '',
       route: p.route ?? '',
       duration: p.duration ?? '',
+      quantity: p.quantity ?? null,
+      quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
     };
@@ -604,8 +615,15 @@ export class PrescriptionsComponent implements OnInit {
   protected readonly formError = signal('');
 
   submitForm(): void {
-    this.saving.set(true);
     this.formError.set('');
+    // QA D706: a new prescription states the quantity to hand over; the
+    // pharmacy caps the dispense at it (the server refuses it too).
+    const qty = this.form.quantity;
+    if (!this.editing() && (qty == null || !(Number(qty) > 0))) {
+      this.formError.set(this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED'));
+      return;
+    }
+    this.saving.set(true);
     const op = this.editing()
       ? this.prescriptionService.update(this.editingId()!, this.form)
       : this.prescriptionService.create(this.form);

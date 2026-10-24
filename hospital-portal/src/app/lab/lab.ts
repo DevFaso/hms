@@ -32,11 +32,12 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab.scss',

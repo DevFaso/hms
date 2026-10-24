@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
  * anything else (STAT, once, PRN, free prose) yields {@code null}, which the
  * MAR treats as a single dose.
  */
-final class MarDoseSchedule {
+public final class MarDoseSchedule {
 
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
     private static final Pattern EVERY_HOURS =
@@ -22,7 +22,7 @@ final class MarDoseSchedule {
     }
 
     /** Hours between doses, or {@code null} when the frequency is not a fixed repeat. */
-    static Integer intervalHours(String frequency) {
+    public static Integer intervalHours(String frequency) {
         if (frequency == null || frequency.isBlank()) {
             return null;
         }
@@ -45,10 +45,10 @@ final class MarDoseSchedule {
         }
         String compact = f.replace(" ", "");
         return switch (compact) {
-            case "QD", "OD", "DAILY", "ONCEDAILY", "QAM", "QPM", "QHS", "HS", "1XDAILY" -> 24;
-            case "BID", "BD", "TWICEDAILY" -> 12;
-            case "TID", "TDS", "THREETIMESDAILY" -> 8;
-            case "QID", "QDS", "FOURTIMESDAILY" -> 6;
+            case "QD", "OD", "DAILY", "ONCEDAILY", "ONCEADAY", "QAM", "QPM", "QHS", "HS", "1XDAILY" -> 24;
+            case "BID", "BD", "TWICEDAILY", "TWICEADAY" -> 12;
+            case "TID", "TDS", "THREETIMESDAILY", "THREETIMESADAY" -> 8;
+            case "QID", "QDS", "FOURTIMESDAILY", "FOURTIMESADAY" -> 6;
             default -> null;
         };
     }

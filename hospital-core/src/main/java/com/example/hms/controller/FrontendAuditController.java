@@ -12,6 +12,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.security.core.Authentication;
+import com.example.hms.controller.support.ControllerAuthUtils;
+import java.util.UUID;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class FrontendAuditController {
 
     private final FrontendAuditService frontendAuditService;
+    private final ControllerAuthUtils authUtils;
 
     @Operation(
         summary = "Record a frontend audit event",
@@ -36,17 +40,20 @@ public class FrontendAuditController {
         @Valid @RequestBody FrontendAuditEventRequestDTO request,
         HttpServletRequest httpRequest,
         @RequestHeader(value = "X-Forwarded-For", required = false) String forwardedIps,
-        @RequestHeader(value = "User-Agent", required = false) String userAgent
+        @RequestHeader(value = "User-Agent", required = false) String userAgent,
+        Authentication authentication
     ) {
-        String ipAddress = resolveIpAddress(request.getIpAddress(), forwardedIps, httpRequest);
+        // QA D701 sibling: the actor and the address are the server's to state,
+        // never the payload's. A body-supplied "actor" let any caller attribute a
+        // breadcrumb to someone else; the authenticated principal is the actor.
+        request.setActor(authUtils.resolveUserId(authentication).map(UUID::toString).orElse(null));
+        request.setIpAddress(null);
+        String ipAddress = resolveIpAddress(forwardedIps, httpRequest);
         frontendAuditService.recordEvent(request, ipAddress, userAgent);
         return ResponseEntity.accepted().build();
     }
 
-    private String resolveIpAddress(String payloadOverride, String forwardedIps, HttpServletRequest request) {
-        if (payloadOverride != null && !payloadOverride.isBlank()) {
-            return payloadOverride.trim();
-        }
+    private String resolveIpAddress(String forwardedIps, HttpServletRequest request) {
         if (forwardedIps != null && !forwardedIps.isBlank()) {
             return forwardedIps.split(",")[0].trim();
         }
