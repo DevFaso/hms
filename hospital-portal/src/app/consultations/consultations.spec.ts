@@ -81,6 +81,9 @@ describe('ConsultationsComponent', () => {
         { id: 'st2', name: 'Dr B', active: false, roleCode: 'ROLE_DOCTOR' } as StaffResponse,
         // QA D122: a receptionist is never offered as a consultant.
         { id: 'st3', name: 'Desk', active: true, roleCode: 'ROLE_RECEPTIONIST' } as StaffResponse,
+        // QA D715: nor is a nurse or a midwife: the consultant must be a doctor.
+        { id: 'st4', name: 'Nurse N', active: true, roleCode: 'ROLE_NURSE' } as StaffResponse,
+        { id: 'st5', name: 'Midwife M', active: true, roleCode: 'ROLE_MIDWIFE' } as StaffResponse,
       ]),
     );
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -272,7 +275,8 @@ describe('ConsultationsComponent', () => {
   it('openAssign loads only active staff for the consultation hospital', () => {
     component.openAssign(mockConsult());
     expect(staffSpy.list).toHaveBeenCalledWith('h1');
-    expect(component.assignStaff().length).toBe(1); // inactive filtered out
+    // Inactive, receptionist, nurse and midwife filtered out (QA D122, D715).
+    expect(component.assignStaff().map((s) => s.id)).toEqual(['st1']);
     expect(component.isReassign()).toBeFalse();
   });
 
