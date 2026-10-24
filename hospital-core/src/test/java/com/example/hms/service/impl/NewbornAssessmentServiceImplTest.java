@@ -250,7 +250,7 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
 
         assertNull(response.getDeliveryRecordId());
-        verify(deliveryRecordRepository, org.mockito.Mockito.never()).findById(any());
+        verify(deliveryRecordRepository, never()).findById(any());
     }
 
     @Test
@@ -267,7 +267,7 @@ class NewbornAssessmentServiceImplTest {
 
         assertThrows(BusinessException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(assessmentRepository, never()).save(any());
     }
 
     @Test
@@ -284,7 +284,7 @@ class NewbornAssessmentServiceImplTest {
 
         assertThrows(ResourceNotFoundException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(assessmentRepository, never()).save(any());
     }
 
     @Test
@@ -397,7 +397,7 @@ class NewbornAssessmentServiceImplTest {
         BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
             () -> service.recordAssessment(patientId, early, recorderId));
         assertEquals("maternity.newborn.assessmentTime.beforeBirth", ex.getMessageKey());
-        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(assessmentRepository, never()).save(any());
 
         NewbornAssessmentRequestDTO after = NewbornAssessmentRequestDTO.builder()
             .hospitalId(hospitalId).assessmentTime(birth.plusHours(1)).apgarOneMinute(8).apgarFiveMinute(9).build();
