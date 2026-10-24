@@ -154,7 +154,12 @@ public class CriticalValueNotificationService {
         // warning (the #553 trap, and the same one the outbox enqueue had).
         // Failing loudly means the clinical write is retried, which is
         // recoverable; a critical result nobody was told about is not.
-        if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
+        // QA D709: a clinician is paged about a result they can read. Before
+        // release the result is the laboratory's draft (GET answers 404 to
+        // the ordering side), so the page waits for the release, which calls
+        // this again; the stamp is not written, so the sweep does not chase it.
+        if (!result.isReleased()
+            || result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
             return;
         }
         String username = resolveOrderingUsername(result);

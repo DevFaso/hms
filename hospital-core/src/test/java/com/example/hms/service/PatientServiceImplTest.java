@@ -911,6 +911,7 @@ class PatientServiceImplTest {
 
         LabResult labResult = LabResult.builder()
             .labOrder(labOrder)
+            .released(true)
             // Not a person. This is what the chart rendered under
             // "who treated the patient" before this change.
             .releasedByDisplay("Autoverification")
@@ -1200,6 +1201,7 @@ class PatientServiceImplTest {
         order.setId(UUID.randomUUID());
         LabResult result = LabResult.builder()
             .labOrder(order)
+            .released(true)
             .resultValue(value)
             .resultUnit("mmol/L")
             .resultDate(LocalDateTime.now().minusDays(1))
@@ -1292,6 +1294,7 @@ class PatientServiceImplTest {
         labOrder.setId(UUID.randomUUID());
         LabResult labResult = LabResult.builder()
             .labOrder(labOrder)
+            .released(true)
             .resultValue("Reactive")
             .resultUnit("IgG")
             .resultDate(LocalDateTime.now().minusHours(1))

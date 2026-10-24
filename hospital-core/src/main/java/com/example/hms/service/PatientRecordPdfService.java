@@ -192,7 +192,9 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.results"));
         pages.rows(chart.getResults(), r -> join(SEPARATOR, t.fmt(r.getResultDate()),
             safe(r.getTestName()) + code(r.getTestCode()),
-            join(" ", r.getResultValue(), r.getResultUnit()), label(t, r.getAbnormalFlag()), r.getOrderingStaffName()));
+            // QA D740: an unreleased row prints as pending, never with a value.
+            r.isReleased() ? join(" ", r.getResultValue(), r.getResultUnit()) : t.get("pdf.record.result.pending"),
+            r.isReleased() ? label(t, r.getAbnormalFlag()) : null, r.getOrderingStaffName()));
 
         pages.heading(t.get("pdf.record.section.medications"));
         pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),

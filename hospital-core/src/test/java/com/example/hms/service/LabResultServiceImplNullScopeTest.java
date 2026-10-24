@@ -250,7 +250,10 @@ class LabResultServiceImplNullScopeTest {
         @Test
         void isStillServedAcrossTenants() {
             assertThat(service.getLabResultById(result.getId(), Locale.ENGLISH)).isSameAs(mapped);
+            // QA D709: a read-back is of a released result.
+            result.setReleased(true);
             assertThat(service.recordCriticalReadBack(result.getId(), readBack(), Locale.ENGLISH)).isSameAs(mapped);
+            result.setReleased(false);
 
             service.deleteLabResult(result.getId(), Locale.ENGLISH);
             verify(labResultRepository).deleteById(result.getId());
@@ -271,6 +274,7 @@ class LabResultServiceImplNullScopeTest {
             // QA D211 (round 5): the global branch ignored both.
             PageRequest page = PageRequest.of(0, 20);
             UUID patientId = UUID.randomUUID();
+            result.setReleased(true);
             when(labResultRepository.findAllForReader(true, false, patientId, page))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
@@ -289,7 +293,10 @@ class LabResultServiceImplNullScopeTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
 
             assertThat(service.getLabResultById(result.getId(), Locale.ENGLISH)).isSameAs(mapped);
+            // QA D709: a read-back is of a released result.
+            result.setReleased(true);
             assertThat(service.recordCriticalReadBack(result.getId(), readBack(), Locale.ENGLISH)).isSameAs(mapped);
+            result.setReleased(false);
             service.deleteLabResult(result.getId(), Locale.ENGLISH);
 
             verify(labResultRepository).deleteById(result.getId());

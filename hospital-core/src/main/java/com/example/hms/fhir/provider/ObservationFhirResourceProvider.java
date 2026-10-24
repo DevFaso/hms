@@ -20,6 +20,7 @@ import com.example.hms.fhir.mapper.ObservationFhirMapper;
 import com.example.hms.fhir.write.ObservationFhirWriteService;
 import com.example.hms.model.LabResult;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientVitalSignRepository;
 import org.hl7.fhir.r4.model.IdType;
 import org.hl7.fhir.r4.model.Observation;
@@ -92,6 +93,9 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
             // an Observation it then gets 404 on.
             return labResultRepository.findById(uuid)
                 .filter(r -> r.getLabOrder() != null && r.getLabOrder().isHandledBy(hospitalId))
+                // QA D740/D741: an unreleased or superseded row is not served.
+                .filter(r -> ClinicalLabResultView.isReleasedAndCurrent(r,
+                    labResultRepository.findByLabOrder_Id(r.getLabOrder().getId())))
                 .map(mapper::toFhir)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }
@@ -142,8 +146,8 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
                 .forEach(v -> out.addAll(mapper.toFhir(v)));
         }
         if (wantsLabs) {
-            labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                    patientId, hospitalId, PageRequest.of(0, MAX_LAB_RESULTS_PER_PATIENT))
+            ClinicalLabResultView.releasedAndCurrent(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                    patientId, hospitalId, PageRequest.of(0, MAX_LAB_RESULTS_PER_PATIENT)).getContent())
                 .forEach(r -> {
                     Observation mapped = mapper.toFhir(r);
                     if (mapped != null) out.add(mapped);

@@ -71,6 +71,7 @@ import com.example.hms.repository.AdvanceDirectiveRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.service.allergy.LegacyAllergyTextImporter;
@@ -1939,8 +1940,9 @@ public class PatientServiceImpl implements PatientService {
         // own laboratory for another hospital. A performed-here row is still
         // the ordering hospital's record, so it carries that provenance and
         // passes the same D3 filter as any other foreign row.
-        List<LabResult> admitted = labResultRepository.findPatientResultsReadableAt(patientId,
-                readableHospitalIds, actingHospitalId, false, Pageable.unpaged()).stream()
+        // QA D741: superseded results and legacy duplicates are not current.
+        List<LabResult> admitted = ClinicalLabResultView.current(labResultRepository.findPatientResultsReadableAt(patientId,
+                readableHospitalIds, actingHospitalId, false, Pageable.unpaged())).stream()
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
                 departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
@@ -2226,8 +2228,9 @@ public class PatientServiceImpl implements PatientService {
         // hospital. This section has always been acting-hospital only, unlike
         // the medications and imaging beside it, which read the readable set;
         // the treatment relationship still does not widen it.
-        List<LabResult> results = labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId),
-                hospitalId, false, Pageable.unpaged()).stream()
+        // QA D740/D741: the record carries values, so released, current results only.
+        List<LabResult> results = ClinicalLabResultView.releasedAndCurrent(labResultRepository.findPatientResultsReadableAt(
+                patientId, Set.of(hospitalId), hospitalId, false, Pageable.unpaged())).stream()
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);
@@ -2534,6 +2537,12 @@ public class PatientServiceImpl implements PatientService {
             .filter(s -> s != null && !s.isBlank())
             .orElse("Lab Result");
         StringBuilder summary = new StringBuilder(testName);
+        // QA D740: an unreleased value stays in the laboratory.
+        if (!ClinicalLabResultView.showsValue(result)) {
+            return summary.append(": ")
+                .append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"))
+                .toString();
+        }
         summary.append(": ").append(result.getResultValue());
         if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
             summary.append(" ").append(result.getResultUnit());

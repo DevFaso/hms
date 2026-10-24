@@ -453,6 +453,7 @@ class ChartReviewServiceImplTest {
             .resultUnit("g/dL")
             .resultDate(when)
             .abnormalFlag(flag)
+            .released(true)
             .build();
         r.setId(UUID.randomUUID());
         return r;
@@ -688,6 +689,52 @@ class ChartReviewServiceImplTest {
             .filteredOn(e -> e.getSection() == Section.RESULT)
             .singleElement()
             .satisfies(e -> assertThat(e.getStatus()).isEqualTo("CRITICAL"));
+    }
+
+    @Test
+    void d740_anUnreleasedCriticalValueIsListedPendingWithNoValueUnitOrFlag() {
+        // Re-test D740: LAB_TECH_A enters KAL 1.8 (critical) and does not
+        // release it; the chart DTO the record.pdf is built from carried 1.8.
+        LabResult r = handEnteredPotassium("1.8");
+        r.setReleased(false);
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).singleElement().satisfies(e -> {
+            assertThat(e.isReleased()).isFalse();
+            assertThat(e.getResultValue()).isNull();
+            assertThat(e.getResultUnit()).isNull();
+            assertThat(e.getAbnormalFlag()).isNull();
+        });
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> {
+                assertThat(e.getTitle()).doesNotContain("1.8");
+                assertThat(e.getStatus()).isNull();
+            });
+    }
+
+    @Test
+    void d741_aReleasedCorrectionReplacesTheResultItCorrects() {
+        // Re-test D741: KAL 4.1 released, then a correction 4.0 naming it,
+        // released. Both showed as current.
+        LabResult original = handEnteredPotassium("4.1");
+        LabResult correction = handEnteredPotassium("4.0");
+        correction.setLabOrder(original.getLabOrder());
+        correction.setSupersedesResultId(original.getId());
+        correction.setResultDate(original.getResultDate().plusMinutes(5));
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(correction, original));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).extracting(ChartReviewDTO.ResultEntryDTO::getResultValue)
+            .containsExactly("4.0");
     }
 
     @Test

@@ -16,6 +16,7 @@ import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.service.lab.SupersededLabResults;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.service.PatientLabResultService;
@@ -142,8 +143,11 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         // rows to return one, and a fixed +1 still came up short whenever a
         // page held more than one pair.
 
+        // QA D741: outside the laboratory a superseded result and a legacy
+        // duplicate are not current, on the portal and the staff view alike.
+        boolean clinicalReader = portalView || !includeUnreleasedValues;
         List<LabResult> results = fetchRows(patient, hospitalId, effectiveLimit, portalView);
-        List<LabResult> visible = resolvePairs(results, portalView, effectiveLimit);
+        List<LabResult> visible = currentFor(clinicalReader, resolvePairs(results, portalView, effectiveLimit));
         // Only worth reading again if there are rows we have not seen AND the
         // wider read would actually be wider — at the cap it would repeat the
         // identical query for nothing.
@@ -151,7 +155,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             && results.size() >= effectiveLimit
             && effectiveLimit < MAX_LIMIT) {
             results = fetchRows(patient, hospitalId, MAX_LIMIT, portalView);
-            visible = resolvePairs(results, portalView, effectiveLimit);
+            visible = currentFor(clinicalReader, resolvePairs(results, portalView, effectiveLimit));
         }
 
         if (!portalView && hospitalId != null) {
@@ -178,8 +182,12 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(visible);
         return visible.stream()
-            .map(result -> toResponse(result, portalView || !includeUnreleasedValues, collectedAtByOrder))
+            .map(result -> toResponse(result, clinicalReader, collectedAtByOrder))
             .toList();
+    }
+
+    private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {
+        return clinicalReader ? ClinicalLabResultView.current(rows) : rows;
     }
 
     /**
