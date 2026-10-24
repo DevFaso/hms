@@ -656,7 +656,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, consultantId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.acknowledge.badStatus");
+                    .extracting("messageKey").isEqualTo("consultation.acknowledge.badStatus");
         }
     }
 
@@ -750,7 +750,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.complete.alreadyCompleted");
+                    .extracting("messageKey").isEqualTo("consultation.complete.alreadyCompleted");
         }
 
         @Test
@@ -763,7 +763,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.complete.cancelled");
+                    .extracting("messageKey").isEqualTo("consultation.complete.cancelled");
         }
     }
 
@@ -795,7 +795,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.cancelConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.cancel.completed");
+                    .extracting("messageKey").isEqualTo("consultation.cancel.completed");
         }
 
         @Test
@@ -806,7 +806,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.cancelConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.cancel.alreadyCancelled");
+                    .extracting("messageKey").isEqualTo("consultation.cancel.alreadyCancelled");
         }
     }
 
@@ -968,7 +968,7 @@ class ConsultationServiceImplTest {
             LocalDateTime now = LocalDateTime.now();
             assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.schedule.badStatus");
+                    .extracting("messageKey").isEqualTo("consultation.schedule.badStatus");
         }
 
         @Test
@@ -1046,7 +1046,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.startConsultation(consultationId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.start.badStatus");
+                    .extracting("messageKey").isEqualTo("consultation.start.badStatus");
         }
     }
 
@@ -1097,7 +1097,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.declineConsultation(consultationId, "reason"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.decline.alreadyDeclined");
+                    .extracting("messageKey").isEqualTo("consultation.decline.alreadyDeclined");
         }
     }
 
@@ -1137,7 +1137,7 @@ class ConsultationServiceImplTest {
             UUID assignedById = UUID.randomUUID();
             assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("consultation.assign.badStatus");
+                    .extracting("messageKey").isEqualTo("consultation.assign.badStatus");
         }
 
         @Test
@@ -1190,7 +1190,7 @@ class ConsultationServiceImplTest {
                     () -> service.updateConsultation(consultationId, update))) {
                 assertThatThrownBy(call::run)
                     .isInstanceOf(BusinessException.class)
-                    .hasMessage("consultation.consultant.notAtHospital");
+                    .extracting("messageKey").isEqualTo("consultation.consultant.notAtHospital");
             }
             assertThat(requested.getConsultant()).isNull();
             verify(consultationRepository, never()).save(any());
@@ -1527,7 +1527,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, done))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("consultation.complete.badStatus");
+                .extracting("messageKey").isEqualTo("consultation.complete.badStatus");
             verify(consultationRepository, never()).save(any());
         }
 
@@ -1601,7 +1601,7 @@ class ConsultationServiceImplTest {
                     () -> service.reassignConsultation(consultationId, consultantId, UUID.randomUUID(), "r"),
                     () -> service.updateConsultation(consultationId, update))) {
                 assertThatThrownBy(call::run).isInstanceOf(BusinessException.class)
-                    .hasMessage("consultation.consultant.notPhysician");
+                    .extracting("messageKey").isEqualTo("consultation.consultant.notPhysician");
             }
 
             ConsultationRequestDTO request = buildRequest();
@@ -1611,7 +1611,7 @@ class ConsultationServiceImplTest {
             when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
             when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
-                .isInstanceOf(BusinessException.class).hasMessage("consultation.consultant.notPhysician");
+                .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("consultation.consultant.notPhysician");
             verify(consultationRepository, never()).save(any());
         }
 
@@ -1630,7 +1630,7 @@ class ConsultationServiceImplTest {
             when(staffRepository.findById(consultantId)).thenReturn(Optional.of(consultant));
 
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
-                .isInstanceOf(BusinessException.class).hasMessage("consultation.consultant.notAtHospital");
+                .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("consultation.consultant.notAtHospital");
             verify(consultationRepository, never()).save(any());
         }
 
