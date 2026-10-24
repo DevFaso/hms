@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { Observable, of } from 'rxjs';
+import { Observable, of, NEVER } from 'rxjs';
 import { StockAdjustmentComponent } from './stock-adjustment';
 import { PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
@@ -124,6 +124,28 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
 
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
     expect(svc.recordTransaction).not.toHaveBeenCalled();
+  });
+
+  it('QA D655: a controlled receipt needs a witness and sends it with the lot', () => {
+    const c = create();
+    // Never answers: the reload after a success is not what this test is about.
+    svc.receiveStock.and.returnValue(NEVER as never);
+    c.inventoryItems.set([{ id: 'morph', controlled: true, quantityOnHand: 10 } as never]);
+    c.openForm();
+    c.onTypeChange('RECEIPT');
+    c.onItemChange('morph');
+    c.form.quantity = 10;
+    c.receiptLotNumber = 'MOR-1';
+    c.receiptExpiryDate = '2099-01-31';
+
+    expect(c.needsWitness()).toBeTrue();
+    c.submitForm();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+    expect(svc.receiveStock).not.toHaveBeenCalled();
+
+    c.form.witnessedBy = 'u-2';
+    c.submitForm();
+    expect(svc.receiveStock.calls.mostRecent().args[0].witnessedBy).toBe('u-2');
   });
 
   it('QA D158: the ledger signs receipts positive and an adjustment by its own sign', () => {

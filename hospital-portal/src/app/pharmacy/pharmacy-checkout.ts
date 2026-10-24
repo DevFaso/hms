@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -12,6 +12,7 @@ import {
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -25,7 +26,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CurrencyPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',

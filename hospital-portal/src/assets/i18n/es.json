@@ -1436,6 +1436,8 @@
     "PAYMENT_AMOUNT": "Importe",
     "PAYMENT_AMOUNT_REQUIRED": "Ingrese un importe mayor que cero",
     "PAYMENT_EXCEEDS_BALANCE": "El importe excede el saldo pendiente",
+    "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
+    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura.",
     "PAYMENT_FAILED": "Error en el pago",
     "PAYMENT_METHOD": "Método de pago",
     "PAYMENT_NOTE": "Los pagos se aplican a facturas emitidas o parcialmente pagadas, hasta el saldo pendiente, en francos enteros.",

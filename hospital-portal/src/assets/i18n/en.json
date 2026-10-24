@@ -1436,6 +1436,8 @@
     "PAYMENT_AMOUNT": "Amount",
     "PAYMENT_AMOUNT_REQUIRED": "Enter a payment amount greater than zero",
     "PAYMENT_EXCEEDS_BALANCE": "The amount exceeds the balance due",
+    "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
+    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice.",
     "PAYMENT_FAILED": "Payment failed",
     "PAYMENT_METHOD": "Payment Method",
     "PAYMENT_NOTE": "Payments apply to issued or partially paid invoices, up to the balance due, in whole francs.",

@@ -236,7 +236,7 @@
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                   }
-                  @if (canDelete) {
+                  @if (canDelete && inv.status === 'DRAFT') {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
@@ -577,11 +577,18 @@
         <div class="form-row">
           <div class="field">
             <label for="bill-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
-            <app-patient-picker
-              inputId="bill-patient"
-              [selected]="formPatient()"
-              (selectedChange)="onPatientPicked($event)"
-            />
+            @if (patientLocked()) {
+              <p id="bill-patient" class="field-value" data-testid="bill-patient-locked">
+                {{ formPatient()?.firstName }} {{ formPatient()?.lastName }}
+              </p>
+              <p class="field-hint">{{ 'BILLING.PATIENT_LOCKED_ISSUED' | translate }}</p>
+            } @else {
+              <app-patient-picker
+                inputId="bill-patient"
+                [selected]="formPatient()"
+                (selectedChange)="onPatientPicked($event)"
+              />
+            }
           </div>
         </div>
         <div class="form-row">
@@ -606,11 +613,25 @@
         <div class="form-row">
           <div class="field">
             <label for="bill-invoiceDate">{{ 'BILLING.INVOICE_DATE' | translate }} *</label>
-            <input id="bill-invoiceDate" type="date" [(ngModel)]="form.invoiceDate" required />
+            <input
+              id="bill-invoiceDate"
+              type="date"
+              [(ngModel)]="form.invoiceDate"
+              [max]="maxInvoiceDate()"
+              [disabled]="issuedContentLocked()"
+              required
+            />
           </div>
           <div class="field">
             <label for="bill-dueDate">{{ 'BILLING.DUE_DATE' | translate }} *</label>
-            <input id="bill-dueDate" type="date" [(ngModel)]="form.dueDate" required />
+            <input
+              id="bill-dueDate"
+              type="date"
+              [(ngModel)]="form.dueDate"
+              [min]="form.invoiceDate"
+              [disabled]="issuedContentLocked()"
+              required
+            />
           </div>
         </div>
         <div class="form-row">
@@ -620,7 +641,7 @@
               id="bill-totalAmount"
               type="number"
               [(ngModel)]="form.totalAmount"
-              [disabled]="editingHasLines()"
+              [disabled]="editingHasLines() || issuedContentLocked()"
               min="0"
               step="1"
             />
@@ -638,6 +659,7 @@
             type="text"
             maxlength="64"
             [(ngModel)]="form.encounterReference"
+            [disabled]="issuedContentLocked()"
             [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
           />
           <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>
@@ -806,6 +828,14 @@
           {{ 'BILLING.BALANCE_DUE' | translate }}:
           <strong>{{ formatCurrency(inv.balanceDue) }}</strong>
         </p>
+        @if (paymentPending() > 0) {
+          <p class="payment-pending" role="status" data-testid="payment-pending-declared">
+            {{
+              'BILLING.PAYMENT_PENDING_DECLARED'
+                | translate: { amount: formatCurrency(paymentPending()) }
+            }}
+          </p>
+        }
         <div class="field">
           <label for="payment-amount">{{ 'BILLING.PAYMENT_AMOUNT' | translate }} *</label>
           <input

@@ -31,7 +31,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
@@ -43,7 +42,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 
@@ -55,6 +53,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final StockTransactionRepository stockTransactionRepository;
     private final InventoryItemRepository inventoryItemRepository;
     private final StockLotRepository stockLotRepository;
+    private final com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
     private final PharmacyRepository pharmacyRepository;
     private final UserRepository userRepository;
     private final StockTransactionMapper stockTransactionMapper;
@@ -64,8 +63,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     /** Roles whose holder may witness a controlled-substance movement (QA D157). */
-    static final Set<String> WITNESS_ROLE_CODES =
-            Set.of("ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN");
+    static final Set<String> WITNESS_ROLE_CODES = ControlledStockWitness.WITNESS_ROLE_CODES;
+    /** QA D655: the one copy of the controlled-stock witness rule. */
+    private final ControlledStockWitness controlledStockWitness;
     /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
     private final EntityManager entityManager;
 
@@ -82,6 +82,9 @@ public class StockTransactionServiceImpl implements StockTransactionService {
 
         requireMovementIsAccountable(dto, item, lot);
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
+            requireWholeUnitsWhenCounted(item, dto.getQuantity()); // QA D668
+            // QA D604: the dispense row first (the lock its cancel takes), then the item.
+            requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
         }
 
@@ -198,22 +201,26 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (type == StockTransactionType.DISPENSE) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.dispense.viaWorkflow"));
         }
+        // QA D615: a receipt here created no lot row, so an expired lot, a
+        // lot number re-used with another expiry and an item total above its
+        // lots all went through. Goods are received through the lot receipt
+        // (POST /pharmacy/inventory/lots), which owns those rules; the portal
+        // already uses it.
+        if (type == StockTransactionType.RECEIPT) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.receipt.viaLots"));
+        }
         BigDecimal quantity = dto.getQuantity();
         boolean quantityValid = quantity != null
                 && (type == StockTransactionType.ADJUSTMENT ? quantity.signum() != 0 : quantity.signum() > 0);
         if (!quantityValid) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.quantity.invalid"));
         }
-        if (type != StockTransactionType.RECEIPT && (dto.getReason() == null || dto.getReason().isBlank())) {
+        if (dto.getReason() == null || dto.getReason().isBlank()) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.reason.required"));
         }
         if (lot != null) {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
-            }
-            if (type == StockTransactionType.RECEIPT && lot.getExpiryDate() != null
-                    && lot.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
-                throw new BusinessException(MessageUtil.resolve("stockLot.expired"));
             }
         } else if (stockLotRepository.existsByInventoryItemId(item.getId())) {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
@@ -251,41 +258,135 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
     }
 
+    /**
+     * QA D604: a return that names a dispense ({@code referenceId}) gives
+     * back at most what that dispense delivered and was not returned yet
+     * (a 4-unit fill took returns of 2, 3 and 4). The dispense row is locked
+     * so two returns, or a return and the cancel of that fill, are counted
+     * in turn. A cancelled fill already went back to stock, so nothing more
+     * can be returned against it. A reference that is not a dispense (a
+     * transfer) keeps the lot / item bound below.
+     */
+    private void requireReturnWithinDispense(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        if (dto.getReferenceId() == null) {
+            attributeUnreferencedReturn(dto, item, lot);
+            return;
+        }
+        if (dispenseRepository == null) {
+            return;
+        }
+        com.example.hms.model.pharmacy.Dispense dispense =
+                dispenseRepository.findLockedById(dto.getReferenceId()).orElse(null);
+        if (dispense == null) {
+            requireReturnOfTransfer(dto, item, lot);
+            return;
+        }
+        if (dispense.getStatus() != com.example.hms.enums.DispenseStatus.COMPLETED
+                && dispense.getStatus() != com.example.hms.enums.DispenseStatus.PARTIAL) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
+        }
+        StockLot dispensedLot = dispense.getStockLot();
+        boolean sameStock = dispensedLot != null
+                ? lot != null && dispensedLot.getId().equals(lot.getId())
+                : lot == null && dispense.getPharmacy() != null && item.getPharmacy() != null
+                    && dispense.getPharmacy().getId() != null
+                    && dispense.getPharmacy().getId().equals(item.getPharmacy().getId());
+        if (!sameStock) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
+        }
+        BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
+                stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
+        if (dto.getQuantity().compareTo(returnable) > 0) {
+            throw new BusinessException("stockTransaction.return.exceedsDispensed",
+                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /**
+     * QA D668/D675: a referenceId that is not a dispense (a prescription id,
+     * a random UUID) was accepted and created stock. It must then be a
+     * TRANSFER out of this lot (or item, for an unlotted item), and the
+     * return is capped at what that transfer moved and has not come back.
+     */
+    private void requireReturnOfTransfer(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        StockTransaction transfer = stockTransactionRepository.findById(dto.getReferenceId())
+                .filter(t -> t.getTransactionType() == StockTransactionType.TRANSFER)
+                .orElseThrow(() -> new BusinessException(
+                        MessageUtil.resolve("stockTransaction.return.referenceNotReturnable")));
+        boolean sameStock = transfer.getStockLot() != null
+                ? lot != null && transfer.getStockLot().getId().equals(lot.getId())
+                : lot == null && transfer.getInventoryItem() != null
+                    && item.getId().equals(transfer.getInventoryItem().getId());
+        if (!sameStock) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+        }
+        BigDecimal returnable = nz(transfer.getQuantity()).subtract(nz(
+                stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
+        if (dto.getQuantity().compareTo(returnable) > 0) {
+            throw new BusinessException("stockTransaction.return.exceedsDispensed",
+                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /**
+     * QA D653 then D668: a return that names no dispense was booked against
+     * whichever open fill could take it, another prescription's included
+     * (round-9 re-test). A return of a dispensed item names its dispense
+     * now; a return without one only gives back stock that left this lot
+     * (or item) by an unreferenced transfer and has not come back yet.
+     */
+    private void attributeUnreferencedReturn(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        inventoryItemRepository.lockById(item.getId());
+        BigDecimal transferred;
+        BigDecimal returned;
+        if (lot != null) {
+            transferred = stockTransactionRepository.sumQuantityForLot(lot.getId(), TRANSFERRED_TYPES);
+            returned = stockTransactionRepository.sumUnreferencedQuantityForLot(lot.getId(), RETURNED_TYPES);
+        } else {
+            transferred = stockTransactionRepository.sumQuantityForItem(item.getId(), TRANSFERRED_TYPES);
+            returned = stockTransactionRepository.sumUnreferencedQuantityForItem(item.getId(), RETURNED_TYPES);
+        }
+        if (dto.getQuantity().compareTo(nz(transferred).subtract(nz(returned))) > 0) {
+            throw new BusinessException("stockTransaction.return.dispenseRequired");
+        }
+    }
+
+    private static final Set<StockTransactionType> TRANSFERRED_TYPES =
+            java.util.EnumSet.of(StockTransactionType.TRANSFER);
+
+    /**
+     * QA D668: a return of 0.5 was accepted on a lot counted in tablets.
+     * An item whose unit is not a measure (ml, g, ...) is counted in whole
+     * units, so its returns are whole too.
+     */
+    static void requireWholeUnitsWhenCounted(InventoryItem item, BigDecimal quantity) {
+        if (quantity == null || quantity.stripTrailingZeros().scale() <= 0) {
+            return;
+        }
+        String unit = item.getUnit() == null ? "" : item.getUnit().trim().toLowerCase(java.util.Locale.ROOT);
+        if (!MEASURED_UNITS.contains(unit)) {
+            throw new BusinessException("stockTransaction.return.wholeUnitsOnly");
+        }
+    }
+
+    /** Units a quantity is measured (not counted) in; anything else is counted. */
+    static final Set<String> MEASURED_UNITS = Set.of(
+            "ml", "l", "cl", "dl", "g", "mg", "kg", "mcg", "µg", "ug", "ui", "iu");
+
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;
     }
 
     /**
-     * QA D157 (D82 follow-up): a manual movement of a controlled substance
-     * is witnessed by a second person, not the performer, who holds an
-     * active stock role in the hospital that owns the stock. Any other
-     * movement records no witness, so the column means one thing.
+     * QA D157 (D82 follow-up), D655: a manual movement of a controlled
+     * substance, a receipt included, is witnessed (the rule lives in
+     * {@link ControlledStockWitness}).
      */
     private User resolveWitness(StockTransactionRequestDTO dto, InventoryItem item, User performer) {
-        boolean controlled = dto.getTransactionType() != StockTransactionType.RECEIPT && isControlled(item);
-        if (!controlled) {
+        if (!ControlledStockWitness.isControlled(item)) {
             return null;
         }
-        UUID witnessId = dto.getWitnessedBy();
-        if (witnessId == null) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.required"));
-        }
-        if (witnessId.equals(performer.getId())) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.notSelf"));
-        }
-        UUID hospitalId = item.getPharmacy() != null && item.getPharmacy().getHospital() != null
-                ? item.getPharmacy().getHospital().getId() : null;
-        if (hospitalId == null || !assignmentRepository.existsActiveWitness(
-                witnessId, hospitalId, WITNESS_ROLE_CODES)) {
-            throw new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid"));
-        }
-        return userRepository.findById(witnessId)
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("stockTransaction.witness.invalid")));
-    }
-
-    private static boolean isControlled(InventoryItem item) {
-        MedicationCatalogItem catalogItem = item.getMedicationCatalogItem();
-        return catalogItem != null && catalogItem.isControlled();
+        return controlledStockWitness.resolve(dto.getWitnessedBy(), item, performer);
     }
 
     private static String upper(String code) {

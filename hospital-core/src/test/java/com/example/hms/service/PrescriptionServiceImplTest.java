@@ -138,6 +138,8 @@ class PrescriptionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     /** D414: the open stay a consultant's order belongs to. */
     @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    /** D654: a catalog pick carries its code into the order. */
+    @Mock private com.example.hms.repository.MedicationCatalogItemRepository catalogRepo;
     @Mock private AdmissionStayEncounterService stayEncounters;
 
     @InjectMocks
@@ -271,6 +273,67 @@ class PrescriptionServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
         assertThat(mappedEntity.getAssignment()).isEqualTo(encounterAssignment);
         verify(prescriptionRepository).save(mappedEntity);
+    }
+
+    /**
+     * D654 replay: ctl3.js posts medicationCatalogItemId (morphine) and no
+     * medicationCode. The order must take the item's code, which is what the
+     * mapper reads the catalog's controlled flag by.
+     */
+    @Test
+    void createPrescriptionFromACatalogPickTakesTheItemCode() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationCode(null);
+        UUID catalogId = UUID.randomUUID();
+        request.setMedicationCatalogItemId(catalogId);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setCode("N02AA01");
+        item.setControlled(true);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(catalogRepo.findByIdAndHospital_Id(catalogId, hospitalId)).thenReturn(Optional.of(item));
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCode()).isEqualTo("N02AA01");
+        // the signing block stays on the prescriber's tick
+        assertThat(request.getControlledSubstance()).isNull();
+    }
+
+    @Test
+    void createPrescriptionRefusesACatalogItemOfAnotherHospital() {
+        PrescriptionRequestDTO request = buildRequest();
+        UUID catalogId = UUID.randomUUID();
+        request.setMedicationCatalogItemId(catalogId);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(catalogRepo.findByIdAndHospital_Id(catalogId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

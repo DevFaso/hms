@@ -135,13 +135,17 @@ public class PharmacistVerificationService {
         // Verifying a draft would be verifying something the prescriber can
         // still freely rewrite, and the invalidation rule would clear it the
         // moment they did.
+        // QA D607: checked before the status. A fill attested at the counter
+        // (D512) stamps the verification and moves the order to DISPENSED, so
+        // the status check answered "only a signed prescription can be
+        // validated" and the order read as never verified.
+        if (isVerified(prescription)) {
+            throw new BusinessException("pharmacy.r7.alreadyVerified");
+        }
+
         PrescriptionStatus status = prescription.getStatus();
         if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
             throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
-        }
-
-        if (isVerified(prescription)) {
-            throw new BusinessException("pharmacy.r7.alreadyVerified");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();

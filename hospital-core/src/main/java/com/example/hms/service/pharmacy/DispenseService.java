@@ -59,7 +59,12 @@ public interface DispenseService {
 
     Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
 
-    DispenseResponseDTO cancelDispense(UUID id);
+    default DispenseResponseDTO cancelDispense(UUID id) {
+        return cancelDispense(id, null);
+    }
+
+    /** QA D654: {@code witnessedBy} is required when the cancel returns a controlled substance. */
+    DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy);
 
     /** Paginated list of prescriptions ready to dispense at the caller's active hospital. */
     default Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {

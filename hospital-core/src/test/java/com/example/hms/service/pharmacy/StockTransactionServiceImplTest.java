@@ -11,7 +11,6 @@ import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.model.pharmacy.StockTransaction;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.StockTransactionRequestDTO;
 import com.example.hms.payload.dto.pharmacy.StockTransactionResponseDTO;
 import com.example.hms.repository.UserRepository;
@@ -64,6 +63,7 @@ class StockTransactionServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     @InjectMocks
     private StockTransactionServiceImpl service;
@@ -125,6 +125,9 @@ class StockTransactionServiceImplTest {
         user.setId(userId);
         user.setUsername("pharmacist1");
         stockMovesLikeTheDatabase();
+        // QA D655: the witness rule is one shared component, run for real on the mocks.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "controlledStockWitness",
+                new ControlledStockWitness(assignmentRepository, userRepository));
     }
 
     /**
@@ -216,25 +219,48 @@ class StockTransactionServiceImplTest {
     // ── recordTransaction — RECEIPT ──────────────────────────────────────
 
     @Nested
-    @DisplayName("recordTransaction — RECEIPT")
+    @DisplayName("recordTransaction — RECEIPT (QA D615)")
     class RecordReceipt {
 
+        private void makeControlledWithoutLots() {
+            inventoryItem.getMedicationCatalogItem().setControlled(true);
+        }
+
+        /**
+         * QA D615: POST /pharmacy/stock-transactions RECEIPT on a controlled
+         * item with no lot yet — a normal one, the same lot number with
+         * another expiry, and an expired lot — all returned 201 with no lot
+         * row and no witness. A receipt goes through the lot receipt.
+         */
         @Test
-        @DisplayName("adds quantity to item and lot")
-        void success() {
-            BigDecimal qty = new BigDecimal("20.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
-            stubCommonMocks(dto, true);
+        @DisplayName("D615: every API receipt is refused and moves nothing — normal, duplicate lot, expired lot")
+        void receiptIsRefusedOnThisEndpoint() {
+            makeControlledWithoutLots();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            List<StockTransactionRequestDTO> attempts = List.of(
+                    receipt("LOT-QA-1", LocalDate.now().plusYears(1)),
+                    receipt("LOT-QA-1", LocalDate.now().plusYears(2)),
+                    receipt("LOT-QA-OLD", LocalDate.now().minusDays(10)));
+            for (StockTransactionRequestDTO dto : attempts) {
+                assertThatThrownBy(() -> service.recordTransaction(dto))
+                        .isInstanceOf(BusinessException.class)
+                        .hasMessage(MessageUtil.resolve("stockTransaction.receipt.viaLots"));
+            }
+            verify(stockTransactionRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+        }
 
-            service.recordTransaction(dto);
-
-            // Item quantity increased
-            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("120.00"));
-            // Lot remaining increased
-            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("70.00"));
-            verify(stockLotRepository, never()).save(any(StockLot.class));
-            verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
-            verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+        private StockTransactionRequestDTO receipt(String lotNumber, LocalDate expiry) {
+            return StockTransactionRequestDTO.builder()
+                    .inventoryItemId(inventoryItemId)
+                    .transactionType(StockTransactionType.RECEIPT)
+                    .quantity(new BigDecimal("30"))
+                    .lotNumber(lotNumber)
+                    .expiryDate(expiry)
+                    .build();
         }
     }
 
@@ -609,10 +635,15 @@ class StockTransactionServiceImplTest {
         }
 
         private void stubLotMovements(BigDecimal issued, BigDecimal returned) {
-            when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
+            org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
                     StockTransactionType.DISPENSE, StockTransactionType.TRANSFER))).thenReturn(issued);
-            when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
+            org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId, java.util.EnumSet.of(
                     StockTransactionType.RETURN))).thenReturn(returned);
+            // D668: these returns name no dispense, so they give back transferred stock.
+            org.mockito.Mockito.lenient().when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.TRANSFER))).thenReturn(issued);
+            org.mockito.Mockito.lenient().when(stockTransactionRepository.sumUnreferencedQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(returned);
         }
 
         /**
@@ -628,15 +659,312 @@ class StockTransactionServiceImplTest {
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+            // the transferred-stock bound (D668) is not the one under test here
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.TRANSFER))).thenReturn(new BigDecimal("100"));
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsIssued");
 
-            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(inventoryItemRepository, org.mockito.Mockito.atLeastOnce()).lockById(inventoryItemId);
             verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
             verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("50.00"));
+        }
+
+        private com.example.hms.model.pharmacy.Dispense dispenseOf(BigDecimal quantity,
+                com.example.hms.enums.DispenseStatus status, StockLot lot) {
+            com.example.hms.model.pharmacy.Dispense d = new com.example.hms.model.pharmacy.Dispense();
+            d.setId(UUID.randomUUID());
+            d.setQuantityDispensed(quantity);
+            d.setStatus(status);
+            d.setStockLot(lot);
+            d.setPharmacy(pharmacy);
+            return d;
+        }
+
+        /**
+         * QA D668, the replay (mix.js step 4): dispense 4 then cancel it, POST
+         * a RETURN of 4 with no referenceId. It was booked against another
+         * prescription's open fill and the lot went 195 -> 199. A return of
+         * dispensed stock must now name its dispense.
+         */
+        @Test
+        @DisplayName("D668: an unreferenced return of dispensed stock is refused, never attributed")
+        void unreferencedReturnOfDispensedStockIsRefused() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.TRANSFER))).thenReturn(BigDecimal.ZERO);
+            when(stockTransactionRepository.sumUnreferencedQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("4"));
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.dispenseRequired");
+            assertThat(request.getReferenceId()).isNull();
+            verify(dispenseRepository, never()).findLockedById(any());
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D668: an unreferenced return of transferred-out stock still goes back")
+        void unreferencedReturnWithinTransferredStockIsAccepted() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal("4"));
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("40.00"), BigDecimal.ZERO);
+            when(stockTransactionRepository.sumQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.TRANSFER))).thenReturn(new BigDecimal("5"));
+            when(stockTransactionRepository.sumUnreferencedQuantityForLot(stockLotId,
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ONE);
+
+            service.recordTransaction(dto);
+
+            assertThat(dto.getReferenceId()).isNull();
+            verify(stockTransactionRepository).save(any(StockTransaction.class));
+        }
+
+        /** QA D668 (mix.js step 5): a RETURN of 0.5 tablets was accepted. */
+        @Test
+        @DisplayName("D668: a fractional return of an item counted in whole units is refused")
+        void fractionalReturnOfACountedItemIsRefused() {
+            inventoryItem.setUnit("comprimé");
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("0.5"));
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.wholeUnitsOnly");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D668: a measured unit still takes a fractional return")
+        void measuredUnitsAcceptFractions() {
+            inventoryItem.setUnit("mL");
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                    StockTransactionServiceImpl.requireWholeUnitsWhenCounted(inventoryItem, new BigDecimal("0.5")))
+                    .doesNotThrowAnyException();
+            inventoryItem.setUnit("ampoule");
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                    StockTransactionServiceImpl.requireWholeUnitsWhenCounted(inventoryItem, new BigDecimal("2.00")))
+                    .doesNotThrowAnyException();
+        }
+
+        private StockTransactionRequestDTO returnAgainst(com.example.hms.model.pharmacy.Dispense d, String qty) {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RETURN, new BigDecimal(qty));
+            dto.setReferenceId(d.getId());
+            return dto;
+        }
+
+        /**
+         * QA D604, the exact scenario: dispense 63a1f3fb delivered 4; a
+         * RETURN of 2 referencing it was taken, then a RETURN of 3. The lot
+         * had issued plenty, so only the per-dispense bound can refuse it.
+         */
+        @Test
+        @DisplayName("D604: a return cannot give back more than its dispense delivered minus earlier returns")
+        void refusesAReturnAboveWhatTheDispenseDelivered() {
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            StockTransactionRequestDTO request = returnAgainst(dispense, "3");
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
+
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D604: a return within what its dispense delivered still goes back on the lot")
+        void acceptsAReturnWithinTheDispense() {
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            StockTransactionRequestDTO dto = returnAgainst(dispense, "2");
+            stubCommonMocks(dto, true);
+            stubLotMovements(new BigDecimal("40.00"), BigDecimal.ZERO);
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+
+            service.recordTransaction(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("52.00"));
+            // The dispense row is locked before the item, the order its cancel takes.
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(dispenseRepository, inventoryItemRepository);
+            order.verify(dispenseRepository).findLockedById(dispense.getId());
+            order.verify(inventoryItemRepository).lockById(inventoryItemId);
+        }
+
+        @Test
+        @DisplayName("D604: nothing is returned against a cancelled dispense (its cancel already put it back)")
+        void refusesAReturnAgainstACancelledDispense() {
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.CANCELLED, stockLot);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.dispenseNotReturnable"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        /**
+         * QA D668/D675 (r3/d668.js): POST /api/pharmacy/stock-transactions as
+         * PHARMACIST_A, RETURN of 1 on lot 69e536f6 with referenceId a
+         * prescription id or a random UUID: 201 and the lot rose. Refused now.
+         */
+        @Test
+        @DisplayName("D675: a return whose reference is neither a dispense nor a transfer is refused")
+        void refusesAReturnReferencingNeitherADispenseNorATransfer() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            UUID prescriptionId = UUID.randomUUID();
+            when(dispenseRepository.findLockedById(prescriptionId)).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, BigDecimal.ONE);
+            request.setReferenceId(prescriptionId);
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D675: a return referencing a receipt (not a transfer) of this lot is refused")
+        void refusesAReturnReferencingANonTransferMovement() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            StockTransaction receipt = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.RECEIPT).quantity(new BigDecimal("10")).build();
+            receipt.setId(UUID.randomUUID());
+            when(dispenseRepository.findLockedById(receipt.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, BigDecimal.ONE);
+            request.setReferenceId(receipt.getId());
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D675: a return of a transfer out of this lot is capped at what that transfer moved")
+        void aReturnOfATransferIsCappedByTheTransfer() {
+            StockTransaction transfer = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.TRANSFER).quantity(new BigDecimal("3")).build();
+            transfer.setId(UUID.randomUUID());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(transfer.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(transfer.getId())).thenReturn(Optional.of(transfer));
+            when(stockTransactionRepository.sumQuantityForReference(transfer.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("2"));
+            request.setReferenceId(transfer.getId());
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D604: a return naming a dispense of another lot is refused")
+        void refusesAReturnOnAnotherLot() {
+            StockLot other = StockLot.builder().inventoryItem(inventoryItem).lotNumber("LOT-002").build();
+            other.setId(UUID.randomUUID());
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, other);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
+        }
+
+        @Test
+        @DisplayName("D604: an item kept without lots is bounded by its partial dispense from the same pharmacy")
+        void acceptsNothingAbovePartialItemDispense() {
+            var dispense = dispenseOf(new BigDecimal("3"), com.example.hms.enums.DispenseStatus.PARTIAL, null);
+            StockTransactionRequestDTO request = returnAgainst(dispense, "3");
+            request.setStockLotId(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+            when(stockTransactionRepository.sumQuantityForReference(dispense.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("1"));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo(new BigDecimal("100.00"));
+        }
+
+        @Test
+        @DisplayName("D604: a lot-less return naming a dispense of another pharmacy is refused")
+        void refusesAnItemReturnAgainstAnotherPharmacysDispense() {
+            Pharmacy elsewhere = Pharmacy.builder().hospital(hospital).name("Annex").build();
+            elsewhere.setId(UUID.randomUUID());
+            var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.COMPLETED, null);
+            dispense.setPharmacy(elsewhere);
+            StockTransactionRequestDTO request = returnAgainst(dispense, "1");
+            request.setStockLotId(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(dispenseRepository.findLockedById(dispense.getId())).thenReturn(Optional.of(dispense));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.wrongDispense"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D604/D675: a return of a real transfer of this lot still meets the lot bound")
+        void aTransferReferenceStillMeetsTheLotBound() {
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("9.00"));
+            StockTransaction transfer = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.TRANSFER).quantity(new BigDecimal("20")).build();
+            transfer.setId(UUID.randomUUID());
+            request.setReferenceId(transfer.getId());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(transfer.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(transfer.getId())).thenReturn(Optional.of(transfer));
+            when(stockTransactionRepository.sumQuantityForReference(transfer.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
+            stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
+
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsIssued");
         }
 
         @Test
@@ -663,7 +991,9 @@ class StockTransactionServiceImplTest {
         @DisplayName("updates only item quantity, not lot")
         void noLot() {
             BigDecimal qty = new BigDecimal("25.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
+            // A positive adjustment of an item kept without lots (a receipt
+            // is refused here since QA D615).
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, qty);
             dto.setStockLotId(null);
 
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
@@ -672,7 +1002,7 @@ class StockTransactionServiceImplTest {
             StockTransaction tx = StockTransaction.builder()
                     .inventoryItem(inventoryItem)
                     .stockLot(null)
-                    .transactionType(StockTransactionType.RECEIPT)
+                    .transactionType(StockTransactionType.ADJUSTMENT)
                     .quantity(qty)
                     .reason("Test reason")
                     .performedByUser(user)
@@ -916,8 +1246,8 @@ class StockTransactionServiceImplTest {
         @Test
         @DisplayName("uses current user when performedBy is null")
         void resolvesCurrentUser() {
-            BigDecimal qty = new BigDecimal("10.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
+            BigDecimal qty = new BigDecimal("-10.00");
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, qty);
             dto.setPerformedBy(null);
 
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
@@ -929,7 +1259,7 @@ class StockTransactionServiceImplTest {
             StockTransaction tx = StockTransaction.builder()
                     .inventoryItem(inventoryItem)
                     .stockLot(stockLot)
-                    .transactionType(StockTransactionType.RECEIPT)
+                    .transactionType(StockTransactionType.ADJUSTMENT)
                     .quantity(qty)
                     .performedByUser(user)
                     .build();
@@ -947,8 +1277,8 @@ class StockTransactionServiceImplTest {
         @Test
         @DisplayName("throws BusinessException when current user cannot be determined")
         void cannotDetermineCurrentUser() {
-            BigDecimal qty = new BigDecimal("10.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
+            BigDecimal qty = new BigDecimal("-10.00");
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, qty);
             dto.setPerformedBy(null);
 
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
@@ -964,8 +1294,8 @@ class StockTransactionServiceImplTest {
         @Test
         @DisplayName("throws ResourceNotFoundException when the signed-in user is not found")
         void performerNotFound() {
-            BigDecimal qty = new BigDecimal("10.00");
-            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.RECEIPT, qty);
+            BigDecimal qty = new BigDecimal("-10.00");
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.ADJUSTMENT, qty);
 
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();

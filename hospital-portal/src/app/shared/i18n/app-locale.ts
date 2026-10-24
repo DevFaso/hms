@@ -130,3 +130,27 @@ export function switchLanguage(lang: string, translate: TranslateService): boole
   if (applyLanguage(lang)) window.location.reload();
   return true;
 }
+
+/**
+ * QA D621: an amount in francs CFA, read the same way in every language:
+ * "4 000 F CFA" in French, "4,000 F CFA" in English, "4000 F CFA" in Spanish.
+ * `Intl`'s own XOF currency printed "XOF" in Spanish and "F CFA4,000" in
+ * English. Another currency keeps `Intl`'s formatting.
+ */
+export function formatCfa(
+  amount: number | null | undefined,
+  currency: string | null | undefined = 'XOF',
+  locale: string = currentLocale(),
+): string {
+  const value = Number(amount ?? 0);
+  const code = (currency || 'XOF').toUpperCase();
+  if (code !== 'XOF') {
+    return new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: code,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+  const digits = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  return `${digits}\u00a0F\u00a0CFA`;
+}

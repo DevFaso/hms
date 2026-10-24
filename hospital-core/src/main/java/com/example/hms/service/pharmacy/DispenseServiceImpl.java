@@ -106,6 +106,8 @@ public class DispenseServiceImpl implements DispenseService {
     /** G15: the one owner of cancelling a prepared fill (rule 8). */
     private final PreparedFillVoider preparedFillVoider;
     private final PharmacyPaymentVoider paymentVoider;
+    /** QA D654: a controlled substance leaves and comes back only witnessed. */
+    private final ControlledStockWitness controlledStockWitness;
     /** G15 B2/A1: resyncs the one row a conditional bulk UPDATE changed. */
     private final EntityManager entityManager;
     /** G13: the work-queue claim; a fill or a preparation ends it (plan rule 4). */
@@ -936,6 +938,10 @@ public class DispenseServiceImpl implements DispenseService {
         // stock writer (fills, returns, receipts, adjustments, transfers)
         // moves quantities this way, lot first then item, so none can
         // overwrite another. 0 rows = not enough left at this instant.
+        // QA D654: a controlled substance leaves the shelf in front of a
+        // witness, whatever the prescription's own flag says.
+        User witness = ControlledStockWitness.isControlled(inventoryItem)
+                ? controlledStockWitness.resolve(dto.getWitnessedBy(), inventoryItem, performer) : null;
         LocalDateTime now = LocalDateTime.now(clock);
         if (stockLotRepository.decrementRemaining(stockLot.getId(), requested, now) == 0) {
             // No figure for what remains: the managed copy was read before the
@@ -955,6 +961,7 @@ public class DispenseServiceImpl implements DispenseService {
                 .quantity(requested)
                 .reason("Dispense for prescription " + prescription.getId())
                 .performedByUser(performer)
+                .witnessedByUser(witness)
                 .build();
         stockTransactionRepository.save(tx);
         return stockLot;
@@ -1183,7 +1190,7 @@ public class DispenseServiceImpl implements DispenseService {
 
     @Override
     @Transactional
-    public DispenseResponseDTO cancelDispense(UUID id) {
+    public DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy) {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         // Cancelling reverses a stock lot and rewrites the prescription's
@@ -1214,25 +1221,36 @@ public class DispenseServiceImpl implements DispenseService {
 
         dispense.setStatus(DispenseStatus.CANCELLED);
 
-        // Reverse stock if a lot was used
-        if (dispense.getStockLot() != null) {
+        // Reverse stock if a lot was used. QA D604: only what was not
+        // already returned against this fill goes back (a 4-unit fill with
+        // returns of 2 and 3 then put 4 more back on cancel), counted under
+        // the dispense row lock that a referenced return also takes, and the
+        // reversal names the dispense so it counts as one of its returns.
+        BigDecimal stillOut = dispense.getStockLot() != null ? notYetReturned(dispense) : BigDecimal.ZERO;
+        if (stillOut.signum() > 0) {
             StockLot lot = dispense.getStockLot();
             InventoryItem item = lot.getInventoryItem();
+            User performer = resolveCurrentUser();
+            // QA D654: a controlled substance goes back on the shelf in front
+            // of a witness, as it left.
+            User witness = ControlledStockWitness.isControlled(item)
+                    ? controlledStockWitness.resolve(witnessedBy, item, performer) : null;
             LocalDateTime now = LocalDateTime.now(clock);
-            stockLotRepository.incrementRemaining(lot.getId(), dispense.getQuantityDispensed(), now);
-            inventoryItemRepository.incrementOnHand(item.getId(), dispense.getQuantityDispensed(), now);
+            stockLotRepository.incrementRemaining(lot.getId(), stillOut, now);
+            inventoryItemRepository.incrementOnHand(item.getId(), stillOut, now);
             refreshIfManaged(lot);
             refreshIfManaged(item);
 
-            User performer = resolveCurrentUser();
             StockTransaction reverseTx = StockTransaction.builder()
                     .inventoryItem(item)
                     .stockLot(lot)
                     .transactionType(StockTransactionType.RETURN)
-                    .quantity(dispense.getQuantityDispensed())
+                    .referenceId(dispense.getId())
+                    .quantity(stillOut)
                     .reason("Dispense cancelled — stock returned for prescription "
                             + dispense.getPrescription().getId())
                     .performedByUser(performer)
+                    .witnessedByUser(witness)
                     .build();
             stockTransactionRepository.save(reverseTx);
         }
@@ -1260,6 +1278,35 @@ public class DispenseServiceImpl implements DispenseService {
                 saved.getId().toString());
 
         return dispenseMapper.toResponseDTO(saved);
+    }
+
+    /** QA D604: what a fill delivered minus what was already returned against it. */
+    private BigDecimal notYetReturned(Dispense dispense) {
+        BigDecimal dispensed = dispense.getQuantityDispensed() == null
+                ? BigDecimal.ZERO : dispense.getQuantityDispensed();
+        BigDecimal returned = stockTransactionRepository.sumQuantityForReference(
+                dispense.getId(), java.util.EnumSet.of(StockTransactionType.RETURN));
+        BigDecimal stillOut = dispensed.subtract(returned == null ? BigDecimal.ZERO : returned)
+                .max(BigDecimal.ZERO);
+        // #926 review: a return that names no dispense is bounded only by the
+        // lot, so it may already have given this fill back. The reversal is
+        // also capped at what left the lot and has not come back, counted
+        // under the item lock every return takes.
+        if (stillOut.signum() > 0 && dispense.getStockLot() != null) {
+            StockLot lot = dispense.getStockLot();
+            inventoryItemRepository.lockById(lot.getInventoryItem().getId());
+            stillOut = stillOut.min(lotStillOut(lot.getId()));
+        }
+        return stillOut.max(BigDecimal.ZERO);
+    }
+
+    private BigDecimal lotStillOut(UUID lotId) {
+        BigDecimal issued = stockTransactionRepository.sumQuantityForLot(lotId,
+                java.util.EnumSet.of(StockTransactionType.DISPENSE, StockTransactionType.TRANSFER));
+        BigDecimal back = stockTransactionRepository.sumQuantityForLot(lotId,
+                java.util.EnumSet.of(StockTransactionType.RETURN));
+        return (issued == null ? BigDecimal.ZERO : issued)
+                .subtract(back == null ? BigDecimal.ZERO : back).max(BigDecimal.ZERO);
     }
 
     @Override

@@ -7,9 +7,9 @@
   @if (!loading()) {
     <div class="total-banner">
       <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_PAID' | translate }}</span>
-      <strong>{{ totalPaid() | currency: 'XOF' : 'symbol' : '1.0-0' }}</strong>
+      <strong>{{ totalPaid() | cfa }}</strong>
       <span>{{ 'MY_PHARMACY_INVOICES.TOTAL_CLAIMED' | translate }}</span>
-      <strong>{{ totalClaimed() | currency: 'XOF' : 'symbol' : '1.0-0' }}</strong>
+      <strong>{{ totalClaimed() | cfa }}</strong>
     </div>
   }
 
@@ -27,9 +27,7 @@
         <li class="payment-item">
           <div class="row-top">
             <span class="date">{{ p.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
-            <span class="amount">{{
-              p.amount | currency: p.currency || 'XOF' : 'symbol' : '1.0-0'
-            }}</span>
+            <span class="amount">{{ p.amount | cfa: p.currency }}</span>
           </div>
           <div class="row-meta">
             <span class="method">{{ methodLabel(p.paymentMethod) }}</span>
@@ -65,9 +63,7 @@
         <li class="payment-item">
           <div class="row-top">
             <span class="date">{{ c.submittedAt || c.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
-            <span class="amount">{{
-              c.amount | currency: c.currency || 'XOF' : 'symbol' : '1.0-0'
-            }}</span>
+            <span class="amount">{{ c.amount | cfa: c.currency }}</span>
           </div>
           <div class="row-meta">
             <span class="method">{{ statusLabel(c.claimStatus) }}</span>

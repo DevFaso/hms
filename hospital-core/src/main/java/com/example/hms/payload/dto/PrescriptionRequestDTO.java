@@ -45,6 +45,14 @@ public class PrescriptionRequestDTO {
     @Size(max = 64)
     private String medicationCode;
 
+    /**
+     * D654: the catalog item the prescriber picked. When present and no
+     * {@link #medicationCode} is sent, the code is taken from this item (in
+     * the prescription's hospital), so the response shows the catalog's
+     * controlled flag and the CDS engine sees the formulary code.
+     */
+    private UUID medicationCatalogItemId;
+
     @Size(max = 100)
     private String dosage;
 

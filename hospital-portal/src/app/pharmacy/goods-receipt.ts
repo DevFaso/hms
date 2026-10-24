@@ -8,12 +8,14 @@ import {
   PharmacyResponse,
   InventoryItemResponse,
   StockLotResponse,
+  StockWitnessCandidate,
 } from '../services/pharmacy.service';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',
@@ -38,9 +40,20 @@ export class GoodsReceiptComponent implements OnInit {
   saving = signal(false);
   selectedInventoryItemId = '';
   form = this.emptyForm();
+  /** QA D655: colleagues who may witness the receipt of a controlled substance. */
+  witnessCandidates = signal<StockWitnessCandidate[]>([]);
 
   ngOnInit(): void {
     this.loadPharmacies();
+    this.svc.listWitnessCandidates().subscribe({
+      next: (res) => this.witnessCandidates.set(res?.data ?? []),
+      error: () => this.witnessCandidates.set([]),
+    });
+  }
+
+  /** QA D655: a controlled substance is received in front of a witness. */
+  needsWitness(): boolean {
+    return !!this.inventoryItems().find((i) => i.id === this.selectedInventoryItemId)?.controlled;
   }
 
   private loadPharmacies(): void {
@@ -146,8 +159,17 @@ export class GoodsReceiptComponent implements OnInit {
       return;
     }
 
+    if (this.needsWitness() && !this.form.witnessedBy) {
+      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+      return;
+    }
+
     this.saving.set(true);
-    const req = { ...this.form, inventoryItemId: this.selectedInventoryItemId };
+    const req = {
+      ...this.form,
+      inventoryItemId: this.selectedInventoryItemId,
+      witnessedBy: this.needsWitness() ? this.form.witnessedBy : undefined,
+    };
     this.svc.receiveStock(req).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.LOT_RECEIVED'));
@@ -178,6 +200,7 @@ export class GoodsReceiptComponent implements OnInit {
       supplier: '',
       unitCost: 0,
       receivedDate: new Date().toISOString().split('T')[0],
+      witnessedBy: undefined as string | undefined,
     };
   }
 }
