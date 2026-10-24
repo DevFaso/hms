@@ -340,7 +340,8 @@ class StaffSchedulingServiceImplTest {
             staffId, hospitalId, null, TODAY.plusDays(10), TODAY.plusDays(5), null, null,
             com.example.hms.enums.StaffLeaveType.VACATION, null, "x");
 
-        assertThatThrownBy(() -> realBundles.requestLeave(backwards, Locale.forLanguageTag(lang)))
+        Locale locale = Locale.forLanguageTag(lang);
+        assertThatThrownBy(() -> realBundles.requestLeave(backwards, locale))
             .isInstanceOf(BusinessRuleException.class)
             .hasMessage(expected);
         verify(leaveRepository, never()).save(any());
