@@ -58,7 +58,7 @@
               <span class="material-symbols-outlined">history_edu</span>
               <span>
                 {{ 'MICRO.CORRECTED_AT' | translate }}
-                {{ culture.correctedAt | date: 'short' }} —
+                {{ culture.correctedAt | serverTime | date: 'short' }} —
                 {{ culture.correctionReason }}
               </span>
             </div>
@@ -82,7 +82,7 @@
             @if (culture.finalizedAt) {
               <span>
                 {{ 'MICRO.FINALIZED_AT' | translate }}:
-                {{ culture.finalizedAt | date: 'short' }}
+                {{ culture.finalizedAt | serverTime | date: 'short' }}
                 @if (culture.finalizedByName) {
                   ({{ culture.finalizedByName }})
                 }

@@ -6321,6 +6321,7 @@
     "SIGN": "Sign",
     "COSIGN": "Co-sign",
     "REQUIRES_COSIGN": "Requires co-signature by a second prescriber",
+    "TAKE_HOME": "Take-home medication (continues after discharge)",
     "SIGNED_AT": "Signed",
     "COSIGN_STATE": "Co-signature",
     "COSIGN_PENDING": "Pending — a second prescriber must co-sign",
@@ -7871,6 +7872,8 @@
     "error": "Check-out failed. Please try again."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
+    "DIAGNOSIS_REQUIRED": "The discharge diagnosis is required",
     "ACTIVITY_RESTRICTIONS": "Activity restrictions",
     "ADDITIONAL_NOTES": "Additional notes",
     "ADD_FOLLOW_UP": "Add follow-up",

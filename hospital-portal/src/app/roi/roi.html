@@ -72,10 +72,10 @@
                   }
                 </td>
                 <td class="scope-cell">{{ row.scopeDescription }}</td>
-                <td>{{ row.requestedOn | date: 'mediumDate' }}</td>
+                <td>{{ row.requestedOn | serverTime | date: 'mediumDate' }}</td>
                 @if (activeStatus() !== 'PENDING') {
                   <td>
-                    {{ row.decidedAt | date: 'mediumDate' }}
+                    {{ row.decidedAt | serverTime | date: 'mediumDate' }}
                     @if (row.decidedByName) {
                       · {{ row.decidedByName }}
                     }

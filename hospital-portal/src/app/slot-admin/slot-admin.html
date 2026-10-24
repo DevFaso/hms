@@ -182,8 +182,11 @@
                   <td>{{ tpl.departmentName || '—' }}</td>
                   <td>{{ tpl.visitTypeName || ('SLOT_ADMIN.ANY_VISIT_TYPE' | translate) }}</td>
                   <td>
-                    {{ tpl.effectiveFrom | date: 'mediumDate' }}
-                    → {{ tpl.effectiveTo ? (tpl.effectiveTo | date: 'mediumDate') : '∞' }}
+                    {{ tpl.effectiveFrom | serverTime | date: 'mediumDate' }}
+                    →
+                    {{
+                      tpl.effectiveTo ? (tpl.effectiveTo | serverTime | date: 'mediumDate') : '∞'
+                    }}
                   </td>
                   <td>
                     <span class="state-chip" [class.state-active]="tpl.active">
@@ -328,7 +331,7 @@
             <tbody>
               @for (slot of slots(); track slot.id) {
                 <tr [attr.data-testid]="'slot-row-' + slot.id">
-                  <td>{{ slot.slotDate | date: 'mediumDate' }}</td>
+                  <td>{{ slot.slotDate | serverTime | date: 'mediumDate' }}</td>
                   <td>
                     {{ slot.startAt | date: 'shortTime' }}–{{ slot.endAt | date: 'shortTime' }}
                   </td>

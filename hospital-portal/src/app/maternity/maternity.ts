@@ -33,7 +33,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { nowLocalDatetime, withServerDateTimes } from '../shared/date-utils';
+import { nowLocalDatetime, withServerDateTimes, serverInstant } from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
@@ -604,7 +604,7 @@ export class MaternityComponent implements OnInit {
     return (
       (referral.status === 'SUBMITTED' || referral.status === 'ACKNOWLEDGED') &&
       !!referral.slaDueAt &&
-      new Date(referral.slaDueAt).getTime() < Date.now()
+      serverInstant(referral.slaDueAt).getTime() < Date.now()
     );
   }
 

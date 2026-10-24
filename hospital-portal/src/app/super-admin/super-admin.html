@@ -7,7 +7,10 @@
     @if (generatedAt()) {
       <div class="header-meta">
         <span class="material-symbols-outlined">schedule</span>
-        <span>{{ 'SUPER_ADMIN.AS_OF' | translate }} {{ generatedAt() | date: 'medium' }}</span>
+        <span
+          >{{ 'SUPER_ADMIN.AS_OF' | translate }}
+          {{ generatedAt() | serverTime | date: 'medium' }}</span
+        >
       </div>
     }
   </div>
@@ -120,7 +123,7 @@
               </div>
               <div class="activity-summary">{{ row.summary || '—' }}</div>
               <div class="activity-timestamp">
-                {{ row.timestamp ? (row.timestamp | date: 'short') : '—' }}
+                {{ row.timestamp ? (row.timestamp | serverTime | date: 'short') : '—' }}
               </div>
             </div>
           }

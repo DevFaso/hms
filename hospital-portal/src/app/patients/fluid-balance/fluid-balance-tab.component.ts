@@ -18,6 +18,8 @@ import {
   IntakeOutputSummary,
   OUTPUT_ROUTES,
 } from '../../services/fluid-balance.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../../shared/date-utils';
 
 type WindowPreset = '24h' | '48h' | '7d';
 
@@ -32,7 +34,7 @@ const WINDOW_HOURS: Record<WindowPreset, number> = { '24h': 24, '48h': 48, '7d':
 @Component({
   selector: 'app-fluid-balance-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './fluid-balance-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './fluid-balance-tab.component.scss',
@@ -70,7 +72,11 @@ export class FluidBalanceTabComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
     const hours = WINDOW_HOURS[this.windowPreset()];
-    const from = this.toLocalDateTimeString(new Date(Date.now() - hours * 3600 * 1000));
+    // #948 review: observation times are stored on the server's UTC clock
+    // (entered through toServerDateTime, read back through serverTime), so
+    // the window start is sent on that clock too. Sent as the local wall
+    // clock, a 24 h window covered 28 h in New York and 22 h east of UTC.
+    const from = new Date(Date.now() - hours * 3600 * 1000).toISOString().slice(0, 19);
     this.fluidService.getSummary(this.patientId, { from }).subscribe({
       next: (summary) => {
         this.summary.set(summary);
@@ -119,7 +125,8 @@ export class FluidBalanceTabComponent implements OnInit {
       .record(this.patientId, {
         route,
         volumeMl: volume,
-        observationTime: this.formTime() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        observationTime: this.formTime() ? toServerDateTime(this.formTime()) : undefined,
         notes: this.formNotes() || undefined,
       })
       .subscribe({
@@ -141,15 +148,5 @@ export class FluidBalanceTabComponent implements OnInit {
 
   routeLabel(route: IntakeOutputRoute): string {
     return this.translate.instant(`FLUID_BALANCE.ROUTE_${route}`);
-  }
-
-  /** yyyy-MM-ddTHH:mm in LOCAL time — the backend field is a LocalDateTime,
-   *  so an ISO/UTC "Z" string would fail to parse (or worse, shift the day). */
-  private toLocalDateTimeString(date: Date): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return (
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-      `T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
-    );
   }
 }

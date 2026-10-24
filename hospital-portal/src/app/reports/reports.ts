@@ -10,6 +10,7 @@ import {
   ReportsService,
 } from './reports.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
@@ -20,7 +21,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './reports.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports.scss',

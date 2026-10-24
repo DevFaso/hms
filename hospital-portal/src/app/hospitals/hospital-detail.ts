@@ -21,6 +21,7 @@ import { HospitalLifecycleService } from '../services/hospital-lifecycle.service
 import { HospitalResponse, HospitalService } from '../services/hospital.service';
 import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { localDateString } from '../shared/date-utils';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -37,7 +38,7 @@ interface ActionDialog {
 @Component({
   selector: 'app-hospital-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './hospital-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hospital-detail.scss',

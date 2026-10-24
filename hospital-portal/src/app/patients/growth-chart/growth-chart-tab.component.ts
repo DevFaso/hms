@@ -14,6 +14,7 @@ import {
   GrowthPoint,
   VitalSignService,
 } from '../../services/vital-sign.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 export type GrowthMetric = 'weight' | 'height' | 'headCircumference';
 
@@ -56,7 +57,7 @@ const DAYS_PER_YEAR = 365.25;
 @Component({
   selector: 'app-growth-chart-tab',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './growth-chart-tab.component.html',
   styleUrl: './growth-chart-tab.component.scss',

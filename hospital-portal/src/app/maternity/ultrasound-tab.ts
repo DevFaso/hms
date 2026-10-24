@@ -19,13 +19,14 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { localDateString } from '../shared/date-utils';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './ultrasound-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

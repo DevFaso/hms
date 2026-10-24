@@ -19,6 +19,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 /** QA D330: the write audit's "METHOD /route" description, read as an action. */
 const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
@@ -118,8 +119,9 @@ export class AuditLogsComponent implements OnInit {
       .list({
         page: this.currentPage(),
         size: this.pageSize,
-        fromDate: this.fromDate || undefined,
-        toDate: this.toDate || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        fromDate: this.fromDate ? toServerDateTime(this.fromDate) : undefined,
+        toDate: this.toDate ? toServerDateTime(this.toDate) : undefined,
       })
       .subscribe({
         next: (res) => {

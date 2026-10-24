@@ -215,6 +215,15 @@ public class Prescription extends BaseEntity {
     @Column(name = "inpatient_order", nullable = false)
     private boolean inpatientOrder = false;
 
+    /**
+     * QA D757: the prescriber means the patient to take this order home. Only
+     * a take-home order outlives the stay it was written on; every other order
+     * of the stay is discontinued at discharge (V231).
+     */
+    @Builder.Default
+    @Column(name = "take_home", nullable = false)
+    private boolean takeHome = false;
+
     @Builder.Default
     @Column(name = "allergies_reviewed", nullable = false)
     private boolean allergiesReviewed = false;

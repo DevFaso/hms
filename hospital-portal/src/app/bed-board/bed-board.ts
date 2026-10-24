@@ -33,6 +33,7 @@ import { AuthService } from '../auth/auth.service';
 import { roleSatisfies } from '../core/role-equivalence';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * The ward board (Tier 2 items 30, 31 and 32).
@@ -52,7 +53,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './bed-board.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-board.scss',

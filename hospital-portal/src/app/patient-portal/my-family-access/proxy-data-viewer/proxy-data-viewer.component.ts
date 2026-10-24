@@ -12,6 +12,7 @@ import {
   ProxyResponse,
 } from '../../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
 export type ProxyTabKey = 'appointments' | 'medications' | 'labResults' | 'billing' | 'records';
 
@@ -46,7 +47,7 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
 @Component({
   selector: 'app-proxy-data-viewer',
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './proxy-data-viewer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./proxy-data-viewer.component.scss', '../../patient-portal-pages.scss'],

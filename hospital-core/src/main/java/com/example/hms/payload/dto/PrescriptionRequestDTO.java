@@ -121,6 +121,12 @@ public class PrescriptionRequestDTO {
     private Boolean requiresCosign;
 
     /**
+     * QA D757: the order is for the patient to take home, so it outlives the
+     * stay it is written on. Null leaves the stored value unchanged on update.
+     */
+    private Boolean takeHome;
+
+    /**
      * QA D660: required when a SIGNED prescription is cancelled or
      * discontinued, the only edit a signed order accepts.
      */

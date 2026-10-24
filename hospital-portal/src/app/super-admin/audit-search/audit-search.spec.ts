@@ -61,6 +61,19 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     residency.listAvailableRegions.and.returnValue(of([]));
   });
 
+  it('applySaved shows the saved UTC bounds as local picker values, so a re-save round-trips (#948 review)', () => {
+    const component = setup();
+    const fromUtc = new Date(2026, 9, 24, 8, 30).toISOString().slice(0, 19);
+    component.applySaved({
+      id: 's1',
+      name: 'Morning',
+      filter: { fromDate: fromUtc },
+    } as never);
+    expect(component.fromDate()).toBe('2026-10-24T08:30');
+    const [sent] = auditSearch.search.calls.mostRecent().args;
+    expect(sent.fromDate).toBe(fromUtc);
+  });
+
   it('reads an audit entity token in the reader language (D619)', () => {
     const c = setup();
     const translate = TestBed.inject(TranslateService);

@@ -78,7 +78,7 @@
                 @if (entry.offerExpiresAt) {
                   <div class="offer-expiry" [class.expired]="offerExpired(entry)">
                     {{ 'RECEPTION.OFFER_EXPIRES' | translate }}
-                    {{ entry.offerExpiresAt | date: 'short' }}
+                    {{ entry.offerExpiresAt | serverTime | date: 'short' }}
                   </div>
                 }
               }
@@ -163,7 +163,9 @@
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
                   {{ p.firstName }} {{ p.lastName }}
                   @if (p.dateOfBirth) {
-                    <span class="dob-hint">({{ p.dateOfBirth | date: 'mediumDate' }})</span>
+                    <span class="dob-hint"
+                      >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span
+                    >
                   }
                 </li>
               }

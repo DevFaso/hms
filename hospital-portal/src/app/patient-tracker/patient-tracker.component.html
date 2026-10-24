@@ -12,7 +12,7 @@
       </span>
       @if (lastRefreshed()) {
         <span class="meta-muted">
-          {{ 'TRACKER.UPDATED' | translate }} {{ lastRefreshed() | date: 'shortTime' }}
+          {{ 'TRACKER.UPDATED' | translate }} {{ lastRefreshed() | serverTime | date: 'shortTime' }}
         </span>
       }
       <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">

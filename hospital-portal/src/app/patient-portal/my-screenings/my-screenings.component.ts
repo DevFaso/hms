@@ -17,6 +17,7 @@ import {
   ProInstrumentFormComponent,
   unansweredItems,
 } from '../../shared/pro-instrument-form/pro-instrument-form.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
@@ -31,7 +32,14 @@ import {
 @Component({
   selector: 'app-my-screenings',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, TranslateModule, ProInstrumentFormComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    TranslateModule,
+    ProInstrumentFormComponent,
+  ],
   templateUrl: './my-screenings.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-screenings.component.scss', '../patient-portal-pages.scss'],

@@ -322,6 +322,18 @@ describe('PostpartumTabComponent — screening', () => {
     expect(toastSpy.success).toHaveBeenCalled();
   });
 
+  it('sends the screening time as the UTC the history reads back (#948 review)', () => {
+    screeningSpy.record.and.returnValue(of(response('r4')));
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openScreening();
+    component.screeningAnswers.set({ 1: 0, 2: 0 });
+    component.screeningAdministeredAt = '2026-09-01T10:00';
+    component.submitScreening();
+
+    const [, sent] = screeningSpy.record.calls.mostRecent().args;
+    expect(sent.administeredAt).toBe(new Date(2026, 8, 1, 10, 0).toISOString().slice(0, 19));
+  });
+
   it('grades the saved toast by severity: safety item beats screen positive', () => {
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
     component.openScreening();

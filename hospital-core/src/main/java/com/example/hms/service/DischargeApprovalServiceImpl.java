@@ -117,6 +117,12 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
+        // QA D766: the approval discharges the stay, so like the direct
+        // discharge it refuses to leave the after-visit summary with no diagnosis.
+        String dischargeDiagnosis = trim(decision.getDischargeDiagnosis());
+        if (dischargeDiagnosis == null || dischargeDiagnosis.isEmpty()) {
+            throw new BusinessException("admissionDischarge.dischargeDiagnosis.required");
+        }
         approval.setDoctorNote(trim(decision.getDoctorNote()));
         approval.setRejectionReason(null);
         approval.setStatus(DischargeStatus.APPROVED);
@@ -143,8 +149,10 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
             stay.discharge(stay.getDischargeDisposition(), stay.getDischargeSummary(),
                 stay.getDischargeInstructions(), doctor);
             admissionRepository.save(stay);
-            stayEncounters.recordDischarge(stay);
+            stayEncounters.recordDischarge(stay, dischargeDiagnosis);
             encounterAutoCompletion.completeAdmissionEncounters(stay.getId());
+            // QA D760: and the visit that led to the stay, as the direct discharge does.
+            encounterAutoCompletion.completeVisitsThatLedToAdmission(stay);
         }
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);

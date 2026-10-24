@@ -24,6 +24,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale, formatClockTime } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverDateOrInstant, localDateString } from '../shared/date-utils';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
@@ -240,7 +241,8 @@ export class StaffDetailComponent implements OnInit {
 
   formatDate(date?: string): string {
     if (!date) return '—';
-    return new Date(date).toLocaleDateString(currentLocale(), {
+    // #948 review: startDate/endDate are calendar dates, createdAt/updatedAt UTC times.
+    return serverDateOrInstant(date).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -295,6 +297,6 @@ export class StaffDetailComponent implements OnInit {
   }
 
   private toISODate(d: Date): string {
-    return d.toISOString().split('T')[0];
+    return localDateString(d);
   }
 }

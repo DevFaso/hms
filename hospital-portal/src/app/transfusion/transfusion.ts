@@ -33,6 +33,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 type Tab = 'requests' | 'units';
 
@@ -47,7 +49,14 @@ type Tab = 'requests' | 'units';
 @Component({
   selector: 'app-transfusion',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './transfusion.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './transfusion.scss',
@@ -534,7 +543,7 @@ export class TransfusionComponent implements OnInit {
       .recordReaction(administrationId, {
         reactionType: this.reactionForm.reactionType,
         severity: this.reactionForm.severity,
-        onsetAt: this.reactionForm.onsetAt,
+        onsetAt: toServerDateTime(this.reactionForm.onsetAt), // QA D777/D784: the picker gives local wall time; the server keeps UTC.
         signsSymptoms: this.reactionForm.signsSymptoms.trim(),
         actionsTaken: this.reactionForm.actionsTaken.trim() || undefined,
         unitReturnedToLab: this.reactionForm.unitReturnedToLab,

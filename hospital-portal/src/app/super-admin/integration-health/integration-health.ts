@@ -19,6 +19,7 @@ import {
   IntegrationHistoryBucket,
   IntegrationProbeResult,
 } from '../../services/integration-health.model';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 interface StatusChip {
   status: IntegrationHealthStatus;
@@ -43,7 +44,7 @@ interface HistoryState {
 @Component({
   selector: 'app-integration-health',
   standalone: true,
-  imports: [CommonModule, RouterLink, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './integration-health.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-health.scss',

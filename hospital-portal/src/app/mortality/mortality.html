@@ -128,7 +128,7 @@
                   <div class="cell-primary">{{ d.patientName }}</div>
                   <div class="cell-secondary">{{ d.patientMrn || '—' }}</div>
                 </td>
-                <td>{{ d.diedAt | date: 'short' }}</td>
+                <td>{{ d.diedAt | serverTime | date: 'short' }}</td>
                 <td>{{ 'MORTALITY.PLACE_' + d.placeOfDeath | translate }}</td>
                 <td>{{ d.underlyingCause || d.immediateCause }}</td>
                 <td>
@@ -189,7 +189,8 @@
             <div class="amended-banner">
               <span class="material-symbols-outlined">history_edu</span>
               <span>
-                {{ 'MORTALITY.AMENDED_ON' | translate }} {{ rec.amendedAt | date: 'short' }} —
+                {{ 'MORTALITY.AMENDED_ON' | translate }}
+                {{ rec.amendedAt | serverTime | date: 'short' }} —
                 {{ rec.amendmentReason }}
               </span>
             </div>
@@ -197,7 +198,7 @@
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.DIED_AT' | translate }}</span>
-              <span class="field-value">{{ rec.diedAt | date: 'medium' }}</span>
+              <span class="field-value">{{ rec.diedAt | serverTime | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'MORTALITY.PLACE' | translate }}</span>

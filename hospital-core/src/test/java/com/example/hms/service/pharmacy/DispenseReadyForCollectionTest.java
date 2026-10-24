@@ -989,7 +989,7 @@ class DispenseReadyForCollectionTest {
         private java.util.List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> queue(
                 java.util.List<Prescription> rows, java.util.List<Dispense> open) {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(any(), any(), any()))
+            when(prescriptionRepository.findWorkQueue(any(), any(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
             when(dispenseRepository.findByPrescription_IdInAndStatus(any(), eq(DispenseStatus.PENDING)))
                     .thenReturn(open);

@@ -55,7 +55,7 @@
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.SUSPENDED_AT' | translate }}</dt>
             <dd>
-              {{ lc.suspendedAt | date: 'medium' }}
+              {{ lc.suspendedAt | serverTime | date: 'medium' }}
               @if (lc.suspendedByName) {
                 — {{ lc.suspendedByName }}
               }
@@ -72,7 +72,7 @@
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.ARCHIVED_AT' | translate }}</dt>
             <dd>
-              {{ lc.archivedAt | date: 'medium' }}
+              {{ lc.archivedAt | serverTime | date: 'medium' }}
               @if (lc.archivedByName) {
                 — {{ lc.archivedByName }}
               }
@@ -82,13 +82,13 @@
         @if (lc.purgeScheduledFor) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGE_SCHEDULED_FOR' | translate }}</dt>
-            <dd>{{ lc.purgeScheduledFor | date: 'medium' }}</dd>
+            <dd>{{ lc.purgeScheduledFor | serverTime | date: 'medium' }}</dd>
           </div>
         }
         @if (lc.purgedAt) {
           <div>
             <dt>{{ 'HOSPITAL_LIFECYCLE.META.PURGED_AT' | translate }}</dt>
-            <dd>{{ lc.purgedAt | date: 'medium' }}</dd>
+            <dd>{{ lc.purgedAt | serverTime | date: 'medium' }}</dd>
           </div>
         }
       </dl>

@@ -9,6 +9,7 @@ import { OrderSetService, OrderSetSummary } from '../../services/order-set.servi
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Admin list view for CPOE order-set templates. Hospital-scoped via
@@ -18,7 +19,7 @@ import { AuthService } from '../../auth/auth.service';
 @Component({
   selector: 'app-order-set-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-admin" data-testid="order-set-admin">
@@ -69,7 +70,7 @@ import { AuthService } from '../../auth/auth.service';
                 <td>v{{ os.version }}</td>
                 <td>{{ os.orderCount }}</td>
                 <td>{{ os.admissionType }}</td>
-                <td>{{ os.updatedAt | date: 'short' }}</td>
+                <td>{{ os.updatedAt | serverTime | date: 'short' }}</td>
                 <td class="actions">
                   <a
                     class="action-link"

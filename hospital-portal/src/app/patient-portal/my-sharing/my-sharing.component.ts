@@ -10,6 +10,7 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -23,7 +24,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, FormsModule, TranslateModule],
   templateUrl: './my-sharing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],

@@ -8,7 +8,8 @@
     <div class="header-actions">
       @if (lastRefreshed()) {
         <span class="last-refreshed"
-          >{{ 'NURSE.UPDATED_PREFIX' | translate }} {{ lastRefreshed() | date: 'shortTime' }}</span
+          >{{ 'NURSE.UPDATED_PREFIX' | translate }}
+          {{ lastRefreshed() | serverTime | date: 'shortTime' }}</span
         >
       }
       <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
@@ -481,7 +482,7 @@
                   <div class="workboard-card-meta">
                     <span class="meta-item">
                       <span class="material-symbols-outlined">schedule</span>
-                      {{ e.encounterDate | date: 'shortTime' }}
+                      {{ e.encounterDate | serverTime | date: 'shortTime' }}
                     </span>
                   </div>
                   <div class="workboard-card-actions">
@@ -556,7 +557,7 @@
                   } @else if (p.lastVitalsTime) {
                     <span class="indicator indicator-ok">
                       <span class="material-symbols-outlined">monitor_heart</span>
-                      {{ p.lastVitalsTime | date: 'shortTime' }}
+                      {{ p.lastVitalsTime | serverTime | date: 'shortTime' }}
                     </span>
                   }
                   @if (p.medsDue > 0) {
@@ -568,7 +569,8 @@
                   @if (p.admittedAt) {
                     <span class="indicator indicator-neutral">
                       <span class="material-symbols-outlined">login</span>
-                      {{ 'NURSE.ADMITTED' | translate }} {{ p.admittedAt | date: 'shortDate' }}
+                      {{ 'NURSE.ADMITTED' | translate }}
+                      {{ p.admittedAt | serverTime | date: 'shortDate' }}
                     </span>
                   }
                 </div>
@@ -879,7 +881,8 @@
                   }
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
-                      {{ 'NURSE.DUE_LABEL' | translate }} {{ task.dueAt | date: 'shortTime' }}
+                      {{ 'NURSE.DUE_LABEL' | translate }}
+                      {{ task.dueAt | serverTime | date: 'shortTime' }}
                       @if (task.overdue) {
                         <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }

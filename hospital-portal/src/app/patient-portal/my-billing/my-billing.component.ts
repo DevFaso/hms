@@ -9,11 +9,20 @@ import {
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-billing',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule, CfaPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    EnumLabelPipe,
+    TranslateModule,
+    CfaPipe,
+  ],
   templateUrl: './my-billing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-billing.component.scss', '../patient-portal-pages.scss'],

@@ -105,7 +105,7 @@
                   }}
                 </td>
                 <td>{{ a.reaction || '—' }}</td>
-                <td>{{ a.onsetDate ? (a.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>{{ a.onsetDate ? (a.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
                 </td>
@@ -204,7 +204,7 @@
                     p.severity ? ('CHART.SEVERITY_' + p.severity | translate) : '—'
                   }}</span>
                 </td>
-                <td>{{ p.onsetDate ? (p.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>{{ p.onsetDate ? (p.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
                 <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
                 @if (canEditProblems()) {
@@ -264,7 +264,7 @@
               <span class="update-version">v{{ u.versionNumber }}</span>
               <span class="update-reason">{{ u.updateReason }}</span>
               <span class="update-meta">
-                {{ u.recordedByName }} — {{ u.recordedAt | date: 'short' }}
+                {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {
                   <span class="update-hospital">· {{ u.hospitalName }}</span>
                 }
@@ -582,7 +582,7 @@
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
                 {{ e.category | enumLabel: 'timelineCategory' }} ·
-                {{ e.occurredAt | date: 'medium' }}
+                {{ e.occurredAt | serverTime | date: 'medium' }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never

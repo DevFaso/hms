@@ -16,6 +16,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
 
 /** A user whose only role is ROLE_PATIENT (a patient portal account). */
 function isPatientOnlyUser(u: Pick<UserSummary, 'roleName'>): boolean {
@@ -427,7 +428,7 @@ export class StaffListComponent implements OnInit {
       licenseNumber: '',
       jobTitle: '',
       employmentType: '',
-      startDate: new Date().toISOString().slice(0, 10), // today as default start date
+      startDate: localDateString(), // today as default start date
       roleName: '',
     };
   }

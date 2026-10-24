@@ -36,6 +36,7 @@ import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
 import { ProviderStaffRegisterComponent } from '../../../provider/provider-staff-register/provider-staff-register';
 import { ProviderEvidenceFormComponent } from '../provider-evidence-form/provider-evidence-form';
 import { lifecycleBadgeClass, verificationBadgeClass } from '../provider-status';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
 /** A verification decision taken with a reason. */
 type DecisionKind = 'reject' | 'revoke';
@@ -64,6 +65,7 @@ const LIFECYCLE_REASON_MIN = 5;
   selector: 'app-provider-detail',
   standalone: true,
   imports: [
+    ServerTimePipe,
     DatePipe,
     FormsModule,
     RouterLink,

@@ -539,7 +539,15 @@ export class ReferralsComponent implements OnInit {
     if (!ref || !this.scheduleAppointmentTime) return;
     this.actionLoading.set(true);
     this.referralService
-      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .schedule(
+        ref.id,
+        // #948 review: kept as the hospital's wall clock, NOT converted to UTC.
+        // The server copies it into the booked Appointment's date and start
+        // time, which are wall-clock fields (calendar, check-in, reminders,
+        // patient emails), so 10:00 must arrive as 10:00.
+        this.scheduleAppointmentTime,
+        this.scheduleLocation || undefined,
+      )
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));

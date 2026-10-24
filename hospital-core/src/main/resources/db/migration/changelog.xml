@@ -3038,6 +3038,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V231 (QA D757): clinical.prescriptions.take_home, so a ward order
+         ends with its stay unless it is marked for home. Plain statements,
+         no DO block. -->
+    <changeSet id="V231-prescription-take-home" author="hms-team" runOnChange="false">
+        <sqlFile path="V231__prescription_take_home.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V229 (QA D783): issued invoices with a total of 0, no amount paid
          and no payment row, left from before the D767 guard, are cancelled
          (never deleted), with one SYSTEM audit row each. One DO block

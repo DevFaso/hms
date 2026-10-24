@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
-import { NurseStationComponent } from './nurse-station';
+import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
 import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -299,9 +299,16 @@ describe('NurseStationComponent — two-tier polling', () => {
     it('a nurse sees ARRIVED/TRIAGE outpatients and opens the triage form on one', () => {
       authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
       component.loadFlow$().subscribe();
+      // #948 review: "today" starts at the reader's local midnight, sent on
+      // the server's UTC clock (encounterDate is compared on it), not as the
+      // local wall clock.
       const d = new Date();
-      const p = (n: number) => String(n).padStart(2, '0');
-      const fromDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T00:00:00`;
+      const localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const fromDate = localMidnight.toISOString().slice(0, 19);
+      const sent = encounterSpy.list.calls.mostRecent().args[0] as { fromDate: string };
+      expect(new Date(`${sent.fromDate}Z`).getTime())
+        .withContext('fromDate is local midnight read as UTC')
+        .toBe(localMidnight.getTime());
       expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate, size: 100 });
       expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate, size: 100 });
       expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);
@@ -317,6 +324,34 @@ describe('NurseStationComponent — two-tier polling', () => {
       fixture.detectChanges();
       expect(component.triageEncounter()?.id).toBe('e1');
       expect(fixture.nativeElement.querySelector('app-triage-form')).toBeTruthy();
+    });
+
+    // QA D777/D784 re-test: Salif's card read 15:33 in both Ouagadougou and
+    // New York for an arrival stamped 2026-10-24T15:33:17 (UTC, no zone).
+    // On a workstation outside UTC this fails without `serverTime`; the
+    // zone-independent check is scripts/lib/server-time.test.mjs.
+    it('shows the triage card arrival time in the reader zone (D777/D784)', () => {
+      const salif = {
+        id: 'e9',
+        patientName: 'Salif K',
+        status: 'ARRIVED',
+        encounterType: 'OUTPATIENT',
+        encounterDate: '2026-10-24T15:33:17.25607', // the raw value of GET /encounters (t7.js)
+      } as never;
+      encounterSpy.list.and.callFake(((f: { status?: string }) =>
+        of(f?.status === 'ARRIVED' ? [salif] : [])) as never);
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component.activeSection.set('workboard');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+
+      const card = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="awaiting-triage"] .workboard-card-meta',
+      );
+      expect(card?.textContent?.replace(/\s+/g, ' ')).toContain(
+        formatDate('2026-10-24T15:33:17Z', 'shortTime', 'en-US').replace(/\s+/g, ' '),
+      );
     });
 
     it('a non-nurse gets no triage list and no encounter query', () => {
@@ -606,5 +641,20 @@ describe('NurseStationComponent — two-tier polling', () => {
       (td) => td.textContent?.trim(),
     );
     expect(cells).toContain(expected);
+  });
+});
+
+describe('localInputToUtcIso (QA D777)', () => {
+  it('sends the nurse-picked local wall time as a UTC instant, not as a zone-less UTC guess', () => {
+    const picked = '2026-10-24T14:00';
+    const sent = localInputToUtcIso(picked);
+    expect(sent).toBe(new Date(2026, 9, 24, 14, 0).toISOString());
+    expect(sent?.endsWith('Z')).toBeTrue();
+  });
+
+  it('sends nothing for an empty or unreadable value', () => {
+    expect(localInputToUtcIso('')).toBeUndefined();
+    expect(localInputToUtcIso(undefined)).toBeUndefined();
+    expect(localInputToUtcIso('not a date')).toBeUndefined();
   });
 });

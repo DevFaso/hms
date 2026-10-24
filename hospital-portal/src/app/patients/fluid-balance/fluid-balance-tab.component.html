@@ -95,7 +95,7 @@
             @for (entry of s.entries; track entry.id) {
               <tr>
                 <td>
-                  {{ entry.observationTime | date: 'short' }}
+                  {{ entry.observationTime | serverTime | date: 'short' }}
                   @if (entry.lateEntry) {
                     <span class="late-chip">{{ 'FLUID_BALANCE.LATE_ENTRY' | translate }}</span>
                   }

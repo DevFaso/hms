@@ -9,11 +9,12 @@ import {
   FamilyHistorySummary,
   SocialHistorySummary,
 } from '../../services/patient-portal.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-medical-history',
   standalone: true,
-  imports: [CommonModule, DatePipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, TranslateModule],
   templateUrl: './my-medical-history.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-medical-history.component.scss', '../patient-portal-pages.scss'],

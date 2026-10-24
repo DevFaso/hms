@@ -76,7 +76,7 @@
         @if (s.dob) {
           <div class="snap-field">
             <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span>
-            <span class="field-val">{{ s.dob | date: 'mediumDate' }}</span>
+            <span class="field-val">{{ s.dob | serverTime | date: 'mediumDate' }}</span>
           </div>
         }
         @if (s.phone) {
@@ -121,7 +121,7 @@
           <div class="snap-field">
             <span class="field-label">{{ 'RECEPTION.EXPIRES' | translate }}</span>
             <span class="field-val" [class.expired-val]="s.insurance.expired">
-              {{ s.insurance.expiresOn | date: 'mediumDate' }}
+              {{ s.insurance.expiresOn | serverTime | date: 'mediumDate' }}
               @if (s.insurance.expired) {
                 <span class="alert-chip danger small">{{ 'RECEPTION.EXPIRED' | translate }}</span>
               }

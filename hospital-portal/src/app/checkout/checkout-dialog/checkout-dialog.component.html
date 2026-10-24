@@ -154,7 +154,7 @@
           </div>
           <div>
             <dt>{{ 'CHECKOUT.AVS_VISIT_DATE' | translate }}</dt>
-            <dd>{{ avs()!.visitDate | date: 'medium' }}</dd>
+            <dd>{{ avs()!.visitDate | serverTime | date: 'medium' }}</dd>
           </div>
           <div>
             <dt>{{ 'CHECKOUT.AVS_PROVIDER' | translate }}</dt>

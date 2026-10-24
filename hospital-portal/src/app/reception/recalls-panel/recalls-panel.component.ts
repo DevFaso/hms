@@ -22,6 +22,8 @@ import { ReferralService, DepartmentMinimal } from '../../services/referral.serv
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { localDateString } from '../../shared/date-utils';
 
 type RecallFilter = 'ALL' | RecallStatus;
 
@@ -33,7 +35,7 @@ type RecallFilter = 'ALL' | RecallStatus;
 @Component({
   selector: 'app-recalls-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './recalls-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './recalls-panel.component.scss',
@@ -207,7 +209,7 @@ export class RecallsPanelComponent implements OnInit {
 
   isOverdue(recall: RecallResponse): boolean {
     if (recall.status !== 'PENDING' && recall.status !== 'NOTIFIED') return false;
-    return recall.dueDate < new Date().toISOString().split('T')[0];
+    return recall.dueDate < localDateString();
   }
 
   isOpen(recall: RecallResponse): boolean {

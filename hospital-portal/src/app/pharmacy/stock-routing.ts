@@ -16,11 +16,19 @@ import {
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, HospitalScopeHintComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    HospitalScopeHintComponent,
+  ],
   templateUrl: './stock-routing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-routing.scss',

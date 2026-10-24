@@ -1,4 +1,11 @@
-import { fromServerDateTime, nowLocalDatetime, withServerDateTimes } from './date-utils';
+import {
+  fromServerDateTime,
+  nowLocalDatetime,
+  serverDateOrInstant,
+  serverInstant,
+  serverLocalDate,
+  withServerDateTimes,
+} from './date-utils';
 
 describe('fromServerDateTime (QA D622)', () => {
   it('reads a zone-less server time as UTC', () => {
@@ -32,5 +39,56 @@ describe('withServerDateTimes (#941 review)', () => {
 
   it('leaves empty fields alone', () => {
     expect(withServerDateTimes({ birthDateTime: '' }, ['birthDateTime']).birthDateTime).toBe('');
+  });
+});
+
+describe('serverInstant (QA D777/D784)', () => {
+  it('reads the zone-less UTC server time of the re-test as UTC', () => {
+    expect(serverInstant('2026-10-24T15:33:17').getTime()).toBe(Date.UTC(2026, 9, 24, 15, 33, 17));
+    expect(serverInstant('2026-10-24T15:33:17.123456').getTime()).toBe(
+      Date.UTC(2026, 9, 24, 15, 33, 17, 123),
+    );
+  });
+
+  it('keeps a stated zone and passes a bare calendar date as is', () => {
+    expect(serverInstant('2026-10-24T15:33:17+02:00').getTime()).toBe(
+      Date.UTC(2026, 9, 24, 13, 33, 17),
+    );
+    expect(serverInstant('2026-10-24T15:33:17Z').getTime()).toBe(Date.UTC(2026, 9, 24, 15, 33, 17));
+    expect(serverInstant('2026-10-24').getTime()).toBe(new Date('2026-10-24').getTime());
+  });
+
+  it('gives an Invalid Date for an unreadable value, as new Date would', () => {
+    expect(Number.isNaN(serverInstant('not a date').getTime())).toBeTrue();
+  });
+});
+
+describe('serverDateOrInstant (#948 review)', () => {
+  it('reads a bare calendar date as local midnight of that day, not UTC midnight', () => {
+    const d = serverDateOrInstant('2026-10-24');
+    expect([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]).toEqual([2026, 9, 24, 0]);
+  });
+
+  it('reads a zone-less date and time as the UTC server time', () => {
+    expect(serverDateOrInstant('2026-10-24T15:33:17').getTime()).toBe(
+      Date.UTC(2026, 9, 24, 15, 33, 17),
+    );
+  });
+});
+
+describe('serverLocalDate (#948 review)', () => {
+  it('gives the reader day of a UTC server time, not its UTC day', () => {
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    expect(serverLocalDate(stored)).toBe('2026-10-24');
+  });
+
+  it('keeps a bare calendar date as that day', () => {
+    expect(serverLocalDate('2026-10-24')).toBe('2026-10-24');
+  });
+
+  it('is empty for an empty or unreadable value', () => {
+    expect(serverLocalDate(null)).toBe('');
+    expect(serverLocalDate('')).toBe('');
+    expect(serverLocalDate('not a date')).toBe('');
   });
 });

@@ -18,11 +18,19 @@ import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './treatment-plans.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './treatment-plans.scss',

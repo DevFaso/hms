@@ -1112,6 +1112,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             textDiffers(request.getNotes(), existing.getNotes()),
             flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
             flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
+            flagDiffers(request.getTakeHome(), existing.isTakeHome()),
             Boolean.TRUE.equals(request.getForceOverride()));
         return changes.contains(Boolean.TRUE);
     }

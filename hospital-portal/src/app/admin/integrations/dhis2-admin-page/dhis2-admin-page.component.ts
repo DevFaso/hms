@@ -16,6 +16,7 @@ import { RoleContextService } from '../../../core/role-context.service';
 import { ToastService } from '../../../core/toast.service';
 import { Dhis2ExportPanelComponent } from '../dhis2-export-panel/dhis2-export-panel.component';
 import { Dhis2MappingEditorComponent } from '../dhis2-mapping-editor/dhis2-mapping-editor.component';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
 type Tab = 'config' | 'mappings' | 'exports';
 
@@ -31,6 +32,7 @@ type Tab = 'config' | 'mappings' | 'exports';
   selector: 'app-dhis2-admin-page',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -170,7 +172,7 @@ type Tab = 'config' | 'mappings' | 'exports';
           @if (loadedConfig(); as cfg) {
             <p class="dhis2-admin__last-export" data-testid="dhis2-config-last-export">
               {{ 'DHIS2.CONFIG.LAST_EXPORT' | translate }}:
-              {{ cfg.lastExportAt ? (cfg.lastExportAt | date: 'short') : '—' }}
+              {{ cfg.lastExportAt ? (cfg.lastExportAt | serverTime | date: 'short') : '—' }}
               ·
               {{ 'DHIS2.CONFIG.SECRET_CONFIGURED' | translate }}:
               {{ cfg.authSecretConfigured ? '✓' : '✗' }}

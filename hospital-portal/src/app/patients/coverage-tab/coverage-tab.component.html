@@ -48,8 +48,8 @@
                 }
               </td>
               <td>
-                {{ i.effectiveDate ? (i.effectiveDate | date: 'shortDate') : '—' }} —
-                {{ i.expirationDate ? (i.expirationDate | date: 'shortDate') : '…' }}
+                {{ i.effectiveDate ? (i.effectiveDate | serverTime | date: 'shortDate') : '—' }} —
+                {{ i.expirationDate ? (i.expirationDate | serverTime | date: 'shortDate') : '…' }}
               </td>
               <td>
                 @if (isExpired(i)) {
@@ -113,7 +113,11 @@
             <tr>
               <td>{{ r.hospitalName || '—' }}</td>
               <td>{{ r.mri || r.registrationCode || '—' }}</td>
-              <td>{{ r.registrationDate ? (r.registrationDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{
+                  r.registrationDate ? (r.registrationDate | serverTime | date: 'mediumDate') : '—'
+                }}
+              </td>
               <td>
                 {{ r.stayStatus ? ('REGISTRATIONS.STAY_' + r.stayStatus | translate) : '—' }}
               </td>
@@ -267,7 +271,7 @@
         <tbody>
           @for (c of consents(); track c.id) {
             <tr>
-              <td>{{ c.consentedAt | date: 'medium' }}</td>
+              <td>{{ c.consentedAt | serverTime | date: 'medium' }}</td>
               <td>{{ 'COVERAGE.CONSENT_METHOD_' + c.method | translate }}</td>
               <td>{{ 'COVERAGE.CONSENT_SOURCE_' + c.source | translate }}</td>
               <td>{{ c.signedName || '—' }}</td>

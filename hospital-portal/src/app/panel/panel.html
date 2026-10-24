@@ -54,7 +54,7 @@
                   <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
                 </td>
                 <td>{{ roleKey(row.panelRole) | translate }}</td>
-                <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
+                <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
                     {{ 'PANEL.END' | translate }}
@@ -139,7 +139,7 @@
                   <td>
                     <a [routerLink]="['/patients', row.patientId]">{{ row.patientName }}</a>
                   </td>
-                  <td>{{ row.assignedOn | date: 'mediumDate' }}</td>
+                  <td>{{ row.assignedOn | serverTime | date: 'mediumDate' }}</td>
                   <td>
                     <button type="button" class="btn-link danger" (click)="openEnd(row, $event)">
                       {{ 'PANEL.END' | translate }}

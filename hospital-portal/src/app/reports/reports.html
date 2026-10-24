@@ -103,7 +103,11 @@
                             }}</span>
                           </td>
                           <td>{{ run.rowCount ?? '—' }}</td>
-                          <td>{{ run.generatedAt ? (run.generatedAt | date: 'short') : '—' }}</td>
+                          <td>
+                            {{
+                              run.generatedAt ? (run.generatedAt | serverTime | date: 'short') : '—'
+                            }}
+                          </td>
                           <td class="error-cell">{{ run.errorMessage ?? '—' }}</td>
                         </tr>
                       }

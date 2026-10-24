@@ -4,11 +4,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, LabResultSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-lab-results',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-lab-results.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-lab-results.component.scss', '../patient-portal-pages.scss'],

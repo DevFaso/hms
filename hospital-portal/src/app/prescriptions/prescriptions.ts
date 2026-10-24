@@ -42,6 +42,7 @@ import { PrescriptionClarificationComponent } from '../shared/prescription-clari
 import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -521,7 +522,7 @@ export class PrescriptionsComponent implements OnInit {
   /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
   encounterLabel(e: EncounterResponse): string {
     const date = e.encounterDate
-      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
       : '';
     return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
@@ -569,6 +570,7 @@ export class PrescriptionsComponent implements OnInit {
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
+      takeHome: !!p.takeHome,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -1653,7 +1655,8 @@ export class PrescriptionsComponent implements OnInit {
 function eventTime(primary?: string | null, fallback?: string | null): number {
   const raw = primary ?? fallback;
   if (!raw) return 0;
-  const parsed = Date.parse(raw);
+  // #948 review: a zone-less UTC server time (daysWaiting counts from it).
+  const parsed = serverInstant(raw).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 

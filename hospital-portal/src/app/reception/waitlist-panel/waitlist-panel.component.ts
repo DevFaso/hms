@@ -26,13 +26,15 @@ import { StaffService, isClinicalProvider, StaffResponse } from '../../services/
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { serverInstant } from '../../shared/date-utils';
 
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './waitlist-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './waitlist-panel.component.scss',
@@ -274,7 +276,7 @@ export class WaitlistPanelComponent implements OnInit {
   }
 
   offerExpired(entry: WaitlistEntryResponse): boolean {
-    return !!entry.offerExpiresAt && new Date(entry.offerExpiresAt).getTime() < Date.now();
+    return !!entry.offerExpiresAt && serverInstant(entry.offerExpiresAt).getTime() < Date.now();
   }
 
   closeEntry(id: string): void {

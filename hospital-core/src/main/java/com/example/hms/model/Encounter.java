@@ -63,6 +63,15 @@ public class Encounter extends BaseEntity {
      */
     public static final String PRESCRIPTION_ANCHOR_NOTE = "Auto-generated for prescription entry";
 
+    /**
+     * QA D759: the encounter only anchors a prescription written outside a
+     * visit. It is not a visit the patient made, so the patient's visit
+     * history leaves it out (its untranslated bookkeeping note with it).
+     */
+    public boolean isPrescriptionAnchor() {
+        return PRESCRIPTION_ANCHOR_NOTE.equals(notes);
+    }
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "patient_id", nullable = false,
         foreignKey = @ForeignKey(name = "fk_encounter_patient"))

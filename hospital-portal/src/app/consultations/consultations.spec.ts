@@ -347,7 +347,12 @@ describe('ConsultationsComponent', () => {
     component.openSchedule(mockConsult());
     component.scheduleForm.scheduledAt = '2026-08-20T10:00';
     component.submitSchedule();
-    expect(consultSpy.schedule).toHaveBeenCalledWith('c1', '2026-08-20T10:00', undefined);
+    // QA D777/D784: the picked local wall time is sent as the UTC the server keeps.
+    expect(consultSpy.schedule).toHaveBeenCalledWith(
+      'c1',
+      new Date(2026, 7, 20, 10, 0).toISOString().slice(0, 19),
+      undefined,
+    );
     expect(component.showScheduleModal()).toBeFalse();
   });
 

@@ -60,7 +60,7 @@
       @if (logoutPanel().result; as r) {
         <p class="result-success" data-test="logout-success">
           {{ r.message }}
-          <em>({{ r.takenAt | date: 'short' }})</em>
+          <em>({{ r.takenAt | serverTime | date: 'short' }})</em>
         </p>
       }
     </section>

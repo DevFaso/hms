@@ -375,7 +375,7 @@
                     </span>
                   </td>
                   <td class="cell-time">
-                    {{ row.timestamp ? (row.timestamp | date: 'short') : '—' }}
+                    {{ row.timestamp ? (row.timestamp | serverTime | date: 'short') : '—' }}
                   </td>
                   <td>
                     <!--

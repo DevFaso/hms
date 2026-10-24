@@ -46,6 +46,7 @@ import { ChartReviewComponent } from './chart-review/chart-review.component';
 import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
 
 type TabKey =
   | 'overview'
@@ -448,7 +449,7 @@ export class PatientDetailComponent implements OnInit {
     if (!this.canViewGrowth()) return false;
     const dob = this.patient()?.dateOfBirth;
     if (!dob) return false;
-    const ageMs = Date.now() - new Date(dob).getTime();
+    const ageMs = Date.now() - serverDateOrInstant(dob).getTime();
     return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
   }
 
@@ -597,7 +598,7 @@ export class PatientDetailComponent implements OnInit {
 
   getAge(dob?: string): string {
     if (!dob) return '—';
-    const birth = new Date(dob);
+    const birth = serverDateOrInstant(dob);
     const now = new Date();
     let age = now.getFullYear() - birth.getFullYear();
     if (

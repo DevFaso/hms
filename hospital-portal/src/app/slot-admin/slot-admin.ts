@@ -25,6 +25,7 @@ import { StaffService, isClinicalProvider, StaffResponse } from '../services/sta
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
@@ -40,7 +41,7 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
 @Component({
   selector: 'app-slot-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './slot-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './slot-admin.scss',

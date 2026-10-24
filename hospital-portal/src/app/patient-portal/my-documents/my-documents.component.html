@@ -121,7 +121,7 @@
             @if (doc.collectionDate) {
               <span>
                 <span class="material-symbols-outlined detail-icon">calendar_today</span>
-                {{ doc.collectionDate | date: 'mediumDate' }}
+                {{ doc.collectionDate | serverTime | date: 'mediumDate' }}
               </span>
             }
             <span>

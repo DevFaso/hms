@@ -179,7 +179,7 @@
           </div>
           <div>
             <dt>{{ 'PROVIDER.EVIDENCE.STARTED_ON' | translate }}</dt>
-            <dd>{{ b.startedOn | date: 'mediumDate' }}</dd>
+            <dd>{{ b.startedOn | serverTime | date: 'mediumDate' }}</dd>
           </div>
           <div>
             <dt>{{ 'PROVIDER.EVIDENCE.RCCM' | translate }}</dt>
@@ -263,11 +263,21 @@
           </div>
           <div>
             <dt>{{ 'PROVIDER.EVIDENCE.ISSUED_ON' | translate }}</dt>
-            <dd>{{ pro.licenceIssuedOn ? (pro.licenceIssuedOn | date: 'mediumDate') : '—' }}</dd>
+            <dd>
+              {{
+                pro.licenceIssuedOn ? (pro.licenceIssuedOn | serverTime | date: 'mediumDate') : '—'
+              }}
+            </dd>
           </div>
           <div>
             <dt>{{ 'PROVIDER.EVIDENCE.EXPIRES_ON' | translate }}</dt>
-            <dd>{{ pro.licenceExpiresOn ? (pro.licenceExpiresOn | date: 'mediumDate') : '—' }}</dd>
+            <dd>
+              {{
+                pro.licenceExpiresOn
+                  ? (pro.licenceExpiresOn | serverTime | date: 'mediumDate')
+                  : '—'
+              }}
+            </dd>
           </div>
         </dl>
       </section>
@@ -280,11 +290,11 @@
       <dl class="detail-grid">
         <div>
           <dt>{{ 'PROVIDER.DETAIL.SUBMITTED_AT' | translate }}</dt>
-          <dd>{{ p.submittedAt ? (p.submittedAt | date: 'medium') : '—' }}</dd>
+          <dd>{{ p.submittedAt ? (p.submittedAt | serverTime | date: 'medium') : '—' }}</dd>
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.DECIDED_AT' | translate }}</dt>
-          <dd>{{ p.decidedAt ? (p.decidedAt | date: 'medium') : '—' }}</dd>
+          <dd>{{ p.decidedAt ? (p.decidedAt | serverTime | date: 'medium') : '—' }}</dd>
         </div>
         <div>
           <dt>{{ 'PROVIDER.DETAIL.IFU_CONFIRMED' | translate }}</dt>
@@ -345,7 +355,9 @@
             <tbody>
               @for (row of history(); track row.verificationId) {
                 <tr data-test="history-row">
-                  <td>{{ row.submittedAt ? (row.submittedAt | date: 'medium') : '—' }}</td>
+                  <td>
+                    {{ row.submittedAt ? (row.submittedAt | serverTime | date: 'medium') : '—' }}
+                  </td>
                   <td>
                     <span [class]="'status-badge ' + verificationBadge(row.status)">
                       {{ row.status | enumLabel: 'providerVerificationStatus' }}
@@ -353,7 +365,7 @@
                   </td>
                   <td>{{ row.legalName || '—' }}</td>
                   <td>{{ row.licenceNumber || '—' }}</td>
-                  <td>{{ row.decidedAt ? (row.decidedAt | date: 'medium') : '—' }}</td>
+                  <td>{{ row.decidedAt ? (row.decidedAt | serverTime | date: 'medium') : '—' }}</td>
                   <td data-test="history-reason">{{ row.decisionReason || '—' }}</td>
                   <td data-test="history-note">{{ row.evidenceNote || '—' }}</td>
                 </tr>

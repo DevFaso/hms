@@ -25,6 +25,7 @@ import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * Panel management (Tier 2 item 37).
@@ -43,7 +44,14 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './panel.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './panel.scss',

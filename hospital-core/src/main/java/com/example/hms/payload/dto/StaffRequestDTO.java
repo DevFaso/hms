@@ -9,7 +9,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -57,7 +56,9 @@ public class StaffRequestDTO {
     @Schema(description = "License number (required for roles like doctor, nurse, pharmacist)")
     private String licenseNumber;
 
-    @PastOrPresent(message = "{staff.startDate.past}")
+    // #948 review: the portal defaults this to the reader's today (east of UTC,
+    // already tomorrow on the server's calendar), so the check allows that day.
+    @com.example.hms.validation.PickedDayNotInFuture(message = "{staff.startDate.past}")
     @Schema(description = "Employment start date")
     private LocalDate startDate;
 

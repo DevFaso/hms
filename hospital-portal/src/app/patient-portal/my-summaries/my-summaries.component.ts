@@ -3,11 +3,12 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { PatientPortalService, AfterVisitSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-summaries',
   standalone: true,
-  imports: [CommonModule, DatePipe, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, DatePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-summaries.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-summaries.component.scss', '../patient-portal-pages.scss'],
