@@ -160,6 +160,8 @@ class AdmissionServiceImplTest {
         assertThat(service.admitPatient(request)).isEqualTo(response);
         // QA D98/D135: every admission opens its own INPATIENT encounter.
         verify(stayEncounters).openStayEncounter(admission);
+        // QA D712: the visit that led to the stay is closed with the admission.
+        verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(admission);
     }
 
     @Test

@@ -4586,6 +4586,7 @@
       "EMPTY_TITLE": "No se encontraron medicamentos",
       "EMPTY_DESC": "No tiene ningún medicamento activo.",
       "ACTIVE": "Medicamentos activos",
+      "PAST": "Medicamentos anteriores",
       "PRESCRIPTIONS": "Recetas",
       "MEDICATION": "Medicamento",
       "DOSAGE": "Posología",

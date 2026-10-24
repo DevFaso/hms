@@ -48,6 +48,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -166,6 +167,41 @@ class EncounterNoteSignatureTest {
         assertThat(note.getSignedByName()).isEqualTo("Issa Ouédraogo");
         assertThat(note.getSignatureAlgorithm()).isEqualTo("SHA-256");
         assertThat(note.getSignatureValue()).hasSize(64).matches("[0-9a-f]+");
+    }
+
+    @Test
+    void d751_theSignedHistoryRowNamesTheSignerLikeEveryOtherRow() {
+        authorUser.setEmail("doctor@example.test");
+
+        service.signEncounterNote(encounterId, LOCALE);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_SIGNED");
+        assertThat(history.getValue().getChangedBy()).isEqualTo("doctor@example.test");
+    }
+
+    @Test
+    void d751_theCosignedHistoryRowNamesTheCosignerNotTheirId() {
+        makeSignedRequiringCosign();
+        UUID attendingUserId = UUID.randomUUID();
+        User attendingUser = new User();
+        attendingUser.setId(attendingUserId);
+        attendingUser.setEmail("attending@example.test");
+        Staff attending = Staff.builder().user(attendingUser).build();
+        attending.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(attendingUserId);
+        when(staffRepository.findByUserIdAndHospitalId(attendingUserId, hospitalId))
+            .thenReturn(Optional.of(attending));
+
+        service.cosignEncounterNote(encounterId, LOCALE);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_COSIGNED");
+        assertThat(history.getValue().getChangedBy()).isEqualTo("attending@example.test");
     }
 
     @Test
@@ -393,6 +429,135 @@ class EncounterNoteSignatureTest {
         verify(encounterNoteHistoryRepository).save(history.capture());
         assertThat(history.getValue().getChangedBy()).isEqualTo("doctor@example.test");
         assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_UPDATED");
+    }
+
+    @Test
+    void d711_aSecondProgressNoteOnAStayIsANewEntryWithoutYesterdaysSections() {
+        // QA D711: the second POST /notes on the stay was a NOTE_UPDATED and
+        // the day-1 objective stayed under the day-2 assessment.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setObjective("Day 1: febrile 39.2");
+        note.setAssessment("Day 1 assessment");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(note.getObjective()).isNull();
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
+        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
+        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
+    }
+
+    @Test
+    void d711_aDayOneAddendumStaysWithDayOneNotUnderTheDayTwoEntry() {
+        // #940 review: stay entries cleared the sections but not the addenda,
+        // so a day-1 correction showed under the day-2 entry and author, and
+        // the history kept only the addenda count.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        note.addAddendum(com.example.hms.model.encounter.EncounterNoteAddendum.builder()
+            .author(authorUser).authorName("Day 1 author")
+            .content("Correction: dose was 500 mg").documentedAt(LocalDateTime.now().minusHours(18)).build());
+        tools.jackson.databind.ObjectMapper realMapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        when(objectMapper.writeValueAsString(any())).thenAnswer(inv -> realMapper.writeValueAsString(inv.getArgument(0)));
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAddenda()).isEmpty();
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
+        String dayOne = history.getAllValues().get(0).getContentSnapshot();
+        assertThat(dayOne).contains("Day 1 assessment").contains("Correction: dose was 500 mg").contains("Day 1 author");
+        String dayTwo = history.getAllValues().get(1).getContentSnapshot();
+        assertThat(dayTwo).contains("Day 2: afebrile").doesNotContain("Correction: dose was 500 mg");
+    }
+
+    @Test
+    void d711_aSignedDayOneNoteDoesNotBlockDayTwo() {
+        // #940 review: the signed lock ran before the stay-entry branch, so a
+        // signed day-1 note refused every later progress entry of the stay.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        note.setSignedAt(LocalDateTime.now().minusHours(20));
+        note.setSignedByName("Issa Ouédraogo");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(note.isSigned()).isFalse();
+        assertThat(note.getSignedByName()).isNull();
+    }
+
+    @Test
+    void d711_aCoveringClinicianWritesTheNextStayEntryInTheirOwnName() {
+        // #940 review: the other-author lock refused a covering clinician's
+        // progress entry on a stay whose day-1 entry another clinician wrote.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        Staff covering = nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Night: stable").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Night: stable");
+        assertThat(note.getAuthorStaff()).isEqualTo(covering);
+    }
+
+    @Test
+    void d738_theClosingEntrysSnapshotIsAttributedToItsAuthorNotToTheNextOne() {
+        // QA D738 (r10 re-test s5.js): MULTI_A wrote J2, DOCTOR2_A posted J3;
+        // the NOTE_UPDATED row holding the J2 text named DOCTOR2_A.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setAssessment("J2: improving");
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("J3: stable").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
+        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
+        assertThat(history.getAllValues().get(0).getChangedBy()).isEqualTo("doctor@example.test");
+        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
+        assertThat(history.getAllValues().get(1).getChangedBy()).isEqualTo("nurse@example.test");
+    }
+
+    @Test
+    void d711_anOutpatientNoteOfAnotherAuthorIsStillLocked() {
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(null);
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Overwrite").build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void d711_aVisitNoteRevisionStillKeepsTheSectionsItDoesNotResend() {
+        // Path re-verified: an outpatient visit's note is still revised in place.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(null);
+        note.setObjective("Kept");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Revised").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getObjective()).isEqualTo("Kept");
     }
 
     @Test

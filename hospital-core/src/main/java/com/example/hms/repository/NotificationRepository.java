@@ -20,6 +20,12 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
     @Modifying
     @Query("UPDATE Notification n SET n.read = true WHERE n.recipientUsername = :username AND n.read = false")
     int markAllReadForUser(@Param("username") String username);
+
+    /** QA D726: marks read the unread notifications about {@code subjectId} of the given types. */
+    @Modifying
+    @Query("UPDATE Notification n SET n.read = true WHERE n.subjectId = :subjectId AND n.type IN :types AND n.read = false")
+    int markReadForSubject(@Param("subjectId") java.util.UUID subjectId,
+                           @Param("types") java.util.Collection<String> types);
     List<Notification> findByRecipientUsernameAndReadOrderByCreatedAtDesc(String recipientUsername, boolean read);
 
     List<Notification> findByRecipientUsernameAndMessageContainingIgnoreCaseOrderByCreatedAtDesc(String recipientUsername, String search);
