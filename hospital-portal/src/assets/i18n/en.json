@@ -7872,6 +7872,8 @@
     "error": "Check-out failed. Please try again."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
+    "DIAGNOSIS_REQUIRED": "The discharge diagnosis is required",
     "ACTIVITY_RESTRICTIONS": "Activity restrictions",
     "ADDITIONAL_NOTES": "Additional notes",
     "ADD_FOLLOW_UP": "Add follow-up",

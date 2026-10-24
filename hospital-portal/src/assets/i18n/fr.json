@@ -7872,6 +7872,8 @@
     "error": "Échec de la sortie. Veuillez réessayer."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Diagnostic de sortie",
+    "DIAGNOSIS_REQUIRED": "Le diagnostic de sortie est obligatoire",
     "ACTIVITY_RESTRICTIONS": "Restrictions d'activité",
     "ADDITIONAL_NOTES": "Notes complémentaires",
     "ADD_FOLLOW_UP": "Ajouter un suivi",

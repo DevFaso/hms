@@ -298,6 +298,19 @@
           <strong>{{ decisionTarget()?.patientName }}</strong>
           — {{ decisionTarget()?.nurseSummary || ('DISCHARGE.NO_NURSE_SUMMARY' | translate) }}
         </p>
+        @if (decisionMode() === 'approve') {
+          <div class="field">
+            <label for="decision-diagnosis">
+              {{ 'DISCHARGE.DISCHARGE_DIAGNOSIS' | translate }} <span>*</span>
+            </label>
+            <textarea
+              id="decision-diagnosis"
+              rows="2"
+              maxlength="2000"
+              [(ngModel)]="decisionDiagnosis"
+            ></textarea>
+          </div>
+        }
         <div class="field">
           <label for="decision-note">
             {{

@@ -7872,6 +7872,8 @@
     "error": "Error en el alta. Inténtelo de nuevo."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Diagnóstico de alta",
+    "DIAGNOSIS_REQUIRED": "El diagnóstico de alta es obligatorio",
     "ACTIVITY_RESTRICTIONS": "Restricciones de actividad",
     "ADDITIONAL_NOTES": "Notas adicionales",
     "ADD_FOLLOW_UP": "Agregar seguimiento",

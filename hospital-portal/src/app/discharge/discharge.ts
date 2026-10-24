@@ -82,6 +82,7 @@ export class DischargeComponent implements OnInit {
   decisionMode = signal<'approve' | 'reject'>('approve');
   decisionTarget = signal<DischargeApproval | null>(null);
   decisionNote = '';
+  decisionDiagnosis = '';
   decisionSubmitting = signal(false);
 
   showCancelModal = signal(false);
@@ -222,6 +223,7 @@ export class DischargeComponent implements OnInit {
     this.decisionTarget.set(approval);
     this.decisionMode.set(mode);
     this.decisionNote = '';
+    this.decisionDiagnosis = '';
     this.showDecisionModal.set(true);
   }
 
@@ -238,12 +240,18 @@ export class DischargeComponent implements OnInit {
       this.toast.error(this.translate.instant('DISCHARGE.REJECTION_REASON_REQUIRED'));
       return;
     }
+    // QA D766: an approval discharges the stay, so it needs a diagnosis.
+    if (mode === 'approve' && !this.decisionDiagnosis.trim()) {
+      this.toast.error(this.translate.instant('DISCHARGE.DIAGNOSIS_REQUIRED'));
+      return;
+    }
     this.decisionSubmitting.set(true);
     const decision = {
       doctorStaffId: this.staffId!,
       doctorAssignmentId: this.assignmentId!,
       doctorNote: mode === 'approve' ? this.decisionNote.trim() || undefined : undefined,
       rejectionReason: mode === 'reject' ? this.decisionNote.trim() : undefined,
+      dischargeDiagnosis: mode === 'approve' ? this.decisionDiagnosis.trim() : undefined,
     };
     const op =
       mode === 'approve'

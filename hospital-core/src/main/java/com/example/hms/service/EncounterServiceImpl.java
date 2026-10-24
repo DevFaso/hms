@@ -162,6 +162,7 @@ public class EncounterServiceImpl implements EncounterService {
                 activeHospitalId == null // super-admin
                     || (e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()))
             )
+            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -1705,6 +1706,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         return encounters.stream()
+            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -1731,7 +1733,9 @@ public class EncounterServiceImpl implements EncounterService {
             hospitalId = roleValidator.requireActiveHospitalId();
         }
 
-        Specification<Encounter> spec = alwaysTrue();
+        // QA D759: a prescription's anchor is not a visit; filtered in the
+        // query so the page counts stay right.
+        Specification<Encounter> spec = alwaysTrue().and(notPrescriptionAnchor());
 
         if (patientId != null)  spec = spec.and(eqUuid("patient.id", patientId));
         if (staffId != null)    spec = spec.and(eqUuid("staff.id", staffId));
@@ -1742,6 +1746,12 @@ public class EncounterServiceImpl implements EncounterService {
 
         return encounterRepository.findAll(spec, pageable)
             .map(encounterMapper::toEncounterResponseDTO);
+    }
+
+    private static Specification<Encounter> notPrescriptionAnchor() {
+        return (root, q, cb) -> cb.or(
+            cb.isNull(root.get("notes")),
+            cb.notEqual(root.get("notes"), Encounter.PRESCRIPTION_ANCHOR_NOTE));
     }
 
     /** Always-true base spec to keep chaining safe & typed. */
@@ -1848,6 +1858,7 @@ public class EncounterServiceImpl implements EncounterService {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId == null) {
             return encounterRepository.findByPatient_Id(patientId).stream()
+                .filter(e -> !e.isPrescriptionAnchor())
                 .map(encounterMapper::toEncounterResponseDTO)
                 .toList();
         }
@@ -1861,7 +1872,9 @@ public class EncounterServiceImpl implements EncounterService {
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(encounters.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), activeHospitalId),
             "Cross-hospital encounter read on the treatment relationship");
+        // QA D759: a prescription's anchor is not a visit, for staff either.
         return encounters.stream()
+            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }

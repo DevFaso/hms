@@ -227,6 +227,26 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void getEncountersByPatientId_leavesPrescriptionAnchorsOut() {
+        // QA D759: the clinician's visit list showed each prescription anchor
+        // as a COMPLETED consultation; only the patient portal filtered them.
+        UUID patientId = UUID.randomUUID();
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        Encounter anchor = new Encounter();
+        anchor.setId(UUID.randomUUID());
+        anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(visit, anchor));
+        when(encounterMapper.toEncounterResponseDTO(visit)).thenReturn(dto);
+
+        assertThat(service.getEncountersByPatientId(patientId, locale)).containsExactly(dto);
+        verify(encounterMapper, never()).toEncounterResponseDTO(anchor);
+    }
+
+    @Test
     void getEncountersByPatientId_patientNotFound() {
         UUID patientId = UUID.randomUUID();
         when(patientRepository.existsById(patientId)).thenReturn(false);
