@@ -433,6 +433,43 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         return definition == null || definition.getHospital() == null;
     }
 
+    /** The APPROVE step; returns whether the sole director did the combined review-approval (D417). */
+    private boolean approve(User currentUser, LabTestDefinition definition) {
+        assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+        assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+        // QA D314 / D417: the director may also have done the QA review.
+        // Four eyes means two people, the author and an independent
+        // reviewer-approver; requiring a third (allowed only when the
+        // hospital had a single director) left a lab with a second,
+        // absent director unable to activate anything. The combined
+        // review is recorded in the audit row. The submitter rule holds.
+        requireRangesBeforeReview(definition);
+        boolean singleDirectorException = reviewerIsApprover(currentUser, definition);
+        // QA D523: the combined review-approval (D417) is allowed only
+        // when the hospital has exactly one active lab director, and
+        // it is then recorded in the audit row. With two directors, or
+        // for anyone else (the super-admin included), the approver
+        // must be someone other than the QA reviewer.
+        if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
+            throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
+        }
+        // QA D707: four eyes is two people. When an independent
+        // reviewer (never the submitter, enforced at COMPLETE_QA_REVIEW)
+        // stands between, the submitting director may approve: one
+        // director plus a quality manager, or two directors, can bring
+        // a test live. The approver must differ from the submitter only
+        // when no independent review sits between them (the combined
+        // sole-director review, or a legacy row with no reviewer).
+        if (singleDirectorException || definition.getReviewedById() == null) {
+            assertNotSameUser(currentUser, definition.getSubmittedById(),
+                "lab.definition.fourEyes.approverNotSubmitter");
+        }
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.setApprovedById(currentUser.getId());
+        definition.setApprovedAt(LocalDateTime.now());
+        return singleDirectorException;
+    }
+
     @Override
     @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto) {
@@ -484,38 +521,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setReviewedAt(LocalDateTime.now());
             }
             case "APPROVE" -> {
-                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
-                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
-                // QA D314 / D417: the director may also have done the QA review.
-                // Four eyes means two people, the author and an independent
-                // reviewer-approver; requiring a third (allowed only when the
-                // hospital had a single director) left a lab with a second,
-                // absent director unable to activate anything. The combined
-                // review is recorded in the audit row. The submitter rule holds.
-                requireRangesBeforeReview(definition);
-                singleDirectorException = reviewerIsApprover(currentUser, definition);
-                // QA D523: the combined review-approval (D417) is allowed only
-                // when the hospital has exactly one active lab director, and
-                // it is then recorded in the audit row. With two directors, or
-                // for anyone else (the super-admin included), the approver
-                // must be someone other than the QA reviewer.
-                if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
-                    throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
-                }
-                // QA D707: four eyes is two people. When an independent
-                // reviewer (never the submitter, enforced at COMPLETE_QA_REVIEW)
-                // stands between, the submitting director may approve: one
-                // director plus a quality manager, or two directors, can bring
-                // a test live. The approver must differ from the submitter only
-                // when no independent review sits between them (the combined
-                // sole-director review, or a legacy row with no reviewer).
-                if (singleDirectorException || definition.getReviewedById() == null) {
-                    assertNotSameUser(currentUser, definition.getSubmittedById(),
-                        "lab.definition.fourEyes.approverNotSubmitter");
-                }
-                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
-                definition.setApprovedById(currentUser.getId());
-                definition.setApprovedAt(LocalDateTime.now());
+                singleDirectorException = approve(currentUser, definition);
             }
             case "ACTIVATE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));

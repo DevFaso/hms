@@ -238,14 +238,8 @@ class LabOrderEndToEndIT extends BaseIT {
         // 3b. B8: the roles the annotation admits get past the edge too. They
         //     post on a second order so the queue assertion below stays exact.
         //     QA D708: one result per order, so each role posts on its own.
-        UUID secondOrderId = placeOrder(LocalDateTime.now().minusHours(2));
-        collectSpecimen(secondOrderId);
-        postResult(director, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
-        assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
-        UUID thirdOrderId = placeOrder(LocalDateTime.now().minusHours(2));
-        collectSpecimen(thirdOrderId);
-        postResult(qualityManager, thirdOrderId, NORMAL_VALUE).andExpect(status().isCreated());
-        assertThat(orderStatus(thirdOrderId)).isEqualTo(LabOrderStatus.RESULTED);
+        UUID secondOrderId = resultedOrderPostedBy(director);
+        resultedOrderPostedBy(qualityManager);
 
         // 4. B10: the ordering roles cannot release — the annotation says so
         //    before the service is reached.
@@ -656,13 +650,22 @@ class LabOrderEndToEndIT extends BaseIT {
 
     // ── HTTP helpers ─────────────────────────────────────────────────────
 
-    /** D107: a hand-entered result needs a collected specimen first. */
+    /** Places and collects a fresh order, posts a normal result on it as {@code actor}, and checks it is RESULTED. */
+    private UUID resultedOrderPostedBy(Actor actor) throws Exception {
+        UUID orderId = placeOrder(LocalDateTime.now().minusHours(2));
+        collectSpecimen(orderId);
+        postResult(actor, orderId, NORMAL_VALUE).andExpect(status().isCreated());
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.RESULTED);
+        return orderId;
+    }
+
     /** Releases a result as someone other than its author (no self-release confirmation). */
     private void releaseAs(Actor actor, UUID resultId) throws Exception {
         mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(actor)).with(csrf()))
             .andExpect(status().isOk());
     }
 
+    /** D107: a hand-entered result needs a collected specimen first. */
     private void collectSpecimen(UUID orderId) throws Exception {
         mockMvc.perform(post(LAB_ORDER_SPECIMENS, orderId)
                 .contextPath(API)

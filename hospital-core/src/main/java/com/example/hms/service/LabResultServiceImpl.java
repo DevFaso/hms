@@ -218,10 +218,7 @@ public class LabResultServiceImpl implements LabResultService {
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
-            requireOrderPatient(request.getPatientId(), labOrder);
-            request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
-            request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
-            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+            checkInteractiveEntry(request, labOrder);
         }
 
     UUID currentUserId = authService.getCurrentUserId();
@@ -271,7 +268,7 @@ public class LabResultServiceImpl implements LabResultService {
 
         // QA D708 (round 10) narrows what follows: an order is one test
         // definition, one analyte, and the portal enters one value for it. A
-        // second plain result on it is refused below (requireNoLiveResult);
+        // second plain result on it is refused below, by the live-result check;
         // a correction names the result it replaces. Only the ingest path,
         // whose ORU carries one OBX per analyte, records several rows.
         // A retried post records a second result, deliberately. Detecting the
@@ -893,11 +890,6 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
-     * D81: a correction names the released result it replaces. It must be a
-     * released result on the SAME order (the order row is locked here, so two
-     * corrections cannot both claim it) that no correction has replaced yet.
-     */
-    /**
      * QA D708: two POSTs 240 ms apart both recorded a result on a single-test
      * order; one was never released, so the patient saw a permanent "pending"
      * row and the chart and record PDF listed the result twice. The order row
@@ -917,6 +909,14 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
+    /** A hand-entered result: the order's patient, a plausible date and a valid value. */
+    private void checkInteractiveEntry(LabResultRequestDTO request, LabOrder labOrder) {
+        requireOrderPatient(request.getPatientId(), labOrder);
+        request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+        request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
+        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+    }
+
     /** QA D708: a patient id that is not the order's patient is a wrong request, not a detail to drop. */
     private static void requireOrderPatient(UUID requestedPatientId, LabOrder labOrder) {
         if (requestedPatientId != null && labOrder.getPatient() != null
@@ -925,6 +925,11 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
+    /**
+     * D81: a correction names the released result it replaces. It must be a
+     * released result on the SAME order (the order row is locked here, so two
+     * corrections cannot both claim it) that no correction has replaced yet.
+     */
     private LabResult requireSupersedable(UUID supersedesResultId, LabOrder lockedOrder) {
         if (supersedesResultId == null) {
             return null;
