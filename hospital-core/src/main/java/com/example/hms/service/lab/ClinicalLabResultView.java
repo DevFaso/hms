@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * What a reader outside the laboratory may see of a patient's stored lab
@@ -78,9 +79,76 @@ public final class ClinicalLabResultView {
         return current(rows).stream().filter(LabResult::isReleased).toList();
     }
 
-    /** Whether one row, read alone, may be served to a reader outside the laboratory. */
-    public static boolean isReleasedAndCurrent(LabResult row) {
-        return row != null && row.isReleased() && row.getSupersededByResultId() == null;
+    /**
+     * Whether one row may be served to a reader outside the laboratory, judged
+     * against the other rows of its order. A row read alone cannot be judged:
+     * a legacy duplicate carries no link at all, and an older correction may
+     * name its predecessor only through the newer row's forward link (QA D741).
+     */
+    public static boolean isReleasedAndCurrent(LabResult row, Collection<LabResult> orderSiblings) {
+        if (row == null || !row.isReleased()) {
+            return false;
+        }
+        List<LabResult> all = new ArrayList<>();
+        if (orderSiblings != null) {
+            all.addAll(orderSiblings);
+        }
+        if (row.getId() == null || all.stream().noneMatch(r -> r != null && row.getId().equals(r.getId()))) {
+            all.add(row);
+        }
+        return releasedAndCurrent(all).stream()
+            .anyMatch(r -> r == row || (row.getId() != null && row.getId().equals(r.getId())));
+    }
+
+    /**
+     * The rows of {@code page}, in order, that are released and current once
+     * judged against every row of their orders; {@code siblingsOfOrders} loads
+     * those rows for a set of order ids (QA D741).
+     */
+    public static List<LabResult> releasedAndCurrentAmongOrders(List<LabResult> page,
+            Function<Collection<UUID>, List<LabResult>> siblingsOfOrders) {
+        if (page == null || page.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> orderIds = new HashSet<>();
+        for (LabResult row : page) {
+            UUID orderId = row == null ? null : orderIdOf(row);
+            if (orderId != null) {
+                orderIds.add(orderId);
+            }
+        }
+        Map<UUID, LabResult> all = new java.util.LinkedHashMap<>();
+        List<LabResult> unidentified = new ArrayList<>();
+        List<LabResult> siblings = orderIds.isEmpty() ? List.of() : siblingsOfOrders.apply(orderIds);
+        for (LabResult row : siblings == null ? List.<LabResult>of() : siblings) {
+            if (row != null && row.getId() != null) {
+                all.putIfAbsent(row.getId(), row);
+            }
+        }
+        for (LabResult row : page) {
+            if (row == null) {
+                continue;
+            }
+            if (row.getId() == null) {
+                unidentified.add(row);
+            } else {
+                all.putIfAbsent(row.getId(), row);
+            }
+        }
+        List<LabResult> judged = new ArrayList<>(all.values());
+        judged.addAll(unidentified);
+        Set<UUID> keptIds = new HashSet<>();
+        Set<LabResult> keptRows = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        for (LabResult r : releasedAndCurrent(judged)) {
+            keptRows.add(r);
+            if (r.getId() != null) {
+                keptIds.add(r.getId());
+            }
+        }
+        return page.stream()
+            .filter(Objects::nonNull)
+            .filter(r -> r.getId() == null ? keptRows.contains(r) : keptIds.contains(r.getId()))
+            .toList();
     }
 
     private static Set<UUID> supersededIds(List<LabResult> rows) {

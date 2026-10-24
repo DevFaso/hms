@@ -462,6 +462,7 @@ class LabResultServiceImplPerformingHospitalTest {
     void nonLaboratoryListIsReleasedOnlyAndFilteredByPatient() {
         PageRequest page = PageRequest.of(0, 10);
         UUID patientId = UUID.randomUUID();
+        result.setReleased(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, page))
             .thenReturn(new PageImpl<>(List.of(result)));
@@ -471,11 +472,49 @@ class LabResultServiceImplPerformingHospitalTest {
             .containsExactly(mapped);
     }
 
+    /** Self-review of #939 (QA D741): the list judges a legacy duplicate against its order's rows. */
+    @Test
+    void nonLaboratoryListDropsALegacyDuplicateWhoseNewerSiblingIsOnAnotherPage() {
+        PageRequest page = PageRequest.of(0, 10);
+        UUID patientId = UUID.randomUUID();
+        result.setReleased(true);
+        result.setResultDate(LocalDateTime.of(2026, 10, 1, 8, 0));
+        LabResult newer = LabResult.builder().labOrder(order).resultValue("2")
+            .resultDate(result.getResultDate().plusHours(1)).build();
+        newer.setId(UUID.randomUUID());
+        newer.setReleased(true);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, page))
+            .thenReturn(new PageImpl<>(List.of(result), page, 2));
+        when(labResultRepository.findByLabOrder_IdIn(any())).thenReturn(List.of(result, newer));
+
+        org.springframework.data.domain.Page<?> out = service.getLabResultsPage(page, Locale.ENGLISH, patientId, false);
+
+        assertThat(out.getContent()).isEmpty();
+    }
+
     /** QA D211: the by-id read does not hand an unreleased value to a non-laboratory reader. */
     @Test
     void nonLaboratoryByIdReadOfUnreleasedResultIsNotFound() {
         result.setReleased(false);
         when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.getLabResultById(result.getId(), Locale.ENGLISH, false)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    /** Self-review of #939 (QA D741): a by-id read of a forward-link-only superseded row is not found. */
+    @Test
+    void nonLaboratoryByIdReadOfAForwardLinkSupersededResultIsNotFound() {
+        result.setReleased(true);
+        LabResult correction = LabResult.builder().labOrder(order).resultValue("12.0")
+            .resultDate(LocalDateTime.now()).build();
+        correction.setId(UUID.randomUUID());
+        correction.setReleased(true);
+        correction.setSupersedesResultId(result.getId());
+        when(labResultRepository.findById(result.getId())).thenReturn(java.util.Optional.of(result));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(result, correction));
 
         assertThat(org.assertj.core.api.Assertions.catchThrowable(
             () -> service.getLabResultById(result.getId(), Locale.ENGLISH, false)))

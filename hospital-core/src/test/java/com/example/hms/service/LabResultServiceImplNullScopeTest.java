@@ -274,6 +274,7 @@ class LabResultServiceImplNullScopeTest {
             // QA D211 (round 5): the global branch ignored both.
             PageRequest page = PageRequest.of(0, 20);
             UUID patientId = UUID.randomUUID();
+            result.setReleased(true);
             when(labResultRepository.findAllForReader(true, false, patientId, page))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 

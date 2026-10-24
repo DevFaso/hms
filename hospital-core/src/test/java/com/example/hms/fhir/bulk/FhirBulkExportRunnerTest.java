@@ -226,6 +226,33 @@ class FhirBulkExportRunnerTest {
     }
 
     @Test
+    void aLegacyDuplicateIsNotExportedBesideItsNewerSibling_D741() {
+        // Self-review of #939: each row is judged against its order, not its own back-link.
+        job.setTypes("Observation");
+        com.example.hms.model.LabOrder order = new com.example.hms.model.LabOrder();
+        order.setId(UUID.randomUUID());
+        com.example.hms.model.LabResult stale = com.example.hms.model.LabResult.builder().labOrder(order)
+            .resultValue("1").resultDate(java.time.LocalDateTime.of(2026, 10, 1, 8, 0)).build();
+        stale.setId(UUID.randomUUID());
+        stale.setReleased(true);
+        com.example.hms.model.LabResult newer = com.example.hms.model.LabResult.builder().labOrder(order)
+            .resultValue("2").resultDate(stale.getResultDate().plusHours(1)).build();
+        newer.setId(UUID.randomUUID());
+        newer.setReleased(true);
+        when(labResultRepository.findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of(stale, newer)));
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(stale, newer));
+        when(observationMapper.toFhir(any(com.example.hms.model.LabResult.class)))
+            .thenReturn(new org.hl7.fhir.r4.model.Observation());
+
+        runner.processJob(jobId);
+
+        verify(observationMapper, never()).toFhir(stale);
+        verify(observationMapper).toFhir(newer);
+        verify(labResultRepository).findByLabOrder_Id(order.getId());
+    }
+
+    @Test
     void honoursTheTypeFilter() {
         job.setTypes("Encounter");
 

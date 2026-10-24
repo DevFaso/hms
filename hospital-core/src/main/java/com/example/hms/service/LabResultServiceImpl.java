@@ -644,7 +644,9 @@ public class LabResultServiceImpl implements LabResultService {
 
     private LabResultResponseDTO readLabResultById(UUID id, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
-            .filter(r -> includeUnreleased || r.isReleased())
+            // QA D741: outside the laboratory a superseded row or a legacy
+            // duplicate is not the result, judged against its order's rows.
+            .filter(r -> includeUnreleased || isCurrentForReader(r))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
@@ -710,16 +712,40 @@ public class LabResultServiceImpl implements LabResultService {
         if (hospitalId == null) {
             // Verified super-admin in global view. QA D211 (round 5): this
             // branch applied neither the patientId filter nor released-only.
-            return labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
+            return currentForReader(labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
                     patientId == null ? NO_HOSPITAL : patientId,
-                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE))
+                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased)
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
+        Page<LabResult> page = currentForReader(labResultRepository.findHandledByHospitalForReader(hospitalId,
             !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
-            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased);
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
+    }
+
+    /** QA D741: released, and current against every row of its order. */
+    private boolean isCurrentForReader(LabResult row) {
+        LabOrder order = row.getLabOrder();
+        List<LabResult> siblings = order == null || order.getId() == null
+            ? List.of() : labResultRepository.findByLabOrder_Id(order.getId());
+        return ClinicalLabResultView.isReleasedAndCurrent(row, siblings);
+    }
+
+    /**
+     * QA D741: the query drops unreleased rows, rows with a back-link and rows
+     * a released correction names; a legacy duplicate carries no link at all,
+     * so each page is judged again against every row of its orders.
+     */
+    private Page<LabResult> currentForReader(Page<LabResult> page, boolean includeUnreleased) {
+        if (includeUnreleased || page.isEmpty()) {
+            return page;
+        }
+        List<LabResult> kept = ClinicalLabResultView.releasedAndCurrentAmongOrders(page.getContent(),
+            labResultRepository::findByLabOrder_IdIn);
+        long hiddenHere = (long) page.getNumberOfElements() - kept.size();
+        return new org.springframework.data.domain.PageImpl<>(kept, page.getPageable(),
+            Math.max(kept.size(), page.getTotalElements() - hiddenHere));
     }
 
     @Override
@@ -1908,25 +1934,26 @@ public class LabResultServiceImpl implements LabResultService {
             org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
         if (actingHospitalId == null) {
             // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
-            return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
-                Set.of(NO_HOSPITAL), null, true, window)
-                .stream()
-                .filter(r -> includeUnreleased || ClinicalLabResultView.isReleasedAndCurrent(r))
-                .toList();
+            List<LabResult> rows = labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                Set.of(NO_HOSPITAL), null, true, window);
+            return includeUnreleased ? rows
+                : ClinicalLabResultView.releasedAndCurrentAmongOrders(rows, labResultRepository::findByLabOrder_IdIn);
         }
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
         readable.add(actingHospitalId);
-        return labResultRepository.findTrendReadableAt(patientId, testDefinitionId, readable, actingHospitalId,
-                false, window)
+        List<LabResult> readableRows = labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                readable, actingHospitalId, false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
-            // QA D211: outside the laboratory an unreleased value is not a
-            // result yet, in a trend any more than on its own.
-            // QA D741: nor is a released value its correction replaced.
-            .filter(r -> includeUnreleased || ClinicalLabResultView.isReleasedAndCurrent(r))
-            .limit(TREND_WINDOW)
             .toList();
+        // QA D211: outside the laboratory an unreleased value is not a result
+        // yet, in a trend any more than on its own. QA D741: nor is a released
+        // value its correction or a newer duplicate replaced, judged against
+        // every row of its order, not the row's own back-link.
+        List<LabResult> shown = includeUnreleased ? readableRows
+            : ClinicalLabResultView.releasedAndCurrentAmongOrders(readableRows, labResultRepository::findByLabOrder_IdIn);
+        return shown.stream().limit(TREND_WINDOW).toList();
     }
 
     private static boolean isReadableAt(LabResult result, UUID actingHospitalId, Set<UUID> readableHospitalIds) {
@@ -2032,7 +2059,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Transactional(readOnly = true)
     public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased) {
         LabResult current = labResultRepository.findById(currentResultId)
-            .filter(r -> includeUnreleased || r.isReleased())
+            // QA D741: outside the laboratory a superseded row or a legacy
+            // duplicate is not the result, judged against its order's rows.
+            .filter(r -> includeUnreleased || isCurrentForReader(r))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         // Hospital scope enforcement: the shared single-row comparison, which

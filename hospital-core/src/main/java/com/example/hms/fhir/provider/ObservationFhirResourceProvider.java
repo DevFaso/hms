@@ -94,7 +94,8 @@ public class ObservationFhirResourceProvider implements IResourceProvider {
             return labResultRepository.findById(uuid)
                 .filter(r -> r.getLabOrder() != null && r.getLabOrder().isHandledBy(hospitalId))
                 // QA D740/D741: an unreleased or superseded row is not served.
-                .filter(ClinicalLabResultView::isReleasedAndCurrent)
+                .filter(r -> ClinicalLabResultView.isReleasedAndCurrent(r,
+                    labResultRepository.findByLabOrder_Id(r.getLabOrder().getId())))
                 .map(mapper::toFhir)
                 .orElseThrow(() -> new ResourceNotFoundException(id));
         }

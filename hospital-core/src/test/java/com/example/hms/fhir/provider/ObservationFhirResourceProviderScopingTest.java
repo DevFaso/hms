@@ -183,6 +183,25 @@ class ObservationFhirResourceProviderScopingTest {
         verify(mapper, never()).toFhir(any(LabResult.class));
     }
 
+    @Test
+    void readOfALegacyDuplicateWithANewerSiblingReadsAsNotFound() {
+        // Self-review of #939 (QA D741): the row carries no link, only its order shows it is stale.
+        UUID rowId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        LabResult stale = labResultInHospital(rowId, activeHospitalId);
+        stale.getLabOrder().setId(orderId);
+        stale.setResultDate(java.time.LocalDateTime.of(2026, 10, 1, 8, 0));
+        LabResult newer = labResultInHospital(UUID.randomUUID(), activeHospitalId);
+        newer.setLabOrder(stale.getLabOrder());
+        newer.setResultDate(stale.getResultDate().plusHours(1));
+        when(labResultRepository.findById(rowId)).thenReturn(Optional.of(stale));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(stale, newer));
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> provider.read(new IdType("Observation", "labresult-" + rowId)));
+        verifyNoInteractions(mapper);
+    }
+
     private static LabResult labResultInHospital(UUID rowId, UUID hospitalId) {
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);

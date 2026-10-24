@@ -52,7 +52,7 @@ class ClinicalLabResultViewTest {
         original.setSupersededByResultId(UUID.randomUUID());
 
         assertThat(ClinicalLabResultView.current(List.of(original))).isEmpty();
-        assertThat(ClinicalLabResultView.isReleasedAndCurrent(original)).isFalse();
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(original, List.of())).isFalse();
     }
 
     @Test
@@ -107,6 +107,47 @@ class ClinicalLabResultViewTest {
         assertThat(ClinicalLabResultView.showsValue(critical)).isFalse();
         assertThat(ClinicalLabResultView.current(List.of(critical))).containsExactly(critical);
         assertThat(ClinicalLabResultView.releasedAndCurrent(List.of(critical))).isEmpty();
-        assertThat(ClinicalLabResultView.isReleasedAndCurrent(critical)).isFalse();
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(critical, List.of())).isFalse();
+    }
+
+    @Test
+    void oneRowJudgedAgainstItsOrder_aLegacyDuplicateWithNoLinkIsNotCurrent() {
+        // Self-review of #939: the bulk export and Observation read judged a row alone.
+        LabOrder tdr = order();
+        LabResult older = row(tdr, "Positif", T0, true);
+        LabResult newer = row(tdr, "Negatif", T0.plusHours(1), true);
+
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(older, List.of(older, newer))).isFalse();
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(newer, List.of(older, newer))).isTrue();
+    }
+
+    @Test
+    void oneRowJudgedAgainstItsOrder_aForwardLinkOnlyCorrectionHidesTheOriginal() {
+        LabOrder kal = order();
+        LabResult original = row(kal, "4.1", T0, true);
+        LabResult correction = row(kal, "4.0", T0.plusMinutes(10), true);
+        correction.setSupersedesResultId(original.getId());
+
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(original, List.of(correction))).isFalse();
+        assertThat(ClinicalLabResultView.isReleasedAndCurrent(correction, List.of(original, correction))).isTrue();
+    }
+
+    @Test
+    void aPageJudgedAgainstItsOrders_dropsDuplicatesAndForwardLinkedRowsWhoseSiblingsAreOffThePage() {
+        // The /lab-results list and the trend: the page holds only the stale rows.
+        LabOrder tdr = order();
+        LabOrder kal = order();
+        LabResult staleDup = row(tdr, "Positif", T0, true);
+        LabResult newerDup = row(tdr, "Negatif", T0.plusHours(1), true);
+        LabResult original = row(kal, "4.1", T0, true);
+        LabResult correction = row(kal, "4.0", T0.plusMinutes(10), true);
+        correction.setSupersedesResultId(original.getId());
+        LabResult alone = row(order(), "7.0", T0, true);
+
+        List<LabResult> kept = ClinicalLabResultView.releasedAndCurrentAmongOrders(
+            List.of(staleDup, original, alone),
+            ids -> List.of(staleDup, newerDup, original, correction, alone));
+
+        assertThat(kept).containsExactly(alone);
     }
 }
