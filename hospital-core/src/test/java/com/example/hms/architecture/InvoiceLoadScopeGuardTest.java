@@ -40,8 +40,15 @@ class InvoiceLoadScopeGuardTest {
     private static final Pattern LOAD = Pattern.compile(
         "[iI]nvoiceRepository\\.(findByIdWithRefs|findWithAllById|findLockedById|findById)\\(");
 
+    /**
+     * A method header: modifiers, optional (once-nested) type parameters, a return type (a space only
+     * after a generic comma), then the name. Every quantifier is possessive and the
+     * alternatives start on disjoint characters, so matching is linear (Sonar S8786).
+     */
     private static final Pattern METHOD = Pattern.compile(
-        "^\\s+(?:public|private|protected)\\s+(?:static\\s+)?[\\w.<>\\[\\], ]+\\s+(\\w+)\\(");
+        "^\\s++(?:public|private|protected)\\s++(?:(?:static|final|abstract|synchronized)\\s++)*+"
+            + "(?:<(?:[^<>]++|<[^<>]*+>)*+>\\s++)?"
+            + "(?:[\\w.<>\\[\\]?]++|,\\s*+)++\\s++(\\w++)\\(");
 
     private static final List<String> SCOPE_CHECKS = List.of(
         "requireActiveHospitalId", "requireInScope", "requirePinned", "requirePayable");

@@ -64,8 +64,9 @@ class InvoiceEmailServiceTest {
     void otherHospitalsInvoiceIsNotFound() {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalB);
+        UUID id = invoice.getId();
 
-        assertThatThrownBy(() -> service.emailInvoice(invoice.getId(), request))
+        assertThatThrownBy(() -> service.emailInvoice(id, request))
             .isInstanceOf(ResourceNotFoundException.class);
         verifyNoInteractions(emailService, pdfInvoiceService);
     }
@@ -98,8 +99,9 @@ class InvoiceEmailServiceTest {
     void draftIsRefusedAndKept() {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.DRAFT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
+        UUID id = invoice.getId();
 
-        assertThatThrownBy(() -> service.emailInvoice(invoice.getId(), request))
+        assertThatThrownBy(() -> service.emailInvoice(id, request))
             .isInstanceOf(BusinessException.class);
         assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
         verify(billingInvoiceRepository, never()).save(any());

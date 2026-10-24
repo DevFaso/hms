@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -58,7 +59,7 @@ class BillingInvoiceControllerPdfTest {
     @Test
     void emailOfAnInvoiceOutOfScopeIs404Not500() throws Exception {
         UUID invoiceId = UUID.randomUUID();
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.ResourceNotFoundException("billinginvoice.notfound", invoiceId))
+        doThrow(new com.example.hms.exception.ResourceNotFoundException("billinginvoice.notfound", invoiceId))
             .when(invoiceEmailService).emailInvoice(eq(invoiceId), org.mockito.ArgumentMatchers.any());
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -72,7 +73,7 @@ class BillingInvoiceControllerPdfTest {
     @Test
     void emailOfADraftIsABadRequest() throws Exception {
         UUID invoiceId = UUID.randomUUID();
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.BusinessException("billing.invoice.emailDraft"))
+        doThrow(new com.example.hms.exception.BusinessException("billing.invoice.emailDraft"))
             .when(invoiceEmailService).emailInvoice(eq(invoiceId), org.mockito.ArgumentMatchers.any());
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
