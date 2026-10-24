@@ -417,6 +417,51 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
+    void d711_aSignedDayOneNoteDoesNotBlockDayTwo() {
+        // #940 review: the signed lock ran before the stay-entry branch, so a
+        // signed day-1 note refused every later progress entry of the stay.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        note.setSignedAt(LocalDateTime.now().minusHours(20));
+        note.setSignedByName("Issa Ouédraogo");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(note.isSigned()).isFalse();
+        assertThat(note.getSignedByName()).isNull();
+    }
+
+    @Test
+    void d711_aCoveringClinicianWritesTheNextStayEntryInTheirOwnName() {
+        // #940 review: the other-author lock refused a covering clinician's
+        // progress entry on a stay whose day-1 entry another clinician wrote.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        note.setAssessment("Day 1 assessment");
+        Staff covering = nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Night: stable").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Night: stable");
+        assertThat(note.getAuthorStaff()).isEqualTo(covering);
+    }
+
+    @Test
+    void d711_anOutpatientNoteOfAnotherAuthorIsStillLocked() {
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(null);
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Overwrite").build();
+
+        assertThatThrownBy(() -> service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId))
+            .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
     void d711_aVisitNoteRevisionStillKeepsTheSectionsItDoesNotResend() {
         // Path re-verified: an outpatient visit's note is still revised in place.
         encounter.setEncounterNote(note);

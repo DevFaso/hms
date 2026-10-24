@@ -989,7 +989,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (encounter != null && encounter.getEncounterType() == com.example.hms.enums.EncounterType.EMERGENCY) {
             // The department's orders carry on to the ward: the emergency
             // visit ends with the admission (QA D712), its treatment does not.
-            return written != null && (from == null || !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER)));
+            // Only the visit still open at admission carries over: a visit
+            // checked out before it (the patient went home with a course and
+            // came back later) keeps its take-home orders off the ward MAR.
+            LocalDateTime checkout = encounter.getCheckoutTimestamp();
+            boolean openAtAdmission = checkout == null || from == null || !checkout.isBefore(from);
+            return openAtAdmission && written != null
+                && (from == null || !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER)));
         }
         if (encounter != null && encounter.getEncounterType() != com.example.hms.enums.EncounterType.INPATIENT) {
             return false;

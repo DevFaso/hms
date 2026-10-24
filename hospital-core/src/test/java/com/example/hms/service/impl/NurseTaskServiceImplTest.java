@@ -3546,6 +3546,33 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void d702_aTakeHomeCourseOfAnEmergencyVisitClosedBeforeTheAdmissionIsNotAWardDose() {
+        // #940 review: an ED visit checked out at 09:00 with a course for home,
+        // then a same-day admission at 18:00 — the course must not be DUE.
+        LocalDateTime admittedAt = LocalDateTime.now().minusHours(1);
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(admittedAt);
+        Encounter closedEd = new Encounter();
+        closedEd.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        closedEd.setCheckoutTimestamp(admittedAt.minusHours(9));
+        Prescription takeHome = new Prescription();
+        takeHome.setEncounter(closedEd);
+        takeHome.setCreatedAt(admittedAt.minusHours(10));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(takeHome, stay)).isFalse();
+
+        Encounter openEd = new Encounter();
+        openEd.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        openEd.setCheckoutTimestamp(admittedAt);
+        Prescription edDose = new Prescription();
+        edDose.setEncounter(openEd);
+        edDose.setCreatedAt(admittedAt.minusHours(2));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(edDose, stay)).isTrue();
+        openEd.setCheckoutTimestamp(null);
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(edDose, stay)).isTrue();
+    }
+
+    @Test
     void d514_anAdmittedPatientsDoseAndAnOpenEmergencyVisitsDoseAreStillListed() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();

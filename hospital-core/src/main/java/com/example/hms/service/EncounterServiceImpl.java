@@ -754,16 +754,23 @@ public class EncounterServiceImpl implements EncounterService {
             .orElseGet(() -> encounterNoteRepository.findByEncounter_Id(encounter.getId()).orElse(new EncounterNote()));
 
         boolean isNew = note.getId() == null;
+        // QA D711: on an inpatient stay each POST is the day's progress entry,
+        // not an edit of yesterday's. A section the new entry leaves out is
+        // empty, never yesterday's text under today's assessment; the earlier
+        // entry stays whole in the note history (NOTE_CREATED per entry).
+        // Decided BEFORE the edit locks: a new entry edits nothing, so a signed
+        // day-1 note or another clinician's earlier entry does not block it.
+        boolean newStayEntry = progressEntryPost && !isNew && encounter.getAdmissionId() != null;
         // The lock the sign ceremony creates (P3 #20). Includes pre-V125
         // client-asserted signatures: the note form always promised signing
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
-        if (!isNew && note.isSigned()) {
+        if (!isNew && !newStayEntry && note.isSigned()) {
             throw new BusinessException("encounter.note.signedLocked");
         }
         // D406: a session author may only revise their own note. Another
         // clinician's text is never overwritten nor re-attributed; they add an addendum.
-        if (!isNew && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
+        if (!isNew && !newStayEntry && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
             throw new BusinessException("encounter.note.otherAuthor");
         }
         if (isNew) {
@@ -772,11 +779,6 @@ public class EncounterServiceImpl implements EncounterService {
             note.setHospital(encounter.getHospital());
             note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
         }
-        // QA D711: on an inpatient stay each POST is the day's progress entry,
-        // not an edit of yesterday's. A section the new entry leaves out is
-        // empty, never yesterday's text under today's assessment; the earlier
-        // entry stays whole in the note history (NOTE_CREATED per entry).
-        boolean newStayEntry = progressEntryPost && !isNew && encounter.getAdmissionId() != null;
         if (newStayEntry) {
             startNewStayEntry(note, request);
         }
@@ -807,6 +809,16 @@ public class EncounterServiceImpl implements EncounterService {
         note.setAttestAccuracy(false);
         note.setAttestNoAbbreviations(false);
         note.setAttestSpellCheck(false);
+        // The previous entry's signature and co-signature belong to that
+        // entry (kept in the note history), never to the new unsigned text.
+        note.setSignedAt(null);
+        note.setSignedByName(null);
+        note.setSignedByCredentials(null);
+        note.setSignedByUserId(null);
+        note.setSignatureAlgorithm(null);
+        note.setSignatureValue(null);
+        note.setCosignedBy(null);
+        note.setCosignedAt(null);
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
