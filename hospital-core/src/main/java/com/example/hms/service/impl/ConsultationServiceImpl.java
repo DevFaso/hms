@@ -409,7 +409,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new BusinessException("consultation.schedule.badStatus", consultation.getStatus());
         }
 
-        if (changesConsultant && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
+        if (changesConsultant) {
             Staff consultant = resolveStaffAt(updateDTO.getConsultantId(), consultation.getHospital() != null ? consultation.getHospital().getId() : null)
                 .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, updateDTO.getConsultantId()));
             requireConsultantAtHospital(consultant, consultation);
@@ -425,24 +425,25 @@ public class ConsultationServiceImpl implements ConsultationService {
             }
         }
 
-        if (updateDTO.getConsultantNote() != null) {
-            consultation.setConsultantNote(updateDTO.getConsultantNote());
-        }
-
-        if (updateDTO.getRecommendations() != null) {
-            consultation.setRecommendations(updateDTO.getRecommendations());
-        }
-
-        if (updateDTO.getFollowUpRequired() != null) {
-            consultation.setFollowUpRequired(updateDTO.getFollowUpRequired());
-        }
-
-        if (updateDTO.getFollowUpInstructions() != null) {
-            consultation.setFollowUpInstructions(updateDTO.getFollowUpInstructions());
-        }
+        applyClinicalAnswer(consultation, updateDTO);
 
         Consultation saved = consultationRepository.save(consultation);
         return toResponseDTO(saved);
+    }
+
+    private static void applyClinicalAnswer(Consultation consultation, ConsultationUpdateDTO updateDTO) {
+        if (updateDTO.getConsultantNote() != null) {
+            consultation.setConsultantNote(updateDTO.getConsultantNote());
+        }
+        if (updateDTO.getRecommendations() != null) {
+            consultation.setRecommendations(updateDTO.getRecommendations());
+        }
+        if (updateDTO.getFollowUpRequired() != null) {
+            consultation.setFollowUpRequired(updateDTO.getFollowUpRequired());
+        }
+        if (updateDTO.getFollowUpInstructions() != null) {
+            consultation.setFollowUpInstructions(updateDTO.getFollowUpInstructions());
+        }
     }
 
     @Override
