@@ -323,6 +323,20 @@ class DepartmentServiceImplTest {
     }
 
     @Test
+    void deleteDepartment_referencedWithoutForeignKey_isRefusedBeforeDelete_D601() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
+        when(departmentRepository.existsByClinicalReference(deptId)).thenReturn(true);
+        when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("department.r7.deleteInUse"), any(), any(Locale.class)))
+                .thenReturn("still used");
+
+        assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessage("still used");
+        verify(departmentRepository, never()).delete(any(Department.class));
+    }
+
+    @Test
     void deleteDepartment_stillReferenced_saysWhy_D435() {
         when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);

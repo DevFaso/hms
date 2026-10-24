@@ -710,7 +710,8 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_labResultWithNullTestDef_shouldSendNullNotAWord() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_labResultWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -736,8 +737,8 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getLatestLabs().size());
-        // Not the English "Lab Test": the drawer owns the translated fallback.
-        assertNull(result.getLatestLabs().get(0).getTest());
+        // QA D648: the same deleted-test label as every lab screen.
+        assertEquals("Deleted test", result.getLatestLabs().get(0).getTest());
         assertEquals("REVIEW", result.getLatestLabs().get(0).getFlag());
         assertEquals("", result.getLatestLabs().get(0).getDate());
     }
@@ -773,7 +774,8 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_pendingOrderWithNullTestDef_shouldSendNullNotAWord() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_pendingOrderWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -795,7 +797,8 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getPendingOrders().size());
-        assertNull(result.getPendingOrders().get(0).getDescription());
+        // QA D648: a pending order whose definition was deleted names a deleted test.
+        assertEquals("Deleted test", result.getPendingOrders().get(0).getDescription());
     }
 
     @Test

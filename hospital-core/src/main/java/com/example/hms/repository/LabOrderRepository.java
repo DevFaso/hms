@@ -73,6 +73,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     LabOrderStatus findStatusById(@Param("id") UUID id);
     List<LabOrder> findByOrderingStaff_Id(UUID staffId);
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
+    boolean existsByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
 
     // Hospital-scoped queries for tenant isolation

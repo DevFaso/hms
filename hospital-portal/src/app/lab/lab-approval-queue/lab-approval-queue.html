@@ -139,6 +139,10 @@
                         <span class="material-symbols-outlined">fact_check</span>
                         {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
                       </button>
+                    } @else {
+                      <span class="own-submission-hint" role="note">{{
+                        'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_QA' | translate
+                      }}</span>
                     }
                     <button
                       class="btn-action btn-reject"
@@ -164,6 +168,10 @@
                         <span class="material-symbols-outlined">verified</span>
                         {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
                       </button>
+                    } @else {
+                      <span class="own-submission-hint" role="note">{{
+                        'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_APPROVE' | translate
+                      }}</span>
                     }
                     <button
                       class="btn-action btn-reject"

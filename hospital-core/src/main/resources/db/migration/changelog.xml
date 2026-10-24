@@ -2964,4 +2964,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V219 (QA D673): lab.lab_orders.cancellation_reason, required on every
+         cancel. Plain statement, no DO block. -->
+    <changeSet id="V219-lab-order-cancellation-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V219__lab_order_cancellation_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

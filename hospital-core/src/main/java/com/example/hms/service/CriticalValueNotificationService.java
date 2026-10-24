@@ -508,9 +508,15 @@ public class CriticalValueNotificationService {
     private String buildMessage(LabResult result, boolean escalation) {
         java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
-        String testName = order != null && order.getLabTestDefinition() != null
-            ? order.getLabTestDefinition().getName()
-            : messageSource.getMessage("lab.test.fallback", null, locale);
+        String testName;
+        if (order == null) {
+            testName = messageSource.getMessage("lab.test.fallback", null, locale);
+        } else if (order.getLabTestDefinition() != null) {
+            testName = order.getLabTestDefinition().getName();
+        } else {
+            // QA D648: an order whose definition was deleted names a deleted test.
+            testName = messageSource.getMessage(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL, null, locale);
+        }
         String patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : messageSource.getMessage("patient.fallback.generic", null, locale);

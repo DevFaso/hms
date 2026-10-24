@@ -5395,10 +5395,12 @@
         "INVOICE_UPDATED": "Facture modifiée",
         "LAB_ORDER_CREATED": "Examen prescrit",
         "LAB_ORDER_UPDATED": "Demande d'examen modifiée",
+        "LAB_ORDER_CANCELLED": "Demande d'examen annulée",
         "LAB_SPECIMEN_UPDATED": "Prélèvement mis à jour",
         "LAB_RESULT_CREATED": "Résultat d'examen saisi",
         "LAB_RESULT_ACKNOWLEDGED": "Résultat d'examen pris en compte",
         "LAB_RESULT_RELEASED": "Résultat d'examen validé",
+        "LAB_RESULT_SELF_RELEASED": "Résultat d'examen autovalidé",
         "LAB_RESULT_UPDATED": "Résultat d'examen modifié",
         "LOGIN": "Connexion",
         "LOGIN_FAILURE": "Échec de connexion",
@@ -8528,7 +8530,9 @@
       "APPROVE_TITLE": "Approuver",
       "CLOSE_TITLE": "Fermer",
       "ACTIVATE": "Activer",
-      "ACTIVATE_TITLE": "Activer pour la prescription"
+      "ACTIVATE_TITLE": "Activer pour la prescription",
+      "OWN_SUBMISSION_HINT_QA": "Vous avez soumis cet examen : un autre responsable qualité ou directeur de laboratoire doit en effectuer la revue qualité (principe des quatre yeux).",
+      "OWN_SUBMISSION_HINT_APPROVE": "Vous avez soumis cet examen : un autre directeur de laboratoire doit l'approuver (principe des quatre yeux)."
     },
     "EMPTY": {
       "TITLE": "La file d'attente est vide",

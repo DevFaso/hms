@@ -67,6 +67,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     private final ActingScopeResolver actingScopeResolver;
     /** QA D213: each approval step is audited by name. */
     private final com.example.hms.service.AuditEventLogService auditEventLogService;
+    private final com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     /** Roles that may author or edit a definition AT a hospital (D30: checked at that hospital). */
     private static final Set<String> HOSPITAL_MANAGE_ROLES = Set.of(
@@ -178,6 +179,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         assertCanManage(currentUser, existing);
+        assertNotRetired(existing);
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
@@ -223,6 +225,18 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
         assertCanManage(currentUser, existing);
         Objects.requireNonNull(existing, "Lab Test Definition reference cannot be null");
+        // QA D601: a definition is clinical reference data. Once it has been
+        // activated or ordered, its orders and released results point at it,
+        // so it may only be retired (soft), never hard-deleted.
+        if (!EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED)
+                .contains(existing.getApprovalStatus())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteRetireInstead"));
+        }
+        if (labOrderRepository.existsByLabTestDefinition_Id(existing.getId())) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.deleteHasOrders"));
+        }
         repository.delete(existing);
     }
 
@@ -232,9 +246,27 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         ActingScope scope = actingScopeResolver.current();
         UUID activeHospitalId = pinnedHospitalIdOf(scope);
         boolean everyHospital = scope instanceof ActingScope.Global;
+        // QA D639: only the lab's configuration roles see the catalogue's
+        // drafts and pending definitions; a clinician searching to order sees
+        // only what can actually be ordered.
+        if (!callerManagesCatalogue()) {
+            active = Boolean.TRUE;
+            approvalStatus = LabTestDefinitionApprovalStatus.ACTIVE;
+        }
         return repository.search(keyword, unit, category, active, approvalStatus,
                 everyHospital, activeHospitalId, normalizedPageable)
                 .map(mapper::toDto);
+    }
+
+    private static boolean callerManagesCatalogue() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(HOSPITAL_MANAGE_ROLES::contains);
     }
 
     private Pageable normalizePageable(Pageable pageable) {
@@ -378,6 +410,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto) {
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
@@ -510,6 +543,17 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.getHospital().getId(), ROLE_LAB_DIRECTOR) == 1;
     }
 
+    /**
+     * QA D650: a retired definition is history - its orders and results were
+     * graded against it as it stands. It is read-only on every edit path.
+     */
+    private static void assertNotRetired(LabTestDefinition definition) {
+        if (definition.getApprovalStatus() == LabTestDefinitionApprovalStatus.RETIRED) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.retiredReadOnly"));
+        }
+    }
+
     /** QA D417: no definition enters review without a reference range. */
     private static void requireRangesBeforeReview(LabTestDefinition definition) {
         if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
@@ -526,25 +570,36 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (auditEventLogService == null) {
             return;
         }
-        try {
-            auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
-                .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
-                .status(com.example.hms.enums.AuditStatus.SUCCESS)
-                .userId(actor.getId())
-                .hospitalName(definition.getHospital() != null ? definition.getHospital().getName() : null)
-                .eventDescription("Lab test definition approval step " + action + " -> "
-                    + definition.getApprovalStatus()
-                    + (singleDirectorException
-                        ? " (the approver also completed the QA review)"
-                        : ""))
-                .entityType("LabTestDefinition")
-                .resourceId(definition.getId() != null ? definition.getId().toString() : null)
-                .build());
-        } catch (RuntimeException ex) {
-            org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
-                .warn("Approval-step audit not written for definition {}: {}", definition.getId(),
-                    ex.getClass().getSimpleName());
-        }
+        // QA D638 (re-test): this ran outside any transaction and read the
+        // definition's LAZY hospital for its name, so every step died on a
+        // LazyInitializationException (dev log, 17:50Z) and wrote nothing.
+        // Everything is read here, inside the approval transaction, and the
+        // row is written after commit with ids and strings only: a rolled-back
+        // step leaves no row, and a failed audit does not undo the step.
+        com.example.hms.model.Hospital hospital = definition.getHospital();
+        com.example.hms.payload.dto.AuditEventRequestDTO request = com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+            .eventType(com.example.hms.enums.AuditEventType.CONFIGURATION_CHANGED)
+            .status(com.example.hms.enums.AuditStatus.SUCCESS)
+            .userId(actor.getId())
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalId(hospital != null ? hospital.getId() : null)
+            // QA D638: the row names the step and the definition, in the caller's language.
+            .eventDescription(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                singleDirectorException ? "lab.definition.audit.stepSingleDirector" : "lab.definition.audit.step",
+                action, definition.getTestCode(), statusLabel(definition.getApprovalStatus())))
+            .entityType("LabTestDefinition")
+            .resourceId(definition.getId() != null ? definition.getId().toString() : null)
+            .build();
+        UUID definitionId = definition.getId();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(request);
+            } catch (RuntimeException ex) {
+                org.slf4j.LoggerFactory.getLogger(LabTestDefinitionServiceImpl.class)
+                    .warn("Approval-step audit not written for definition {}: {}", definitionId,
+                        ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /**
@@ -657,6 +712,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
 
         assertCanManage(currentUser, definition);
+        assertNotRetired(definition);
 
         List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
         assertRangesEditable(definition, entityRanges);

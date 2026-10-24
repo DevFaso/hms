@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of, throwError } from 'rxjs';
 import { LabApprovalQueueComponent } from './lab-approval-queue';
@@ -12,6 +12,7 @@ type SearchPage =
 describe('LabApprovalQueueComponent (D124)', () => {
   let lab: jasmine.SpyObj<LabService>;
   let toast: jasmine.SpyObj<ToastService>;
+  let fixture: ComponentFixture<LabApprovalQueueComponent>;
 
   function create(roles: string[], userId = 'me'): LabApprovalQueueComponent {
     lab = jasmine.createSpyObj<LabService>('LabService', [
@@ -34,6 +35,11 @@ describe('LabApprovalQueueComponent (D124)', () => {
             approvalStatus: 'PENDING_QA_REVIEW',
             submittedById: 'other',
           } as LabTestDefinition,
+          {
+            id: 'f',
+            approvalStatus: 'PENDING_DIRECTOR_APPROVAL',
+            submittedById: 'me',
+          } as LabTestDefinition,
         ],
       } as unknown as SearchPage),
     );
@@ -49,14 +55,14 @@ describe('LabApprovalQueueComponent (D124)', () => {
         { provide: ToastService, useValue: toast },
       ],
     });
-    const fixture = TestBed.createComponent(LabApprovalQueueComponent);
+    fixture = TestBed.createComponent(LabApprovalQueueComponent);
     fixture.detectChanges();
     return fixture.componentInstance;
   }
 
   it('keeps an approved definition in the queue so it can be activated', () => {
     const c = create(['ROLE_LAB_MANAGER']);
-    expect(c.definitions().map((d) => d.id)).toEqual(['a', 'c', 'd', 'e']);
+    expect(c.definitions().map((d) => d.id)).toEqual(['a', 'c', 'd', 'e', 'f']);
     expect(c.canActivate).toBeTrue();
   });
 
@@ -87,5 +93,25 @@ describe('LabApprovalQueueComponent (D124)', () => {
     c.openApprovalModal(c.definitions()[3], 'COMPLETE_QA_REVIEW');
     c.submitApprovalAction();
     expect(toast.error).toHaveBeenCalledWith('Four-eyes reason');
+  });
+
+  function hints(): string[] {
+    return Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.own-submission-hint'),
+    ).map((el) => (el.textContent ?? '').trim());
+  }
+
+  it('QA D644: the QA-step hint names the roles that may complete the QA review', () => {
+    create(['ROLE_QUALITY_MANAGER']);
+    fixture.componentInstance.setStatusFilter('PENDING_QA_REVIEW');
+    fixture.detectChanges();
+    expect(hints()).toEqual(['LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_QA']);
+  });
+
+  it('QA D644: the approve-step hint names only the lab director', () => {
+    create(['ROLE_LAB_DIRECTOR']);
+    fixture.componentInstance.setStatusFilter('PENDING_DIRECTOR_APPROVAL');
+    fixture.detectChanges();
+    expect(hints()).toEqual(['LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_APPROVE']);
   });
 });

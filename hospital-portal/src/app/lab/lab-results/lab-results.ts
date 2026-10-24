@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { actionRoles } from '../../core/action-permissions';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -95,6 +103,10 @@ export class LabResultsComponent implements OnInit {
       ...LabResultsComponent.POINT_OF_CARE_ROLES,
     ]);
   }
+  /** QA D616: the delete icon only for the roles DELETE /lab-results/{id} admits. */
+  readonly canDeleteResult = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(actionRoles('labResultDelete')),
+  );
   protected readonly globalView = this.roleContext.globalView;
 
   loading = signal(true);
@@ -252,7 +264,15 @@ export class LabResultsComponent implements OnInit {
     this.scopeUrl.applyUrlScopeSync(this.route);
 
     this.loadResults();
-    this.labService.listOrders({ size: 500 }).subscribe((list) => this.orders.set(list));
+    // QA D645: an order whose test definition no longer resolves has nothing a
+    // result can be entered against; it is not offered ("— — —" in the picker).
+    this.labService.listOrders({ size: 500 }).subscribe((list) =>
+      // QA D645/D648: an order whose test definition was deleted carries a
+      // "deleted test" label but cannot take a result; it stays out of the picker.
+      this.orders.set(
+        list.filter((o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode)),
+      ),
+    );
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);

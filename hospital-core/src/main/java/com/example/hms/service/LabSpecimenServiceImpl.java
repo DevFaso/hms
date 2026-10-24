@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +39,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private final RoleValidator roleValidator;
     private final InstrumentOutboxService instrumentOutboxService;
 
+    private static final java.time.Duration COLLECTION_SKEW = java.time.Duration.ofMinutes(5);
+
     @Override
     @Transactional
     public LabSpecimenResponseDTO createSpecimen(LabSpecimenRequestDTO request, Locale locale) {
@@ -52,6 +55,19 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
+        // QA D637: a specimen cannot be collected before the test was ordered
+        // (a few minutes of clock skew between devices are tolerated).
+        LocalDateTime collectedAt = request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now(ZoneId.systemDefault());
+        LocalDateTime orderedAt = labOrder.getOrderDatetime();
+        if (orderedAt != null && collectedAt.isBefore(orderedAt.minus(COLLECTION_SKEW))) {
+            throw new BusinessException("lab.specimen.collectedBeforeOrder");
+        }
+        // QA D649: nor in the future - a collection 48 h ahead was accepted and
+        // then blocked every result on the order (a result cannot predate it).
+        if (collectedAt.isAfter(LocalDateTime.now(ZoneId.systemDefault()).plus(COLLECTION_SKEW))) {
+            throw new BusinessException("lab.specimen.collectedInFuture");
+        }
+
         String accessionNumber = generateAccessionNumber();
         String barcodeValue = "LAB-" + accessionNumber;
 
@@ -61,7 +77,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             .barcodeValue(barcodeValue)
             .specimenType(request.getSpecimenType())
             .currentLocation(request.getCurrentLocation())
-            .collectedAt(request.getCollectedAt() != null ? request.getCollectedAt() : LocalDateTime.now())
+            .collectedAt(collectedAt)
             .collectedById(roleValidator.getCurrentUserId())
             .status(LabSpecimenStatus.COLLECTED)
             .notes(request.getNotes())

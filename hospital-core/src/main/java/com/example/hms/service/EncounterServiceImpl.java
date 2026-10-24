@@ -1075,7 +1075,10 @@ public class EncounterServiceImpl implements EncounterService {
                 .artifactType(EncounterNoteLinkType.LAB_ORDER)
                 .artifactId(order.getId())
                 .artifactCode(order.getLabTestDefinition() != null ? order.getLabTestDefinition().getTestCode() : null)
-                .artifactDisplay(order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : order.getClinicalIndication())
+                .artifactDisplay(order.getLabTestDefinition() != null
+                    ? order.getLabTestDefinition().getName()
+                    // QA D648: the clinical indication is not a test name.
+                    : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                 .artifactStatus(order.getStatus() != null ? order.getStatus().name() : null)
                 .linkedAt(LocalDateTime.now())
                 .build());

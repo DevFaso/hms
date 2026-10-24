@@ -41,6 +41,7 @@ import java.util.UUID;
 public class LabTestDefinitionController {
 
     private final LabTestDefinitionService service;
+    private final jakarta.validation.Validator validator;
 
     // LAB_SCIENTIST and LAB_MANAGER may draft definitions; LAB_DIRECTOR/QUALITY_MANAGER/SUPER_ADMIN/HOSPITAL_ADMIN manage all
     private static final String MANAGE_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')";
@@ -55,6 +56,22 @@ public class LabTestDefinitionController {
     @Operation(summary = "Create multiple Lab Test Definitions")
     public ResponseEntity<ApiResponseWrapper<List<LabTestDefinitionResponseDTO>>> createBatch(
         @RequestBody List<LabTestDefinitionRequestDTO> dtoList) {
+        // QA D667: every element is validated as the single POST validates its
+        // body, all before the first create, so an incomplete row is a 400 and
+        // nothing is half-created.
+        java.util.Set<jakarta.validation.ConstraintViolation<?>> violations = new java.util.LinkedHashSet<>();
+        if (dtoList == null || dtoList.isEmpty()) {
+            throw new com.example.hms.exception.BusinessException("lab.definition.batchEmpty");
+        }
+        for (LabTestDefinitionRequestDTO dto : dtoList) {
+            if (dto == null) {
+                throw new com.example.hms.exception.BusinessException("lab.definition.batchEmpty");
+            }
+            violations.addAll(validator.validate(dto));
+        }
+        if (!violations.isEmpty()) {
+            throw new jakarta.validation.ConstraintViolationException(violations);
+        }
         List<LabTestDefinitionResponseDTO> responses = dtoList.stream()
             .map(service::create)
             .toList();
@@ -131,6 +148,8 @@ public class LabTestDefinitionController {
      */
     @PostMapping("/{id}/approval")
     @PreAuthorize(APPROVAL_ROLES)
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "QA D638: the service writes one CONFIGURATION_CHANGED row naming the step; a generic DATA_CREATE row would not")
     @Operation(summary = "Process an approval action on a Lab Test Definition")
     public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> processApproval(
         @PathVariable UUID id,

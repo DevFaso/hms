@@ -387,6 +387,13 @@ public class DepartmentServiceImpl implements DepartmentService {
             );
         }
 
+        // QA D601: refuse before the delete whenever anything points at the
+        // department; the FK catch below only helps where a constraint exists.
+        if (departmentRepository.existsByClinicalReference(id)) {
+            throw new BusinessRuleException(
+                    messageSource.getMessage("department.r7.deleteInUse", null, locale));
+        }
+
         // QA D435: a department still referenced elsewhere (wards, beds,
         // encounters, appointments...) failed on the foreign key at commit and
         // the admin read a generic error. Flush here so the refusal says why.

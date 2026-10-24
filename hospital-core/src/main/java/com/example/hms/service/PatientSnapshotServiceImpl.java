@@ -462,13 +462,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
                     .toList());
-            // No test definition (deleted, or never linked) sends null rather
-            // than an English word: the drawer renders its own translated
-            // fallback, as it already does for the pending order below.
+            // QA D648: a result's order without a definition lost it to a delete,
+            // so the row names a deleted test in the caller's language, as the
+            // chart and the lab screens do.
             rows.forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
-                                    : null)
+                                    : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .value(r.getResultValue())
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
@@ -506,7 +506,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
                             .type("LAB")
-                            .description(o.getLabTestDefinition() != null ? o.getLabTestDefinition().getName() : null)
+                            .description(o.getLabTestDefinition() != null
+                                    ? o.getLabTestDefinition().getName()
+                                    : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .orderedAt(o.getOrderDatetime() != null ? o.getOrderDatetime().format(DATE_FMT) : "")
                             .build()));
         } catch (Exception e) {

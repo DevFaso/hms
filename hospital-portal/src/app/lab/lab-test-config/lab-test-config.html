@@ -115,27 +115,32 @@
                 {{ def.referenceRanges?.length ?? 0 }}
               </td>
               <td>
-                <button
-                  class="btn-icon"
-                  (click)="openEditDef(def)"
-                  [title]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
-                >
-                  <span class="material-symbols-outlined">edit</span>
-                </button>
-                <button
-                  class="btn-icon"
-                  (click)="openRangeEditor(def)"
-                  [title]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
-                >
-                  <span class="material-symbols-outlined">tune</span>
-                </button>
-                <button
-                  class="btn-icon btn-icon-danger"
-                  (click)="confirmDeleteDef(def)"
-                  [title]="'LAB_TEST_CONFIG.DELETE_DEF' | translate"
-                >
-                  <span class="material-symbols-outlined">delete</span>
-                </button>
+                @if (!isRetired(def)) {
+                  <button
+                    class="btn-icon"
+                    data-testid="edit-def"
+                    (click)="openEditDef(def)"
+                    [title]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                }
+                @if (isEditableDraft(def)) {
+                  <button
+                    class="btn-icon"
+                    (click)="openRangeEditor(def)"
+                    [title]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
+                  >
+                    <span class="material-symbols-outlined">tune</span>
+                  </button>
+                  <button
+                    class="btn-icon btn-icon-danger"
+                    (click)="confirmDeleteDef(def)"
+                    [title]="'LAB_TEST_CONFIG.DELETE_DEF' | translate"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                }
               </td>
             </tr>
           }

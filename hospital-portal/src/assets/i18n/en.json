@@ -5429,10 +5429,12 @@
         "INVOICE_UPDATED": "Invoice Updated",
         "LAB_ORDER_CREATED": "Lab Order Created",
         "LAB_ORDER_UPDATED": "Lab Order Updated",
+        "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_SPECIMEN_UPDATED": "Lab Specimen Updated",
         "LAB_RESULT_CREATED": "Lab Result Created",
         "LAB_RESULT_ACKNOWLEDGED": "Lab Result Acknowledged",
         "LAB_RESULT_RELEASED": "Lab Result Released",
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_RESULT_UPDATED": "Lab Result Updated",
         "LOGIN": "Login",
         "LOGIN_FAILURE": "Login Failure",
@@ -8528,7 +8530,9 @@
       "APPROVE_TITLE": "Approve",
       "CLOSE_TITLE": "Close",
       "ACTIVATE": "Activate",
-      "ACTIVATE_TITLE": "Activate for ordering"
+      "ACTIVATE_TITLE": "Activate for ordering",
+      "OWN_SUBMISSION_HINT_QA": "You submitted this definition: another quality manager or lab director must complete its QA review (four-eyes rule).",
+      "OWN_SUBMISSION_HINT_APPROVE": "You submitted this definition: another lab director must approve it (four-eyes rule)."
     },
     "EMPTY": {
       "TITLE": "Queue is clear",

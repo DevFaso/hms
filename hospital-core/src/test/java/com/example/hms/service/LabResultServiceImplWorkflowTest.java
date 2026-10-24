@@ -48,6 +48,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
 class LabResultServiceImplWorkflowTest {
 
@@ -270,10 +271,13 @@ class LabResultServiceImplWorkflowTest {
         ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
             ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
-        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LAB_RESULT_RELEASED);
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.LAB_RESULT_SELF_RELEASED);
         assertThat(audit.getValue().getUserId()).isEqualTo(actorId);
         assertThat(audit.getValue().getResourceId()).isEqualTo(labResultId.toString());
         assertThat(audit.getValue().getEventDescription()).startsWith("Self-release");
+        // QA D638: the row is anchored at the hospital and names the patient by id.
+        assertThat(audit.getValue().getHospitalId()).isNotNull();
+        assertThat(audit.getValue().getPatientId()).isNotNull();
     }
 
     /** D58: a second person's release needs no confirmation and is no self-release. */

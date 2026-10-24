@@ -219,6 +219,7 @@ public class LabResultServiceImpl implements LabResultService {
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
             request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+            request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
             LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
         }
 
@@ -761,6 +762,7 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ResourceNotFoundException("laborder.notfound");
         }
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+        request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
         LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
@@ -1283,7 +1285,9 @@ public class LabResultServiceImpl implements LabResultService {
         labResult.setReleasedByUserId(actorId);
         labResult.setReleasedByDisplay(resolveActorDisplay(actorId, hospitalId));
         if (selfRelease) {
-            auditSelfReleaseAfterCommit(labResult.getId(), actorId);
+            LabOrder releasedOrder = labResult.getLabOrder();
+            auditSelfReleaseAfterCommit(labResult.getId(), actorId, hospitalId,
+                releasedOrder != null && releasedOrder.getPatient() != null ? releasedOrder.getPatient().getId() : null);
         }
 
         labResultRepository.save(labResult);
@@ -1326,7 +1330,10 @@ public class LabResultServiceImpl implements LabResultService {
                 ? com.example.hms.enums.InBasketPriority.URGENT
                 : com.example.hms.enums.InBasketPriority.NORMAL;
         };
-        String testName = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
+        String testName = order.getLabTestDefinition() != null
+            ? order.getLabTestDefinition().getName()
+            // QA D648: the same "deleted test" label as every other lab screen.
+            : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
         com.example.hms.model.Patient patient = order.getPatient();
         com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request =
             new com.example.hms.payload.dto.clinical.CreateInBasketItemRequest();
@@ -1356,14 +1363,22 @@ public class LabResultServiceImpl implements LabResultService {
      * rolled-back release must not leave a row claiming it happened). Ids
      * only - no value, no patient.
      */
-    private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId) {
+    private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId, UUID hospitalId, UUID patientId) {
+        // QA D638: the row is anchored at the releasing hospital and carries the
+        // patient id (an id, never a name), and its text is in the caller's
+        // language, resolved here while the request locale is still bound.
+        String description = com.example.hms.utility.MessageUtil.resolveOrRaw("labresult.audit.selfRelease");
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .eventType(AuditEventType.LAB_RESULT_RELEASED)
+                    // QA D638 (re-test): its own type, so the self-release is not one
+                    // of two indistinguishable LAB_RESULT_RELEASED rows per release.
+                    .eventType(AuditEventType.LAB_RESULT_SELF_RELEASED)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorId)
-                    .eventDescription("Self-release: released by the user who entered the result")
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription(description)
                     .entityType("LabResult")
                     .resourceId(labResultId != null ? labResultId.toString() : null)
                     .build());

@@ -332,6 +332,22 @@ export class LabTestConfigComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D617/D601: reference ranges are frozen once a definition is submitted,
+   * and a definition is deleted only while it is a draft or rejected; an
+   * active one is retired through the approval workflow instead. Mirrors
+   * LabTestDefinitionServiceImpl (RANGES_LOCKED and delete).
+   */
+  /** QA D650: a retired definition is read-only (the API answers 409 to an edit). */
+  isRetired(def: { approvalStatus?: string | null }): boolean {
+    return def.approvalStatus === 'RETIRED';
+  }
+
+  isEditableDraft(def: { approvalStatus?: string | null }): boolean {
+    const status = def.approvalStatus ?? 'DRAFT';
+    return status === 'DRAFT' || status === 'REJECTED';
+  }
+
   statusClass(status: string): string {
     switch (status) {
       case 'ACTIVE':

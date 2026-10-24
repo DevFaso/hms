@@ -195,6 +195,7 @@ public class RoleValidator {
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean isLabTechnician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_TECHNICIAN"); }
     public boolean isLabManager(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_MANAGER"); }
+    public boolean isLabDirector(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_DIRECTOR"); }
     /** True if the user has any lab staff role (scientist, technician, or manager) in the given hospital. */
     public boolean isLabStaff(UUID userId, UUID hospitalId) {
         return isLabScientist(userId, hospitalId)

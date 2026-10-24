@@ -69,7 +69,16 @@ public interface LabOrderService {
      * Transitions a lab order to the given {@code toStatus}, enforcing
      * role-based transition rules.
      */
-    LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale);
+    default LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale) {
+        return transitionLabOrderStatus(id, toStatus, null, locale);
+    }
+
+    /**
+     * QA D673: as above, with the reason a cancellation requires. A cancel
+     * without a non-blank reason is refused with
+     * {@code lab.order.cancelReasonRequired}; the reason is ignored otherwise.
+     */
+    LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason, Locale locale);
 
     /** B1: the laboratories the caller may route an order to — every active hospital but the acting one. */
     List<com.example.hms.payload.dto.PerformingLabOptionDTO> listPerformingLabs();

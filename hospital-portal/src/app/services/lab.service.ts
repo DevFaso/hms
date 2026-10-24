@@ -16,6 +16,8 @@ export interface LabOrderResponse {
   performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
+  /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
+  labTestDefinitionMissing?: boolean;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;

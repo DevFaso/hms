@@ -70,6 +70,68 @@ describe('LabTestConfigComponent', () => {
     flushAssignments();
   }
 
+  it('QA D617: renders no tune or delete on an ACTIVE row, and both on a DRAFT row', () => {
+    fixture.detectChanges();
+    flushInit(
+      [
+        mockDefinition({ id: 'def-active', testCode: 'ACT', approvalStatus: 'ACTIVE' }),
+        mockDefinition({ id: 'def-draft', testCode: 'DRF', approvalStatus: 'DRAFT' }),
+      ],
+      2,
+    );
+    fixture.detectChanges();
+
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+    ) as HTMLElement[];
+    const row = (code: string) =>
+      rows.find((r) => r.querySelector('.code-cell')?.textContent?.trim() === code)!;
+    const icons = (r: HTMLElement) =>
+      Array.from(r.querySelectorAll('.btn-icon .material-symbols-outlined')).map((i) =>
+        i.textContent?.trim(),
+      );
+    expect(icons(row('ACT'))).not.toContain('tune');
+    expect(icons(row('ACT'))).not.toContain('delete');
+    expect(icons(row('DRF'))).toContain('tune');
+    expect(icons(row('DRF'))).toContain('delete');
+  });
+
+  it('QA D650: renders no edit button on a RETIRED row, and one on an ACTIVE row', () => {
+    fixture.detectChanges();
+    flushInit(
+      [
+        mockDefinition({ id: 'def-active', testCode: 'ACT', approvalStatus: 'ACTIVE' }),
+        mockDefinition({ id: 'def-retired', testCode: 'RET', approvalStatus: 'RETIRED' }),
+      ],
+      2,
+    );
+    fixture.detectChanges();
+
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+    ) as HTMLElement[];
+    const row = (code: string) =>
+      rows.find((r) => r.querySelector('.code-cell')?.textContent?.trim() === code)!;
+    expect(row('ACT').querySelector('[data-testid="edit-def"]')).not.toBeNull();
+    expect(row('RET').querySelector('[data-testid="edit-def"]')).toBeNull();
+  });
+
+  it('QA D617: offers range edit and delete only on a draft or rejected definition', () => {
+    expect(component.isEditableDraft({ approvalStatus: 'DRAFT' })).toBeTrue();
+    expect(component.isEditableDraft({ approvalStatus: 'REJECTED' })).toBeTrue();
+    for (const st of [
+      'PENDING_QA_REVIEW',
+      'PENDING_DIRECTOR_APPROVAL',
+      'APPROVED',
+      'ACTIVE',
+      'RETIRED',
+    ]) {
+      expect(component.isEditableDraft({ approvalStatus: st }))
+        .withContext(st)
+        .toBeFalse();
+    }
+  });
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();

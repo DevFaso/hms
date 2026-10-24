@@ -750,6 +750,39 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("QA D640 — a decimal comma typed on entry is saved with a decimal point")
+    void aDecimalCommaIsSavedAsAPointOnEntry() {
+        stubEntryPath();
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> {
+            LabResult entered = resultOn(inv.getArgument(1), false);
+            entered.setResultValue(((LabResultRequestDTO) inv.getArgument(0)).getResultValue());
+            return entered;
+        });
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("7,9");
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getResultValue()).isEqualTo("7.9");
+    }
+
+    @Test
+    @DisplayName("QA D640 — a decimal comma typed on amendment is saved with a decimal point")
+    void aDecimalCommaIsSavedAsAPointOnAmendment() {
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("7,9");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getResultValue()).isEqualTo("7.9");
+    }
+
+    @Test
     @DisplayName("B5 — a normal result is NOT released on entry unless auto-verification is switched on")
     void normalResultStaysUnreleasedByDefault() {
         stubEntryPath();

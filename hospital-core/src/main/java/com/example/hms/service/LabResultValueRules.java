@@ -43,6 +43,26 @@ public final class LabResultValueRules {
     private LabResultValueRules() {
     }
 
+    /** A plain or censored number written with a decimal comma: "7,9", "-0,5", "<0,5". */
+    private static final Pattern DECIMAL_COMMA = Pattern.compile("^((?:<=|>=|<|>|≤|≥)\\s*)?(-?\\d+),(\\d+)$");
+
+    /**
+     * QA D640: a French or Spanish keyboard writes "7,9". The value is stored
+     * with a point so that range grading, critical alerts and trends, which
+     * all parse it, read the same number. Anything else is returned as is.
+     */
+    public static String normalizeDecimalComma(String rawValue) {
+        if (rawValue == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = DECIMAL_COMMA.matcher(rawValue.trim());
+        if (!m.matches()) {
+            return rawValue;
+        }
+        String prefix = m.group(1) == null ? "" : m.group(1);
+        return prefix + m.group(2) + "." + m.group(3);
+    }
+
     /** Refuses a value a numeric test cannot hold; does nothing for a test with no numeric limits. */
     static void requireValidValue(String rawValue, LabTestDefinition definition) {
         if (rawValue == null || rawValue.isBlank() || definition == null) {

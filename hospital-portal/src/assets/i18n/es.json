@@ -5429,10 +5429,12 @@
         "INVOICE_UPDATED": "Factura actualizada",
         "LAB_ORDER_CREATED": "Orden de laboratorio creada",
         "LAB_ORDER_UPDATED": "Orden de laboratorio actualizada",
+        "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_SPECIMEN_UPDATED": "Muestra de laboratorio actualizada",
         "LAB_RESULT_CREATED": "Resultado de laboratorio registrado",
         "LAB_RESULT_ACKNOWLEDGED": "Resultado de laboratorio reconocido",
         "LAB_RESULT_RELEASED": "Resultado de laboratorio liberado",
+        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
         "LAB_RESULT_UPDATED": "Resultado de laboratorio actualizado",
         "LOGIN": "Inicio de sesión",
         "LOGIN_FAILURE": "Inicio de sesión fallido",
@@ -8528,7 +8530,9 @@
       "APPROVE_TITLE": "Aprobar",
       "CLOSE_TITLE": "Cerrar",
       "ACTIVATE": "Activar",
-      "ACTIVATE_TITLE": "Activar para solicitudes"
+      "ACTIVATE_TITLE": "Activar para solicitudes",
+      "OWN_SUBMISSION_HINT_QA": "Usted envió esta prueba: otro responsable de calidad o director de laboratorio debe completar su revisión de calidad (principio de los cuatro ojos).",
+      "OWN_SUBMISSION_HINT_APPROVE": "Usted envió esta prueba: otro director de laboratorio debe aprobarla (principio de los cuatro ojos)."
     },
     "EMPTY": {
       "TITLE": "La cola está vacía",

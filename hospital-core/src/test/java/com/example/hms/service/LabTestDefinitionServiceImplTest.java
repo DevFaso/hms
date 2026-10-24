@@ -65,6 +65,7 @@ class LabTestDefinitionServiceImplTest {
     /** Answers the scope the test's HospitalContext describes, as the real resolver does. */
     @Mock private ActingScopeResolver actingScopeResolver;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.LabOrderRepository labOrderRepository;
 
     @InjectMocks private LabTestDefinitionServiceImpl service;
 
@@ -126,6 +127,7 @@ class LabTestDefinitionServiceImplTest {
     @AfterEach
     void clearContext() {
         HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private void actingAt(UUID activeHospitalId) {
@@ -522,6 +524,66 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** QA D601: the exact report - LAB_DIRECTOR deletes an ACTIVE, ordered definition. */
+    @Test
+    void delete_activeDefinition_isRefused_andNothingIsDeleted() {
+        superAdminCaller();
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.delete(defId))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(repository, never()).delete(definition);
+        }
+    }
+
+    /** QA D601: every non-draft status (pending, approved, retired) is refused too. */
+    @Test
+    void delete_everySubmittedStatus_isRefused() {
+        superAdminCaller();
+        for (LabTestDefinitionApprovalStatus st : LabTestDefinitionApprovalStatus.values()) {
+            if (st == LabTestDefinitionApprovalStatus.DRAFT || st == LabTestDefinitionApprovalStatus.REJECTED) {
+                continue;
+            }
+            definition.setApprovalStatus(st);
+            try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+                sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+                lenient().when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+                lenient().when(repository.findById(defId)).thenReturn(Optional.of(definition));
+                assertThatThrownBy(() -> service.delete(defId))
+                        .as(st.name())
+                        .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            }
+        }
+        verify(repository, never()).delete(definition);
+    }
+
+    /** QA D601: a draft that was somehow ordered keeps its orders' test name. */
+    @Test
+    void delete_draftWithOrders_isRefused() {
+        superAdminCaller();
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(labOrderRepository.existsByLabTestDefinition_Id(defId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.delete(defId))
+                    .isInstanceOf(com.example.hms.exception.ConflictException.class);
+            verify(repository, never()).delete(definition);
+        }
+    }
+
+    private void superAdminCaller() {
+        definition.setHospital(null);
+        definition.setAssignment(null);
+        Role superRole = Role.builder().code("ROLE_SUPER_ADMIN").name("Super Admin").build();
+        currentUser.getUserRoles().add(UserRole.builder().role(superRole).build());
+    }
+
     @Test
     void delete_notFound_throws() {
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
@@ -565,6 +627,7 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void search_success() {
+        authenticateAs("ROLE_LAB_DIRECTOR");
         Pageable pageable = PageRequest.of(0, 10);
         Page<LabTestDefinition> page = new PageImpl<>(List.of(definition));
         when(repository.search("CBC", null, null, null, null, false, null, pageable)).thenReturn(page);
@@ -577,6 +640,7 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void search_withNullPageable_usesUnpaged() {
+        authenticateAs("ROLE_LAB_DIRECTOR");
         when(repository.search(eq("CBC"), isNull(), isNull(), isNull(), isNull(), eq(false), isNull(), eq(Pageable.unpaged())))
                 .thenReturn(new PageImpl<>(List.of(definition)));
         when(mapper.toDto(definition)).thenReturn(responseDTO);
@@ -584,6 +648,42 @@ class LabTestDefinitionServiceImplTest {
         Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null, null);
 
         assertThat(result.getContent()).hasSize(1);
+    }
+
+    /** QA D639: the doctor's order search never returns a DRAFT definition, even when it asks for one. */
+    @Test
+    void search_asDoctor_isNarrowedToActiveDefinitions() {
+        authenticateAs("ROLE_DOCTOR");
+        Pageable pageable = PageRequest.of(0, 10);
+        when(repository.search(eq("K"), isNull(), isNull(), eq(Boolean.TRUE),
+                eq(LabTestDefinitionApprovalStatus.ACTIVE), eq(false), isNull(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.search("K", null, null, null, LabTestDefinitionApprovalStatus.DRAFT, pageable);
+
+        verify(repository).search(eq("K"), isNull(), isNull(), eq(Boolean.TRUE),
+                eq(LabTestDefinitionApprovalStatus.ACTIVE), eq(false), isNull(), eq(pageable));
+    }
+
+    /** Path kept: the lab director's configuration screen still lists drafts. */
+    @Test
+    void search_asLabDirector_keepsRequestedStatus() {
+        authenticateAs("ROLE_LAB_DIRECTOR");
+        Pageable pageable = PageRequest.of(0, 10);
+        when(repository.search(eq("K"), isNull(), isNull(), isNull(),
+                eq(LabTestDefinitionApprovalStatus.DRAFT), eq(false), isNull(), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.search("K", null, null, null, LabTestDefinitionApprovalStatus.DRAFT, pageable);
+
+        verify(repository).search(eq("K"), isNull(), isNull(), isNull(),
+                eq(LabTestDefinitionApprovalStatus.DRAFT), eq(false), isNull(), eq(pageable));
+    }
+
+    private static void authenticateAs(String role) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                "u", "n/a", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
     }
 
     // ---- hospital-level auth via assignment ----
@@ -954,7 +1054,9 @@ class LabTestDefinitionServiceImplTest {
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
             assertThat(definition.isActive()).isTrue();
             verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
-                e -> e.getEventDescription().contains("ACTIVATE") && e.getEventDescription().contains("ACTIVE")));
+                // QA D638: the row names the step and the definition and is anchored at its hospital.
+                e -> e.getEventDescription().contains("ACTIVATE") && e.getEventDescription().contains("CBC")
+                    && hospital.getId().equals(e.getHospitalId())));
         }
     }
 

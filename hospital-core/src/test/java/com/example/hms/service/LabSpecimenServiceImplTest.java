@@ -102,6 +102,24 @@ class LabSpecimenServiceImplTest {
         verify(labOrderRepository, never()).save(any(LabOrder.class));
     }
 
+    /** QA D637: collectedAt 48 h before the order is refused and nothing is saved. */
+    @Test
+    void createSpecimen_collectedBeforeOrder_isRefused() {
+        labOrder.setOrderDatetime(java.time.LocalDateTime.now());
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .collectedAt(java.time.LocalDateTime.now().minusHours(48))
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("ordered");
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
     @Test
     void createSpecimen_noLabOrderId_throwsBusinessException() {
         LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder().build(); // labOrderId is null

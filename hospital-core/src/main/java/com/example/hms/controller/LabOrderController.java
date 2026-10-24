@@ -188,8 +188,11 @@ public class LabOrderController {
         } catch (IllegalArgumentException ex) {
             throw new com.example.hms.exception.BusinessException("lab.order.unknownStatus", rawStatus);
         }
-        LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
-        auditLabOrder(com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, result);
+        LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, request.getReason(), locale);
+        // QA D673: a cancel is its own audit event, not a generic update.
+        auditLabOrder(toStatus == LabOrderStatus.CANCELLED
+            ? com.example.hms.enums.AuditEventType.LAB_ORDER_CANCELLED
+            : com.example.hms.enums.AuditEventType.LAB_ORDER_UPDATED, result);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
@@ -198,8 +201,13 @@ public class LabOrderController {
         @NotBlank(message = "Request body must include a 'status' field.")
         private String status;
 
+        /** QA D673: required when the target status is CANCELLED. */
+        private String reason;
+
         public String getStatus() { return status; }
         public void setStatus(String status) { this.status = status; }
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
     }
 
     /** QA D429: the lab audit row names the event, the order and its patient. Ids only. */
