@@ -65,6 +65,8 @@ class RefillApprovalServiceImplTest {
     @Mock private PatientLocaleResolver patientLocaleResolver;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks private RefillApprovalServiceImpl service;
 
     private UUID userId;
@@ -425,7 +427,7 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no longer be refilled");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
         // The whole point: never leave a request APPROVED with nothing behind it.
         assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
@@ -442,7 +444,7 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("new prescription");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
     }
 
     @Test
@@ -455,7 +457,21 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("new prescription");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
+
+    @Test
+    @DisplayName("QA D719 re-test: approve — refuses catalog-controlled morphine whose tick is false")
+    void approve_refusesCatalogControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(false);
+        when(controlledResolver.isControlled(prescription)).thenReturn(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((BusinessException) e).getMessageKey()));
     }
 
     @Test

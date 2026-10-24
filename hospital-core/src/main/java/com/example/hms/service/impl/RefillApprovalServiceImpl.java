@@ -42,6 +42,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
     private final ControllerAuthUtils authUtils;
@@ -189,10 +190,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private void releaseRefillToPharmacy(Prescription prescription) {
         PrescriptionStatus status = prescription.getStatus();
         // QA D719: a controlled substance is never refilled, whatever its status.
-        if (!prescription.allowsRefill()) {
-            throw new BusinessException(
-                "This prescription can no longer be refilled (status: " + status
-                    + "). The patient needs a new prescription.");
+        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.approveNotRefillable", String.valueOf(status));
         }
 
         Integer remaining = prescription.getRefillsRemaining();

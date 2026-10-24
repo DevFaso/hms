@@ -50,6 +50,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D719 re-test: the catalog decides "controlled" too, not the tick alone. */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final RefillRequestRepository refillRequestRepository;
@@ -202,7 +204,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())
-            .refillable(prescription.allowsRefill())
+            .refillable(prescription.allowsRefill() && !controlledResolver.isControlled(prescription))
             .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
                 ? latestRefill.getStatus().name() : null)
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)

@@ -31,6 +31,8 @@ class LinkedPatientLookupTest {
     @Mock private ControllerAuthUtils authUtils;
     @Mock private Authentication auth;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks private PatientPortalServiceImpl portal;
 
     private final UUID userId = UUID.randomUUID();

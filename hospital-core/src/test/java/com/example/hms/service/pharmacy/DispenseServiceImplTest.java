@@ -130,6 +130,8 @@ class DispenseServiceImplTest {
     /** QA D654: the controlled-stock witness rule. */
     @Mock private ControlledStockWitness controlledStockWitness;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -563,10 +565,12 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("QA D706: a legacy controlled prescription with no quantity is not filled")
+        @DisplayName("QA D706 re-test: legacy catalog morphine (tick false, no quantity), 40 with a witness, is refused")
         void aControlledPrescriptionWithNoQuantityIsRefused() {
             prescription.setQuantity(null);
-            prescription.setControlledSubstance(true);
+            // The legacy row: the prescriber never ticked it, the catalog item is controlled.
+            prescription.setControlledSubstance(false);
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
             prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

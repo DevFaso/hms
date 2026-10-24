@@ -166,6 +166,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.PatientTreatmentConsentRepository treatmentConsentRepository;
     private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D719 re-test: catalog-controlled morphine (tick false) was refillable. */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final RefillRequestRepository refillRequestRepository;
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
@@ -841,10 +843,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
         // approve it.
-        if (!prescription.allowsRefill()) {
-            throw new BusinessException(
-                    "This prescription can no longer be refilled. Please contact your care team "
-                            + "for a new prescription.");
+        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.notRefillable");
         }
 
         // One open request per prescription. There was no guard at all, so a
@@ -854,12 +854,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
                         prescription.getId(), patient.getId(), OPEN_REFILL_STATUSES)
                 .ifPresent(open -> {
+                    // QA D743: localised (the French portal showed English).
                     throw new BusinessException(
                             open.getStatus() == RefillStatus.PAUSED
-                                    ? "Your provider has put this refill request on hold. "
-                                            + "They will follow up with you."
-                                    : "You already have a refill request awaiting review for this "
-                                            + "medication.");
+                                    ? "patient.refill.onHold"
+                                    : "patient.refill.alreadyPending");
                 });
 
         RefillRequest refill = RefillRequest.builder()

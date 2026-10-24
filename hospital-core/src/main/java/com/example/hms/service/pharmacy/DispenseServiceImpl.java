@@ -79,6 +79,8 @@ public class DispenseServiceImpl implements DispenseService {
 
     private final DispenseRepository dispenseRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D706 re-test: legacy catalog-controlled morphine has the tick false. */
+    private final PrescriptionControlledResolver controlledResolver;
     private final PatientRepository patientRepository;
     private final PharmacyRepository pharmacyRepository;
     private final StockLotRepository stockLotRepository;
@@ -697,7 +699,7 @@ public class DispenseServiceImpl implements DispenseService {
      */
     private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
         if (prescription.getQuantity() == null) {
-            if (prescription.isControlledSubstance()) {
+            if (controlledResolver.isControlled(prescription)) {
                 throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
             }
             return;

@@ -123,6 +123,8 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
