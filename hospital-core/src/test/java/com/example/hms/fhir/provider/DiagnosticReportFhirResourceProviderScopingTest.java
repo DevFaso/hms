@@ -164,6 +164,7 @@ class DiagnosticReportFhirResourceProviderScopingTest {
             .thenReturn(new PageImpl<>(List.of(withResults, withoutResults)));
         LabResult result = new LabResult();
         result.setLabOrder(withResults);
+        result.setReleased(true);
         // Batch-loaded in one query for the page, then grouped — the
         // per-order findByLabOrder_Id round trips are gone.
         when(labResultRepository.findByLabOrder_IdIn(

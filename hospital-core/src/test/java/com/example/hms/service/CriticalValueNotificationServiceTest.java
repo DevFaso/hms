@@ -85,6 +85,8 @@ class CriticalValueNotificationServiceTest {
         result.setLabOrder(order);
         result.setResultValue("7.1");
         result.setResultUnit("mmol/L");
+        // QA D709: only a released result pages anyone.
+        result.setReleased(true);
 
         lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
@@ -123,6 +125,20 @@ class CriticalValueNotificationServiceTest {
         service.notifyIfCritical(result);
 
         verify(notificationService).created(anyString(), eq("dr.diallo"), anyString());
+    }
+
+    /** QA D709: the page went out on entry, before release, while GET answered 404. */
+    @Test
+    void anUnreleasedCriticalResultPagesNobodyAndIsNotStamped() {
+        result.setReleased(false);
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+
+        service.notifyIfCritical(result, "CRITICAL");
+
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+        verify(notificationService, never()).createNotification(any(), any(), any(), any());
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(labResultRepository, never()).save(any(LabResult.class));
     }
 
     @Test

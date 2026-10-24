@@ -114,4 +114,43 @@ describe('LabApprovalQueueComponent (D124)', () => {
     fixture.detectChanges();
     expect(hints()).toEqual(['LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_APPROVE']);
   });
+
+  function buttons(selector: string): number {
+    return (fixture.nativeElement as HTMLElement).querySelectorAll(selector).length;
+  }
+
+  it('QA D723: the quality manager can reject a definition pending director approval', () => {
+    create(['ROLE_QUALITY_MANAGER']);
+    fixture.componentInstance.setStatusFilter('PENDING_DIRECTOR_APPROVAL');
+    fixture.detectChanges();
+    expect(buttons('.btn-reject')).toBe(1);
+    expect(buttons('.btn-approve')).toBe(0);
+    expect(hints()).toEqual([]);
+  });
+
+  it('QA D722: the QA reviewer is not offered Approve unless the server says so', () => {
+    const c = create(['ROLE_LAB_DIRECTOR']);
+    const reviewed = {
+      id: 'g',
+      approvalStatus: 'PENDING_DIRECTOR_APPROVAL',
+      submittedById: 'other',
+      reviewedById: 'me',
+    } as LabTestDefinition;
+    expect(c.isOwnReview(reviewed)).toBeTrue();
+    expect(c.canApprove(reviewed)).toBeFalse();
+    expect(c.canApprove({ ...reviewed, reviewerMayApprove: false })).toBeFalse();
+    expect(c.canApprove({ ...reviewed, reviewerMayApprove: true })).toBeTrue();
+  });
+
+  it('QA D707: the submitting director approves after an independent QA review', () => {
+    const c = create(['ROLE_LAB_DIRECTOR']);
+    const def = {
+      id: 'h',
+      approvalStatus: 'PENDING_DIRECTOR_APPROVAL',
+      submittedById: 'me',
+      reviewedById: 'qm',
+    } as LabTestDefinition;
+    expect(c.canApprove(def)).toBeTrue();
+    expect(c.canApprove({ ...def, reviewedById: null })).toBeFalse();
+  });
 });

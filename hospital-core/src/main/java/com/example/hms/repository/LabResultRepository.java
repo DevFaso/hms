@@ -290,13 +290,15 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         SELECT r FROM LabResult r
         WHERE (r.labOrder.hospital.id = :hospitalId
            OR r.labOrder.performingHospital.id = :hospitalId)
-          AND (:releasedOnly = false OR r.released = true)
+          AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE (r.labOrder.hospital.id = :hospitalId
            OR r.labOrder.performingHospital.id = :hospitalId)
-          AND (:releasedOnly = false OR r.released = true)
+          AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
     """)
     Page<LabResult> findHandledByHospitalForReader(@Param("hospitalId") UUID hospitalId,
@@ -323,11 +325,13 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
     })
     @Query(value = """
         SELECT r FROM LabResult r
-        WHERE (:releasedOnly = false OR r.released = true)
+        WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
-        WHERE (:releasedOnly = false OR r.released = true)
+        WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
+               AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
     """)
     Page<LabResult> findAllForReader(@Param("releasedOnly") boolean releasedOnly,

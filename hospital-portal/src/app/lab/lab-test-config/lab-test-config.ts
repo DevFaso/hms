@@ -63,6 +63,12 @@ export class LabTestConfigComponent implements OnInit {
   showDefModal = signal(false);
   editingDefCrud = signal(false);
   editingDefId = signal<string | null>(null);
+  /**
+   * QA D705/D721: the code, unit, sample type and LOINC of a submitted, approved or live
+   * definition move only through a new approval (the API refuses the edit), so the form
+   * shows them read-only.
+   */
+  clinicalFieldsLocked = signal(false);
   savingDef = signal(false);
   defForm: LabTestDefinitionRequest = this.emptyDefForm();
 
@@ -250,6 +256,7 @@ export class LabTestConfigComponent implements OnInit {
     this.defForm = this.emptyDefForm();
     this.defForm.assignmentId = this.activeAssignmentId || undefined;
     this.editingDefCrud.set(false);
+    this.clinicalFieldsLocked.set(false);
     this.editingDefId.set(null);
     this.showDefModal.set(true);
   }
@@ -272,6 +279,7 @@ export class LabTestConfigComponent implements OnInit {
     };
     this.editingDefCrud.set(true);
     this.editingDefId.set(def.id);
+    this.clinicalFieldsLocked.set(!this.isEditableDraft(def));
     this.showDefModal.set(true);
   }
 

@@ -16,6 +16,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.FhirBulkExportFileRepository;
 import com.example.hms.repository.FhirBulkExportJobRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
@@ -278,10 +279,17 @@ public class FhirBulkExportRunner {
                         observationMapper.toFhir(v).forEach(o -> sink.write(TYPE_OBSERVATION, o));
                     }
                 });
+            // QA D741: a row is current only against the other rows of its
+            // order (legacy duplicates and forward-link-only corrections).
+            java.util.Map<UUID, List<com.example.hms.model.LabResult>> siblingsByOrder = new java.util.HashMap<>();
             pageThrough(p -> labResultRepository
                     .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, p),
                 r -> {
-                    if (passesSince(r.getUpdatedAt(), since)) {
+                    // QA D740/D741: released, current results only.
+                    List<com.example.hms.model.LabResult> siblings = r.getLabOrder() == null || r.getLabOrder().getId() == null
+                        ? List.of()
+                        : siblingsByOrder.computeIfAbsent(r.getLabOrder().getId(), labResultRepository::findByLabOrder_Id);
+                    if (ClinicalLabResultView.isReleasedAndCurrent(r, siblings) && passesSince(r.getUpdatedAt(), since)) {
                         sink.write(TYPE_OBSERVATION, observationMapper.toFhir(r));
                     }
                 });

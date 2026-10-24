@@ -375,6 +375,27 @@ class LabResultServiceImplTrendScopeTest {
         assertThat(service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH, true)).hasSize(2);
     }
 
+    @Test
+    void theTrendJudgesEachRowAgainstItsOrder_aLegacyDuplicateWhoseNewerSiblingIsOffTheWindowStaysOut_D741() {
+        // Self-review of #939: the trend judged a row by its own back-link only.
+        LabResult kept = row(hospitalB, null, 1);
+        kept.setReleased(true);
+        LabResult staleDup = row(hospitalB, null, 3);
+        staleDup.setReleased(true);
+        LabResult newerDup = row(hospitalB, null, 0);
+        newerDup.setReleased(true);
+        newerDup.setLabOrder(staleDup.getLabOrder());
+        when(labResultRepository.findTrendReadableAt(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+            .thenReturn(List.of(kept, staleDup));
+        when(labResultRepository.findByLabOrder_IdIn(any())).thenReturn(List.of(kept, staleDup, newerDup));
+
+        List<LabResultComparisonDTO> forDoctor =
+            service.compareSequentialResults(patient.getId(), test.getId(), Locale.ENGLISH, false);
+
+        assertThat(forDoctor).extracting(c -> c.getCurrentResult().getLabResultId())
+            .containsExactly(kept.getId().toString());
+    }
+
     /** A result for the patient and test, ordered at {@code ordering}, sent to {@code performing} when not null. */
     private LabResult row(Hospital ordering, Hospital performing, int daysAgo) {
         LabOrder order = new LabOrder();
