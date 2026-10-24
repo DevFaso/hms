@@ -194,12 +194,8 @@ public class InventoryServiceImpl implements InventoryService {
 
     // ── Stock lots ───────────────────────────────────────────────────────
 
-    @Override
-    @Transactional
-    public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
-        InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
-        enforceHospitalScope(item.getPharmacy());
-
+    /** Field checks on a goods receipt, before anything is read or written. */
+    private static void validateReceiptQuantitiesAndDates(StockLotRequestDTO dto) {
         // D108: an expired lot is not stock. It was accepted at goods receipt
         // and counted on hand, where the FEFO picker skips it but every total,
         // reorder decision and report counted it.
@@ -234,6 +230,9 @@ public class InventoryServiceImpl implements InventoryService {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
         }
+    }
+
+    private void requireConsistentLotExpiry(InventoryItem item, StockLotRequestDTO dto) {
         // QA D315: a lot number identifies one manufacturing batch, which has
         // one expiry date. A second delivery of the same lot is fine; the same
         // lot number with another expiry is a typing error or a false label.
@@ -243,6 +242,16 @@ public class InventoryServiceImpl implements InventoryService {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.lotNumber.expiryMismatch"));
         }
+    }
+
+    @Override
+    @Transactional
+    public StockLotResponseDTO receiveStock(StockLotRequestDTO dto) {
+        InventoryItem item = resolveInventoryItem(dto.getInventoryItemId());
+        enforceHospitalScope(item.getPharmacy());
+
+        validateReceiptQuantitiesAndDates(dto);
+        requireConsistentLotExpiry(item, dto);
 
         // The receipt is recorded against the signed-in user (D82): a
         // caller-supplied receiver let one user book a delivery in a

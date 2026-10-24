@@ -772,8 +772,8 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setControlledSubstance(true);
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
 
-            assertThatThrownBy(() -> service.requestMedicationRefill(auth,
-                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("no longer be refilled");
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));

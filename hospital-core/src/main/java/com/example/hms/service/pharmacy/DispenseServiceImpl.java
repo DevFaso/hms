@@ -688,15 +688,6 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
-     * Everything the one-step fill and the ready path check before any stock
-     * moves: quantities, the locked prescription (rule 1) and its open
-     * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
-     * item, the lot, and the counter-side verification.
-     *
-     * @param openPreparationKey the 409 message when the prescription already
-     *                           has an open preparation
-     */
-    /**
      * QA D706: 40 morphine ampoules were handed over for "10 mg x1", because
      * nothing compared a fill with what was prescribed. Under the
      * prescription lock, the fills to date plus this one stay within the
@@ -719,6 +710,15 @@ public class DispenseServiceImpl implements DispenseService {
         }
     }
 
+    /**
+     * Everything the one-step fill and the ready path check before any stock
+     * moves: quantities, the locked prescription (rule 1) and its open
+     * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
+     * item, the lot, and the counter-side verification.
+     *
+     * @param openPreparationKey the 409 message when the prescription already
+     *                           has an open preparation
+     */
     private FillContext validateFill(DispenseRequestDTO dto, String openPreparationKey) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
