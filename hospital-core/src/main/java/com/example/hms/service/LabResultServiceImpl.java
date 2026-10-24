@@ -20,6 +20,7 @@ import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
 import com.example.hms.payload.dto.LabResultTrendPointDTO;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
@@ -1910,7 +1911,7 @@ public class LabResultServiceImpl implements LabResultService {
             return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
                 Set.of(NO_HOSPITAL), null, true, window)
                 .stream()
-                .filter(r -> includeUnreleased || r.isReleased())
+                .filter(r -> includeUnreleased || ClinicalLabResultView.isReleasedAndCurrent(r))
                 .toList();
         }
         Set<UUID> readable = new java.util.HashSet<>(
@@ -1922,7 +1923,8 @@ public class LabResultServiceImpl implements LabResultService {
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
             // QA D211: outside the laboratory an unreleased value is not a
             // result yet, in a trend any more than on its own.
-            .filter(r -> includeUnreleased || r.isReleased())
+            // QA D741: nor is a released value its correction replaced.
+            .filter(r -> includeUnreleased || ClinicalLabResultView.isReleasedAndCurrent(r))
             .limit(TREND_WINDOW)
             .toList();
     }

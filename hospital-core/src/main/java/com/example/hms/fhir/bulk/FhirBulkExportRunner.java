@@ -16,6 +16,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.FhirBulkExportFileRepository;
 import com.example.hms.repository.FhirBulkExportJobRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
@@ -281,7 +282,8 @@ public class FhirBulkExportRunner {
             pageThrough(p -> labResultRepository
                     .findPageByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patientId, hospitalId, p),
                 r -> {
-                    if (passesSince(r.getUpdatedAt(), since)) {
+                    // QA D740/D741: released, current results only.
+                    if (ClinicalLabResultView.isReleasedAndCurrent(r) && passesSince(r.getUpdatedAt(), since)) {
                         sink.write(TYPE_OBSERVATION, observationMapper.toFhir(r));
                     }
                 });

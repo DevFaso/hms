@@ -396,6 +396,7 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(testDef);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("6.5%");
         when(labResult.isAcknowledged()).thenReturn(true);
@@ -430,6 +431,7 @@ class PatientSnapshotServiceImplTest {
         LabOrder order = mock(LabOrder.class);
         when(order.getLabTestDefinition()).thenReturn(testDef);
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.9");
         when(labResult.getAbnormalFlag()).thenReturn(com.example.hms.enums.AbnormalFlag.ABNORMAL_HIGH);
@@ -733,6 +735,7 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(null);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.0");
         when(labResult.isAcknowledged()).thenReturn(false);
@@ -1270,6 +1273,7 @@ class PatientSnapshotServiceImplTest {
         order.setPerformingHospital(here);
         LabResult performedHere = new LabResult();
         performedHere.setLabOrder(order);
+        performedHere.setReleased(true);
         performedHere.setResultValue("7.1");
         org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
                 org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);

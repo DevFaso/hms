@@ -718,7 +718,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
         if (!current.equals(next)) {
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
-                "lab.definition.rangesLocked", String.valueOf(definition.getApprovalStatus())));
+                "lab.definition.rangesLocked", statusLabel(definition.getApprovalStatus())));
         }
     }
 

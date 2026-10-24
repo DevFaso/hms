@@ -191,6 +191,7 @@ class ObservationFhirResourceProviderScopingTest {
         LabResult result = new LabResult();
         result.setId(rowId);
         result.setLabOrder(order);
+        result.setReleased(true);
         return result;
     }
 }

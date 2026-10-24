@@ -1713,9 +1713,46 @@ class LabTestDefinitionServiceImplTest {
             List<LabTestReferenceRangeDTO> widenedRanges = List.of(widened);
             assertThatThrownBy(() -> service.updateReferenceRanges(defId, widenedRanges))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("ACTIVE");
+                .satisfies(e -> assertThat(e.getMessage()).containsAnyOf("ACTIVE", "Active"));
             assertThat(definition.getReferenceRanges()).containsExactly(glucoseRange(6.1));
             verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** QA D742: the ranges lock names the status in the reader's language, like the clinical-fields lock. */
+    @Test
+    void updateReferenceRanges_lockMessage_namesTheStatusInFrenchNotTheEnum() throws Exception {
+        definition.setHospital(null);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        definition.setReferenceRanges(new java.util.ArrayList<>(List.of(glucoseRange(6.1))));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+        LabTestReferenceRangeDTO widened = glucoseRangeDto(9.0);
+        org.springframework.context.support.ResourceBundleMessageSource bundle =
+            new org.springframework.context.support.ResourceBundleMessageSource();
+        bundle.setBasenames("i18n/messages-lab");
+        bundle.setDefaultEncoding("UTF-8");
+        bundle.setFallbackToSystemLocale(false);
+        java.lang.reflect.Field field = com.example.hms.utility.MessageUtil.class.getDeclaredField("messageSource");
+        field.setAccessible(true);
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource) field.get(null);
+        com.example.hms.utility.MessageUtil.setMessageSource(bundle);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(widened)))
+                .thenReturn(new java.util.ArrayList<>(List.of(glucoseRange(9.0))));
+
+            List<LabTestReferenceRangeDTO> widenedRanges = List.of(widened);
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, widenedRanges))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("En attente de revue qualité")
+                .hasMessageNotContaining("PENDING_QA_REVIEW");
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
     }
 

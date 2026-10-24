@@ -21,6 +21,7 @@ import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
@@ -225,15 +226,13 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .filter(order -> REVIEWABLE_ORDER_STATUSES.contains(order.getStatus()))
                 .filter(order -> order.getPatient() != null)
                 .forEach(order -> {
-                    List<LabResult> results = labResultRepository.findByLabOrder_Id(order.getId());
-                    for (LabResult result : results) {
-                        // Only what the laboratory has released is the
-                        // doctor's to review: a result entered on an order
-                        // that had already completed is not on the chart yet.
-                        if (result.isReleased()) {
-                            queue.add(toQueueItem(order, result, locale));
-                        }
-                    }
+                    // Only what the laboratory has released is the doctor's
+                    // to review: a result entered on an order that had already
+                    // completed is not on the chart yet. QA D741: nor is a
+                    // released value its correction replaced, or a legacy
+                    // duplicate of the order's current result.
+                    ClinicalLabResultView.releasedAndCurrent(labResultRepository.findByLabOrder_Id(order.getId()))
+                        .forEach(result -> queue.add(toQueueItem(order, result, locale)));
                 });
 
         // Sort: CRITICAL → ABNORMAL → NORMAL, then by date desc
