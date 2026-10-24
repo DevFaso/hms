@@ -262,6 +262,7 @@ describe('PrescriptionsComponent — signing', () => {
       'list',
       'sign',
       'cosign',
+      'update',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -321,20 +322,141 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
   });
 
+  it('QA D660: a refused edit of a signed prescription is reported inside the open modal', () => {
+    prescriptionService.update.and.returnValue(
+      throwError(() => ({ status: 403, error: { message: 'Access denied' } })),
+    );
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    component.submitForm();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const inline = el.querySelector('[data-testid="rx-form-error"]');
+    expect(component.showModal()).toBeTrue();
+    expect(inline?.textContent?.trim()).toBe('PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
+  it("QA D660: the server's reason for a refused save is shown in the modal, not only a toast", () => {
+    prescriptionService.update.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Cette ordonnance ne peut plus être modifiée dans son statut actuel.' },
+      })),
+    );
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+    } as PrescriptionResponse);
+    component.submitForm();
+    fixture.detectChanges();
+
+    const inline = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-form-error"]',
+    );
+    expect(inline?.textContent).toContain('ne peut plus être modifiée');
+    component.closeModal();
+    component.openEdit(rx('d', 'DRAFT'));
+    fixture.detectChanges();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="rx-form-error"]'),
+    ).toBeNull();
+  });
+
+  it('QA D670: the withdrawal form names the prescriber of record, not the caller', async () => {
+    component.openEdit({
+      ...rx('eda77c51', 'SIGNED'),
+      staffId: 'staff-doctor-a',
+      staffFullName: 'QA R9 Docteur-A',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const field = (fixture.nativeElement as HTMLElement).querySelector(
+      '#rx-staffId',
+    ) as HTMLInputElement;
+    expect(field.value).toBe('QA R9 Docteur-A');
+    expect(field.readOnly).toBeTrue();
+  });
+
+  it('QA D660: a signed prescription opens read-only, offering only a withdrawal with a reason', async () => {
+    component.openEdit({
+      ...rx('5dd1633b', 'SIGNED'),
+      medicationName: 'morphine',
+      dosage: '10mg',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-signed-hint"]')).not.toBeNull();
+    for (const id of [
+      'rx-medName',
+      'rx-dosage',
+      'rx-frequency',
+      'rx-duration',
+      'rx-notes',
+      'rx-staffId',
+    ]) {
+      expect((el.querySelector('#' + id) as HTMLInputElement).readOnly)
+        .withContext(id)
+        .toBeTrue();
+    }
+    for (const id of ['rx-route', 'rx-cosign', 'rx-encounterId']) {
+      expect((el.querySelector('#' + id) as HTMLInputElement).disabled)
+        .withContext(id)
+        .toBeTrue();
+    }
+    expect(el.querySelector('.chip-clear')).toBeNull();
+    const choices = Array.from(
+      (el.querySelector('#rx-status') as HTMLSelectElement).options,
+    ).filter((o) => !o.disabled);
+    expect(choices.map((o) => o.textContent?.trim())).toEqual([
+      'PORTAL.ENUM.PRESCRIPTION_STATUS.CANCELLED',
+      'PORTAL.ENUM.PRESCRIPTION_STATUS.DISCONTINUED',
+    ]);
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
+
+    const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
+    expect(save.disabled).withContext('nothing chosen yet').toBeTrue();
+    component.form.status = 'CANCELLED';
+    fixture.detectChanges();
+    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    component.form.withdrawalReason = 'Wrong patient';
+    fixture.detectChanges();
+    expect(save.disabled).toBeFalse();
+
+    component.closeModal();
+    component.openEdit(rx('d', 'DRAFT'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-signed-hint"]')).toBeNull();
+    expect((el.querySelector('#rx-dosage') as HTMLInputElement).readOnly).toBeFalse();
+  });
+
   it('does not offer SIGNED in the editable status list', () => {
     // The whole point of the ceremony: this status is reachable only by signing.
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');
   });
 
-  it('offers only the withdrawn statuses when editing a withdrawn prescription', () => {
-    // Withdrawal is final on the server: a reopen to DRAFT would be refused.
+  it('QA D660: a withdrawn prescription opens no edit form and offers no Edit', () => {
+    // Withdrawal is final and read-only on the server, every field.
     for (const status of ['CANCELLED', 'DISCONTINUED']) {
       component.openEdit(rx('w', status));
-      expect(component.statusOptions().map((s) => s.value)).toEqual(['CANCELLED', 'DISCONTINUED']);
+      fixture.detectChanges();
+      expect(component.showModal()).withContext(status).toBeFalse();
+      expect((fixture.nativeElement as HTMLElement).querySelector('#rx-medName')).toBeNull();
+      expect(component.canEditRow(rx('w', status)))
+        .withContext(status)
+        .toBeFalse();
     }
     component.openEdit(rx('d', 'DRAFT'));
     expect(component.statusOptions().map((s) => s.value)).toContain('DRAFT');
-    component.openEdit(rx('c', 'CANCELLED'));
     component.openEdit(rx('d2', 'DRAFT'));
     expect(component.statusOptions().length).toBe(component.prescriptionStatuses.length);
     // D129: a new prescription is never offered a withdrawn status.
@@ -586,6 +708,40 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     expect(host.querySelector('.page-actions .btn-primary')).toBeNull();
     expect(host.querySelector('.edit-link')).toBeNull();
     expect(host.querySelector('.delete-link')).toBeNull();
+  });
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_HOSPITAL_ADMIN']) {
+    it(`QA D670: ${role} is not offered Edit on a doctor's signed prescription`, () => {
+      activeRoles = [role];
+      prescriptionService.list.and.returnValue(
+        of([rx('eda77c51', 'SIGNED', { staffId: 'staff-doctor-a' })]),
+      );
+      component.ngOnInit();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).toBeNull();
+    });
+  }
+
+  for (const role of ['ROLE_DOCTOR']) {
+    it(`QA D670: ${role} is offered the withdrawal of another prescriber's signed order`, () => {
+      activeRoles = [role];
+      prescriptionService.list.and.returnValue(
+        of([rx('eda77c51', 'SIGNED', { staffId: 'staff-doctor-a' })]),
+      );
+      component.ngOnInit();
+      fixture.detectChanges();
+      expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).not.toBeNull();
+    });
+  }
+
+  it('QA D660: a doctor is offered no Edit on a withdrawn prescription', () => {
+    activeRoles = ['ROLE_DOCTOR'];
+    prescriptionService.list.and.returnValue(
+      of([rx('eda77c51', 'DISCONTINUED', { staffId: 'staff-doctor-a' })]),
+    );
+    component.ngOnInit();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.edit-link')).toBeNull();
   });
 
   it('offers verification only for an in-scope prescription that reached SIGNED', () => {
@@ -2194,5 +2350,133 @@ describe('PrescriptionsComponent — answering a pharmacist clarification', () =
     );
     // The list reloads so the row leaves PENDING_CLARIFICATION on screen too.
     expect(prescriptionService.list.calls.count()).toBeGreaterThan(1);
+  });
+});
+
+/**
+ * QA D611/D677/D678 (round-9 re-test 3, r3/uisign.js and ui.js): the row
+ * actions follow the role POST /prescriptions/{id}/sign admits (ROLE_DOCTOR,
+ * mirrored by ActionPermissionsMirrorTest) and the row status.
+ */
+describe('PrescriptionsComponent — row actions per role and status (QA D611/D677)', () => {
+  const DRAFT_ID = '8b3ca231-1f81-4ad0-9293-f88703c401c4';
+  const PENDING_ID = 'pending-row';
+  const DISPENSED_ID = 'f98f8393-bfb5-4d4c-854e-a75c6384bd31';
+
+  async function render(role: string) {
+    const prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
+      'list',
+      'sign',
+      'cosign',
+      'update',
+    ]);
+    prescriptionService.list.and.returnValue(of([]));
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService.list.and.returnValue(of([]));
+    const pharmacies = jasmine.createSpyObj<CommunityPharmacyService>('CommunityPharmacyService', [
+      'list',
+    ]);
+    pharmacies.list.and.returnValue(of([]));
+    const scopeUrl = jasmine.createSpyObj<HospitalScopeUrlService>('HospitalScopeUrlService', [
+      'applyUrlScopeSync',
+    ]);
+    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [PrescriptionsComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: PrescriptionService, useValue: prescriptionService },
+        { provide: StaffService, useValue: staffService },
+        { provide: PatientService, useValue: patientService },
+        { provide: CommunityPharmacyService, useValue: pharmacies },
+        { provide: HospitalScopeUrlService, useValue: scopeUrl },
+        { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: signal(false),
+            globalView: signal(false),
+            activeHospitalId: 'h-1',
+            hasAnyActiveRole: (roles: string[]) => roles.includes(role),
+            activeRoles: [role],
+            activeRole: role,
+          },
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(PrescriptionsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.loading.set(false);
+    fixture.componentInstance.filtered.set([
+      { id: DRAFT_ID, status: 'DRAFT', requiresCosign: true } as PrescriptionResponse,
+      { id: PENDING_ID, status: 'PENDING_SIGNATURE' } as PrescriptionResponse,
+      { id: DISPENSED_ID, status: 'DISPENSED' } as PrescriptionResponse,
+    ]);
+    fixture.detectChanges();
+    return { fixture, prescriptionService, el: fixture.nativeElement as HTMLElement };
+  }
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE']) {
+    it(`${role} is offered no Sign or Co-sign on a doctor's draft or pending row`, async () => {
+      const { el } = await render(role);
+      for (const id of [DRAFT_ID, PENDING_ID]) {
+        expect(el.querySelector(`[data-testid="rx-sign-${id}"]`))
+          .withContext(id)
+          .toBeNull();
+        expect(el.querySelector(`[data-testid="rx-cosign-${id}"]`))
+          .withContext(id)
+          .toBeNull();
+      }
+    });
+  }
+
+  it('ROLE_DOCTOR keeps Sign on draft and pending rows', async () => {
+    const { el } = await render('ROLE_DOCTOR');
+    expect(el.querySelector(`[data-testid="rx-sign-${DRAFT_ID}"]`)).not.toBeNull();
+    expect(el.querySelector(`[data-testid="rx-sign-${PENDING_ID}"]`)).not.toBeNull();
+    expect(el.querySelector(`[data-testid="rx-cosign-${DRAFT_ID}"]`)).not.toBeNull();
+  });
+
+  for (const role of ['ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_DOCTOR']) {
+    it(`QA D678: ${role} sees no Edit on a dispensed row, but keeps it on a draft`, async () => {
+      const { fixture } = await render(role);
+      const rows = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+      ) as HTMLElement[];
+      const edit = (r: HTMLElement) => r.querySelector('.edit-link');
+      expect(rows.length).toBe(3);
+      expect(edit(rows[0])).withContext('draft').not.toBeNull();
+      expect(edit(rows[2])).withContext('dispensed').toBeNull();
+    });
+  }
+
+  it('QA D677: a refused sign is shown translated inside the page, not only as a toast', async () => {
+    const { fixture, prescriptionService, el } = await render('ROLE_DOCTOR');
+    TestBed.inject(TranslateService).setTranslation('fr', {
+      PRESCRIPTIONS: { TOAST: { ACTION_FORBIDDEN: 'Action non autorisée' } },
+    });
+    TestBed.inject(TranslateService).use('fr');
+    prescriptionService.sign.and.returnValue(
+      throwError(() => ({
+        status: 403,
+        error: { message: 'Accès refusé', code: 'ACCESS_DENIED' },
+      })),
+    );
+    fixture.componentInstance.signPrescription({
+      id: DRAFT_ID,
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-action-error"]')?.textContent?.trim()).toBe(
+      'Action non autorisée',
+    );
   });
 });

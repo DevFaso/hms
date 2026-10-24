@@ -2964,10 +2964,29 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V222 (QA D605): escalation rows for URGENT obstetric and neonatal alerts,
+         so the on-call team is told and a sweep re-notifies until someone
+         acknowledges. Plain statements, no DO block. -->
+    <changeSet id="V222-obstetric-alert-escalations" author="hms-team" runOnChange="false">
+        <sqlFile path="V222__obstetric_alert_escalations.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V225 (QA D665): security.notifications.message_key + message_args, so a
          notification body is rendered in the reader's language. Plain statements. -->
     <changeSet id="V225-notification-message-key" author="hms-team" runOnChange="false">
         <sqlFile path="V225__notification_message_key.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V223 (QA D660): the mandatory reason a signed prescription was
+         cancelled or discontinued. Plain statements, no DO block. -->
+    <changeSet id="V223-prescription-withdrawal-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V223__prescription_withdrawal_reason.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="false"/>

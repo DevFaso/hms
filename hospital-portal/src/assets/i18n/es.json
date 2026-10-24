@@ -1436,8 +1436,6 @@
     "PAYMENT_AMOUNT": "Importe",
     "PAYMENT_AMOUNT_REQUIRED": "Ingrese un importe mayor que cero",
     "PAYMENT_EXCEEDS_BALANCE": "El importe excede el saldo pendiente",
-    "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
-    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura.",
     "PAYMENT_FAILED": "Error en el pago",
     "PAYMENT_METHOD": "Método de pago",
     "PAYMENT_NOTE": "Los pagos se aplican a facturas emitidas o parcialmente pagadas, hasta el saldo pendiente, en francos enteros.",
@@ -1519,7 +1517,9 @@
       "CONFIRMED": "Confirmado",
       "REJECTED": "Rechazado",
       "REVERSED": "Revertido"
-    }
+    },
+    "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
+    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -5431,12 +5431,10 @@
         "INVOICE_UPDATED": "Factura actualizada",
         "LAB_ORDER_CREATED": "Orden de laboratorio creada",
         "LAB_ORDER_UPDATED": "Orden de laboratorio actualizada",
-        "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_SPECIMEN_UPDATED": "Muestra de laboratorio actualizada",
         "LAB_RESULT_CREATED": "Resultado de laboratorio registrado",
         "LAB_RESULT_ACKNOWLEDGED": "Resultado de laboratorio reconocido",
         "LAB_RESULT_RELEASED": "Resultado de laboratorio liberado",
-        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
         "LAB_RESULT_UPDATED": "Resultado de laboratorio actualizado",
         "LOGIN": "Inicio de sesión",
         "LOGIN_FAILURE": "Inicio de sesión fallido",
@@ -5539,7 +5537,9 @@
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Asignación liberada",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Asignación relevada",
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada",
-        "USER_RESTORE": "Usuario restaurado"
+        "USER_RESTORE": "Usuario restaurado",
+        "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
+        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -5653,6 +5653,8 @@
         "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",
+        "OBSTETRIC_ALERT": "Alerta obstétrica urgente",
+        "OBSTETRIC_ALERT_ESCALATION": "Escalamiento de alerta obstétrica urgente",
         "PHARMACY_EVENT": "Aviso de farmacia",
         "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
         "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
@@ -6378,6 +6380,9 @@
     "REFILLS_VALUE": "{{remaining}} de {{allowed}} restantes",
     "LIST_TRUNCATED": "Solo se muestran las recetas más recientes, por lo que estos totales son un mínimo. Use el buscador para encontrar una más antigua.",
     "ROUTE_NOT_RECORDED": "No registrada",
+    "SIGNED_EDIT_HINT": "Esta receta está firmada: solo puede cancelarse o suspenderse, con un motivo. Para cambiar cualquier otra cosa, redacte una receta nueva.",
+    "CHOOSE_WITHDRAWAL": "Elija Cancelada o Suspendida",
+    "WITHDRAWAL_REASON": "Motivo de la retirada",
     "ROUTES": {
       "PO": "Oral (PO)",
       "IV": "Intravenosa (IV)",
@@ -6849,6 +6854,7 @@
     "ACK_NOTES_PLACEHOLDER": "Escriba las notas de aceptación…",
     "ACTION_ACKNOWLEDGE": "Aceptar",
     "ACTION_COMPLETE": "Completar",
+    "ACTION_FORBIDDEN": "No está autorizado a hacer esto en esta derivación. Solo el profesional que la redactó puede cancelarla o enviarla.",
     "ACTION_REJECT": "Rechazar",
     "ACTION_SCHEDULE": "Programar",
     "ACTION_START": "Iniciar",
@@ -7363,7 +7369,6 @@
     "SIGN": "Firmar",
     "SIGNING": "Firmando...",
     "REPORT_ID": "ID del informe",
-    "REPORT_ID_INVALID": "El ID del informe debe ser un identificador de registro (UUID), por ejemplo copiado desde la página del informe.",
     "REPORT_ID_PLACEHOLDER": "UUID del informe",
     "SIGN_VALUE_PLACEHOLDER": "p. ej. Dra. Juana Pérez",
     "SIGN_VALUE_HINT": "Escriba su nombre legal completo exactamente: la verificación compara este texto carácter por carácter.",
@@ -7383,6 +7388,7 @@
     "LOOKUP_NONE": "Sin firmas en este informe",
     "REPORT_SIGNED": "Informe firmado",
     "REPORT_NOT_SIGNED": "Informe sin firmar",
+    "REPORT_ID_INVALID": "El ID del informe debe ser un identificador de registro (UUID), por ejemplo copiado desde la página del informe.",
     "REPORT": "Informe",
     "PICK_REPORT": "Elija un informe para firmar",
     "SIGNABLE_LOADING": "Cargando sus informes…",

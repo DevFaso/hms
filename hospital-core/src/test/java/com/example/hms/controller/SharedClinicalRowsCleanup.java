@@ -51,6 +51,11 @@ final class SharedClinicalRowsCleanup {
         context.getBean(LabSpecimenRepository.class).deleteAll();
         context.getBean(LabOrderRepository.class).deleteAll();
         context.getBean(LabTestDefinitionRepository.class).deleteAll();
+        // QA D605: labour charts pin the patient, the hospital and the staff.
+        context.getBean(com.example.hms.repository.ObstetricAlertEscalationRepository.class).deleteAllInBatch();
+        context.getBean(com.example.hms.repository.LaborPartographEntryRepository.class).deleteAll();
+        context.getBean(com.example.hms.repository.DeliveryRecordRepository.class).deleteAll();
+        context.getBean(com.example.hms.repository.LaborEpisodeRepository.class).deleteAll();
         context.getBean(PatientHospitalRegistrationRepository.class).deleteAll();
         // patient_problems (and their history) reference staff.
         context.getBean(PatientProblemHistoryRepository.class).deleteAllInBatch();

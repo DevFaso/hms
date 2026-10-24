@@ -14,6 +14,9 @@ import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+const SERVER_TIME = new ServerTimePipe();
 
 @Component({
   selector: 'app-in-basket-panel',
@@ -146,7 +149,9 @@ export class InBasketPanelComponent {
 
   formatDate(iso: string | null): string {
     if (!iso) return '';
-    const d = new Date(iso);
+    // QA D662 (D647): the server sends a zone-less UTC wall time; read raw,
+    // the browser took it for local time and showed the UTC clock.
+    const d = new Date(SERVER_TIME.transform(iso));
     // No hour12 override: the locale decides. Burkina Faso reads a 24-hour
     // clock; forcing 12-hour produced "15 juil., 10:00 AM" — French date,
     // American time.

@@ -143,6 +143,7 @@ public class PrescriptionMapper {
             .clarificationRequestedAt(p.getClarificationRequestedAt())
             .clarificationResponse(p.getClarificationResponse())
             .clarificationResolvedAt(p.getClarificationResolvedAt())
+            .withdrawalReason(p.getWithdrawalReason())
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())

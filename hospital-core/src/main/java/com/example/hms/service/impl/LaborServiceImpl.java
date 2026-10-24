@@ -147,6 +147,8 @@ public class LaborServiceImpl implements LaborService {
     private final MessageSource messageSource;
     private final com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
     private final com.example.hms.service.DeliveryChargeService deliveryChargeService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -179,7 +181,7 @@ public class LaborServiceImpl implements LaborService {
 
         String riskNotes = resolveRecentDeliveryOverride(patientId, request);
 
-        Staff admittedBy = resolveStaff(request.getAdmittedByStaffId(), hospital);
+        Staff admittedBy = resolveStaffOrCaller(request.getAdmittedByStaffId(), hospital, recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
         MaternalHistory history = maternalHistoryRepository.findCurrentByPatientId(patientId).orElse(null);
 
@@ -273,6 +275,10 @@ public class LaborServiceImpl implements LaborService {
             recordedBy = com.example.hms.security.CallerIdentity.confirmActor(staffRepository, recordedBy,
                 com.example.hms.security.CallerIdentity.hospitalIdOf(episode.getHospital()));
         }
+        if (recordedBy == null) {
+            // QA D629: no recorder named in the body means the caller recorded it.
+            recordedBy = callerStaffAt(episode.getHospital(), recorderUserId);
+        }
         User documentedBy = resolveUser(recorderUserId);
 
         LaborPartographEntry entry = LaborPartographEntry.builder()
@@ -310,7 +316,8 @@ public class LaborServiceImpl implements LaborService {
         evaluateMaternalCondition(entry);
 
         LaborPartographEntry saved = entryRepository.save(entry);
-        publishUrgentAlerts(saved.getAlerts(), episode, documentedBy);
+        publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH, saved.getId());
         return laborMapper.toEntryResponse(saved, episode.getActivePhaseStartAt());
     }
 
@@ -345,7 +352,7 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("labor.delivery.beforeOnset");
         }
         String notes = resolveRecentDeliveryOverride(episode, birthAt, request);
-        Staff deliveredBy = resolveStaff(request.getDeliveredByStaffId(), episode.getHospital());
+        Staff deliveredBy = resolveStaffOrCaller(request.getDeliveredByStaffId(), episode.getHospital(), recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
 
         DeliveryRecord record = DeliveryRecord.builder()
@@ -381,7 +388,8 @@ public class LaborServiceImpl implements LaborService {
         DeliveryRecord saved = deliveryRecordRepository.save(record);
         chargeDelivery(saved, recorderUserId);
         closeEarlierPostpartumPlans(episode, birthAt);
-        publishUrgentAlerts(saved.getAlerts(), episode, documentedBy);
+        publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
+            com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
         return laborMapper.toDeliveryResponse(saved);
     }
 
@@ -631,6 +639,26 @@ public class LaborServiceImpl implements LaborService {
         throw new BusinessException("maternity.labor.hospitalRequiredToRecord");
     }
 
+    /**
+     * QA D629: the maternity screen sends no admitting or delivering staff id,
+     * so admittedByStaffName and deliveredByStaffName were always null. With
+     * none named, the clinician recording it is the one who admitted or
+     * delivered: the caller's staff record at the record's hospital.
+     */
+    private Staff resolveStaffOrCaller(UUID staffId, Hospital hospital, UUID recorderUserId) {
+        if (staffId != null) {
+            return resolveStaff(staffId, hospital);
+        }
+        return callerStaffAt(hospital, recorderUserId);
+    }
+
+    private Staff callerStaffAt(Hospital hospital, UUID recorderUserId) {
+        if (recorderUserId == null || hospital == null || hospital.getId() == null) {
+            return null;
+        }
+        return staffRepository.findByUserIdAndHospitalId(recorderUserId, hospital.getId()).orElse(null);
+    }
+
     private Staff resolveStaff(UUID staffId, Hospital hospital) {
         if (staffId == null) {
             return null;
@@ -688,28 +716,57 @@ public class LaborServiceImpl implements LaborService {
         return messageSource.getMessage("labor.alert.msg." + code, args, NotificationLocales.STAFF);
     }
 
-    /** URGENT alerts notify the documenting clinician — best-effort, house policy. */
+    /**
+     * URGENT alerts notify the documenting clinician (best-effort, house
+     * policy) and, QA D605, the hospital's on-call team, with escalation until
+     * someone else acknowledges. The team is notified even when the
+     * documenter is unknown.
+     */
     private void publishUrgentAlerts(List<com.example.hms.model.labor.LaborAlert> alerts,
-                                     LaborEpisode episode, User documentedBy) {
-        if (alerts == null || alerts.isEmpty() || documentedBy == null || documentedBy.getUsername() == null) {
+                                     LaborEpisode episode, User documentedBy, String sourceType, UUID sourceId) {
+        if (alerts == null || alerts.isEmpty()) {
             return;
         }
-        // Read by the documenting clinician, in their language (QA D665).
-        Object patientName = episode.getPatient() != null
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
+        // The documenter reads the notice in her language (QA D665); the escalation
+        // row stores the staff-locale text, so the arg keeps the fallback as a key.
+        Object patientArg = episode.getPatient() != null
             ? episode.getPatient().getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
         alerts.stream()
             .filter(alert -> alert.getSeverity() == LaborAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D172 (D61/D121): the type is a translated label, never the raw enum.
-                Object typeLabel = alert.getType() == null ? ""
-                    : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
-                try {
-                    notificationService.createNotification("labor.alert.notification",
-                        new Object[]{typeLabel, patientName, alert.getMessage()}, documentedBy.getUsername(), null);
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create labor alert notification: {}", ex.getMessage());
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, episode, documentedBy, sourceType, sourceId,
+                patientArg, notifyDocumenter));
+    }
+
+    private void publishUrgentAlert(com.example.hms.model.labor.LaborAlert alert, LaborEpisode episode,
+                                    User documentedBy, String sourceType, UUID sourceId,
+                                    Object patientArg, boolean notifyDocumenter) {
+        if (notifyDocumenter) {
+            // QA D172 (D61/D121): the type is a translated label, never the raw enum.
+            Object typeKey = alert.getType() == null ? ""
+                : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
+            try {
+                notificationService.createNotification("labor.alert.notification",
+                    new Object[]{typeKey, patientArg, alert.getMessage()}, documentedBy.getUsername(), null);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to create labor alert notification: {}", ex.getMessage());
+            }
+        }
+        if (obstetricAlertEscalation != null && episode.getHospital() != null && episode.getPatient() != null) {
+            // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
+            java.util.Locale locale = NotificationLocales.STAFF;
+            String patientName = episode.getPatient().getFullName();
+            String typeLabel = alert.getType() == null ? ""
+                : messageSource.getMessage("labor.alert.type." + alert.getType().name(), null, locale);
+            String message = messageSource.getMessage("labor.alert.notification",
+                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+            obstetricAlertEscalation.raiseAfterCommit(
+                new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                    episode.getHospital().getId(), episode.getPatient().getId(), patientName,
+                    sourceType, sourceId, alert.getType() == null ? null : alert.getType().name(),
+                    typeLabel, alert.getMessage(),
+                    documentedBy == null ? null : documentedBy.getId(), message));
+        }
     }
 }

@@ -800,6 +800,8 @@ export class EnumLabelService implements OnDestroy {
       LICENSE_EXPIRY: 'License Expiry',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',
+      OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
+      OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',

@@ -188,6 +188,8 @@ export interface PrescriptionRequest {
    */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D660: mandatory when a SIGNED prescription is cancelled or discontinued. */
+  withdrawalReason?: string;
 }
 
 @Injectable({ providedIn: 'root' })

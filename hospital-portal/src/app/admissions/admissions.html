@@ -647,7 +647,7 @@
               class="form-select"
             >
               <option value="">{{ 'ADMISSIONS.SELECT_PROVIDER' | translate }}</option>
-              @for (s of staffMembers(); track s.id) {
+              @for (s of dischargeProviders(); track s.id) {
                 <option [value]="s.id">{{ s.name || s.email }}</option>
               }
             </select>

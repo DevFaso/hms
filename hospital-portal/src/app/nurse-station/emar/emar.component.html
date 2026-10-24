@@ -42,7 +42,8 @@
                 <span class="emar__queue-patient">{{ task.patientName }}</span>
                 <span class="emar__queue-med">{{ task.medication }}</span>
                 <span class="emar__queue-meta">
-                  {{ task.dose }} · {{ task.route }} · {{ task.dueTime | date: 'HH:mm' }}
+                  {{ task.dose }} · {{ task.route }} ·
+                  {{ task.dueTime | serverTime | date: 'HH:mm' }}
                 </span>
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give

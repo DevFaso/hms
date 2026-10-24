@@ -76,6 +76,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final NewbornAssessmentMapper mapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -381,28 +383,46 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (assessment.getAlerts() == null || assessment.getAlerts().isEmpty()) {
             return;
         }
-        if (documentedBy == null || documentedBy.getUsername() == null) {
-            return;
-        }
-        // Read by the documenting clinician, in their language (QA D665).
-        Object fallbackName = NotificationLocalizer.key("patient.fallback.generic");
-        String patientName = assessment.getPatient() != null
+        // QA D605: the team is told even when the documenter is unknown.
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
+        String fullName = assessment.getPatient() != null
             ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
             : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D216: the type is a translated label, never the raw enum.
-                Object typeLabel = alert.getType() == null ? ""
-                    : NotificationLocalizer.key("newborn.alert.type." + alert.getType().name());
-                try {
-                    notificationService.createNotification("newborn.alert.notification",
-                        new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                        documentedBy.getUsername(), null);
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, assessment, documentedBy, fullName, notifyDocumenter));
+    }
+
+    private void publishUrgentAlert(NewbornAssessmentAlert alert, NewbornAssessment assessment, User documentedBy,
+                                    String fullName, boolean notifyDocumenter) {
+        if (notifyDocumenter) {
+            // Read by the documenting clinician, in her language (QA D665).
+            // QA D216: the type is a translated label, never the raw enum.
+            Object typeKey = alert.getType() == null ? ""
+                : NotificationLocalizer.key("newborn.alert.type." + alert.getType().name());
+            Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+            try {
+                notificationService.createNotification("newborn.alert.notification",
+                    new Object[]{typeKey, patientArg, alert.getMessage()}, documentedBy.getUsername(), null);
+            } catch (RuntimeException ex) {
+                log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+            }
+        }
+        if (obstetricAlertEscalation != null && assessment.getHospital() != null && assessment.getPatient() != null) {
+            // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
+            java.util.Locale locale = NotificationLocales.STAFF;
+            String patientName = fullName.isBlank()
+                ? messageSource.getMessage("patient.fallback.generic", null, locale) : fullName;
+            String typeLabel = alert.getType() == null ? ""
+                : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
+            String message = messageSource.getMessage("newborn.alert.notification",
+                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                assessment.getHospital().getId(), assessment.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message));
+        }
     }
 
     /**

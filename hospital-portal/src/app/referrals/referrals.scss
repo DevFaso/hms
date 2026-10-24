@@ -528,3 +528,13 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+// QA D611: a refused cancel, inside the confirmation dialog.
+.form-error {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #991b1b;
+}

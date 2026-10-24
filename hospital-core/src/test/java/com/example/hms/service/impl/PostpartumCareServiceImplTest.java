@@ -82,6 +82,8 @@ class PostpartumCareServiceImplTest {
     @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
     private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
+    @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
@@ -108,6 +110,7 @@ class PostpartumCareServiceImplTest {
             staffRepository,
             userRepository,
             notificationService,
+            obstetricAlertEscalation,
             new PostpartumObservationMapper(),
             proResponseService,
             recordAccessPolicy,
@@ -204,6 +207,9 @@ class PostpartumCareServiceImplTest {
         assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hémorragie"));
 
     verify(notificationService, times(1)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        // QA D605: the URGENT postpartum alert reaches the on-call team too.
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(a.sourceType())));
 
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());

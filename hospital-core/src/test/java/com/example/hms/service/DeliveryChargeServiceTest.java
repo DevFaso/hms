@@ -117,6 +117,31 @@ class DeliveryChargeServiceTest {
         assertThat(invoice.getTotalAmount()).isEqualByComparingTo("0");
     }
 
+    /**
+     * QA D608: the exact round-9 case — a vaginal birth at a hospital with no
+     * priced delivery service. The draft existed but said nothing (total 0, no
+     * notes), so billing reported "no delivery charge". It now names the birth.
+     */
+    @Test
+    void unpricedDraft_namesTheBirthSoBillingCanFindIt() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            recorderWorksHere();
+            delivery.setBirthDateTime(java.time.LocalDateTime.of(2026, 10, 23, 11, 40));
+            when(treatmentRepository.findByHospital_Id(hospital.getId())).thenReturn(List.of());
+
+            BillingInvoice invoice = service.chargeDelivery(delivery, recorderId).orElseThrow();
+
+            assertThat(invoice.getNotes()).contains("Accouchement (voie basse)").contains("2026-10-23")
+                .doesNotContain("Missing translation");
+            assertThat(invoice.getInvoiceItems().iterator().next().getItemDescription())
+                .isEqualTo("Accouchement (voie basse)");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     /** QA D516: a cross-hospital or super-admin recorder still bills the birth, under the billing desk. */
     @Test
     void recorderWithoutAnAssignmentThere_filesTheLineUnderTheBillingDesk() {

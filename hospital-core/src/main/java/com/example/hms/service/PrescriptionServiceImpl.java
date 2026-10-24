@@ -654,10 +654,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectClientAssertedWorkflowStatus(PrescriptionRequestDTO request) {
         PrescriptionStatus status = request.getStatus();
         if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
-            throw new BusinessException(
-                "The status " + status + " cannot be set directly. Signing has its own endpoint "
-                    + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
-                    + "their own workflows.");
+            // QA D660: a key, so the refusal reaches the prescriber in her language.
+            throw new BusinessException("prescription.status.notAssertable");
         }
     }
 
@@ -684,10 +682,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectStatusChangeOnUpdate(Prescription existing, PrescriptionRequestDTO request) {
         PrescriptionStatus requested = request.getStatus();
         if (requested == null) {
-            return;
-        }
-        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
-            rejectReopeningWithdrawn(requested);
             return;
         }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
@@ -803,14 +797,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
         if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
-            throw new BusinessException(
-                "This prescription is flagged as a controlled substance; the flag cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.controlled.flagLocked");
         }
         if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
-            throw new BusinessException(
-                "This prescription declares a co-signature requirement; the requirement cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.cosign.flagLocked");
         }
     }
 
@@ -947,6 +937,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        // QA D660: a signed order is no longer rewritten by edit.
+        if (existing.getStatus() == PrescriptionStatus.SIGNED) {
+            return withdrawSignedPrescription(existing, request);
+        }
+        // QA D660 (re-test 2): a withdrawn order is read-only, every field.
+        // It used to fall through to updateEntity below, so a signed order
+        // once withdrawn had its drug and dose rewritten under the signature.
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectAnyEditOfWithdrawn(request);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -1012,6 +1012,115 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * QA D660 (user decision): the only edit a SIGNED prescription accepts is
+     * its withdrawal, to CANCELLED or DISCONTINUED, with a reason. The signed
+     * drug, dose, route, patient, prescriber and encounter are what the
+     * signature digest covers; rewriting them under the same signature is
+     * what the edit form used to allow. The portal echoes the whole form, so
+     * a field that equals the stored value (or is absent) is not a change;
+     * any other value is refused before anything is written.
+     */
+    private PrescriptionResponseDTO withdrawSignedPrescription(Prescription existing,
+                                                               PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null || !requested.isWithdrawn() || changesSignedContent(existing, request)) {
+            throw new BusinessException("prescription.signed.onlyWithdrawal");
+        }
+        String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+        if (reason == null || reason.isEmpty()) {
+            throw new BusinessException("prescription.signed.withdrawalReason.required");
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        existing.setStatus(requested);
+        existing.setWithdrawalReason(reason);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+    }
+
+    /**
+     * QA D660 (re-test 2): a CANCELLED or DISCONTINUED order is final and
+     * read-only. Asking for a non-withdrawn status keeps the "cannot be
+     * reopened" answer; any other edit, its content or its status, is refused.
+     */
+    private static void rejectAnyEditOfWithdrawn(PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested != null && !requested.isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+        }
+        throw new BusinessException("prescription.withdrawn.readOnly");
+    }
+
+    /**
+     * QA D670 (coordinator decision): a signed order is withdrawn by the
+     * prescriber or another doctor of the same hospital. A nurse or a midwife
+     * may write a prescription but not withdraw a signed one; the refusal is
+     * a translated 403. Admins never reach PUT /prescriptions (E9 #67,
+     * HospitalAdminOffOrdersTest), so they have no arm here.
+     */
+    private void requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
+        if (hospitalId == null || callerId == null) {
+            throw new BusinessException("prescription.only.doctor.admin");
+        }
+        boolean isPrescriber = existing.getStaff() != null && existing.getStaff().getUser() != null
+            && callerId.equals(existing.getStaff().getUser().getId());
+        boolean allowed = isPrescriber
+            || roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId);
+        if (!allowed) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));
+        }
+    }
+
+    /** True when the request asks for anything on a signed order other than its status. */
+    private static boolean changesSignedContent(Prescription existing, PrescriptionRequestDTO request) {
+        java.util.List<Boolean> changes = java.util.List.of(
+            differs(request.getPatientId(), existing.getPatient() == null ? null : existing.getPatient().getId()),
+            request.getPatientId() == null && !isBlank(request.getPatientIdentifier()),
+            differs(request.getStaffId(), existing.getStaff() == null ? null : existing.getStaff().getId()),
+            differs(request.getEncounterId(), existing.getEncounter() == null ? null : existing.getEncounter().getId()),
+            textDiffers(request.getMedicationName(), existing.getMedicationName()),
+            !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
+            textDiffers(request.getDosage(), existing.getDosage()),
+            textDiffers(request.getFrequency(), existing.getFrequency()),
+            !isBlank(request.getRoute()) && !request.getRoute().trim().equalsIgnoreCase(String.valueOf(existing.getRoute())),
+            textDiffers(request.getDuration(), existing.getDuration()),
+            textDiffers(request.getNotes(), existing.getNotes()),
+            flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
+            flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
+            Boolean.TRUE.equals(request.getForceOverride()));
+        return changes.contains(Boolean.TRUE);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static boolean flagDiffers(Boolean requested, boolean stored) {
+        return requested != null && requested != stored;
+    }
+
+    private static boolean differs(UUID requested, UUID stored) {
+        return requested != null && !requested.equals(stored);
+    }
+
+    /** Blank and absent are the same "nothing recorded" the form echoes. */
+    private static boolean textDiffers(String requested, String stored) {
+        if (requested == null) {
+            return false;
+        }
+        String r = requested.trim();
+        String st = stored == null ? "" : stored.trim();
+        return !r.equals(st);
     }
 
     @Override

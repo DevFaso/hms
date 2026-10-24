@@ -131,6 +131,49 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
+  // QA D661: the receiving-side and cancel actions are physician-only.
+  referralAcknowledge: {
+    endpoint: 'GeneralReferralController#acknowledgeReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralSchedule: {
+    endpoint: 'GeneralReferralController#scheduleReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralStart: {
+    endpoint: 'GeneralReferralController#startReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralComplete: {
+    endpoint: 'GeneralReferralController#completeReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralReject: {
+    endpoint: 'GeneralReferralController#rejectReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  referralCancel: {
+    endpoint: 'GeneralReferralController#cancelReferral',
+    roles: ['ROLE_DOCTOR'],
+  },
+  // QA D611/D677: signing is the prescriber's own act; nurses and midwives
+  // may draft and edit, but POST /sign and /cosign admit ROLE_DOCTOR only.
+  prescriptionCreate: {
+    endpoint: 'PrescriptionController#create',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  prescriptionUpdate: {
+    endpoint: 'PrescriptionController#update',
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
+  },
+  prescriptionSign: {
+    endpoint: 'PrescriptionController#sign',
+    roles: ['ROLE_DOCTOR'],
+  },
+  prescriptionCosign: {
+    endpoint: 'PrescriptionController#cosign',
+    roles: ['ROLE_DOCTOR'],
+  },
   allergyCreate: {
     endpoint: 'PatientController#createPatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],

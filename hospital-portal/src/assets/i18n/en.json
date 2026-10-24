@@ -1436,8 +1436,6 @@
     "PAYMENT_AMOUNT": "Amount",
     "PAYMENT_AMOUNT_REQUIRED": "Enter a payment amount greater than zero",
     "PAYMENT_EXCEEDS_BALANCE": "The amount exceeds the balance due",
-    "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
-    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice.",
     "PAYMENT_FAILED": "Payment failed",
     "PAYMENT_METHOD": "Payment Method",
     "PAYMENT_NOTE": "Payments apply to issued or partially paid invoices, up to the balance due, in whole francs.",
@@ -1519,7 +1517,9 @@
       "CONFIRMED": "Confirmed",
       "REJECTED": "Rejected",
       "REVERSED": "Reversed"
-    }
+    },
+    "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
+    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5431,12 +5431,10 @@
         "INVOICE_UPDATED": "Invoice Updated",
         "LAB_ORDER_CREATED": "Lab Order Created",
         "LAB_ORDER_UPDATED": "Lab Order Updated",
-        "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_SPECIMEN_UPDATED": "Lab Specimen Updated",
         "LAB_RESULT_CREATED": "Lab Result Created",
         "LAB_RESULT_ACKNOWLEDGED": "Lab Result Acknowledged",
         "LAB_RESULT_RELEASED": "Lab Result Released",
-        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_RESULT_UPDATED": "Lab Result Updated",
         "LOGIN": "Login",
         "LOGIN_FAILURE": "Login Failure",
@@ -5539,7 +5537,9 @@
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
-        "USER_RESTORE": "User Restored"
+        "USER_RESTORE": "User Restored",
+        "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5653,6 +5653,8 @@
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",
+        "OBSTETRIC_ALERT": "Urgent Obstetric Alert",
+        "OBSTETRIC_ALERT_ESCALATION": "Urgent Obstetric Alert Escalation",
         "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
@@ -6378,6 +6380,9 @@
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one.",
     "ROUTE_NOT_RECORDED": "Not recorded",
+    "SIGNED_EDIT_HINT": "This prescription is signed: it can only be cancelled or discontinued, with a reason. To change anything else, write a new prescription.",
+    "CHOOSE_WITHDRAWAL": "Choose Cancelled or Discontinued",
+    "WITHDRAWAL_REASON": "Reason for withdrawal",
     "ROUTES": {
       "PO": "Oral (PO)",
       "IV": "Intravenous (IV)",
@@ -6849,6 +6854,7 @@
     "ACK_NOTES_PLACEHOLDER": "Enter acknowledgement notes…",
     "ACTION_ACKNOWLEDGE": "Acknowledge",
     "ACTION_COMPLETE": "Complete",
+    "ACTION_FORBIDDEN": "You are not allowed to do this on this referral. Only the clinician who wrote it can cancel or send it.",
     "ACTION_REJECT": "Reject",
     "ACTION_SCHEDULE": "Schedule",
     "ACTION_START": "Start",
@@ -7363,7 +7369,6 @@
     "SIGN": "Sign",
     "SIGNING": "Signing...",
     "REPORT_ID": "Report ID",
-    "REPORT_ID_INVALID": "The report ID must be a record identifier (UUID), for example copied from the report page.",
     "REPORT_ID_PLACEHOLDER": "Report UUID",
     "SIGN_VALUE_PLACEHOLDER": "e.g. Dr. Jane Doe",
     "SIGN_VALUE_HINT": "Type your full legal name exactly — verification matches this text character for character.",
@@ -7383,6 +7388,7 @@
     "LOOKUP_NONE": "No signatures on this report",
     "REPORT_SIGNED": "Report is signed",
     "REPORT_NOT_SIGNED": "Report is not signed",
+    "REPORT_ID_INVALID": "The report ID must be a record identifier (UUID), for example copied from the report page.",
     "REPORT": "Report",
     "PICK_REPORT": "Choose a report to sign",
     "SIGNABLE_LOADING": "Loading your reports…",
