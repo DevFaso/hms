@@ -133,6 +133,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     private LinkedTestAccounts accounts;
 
     private final UUID rowId = UUID.randomUUID();
+    private com.example.hms.model.User doctor;
     /**
      * Real hospitals and a real patient registered at both: the create and move
      * refusals must be seen to be the ACTING-hospital check, not a lookup that
@@ -168,7 +169,7 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
         }
         accounts = new LinkedTestAccounts(hospitalRepository, userRepository, roleRepository,
             assignmentRepository, auditEventLogRepository);
-        com.example.hms.model.User doctor = accounts.userAt("doctor.a", hospitalA, "DOCTOR");
+        doctor = accounts.userAt("doctor.a", hospitalA, "DOCTOR");
         // The account is linked, so the idle gate applies on this path too.
         idleSessionTracker.touch(doctor.getId());
         doctorAtA = token(doctor.getUsername(), doctor.getId(), hospitalA, "DOCTOR");
@@ -309,9 +310,11 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("at its own hospital the doctor still starts an assigned consultation")
+    @DisplayName("at its own hospital the assigned doctor still starts the consultation")
     void consultationStartAtTheActingHospitalWorks() throws Exception {
         Consultation own = consultationAt(hospitalA, ConsultationStatus.ASSIGNED);
+        // QA r10 D704: only the assigned consultant may start it, so assign it to this doctor.
+        own.setConsultant(com.example.hms.model.Staff.builder().user(doctor).build());
         when(consultationRepository.findById(rowId)).thenReturn(Optional.of(own));
         when(consultationRepository.save(own)).thenReturn(own);
 

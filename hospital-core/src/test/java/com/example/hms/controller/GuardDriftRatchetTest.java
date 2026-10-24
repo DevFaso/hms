@@ -154,14 +154,12 @@ class GuardDriftRatchetTest {
         listed.put("BirthPlanController.getPendingReviews", BIRTHPLANCONTROLLER_REASON);
         listed.put("BirthPlanController.providerReview", BIRTHPLANCONTROLLER_REASON);
         listed.put("ConsultationController.acknowledgeConsultation", CONSULTATIONCONTROLLER_REASON);
-        listed.put("ConsultationController.assignConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.completeConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.declineConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.getConsultationsAssignedTo", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.getConsultationsForHospital", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.getMyConsultations", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.getPendingConsultations", CONSULTATIONCONTROLLER_REASON);
-        listed.put("ConsultationController.reassignConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.scheduleConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.startConsultation", CONSULTATIONCONTROLLER_REASON);
         listed.put("ConsultationController.updateConsultation", CONSULTATIONCONTROLLER_REASON);

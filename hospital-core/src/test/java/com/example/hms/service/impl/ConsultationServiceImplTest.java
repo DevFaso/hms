@@ -67,6 +67,7 @@ class ConsultationServiceImplTest {
     @Spy private Clock clock = Clock.systemDefaultZone();
 
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver scopeResolver;
 
     @InjectMocks private ConsultationServiceImpl service;
 
@@ -98,7 +99,9 @@ class ConsultationServiceImplTest {
         consultationId = UUID.randomUUID();
         patient = new Patient(); patient.setId(patientId); patient.setFirstName("John"); patient.setLastName("Doe");
         hospital = new Hospital(); hospital.setId(hospitalId); hospital.setName("General Hospital");
-        staff = new Staff(); staff.setId(staffId);
+        staff = new Staff(); staff.setId(staffId); staff.setHospital(hospital);
+        com.example.hms.model.User staffUser = new com.example.hms.model.User(); staffUser.setId(UUID.randomUUID());
+        staff.setUser(staffUser);
         // The self-proxy this used to wire is gone: getAllConsultations now
         // calls a private shared body instead of re-entering the public
         // method, so there is no self-invocation left to route.
@@ -176,6 +179,8 @@ class ConsultationServiceImplTest {
     @Test void acknowledgeConsultation_success() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // an unassigned consult: only a coordinator takes it (QA D735)
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
     }
@@ -187,7 +192,10 @@ class ConsultationServiceImplTest {
 
     @Test void completeConsultation_success() {
         CompleteConsultationRequestDTO u = CompleteConsultationRequestDTO.builder().recommendations("All good").consultantNote("All good").build();
-        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.IN_PROGRESS)));
+        Consultation inProgress = buildConsultation(ConsultationStatus.IN_PROGRESS);
+        inProgress.setConsultant(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(inProgress));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         ConsultationResponseDTO r = service.completeConsultation(consultationId, u);
         assertThat(r.getStatus()).isEqualTo(ConsultationStatus.COMPLETED);
@@ -207,7 +215,10 @@ class ConsultationServiceImplTest {
     }
 
     @Test void cancelConsultation_success() {
-        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         ConsultationResponseDTO r = service.cancelConsultation(consultationId, "No longer needed");
         assertThat(r.getStatus()).isEqualTo(ConsultationStatus.CANCELLED);
@@ -226,6 +237,7 @@ class ConsultationServiceImplTest {
 
     @Test void updateConsultation_setsScheduledStatus() {
         ConsultationUpdateDTO u = new ConsultationUpdateDTO(); u.setScheduledAt(LocalDateTime.now().plusDays(1));
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // QA D735: a coordinator reschedules
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.ACKNOWLEDGED)));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.updateConsultation(consultationId, u).getStatus()).isEqualTo(ConsultationStatus.SCHEDULED);
