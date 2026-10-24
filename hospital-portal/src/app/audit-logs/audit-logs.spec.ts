@@ -33,6 +33,7 @@ describe('AuditLogsComponent (QA D330)', () => {
         DESC: {
           PATIENT_RECORD_VIEWED: 'Dossier patient consulté',
           ROLE_ASSIGNED: 'Rôle {{role}} attribué à {{name}}',
+          LAB_DEFINITION_STEP: 'Examen {{code}} : étape {{step}}, statut {{status}}.',
         },
       },
       PORTAL: {
@@ -91,6 +92,25 @@ describe('AuditLogsComponent (QA D330)', () => {
     expect(text).toContain('Soumission à la revue qualité');
     expect(text).toContain('Infirmier(ère)');
     expect(text).not.toMatch(/SUBMIT_FOR_QA|ROLE_NURSE/);
+  });
+
+  it('D774: keeps identifiers verbatim (test codes, person names, underscore codes)', () => {
+    expect(
+      component.describe(
+        row({ eventDescription: 'Lab test GLU and HB_A1C updated by ROLE_NURSE' }),
+      ),
+    ).toBe('Lab test GLU and HB_A1C updated by Infirmier(ère)');
+    expect(
+      component.describe(row({ eventDescription: "Assigned role 'ROLE_PATIENT' to AWA TRAORE" })),
+    ).toBe('Rôle Patient(e) attribué à AWA TRAORE');
+    expect(
+      component.describe(
+        row({
+          eventDescription:
+            'Lab test definition GLU: approval step SUBMIT_FOR_QA, new status PENDING_QA_REVIEW.',
+        }),
+      ),
+    ).toBe('Examen GLU : étape Soumission à la revue qualité, statut PENDING_QA_REVIEW.');
   });
 
   it('does not glue the stat-card number to its label', () => {

@@ -39,6 +39,8 @@ interface DescriptionPattern {
   readonly re: RegExp;
   readonly key: string;
   readonly params?: (m: RegExpExecArray) => Record<string, string>;
+  /** Params that are codes to read in the reader's language; every other param is verbatim. */
+  readonly localise?: Readonly<Record<string, 'role' | 'labDefinitionAction'>>;
 }
 const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
   { re: /^Patient record viewed$/, key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED' },
@@ -59,16 +61,19 @@ const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
     re: /^Assigned role '([^']+)' to (.+)$/,
     key: 'AUDIT.DESC.ROLE_ASSIGNED',
     params: (m) => ({ role: m[1], name: m[2] }),
+    localise: { role: 'role' },
   },
   {
     re: /^Confirmed assignment '([^']+)' for (.+)$/,
     key: 'AUDIT.DESC.ASSIGNMENT_CONFIRMED',
     params: (m) => ({ role: m[1], name: m[2] }),
+    localise: { role: 'role' },
   },
   {
     re: /^Lab test definition (\S+): approval step (\S+), new status (.+?)\.$/,
     key: 'AUDIT.DESC.LAB_DEFINITION_STEP',
     params: (m) => ({ code: m[1], step: m[2], status: m[3] }),
+    localise: { step: 'labDefinitionAction' },
   },
 ];
 /** A raw enum token in free text: ROLE_PATIENT, SUBMIT_FOR_QA, PENDING_QA_REVIEW. */
@@ -126,20 +131,32 @@ export class AuditLogsComponent implements OnInit {
       if (m) {
         const params = p.params ? p.params(m) : {};
         const localised: Record<string, string> = {};
-        for (const [k, v] of Object.entries(params)) localised[k] = this.label(v);
+        for (const [k, v] of Object.entries(params)) {
+          const domain = p.localise?.[k];
+          localised[k] = domain ? this.label(v, domain) : v;
+        }
         return this.translate.instant(p.key, localised);
       }
     }
     return description.replaceAll(RAW_TOKEN, (token) => this.label(token));
   }
 
-  /** QA D774: a role or enum token in the reader's language; other text as it is. */
-  private label(value: string): string {
+  /**
+   * QA D774: a role or enum token in the reader's language. Only a real label
+   * replaces it: when the lookup would merely prettify (GLU -> "Glu",
+   * HB_A1C -> "Hb A1c"), the token is an identifier and is kept verbatim.
+   */
+  private label(value: string, domain?: string): string {
     if (!/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
-    if (value.startsWith('ROLE_')) {
-      return this.enumLabels.transform(bareRole(value), 'role') || value;
-    }
-    return this.enumLabels.transform(value) || value;
+    const role = value.startsWith('ROLE_');
+    const code = (role ? bareRole(value) : value) ?? value;
+    const group = role ? 'role' : domain;
+    const label = this.enumLabels.transform(code, group);
+    const prettified = code
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+    return label && label !== prettified ? label : value;
   }
 
   logs = signal<AuditEventLog[]>([]);
