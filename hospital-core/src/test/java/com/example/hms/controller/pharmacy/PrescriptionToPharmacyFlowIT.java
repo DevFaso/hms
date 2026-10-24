@@ -666,7 +666,9 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                                 "medicationName", MEDICATION,
                                 "dosage", "500",
                                 "frequency", "BID",
-                                "duration", "5 days"))))
+                                "duration", "5 days",
+                                "quantity", 10,
+                                "quantityUnit", "tablet"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andReturn().getResponse().getContentAsString();
@@ -688,7 +690,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
             }
         });
 
-        // The request DTO carries no quantity; the dispense arithmetic needs one.
+        // QA D706: the quantity now comes from the request; the rest is set here.
         transactionTemplate.executeWithoutResult(tx -> {
             Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
             rx.setQuantity(BigDecimal.TEN);

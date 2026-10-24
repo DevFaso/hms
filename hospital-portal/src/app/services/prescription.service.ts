@@ -175,6 +175,9 @@ export interface PrescriptionRequest {
   /** D109: the route the MAR five-rights check compares the bedside entry with. */
   route?: string;
   duration?: string;
+  /** QA D706: the quantity to hand over per fill; the dispense is capped at it. */
+  quantity?: number | null;
+  quantityUnit?: string;
   notes?: string;
   status?: PrescriptionStatusType;
   forceOverride?: boolean;

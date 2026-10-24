@@ -156,6 +156,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        requirePrescribedQuantityForControlled(entity);
         recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
@@ -914,6 +915,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
+    /**
+     * QA D706: a controlled substance states how much may be handed over,
+     * on every path that creates one (the form, order sets), because
+     * the pharmacy caps the dispense at it and refuses one without it.
+     */
+    private static void requirePrescribedQuantityForControlled(Prescription prescription) {
+        if (prescription.isControlledSubstance() && prescription.getQuantity() == null) {
+            throw new BusinessException("prescription.quantity.requiredControlled");
+        }
+    }
+
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
@@ -996,6 +1008,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA D706: no quantity check on an edit - a legacy controlled row must
+        // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.

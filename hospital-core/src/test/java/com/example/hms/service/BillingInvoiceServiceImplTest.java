@@ -983,6 +983,39 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void qaD724_staffPaymentCannotSettleInFullWhileADeclarationIsPending() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        BigDecimal total = invoice.getTotalAmount();
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("10.00"));
+
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO full =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(total, "cash", null, null);
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, full, null, Locale.ENGLISH));
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD724_staffPaymentBesideAPendingDeclarationIsTaken() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        BigDecimal rest = invoice.getTotalAmount().subtract(new BigDecimal("10.00"));
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("10.00"));
+
+        billingInvoiceService.recordStaffPayment(invoice.getId(),
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(rest, "cash", null, null), null, Locale.ENGLISH);
+
+        verify(paymentTransactionRepository).save(any());
+    }
+
+    @Test
     void recordStaffPayment_withNoMethodRecordsOther() {
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = payableInvoice(patientId);

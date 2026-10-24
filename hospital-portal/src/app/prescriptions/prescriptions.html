@@ -863,6 +863,34 @@
         </div>
         <div class="form-row">
           <div class="field">
+            <label for="rx-quantity">{{ 'PRESCRIPTIONS.PRESCRIBED_QUANTITY' | translate }} *</label>
+            <input
+              id="rx-quantity"
+              type="number"
+              min="0.01"
+              step="any"
+              required
+              [(ngModel)]="form.quantity"
+              [readonly]="editingSigned()"
+              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="field">
+            <label for="rx-quantity-unit">{{
+              'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT' | translate
+            }}</label>
+            <input
+              id="rx-quantity-unit"
+              type="text"
+              maxlength="60"
+              [(ngModel)]="form.quantityUnit"
+              [readonly]="editingSigned()"
+              [placeholder]="'PRESCRIPTIONS.PRESCRIBED_QUANTITY_UNIT_PLACEHOLDER' | translate"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
             <label for="rx-duration">{{ 'PRESCRIPTIONS.DURATION' | translate }}</label>
             <input
               id="rx-duration"

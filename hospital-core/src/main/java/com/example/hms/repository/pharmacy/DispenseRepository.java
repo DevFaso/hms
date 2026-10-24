@@ -90,6 +90,14 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
             @Param("prescriptionId") UUID prescriptionId,
             @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
 
+    /**
+     * QA D706: what a new fill is capped against - every fill not cancelled,
+     * a prepared one still waiting for collection included.
+     */
+    default BigDecimal sumQuantityCommittedForPrescription(UUID prescriptionId) {
+        return sumQuantityDispensedForPrescription(prescriptionId, List.of(DispenseStatus.CANCELLED));
+    }
+
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 
     /** True when the prescription has an open preparation (status PENDING). */

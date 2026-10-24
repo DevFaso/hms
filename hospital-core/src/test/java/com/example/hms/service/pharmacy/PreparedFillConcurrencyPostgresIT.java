@@ -117,7 +117,7 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import({DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
         DispenseVerificationService.class,
-        ControlledSubstanceGuard.class, ControlledStockWitness.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
+        ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
         StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
         PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class, EncryptionKeyHolder.class,
         PreparedFillConcurrencyPostgresIT.Config.class})

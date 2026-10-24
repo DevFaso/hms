@@ -33,6 +33,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 
+/** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
+function localIsoDate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 /**
  * Why a work-queue row is not a plain fill, keyed by the backend's
  * `attentionReason`. The projection reports ONE reason by precedence
@@ -579,9 +586,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
-    // Date-only comparison: a lot is good through the end of its expiry day,
-    // which is what "use before end of" on the pack means.
-    return lot.expiryDate < new Date().toISOString().slice(0, 10);
+    // QA D710: date-only comparison, and a lot is expired ON its expiry date,
+    // the same rule as the server's receipt, pick, check and expiry report.
+    return lot.expiryDate <= localIsoDate(new Date());
   }
 
   /** The lot currently chosen in the form, if any. */
