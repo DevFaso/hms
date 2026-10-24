@@ -26,6 +26,7 @@ import {
   NurseOrderTask,
   NurseHandoff,
   NurseHandoffCreateRequest,
+  NurseHandoffRecipient,
   NurseAnnouncement,
   NurseDashboardSummary,
   NurseWorkboardPatient,
@@ -153,6 +154,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* Handoff create dialog (P0 #1 — real SBAR handoffs) */
   handoffCreateOpen = signal(false);
   handoffForm = signal<Partial<NurseHandoffCreateRequest>>({});
+  /** QA D776: the colleagues the handoff can be addressed to. */
+  handoffRecipients = signal<NurseHandoffRecipient[]>([]);
   handoffPatient = signal<PatientResponse | null>(null);
   handoffCreating = signal(false);
 
@@ -661,6 +664,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.handoffForm.set({});
     this.handoffPatient.set(null);
     this.handoffCreateOpen.set(true);
+    this.nurseService.getHandoffRecipients().subscribe({
+      next: (rows) => this.handoffRecipients.set(rows),
+      error: () => this.handoffRecipients.set([]),
+    });
   }
 
   closeHandoffCreate(): void {
@@ -691,6 +698,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // QA D331: the S of SBAR is required; the server refuses a blank one too.
     if (!form.situation?.trim()) {
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED'));
+      return;
+    }
+    // QA D776: a handoff is handed to a named colleague; the server refuses none.
+    if (!form.recipientUserId) {
+      this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED'));
       return;
     }
     this.handoffCreating.set(true);
@@ -732,6 +744,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.completedHandoffsLoading.set(false);
       },
     });
+  }
+
+  /**
+   * QA D776: only the colleague a handoff is addressed to completes it (the
+   * server decides and says so per row); the author is never offered it.
+   */
+  canCompleteHandoff(h: NurseHandoff): boolean {
+    return h.status === 'PENDING' && h.completableByMe === true;
   }
 
   completeHandoff(handoffId: string): void {

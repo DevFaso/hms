@@ -152,12 +152,15 @@ public interface MaternalHistoryRepository extends JpaRepository<MaternalHistory
     Page<MaternalHistory> findHighRiskByHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     /**
-     * Find maternal history records requiring provider review.
+     * Find maternal history records requiring provider review: every record
+     * not yet reviewed, which is exactly the set the chart badges "En attente
+     * de revue". QA D770: the query also required dataComplete, so three
+     * badged records left the worklist empty; an incomplete history needs a
+     * provider's eye at least as much as a complete one.
      */
     @Query("""
         SELECT mh FROM MaternalHistory mh
         WHERE mh.hospital.id = :hospitalId
-          AND mh.dataComplete = true
           AND (mh.reviewedByProvider IS NULL OR mh.reviewedByProvider = false)
         ORDER BY mh.recordedDate DESC
         """)

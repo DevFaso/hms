@@ -79,6 +79,17 @@ export interface NurseHandoff {
   /** Set once the handoff is completed — absent on PENDING rows. */
   completedAt?: string | null;
   completedByName?: string | null;
+  /** QA D776: who the handoff is addressed to (absent on legacy rows). */
+  recipientUserId?: string | null;
+  recipientName?: string | null;
+  /** QA D776: the server's word on whether the caller may complete it. */
+  completableByMe?: boolean | null;
+}
+
+/** QA D776: a colleague a handoff can be addressed to. */
+export interface NurseHandoffRecipient {
+  userId: string;
+  displayName: string;
 }
 
 export interface NurseHandoffCreateRequest {
@@ -88,6 +99,8 @@ export interface NurseHandoffCreateRequest {
   background?: string;
   assessment?: string;
   recommendation?: string;
+  /** QA D776: required — the colleague the patient is handed over to. */
+  recipientUserId: string;
 }
 
 export interface NurseAnnouncement {
@@ -324,6 +337,10 @@ export class NurseTaskService {
     let httpParams = new HttpParams();
     if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
     return this.http.post<NurseHandoff>(`${this.baseUrl}/handoffs`, data, { params: httpParams });
+  }
+
+  getHandoffRecipients(): Observable<NurseHandoffRecipient[]> {
+    return this.http.get<NurseHandoffRecipient[]>(`${this.baseUrl}/handoffs/recipients`);
   }
 
   completeHandoff(handoffId: string): Observable<void> {

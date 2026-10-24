@@ -120,6 +120,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         NewbornAssessment assessment =
             buildAssessment(patient, hospital, registration, staff, documentedBy, request);
         assessment.setDeliveryRecord(deliveryRecord);
+        requireNotBeforeBirth(assessment.getAssessmentTime(), deliveryRecord,
+            recordedOnNewbornChart ? patient : null);
         evaluateAssessment(assessment);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
@@ -173,6 +175,27 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return assessments.stream()
             .map(mapper::toResponse)
             .toList();
+    }
+
+    /**
+     * QA D762: an assessment at birth -3 h was accepted and counted toward the
+     * immediate checks. A newborn is assessed after it is born: not before the
+     * delivery's birth time, nor, on the newborn's own chart, before its date
+     * of birth.
+     */
+    private static void requireNotBeforeBirth(LocalDateTime assessmentTime,
+                                              com.example.hms.model.labor.DeliveryRecord deliveryRecord,
+                                              Patient newborn) {
+        if (assessmentTime == null) {
+            return;
+        }
+        LocalDateTime birth = deliveryRecord != null ? deliveryRecord.getBirthDateTime() : null;
+        if (birth == null && newborn != null && newborn.getDateOfBirth() != null) {
+            birth = newborn.getDateOfBirth().atStartOfDay();
+        }
+        if (birth != null && assessmentTime.isBefore(birth)) {
+            throw new BusinessException("maternity.newborn.assessmentTime.beforeBirth");
+        }
     }
 
     private NewbornAssessment buildAssessment(Patient patient,

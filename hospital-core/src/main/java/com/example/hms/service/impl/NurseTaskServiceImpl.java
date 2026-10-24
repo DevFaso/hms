@@ -205,6 +205,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final ObjectMapper objectMapper;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
+    private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+
+    /** QA D776: the roles a patient can be handed over to. */
+    static final Set<String> HANDOFF_RECIPIENT_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -721,7 +725,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
        ═══════════════════════════════════════════════════════════════════ */
 
     @Override
-    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit, String status) {
+    public List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID viewerUserId, UUID hospitalId,
+                                                            int limit, String status) {
         if (hospitalId == null) return List.of();
         int effectiveLimit = clampLimit(limit);
         Set<UUID> scope = assignedPatientIds(nurseUserId, hospitalId);
@@ -739,9 +744,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, effectiveStatus,
                 PageRequest.of(0, HANDOFF_SCAN_PAGE))
             .stream()
-            .filter(h -> inScope(h.getPatient(), scope))
+            // QA D776: a handoff addressed to me is mine whoever the patient's nurse is.
+            .filter(h -> inScope(h.getPatient(), scope) || addressedTo(h, nurseUserId))
             .limit(effectiveLimit)
-            .map(this::toHandoffSummary)
+            // QA D785: completableByMe is about the caller, not the filter.
+            // It was computed for nurseUserId, which is null unless
+            // assignee=me, so every other list said false to the recipient.
+            .map(h -> toHandoffSummary(h, viewerUserId))
             .toList();
     }
 
@@ -770,6 +779,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("nurse.handoff.situation.required");
         }
 
+        // QA D776: a handoff is handed TO someone: a colleague at this
+        // hospital who can take the patient, never the author.
+        UUID recipientId = request.getRecipientUserId();
+        if (recipientId == null) {
+            throw new BusinessException("nurse.handoff.recipient.required");
+        }
+        if (recipientId.equals(nurseUserId)) {
+            throw new BusinessException("nurse.handoff.recipient.notSelf");
+        }
+        if (!assignmentRepository.existsActiveWitness(recipientId, hospitalId, HANDOFF_RECIPIENT_ROLE_CODES)) {
+            throw new BusinessException("nurse.handoff.recipient.invalid");
+        }
+
         NurseHandoff handoff = NurseHandoff.builder()
             .hospital(hospital)
             .patient(patient)
@@ -779,9 +801,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .assessment(trimToNull(request.getAssessment()))
             .recommendation(trimToNull(request.getRecommendation()))
             .createdByName(resolveNurseName(nurseUserId))
+            .createdByUserId(nurseUserId)
+            .recipientUserId(recipientId)
+            .recipientName(resolveNurseName(recipientId))
             .build();
 
-        return toHandoffSummary(nurseHandoffRepository.save(handoff));
+        return toHandoffSummary(nurseHandoffRepository.save(handoff), nurseUserId);
     }
 
     @Override
@@ -800,13 +825,56 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (STATUS_COMPLETED.equals(handoff.getStatus())) {
             return; // already completed — keep the endpoint idempotent
         }
+        // QA D776: the author completed her own handoff. The recipient takes
+        // the patient and completes it; a legacy row (no recipient) may be
+        // completed by anyone but its author.
+        if (!mayComplete(handoff, nurseUserId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("nurse.handoff.complete.recipientOnly"));
+        }
         handoff.setStatus(STATUS_COMPLETED);
         handoff.setCompletedAt(LocalDateTime.now());
         handoff.setCompletedByName(resolveNurseName(nurseUserId));
         nurseHandoffRepository.save(handoff);
     }
 
-    private NurseHandoffSummaryDTO toHandoffSummary(NurseHandoff h) {
+    private static boolean addressedTo(NurseHandoff h, UUID userId) {
+        return userId != null && userId.equals(h.getRecipientUserId());
+    }
+
+    /** QA D776: who may complete a handoff (see {@link #completeHandoff}). */
+    static boolean mayComplete(NurseHandoff h, UUID userId) {
+        if (userId == null) {
+            return false;
+        }
+        if (h.getRecipientUserId() != null) {
+            return h.getRecipientUserId().equals(userId);
+        }
+        return !userId.equals(h.getCreatedByUserId());
+    }
+
+    @Override
+    public List<com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO> getHandoffRecipients(UUID nurseUserId, UUID hospitalId) {
+        if (hospitalId == null) return List.of();
+        java.util.Map<UUID, com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO> byUser = new java.util.LinkedHashMap<>();
+        for (com.example.hms.model.UserRoleHospitalAssignment a : assignmentRepository.findStaffRowsByHospitalId(hospitalId)) {
+            User user = a.getUser();
+            if (!Boolean.TRUE.equals(a.getActive()) || user == null || !user.isActive() || user.isDeleted()
+                || a.getRole() == null || a.getRole().getCode() == null
+                || user.getId() == null || user.getId().equals(nurseUserId)
+                || !HANDOFF_RECIPIENT_ROLE_CODES.contains(a.getRole().getCode().toUpperCase(Locale.ROOT))) {
+                continue;
+            }
+            byUser.putIfAbsent(user.getId(), new com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO(
+                user.getId(), formatFullName(user.getFirstName(), user.getLastName(), user.getUsername())));
+        }
+        return byUser.values().stream()
+            .sorted(java.util.Comparator.comparing(com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO::displayName,
+                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+            .toList();
+    }
+
+    private NurseHandoffSummaryDTO toHandoffSummary(NurseHandoff h, UUID viewerId) {
         Patient patient = h.getPatient();
         return NurseHandoffSummaryDTO.builder()
             .id(h.getId())
@@ -822,6 +890,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .createdByName(h.getCreatedByName())
             .completedAt(h.getCompletedAt())
             .completedByName(h.getCompletedByName())
+            .recipientUserId(h.getRecipientUserId())
+            .recipientName(h.getRecipientName())
+            .completableByMe(STATUS_PENDING.equals(h.getStatus()) && mayComplete(h, viewerId))
             .build();
     }
 
@@ -904,7 +975,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findByHospital_IdAndStatusOrderByCreatedAtDesc(hospitalId, STATUS_PENDING,
                 PageRequest.of(0, HANDOFF_SCAN_PAGE))
             .stream()
-            .filter(h -> inScope(h.getPatient(), scope))
+            // QA D776: a handoff addressed to me is mine whoever the patient's nurse is.
+            .filter(h -> inScope(h.getPatient(), scope) || addressedTo(h, nurseUserId))
             .count();
     }
 

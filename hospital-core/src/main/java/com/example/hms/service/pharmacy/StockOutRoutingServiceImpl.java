@@ -685,7 +685,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
     private void validateRoutableStatus(Prescription prescription) {
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("stock.routing.notRoutable", String.valueOf(prescription.getStatus()));
+            throw new BusinessException("stock.routing.notRoutable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
     }
 

@@ -407,6 +407,30 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("QA D779: half a tablet is not prepared either; the shelf is left alone")
+        void aFractionOfATabletIsNotPrepared() {
+            inventoryItem.setUnit("comprimé");
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+            dto.setQuantityRequested(new BigDecimal("2.5"));
+            dto.setQuantityDispensed(new BigDecimal("2.5"));
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("whole units");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            assertNothingPrepared();
+        }
+
+        @Test
         @DisplayName("AC-2: a CRITICAL CDS alert without an override reason is refused")
         void criticalCdsIsRefused() {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);

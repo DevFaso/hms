@@ -845,6 +845,66 @@ class InventoryServiceImplTest {
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
             verify(stockLotRepository, never()).save(any());
         }
+
+        /** QA D779, the exact replay: POST /pharmacy/inventory/lots, qty 2.5 of a tablet item: 201 before. */
+        @Test
+        @DisplayName("D779: a tablet lot of 2.5 is refused, nothing written")
+        void d779_fractionalTabletsAreRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stock.quantity.wholeUnitsOnly".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D779: a measured item (ml) may still be received by a fraction")
+        void d779_measuredItemKeepsFractions() {
+            inventoryItem.setUnit("ml");
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            // Gets past the whole-units rule and stops at the cost rule.
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+        }
+
+        /** QA D778, the exact replay: a lot with unitCost -10: 201 before. */
+        @Test
+        @DisplayName("D778: a negative unit cost is refused, nothing written")
+        void d778_negativeUnitCostIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D778: the request DTO itself rejects a negative unit cost (bean validation, 400)")
+        void d778_dtoConstraint() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            try (jakarta.validation.ValidatorFactory f = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+                org.assertj.core.api.Assertions.assertThat(f.getValidator().validate(dto))
+                        .anyMatch(v -> "unitCost".equals(v.getPropertyPath().toString()));
+            }
+        }
     }
 
     // ── getStockLot ──────────────────────────────────────────────────────

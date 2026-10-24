@@ -89,4 +89,12 @@ describe('GoodsReceiptComponent', () => {
     component.submitForm();
     expect(svc.receiveStock.calls.mostRecent().args[0].witnessedBy).toBeUndefined();
   });
+
+  it('QA D778: a negative unit cost is not sent', () => {
+    fillForm('inv-par');
+    component.form.unitCost = -10;
+    component.submitForm();
+    expect(svc.receiveStock).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.UNIT_COST_NEGATIVE');
+  });
 });

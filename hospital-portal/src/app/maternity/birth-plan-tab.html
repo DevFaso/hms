@@ -78,10 +78,13 @@
                 <span class="status-badge status-completed">
                   {{ 'BIRTH_PLAN.REVIEWED' | translate }}
                 </span>
-              } @else {
+              } @else if (p.providerReviewRequired !== false) {
+                <!-- QA D770: "pending review" only where the worklist lists it -->
                 <span class="status-badge status-submitted">
                   {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
                 </span>
+              } @else {
+                —
               }
             </td>
             <td class="actions-cell">

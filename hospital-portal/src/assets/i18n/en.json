@@ -3762,7 +3762,8 @@
       "NOTE_FAILED": "Failed to save care note",
       "NO_ENCOUNTER": "No active encounter found for this patient.",
       "ENCOUNTER_LOOKUP_FAILED": "Failed to look up encounter.",
-      "HANDOFF_SITUATION_REQUIRED": "Describe the situation (the S of SBAR) before handing over."
+      "HANDOFF_SITUATION_REQUIRED": "Describe the situation (the S of SBAR) before handing over.",
+      "HANDOFF_RECIPIENT_REQUIRED": "Choose the colleague the patient is handed over to."
     },
     "MED_ACTION": {
       "GIVEN": "given",
@@ -3783,7 +3784,10 @@
     "ACVPU_PAIN": "Responds to pain",
     "ACVPU_UNRESPONSIVE": "Unresponsive",
     "OVERRIDE_EXPLAIN": "The bedside five-rights scan is done in the eMAR. To record this dose as given from here, enter the reason for the override.",
-    "OPEN_EMAR": "Open the eMAR to scan instead"
+    "OPEN_EMAR": "Open the eMAR to scan instead",
+    "HANDOFF_RECIPIENT": "Handed over to",
+    "HANDOFF_RECIPIENT_PLACEHOLDER": "Choose a colleague",
+    "HANDOFF_TO": "to"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -8509,7 +8513,8 @@
     "UNIT_PRICE": "Unit price (F CFA)",
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
-    "PRICE_SAVE_FAILED": "The price could not be saved."
+    "PRICE_SAVE_FAILED": "The price could not be saved.",
+    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

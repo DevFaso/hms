@@ -54,6 +54,7 @@ describe('ReferralsComponent', () => {
         isSuperAdmin: signal(false),
         globalView: signal(false),
         selectedHospitalId: signal<string | null>(null),
+        effectiveHospitalIdForRequest: signal<string | null>('h-A'),
       },
     );
     roleContextStub.hasAnyActiveRole.and.returnValue(true);
@@ -160,6 +161,58 @@ describe('ReferralsComponent', () => {
     component.selectedReferral.set(theirs);
     fixture.detectChanges();
     expect(el.querySelector('.btn-danger')).toBeNull();
+  });
+
+  function showAsDoctor(ref: any): HTMLElement {
+    roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_DOCTOR'),
+    );
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    component.loading.set(false);
+    component.filtered.set([ref]);
+    fixture.detectChanges();
+    return fixture.nativeElement as HTMLElement;
+  }
+
+  it('QA D775: the sending hospital is not offered Acknowledge or Reject (403 at the API)', () => {
+    const sent = {
+      id: 'r-3',
+      status: 'SUBMITTED',
+      hospitalId: 'h-A',
+      receivingHospitalId: 'h-B',
+      referringProviderId: 'staff-1',
+    } as any;
+    const el = showAsDoctor(sent);
+    expect(el.querySelector('.action-link.acknowledge')).toBeNull();
+    expect(el.querySelector('.action-link.reject')).toBeNull();
+    component.selectedReferral.set(sent);
+    fixture.detectChanges();
+    const labels = Array.from(
+      el.querySelectorAll('.modal-actions button, .btn-primary, .btn-danger'),
+    ).map((b) => b.textContent ?? '');
+    expect(labels.some((t) => t.includes('REFERRALS.ACTION_ACKNOWLEDGE'))).toBeFalse();
+    expect(labels.some((t) => t.includes('REFERRALS.ACTION_REJECT'))).toBeFalse();
+    // The ACKNOWLEDGED steps are the receiver's too.
+    expect(component.isReceivingSide({ ...sent, status: 'ACKNOWLEDGED' })).toBeFalse();
+  });
+
+  it('QA D775: the receiving hospital keeps Acknowledge and Reject', () => {
+    const received = {
+      id: 'r-4',
+      status: 'SUBMITTED',
+      hospitalId: 'h-B',
+      receivingHospitalId: 'h-A',
+      referringProviderId: 'staff-other',
+    } as any;
+    const el = showAsDoctor(received);
+    expect(el.querySelector('.action-link.acknowledge')).not.toBeNull();
+    expect(el.querySelector('.action-link.reject')).not.toBeNull();
+  });
+
+  it('QA D775: an internal referral (no receiving hospital) is acted on at its own hospital', () => {
+    expect(component.isReceivingSide({ id: 'r-5', hospitalId: 'h-A' } as any)).toBeTrue();
   });
 
   it('QA D611: a refused cancel shows the server reason in the dialog', () => {

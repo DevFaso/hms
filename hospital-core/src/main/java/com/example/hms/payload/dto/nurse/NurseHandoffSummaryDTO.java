@@ -34,4 +34,9 @@ public class NurseHandoffSummaryDTO {
      */
     private LocalDateTime completedAt;
     private String completedByName;
+    /** QA D776: who the handoff is addressed to (null on legacy rows). */
+    private UUID recipientUserId;
+    private String recipientName;
+    /** QA D776: true when the caller may complete it (the recipient; anyone but the author on a legacy row). */
+    private Boolean completableByMe;
 }
