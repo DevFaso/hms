@@ -46,6 +46,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Access control on the three encounter READS.
@@ -1003,10 +1004,10 @@ class EncounterServiceImplReadAccessControlTest {
         Encounter anchor = new Encounter();
         anchor.setId(UUID.randomUUID());
         anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
-        org.mockito.Mockito.when(encounterRepository.findByPatient_Id(patientId)).thenReturn(java.util.List.of(visit, anchor));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(java.util.List.of(visit, anchor));
 
         assertThat(service.getEncountersForPortalPatient(patientId)).hasSize(1);
-        org.mockito.Mockito.verify(encounterMapper).toEncounterResponseDTO(visit);
-        org.mockito.Mockito.verify(encounterMapper, org.mockito.Mockito.never()).toEncounterResponseDTO(anchor);
+        verify(encounterMapper).toEncounterResponseDTO(visit);
+        verify(encounterMapper, never()).toEncounterResponseDTO(anchor);
     }
 }

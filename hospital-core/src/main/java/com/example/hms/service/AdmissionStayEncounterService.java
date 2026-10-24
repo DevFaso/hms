@@ -150,23 +150,27 @@ public class AdmissionStayEncounterService {
                 by != null && by.getUser() != null ? by.getUser().getId() : null);
         }
         encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).ifPresent(enc -> {
-            if (!isBlank(dischargeDiagnosis)) {
-                enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
-            }
-            if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
-                enc.setFollowUpInstructions(admission.getDischargeInstructions());
-            }
-            if (isBlank(enc.getNotes()) && !isBlank(admission.getDischargeSummary())) {
-                enc.setNotes(truncate(admission.getDischargeSummary(), 2048));
-            }
-            if (isBlank(enc.getDischargeDiagnoses()) && !isBlank(admission.getPrimaryDiagnosisDescription())) {
-                enc.setDischargeDiagnoses(toJsonArray(admission.getPrimaryDiagnosisDescription()));
-            }
+            fillStayEncounter(enc, admission, dischargeDiagnosis);
             encounterRepository.save(enc);
             recordStayDischargeSummary(admission, enc);
         });
         closePendingHandoffs(admission);
         closePendingNursingTasks(admission);
+    }
+
+    private void fillStayEncounter(Encounter enc, Admission admission, String dischargeDiagnosis) {
+        if (!isBlank(dischargeDiagnosis)) {
+            enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
+        }
+        if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
+            enc.setFollowUpInstructions(admission.getDischargeInstructions());
+        }
+        if (isBlank(enc.getNotes()) && !isBlank(admission.getDischargeSummary())) {
+            enc.setNotes(truncate(admission.getDischargeSummary(), 2048));
+        }
+        if (isBlank(enc.getDischargeDiagnoses()) && !isBlank(admission.getPrimaryDiagnosisDescription())) {
+            enc.setDischargeDiagnoses(toJsonArray(admission.getPrimaryDiagnosisDescription()));
+        }
     }
 
     /**
@@ -281,13 +285,7 @@ public class AdmissionStayEncounterService {
         for (com.example.hms.model.Prescription rx : prescriptions) {
             // QA D757: a ward order ends with the stay; only an order the
             // prescriber marked for home goes home.
-            if (!rx.isTakeHome()) {
-                continue;
-            }
-            // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
-            if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
-                || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
-                || (rx.getStatus() != null && rx.getStatus().isWithdrawn())) {
+            if (!goesHome(rx)) {
                 continue;
             }
             summary.addMedicationReconciliation(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
@@ -300,6 +298,17 @@ public class AdmissionStayEncounterService {
                 .prescriptionId(rx.getId())
                 .build());
         }
+    }
+
+    private static boolean goesHome(com.example.hms.model.Prescription rx) {
+        if (!rx.isTakeHome()) {
+            return false;
+        }
+        // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
+        var status = rx.getStatus();
+        return status != com.example.hms.enums.PrescriptionStatus.DRAFT
+            && status != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+            && (status == null || !status.isWithdrawn());
     }
 
     private static void addStayFollowUps(com.example.hms.model.discharge.DischargeSummary summary, Admission admission) {

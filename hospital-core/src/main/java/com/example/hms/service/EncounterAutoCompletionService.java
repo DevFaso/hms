@@ -96,7 +96,7 @@ public class EncounterAutoCompletionService {
         // the reception had opened seconds before then "began after the
         // admission" and was left IN_PROGRESS. A visit is excluded only when
         // it began after the admission was both dated AND recorded.
-        LocalDateTime recordedAt = admission.getCreatedAt() != null ? admission.getCreatedAt() : LocalDateTime.now();
+        LocalDateTime recordedAt = admission.getCreatedAt() != null ? admission.getCreatedAt() : LocalDateTime.now(java.time.ZoneId.systemDefault());
         LocalDateTime cutoff = admittedAt.isAfter(recordedAt) ? admittedAt : recordedAt;
         List<Encounter> open = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
                 admission.getPatient().getId(), admission.getHospital().getId(), TERMINAL_STATUSES).stream()

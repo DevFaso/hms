@@ -39,6 +39,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -315,7 +316,7 @@ class AdmissionControllerTest {
                     .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest());
 
-            verify(admissionService, org.mockito.Mockito.never()).dischargePatient(any(), any());
+            verify(admissionService, never()).dischargePatient(any(), any());
         }
     }
 
