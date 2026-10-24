@@ -695,17 +695,35 @@ public class DispenseServiceImpl implements DispenseService {
      * prescription lock, the fills to date plus this one stay within the
      * prescribed quantity (once per fill owed). A prescription with no
      * quantity predates the field: a controlled substance is refused until
-     * the prescriber states one; any other keeps the D95 behaviour.
+     * the prescriber states one; any other is capped at its regimen
+     * (dose x frequency x duration), or refused when that is unreadable.
      */
     private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
         if (prescription.getQuantity() == null) {
             if (controlledResolver.isControlled(prescription)) {
                 throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
             }
+            // QA D706 third round: 90 paracetamol tablets went out against a
+            // legacy "500 mg, 3 times a day, 3 days" (9 tablets) because a
+            // non-controlled row without a quantity had no ceiling at all. Its
+            // ceiling is read from the regimen; an unreadable regimen is
+            // refused until the quantity is recorded.
+            BigDecimal perFill = PrescribedQuantityEstimate.perFill(prescription);
+            if (perFill == null) {
+                throw new BusinessException("pharmacy.dispense.quantityUnknown");
+            }
+            int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
+            BigDecimal owed = perFill.multiply(BigDecimal.valueOf(1L + refillsUsed));
+            BigDecimal committed = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
+            BigDecimal left = owed.subtract(committed != null ? committed : BigDecimal.ZERO);
+            requireAtMost(requested, left.signum() > 0 ? left : BigDecimal.ZERO);
             return;
         }
         BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
-        BigDecimal remaining = FillAccounting.remaining(prescription, dispensedToDate);
+        requireAtMost(requested, FillAccounting.remaining(prescription, dispensedToDate));
+    }
+
+    private static void requireAtMost(BigDecimal requested, BigDecimal remaining) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
                     remaining.stripTrailingZeros().toPlainString());

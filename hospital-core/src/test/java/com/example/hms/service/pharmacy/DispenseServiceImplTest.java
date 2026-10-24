@@ -40,6 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -582,6 +584,67 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
+        @ParameterizedTest
+        @CsvSource({"three times a day,3 days,90", "three times a day,3 days,60", "3 fois par jour,3 jours,90",
+                "TID,3 days,10"})
+        @DisplayName("QA D706 retest 2: legacy paracetamol 500 mg x3/day x3 days (no quantity) caps at 9")
+        void aLegacyNonControlledPrescriptionIsCappedAtItsRegimen(String frequency, String duration, String qty) {
+            prescription.setQuantity(null);
+            prescription.setMedicationName("Paracétamol 500 mg");
+            prescription.setDosage("500 mg");
+            prescription.setFrequency(frequency);
+            prescription.setDuration(duration);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(BigDecimal.ZERO);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityRequested(new BigDecimal(qty));
+            dto.setQuantityDispensed(new BigDecimal(qty));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D706 retest 2: a legacy fill of 5 after 5 already given (of 9) is refused")
+        void aLegacyRegimenCountsTheFillsToDate() {
+            prescription.setQuantity(null);
+            prescription.setMedicationName("Paracétamol 500 mg");
+            prescription.setDosage("500 mg");
+            prescription.setFrequency("three times a day");
+            prescription.setDuration("3 days");
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(new BigDecimal("5"));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityRequested(new BigDecimal("5"));
+            dto.setQuantityDispensed(new BigDecimal("5"));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey())
+                            && e.getMessage().contains("4"));
+        }
+
+        @Test
+        @DisplayName("QA D706 retest 2: a legacy prescription whose regimen cannot be read is refused until a quantity is recorded")
+        void aLegacyPrescriptionWithAnUnreadableRegimenIsRefused() {
+            prescription.setQuantity(null);
+            prescription.setDosage("500 mg");
+            prescription.setFrequency("as needed");
+            prescription.setDuration("3 days");
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            DispenseRequestDTO dto = buildRequest();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.quantityUnknown".equals(((BusinessException) e).getMessageKey()));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
         @Test
         @DisplayName("QA D156: a controlled prescription nobody verified is not filled")
         void anUnverifiedControlledPrescriptionIsRefusedAtTheCounter() {
@@ -992,6 +1055,10 @@ class DispenseServiceImplTest {
         @DisplayName("D95: a complete fill of a prescription with no quantity is DISPENSED")
         void completeFillWithoutPrescribedQuantityIsDispensed() {
             prescription.setQuantity(null);
+            // A legacy regimen the dispense can read: 1 tablet x 2/day x 5 days = 10.
+            prescription.setDosage("1 comprimé");
+            prescription.setFrequency("2 fois par jour");
+            prescription.setDuration("5 jours");
             DispenseRequestDTO dto = buildRequest();
             Dispense entity = buildDispense(DispenseStatus.COMPLETED);
 
@@ -1019,6 +1086,10 @@ class DispenseServiceImplTest {
         @DisplayName("D95: a short fill of a prescription with no quantity stays PARTIALLY_FILLED")
         void shortFillWithoutPrescribedQuantityStaysPartial() {
             prescription.setQuantity(null);
+            // A legacy regimen the dispense can read: 1 tablet x 2/day x 5 days = 10.
+            prescription.setDosage("1 comprimé");
+            prescription.setFrequency("2 fois par jour");
+            prescription.setDuration("5 jours");
             DispenseRequestDTO dto = buildRequest();
             dto.setQuantityDispensed(BigDecimal.valueOf(5));
             Dispense entity = buildDispense(DispenseStatus.PARTIAL);
