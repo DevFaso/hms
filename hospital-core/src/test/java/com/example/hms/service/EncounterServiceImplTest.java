@@ -2535,6 +2535,54 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        void d761_aWalkInPostedAsArrivedIsStoredArrived() {
+            // The QA call: the reception's walk-in dialog posts POST /encounters
+            // with status ARRIVED; the entity's IN_PROGRESS default won, and
+            // triage then answered 400 "expected ARRIVED or TRIAGE".
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS); // the entity default
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            request.setStatus(EncounterStatus.ARRIVED);
+
+            service.createEncounter(request, locale);
+
+            org.mockito.ArgumentCaptor<Encounter> saved = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+            verify(encounterRepository).save(saved.capture());
+            assertThat(saved.getValue().getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+        }
+
+        @Test
+        void d761_aClinicianEncounterWithNoStatusKeepsItsInProgressDefault() {
+            // Path re-verified: the encounters page posts no status.
+            Encounter fresh = encounter();
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+
+            service.createEncounter(request(null, LocalDateTime.now()), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        @Test
+        void d761_aNewEncounterCannotBeCreatedCompleted() {
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setStatus(EncounterStatus.COMPLETED);
+
+            assertThatThrownBy(() -> service.createEncounter(request, locale))
+                .isInstanceOf(BusinessException.class);
+            verify(encounterRepository, never()).save(any());
+        }
+
+        @Test
         void createRefusesANestedNoteInAnotherClinicianName() {
             when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),

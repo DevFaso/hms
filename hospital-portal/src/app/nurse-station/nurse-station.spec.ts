@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
-import { NurseStationComponent } from './nurse-station';
+import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
 import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
@@ -606,5 +606,20 @@ describe('NurseStationComponent — two-tier polling', () => {
       (td) => td.textContent?.trim(),
     );
     expect(cells).toContain(expected);
+  });
+});
+
+describe('localInputToUtcIso (QA D777)', () => {
+  it('sends the nurse-picked local wall time as a UTC instant, not as a zone-less UTC guess', () => {
+    const picked = '2026-10-24T14:00';
+    const sent = localInputToUtcIso(picked);
+    expect(sent).toBe(new Date(2026, 9, 24, 14, 0).toISOString());
+    expect(sent?.endsWith('Z')).toBeTrue();
+  });
+
+  it('sends nothing for an empty or unreadable value', () => {
+    expect(localInputToUtcIso('')).toBeUndefined();
+    expect(localInputToUtcIso(undefined)).toBeUndefined();
+    expect(localInputToUtcIso('not a date')).toBeUndefined();
   });
 });

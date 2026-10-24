@@ -122,4 +122,37 @@ class InpatientOrderEndTest {
         rx.setCreatedAt(null);
         assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isFalse();
     }
+
+    /* ── QA D757: a take-home order outlives its stay; the pharmacy's own rule ── */
+
+    @Test
+    void d757_aTakeHomeOrderOnAClosedStayHasNotEnded() {
+        Encounter enc = new Encounter();
+        enc.setAdmissionId(UUID.randomUUID());
+        enc.setStatus(EncounterStatus.COMPLETED);
+        rx.setEncounter(enc);
+        rx.setTakeHome(true);
+        assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isFalse();
+        assertThat(InpatientOrderEnd.endedWithItsStay(rx)).isFalse();
+
+        rx.setTakeHome(false);
+        assertThat(InpatientOrderEnd.endedWithAStay(rx, List.of(stay))).isTrue();
+        assertThat(InpatientOrderEnd.endedWithItsStay(rx)).isTrue();
+    }
+
+    @Test
+    void d757_endedWithItsStay_onlyForAClosedStayEncounter() {
+        assertThat(InpatientOrderEnd.endedWithItsStay(null)).isFalse();
+        // No encounter, an outpatient visit, or a stay still open: not ended.
+        assertThat(InpatientOrderEnd.endedWithItsStay(rx)).isFalse();
+        Encounter visit = new Encounter();
+        visit.setStatus(EncounterStatus.COMPLETED);
+        rx.setEncounter(visit);
+        assertThat(InpatientOrderEnd.endedWithItsStay(rx)).isFalse();
+        Encounter openStay = new Encounter();
+        openStay.setAdmissionId(UUID.randomUUID());
+        openStay.setStatus(EncounterStatus.IN_PROGRESS);
+        rx.setEncounter(openStay);
+        assertThat(InpatientOrderEnd.endedWithItsStay(rx)).isFalse();
+    }
 }

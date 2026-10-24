@@ -85,6 +85,7 @@ class EncounterServiceImplReadAccessControlTest {
     @Mock private com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
     @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private com.example.hms.repository.EncounterNoteHistoryRepository encounterNoteHistoryRepository;
+    @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
 
     /**
      * Real, not mocked: identity resolution IS what an ownership guard gets
@@ -337,6 +338,39 @@ class EncounterServiceImplReadAccessControlTest {
             assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 500 mg 3x/j");
             assertThat(avs.getFollowUpInstructions()).isEqualTo("Revenir si fièvre");
             assertThat(avs.getFollowUpAppointmentDate()).isEqualTo("2026-11-02");
+        }
+
+        @Test
+        @DisplayName("QA D757: a stay's AVS no longer lists its ward orders as take-home medicines")
+        void stayAvsLeavesOutTheWardOrders() {
+            // The QA call: GET /encounters/{stay}/avs listed the ward Paracétamol,
+            // written into the summary by the discharge before ward orders ended.
+            authenticateAs("ROLE_PATIENT");
+            Encounter mine = encounterAt(hospital, callerPatient, true);
+            mine.setAdmissionId(UUID.randomUUID());
+            com.example.hms.model.Prescription ward = new com.example.hms.model.Prescription();
+            ward.setMedicationName("Paracétamol");
+            com.example.hms.model.Prescription home = new com.example.hms.model.Prescription();
+            home.setMedicationName("Amoxicilline");
+            home.setTakeHome(true);
+            lenient().when(prescriptionRepository.findByEncounter_Id(org.mockito.ArgumentMatchers.eq(mine.getId()), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(ward, home)));
+            com.example.hms.model.discharge.DischargeSummary summary = new com.example.hms.model.discharge.DischargeSummary();
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Paracétamol").dosage("1 g").frequency("q6h").continueAtDischarge(true)
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED).build());
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Amoxicilline").dosage("1 g").continueAtDischarge(true)
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED).build());
+            // Path re-verified: a line the physician wrote on the discharge screen is kept.
+            summary.getMedicationReconciliation().add(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
+                .medicationName("Paracétamol").dosage("500 mg").continueAtDischarge(true).prescriberNotes("si douleur")
+                .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED).build());
+            lenient().when(dischargeSummaryRepository.findByEncounter_Id(mine.getId())).thenReturn(Optional.of(summary));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
+
+            assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 1 g\nParacétamol 500 mg");
         }
 
         @Test
@@ -955,5 +989,24 @@ class EncounterServiceImplReadAccessControlTest {
 
             assertThat(service.getEncounterNoteHistory(elsewhere.getId(), locale)).isEmpty();
         }
+    }
+
+    @Test
+    @DisplayName("QA D759: a prescription's anchor encounter is not in the patient's visit history")
+    void portalVisitHistoryLeavesOutPrescriptionAnchors() {
+        // The QA call: GET /me/encounters (My visits) for PATIENT_A2 showed five
+        // COMPLETED consultations for one real visit.
+        UUID patientId = UUID.randomUUID();
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setNotes("Toux depuis 3 jours");
+        Encounter anchor = new Encounter();
+        anchor.setId(UUID.randomUUID());
+        anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        org.mockito.Mockito.when(encounterRepository.findByPatient_Id(patientId)).thenReturn(java.util.List.of(visit, anchor));
+
+        assertThat(service.getEncountersForPortalPatient(patientId)).hasSize(1);
+        org.mockito.Mockito.verify(encounterMapper).toEncounterResponseDTO(visit);
+        org.mockito.Mockito.verify(encounterMapper, org.mockito.Mockito.never()).toEncounterResponseDTO(anchor);
     }
 }

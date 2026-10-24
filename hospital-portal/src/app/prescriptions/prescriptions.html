@@ -928,6 +928,19 @@
               {{ 'PRESCRIPTIONS.REQUIRES_COSIGN' | translate }}
             </label>
           </div>
+          <div class="field">
+            <!-- QA D757: only an order marked for home outlives the stay; every
+                 other order of a stay is discontinued at discharge. -->
+            <label for="rx-take-home" class="checkbox-label">
+              <input
+                id="rx-take-home"
+                type="checkbox"
+                [(ngModel)]="form.takeHome"
+                [disabled]="editingSigned()"
+              />
+              {{ 'PRESCRIPTIONS.TAKE_HOME' | translate }}
+            </label>
+          </div>
         </div>
         <div class="form-row">
           <div class="field">

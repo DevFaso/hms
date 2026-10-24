@@ -272,6 +272,10 @@ public class EncounterServiceImpl implements EncounterService {
     private final EncounterNoteAddendumRepository encounterNoteAddendumRepository;
     private final EncounterNoteHistoryRepository encounterNoteHistoryRepository;
     private final LabOrderRepository labOrderRepository;
+    /** QA D761: the statuses a new encounter may be created in. */
+    private static final Set<EncounterStatus> INITIAL_STATUSES =
+        java.util.EnumSet.of(EncounterStatus.ARRIVED, EncounterStatus.IN_PROGRESS);
+
     private final PrescriptionRepository prescriptionRepository;
     private final ObgynReferralRepository obgynReferralRepository;
     private final PatientLocaleResolver patientLocaleResolver;
@@ -345,6 +349,13 @@ public class EncounterServiceImpl implements EncounterService {
 
         LocalDateTime encounterDate = Optional.ofNullable(request.getEncounterDate()).orElse(LocalDateTime.now());
         EncounterStatus status = Optional.ofNullable(request.getStatus()).orElse(EncounterStatus.ARRIVED);
+        // QA D761: a new encounter starts ARRIVED (a walk-in at the desk, who
+        // goes to triage next) or IN_PROGRESS (a clinician's own visit).
+        // Anything later is reached through its workflow step.
+        if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
+            throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
+                new Object[] {request.getStatus().name()}, locale));
+        }
 
         assertNoDuplicateEncounter(ctx, encounterDate, locale);
 
@@ -358,6 +369,12 @@ public class EncounterServiceImpl implements EncounterService {
             ctx.assignment());
 
         applyEncounterDefaults(encounter, ctx.department(), encounterDate, status);
+        // QA D761: the entity defaults to IN_PROGRESS, so the defaults above
+        // never applied the requested status: the reception's ARRIVED walk-in
+        // was stored IN_PROGRESS and triage refused it. The request wins.
+        if (request.getStatus() != null) {
+            encounter.setStatus(request.getStatus());
+        }
         ensureEncounterCode(encounter);
 
         Encounter saved = encounterRepository.save(encounter);
@@ -1811,6 +1828,9 @@ public class EncounterServiceImpl implements EncounterService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<EncounterResponseDTO> getEncountersForPortalPatient(UUID patientId) {
         return encounterRepository.findByPatient_Id(patientId).stream()
+            // QA D759: a prescription's anchor is not a visit; five of them
+            // read as five consultations for one real visit.
+            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -2574,7 +2594,52 @@ public class EncounterServiceImpl implements EncounterService {
      * the discharge summary's reconciliation (stopped ones left out).
      */
     private static String medicationsAtDischarge(DischargeSummary summary) {
+        return medicationsAtDischarge(summary, Set.of());
+    }
+
+    /**
+     * QA D757: the names of a stay's ward orders, which end with the stay. A
+     * summary written before that rule listed every order of the stay as
+     * CONTINUED with no prescription id; such a line naming a ward order is
+     * not a medicine to take home. A name that is also on a take-home order
+     * of the stay is kept. Empty for a visit that is not a stay.
+     */
+    private Set<String> wardOrderNames(Encounter encounter) {
+        if (encounter.getAdmissionId() == null || encounter.getId() == null) {
+            return Set.of();
+        }
+        List<com.example.hms.model.Prescription> orders = prescriptionRepository
+            .findByEncounter_Id(encounter.getId(), org.springframework.data.domain.PageRequest.of(0, 200))
+            .getContent();
+        Set<String> takeHome = orders.stream().filter(com.example.hms.model.Prescription::isTakeHome)
+            .map(rx -> normalizedName(rx.getMedicationName())).collect(Collectors.toSet());
+        return orders.stream().filter(rx -> !rx.isTakeHome())
+            .map(rx -> normalizedName(rx.getMedicationName()))
+            .filter(name -> !name.isEmpty() && !takeHome.contains(name))
+            .collect(Collectors.toSet());
+    }
+
+    /**
+     * A line the D426 discharge wrote for a ward order: no prescription id,
+     * CONTINUED with nothing else said, and naming a ward order of the stay.
+     * A line a physician entered on the discharge screen says more (or names
+     * its prescription) and is kept.
+     */
+    private static boolean isLegacyWardOrderLine(MedicationReconciliationEntry m, Set<String> wardOrders) {
+        return !wardOrders.isEmpty() && m.getPrescriptionId() == null
+            && m.getReconciliationAction() == MedicationReconciliationAction.CONTINUED
+            && m.getWasOnAdmission() == null && m.getGivenDuringHospitalization() == null
+            && isBlankText(m.getPrescriberNotes()) && isBlankText(m.getReasonForChange())
+            && wardOrders.contains(normalizedName(m.getMedicationName()));
+    }
+
+    private static String normalizedName(String name) {
+        return name == null ? "" : name.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String medicationsAtDischarge(DischargeSummary summary, Set<String> wardOrders) {
         String text = summary.getMedicationReconciliation().stream()
+            .filter(m -> !isLegacyWardOrderLine(m, wardOrders))
             .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
             .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
             .filter(m -> !isBlankText(m.getMedicationName()))
@@ -2630,7 +2695,7 @@ public class EncounterServiceImpl implements EncounterService {
             // follow-ups as lists, not as the checkout's free text, so the
             // stay's AVS showed neither.
             if (isBlankText(avs.getPrescriptionSummary())) {
-                avs.setPrescriptionSummary(medicationsAtDischarge(summary));
+                avs.setPrescriptionSummary(medicationsAtDischarge(summary, wardOrderNames(encounter)));
             }
             if (isBlankText(avs.getFollowUpInstructions())) {
                 avs.setFollowUpInstructions(summary.getFollowUpInstructions());

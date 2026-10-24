@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
@@ -260,6 +261,24 @@ describe('ChartReviewComponent', () => {
     for (const expected of ['pret-pour-la-sortie', 'resultats-disponibles', 'reporte']) {
       expect(pills).withContext(`timeline pill ${expected}`).toContain(expected);
     }
+  });
+
+  it('QA D777: shows the zone-less UTC server time in the reader zone, like every other screen', () => {
+    const chart = populatedChart();
+    chart.timeline = [
+      { id: 'e-7', section: 'ENCOUNTER', occurredAt: '2026-10-24T15:41:00', title: 'Vitals' },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+
+    setPatient('p-777');
+
+    const text = (
+      fixture.nativeElement.querySelector('[data-testid="chart-review-panel-timeline"]')
+        ?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(text).toContain(
+      formatDate('2026-10-24T15:41:00Z', 'shortTime', 'en-US').replace(/\s+/g, ' '),
+    );
   });
 });
 

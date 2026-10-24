@@ -264,7 +264,7 @@
               <span class="update-version">v{{ u.versionNumber }}</span>
               <span class="update-reason">{{ u.updateReason }}</span>
               <span class="update-meta">
-                {{ u.recordedByName }} — {{ u.recordedAt | date: 'short' }}
+                {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {
                   <span class="update-hospital">· {{ u.hospitalName }}</span>
                 }
@@ -582,7 +582,7 @@
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
                 {{ e.category | enumLabel: 'timelineCategory' }} ·
-                {{ e.occurredAt | date: 'medium' }}
+                {{ e.occurredAt | serverTime | date: 'medium' }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never

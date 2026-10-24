@@ -464,6 +464,8 @@ class AdmissionServiceImplTest {
         // QA D134: the stay's own encounters, never the patient-wide sweep.
         verify(stayEncounters).recordDischarge(admission, null);
         verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
+        // QA D760: the walk-in that led to the stay is closed at discharge too.
+        verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(admission);
     }
 
     /* ── P0 #4: structured bed assignment ─────────────────────────────── */

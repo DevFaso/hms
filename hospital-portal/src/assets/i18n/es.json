@@ -6321,6 +6321,7 @@
     "SIGN": "Firmar",
     "COSIGN": "Refrendar",
     "REQUIRES_COSIGN": "Requiere refrendo de un segundo prescriptor",
+    "TAKE_HOME": "Medicación para casa (continúa después del alta)",
     "SIGNED_AT": "Firmada",
     "COSIGN_STATE": "Refrendo",
     "COSIGN_PENDING": "Pendiente — un segundo prescriptor debe refrendar",

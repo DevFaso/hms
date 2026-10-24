@@ -43,6 +43,8 @@ public class AdmissionStayEncounterService {
     /** D426: a discharged stay gets its discharge-summary record, as a checkout does. */
     private final com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     private final com.example.hms.repository.PrescriptionRepository prescriptionRepository;
+    /** QA D757: ends the stay's ward orders at discharge. */
+    private final StayOrderDiscontinuation stayOrders;
 
     /**
      * The attending physician runs the stay; the admitting provider stands in
@@ -139,6 +141,13 @@ public class AdmissionStayEncounterService {
     private void applyDischarge(Admission admission, String dischargeDiagnosis) {
         if (admission.getId() == null) {
             return;
+        }
+        // QA D757: the ward orders end with the stay, before its summary is
+        // written, so only take-home orders reach the after-visit summary.
+        if (stayOrders != null) {
+            Staff by = admission.getDischargingProvider();
+            stayOrders.discontinueStayOrders(admission,
+                by != null && by.getUser() != null ? by.getUser().getId() : null);
         }
         encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).ifPresent(enc -> {
             if (!isBlank(dischargeDiagnosis)) {
@@ -270,6 +279,11 @@ public class AdmissionStayEncounterService {
             .findByEncounter_Id(enc.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
             .getContent();
         for (com.example.hms.model.Prescription rx : prescriptions) {
+            // QA D757: a ward order ends with the stay; only an order the
+            // prescriber marked for home goes home.
+            if (!rx.isTakeHome()) {
+                continue;
+            }
             // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
             if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
                 || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
@@ -283,6 +297,7 @@ public class AdmissionStayEncounterService {
                 .frequency(rx.getFrequency())
                 .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
                 .continueAtDischarge(true)
+                .prescriptionId(rx.getId())
                 .build());
         }
     }

@@ -226,4 +226,40 @@ class PrescriptionQueueClaimRepositoryTest {
         assertThat(claimRepository.findByPrescription_Id(id)).isEmpty();
         assertThat(claimRepository.count()).isEqualTo(3);
     }
+
+    @Test
+    @DisplayName("QA D757: a ward order of a discharged stay leaves every queue filter; a take-home order stays")
+    void wardOrdersOfAnEndedStayLeaveTheQueue() {
+        Encounter stay = em.persist(Encounter.builder()
+                .patient(patient).staff(doctorStaff).hospital(hospital).assignment(doctorAssignment)
+                .encounterType(EncounterType.INPATIENT).encounterDate(LocalDateTime.now())
+                .status(com.example.hms.enums.EncounterStatus.COMPLETED)
+                .admissionId(UUID.randomUUID()).code("ENC-STAY").build());
+        Prescription ward = em.persist(Prescription.builder()
+                .patient(patient).staff(doctorStaff).encounter(stay).hospital(hospital)
+                .assignment(doctorAssignment).medicationName("Ceftriaxone")
+                .quantity(BigDecimal.ONE).status(PrescriptionStatus.SIGNED).build());
+        Prescription wardClaimed = em.persist(Prescription.builder()
+                .patient(patient).staff(doctorStaff).encounter(stay).hospital(hospital)
+                .assignment(doctorAssignment).medicationName("Paracétamol")
+                .quantity(BigDecimal.ONE).status(PrescriptionStatus.PARTIALLY_FILLED).build());
+        Prescription takeHome = em.persist(Prescription.builder()
+                .patient(patient).staff(doctorStaff).encounter(stay).hospital(hospital)
+                .assignment(doctorAssignment).medicationName("Amoxicilline").takeHome(true)
+                .quantity(BigDecimal.ONE).status(PrescriptionStatus.SIGNED).build());
+        claim(wardClaimed, me, now.minusMinutes(1));
+        em.flush();
+        em.clear();
+
+        List<UUID> all = ids(prescriptionRepository.findWorkQueue(hospital.getId(), QUEUE, PageRequest.of(0, 50)));
+        assertThat(all).doesNotContain(ward.getId(), wardClaimed.getId())
+                .contains(takeHome.getId(), mineActive.getId(), unclaimed.getId());
+        List<UUID> free = ids(prescriptionRepository.findWorkQueueUnclaimed(hospital.getId(), QUEUE, activeAfter,
+                PageRequest.of(0, 50)));
+        assertThat(free).doesNotContain(ward.getId()).contains(takeHome.getId());
+        Page<Prescription> mine = prescriptionRepository.findWorkQueueClaimedBy(hospital.getId(), QUEUE,
+                me.getId(), activeAfter, PageRequest.of(0, 50));
+        assertThat(ids(mine)).containsExactly(mineActive.getId());
+        assertThat(mine.getTotalElements()).isEqualTo(1);
+    }
 }

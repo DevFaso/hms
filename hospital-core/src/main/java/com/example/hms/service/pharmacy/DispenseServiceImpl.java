@@ -824,6 +824,12 @@ public class DispenseServiceImpl implements DispenseService {
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("pharmacy.dispense.notDispensable", String.valueOf(prescription.getStatus()));
         }
+        // QA D757: a ward order of a stay that has ended is not handed over,
+        // even when it is still SIGNED (written before discharge closed its
+        // orders, or a row older than that rule). A take-home order is.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation
         if (prescription.getPatient() == null
@@ -1401,7 +1407,7 @@ public class DispenseServiceImpl implements DispenseService {
             }
             case UNCLAIMED -> prescriptionRepository.findWorkQueueUnclaimed(hospitalId, statuses,
                     queueClaimService.activeAfter(), pageable);
-            case ALL -> prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, statuses, pageable);
+            case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
         };
     }
 

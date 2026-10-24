@@ -330,6 +330,8 @@ class DischargeApprovalServiceImplTest {
         order.verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
         order.verify(stayEncounters).recordDischarge(stay);
         order.verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
+        // QA D760: the approval path closes the walk-in that led to the stay too.
+        order.verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(stay);
     }
 
     @Test

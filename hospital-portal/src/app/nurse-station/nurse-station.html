@@ -879,7 +879,8 @@
                   }
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
-                      {{ 'NURSE.DUE_LABEL' | translate }} {{ task.dueAt | date: 'shortTime' }}
+                      {{ 'NURSE.DUE_LABEL' | translate }}
+                      {{ task.dueAt | serverTime | date: 'shortTime' }}
                       @if (task.overdue) {
                         <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }

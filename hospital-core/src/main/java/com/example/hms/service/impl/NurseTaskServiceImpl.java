@@ -966,44 +966,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             && (orderOfCurrentStay(rx, currentStay) || givenDuringOpenEmergencyVisit(rx));
     }
 
-    /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */
-    private static final Duration ED_TO_WARD_CARRY_OVER = Duration.ofHours(24);
-
     /**
-     * QA D702: D514 only asked whether the patient is in a bed, so once a
-     * patient was admitted every live prescription he had, including the
-     * take-home orders of an earlier consultation, became a due dose. A dose
-     * is due on the ward only for an order of the current stay: filed on the
-     * stay's own encounter, or (no admission link) on an INPATIENT encounter
-     * or on no encounter at all, written since the admission. An order of an
-     * outpatient visit is the visit's, never a nursing dose.
+     * QA D702: a dose is due on the ward only for an order of the current
+     * stay. The rule is shared with the discharge, which ends exactly these
+     * orders (QA D757): {@link com.example.hms.service.InpatientOrderEnd#orderOfStay}.
      */
     static boolean orderOfCurrentStay(Prescription rx, Admission stay) {
-        if (stay == null) return false;
-        com.example.hms.model.Encounter encounter = rx.getEncounter();
-        if (encounter != null && encounter.getAdmissionId() != null) {
-            return encounter.getAdmissionId().equals(stay.getId());
-        }
-        LocalDateTime written = rx.getCreatedAt();
-        LocalDateTime from = stay.getAdmissionDateTime();
-        if (encounter != null && encounter.getEncounterType() == com.example.hms.enums.EncounterType.EMERGENCY) {
-            // The department's orders carry on to the ward: the emergency
-            // visit ends with the admission (QA D712), its treatment does not.
-            // Only the visit still open at admission carries over: a visit
-            // checked out before it (the patient went home with a course and
-            // came back later) keeps its take-home orders off the ward MAR.
-            LocalDateTime checkout = encounter.getCheckoutTimestamp();
-            boolean openAtAdmission = checkout == null || from == null || !checkout.isBefore(from);
-            return openAtAdmission && written != null
-                && (from == null || !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER)));
-        }
-        if (encounter != null && encounter.getEncounterType() != com.example.hms.enums.EncounterType.INPATIENT) {
-            return false;
-        }
-        // An order with no write time (never, for an order written here) is
-        // kept: it names no outpatient visit, and dropping a ward dose is not
-        // the safe direction.
-        return written == null || from == null || !written.isBefore(from);
+        return com.example.hms.service.InpatientOrderEnd.orderOfStay(rx, stay);
     }
 
     /** The active stay of each patient in a bed at this hospital (QA D702). */

@@ -308,6 +308,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         // QA D134: the stay's own encounters only, never the patient's
         // unrelated outpatient visit at the same hospital.
         encounterAutoCompletion.completeAdmissionEncounters(admission.getId());
+        // QA D760: and the visit that led to the stay, if the admission
+        // missed it (a row from before D712, or one it could not see).
+        encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
     }
 
     @Override

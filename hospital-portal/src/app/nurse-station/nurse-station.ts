@@ -62,6 +62,16 @@ type SectionType =
   | 'tasks'
   | 'inbox';
 
+/**
+ * QA D777: a `datetime-local` value (`2026-10-24T14:00`, the reader's wall
+ * time) as a UTC ISO instant, or undefined when empty or unreadable.
+ */
+export function localInputToUtcIso(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? undefined : instant.toISOString();
+}
+
 @Component({
   selector: 'app-nurse-station',
   standalone: true,
@@ -769,7 +779,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       return;
     }
     this.taskCreating.set(true);
-    this.nurseService.createNursingTask(form as NurseTaskCreateRequest).subscribe({
+    // QA D777: the picker gives the nurse's local wall time with no zone; the
+    // server keeps UTC, so the instant is sent with its zone.
+    const request: NurseTaskCreateRequest = {
+      ...(form as NurseTaskCreateRequest),
+      dueAt: localInputToUtcIso(form.dueAt),
+    };
+    this.nurseService.createNursingTask(request).subscribe({
       next: (task) => {
         this.toast.success(
           this.translate.instant('NURSE.TOAST.TASK_CREATED', { patient: task.patientName }),

@@ -135,6 +135,7 @@ class AdmissionControllerTest {
         dto.setDischargeDisposition(DischargeDisposition.HOME);
         dto.setDischargeSummary("Stable for home discharge");
         dto.setDischargeInstructions("Follow up cardiology in 7 days");
+        dto.setDischargeDiagnosis("Pneumopathie");
         dto.setDischargingProviderId(UUID.randomUUID());
         dto.setFollowUpAppointments(List.of(Map.of("specialty", "Cardiology", "daysOut", 7)));
         return dto;
@@ -295,6 +296,26 @@ class AdmissionControllerTest {
                 .andExpect(jsonPath("$.dischargeSummary").value("Stable for home discharge"));
 
             verify(admissionService).dischargePatient(eq(id), any(AdmissionDischargeRequestDTO.class));
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("QA D766: a discharge with no discharge diagnosis is refused with 400")
+        void dischargeWithoutDiagnosisIsRefused_D766() throws Exception {
+            UUID id = UUID.randomUUID();
+            AdmissionDischargeRequestDTO request = buildDischargeRequest();
+            request.setDischargeDiagnosis(null);
+            mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+            request.setDischargeDiagnosis("   ");
+            mockMvc.perform(post(BASE + "/{admissionId}/discharge", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+            verify(admissionService, org.mockito.Mockito.never()).dischargePatient(any(), any());
         }
     }
 

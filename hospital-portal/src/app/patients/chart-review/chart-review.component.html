@@ -59,9 +59,9 @@
                 <li class="chart-review__timeline-item">
                   <time class="chart-review__timeline-date" [attr.datetime]="event.occurredAt">
                     @if (event.occurredAt) {
-                      {{ event.occurredAt | date: 'mediumDate' }}
+                      {{ event.occurredAt | serverTime | date: 'mediumDate' }}
                       <span class="chart-review__timeline-time">{{
-                        event.occurredAt | date: 'shortTime'
+                        event.occurredAt | serverTime | date: 'shortTime'
                       }}</span>
                     } @else {
                       —
@@ -122,7 +122,7 @@
               <tbody>
                 @for (e of c.encounters; track e.id) {
                   <tr>
-                    <td>{{ e.encounterDate | date: 'mediumDate' }}</td>
+                    <td>{{ e.encounterDate | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ e.encounterType ? (e.encounterType | enumLabel: 'encounterType') : '—' }}
                     </td>
@@ -162,7 +162,7 @@
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">
-                        {{ n.documentedAt | date: 'medium' }}
+                        {{ n.documentedAt | serverTime | date: 'medium' }}
                       </time>
                     }
                     <span
@@ -360,7 +360,7 @@
                     @if (i.orderedAt) {
                       <span
                         >{{ 'CHART_REVIEW.ORDERED' | translate }}:
-                        {{ i.orderedAt | date: 'medium' }}</span
+                        {{ i.orderedAt | serverTime | date: 'medium' }}</span
                       >
                     }
                     @if (i.scheduledFor) {
@@ -423,7 +423,7 @@
               <tbody>
                 @for (p of c.procedures; track p.id) {
                   <tr>
-                    <td>{{ p.orderedAt | date: 'mediumDate' }}</td>
+                    <td>{{ p.orderedAt | serverTime | date: 'mediumDate' }}</td>
                     <td>
                       {{ p.procedureName || '—' }}
                       @if (p.procedureCategory) {

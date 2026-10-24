@@ -559,7 +559,7 @@
           @for (v of vitals(); track v.id) {
             <div class="vital-card">
               <div class="vital-header">
-                <span class="vital-date">{{ v.recordedAt | date: 'medium' }}</span>
+                <span class="vital-date">{{ v.recordedAt | serverTime | date: 'medium' }}</span>
                 <span class="vital-by"
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >

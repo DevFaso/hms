@@ -145,6 +145,8 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
             admissionRepository.save(stay);
             stayEncounters.recordDischarge(stay);
             encounterAutoCompletion.completeAdmissionEncounters(stay.getId());
+            // QA D760: and the visit that led to the stay, as the direct discharge does.
+            encounterAutoCompletion.completeVisitsThatLedToAdmission(stay);
         }
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);

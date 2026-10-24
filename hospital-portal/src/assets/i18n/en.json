@@ -6321,6 +6321,7 @@
     "SIGN": "Sign",
     "COSIGN": "Co-sign",
     "REQUIRES_COSIGN": "Requires co-signature by a second prescriber",
+    "TAKE_HOME": "Take-home medication (continues after discharge)",
     "SIGNED_AT": "Signed",
     "COSIGN_STATE": "Co-signature",
     "COSIGN_PENDING": "Pending — a second prescriber must co-sign",

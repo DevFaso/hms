@@ -569,6 +569,7 @@ export class PrescriptionsComponent implements OnInit {
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
+      takeHome: !!p.takeHome,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',

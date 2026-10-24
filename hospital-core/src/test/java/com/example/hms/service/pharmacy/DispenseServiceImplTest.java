@@ -328,7 +328,7 @@ class DispenseServiceImplTest {
             other.setId(UUID.randomUUID());
             other.setStatus(PrescriptionStatus.SIGNED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription, other)));
             when(queueClaimService.activeClaimsFor(List.of(prescription, other)))
                     .thenReturn(java.util.Map.of(prescriptionId, claimDto(false)));
@@ -356,7 +356,7 @@ class DispenseServiceImplTest {
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
                     .hasSize(1);
-            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+            verify(prescriptionRepository, never()).findWorkQueue(any(), any(), any());
         }
 
         @Test
@@ -372,7 +372,7 @@ class DispenseServiceImplTest {
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.UNCLAIMED).getContent())
                     .hasSize(1);
-            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+            verify(prescriptionRepository, never()).findWorkQueue(any(), any(), any());
         }
 
         @Test
@@ -381,7 +381,7 @@ class DispenseServiceImplTest {
             Pageable pageable = PageRequest.of(0, 20);
             when(queueClaimService.isEnabled()).thenReturn(false);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription)));
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
@@ -421,6 +421,29 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).save(any(Dispense.class));
             verify(prescriptionRepository).save(any(Prescription.class));
             verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D757: a SIGNED ward order of a discharged stay is refused at the counter; a take-home one is not")
+        void aWardOrderOfAnEndedStayIsNotDispensed() {
+            // The QA scenario: IV ceftriaxone, signed on the stay, still SIGNED
+            // after discharge (a row from before the discharge ended orders).
+            com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+            stayEncounter.setAdmissionId(UUID.randomUUID());
+            stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            prescription.setEncounter(stayEncounter);
+            DispenseRequestDTO dto = buildRequest();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+
+            // Path re-verified: the same order marked take-home passes this gate.
+            prescription.setTakeHome(true);
+            assertThat(com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)).isFalse();
         }
 
         @Test
@@ -1949,7 +1972,7 @@ class DispenseServiceImplTest {
         void getWorkQueueShouldMap() {
             Pageable pageable = PageRequest.of(0, 20);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription)));
 
@@ -1983,7 +2006,7 @@ class DispenseServiceImplTest {
             org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
                     org.mockito.ArgumentCaptor.forClass(List.class);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), asked.capture(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(backOrdered, refused, answered)));
 
@@ -2019,7 +2042,7 @@ class DispenseServiceImplTest {
             org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
                     org.mockito.ArgumentCaptor.forClass(List.class);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), asked.capture(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(failed)));
 
@@ -2051,7 +2074,7 @@ class DispenseServiceImplTest {
             backOrder.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(partiallyFilled)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(backOrder));
@@ -2080,7 +2103,7 @@ class DispenseServiceImplTest {
             backOrder.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(filled)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(backOrder));
@@ -2109,7 +2132,7 @@ class DispenseServiceImplTest {
             later.setDispensedAt(resolvedAt.plusHours(1));
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(justAnswered, actedOn)));
             when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                     any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
@@ -2138,7 +2161,7 @@ class DispenseServiceImplTest {
             plain.setStatus(PrescriptionStatus.SIGNED);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(answeredOnBackOrder, plain)));
 
             List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
@@ -2165,7 +2188,7 @@ class DispenseServiceImplTest {
             later.setDispensedAt(resolvedAt.plusHours(1));
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(actedOn)));
             when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                     any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
@@ -2194,7 +2217,7 @@ class DispenseServiceImplTest {
             refusal.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(refused)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(refusal));

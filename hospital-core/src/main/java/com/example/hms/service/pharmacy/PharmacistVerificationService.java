@@ -162,6 +162,10 @@ public class PharmacistVerificationService {
         if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
             throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
         }
+        // QA D757: nor is a ward order of a stay that has ended.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {

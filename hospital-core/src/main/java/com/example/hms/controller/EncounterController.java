@@ -128,8 +128,10 @@ public class EncounterController {
             }
         }
 
-        // Default status for front-desk check-in
-        if (dto.getStatus() == null) {
+        // Default status for front-desk check-in. QA D761: only there; a
+        // clinician's encounter keeps its IN_PROGRESS default, and a status
+        // the client sends is now honoured by the service (it was ignored).
+        if (dto.getStatus() == null && isReceptionist) {
             dto.setStatus(EncounterStatus.ARRIVED);
         }
         // Optional: set encounter time if your DTO supports it
