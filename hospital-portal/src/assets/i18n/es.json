@@ -3762,7 +3762,8 @@
       "NOTE_FAILED": "Error al guardar la nota de cuidado",
       "NO_ENCOUNTER": "No se encontró ningún encuentro activo para este paciente.",
       "ENCOUNTER_LOOKUP_FAILED": "Error al buscar el encuentro.",
-      "HANDOFF_SITUATION_REQUIRED": "Describa la situación (la S de SBAR) antes del traspaso."
+      "HANDOFF_SITUATION_REQUIRED": "Describa la situación (la S de SBAR) antes del traspaso.",
+      "HANDOFF_RECIPIENT_REQUIRED": "Elija al colega a quien se entrega el paciente."
     },
     "MED_ACTION": {
       "GIVEN": "administrado",
@@ -3783,7 +3784,10 @@
     "ACVPU_PAIN": "Responde al dolor",
     "ACVPU_UNRESPONSIVE": "Sin respuesta",
     "OVERRIDE_EXPLAIN": "El escaneo de los cinco correctos a pie de cama se hace en el eMAR. Para registrar esta dosis como administrada desde aquí, indique el motivo de la excepción.",
-    "OPEN_EMAR": "Abrir el eMAR para escanear"
+    "OPEN_EMAR": "Abrir el eMAR para escanear",
+    "HANDOFF_RECIPIENT": "Entregado a",
+    "HANDOFF_RECIPIENT_PLACEHOLDER": "Elija un colega",
+    "HANDOFF_TO": "a"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -8506,7 +8510,8 @@
     "UNIT_PRICE": "Precio unitario (F CFA)",
     "PRICE_SAVED": "Precio guardado.",
     "PRICE_INVALID": "El precio debe ser un número entero de francos, cero o más.",
-    "PRICE_SAVE_FAILED": "No se pudo guardar el precio."
+    "PRICE_SAVE_FAILED": "No se pudo guardar el precio.",
+    "UNIT_COST_NEGATIVE": "El costo unitario no puede ser negativo."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

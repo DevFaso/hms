@@ -251,6 +251,15 @@ public class InventoryServiceImpl implements InventoryService {
         enforceHospitalScope(item.getPharmacy());
 
         validateReceiptQuantitiesAndDates(dto);
+        // QA D779: a receipt is a stock movement like any other (D668 guarded
+        // only returns): 2.5 tablets left the item at 3001182.5 on hand.
+        StockTransactionServiceImpl.requireWholeUnitsWhenCounted(item, dto.getInitialQuantity());
+        StockTransactionServiceImpl.requireWholeUnitsWhenCounted(item, dto.getRemainingQuantity());
+        // QA D778: the DTO constraint is the first gate; this one holds for
+        // any caller that skips bean validation.
+        if (dto.getUnitCost() != null && dto.getUnitCost().signum() < 0) {
+            throw new BusinessException("stockTransaction.unitCost.min");
+        }
         requireConsistentLotExpiry(item, dto);
 
         // The receipt is recorded against the signed-in user (D82): a

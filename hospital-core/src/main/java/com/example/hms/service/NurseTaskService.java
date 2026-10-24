@@ -45,6 +45,9 @@ public interface NurseTaskService {
 
     void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId);
 
+    /** QA D776: the colleagues at {@code hospitalId} a handoff can be addressed to (never the caller). */
+    List<com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO> getHandoffRecipients(UUID nurseUserId, UUID hospitalId);
+
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
 
     NurseMedicationTaskResponseDTO recordMedicationAdministration(

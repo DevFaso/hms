@@ -2777,4 +2777,41 @@ class DispenseServiceImplTest {
             verify(stockLotRepository, never()).findByInventoryItemPharmacyId(any(), any());
         }
     }
+
+    @Nested
+    @DisplayName("QA D780: the not-dispensable refusal names the status in words")
+    class NotDispensableLabel {
+
+        @org.junit.jupiter.api.AfterEach
+        void resetLocale() {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+
+        @Test
+        @DisplayName("a second fill of a DISPENSED order reads 'délivrée' in French, never the raw code")
+        void dispensedIsWordedInFrench() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO request = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("délivrée")
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage()).doesNotContain("DISPENSED"));
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(PrescriptionStatus.class)
+        @DisplayName("every status has a label in EN, FR and ES (no raw code can leak)")
+        void everyStatusIsLabelled(PrescriptionStatus status) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            for (java.util.Locale locale : java.util.List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.of("es"))) {
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+                org.assertj.core.api.Assertions.assertThat(status.localizedLabel()).isNotEqualTo(status.name());
+            }
+        }
+    }
 }

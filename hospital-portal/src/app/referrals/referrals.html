@@ -172,7 +172,7 @@
                       <span class="material-symbols-outlined">send</span>
                     </button>
                   }
-                  @if (canAct().acknowledge && r.status === 'SUBMITTED') {
+                  @if (canAct().acknowledge && isReceivingSide(r) && r.status === 'SUBMITTED') {
                     <button
                       class="action-link acknowledge"
                       (click)="openAcknowledge(r)"
@@ -181,7 +181,11 @@
                       <span class="material-symbols-outlined">task_alt</span>
                     </button>
                   }
-                  @if (canAct().reject && ['SUBMITTED', 'ACKNOWLEDGED'].includes(r.status)) {
+                  @if (
+                    canAct().reject &&
+                    isReceivingSide(r) &&
+                    ['SUBMITTED', 'ACKNOWLEDGED'].includes(r.status)
+                  ) {
                     <button
                       class="action-link reject"
                       (click)="openReject(r)"
@@ -190,7 +194,7 @@
                       <span class="material-symbols-outlined">block</span>
                     </button>
                   }
-                  @if (canAct().schedule && r.status === 'ACKNOWLEDGED') {
+                  @if (canAct().schedule && isReceivingSide(r) && r.status === 'ACKNOWLEDGED') {
                     <button
                       class="action-link schedule"
                       (click)="openSchedule(r)"
@@ -199,7 +203,11 @@
                       <span class="material-symbols-outlined">event</span>
                     </button>
                   }
-                  @if (canAct().start && ['ACKNOWLEDGED', 'SCHEDULED'].includes(r.status)) {
+                  @if (
+                    canAct().start &&
+                    isReceivingSide(r) &&
+                    ['ACKNOWLEDGED', 'SCHEDULED'].includes(r.status)
+                  ) {
                     <button
                       class="action-link start"
                       (click)="startReferral(r)"
@@ -210,6 +218,7 @@
                   }
                   @if (
                     canAct().complete &&
+                    isReceivingSide(r) &&
                     ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(r.status)
                   ) {
                     <button
@@ -398,7 +407,7 @@
                 }}
               </button>
             }
-            @if (canAct().acknowledge && ref.status === 'SUBMITTED') {
+            @if (canAct().acknowledge && isReceivingSide(ref) && ref.status === 'SUBMITTED') {
               <button
                 class="btn-primary"
                 (click)="openAcknowledge(ref)"
@@ -408,19 +417,27 @@
                 {{ 'REFERRALS.ACTION_ACKNOWLEDGE' | translate }}
               </button>
             }
-            @if (canAct().reject && ['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)) {
+            @if (
+              canAct().reject &&
+              isReceivingSide(ref) &&
+              ['SUBMITTED', 'ACKNOWLEDGED'].includes(ref.status)
+            ) {
               <button class="btn-danger" (click)="openReject(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">block</span>
                 {{ 'REFERRALS.ACTION_REJECT' | translate }}
               </button>
             }
-            @if (canAct().schedule && ref.status === 'ACKNOWLEDGED') {
+            @if (canAct().schedule && isReceivingSide(ref) && ref.status === 'ACKNOWLEDGED') {
               <button class="btn-primary" (click)="openSchedule(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">event</span>
                 {{ 'REFERRALS.ACTION_SCHEDULE' | translate }}
               </button>
             }
-            @if (canAct().start && ['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)) {
+            @if (
+              canAct().start &&
+              isReceivingSide(ref) &&
+              ['ACKNOWLEDGED', 'SCHEDULED'].includes(ref.status)
+            ) {
               <button class="btn-primary" (click)="startReferral(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">play_circle</span>
                 {{
@@ -431,7 +448,9 @@
               </button>
             }
             @if (
-              canAct().complete && ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)
+              canAct().complete &&
+              isReceivingSide(ref) &&
+              ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(ref.status)
             ) {
               <button class="btn-primary" (click)="openComplete(ref)" [disabled]="actionLoading()">
                 <span class="material-symbols-outlined">check_circle</span>

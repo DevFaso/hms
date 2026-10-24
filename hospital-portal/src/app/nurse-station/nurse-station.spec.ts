@@ -38,6 +38,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getHandoffs',
       'createHandoff',
       'completeHandoff',
+      'getHandoffRecipients',
       'getAnnouncements',
       'getWorkboard',
       'getPatientFlow',
@@ -54,6 +55,9 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     // All service methods return empty observables by default
     nurseServiceSpy.getVitalsDue.and.returnValue(of([]));
+    nurseServiceSpy.getHandoffRecipients.and.returnValue(
+      of([{ userId: 'u-2', displayName: 'Awa Sanou' }]),
+    );
     nurseServiceSpy.getMedicationMAR.and.returnValue(of([]));
     nurseServiceSpy.getDashboardSummary.and.returnValue(of(null as any));
     nurseServiceSpy.getNursingTasks.and.returnValue(of([]));
@@ -319,6 +323,18 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(fixture.nativeElement.querySelector('app-triage-form')).toBeTruthy();
     });
 
+    it('QA D769: the awaiting-triage queue shows on the default tab under "Mes patients"', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      expect(component.filterMode()).toBe('me');
+      expect(component.activeSection()).toBe('vitals');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="awaiting-triage-open"]'))
+        .withContext('a patient just checked in, on the default view')
+        .toBeTruthy();
+    });
+
     it('a non-nurse gets no triage list and no encounter query', () => {
       component.loadFlow$().subscribe();
       expect(encounterSpy.list).not.toHaveBeenCalled();
@@ -365,6 +381,7 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
     component.updateHandoffField('direction', 'SHIFT_CHANGE');
     component.updateHandoffField('situation', 'Stable.');
+    component.updateHandoffField('recipientUserId', 'u-2');
     component.submitCreateHandoff();
 
     expect(nurseServiceSpy.createHandoff).toHaveBeenCalledWith(
@@ -372,10 +389,48 @@ describe('NurseStationComponent — two-tier polling', () => {
         patientId: 'p1',
         direction: 'SHIFT_CHANGE',
         situation: 'Stable.',
+        recipientUserId: 'u-2',
       }),
     );
     expect(toastSpy.success).toHaveBeenCalled();
     expect(component.handoffCreateOpen()).toBeFalse();
+  });
+
+  it('QA D776: a handoff with no recipient is not posted', () => {
+    component.openHandoffCreate();
+    expect(component.handoffRecipients().map((r) => r.userId)).toEqual(['u-2']);
+    component.onHandoffPatientChange({ id: 'p1' } as PatientResponse);
+    component.updateHandoffField('direction', 'SHIFT_CHANGE');
+    component.updateHandoffField('situation', 'Stable.');
+    component.submitCreateHandoff();
+    expect(toastSpy.error).toHaveBeenCalledWith('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED');
+    expect(nurseServiceSpy.createHandoff).not.toHaveBeenCalled();
+  });
+
+  it('QA D776: Complete is offered only on a handoff the server says the viewer may complete', () => {
+    const base = {
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'SHIFT_CHANGE',
+      updatedAt: '2026-10-24T10:00:00',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'PENDING',
+      createdByName: 'Nina Nurse',
+    };
+    expect(
+      component.canCompleteHandoff({
+        ...base,
+        id: 'mine-to-give',
+        completableByMe: false,
+      } as NurseHandoff),
+    ).toBeFalse();
+    expect(component.canCompleteHandoff({ ...base, id: 'legacy' } as NurseHandoff)).toBeFalse();
+    expect(
+      component.canCompleteHandoff({ ...base, id: 'to-me', completableByMe: true } as NurseHandoff),
+    ).toBeTrue();
   });
 
   it('completeHandoff calls the service and refreshes', () => {

@@ -744,6 +744,23 @@ class StockTransactionServiceImplTest {
             verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
         }
 
+        /** QA D779: every manual movement of a counted item, not only a return, is whole. */
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = StockTransactionType.class, names = {"ADJUSTMENT", "TRANSFER"})
+        @DisplayName("D779: a fractional adjustment or transfer of tablets is refused")
+        void fractionalMovementOfACountedItemIsRefused(StockTransactionType type) {
+            inventoryItem.setUnit("comprimé");
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            StockTransactionRequestDTO request = buildRequest(type, new BigDecimal("2.5"));
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stock.quantity.wholeUnitsOnly");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
         @Test
         @DisplayName("D668: a measured unit still takes a fractional return")
         void measuredUnitsAcceptFractions() {

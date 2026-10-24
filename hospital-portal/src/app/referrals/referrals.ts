@@ -91,6 +91,19 @@ export class ReferralsComponent implements OnInit {
     };
   });
 
+  /**
+   * QA D775 (D611 sibling): acknowledge, reject, schedule, start and complete
+   * belong to the hospital the referral is addressed to (the receiving
+   * hospital, or the sending one for an internal referral) —
+   * GeneralReferralServiceImpl.requireReceivingSide. The role map alone
+   * offered the sender "Prendre en compte" and "Refuser", which ended in 403.
+   */
+  isReceivingSide(r: ReferralResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    const target = r.receivingHospitalId || r.hospitalId;
+    return !!active && !!target && active === target;
+  }
+
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
   isMyDraft(r: ReferralResponse): boolean {
     const staffId = this.auth.getUserProfile()?.staffId;

@@ -154,6 +154,11 @@ export class GoodsReceiptComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.RECEIPT_QUANTITY_POSITIVE'));
       return;
     }
+    // QA D778: a purchase price is never negative (the server refuses it too).
+    if (this.form.unitCost != null && this.form.unitCost < 0) {
+      this.toast.error(this.translate.instant('PHARMACY.UNIT_COST_NEGATIVE'));
+      return;
+    }
     if (!this.form.lotNumber || !this.form.expiryDate || !this.form.initialQuantity) {
       this.toast.error(this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED'));
       return;

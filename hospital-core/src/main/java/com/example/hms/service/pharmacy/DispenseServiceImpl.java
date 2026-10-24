@@ -822,7 +822,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("pharmacy.dispense.notDispensable", String.valueOf(prescription.getStatus()));
+            throw new BusinessException("pharmacy.dispense.notDispensable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation

@@ -62,6 +62,41 @@
     </div>
   </div>
 
+  <!-- QA D769: the triage queue is everyone's job, so it shows on every tab and
+       under every filter ("Mes patients" included): a patient just checked in
+       has no nurse yet, so no per-nurse list could ever hold them. -->
+  @if (!loading() && canTriage() && awaitingTriage().length > 0) {
+    <section class="awaiting-triage" data-testid="awaiting-triage">
+      <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
+      <div class="workboard-grid">
+        @for (e of awaitingTriage(); track e.id) {
+          <div class="workboard-card">
+            <div class="workboard-card-header">
+              <span class="patient-name">{{ e.patientName }}</span>
+            </div>
+            <div class="workboard-card-meta">
+              <span class="meta-item">
+                <span class="material-symbols-outlined">schedule</span>
+                {{ e.encounterDate | date: 'shortTime' }}
+              </span>
+            </div>
+            <div class="workboard-card-actions">
+              <button
+                class="action-btn action-triage"
+                data-testid="awaiting-triage-open"
+                (click)="openTriageForEncounter(e)"
+                [title]="'TRIAGE.TITLE' | translate"
+              >
+                <span class="material-symbols-outlined">emergency</span>
+                {{ 'TRIAGE.TITLE' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
   <!-- ── Section Tabs ──────────────────────────────── -->
   <div class="section-tabs">
     <button
@@ -437,6 +472,9 @@
                     @if (h.createdByName) {
                       {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
                     }
+                    @if (h.recipientName) {
+                      {{ 'NURSE.HANDOFF_TO' | translate }} {{ h.recipientName }} ·
+                    }
                     {{ h.updatedAt | serverTime | date: 'medium' }}
                   </span>
                   @if (h.completedAt) {
@@ -449,7 +487,8 @@
                       {{ h.completedByName || '—' }} ·
                       {{ h.completedAt | serverTime | date: 'medium' }}
                     </span>
-                  } @else {
+                  } @else if (canCompleteHandoff(h)) {
+                    <!-- QA D776: only the recipient completes (server rule) -->
                     <button
                       class="action-btn action-complete"
                       (click)="completeHandoff(h.id)"
@@ -469,37 +508,6 @@
 
       <!-- ═══════════ WORKBOARD TAB ═══════════ -->
       @if (!loading() && activeSection() === 'workboard') {
-        @if (canTriage() && awaitingTriage().length > 0) {
-          <section class="awaiting-triage" data-testid="awaiting-triage">
-            <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
-            <div class="workboard-grid">
-              @for (e of awaitingTriage(); track e.id) {
-                <div class="workboard-card">
-                  <div class="workboard-card-header">
-                    <span class="patient-name">{{ e.patientName }}</span>
-                  </div>
-                  <div class="workboard-card-meta">
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">schedule</span>
-                      {{ e.encounterDate | date: 'shortTime' }}
-                    </span>
-                  </div>
-                  <div class="workboard-card-actions">
-                    <button
-                      class="action-btn action-triage"
-                      data-testid="awaiting-triage-open"
-                      (click)="openTriageForEncounter(e)"
-                      [title]="'TRIAGE.TITLE' | translate"
-                    >
-                      <span class="material-symbols-outlined">emergency</span>
-                      {{ 'TRIAGE.TITLE' | translate }}
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          </section>
-        }
         @if (workboard().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">grid_view</span>
@@ -1404,6 +1412,22 @@
             [selected]="handoffPatient()"
             (selectedChange)="onHandoffPatientChange($event)"
           />
+        </div>
+        <div class="form-row">
+          <label for="ho-recipient">{{ 'NURSE.HANDOFF_RECIPIENT' | translate }} *</label>
+          <select
+            id="ho-recipient"
+            class="reason-input"
+            required
+            aria-required="true"
+            [value]="handoffForm().recipientUserId ?? ''"
+            (change)="updateHandoffField('recipientUserId', $any($event.target).value)"
+          >
+            <option value="">{{ 'NURSE.HANDOFF_RECIPIENT_PLACEHOLDER' | translate }}</option>
+            @for (r of handoffRecipients(); track r.userId) {
+              <option [value]="r.userId">{{ r.displayName }}</option>
+            }
+          </select>
         </div>
         <div class="form-row">
           <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>

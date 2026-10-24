@@ -3762,7 +3762,8 @@
       "NOTE_FAILED": "Échec de l'enregistrement de la note de soins",
       "NO_ENCOUNTER": "Aucune consultation active trouvée pour ce patient.",
       "ENCOUNTER_LOOKUP_FAILED": "Échec de la recherche de la consultation.",
-      "HANDOFF_SITUATION_REQUIRED": "Décrivez la situation (le S de SBAR) avant la transmission."
+      "HANDOFF_SITUATION_REQUIRED": "Décrivez la situation (le S de SBAR) avant la transmission.",
+      "HANDOFF_RECIPIENT_REQUIRED": "Choisissez le collègue à qui le patient est transmis."
     },
     "MED_ACTION": {
       "GIVEN": "administré",
@@ -3783,7 +3784,10 @@
     "ACVPU_PAIN": "Répond à la douleur",
     "ACVPU_UNRESPONSIVE": "Aréactif",
     "OVERRIDE_EXPLAIN": "Le scan des cinq bons au chevet se fait dans l'eMAR. Pour enregistrer cette dose comme administrée depuis cet écran, indiquez le motif de la dérogation.",
-    "OPEN_EMAR": "Ouvrir l'eMAR pour scanner"
+    "OPEN_EMAR": "Ouvrir l'eMAR pour scanner",
+    "HANDOFF_RECIPIENT": "Transmis à",
+    "HANDOFF_RECIPIENT_PLACEHOLDER": "Choisir un collègue",
+    "HANDOFF_TO": "à"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -8506,7 +8510,8 @@
     "UNIT_PRICE": "Prix unitaire (F CFA)",
     "PRICE_SAVED": "Prix enregistré.",
     "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
-    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré."
+    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré.",
+    "UNIT_COST_NEGATIVE": "Le coût unitaire ne peut pas être négatif."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

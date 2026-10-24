@@ -81,8 +81,12 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        // QA D668 (returns), D779 (every movement): an item counted in whole
+        // units never moves by a fraction, or its stock shows decimals.
+        requireWholeUnitsWhenCounted(item, dto.getQuantity(),
+                dto.getTransactionType() == StockTransactionType.RETURN
+                        ? "stockTransaction.return.wholeUnitsOnly" : "stock.quantity.wholeUnitsOnly");
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
-            requireWholeUnitsWhenCounted(item, dto.getQuantity()); // QA D668
             // QA D604: the dispense row first (the lock its cancel takes), then the item.
             requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
@@ -360,12 +364,17 @@ public class StockTransactionServiceImpl implements StockTransactionService {
      * units, so its returns are whole too.
      */
     static void requireWholeUnitsWhenCounted(InventoryItem item, BigDecimal quantity) {
+        requireWholeUnitsWhenCounted(item, quantity, "stock.quantity.wholeUnitsOnly");
+    }
+
+    /** The same rule, refused with {@code messageKey}. */
+    static void requireWholeUnitsWhenCounted(InventoryItem item, BigDecimal quantity, String messageKey) {
         if (quantity == null || quantity.stripTrailingZeros().scale() <= 0) {
             return;
         }
         String unit = item.getUnit() == null ? "" : item.getUnit().trim().toLowerCase(java.util.Locale.ROOT);
         if (!MEASURED_UNITS.contains(unit)) {
-            throw new BusinessException("stockTransaction.return.wholeUnitsOnly");
+            throw new BusinessException(messageKey);
         }
     }
 
