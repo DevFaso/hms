@@ -1,3 +1,4 @@
+import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -28,7 +29,7 @@ import {
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
 import { StaffResponse, StaffService } from '../services/staff.service';
-import { PatientService } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
@@ -120,6 +121,20 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  it('never offers a completed or cancelled encounter for a new order (QA D739)', () => {
+    const encounters = TestBed.inject(EncounterService);
+    spyOn(encounters, 'list').and.returnValue(
+      of([
+        { id: 'e-open', status: 'IN_PROGRESS', encounterDate: '2026-10-20T10:00:00' },
+        { id: 'e-done', status: 'COMPLETED', encounterDate: '2026-10-21T10:00:00' },
+        { id: 'e-ed', status: 'CANCELLED', encounterDate: '2026-10-22T10:00:00' },
+      ] as EncounterResponse[]),
+    );
+    component.selectPatient({ id: 'p-1', firstName: 'A', lastName: 'B' } as PatientResponse);
+
+    expect(component.patientEncounters().map((e) => e.id)).toEqual(['e-open']);
+  });
 
   it('opens a new prescription with the caller as the prescriber (QA D123)', () => {
     const auth = TestBed.inject(AuthService);

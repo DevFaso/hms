@@ -122,7 +122,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId, null);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -955,7 +955,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId,
+            existing.getEncounter() == null ? null : existing.getEncounter().getId());
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -1335,7 +1336,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
                                               Staff staff,
-                                              UUID actingHospitalId) {
+                                              UUID actingHospitalId,
+                                              UUID keptEncounterId) {
         if (request.getEncounterId() != null) {
             Encounter named = encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
@@ -1346,6 +1348,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     && (named.getStatus() == EncounterStatus.COMPLETED
                         || named.getStatus() == EncounterStatus.CANCELLED)) {
                 throw new BusinessException("prescription.encounter.stayClosed");
+            }
+            // QA D739 (r10 re-test 3): the same rule for every encounter type.
+            // A finished consultation or ED visit named explicitly took the new
+            // order, which then showed in that closed visit's chart. An edit
+            // that keeps the order's own encounter is not a new attachment.
+            if (isClosedEncounter(named) && !named.getId().equals(keptEncounterId)) {
+                throw new BusinessException("prescription.encounter.closed");
             }
             return named;
         }
@@ -1405,6 +1414,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // encounter, which is the defect QA reported.
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    private static boolean isClosedEncounter(Encounter encounter) {
+        return encounter.getStatus() == EncounterStatus.COMPLETED
+            || encounter.getStatus() == EncounterStatus.CANCELLED;
     }
 
     /**
