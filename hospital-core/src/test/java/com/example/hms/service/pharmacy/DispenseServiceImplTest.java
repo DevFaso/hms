@@ -1566,18 +1566,36 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("a controlled substance keeps the exact ceiling: 8 tablets against 7.5 is refused")
-        void aControlledSubstanceKeepsTheExactCeiling() {
+        @DisplayName("a controlled substance is never met by the next whole unit: 8 tablets against 7.5 is refused, and the message names 7")
+        void aControlledSubstanceNamesTheWholeUnitsBelowTheCeiling() {
             prescription.setQuantity(new BigDecimal("7.5"));
             when(controlledResolver.isControlled(prescription)).thenReturn(true);
             prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             DispenseRequestDTO eight = fill("8", "8");
-            // a controlled substance is never met by the next whole unit, so the message keeps 7.5
+            // 7.5 would be refused as fractional; 7 is the most that is accepted
             assertThatThrownBy(() -> service.createDispense(eight))
                     .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
-                    .matches(e -> "7.5".equals(((BusinessException) e).getArgs()[0]));
+                    .matches(e -> "7".equals(((BusinessException) e).getArgs()[0]));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("a controlled substance with 9.5 left after a legacy 2.5 fill: 10 is refused, and the message names 9")
+        void aControlledSubstanceAfterALegacyHalfFillNamesNine() {
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(new BigDecimal("2.5"));
+            DispenseRequestDTO ten = fill("10", "10");
+            assertThatThrownBy(() -> service.createDispense(ten))
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "9".equals(((BusinessException) e).getArgs()[0]));
             verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
             verify(dispenseRepository, never()).save(any(Dispense.class));
         }

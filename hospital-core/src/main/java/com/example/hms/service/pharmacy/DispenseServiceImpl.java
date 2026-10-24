@@ -722,18 +722,24 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
-     * The most the refusal tells the pharmacist they may still give. For a
+     * The most the refusal tells the pharmacist they may still give. A
+     * counted fill is whole units, so "at most 7.5" would point at a quantity
+     * the whole-unit rule refuses and hide the one that is accepted. For a
      * counted item that is not controlled, a fractional remainder is met by
-     * the next whole unit ({@link #wholeUnitCeilingAllows}), so the message
-     * names that whole number: "at most 9.5" would point at a quantity the
-     * whole-unit rule refuses, and hide the 10 that is accepted.
+     * the next whole unit ({@link #wholeUnitCeilingAllows}): the message names
+     * 8 (or 10 after a legacy 2.5). A controlled substance never goes above
+     * the prescription, so its message names the whole units below: 7 (or 9).
+     * A measured fill (ml) keeps the exact figure.
      */
     private BigDecimal statedCeiling(DispenseRequestDTO dto, Prescription prescription, BigDecimal remaining) {
         if (remaining == null || remaining.stripTrailingZeros().scale() <= 0
-                || controlledResolver.isControlled(prescription) || !isCountedFill(dto, prescription)) {
+                || !isCountedFill(dto, prescription)) {
             return remaining;
         }
-        return remaining.setScale(0, java.math.RoundingMode.CEILING);
+        java.math.RoundingMode toWhole = controlledResolver.isControlled(prescription)
+                ? java.math.RoundingMode.FLOOR
+                : java.math.RoundingMode.CEILING;
+        return remaining.setScale(0, toWhole);
     }
 
     /**
