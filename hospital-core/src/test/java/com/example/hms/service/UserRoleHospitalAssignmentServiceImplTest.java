@@ -716,6 +716,42 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     /**
+     * QA D772 replay: SUPER_ADMIN POSTs /assignments twice with the same
+     * {userId, hospitalId, roleName: ROLE_NURSE, active: true} and
+     * Accept-Language: fr. The 409 resolved its message in the JVM default
+     * locale (Locale.getDefault()), so it read in English.
+     */
+    @Test
+    void qaD772_duplicateAssignmentConflictSpeaksTheRequestLanguage() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment existing = UserRoleHospitalAssignment.builder().active(true).build();
+            existing.setId(UUID.randomUUID());
+            when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(assignmentRepository.existsByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+                .thenReturn(true);
+            org.mockito.Mockito.lenient().when(assignmentRepository.findByUserIdAndHospitalIdAndRoleId(assignee.getId(), hospital.getId(), role.getId()))
+                .thenReturn(Optional.of(existing));
+            when(messageSource.getMessage(eq("assignment.conflict"), any(), anyString(), eq(java.util.Locale.FRENCH)))
+                .thenReturn("Rôle déjà affecté à cet utilisateur pour cet hôpital.");
+            com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+                new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+            dto.setUserId(assignee.getId());
+            dto.setRoleId(role.getId());
+            dto.setHospitalId(hospital.getId());
+            dto.setActive(true);
+
+            assertThatThrownBy(() -> service.assignRole(dto))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessage("Rôle déjà affecté à cet utilisateur pour cet hôpital.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    /**
      * QA D626/D664 replay: HOSPITAL_ADMIN_A POSTs /assignments
      * {userId: NURSE2_A, hospitalId: A, roleName: 'ROLE_PATIENT'}; the grant
      * check lets a hospital admin grant non-admin roles, so the row used to be

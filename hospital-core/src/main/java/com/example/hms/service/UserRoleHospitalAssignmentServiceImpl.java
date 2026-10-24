@@ -221,14 +221,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO assignRole(UserRoleHospitalAssignmentRequestDTO dto) {
-        Locale locale = Locale.getDefault();
+        Locale locale = LocaleContextHolder.getLocale();
         UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true, true);
         return toDtoWithLinks(assignment);
     }
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO assignRoleOnAccountCreation(UserRoleHospitalAssignmentRequestDTO dto) {
-        Locale locale = Locale.getDefault();
+        Locale locale = LocaleContextHolder.getLocale();
         UserRoleHospitalAssignment assignment = createAssignment(dto, locale, true, false);
         return toDtoWithLinks(assignment);
     }
@@ -385,7 +385,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO updateAssignment(UUID id, UserRoleHospitalAssignmentRequestDTO dto) {
-        final Locale locale = Locale.getDefault();
+        final Locale locale = LocaleContextHolder.getLocale();
 
         // The row as it stands must be one the caller may change, and the row
         // after the change one the caller could have granted (the create rule,
@@ -747,7 +747,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     public UserRoleAssignmentBatchResponseDTO assignRoleToMultipleScopes(UserRoleAssignmentMultiRequestDTO requestDTO) {
         Objects.requireNonNull(requestDTO, "Request must not be null");
 
-        Locale locale = Locale.getDefault();
+        Locale locale = LocaleContextHolder.getLocale();
         Set<UUID> hospitalIds = collectTargetHospitalIds(requestDTO);
         List<UserRoleHospitalAssignmentResponseDTO> successes = new ArrayList<>();
         List<UserRoleAssignmentFailureDTO> failures = new ArrayList<>();
@@ -861,7 +861,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleHospitalAssignmentResponseDTO confirmAssignment(UUID assignmentId, String confirmationCode) {
-        Locale locale = Locale.getDefault();
+        Locale locale = LocaleContextHolder.getLocale();
         String sanitizedCode = confirmationCode != null ? confirmationCode.trim() : null;
         if (sanitizedCode == null || sanitizedCode.isBlank()) {
             throw new BusinessException(
@@ -1324,7 +1324,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (!roleValidator.isSuperAdminFromJwtClaim()) {
             throw new AccessDeniedException("Access denied");
         }
-        final Locale locale = Locale.getDefault();
+        final Locale locale = LocaleContextHolder.getLocale();
         List<UserRoleHospitalAssignment> attached = assignmentRepository.findByRoleId(roleId);
         if (!attached.isEmpty()) {
             throw new ConflictException(
@@ -1486,7 +1486,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                                                   UserRoleAssignmentBulkImportRequestDTO options) {
         try {
             UserRoleHospitalAssignmentRequestDTO request = buildRequestFromCsvRow(tokens, headerIndex, options);
-            UserRoleHospitalAssignment assignment = createAssignment(request, Locale.getDefault(), options.isSendNotifications(), true);
+            UserRoleHospitalAssignment assignment = createAssignment(request, LocaleContextHolder.getLocale(), options.isSendNotifications(), true);
 
             UserRoleAssignmentBulkImportResultDTO result = UserRoleAssignmentBulkImportResultDTO.builder()
                 .rowNumber(rowNumber)

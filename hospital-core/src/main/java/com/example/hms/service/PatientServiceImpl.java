@@ -119,7 +119,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.security.SecureRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -162,8 +161,6 @@ public class PatientServiceImpl implements PatientService {
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String DEFAULT_UNKNOWN = "Unknown";
-    private static final String DEFAULT_PREFIX = "MRX";
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int DEFAULT_TIMELINE_LIMIT = 50;
     private static final int MAX_TIMELINE_LIMIT = 200;
     private static final String CATEGORY_ENCOUNTER = "ENCOUNTER";
@@ -235,6 +232,7 @@ public class PatientServiceImpl implements PatientService {
     private final StaffRepository staffRepository;
     private final PatientProxyRepository patientProxyRepository;
     private final ObjectMapper objectMapper;
+    private final PatientMrnGenerator mrnGenerator;
     private final RoleValidator roleValidator;
 
     @Override
@@ -647,7 +645,7 @@ public class PatientServiceImpl implements PatientService {
         PatientHospitalRegistration registration = registrationRepository
             .findByPatientIdAndHospitalIdAndActiveTrue(patient.getId(), hospital.getId())
             .orElseGet(() -> {
-                String generatedMrn = generateMrn(hospital);
+                String generatedMrn = mrnGenerator.generate(hospital);
                 PatientHospitalRegistration reg = new PatientHospitalRegistration();
                 reg.setPatient(patient);
                 reg.setHospital(hospital);
@@ -2810,56 +2808,6 @@ public class PatientServiceImpl implements PatientService {
             });
 
         return dto;
-    }
-
-    private String generateMrn(Hospital hospital) {
-        if (hospital == null || hospital.getId() == null) {
-            throw new IllegalArgumentException("patient.r7.mrnNeedsHospital");
-        }
-
-        String prefix = deriveHospitalPrefix(hospital);
-        UUID hospitalId = hospital.getId();
-
-        for (int attempt = 0; attempt < 10; attempt++) {
-            String candidate = prefix + String.format("%04d", SECURE_RANDOM.nextInt(0, 10_000));
-            if (!registrationRepository.existsByMrnAndHospitalId(candidate, hospitalId)) {
-                return candidate;
-            }
-        }
-
-        throw new BusinessException("patient.r7.mrnExhausted");
-    }
-
-    private String deriveHospitalPrefix(Hospital hospital) {
-        if (hospital == null) {
-            return DEFAULT_PREFIX;
-        }
-        String prefix = sanitizePrefix(hospital.getCode());
-        if (prefix != null) {
-            return prefix;
-        }
-        prefix = sanitizePrefix(hospital.getName());
-        if (prefix != null) {
-            return prefix;
-        }
-        return DEFAULT_PREFIX;
-    }
-
-    private String sanitizePrefix(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String cleaned = value.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
-        if (cleaned.isBlank()) {
-            return null;
-        }
-
-        if (cleaned.length() >= 3) {
-            return cleaned.substring(0, 3);
-        }
-
-        return (cleaned + DEFAULT_PREFIX).substring(0, 3);
     }
 
     private boolean applyNullable(String value, Consumer<String> setter) {
