@@ -794,6 +794,55 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     /**
+     * QA D773 replay: HOSPITAL_ADMIN_A grants a role; the ROLE_ASSIGNED row used
+     * to carry the GRANTED role as roleName, which is the actor's role column,
+     * so the audit page read "Millogo, Patient(e)". The emitter no longer names
+     * a role: the audit service files it under the registrar's own role, and
+     * the granted role travels in the details.
+     */
+    @Test
+    void qaD773_roleAssignedAuditNeverStoresTheGrantedRoleAsTheActorRole() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        assignment.setRole(patient);
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        registrar.setUsername("admin-a");
+        assignment.setRegisteredBy(registrar);
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "recordAssignmentAudit", assignment);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        com.example.hms.payload.dto.AuditEventRequestDTO row = audit.getValue();
+        assertThat(row.getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ROLE_ASSIGNED);
+        assertThat(row.getUserId()).isEqualTo(registrar.getId());
+        assertThat(row.getRoleName()).isNull();
+        assertThat(row.getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(row.getDetails().toString()).contains("assignedRole").contains("ROLE_PATIENT");
+    }
+
+    /** QA D773 sibling: ASSIGNMENT_CONFIRMED by an administrator is filed under the actor's role too. */
+    @Test
+    void qaD773_assignmentConfirmedAuditNeverStoresTheConfirmedRoleAsTheActorRole() {
+        User admin = new User();
+        admin.setId(UUID.randomUUID());
+        admin.setUsername("admin-a");
+
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            service, "recordAssignmentConfirmationAudit", assignment, admin);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getRoleName()).isNull();
+        assertThat(audit.getValue().getUserId()).isEqualTo(admin.getId());
+    }
+
+    /**
      * QA D671 replay: HOSPITAL_ADMIN_A, Accept-Language fr, POSTs
      * /api/assignments/bulk-import with a row granting ROLE_SUPER_ADMIN. The
      * grant check refuses it with its internal "Access denied", which used to

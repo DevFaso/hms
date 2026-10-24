@@ -365,6 +365,9 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.showCreate.set(true);
   }
 
+  /** Every role of the account being edited, shown read-only (QA D765). */
+  readonly editRoles = signal<string[]>([]);
+
   openEdit(user: UserSummary): void {
     // A deleted account is restored first; the server refuses the edit (D126).
     if (user.deleted) return;
@@ -380,6 +383,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: user.roleName ? [user.roleName] : [],
     };
     this.selectedRoles = user.roleName ? [user.roleName] : [];
+    // QA D765: the summary carries the primary role only. Show every role the
+    // account holds, read-only: roles are granted per hospital from the role
+    // assignments page, and PUT /users/{id} never changes them.
+    this.editRoles.set(user.roleName ? [user.roleName] : []);
     this.fieldErrors.set({});
     this.showCreate.set(true);
 
@@ -389,6 +396,11 @@ export class UserListComponent implements OnInit, OnDestroy {
       next: (detail) => {
         if (detail.phoneNumber) {
           this.createForm.phoneNumber = detail.phoneNumber;
+        }
+        const codes = roleCodesOf(detail.roles);
+        if (codes.length > 0) {
+          this.editRoles.set(codes);
+          this.selectedRoles = codes;
         }
       },
     });
@@ -435,7 +447,7 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
       return;
     }
-    if (this.selectedRoles.length === 0) {
+    if (!isEdit && this.selectedRoles.length === 0) {
       this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
       return;
     }
@@ -468,6 +480,8 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!payload.password?.trim()) delete payload.password;
     if (!payload.phoneNumber?.trim()) delete payload.phoneNumber;
     if (!payload.email?.trim()) delete payload.email;
+    // QA D765: an edit never sends roles; the server refuses a role change here.
+    if (existing) delete payload.roleNames;
     if (!existing) {
       delete payload.username;
       delete payload.password;
@@ -670,4 +684,21 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: [],
     };
   }
+}
+
+/**
+ * The role codes of a user detail. The API sends role summaries
+ * ({ code, name }); older callers typed them as plain strings.
+ */
+export function roleCodesOf(roles: unknown): string[] {
+  if (!Array.isArray(roles)) return [];
+  const codes: string[] = [];
+  for (const r of roles) {
+    const code =
+      typeof r === 'string'
+        ? r
+        : ((r as { code?: string; name?: string })?.code ?? (r as { name?: string })?.name);
+    if (code && !codes.includes(code)) codes.push(code);
+  }
+  return codes;
 }

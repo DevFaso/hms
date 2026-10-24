@@ -19,6 +19,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { bareRole } from '../core/role-token';
 
 /** QA D330: the write audit's "METHOD /route" description, read as an action. */
 const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
@@ -28,6 +29,50 @@ const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
   PATCH: 'AUDIT.WRITE_PATCH',
   DELETE: 'AUDIT.WRITE_DELETE',
 };
+
+/**
+ * QA D774: audit descriptions are stored as the emitter wrote them, mostly in
+ * English with raw codes. The common ones are read in the reader's language;
+ * the parameters (a role code, a person, a test code) are kept.
+ */
+interface DescriptionPattern {
+  readonly re: RegExp;
+  readonly key: string;
+  readonly params?: (m: RegExpExecArray) => Record<string, string>;
+}
+const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
+  { re: /^Patient record viewed$/, key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED' },
+  { re: /^User profile updated$/, key: 'AUDIT.DESC.USER_PROFILE_UPDATED' },
+  { re: /^New user account created$/, key: 'AUDIT.DESC.USER_CREATED' },
+  { re: /^User account soft-deleted$/, key: 'AUDIT.DESC.USER_DELETED' },
+  { re: /^User account restored$/, key: 'AUDIT.DESC.USER_RESTORED' },
+  { re: /^Doctor record view$/, key: 'AUDIT.DESC.DOCTOR_RECORD_VIEW' },
+  { re: /^Doctor timeline view$/, key: 'AUDIT.DESC.DOCTOR_TIMELINE_VIEW' },
+  { re: /^MFA challenge issued$/, key: 'AUDIT.DESC.MFA_CHALLENGE_ISSUED' },
+  { re: /^TOTP enrollment verified$/, key: 'AUDIT.DESC.TOTP_ENROLLMENT_VERIFIED' },
+  { re: /^First sign-in setup completed$/, key: 'AUDIT.DESC.FIRST_SIGN_IN_COMPLETED' },
+  {
+    re: /^Role assignment refused: the caller may not grant this role there$/,
+    key: 'AUDIT.DESC.ROLE_ASSIGNMENT_REFUSED',
+  },
+  {
+    re: /^Assigned role '([^']+)' to (.+)$/,
+    key: 'AUDIT.DESC.ROLE_ASSIGNED',
+    params: (m) => ({ role: m[1], name: m[2] }),
+  },
+  {
+    re: /^Confirmed assignment '([^']+)' for (.+)$/,
+    key: 'AUDIT.DESC.ASSIGNMENT_CONFIRMED',
+    params: (m) => ({ role: m[1], name: m[2] }),
+  },
+  {
+    re: /^Lab test definition (\S+): approval step (\S+), new status (.+?)\.$/,
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP',
+    params: (m) => ({ code: m[1], step: m[2], status: m[3] }),
+  },
+];
+/** A raw enum token in free text: ROLE_PATIENT, SUBMIT_FOR_QA, PENDING_QA_REVIEW. */
+const RAW_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 
 @Component({
   selector: 'app-audit-logs',
@@ -75,7 +120,26 @@ export class AuditLogsComponent implements OnInit {
         : this.translate.instant('AUDIT.WRITE_ENTITY_UNKNOWN');
       return this.translate.instant(WRITE_ACTION_KEYS[match[1]], { entity });
     }
-    return description || '--';
+    if (!description) return '--';
+    for (const p of DESCRIPTION_PATTERNS) {
+      const m = p.re.exec(description);
+      if (m) {
+        const params = p.params ? p.params(m) : {};
+        const localised: Record<string, string> = {};
+        for (const [k, v] of Object.entries(params)) localised[k] = this.label(v);
+        return this.translate.instant(p.key, localised);
+      }
+    }
+    return description.replaceAll(RAW_TOKEN, (token) => this.label(token));
+  }
+
+  /** QA D774: a role or enum token in the reader's language; other text as it is. */
+  private label(value: string): string {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
+    if (value.startsWith('ROLE_')) {
+      return this.enumLabels.transform(bareRole(value), 'role') || value;
+    }
+    return this.enumLabels.transform(value) || value;
   }
 
   logs = signal<AuditEventLog[]>([]);

@@ -130,6 +130,38 @@ class AuditEventLogServiceImplTest {
     }
 
     @Test
+    @DisplayName("D773: a ROLE_ASSIGNED row with no roleName is filed under the registrar's role, not the granted one")
+    void d773_roleAssignedRowCarriesTheRegistrarsRole() {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        User assignee = new User();
+        assignee.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UserRoleHospitalAssignment assigneeRow = assignmentOf(assignee, hospitalA, "Hopital A");
+        com.example.hms.model.Role patient = new com.example.hms.model.Role();
+        patient.setCode("ROLE_PATIENT");
+        assigneeRow.setRole(patient);
+        UserRoleHospitalAssignment registrarRow = assignmentOf(registrar, hospitalA, "Hopital A");
+        com.example.hms.model.Role admin = new com.example.hms.model.Role();
+        admin.setCode("ROLE_HOSPITAL_ADMIN");
+        registrarRow.setRole(admin);
+        when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+        when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(Optional.of(registrarRow));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(registrar.getId()).assignmentId(assigneeRow.getId()).hospitalId(hospitalA)
+            .eventType(AuditEventType.ROLE_ASSIGNED).status(AuditStatus.SUCCESS).entityType("ASSIGNMENT").build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getRoleName()).isEqualTo("HOSPITAL_ADMIN");
+    }
+
+    @Test
     @DisplayName("D533: a CONSENT_UPDATE / PATIENT_EXPORT row naming only the hospital gets its anchor and name")
     void d533_hospitalIdAloneAnchorsAndNamesTheRow() {
         User receptionist = new User();

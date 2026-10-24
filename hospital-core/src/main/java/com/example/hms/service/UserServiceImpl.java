@@ -1588,6 +1588,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
         }
         requireIdentifiersFree(user, dto);
+        requireRolesUnchanged(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1704,6 +1705,39 @@ public class UserServiceImpl implements UserService {
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
             throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
         }
+    }
+
+    /**
+     * Roles are granted and retired per hospital through the role-assignment
+     * endpoints, which apply the grant rules (who may grant what, where).
+     * This endpoint never changed them, yet it accepted {@code roleNames} and
+     * answered 200, so the edit dialog reported a role change that never
+     * happened (QA D765). Sending the current role set back is not a change
+     * and is accepted; anything else is refused instead of silently dropped.
+     */
+    private void requireRolesUnchanged(User user, UpdateUserRequestDTO dto) {
+        if (dto.getRoleNames() == null || dto.getRoleNames().isEmpty()) {
+            return;
+        }
+        Set<String> requested = dto.getRoleNames().stream()
+                .filter(Objects::nonNull)
+                .map(UserServiceImpl::normalizeRoleCode)
+                .filter(code -> !code.isEmpty())
+                .collect(Collectors.toSet());
+        Set<String> current = assignmentRepository.findByUser(user).stream()
+                .filter(a -> a != null && Boolean.TRUE.equals(a.getActive()) && a.getRole() != null)
+                .map(a -> a.getRole().getCode() != null ? a.getRole().getCode() : a.getRole().getName())
+                .filter(Objects::nonNull)
+                .map(UserServiceImpl::normalizeRoleCode)
+                .collect(Collectors.toSet());
+        if (!requested.equals(current)) {
+            throw new BusinessException(MessageUtil.resolve("user.update.roles.unsupported"));
+        }
+    }
+
+    private static String normalizeRoleCode(String code) {
+        String upper = code.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper.substring(5) : upper;
     }
 
     /**

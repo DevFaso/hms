@@ -1384,7 +1384,23 @@
     "WRITE_PUT": "Modification : {{entity}}",
     "WRITE_PATCH": "Modification : {{entity}}",
     "WRITE_DELETE": "Suppression : {{entity}}",
-    "WRITE_ENTITY_UNKNOWN": "enregistrement"
+    "WRITE_ENTITY_UNKNOWN": "enregistrement",
+    "DESC": {
+      "PATIENT_RECORD_VIEWED": "Dossier patient consulté",
+      "USER_PROFILE_UPDATED": "Profil utilisateur mis à jour",
+      "USER_CREATED": "Nouveau compte utilisateur créé",
+      "USER_DELETED": "Compte utilisateur supprimé",
+      "USER_RESTORED": "Compte utilisateur restauré",
+      "DOCTOR_RECORD_VIEW": "Dossier consulté par un médecin",
+      "DOCTOR_TIMELINE_VIEW": "Chronologie consultée par un médecin",
+      "MFA_CHALLENGE_ISSUED": "Défi de double authentification envoyé",
+      "TOTP_ENROLLMENT_VERIFIED": "Inscription de l’application d’authentification vérifiée",
+      "FIRST_SIGN_IN_COMPLETED": "Configuration de la première connexion terminée",
+      "ROLE_ASSIGNMENT_REFUSED": "Attribution de rôle refusée : l’auteur ne peut pas attribuer ce rôle dans cet établissement",
+      "ROLE_ASSIGNED": "Rôle {{role}} attribué à {{name}}",
+      "ASSIGNMENT_CONFIRMED": "Affectation {{role}} confirmée pour {{name}}",
+      "LAB_DEFINITION_STEP": "Examen de laboratoire {{code}} : étape d’approbation {{step}}, nouveau statut {{status}}."
+    }
   },
   "BILLING": {
     "ALL_STATUSES": "Tous les statuts",
@@ -6071,6 +6087,14 @@
         "VITAMIN": "Vitamine",
         "VACCINE": "Vaccin",
         "OTHER": "Autre"
+      },
+      "LAB_DEFINITION_ACTION": {
+        "SUBMIT_FOR_QA": "Soumission à la revue qualité",
+        "COMPLETE_QA_REVIEW": "Revue qualité terminée",
+        "APPROVE": "Approbation",
+        "ACTIVATE": "Activation",
+        "REJECT": "Rejet",
+        "RETIRE": "Retrait"
       }
     },
     "DOCUMENTS": {
@@ -7634,7 +7658,8 @@
     "USER": "Utilisateur",
     "USERNAME": "Nom d'utilisateur",
     "USERS_PLURAL": "Utilisateurs",
-    "USER_SINGULAR": "Utilisateur"
+    "USER_SINGULAR": "Utilisateur",
+    "ROLES_EDIT_HINT": "Les rôles s’attribuent et se retirent par établissement depuis la page des affectations de rôles."
   },
   "TRIAGE": {
     "ACUITY": "Niveau d'acuité",

@@ -2189,6 +2189,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 details.put("confirmationSentAt", assignment.getConfirmationSentAt());
             }
             details.put("confirmationChannels", List.of("SMS", "EMAIL"));
+            details.put("assignedRole", role != null ? getRoleCode(role) : UNKNOWN_ROLE);
             if (assignee != null) {
                 details.put("assigneeId", assignee.getId());
                 details.put("assigneeEmail", assignee.getEmail());
@@ -2201,7 +2202,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .userId(registrar.getId())
                 .assignmentId(assignment.getId())
                 .userName(resolveDisplayName(registrar, null))
-                .roleName(role != null ? role.getName() : null)
+                // QA D773: no roleName. It is the ACTOR's role column; the
+                // granted role used to land there, so a hospital admin's grant
+                // read as done "as Patient(e)". The audit service files the
+                // row under the registrar's own role at this hospital; the
+                // granted role is in the details and the description.
                 .hospitalName(resolveHospitalName(hospital))
                 // QA D521: assignmentId is the ASSIGNEE's row, which the audit
                 // service drops for the registrar; anchor on the registrar's
@@ -2229,6 +2234,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             details.put("confirmationCode", assignment.getConfirmationCode());
             details.put("confirmedAt", assignment.getConfirmationVerifiedAt());
             details.put("confirmationChannel", "PORTAL");
+            if (assignment.getRole() != null) {
+                details.put("assignedRole", getRoleCode(assignment.getRole()));
+            }
 
             User assignee = assignment.getUser();
             Role role = assignment.getRole();
@@ -2240,7 +2248,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .userId(actor != null ? actor.getId() : null)
                 .assignmentId(assignment.getId())
                 .userName(resolveDisplayName(actor, null))
-                .roleName(role != null ? role.getName() : null)
+                // QA D773: the actor's role is resolved by the audit service,
+                // never the confirmed role (which is in the details).
                 .hospitalName(resolveHospitalName(assignment.getHospital()))
                 .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
                 .resourceName(assigneeDisplay)
