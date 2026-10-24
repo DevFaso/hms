@@ -393,6 +393,17 @@ describe('LabResultsComponent', () => {
       expect(fixture.nativeElement.querySelector('[data-testid="read-back-mismatch"]')).toBeNull();
     });
 
+    it('translates the severity in the detail panel instead of the raw enum (QA D674)', () => {
+      fixture.detectChanges();
+      flushInit();
+      component.selectedResult.set(mockResult({ severityFlag: 'CRITICAL' }) as never);
+      fixture.detectChanges();
+      const cell = fixture.nativeElement.querySelector('[data-testid="detail-severity"]');
+      expect(cell).not.toBeNull();
+      expect(cell.textContent).not.toContain('CRITICAL');
+      expect(cell.textContent.trim()).toBe('Critical');
+    });
+
     it('leaves a normal result with a plain acknowledge', () => {
       spyOn(component, 'canAcknowledge').and.returnValue(true);
       fixture.detectChanges();

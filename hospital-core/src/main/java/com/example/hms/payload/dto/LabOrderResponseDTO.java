@@ -38,6 +38,9 @@ public class LabOrderResponseDTO {
     private String clinicalIndication;
     private String medicalNecessityNote;
     private String notes;
+
+    /** QA D673: why the order was cancelled (null unless CANCELLED). */
+    private String cancellationReason;
     private String primaryDiagnosisCode;
     @Builder.Default
     private List<String> additionalDiagnosisCodes = new ArrayList<>();

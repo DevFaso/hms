@@ -445,11 +445,10 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(labUserId);
         when(roleValidator.isLabManager(labUserId, ordering.getId())).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(labUserId, ordering.getId())).thenReturn(false);
         when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
 
         UUID id = order.getId();
-        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, Locale.ENGLISH))
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "x", Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cancel");
         verify(roleValidator, never()).isLabManager(labUserId, performing.getId());
@@ -469,9 +468,48 @@ class LabOrderServiceImplPerformingHospitalTest {
         when(labOrderRepository.save(order)).thenReturn(order);
         when(labOrderMapper.toLabOrderResponseDTO(order)).thenReturn(mapped);
 
-        service.transitionLabOrderStatus(order.getId(), LabOrderStatus.CANCELLED, Locale.ENGLISH);
+        service.transitionLabOrderStatus(order.getId(), LabOrderStatus.CANCELLED, "Definition withdrawn",
+            Locale.ENGLISH);
 
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+        assertThat(order.getCancellationReason()).isEqualTo("Definition withdrawn");
+    }
+
+    @Test
+    void hospitalAdminDoesNotCancelALabOrder() {
+        // QA D666 decision (E9 #67): HOSPITAL_ADMIN is off clinical orders, in the service as in the controller.
+        order.setStatus(LabOrderStatus.ORDERED);
+        UUID adminId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(adminId);
+        org.mockito.Mockito.lenient().when(roleValidator.isHospitalAdmin(adminId, ordering.getId())).thenReturn(true);
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, "x", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cancel");
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"   "})
+    void cancelWithoutAReasonIsRefused(String reason) {
+        // QA D673: LAB_DIRECTOR_A cancelled with {status:'CANCELLED'} and no reason, and got 200.
+        order.setStatus(LabOrderStatus.ORDERED);
+        UUID directorId = UUID.randomUUID();
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(ordering.getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(directorId);
+        when(roleValidator.isLabDirector(directorId, ordering.getId())).thenReturn(true);
+
+        UUID id = order.getId();
+        assertThatThrownBy(() -> service.transitionLabOrderStatus(id, LabOrderStatus.CANCELLED, reason, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(e.getMessage()).containsIgnoringCase("reason"));
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.ORDERED);
+        verify(labOrderRepository, never()).save(any());
     }
 
     @Test

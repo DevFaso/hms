@@ -5395,6 +5395,7 @@
         "INVOICE_UPDATED": "Facture modifiée",
         "LAB_ORDER_CREATED": "Examen prescrit",
         "LAB_ORDER_UPDATED": "Demande d'examen modifiée",
+        "LAB_ORDER_CANCELLED": "Demande d'examen annulée",
         "LAB_SPECIMEN_UPDATED": "Prélèvement mis à jour",
         "LAB_RESULT_CREATED": "Résultat d'examen saisi",
         "LAB_RESULT_ACKNOWLEDGED": "Résultat d'examen pris en compte",

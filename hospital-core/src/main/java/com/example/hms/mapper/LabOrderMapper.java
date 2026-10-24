@@ -79,6 +79,7 @@ public class LabOrderMapper {
             .clinicalIndication(labOrder.getClinicalIndication())
             .medicalNecessityNote(labOrder.getMedicalNecessityNote())
         .notes(labOrder.getNotes())
+        .cancellationReason(labOrder.getCancellationReason())
         .primaryDiagnosisCode(labOrder.getPrimaryDiagnosisCode())
         .additionalDiagnosisCodes(labOrder.getAdditionalDiagnosisCodes() == null
             ? List.of()

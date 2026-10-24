@@ -599,6 +599,7 @@ export class EnumLabelService implements OnDestroy {
       PRESCRIPTION_CREATED: 'Prescription Created',
       LAB_ORDER_CREATED: 'Lab Order Created',
       LAB_ORDER_UPDATED: 'Lab Order Updated',
+      LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',

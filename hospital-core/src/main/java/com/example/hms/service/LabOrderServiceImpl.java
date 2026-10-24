@@ -962,6 +962,9 @@ public class LabOrderServiceImpl implements LabOrderService {
             .toList();
     }
 
+    /** QA D673: matches lab.lab_orders.cancellation_reason (V219). */
+    private static final int MAX_CANCELLATION_REASON = 1000;
+
     // ── Valid forward transitions (CANCELLED handled separately) ──────────────
     private static final Map<LabOrderStatus, Set<LabOrderStatus>> ALLOWED_TRANSITIONS;
     static {
@@ -977,7 +980,8 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     @Override
     @Transactional
-    public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale) {
+    public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason,
+                                                        Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
 
@@ -993,6 +997,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         // an ordering-side decision and stays with the ordering hospital.
         UUID authorityHospitalId = hospitalId != null ? hospitalId : orderingHospitalId;
         validateStatusTransition(current, toStatus, authorityHospitalId, orderingHospitalId);
+        if (toStatus == LabOrderStatus.CANCELLED) {
+            // QA D673: a cancel states why, and the reason is kept on the order.
+            String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired");
+            if (cancelReason.length() > MAX_CANCELLATION_REASON) {
+                throw new BusinessException("lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
+            }
+            labOrder.setCancellationReason(cancelReason);
+        }
         labOrder.setStatus(toStatus);
         return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(labOrder));
     }
@@ -1008,9 +1020,10 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         if (to == LabOrderStatus.CANCELLED) {
             // QA D666: the lab director is the laboratory's senior manager.
+            // QA D666 decision (E9 #67): a hospital admin does not cancel a
+            // clinical order; the controller does not admit the role either.
             if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
                     && !roleValidator.isLabDirector(currentUserId, orderingHospitalId)
-                    && !roleValidator.isHospitalAdmin(currentUserId, orderingHospitalId)
                     && !roleValidator.isSuperAdminFromAuth()) {
                 throw new BusinessException("lab.order.cancelForbidden");
             }

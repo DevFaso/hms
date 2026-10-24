@@ -176,6 +176,10 @@ public class LabOrder extends BaseEntity {
     @Column(name = "standing_order_review_notes", length = 2048)
     private String standingOrderReviewNotes;
 
+    /** QA D673: why the order was cancelled; required on every cancel. */
+    @Column(name = "cancellation_reason", length = 1000)
+    private String cancellationReason;
+
     /** Context (role@hospital) of the ordering user. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "assignment_id", nullable = false,

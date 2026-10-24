@@ -63,6 +63,8 @@ public enum AuditEventType {
     LAB_ORDER_CREATED,
     /** QA D429: a lab order edited or moved through its lifecycle. */
     LAB_ORDER_UPDATED,
+    /** QA D673: a lab order cancelled, with its stated reason on the order. */
+    LAB_ORDER_CANCELLED,
     /** QA D429: a specimen collected or received. */
     LAB_SPECIMEN_UPDATED,
     /** QA D429: a lab result entered. */

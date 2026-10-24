@@ -5429,6 +5429,7 @@
         "INVOICE_UPDATED": "Factura actualizada",
         "LAB_ORDER_CREATED": "Orden de laboratorio creada",
         "LAB_ORDER_UPDATED": "Orden de laboratorio actualizada",
+        "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_SPECIMEN_UPDATED": "Muestra de laboratorio actualizada",
         "LAB_RESULT_CREATED": "Resultado de laboratorio registrado",
         "LAB_RESULT_ACKNOWLEDGED": "Resultado de laboratorio reconocido",

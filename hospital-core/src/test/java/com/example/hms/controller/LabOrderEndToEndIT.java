@@ -64,6 +64,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -547,12 +548,58 @@ class LabOrderEndToEndIT extends BaseIT {
         // ...and the stranded ORDERED order can be resolved (cancelled), keeping its column.
         mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", strandedOrderId).contextPath(API)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"status\":\"CANCELLED\"}")
+                .content("{\"status\":\"CANCELLED\",\"reason\":\"Test definition withdrawn\"}")
                 .with(signedInAs(labManager)).with(csrf()))
             .andExpect(status().isOk());
         assertThat(orderStatus(strandedOrderId)).isEqualTo(LabOrderStatus.CANCELLED);
         assertThat(jdbc.queryForObject("SELECT lab_test_definition_id FROM lab.lab_orders WHERE id = ?",
             UUID.class, strandedOrderId)).isEqualTo(definitionId);
+    }
+
+    @Test
+    @DisplayName("QA D666/D673: a cancel needs a stated reason, is kept and audited, and a hospital admin cannot cancel")
+    void cancellationNeedsAReasonAndIsAudited() throws Exception {
+        // The QA calls (r9-retest/lab3/d666.js): POST /lab-orders/{id}/transition.
+        UUID orderId = placeOrder(LocalDateTime.now().minusHours(1));
+        Actor hospitalAdmin = actor("hadmin", "ROLE_HOSPITAL_ADMIN", hospital);
+
+        // D666 decision (E9 #67): HOSPITAL_ADMIN does not cancel a clinical order.
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\",\"reason\":\"QA R9 rt3 test supprimé\"}")
+                .with(signedInAs(hospitalAdmin)).with(csrf()))
+            .andExpect(status().isForbidden());
+
+        // D673: no reason, then a blank one: a translated 400, the order untouched.
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", orderId).contextPath(API)
+                .header("Accept-Language", "fr")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("Un motif est requis")));
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\",\"reason\":\"  \"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isBadRequest());
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.ORDERED);
+
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\",\"reason\":\"QA R9 rt3 annulation directeur\"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.cancellationReason").value("QA R9 rt3 annulation directeur"));
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.CANCELLED);
+        org.springframework.jdbc.core.JdbcTemplate jdbc =
+            applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        assertThat(jdbc.queryForObject("SELECT cancellation_reason FROM lab.lab_orders WHERE id = ?",
+            String.class, orderId)).isEqualTo("QA R9 rt3 annulation directeur");
+        assertThat(applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll())
+            .anyMatch(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LAB_ORDER_CANCELLED
+                && orderId.toString().equals(row.getResourceId())
+                && patient.getId().equals(row.getPatientId()));
     }
 
     @Test
