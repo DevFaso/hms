@@ -91,8 +91,9 @@ class StockMovementWholeUnitGuardTest {
         int check = src.indexOf("requireWholeUnitsOfFill(dto, stockLot, prescription);", fill);
         int verify = src.indexOf("dispenseVerificationService.verify(", fill);
         assertThat(fill).isPositive();
-        assertThat(check).as("validateFill asks the whole-unit rule").isGreaterThan(fill);
-        assertThat(check).as("before verification").isLessThan(verify);
+        assertThat(check).as("validateFill asks the whole-unit rule, before verification")
+                .isGreaterThan(fill)
+                .isLessThan(verify);
         // Both the one-step fill and the prepared fill go through validateFill.
         assertThat(src.split("validateFill\\(dto, ", -1)).hasSizeGreaterThanOrEqualTo(3);
     }

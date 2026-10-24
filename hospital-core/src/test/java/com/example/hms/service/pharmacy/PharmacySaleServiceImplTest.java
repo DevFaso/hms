@@ -39,6 +39,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -151,7 +153,7 @@ class PharmacySaleServiceImplTest {
         service.createSale(dto);
 
         ArgumentCaptor<PharmacySale> captor = ArgumentCaptor.forClass(PharmacySale.class);
-        org.mockito.Mockito.verify(saleRepository).save(captor.capture());
+        verify(saleRepository).save(captor.capture());
         PharmacySale saved = captor.getValue();
 
         assertThat(saved.getLines()).hasSize(2);
@@ -179,7 +181,7 @@ class PharmacySaleServiceImplTest {
 
         service.createSale(dto);
 
-        org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findById(any());
+        verify(patientRepository, never()).findById(any());
     }
 
     @Test
@@ -233,7 +235,7 @@ class PharmacySaleServiceImplTest {
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
                 .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
-        org.mockito.Mockito.verify(saleRepository, org.mockito.Mockito.never()).save(any());
+        verify(saleRepository, never()).save(any());
     }
 
     @Test

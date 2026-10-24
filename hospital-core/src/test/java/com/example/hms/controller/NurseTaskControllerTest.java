@@ -367,7 +367,7 @@ class NurseTaskControllerTest {
 
         controller.getHandoffs(assignee, null, null, null, auth);
 
-        org.mockito.Mockito.verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null);
+        verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null);
     }
 
     @Test
