@@ -2205,6 +2205,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **Claude PR review script (#924), round-5 findings, capped by the user 2026-10-23.**
+  None is a logic or security bug in the product; all are about the CI
+  helper itself: (1) a failure note can push most of a previous review past
+  the comment size limit; (2) truncation can cut off the "not reviewed"
+  notes; (3) `fit()` can still return a selection over the token budget when
+  counting is approximate (the API then 400s and a failure note is posted);
+  (4) the head SHA is read live instead of from the event payload, so a
+  push during a run can be labelled with the newer head; (5) a PR with only
+  generated files still calls the model; (6) tests for those cases.
+
 ### Execution plan (2026-09-26)
 
 The roadmap above is done except #46 (deferred by the user). What remains is
