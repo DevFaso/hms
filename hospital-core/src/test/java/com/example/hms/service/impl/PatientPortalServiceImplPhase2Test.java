@@ -143,6 +143,8 @@ class PatientPortalServiceImplPhase2Test {
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -716,7 +718,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already have a refill request");
+                    .matches(e -> "patient.refill.alreadyPending".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
             // There was no guard at all before: a double tap fired a second
             // care-team email and a second row in every prescriber's inbox.
@@ -740,7 +742,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("on hold");
+                    .matches(e -> "patient.refill.onHold".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
         }
 
         @Test
@@ -758,8 +760,61 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("no longer be refilled");
+                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719: requestMedicationRefill — refuses a completed controlled substance")
+        void requestRefill_refusesControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(true);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719 re-test: requestMedicationRefill — refuses catalog-controlled morphine whose tick is false")
+        void requestRefill_refusesCatalogControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(false);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.notRefillable".equals(((BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D743: a duplicate refill request is refused with a localised key")
+        void requestRefill_duplicateIsLocalised() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            RefillRequest open = RefillRequest.builder().status(RefillStatus.REQUESTED).build();
+            when(refillRequestRepository.findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                    any(), any(), any())).thenReturn(Optional.of(open));
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.alreadyPending".equals(((BusinessException) e).getMessageKey()));
         }
 
         @Test

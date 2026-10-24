@@ -470,4 +470,17 @@ public class Prescription extends BaseEntity {
             throw new IllegalStateException("Encounter.staff must match Prescription.staff");
         }
     }
+
+    /**
+     * QA D719: whether this prescription may be refilled at all. The status
+     * gate alone answered yes for a completed IV morphine order. A controlled
+     * substance is never refilled: it needs a new, signed prescription.
+     * Single source for the patient's button, the request and the approval.
+     */
+    public boolean allowsRefill() {
+        if (controlledSubstance) {
+            return false;
+        }
+        return status == null || status.isRefillable();
+    }
 }
