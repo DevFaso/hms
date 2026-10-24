@@ -247,6 +247,29 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void qaD706_controlledSubstanceWithoutQuantityIsRefusedOnEveryCreatePath() {
+        PrescriptionRequestDTO request = buildRequest();
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+        mappedEntity.setControlledSubstance(true);
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void createPrescriptionWhenAuthorizedPersistsEntityAndReturnsDto() {
         PrescriptionRequestDTO request = buildRequest();
         UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();

@@ -420,6 +420,15 @@ describe('DispensingComponent', () => {
     expect(ids).not.toContain('inv-1');
   });
 
+  it('QA D710: treats a lot expiring today as expired, and tomorrow as good', () => {
+    const d = new Date();
+    const iso = (x: Date) =>
+      `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    const tomorrow = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+    expect(component.isExpired({ expiryDate: iso(d) } as any)).toBeTrue();
+    expect(component.isExpired({ expiryDate: iso(tomorrow) } as any)).toBeFalse();
+  });
+
   it('keeps expired and empty lots out of the picker', () => {
     component.selectPrescription(mockWorkQueue.data.content[0] as any);
     const ids = component.dispensableLots().map((lot) => lot.id);

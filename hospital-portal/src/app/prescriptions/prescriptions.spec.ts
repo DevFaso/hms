@@ -278,6 +278,7 @@ describe('PrescriptionsComponent — signing', () => {
       'sign',
       'cosign',
       'update',
+      'create',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -335,6 +336,29 @@ describe('PrescriptionsComponent — signing', () => {
     fixture = TestBed.createComponent(PrescriptionsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
+    component.openCreate();
+    component.form.medicationName = 'Morphine 10 mg';
+    component.form.quantity = null;
+    component.submitForm();
+
+    expect(prescriptionService.create).not.toHaveBeenCalled();
+    expect(component['formError']()).toBe('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED');
+  });
+
+  it('QA D706: the quantity to dispense is sent with a new prescription', () => {
+    prescriptionService.create.and.returnValue(of({ id: 'rx-new' } as PrescriptionResponse));
+    component.openCreate();
+    component.form.medicationName = 'Morphine 10 mg';
+    component.form.quantity = 3;
+    component.form.quantityUnit = 'ampoules';
+    component.submitForm();
+
+    expect(prescriptionService.create).toHaveBeenCalledWith(
+      jasmine.objectContaining({ quantity: 3, quantityUnit: 'ampoules' }),
+    );
   });
 
   it('QA D660: a refused edit of a signed prescription is reported inside the open modal', () => {

@@ -79,6 +79,8 @@ public class DispenseServiceImpl implements DispenseService {
 
     private final DispenseRepository dispenseRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D706 re-test: legacy catalog-controlled morphine has the tick false. */
+    private final PrescriptionControlledResolver controlledResolver;
     private final PatientRepository patientRepository;
     private final PharmacyRepository pharmacyRepository;
     private final StockLotRepository stockLotRepository;
@@ -688,6 +690,40 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
+     * QA D706: 40 morphine ampoules were handed over for "10 mg x1", because
+     * nothing compared a fill with what was prescribed. Under the
+     * prescription lock, the fills to date plus this one stay within the
+     * prescribed quantity (once per fill owed). A prescription with no
+     * quantity predates the field: a controlled substance is refused until
+     * the prescriber states one; any other is capped at its regimen
+     * (dose x frequency x duration), or refused when that is unreadable.
+     */
+    private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
+        if (prescription.getQuantity() == null) {
+            if (controlledResolver.isControlled(prescription)) {
+                throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
+            }
+            // QA D706 third round: 90 paracetamol tablets went out against a
+            // legacy "500 mg, 3 times a day, 3 days" (9 tablets) because a
+            // non-controlled row without a quantity had no ceiling at all. Its
+            // ceiling is read from the regimen; an unreadable regimen is
+            // refused until the quantity is recorded.
+            if (FillAccounting.perFillQuantity(prescription) == null) {
+                throw new BusinessException("pharmacy.dispense.quantityUnknown");
+            }
+        }
+        BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
+        requireAtMost(requested, FillAccounting.remaining(prescription, dispensedToDate));
+    }
+
+    private static void requireAtMost(BigDecimal requested, BigDecimal remaining) {
+        if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
+            throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
+                    remaining.stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /**
      * Everything the one-step fill and the ready path check before any stock
      * moves: quantities, the locked prescription (rule 1) and its open
      * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
@@ -705,6 +741,7 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
         // Checked under the prescription lock taken just above.
         requireNoOpenPreparation(prescription, openPreparationKey);
+        requireWithinPrescribedQuantity(prescription, dto.getQuantityDispensed());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -1125,7 +1162,9 @@ public class DispenseServiceImpl implements DispenseService {
                 // QA D335: an expired lot is not dispensable (the fill refuses
                 // it), so it is not offered; shortest-dated first (FEFO).
                 .filter(lot -> lot.getExpiryDate() != null
-                        && !lot.getExpiryDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
+                        // QA D710: a lot is expired ON its expiry date, the
+                        // same rule as the receipt, the check and the report.
+                        && lot.getExpiryDate().isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
                 .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
                         && lot.getInventoryItem().getMedicationCatalogItem() != null
                         && dispenseVerificationService.matchesPrescribedDrug(prescription,

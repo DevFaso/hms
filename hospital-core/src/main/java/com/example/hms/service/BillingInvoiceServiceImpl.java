@@ -1062,11 +1062,34 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         rejectReusedReference(invoice, method, payment.getReference());
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
         creditCheckInCopays(invoice);
+        requireRoomBesidePendingDeclarations(invoice, payment.getAmount());
         BillingInvoice saved = applyPayment(invoiceId, invoice.getPatient().getId(), payment.getAmount());
         PaymentTransaction row = savePaymentRow(saved, payment.getAmount(), method, payment.getReference(),
             payment.getNotes(), recordedBy, PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, saved, row.getId(), "Payment recorded");
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * QA D724: a cashier's payment settled the invoice in full while the
+     * patient's declaration was still PENDING, which then could never be
+     * confirmed (nothing left to pay) and stayed orphaned. The open
+     * declarations count against the balance here too: the cashier confirms
+     * or rejects them first, or takes only what is left beside them.
+     * Called with the invoice row locked.
+     */
+    private void requireRoomBesidePendingDeclarations(BillingInvoice invoice, BigDecimal amount) {
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        if (pending == null || pending.signum() <= 0 || amount == null) {
+            return;
+        }
+        BigDecimal balanceDue = invoice.getTotalAmount()
+            .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
+        if (amount.add(pending).compareTo(balanceDue) > 0) {
+            throw new BusinessException("billing.payment.staffExceedsWithPending", amount, pending,
+                balanceDue.subtract(pending).max(BigDecimal.ZERO));
+        }
     }
 
     /** The invoice in the caller's hospital, or 404 (never 403) for one elsewhere. */

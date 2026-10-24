@@ -42,6 +42,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
     private final ControllerAuthUtils authUtils;
@@ -122,7 +123,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // A hold the patient can't interpret is worse than a denial, so the reason
         // is mandatory here even though approve/reject leave it optional.
         if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
-            throw new BusinessException("A reason is required when putting a refill request on hold.");
+            throw new BusinessException("patient.refill.decision.reasonRequired");
         }
         return decide(auth, refillId, decision, RefillStatus.PAUSED);
     }
@@ -139,12 +140,12 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;
         if (prescriber == null || !staffId.equals(prescriber.getId())) {
-            throw new AccessDeniedException("You can only act on refill requests for your own prescriptions.");
+            throw new AccessDeniedException("patient.refill.decision.notOwnPrescription");
         }
 
         if (!isActionable(refill.getStatus(), newStatus)) {
-            throw new BusinessException(
-                "Only pending refill requests can be acted on. Current status: " + refill.getStatus());
+            throw new BusinessException("patient.refill.decision.notPending",
+                String.valueOf(refill.getStatus()));
         }
 
         // Release the fill BEFORE recording the decision. If the prescription
@@ -188,10 +189,9 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      */
     private void releaseRefillToPharmacy(Prescription prescription) {
         PrescriptionStatus status = prescription.getStatus();
-        if (status != null && !status.isRefillable()) {
-            throw new BusinessException(
-                "This prescription can no longer be refilled (status: " + status
-                    + "). The patient needs a new prescription.");
+        // QA D719: a controlled substance is never refilled, whatever its status.
+        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.approveNotRefillable", String.valueOf(status));
         }
 
         Integer remaining = prescription.getRefillsRemaining();
@@ -222,10 +222,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private UUID resolveStaffId(Authentication auth) {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication."));
+                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
         List<Staff> staffList = staffRepository.findByUserId(userId);
         if (staffList.isEmpty()) {
-            throw new BusinessException("No staff record linked to your account.");
+            throw new BusinessException("patient.refill.decision.noStaffRecord");
         }
         return staffList.get(0).getId();
     }

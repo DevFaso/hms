@@ -49,6 +49,8 @@ class PatientMedicationServiceImplTest {
     @Mock private com.example.hms.service.pharmacy.ReadyForCollectionLookup readyForCollection;
     @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientMedicationServiceImpl service;
 
@@ -244,6 +246,27 @@ class PatientMedicationServiceImplTest {
     void getMedications_discontinuedPrescriptionIsNotRefillable() {
         Prescription p = refillablePrescription();
         p.setStatus(PrescriptionStatus.DISCONTINUED);
+        stubMedicationsFor(p);
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
+                .isFalse();
+    }
+
+    @Test
+    void qaD719_completedControlledSubstanceIsNotRefillable() {
+        Prescription p = refillablePrescription();
+        p.setControlledSubstance(true);
+        stubMedicationsFor(p);
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
+                .isFalse();
+    }
+
+    @Test
+    void qaD719Retest_catalogControlledMorphineWithTickFalseIsNotRefillable() {
+        Prescription p = refillablePrescription();
+        p.setControlledSubstance(false);
+        when(controlledResolver.isControlled(p)).thenReturn(true);
         stubMedicationsFor(p);
 
         assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())

@@ -329,7 +329,7 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.isReceipt() && !this.receiptExpiryDate) {
       return 'PHARMACY.RECEIPT_EXPIRY_REQUIRED';
     }
-    if (this.isReceipt() && this.receiptExpiryDate < this.today()) {
+    if (this.isReceipt() && this.receiptExpiryDate <= this.today()) {
       return 'PHARMACY.RECEIPT_LOT_EXPIRED';
     }
     if (!this.isReceipt() && this.itemLots().length > 0 && !this.form.stockLotId) {

@@ -27,11 +27,28 @@ public interface StockLotRepository extends JpaRepository<StockLot, UUID> {
                                     @Param("lotNumber") String lotNumber,
                                     @Param("expiryDate") LocalDate expiryDate);
 
+    /**
+     * QA D733: the lot already received for this item with this number and
+     * expiry; a second delivery of the same batch adds to it.
+     */
+    @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId "
+         + "AND UPPER(s.lotNumber) = UPPER(:lotNumber) AND s.expiryDate = :expiryDate")
+    List<StockLot> findSameLot(@Param("inventoryItemId") UUID inventoryItemId,
+                               @Param("lotNumber") String lotNumber,
+                               @Param("expiryDate") LocalDate expiryDate);
+
+    /** QA D733: a further delivery of an existing lot, received and on hand. */
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("UPDATE StockLot l SET l.initialQuantity = l.initialQuantity + :quantity, "
+         + "l.remainingQuantity = l.remainingQuantity + :quantity, l.updatedAt = :now WHERE l.id = :id")
+    int addReceipt(@Param("id") UUID id, @Param("quantity") BigDecimal quantity,
+                   @Param("now") LocalDateTime now);
+
     /** D82: whether the item is tracked in lots at all. */
     boolean existsByInventoryItemId(UUID inventoryItemId);
 
     @Query("SELECT s FROM StockLot s WHERE s.inventoryItem.id = :inventoryItemId " +
-           "AND s.remainingQuantity > 0 AND s.expiryDate >= CURRENT_DATE " +
+           "AND s.remainingQuantity > 0 AND s.expiryDate > CURRENT_DATE " +
            "ORDER BY s.expiryDate ASC")
     List<StockLot> findAvailableLotsByFEFO(@Param("inventoryItemId") UUID inventoryItemId);
 
