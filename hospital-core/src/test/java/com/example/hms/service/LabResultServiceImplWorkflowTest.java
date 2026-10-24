@@ -80,6 +80,8 @@ class LabResultServiceImplWorkflowTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private AuditEventLogService auditEventLogService;
+    /** QA D709: release runs the critical-value notification. */
+    @Mock private CriticalValueNotificationService criticalValueNotificationService;
 
     @InjectMocks
     private LabResultServiceImpl labResultService;
@@ -636,6 +638,7 @@ class LabResultServiceImplWorkflowTest {
         UUID labResultId = UUID.randomUUID();
         LabResult critical = new LabResult();
         critical.setId(labResultId);
+        critical.setReleased(true);
         critical.setCriticalNotifiedAt(java.time.LocalDateTime.now().minusMinutes(5));
 
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -651,7 +654,7 @@ class LabResultServiceImplWorkflowTest {
     void acknowledgeLabResultStampsAcknowledgementFields() {
         UUID labResultId = UUID.randomUUID();
         UUID actorId = UUID.randomUUID();
-        LabResult labResult = buildLabResult(labResultId);
+        LabResult labResult = buildReleasedLabResult(labResultId);
         when(authService.getCurrentUserId()).thenReturn(actorId);
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
 
@@ -672,6 +675,13 @@ class LabResultServiceImplWorkflowTest {
         labResult.setResultUnit("mmol/L");
         labResult.setResultDate(LocalDateTime.now().minusDays(1));
         labResult.setNotes("Initial pending result");
+        return labResult;
+    }
+
+    /** A released result: what a clinician acknowledges or reads back (QA D709). */
+    private LabResult buildReleasedLabResult(UUID labResultId) {
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setReleased(true);
         return labResult;
     }
 
@@ -698,7 +708,7 @@ class LabResultServiceImplWorkflowTest {
     @Test
     void acknowledgeLabResultPassesForTheOwningHospital() {
         UUID labResultId = UUID.randomUUID();
-        LabResult labResult = buildLabResult(labResultId);
+        LabResult labResult = buildReleasedLabResult(labResultId);
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -722,5 +732,36 @@ class LabResultServiceImplWorkflowTest {
 
         assertThrows(ResourceNotFoundException.class,
             () -> labResultService.recordCriticalReadBack(labResultId, request, Locale.US));
+    }
+
+    /** QA D709: GET answered 404 for the unreleased result, the read-back 200 and acknowledged it. */
+    @Test
+    void criticalReadBackOfAnUnreleasedResultReadsAsNotFound() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultValue("7.2");
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        CriticalValueReadBackRequestDTO request = new CriticalValueReadBackRequestDTO();
+        request.setRepeatedValue("7.2");
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.recordCriticalReadBack(labResultId, request, Locale.US));
+        assertThat(labResult.isAcknowledged()).isFalse();
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    void acknowledgeOfAnUnreleasedResultReadsAsNotFound() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
+        assertThat(labResult.isAcknowledged()).isFalse();
     }
 }

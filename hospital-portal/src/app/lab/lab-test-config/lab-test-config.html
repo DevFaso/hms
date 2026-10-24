@@ -346,6 +346,7 @@
               id="defTestCode"
               type="text"
               [(ngModel)]="defForm.testCode"
+              [readonly]="clinicalFieldsLocked()"
               [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_CODE' | translate"
               required
             />
@@ -375,6 +376,7 @@
               id="defUnit"
               type="text"
               [(ngModel)]="defForm.unit"
+              [readonly]="clinicalFieldsLocked()"
               [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_UNIT' | translate"
             />
           </div>
@@ -384,6 +386,7 @@
               id="defSampleType"
               type="text"
               [(ngModel)]="defForm.sampleType"
+              [readonly]="clinicalFieldsLocked()"
               [placeholder]="'LAB_TEST_CONFIG.PLACEHOLDER_SAMPLE' | translate"
             />
           </div>
@@ -407,6 +410,7 @@
               id="defLoincCode"
               type="text"
               [(ngModel)]="defForm.loincCode"
+              [readonly]="clinicalFieldsLocked()"
               placeholder="e.g. 718-7"
               pattern="^\d{1,7}-\d$"
               [class.invalid]="!isLoincValid()"

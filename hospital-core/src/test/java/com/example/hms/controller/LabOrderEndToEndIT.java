@@ -237,11 +237,15 @@ class LabOrderEndToEndIT extends BaseIT {
 
         // 3b. B8: the roles the annotation admits get past the edge too. They
         //     post on a second order so the queue assertion below stays exact.
+        //     QA D708: one result per order, so each role posts on its own.
         UUID secondOrderId = placeOrder(LocalDateTime.now().minusHours(2));
         collectSpecimen(secondOrderId);
         postResult(director, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
-        postResult(qualityManager, secondOrderId, NORMAL_VALUE).andExpect(status().isCreated());
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
+        UUID thirdOrderId = placeOrder(LocalDateTime.now().minusHours(2));
+        collectSpecimen(thirdOrderId);
+        postResult(qualityManager, thirdOrderId, NORMAL_VALUE).andExpect(status().isCreated());
+        assertThat(orderStatus(thirdOrderId)).isEqualTo(LabOrderStatus.RESULTED);
 
         // 4. B10: the ordering roles cannot release — the annotation says so
         //    before the service is reached.
@@ -272,7 +276,7 @@ class LabOrderEndToEndIT extends BaseIT {
                 && resultId.toString().equals(row.getResourceId())
                 && patient.getId().equals(row.getPatientId())
                 && hospital.getName().equals(row.getHospitalName()));
-        // the second order still has two unreleased results
+        // the second order still has its unreleased result
         assertThat(orderStatus(secondOrderId)).isEqualTo(LabOrderStatus.RESULTED);
 
         // 6. The ordering doctor's review queue now shows exactly that result.
@@ -285,33 +289,24 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a retried post records a second result and re-opens the order, by design")
-    void aRetryRecordsASecondResult() throws Exception {
-        // Detecting a retry meant comparing the fields a request carries, and
-        // the portal form carries too few to tell two results apart: no
-        // analyte code, a minute-precision date, usually blank notes. Two
-        // analytes of one order entered in the same minute with the same
-        // value collapsed, and the endpoint answered 201 with somebody else's
-        // row. A duplicate row is visible and correctable — a release of both
-        // completes the order — and a lost result is neither.
+    @DisplayName("QA D708: a second post on a single-test order is refused; the first result stands")
+    void aSecondPostOnTheSameOrderIsRefused() throws Exception {
+        // QA D708: two POSTs 240 ms apart both got 201 on a TDR order; one was
+        // never released, so the patient saw a permanent "pending" row and the
+        // chart and record PDF listed the result twice. An order is one test,
+        // one value: an unreleased result is edited, a released one corrected.
         UUID orderId = placeOrder(LocalDateTime.now().minusMinutes(20));
         collectSpecimen(orderId);
         LocalDateTime resultedAt = LocalDateTime.now().withNano(0);
 
-        String first = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
+        String first = postResult(scientist, orderId, NORMAL_VALUE, resultedAt)
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.labTestName").value("Potassium"))
-            .andExpect(jsonPath("$.severityFlag").value("CRITICAL")) // QA D206: paged, so labelled critical
             .andReturn().getResponse().getContentAsString();
-        String retry = postResult(scientist, orderId, CRITICAL_VALUE, resultedAt)
-            .andExpect(status().isCreated())
-            // the second row describes itself as fully as the first
-            .andExpect(jsonPath("$.labTestName").value("Potassium"))
-            .andExpect(jsonPath("$.severityFlag").value("CRITICAL")) // QA D206: paged, so labelled critical
-            .andReturn().getResponse().getContentAsString();
+        postResult(scientist, orderId, NORMAL_VALUE, resultedAt).andExpect(status().isConflict());
 
-        assertThat(idOf(retry)).as("a retry is recorded, not swallowed").isNotEqualTo(idOf(first));
-        assertThat(labResultRepository.findAll()).hasSize(2);
+        assertThat(labResultRepository.findAll()).hasSize(1)
+            .allMatch(row -> row.getId().equals(idOf(first)));
         assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.RESULTED);
     }
 
@@ -340,8 +335,26 @@ class LabOrderEndToEndIT extends BaseIT {
             .andExpect(jsonPath("$.released").value(false))
             .andReturn().getResponse().getContentAsString().transform(this::idOf);
 
+        // QA D709: nobody is paged about a result they cannot read yet, and
+        // the ordering side can neither read it back nor acknowledge it.
+        LabResult draft = labResultRepository.findById(resultId).orElseThrow();
+        assertThat(draft.isReleased()).isFalse();
+        assertThat(draft.getCriticalNotifiedAt()).isNull();
+        assertThat(notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false)).isEmpty();
+        mockMvc.perform(post(RESULT_READ_BACK, resultId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(readBack(CRITICAL_VALUE)))
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(post(RESULT_ACKNOWLEDGE, resultId).contextPath(API).with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isNotFound());
+        assertThat(labResultRepository.findById(resultId).orElseThrow().isAcknowledged()).isFalse();
+
+        // The release pages the doctor.
+        releaseAs(director, resultId);
         LabResult stored = labResultRepository.findById(resultId).orElseThrow();
-        assertThat(stored.isReleased()).isFalse();
+        assertThat(stored.isReleased()).isTrue();
         assertThat(stored.getCriticalNotifiedAt()).isNotNull();
         List<Notification> forDoctor = notificationRepository
             .findByRecipientUsernameAndReadOrderByCreatedAtDesc(doctor.user().getUsername(), false);
@@ -428,6 +441,8 @@ class LabOrderEndToEndIT extends BaseIT {
         collectSpecimen(orderId);
         UUID resultId = idOf(postResult(scientist, orderId, "28.5").andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString());
+        // QA D709: a read-back is of a released result.
+        releaseAs(director, resultId);
 
         // QA D429: the write audit names the lab event and the patient, not a bare DATA_CREATE.
         assertThat(applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll())
@@ -642,6 +657,12 @@ class LabOrderEndToEndIT extends BaseIT {
     // ── HTTP helpers ─────────────────────────────────────────────────────
 
     /** D107: a hand-entered result needs a collected specimen first. */
+    /** Releases a result as someone other than its author (no self-release confirmation). */
+    private void releaseAs(Actor actor, UUID resultId) throws Exception {
+        mockMvc.perform(post(RESULT_RELEASE, resultId).contextPath(API).with(signedInAs(actor)).with(csrf()))
+            .andExpect(status().isOk());
+    }
+
     private void collectSpecimen(UUID orderId) throws Exception {
         mockMvc.perform(post(LAB_ORDER_SPECIMENS, orderId)
                 .contextPath(API)

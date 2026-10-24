@@ -37,12 +37,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.util.List;
+import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -1031,6 +1034,98 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    // ── QA D707: a small lab brings a test live without the super-admin ──
+
+    /** Director submits, the quality manager reviews, the same director approves: two people. */
+    @Test
+    void processApproval_directorPlusQualityManager_canApproveOwnSubmissionAfterIndependentReview() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        definition.setReviewedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("APPROVE"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+        }
+    }
+
+    /** With no recorded reviewer, the submitter still may not approve alone. */
+    @Test
+    void processApproval_approve_bySubmitterWithNoRecordedReviewer_isRefused() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setSubmittedById(director.getId());
+        definition.setReviewedById(null);
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+    }
+
+    /** QM_B got 403 on SUBMIT: the quality manager may author a definition. */
+    @Test
+    void processApproval_submitForQa_byQualityManager_isAllowed() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+        holdsRolesAtHospital(qm);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+            assertThat(definition.getSubmittedById()).isEqualTo(qm.getId());
+        }
+    }
+
+    /** D722: the queue's search tells the QA reviewer whether their approval will be accepted. */
+    @Test
+    void search_pendingApproval_reviewerHint_followsTheSoleDirectorRule() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        definition.setReviewedById(director.getId());
+        definition.setSubmittedById(UUID.randomUUID());
+        holdsRolesAtHospital(director);
+        LabTestDefinitionResponseDTO dto = LabTestDefinitionResponseDTO.builder().id(defId).build();
+        LabTestDefinitionResponseDTO dto2 = LabTestDefinitionResponseDTO.builder().id(defId).build();
+        authenticateAs("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.search(any(), any(), any(), any(), any(), anyBoolean(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(definition)));
+            when(mapper.toDto(definition)).thenReturn(dto, dto2);
+            when(assignmentRepository.countActiveUsersWithRoleCodeAtHospital(hospitalId, "ROLE_LAB_DIRECTOR"))
+                .thenReturn(2L, 1L);
+
+            var page = org.springframework.data.domain.PageRequest.of(0, 20);
+            assertThat(service.search(null, null, null, null, null, page)
+                .getContent().get(0).getReviewerMayApprove()).isFalse();
+            assertThat(service.search(null, null, null, null, null, page)
+                .getContent().get(0).getReviewerMayApprove()).isTrue();
+        }
+    }
+
     // ── ACTIVATE ─────────────────────────────────────────────────────────
 
     @Test
@@ -1487,6 +1582,100 @@ class LabTestDefinitionServiceImplTest {
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Unauthenticated");
+        }
+    }
+
+    // ── QA D705 / D721: unit, sample type, code and LOINC lock with the ranges ──
+
+    /** The exact report: LAB_DIRECTOR_A PUTs GLY-A (ACTIVE, mmol/L) with unit g/L. */
+    @Test
+    void update_activeDefinition_unitChangedByDirector_isRefusedAndNothingIsSaved() {
+        definition.setAssignment(assignment);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setUnit("g/L");
+        requestDTO.setSampleType("Plasma");
+        requestDTO.setReferenceRanges(null);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            assertThatThrownBy(() -> service.update(defId, requestDTO))
+                .isInstanceOf(IllegalStateException.class);
+            assertThat(definition.getUnit()).isEqualTo("mmol/L");
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+            verify(mapper, never()).updateEntityFromDto(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** D721: after QA (pending director approval) the sample type no longer moves. */
+    @Test
+    void update_lockedStatuses_sampleTypeOrLoincOrCodeChange_isRefused() {
+        definition.setAssignment(assignment);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        definition.setLoincCode("2345-7");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setReferenceRanges(null);
+        requestDTO.setUnit("mmol/L");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            for (LabTestDefinitionApprovalStatus status : EnumSet.of(
+                    LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
+                    LabTestDefinitionApprovalStatus.APPROVED,
+                    LabTestDefinitionApprovalStatus.ACTIVE)) {
+                definition.setApprovalStatus(status);
+                requestDTO.setSampleType("Serum");
+                requestDTO.setLoincCode("2345-7");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+                requestDTO.setSampleType("Plasma");
+                requestDTO.setTestCode("CBC2");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+                requestDTO.setTestCode("CBC");
+                requestDTO.setLoincCode("2339-0");
+                assertThatThrownBy(() -> service.update(defId, requestDTO)).isInstanceOf(IllegalStateException.class);
+            }
+            verify(repository, never()).save(org.mockito.ArgumentMatchers.any());
+        }
+    }
+
+    /** Paths that must keep working: a name edit of a live test, and any edit of a draft. */
+    @Test
+    void update_activeNameOnly_andDraftUnit_areAllowed() {
+        definition.setAssignment(assignment);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("mmol/L");
+        definition.setSampleType("Plasma");
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        managesHospital(director);
+        requestDTO.setReferenceRanges(null);
+        requestDTO.setUnit(" mmol/L ");
+        requestDTO.setSampleType("Plasma");
+        requestDTO.setName("Glycemie a jeun");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+            requestDTO.setUnit("g/L");
+            assertThat(service.update(defId, requestDTO)).isNotNull();
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
+            assertThat(service.update(defId, requestDTO)).isNotNull();
         }
     }
 

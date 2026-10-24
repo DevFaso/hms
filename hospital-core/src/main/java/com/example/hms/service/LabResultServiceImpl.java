@@ -218,6 +218,7 @@ public class LabResultServiceImpl implements LabResultService {
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
+            requireOrderPatient(request.getPatientId(), labOrder);
             request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
             request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
             LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
@@ -268,6 +269,11 @@ public class LabResultServiceImpl implements LabResultService {
             requireSpecimenTaken(committedStatus, lockedOrder);
         }
 
+        // QA D708 (round 10) narrows what follows: an order is one test
+        // definition, one analyte, and the portal enters one value for it. A
+        // second plain result on it is refused below (requireNoLiveResult);
+        // a correction names the result it replaces. Only the ingest path,
+        // whose ORU carries one OBX per analyte, records several rows.
         // A retried post records a second result, deliberately. Detecting the
         // retry meant comparing the fields a request carries, and the portal's
         // entry form carries too few to tell two results apart: no analyte
@@ -302,6 +308,9 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         LabResult superseded = ingested ? null : requireSupersedable(request.getSupersedesResultId(), lockedOrder);
+        if (!ingested) {
+            requireNoLiveResult(superseded, lockedOrder);
+        }
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         if (!ingested) {
             // Ingest-only fields: a hand-entered result is nobody's
@@ -888,6 +897,34 @@ public class LabResultServiceImpl implements LabResultService {
      * released result on the SAME order (the order row is locked here, so two
      * corrections cannot both claim it) that no correction has replaced yet.
      */
+    /**
+     * QA D708: two POSTs 240 ms apart both recorded a result on a single-test
+     * order; one was never released, so the patient saw a permanent "pending"
+     * row and the chart and record PDF listed the result twice. The order row
+     * is locked here, so the second of two concurrent posts sees the first.
+     * An unreleased result is edited, a released one is corrected (the
+     * request names it in supersedesResultId); neither is a second result.
+     */
+    private void requireNoLiveResult(LabResult superseded, LabOrder lockedOrder) {
+        if (superseded != null) {
+            return;
+        }
+        boolean hasLiveResult = labResultRepository.findByLabOrder_Id(lockedOrder.getId()).stream()
+            .anyMatch(existing -> !isSupersededByLiveResult(existing));
+        if (hasLiveResult) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolve("labresult.alreadyRecorded"));
+        }
+    }
+
+    /** QA D708: a patient id that is not the order's patient is a wrong request, not a detail to drop. */
+    private static void requireOrderPatient(UUID requestedPatientId, LabOrder labOrder) {
+        if (requestedPatientId != null && labOrder.getPatient() != null
+            && !requestedPatientId.equals(labOrder.getPatient().getId())) {
+            throw new BusinessException("labresult.patientMismatch");
+        }
+    }
+
     private LabResult requireSupersedable(UUID supersedesResultId, LabOrder lockedOrder) {
         if (supersedesResultId == null) {
             return null;
@@ -994,6 +1031,7 @@ public class LabResultServiceImpl implements LabResultService {
         // acknowledge, and thereby silence, another hospital's critical
         // result by guessing the UUID.
         requireResultInActiveHospital(labResult);
+        requireReleasedForClinician(labResult);
         acknowledgeResult(labResult, currentUserId);
         // QA D429: the acknowledge route returns no body; name the patient here.
         com.example.hms.security.audit.WriteAuditDetail.describe(AuditEventType.LAB_RESULT_ACKNOWLEDGED, labResult.getId(),
@@ -1014,6 +1052,7 @@ public class LabResultServiceImpl implements LabResultService {
         // well as a write, and a matching read-back removes the row from
         // the escalation sweep permanently.
         requireResultInActiveHospital(labResult);
+        requireReleasedForClinician(labResult);
 
         UUID actorId = authService.getCurrentUserId();
         LabResult updated = criticalValueNotificationService.recordReadBack(
@@ -1291,6 +1330,8 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         labResultRepository.save(labResult);
+        // QA D709: the critical page goes out on release, not on entry.
+        criticalValueNotificationService.notifyIfCritical(labResult, severityOf(labResult));
         // Both halves of this line's history: #716 closes the order once every
         // result on it is released, and the release then transmits its final
         // form. Domain write first — the message is the consequence, and it is
@@ -1768,6 +1809,17 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.isLabManager(userId, hospitalId)
             || roleValidator.hasRole(userId, hospitalId, ROLE_LAB_DIRECTOR)
             || roleValidator.hasRole(userId, hospitalId, "ROLE_QUALITY_MANAGER");
+    }
+
+    /**
+     * QA D709: the read-back answered 200 and marked acknowledged a result
+     * whose GET was 404 because it was not released. Acting on a result is
+     * reading it, so an unreleased result answers the same 404 here.
+     */
+    private static void requireReleasedForClinician(LabResult result) {
+        if (!result.isReleased()) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
     }
 
     private void acknowledgeResult(LabResult result, UUID userId) {
