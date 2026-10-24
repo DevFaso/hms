@@ -2,6 +2,7 @@ package com.example.hms.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
+import jakarta.validation.UnexpectedTypeException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -53,6 +54,6 @@ public class NotInClinicalFutureValidator implements ConstraintValidator<NotInCl
         if (value instanceof LocalDate date) {
             return !date.isAfter(LocalDate.now(clock));
         }
-        throw new IllegalArgumentException("@NotInClinicalFuture does not support " + value.getClass().getName());
+        throw new UnexpectedTypeException("@NotInClinicalFuture does not support " + value.getClass().getName());
     }
 }
