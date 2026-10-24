@@ -33,7 +33,7 @@ public class PatientHospitalRegistrationMapper {
         .currentRoom(safeTrim(dto.getCurrentRoom()))
         .currentBed(safeTrim(dto.getCurrentBed()))
         .attendingPhysicianName(safeTrim(dto.getAttendingPhysicianName()))
-            .stayStatus(dto.getStayStatus() != null ? dto.getStayStatus() : PatientStayStatus.ADMITTED)
+            .stayStatus(dto.getStayStatus() != null ? dto.getStayStatus() : PatientStayStatus.REGISTERED)
         .readyForDischargeNote(safeTrim(dto.getReadyForDischargeNote()))
             .build();
     }

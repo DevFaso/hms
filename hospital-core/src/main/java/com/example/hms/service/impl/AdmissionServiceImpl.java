@@ -184,6 +184,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
 
         admission = admissionRepository.save(admission);
+        // QA D764: the registration's stay status follows the stay.
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.ADMITTED);
         // QA D98/D135: the stay opens its own INPATIENT encounter, so notes,
         // the discharge summary and the after-visit summary have a home.
         stayEncounters.openStayEncounter(admission);
@@ -294,6 +296,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // Free the structured bed (the admission keeps bed/roomBed as history)
         bedAssignmentService.releaseBed(admission);
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.DISCHARGED);
 
         return admissionMapper.toResponseDTO(admission);
     }
@@ -329,6 +332,28 @@ public class AdmissionServiceImpl implements AdmissionService {
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+        // QA D764: a cancelled stay never happened; the patient is registered only.
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.REGISTERED);
+    }
+
+    /**
+     * QA D764: the registration's stay status said ADMITTED from the day the
+     * patient was registered, outpatients included, because nothing ever
+     * moved it. The admission is the stay, so it moves the status: ADMITTED
+     * on admit, DISCHARGED on discharge, REGISTERED when cancelled. The
+     * registration stays active (a discharged patient is still this
+     * hospital's patient).
+     */
+    private void syncRegistrationStayStatus(Admission admission, com.example.hms.enums.PatientStayStatus status) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        registrationRepository.findByPatientIdAndHospitalId(
+                admission.getPatient().getId(), admission.getHospital().getId())
+            .ifPresent(registration -> {
+                registration.setStayStatus(status);
+                registrationRepository.save(registration);
+            });
     }
 
     @Override

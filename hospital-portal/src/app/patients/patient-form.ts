@@ -59,6 +59,8 @@ export class PatientFormComponent implements OnInit {
   /** Staff confirmed "not the same person" — allows a fresh registration. */
   matchDismissed = false;
   linking = false;
+  /** QA D756: the link failure stays on the card, not only in a toast. */
+  linkError: string | null = null;
   private matchCheckSubject = new Subject<{ email: string; phone: string }>();
 
   // ── SMS phone verification (IKODDI OTP; hidden when not configured) ─────
@@ -271,6 +273,7 @@ export class PatientFormComponent implements OnInit {
       return;
     }
     this.linking = true;
+    this.linkError = null;
     this.registrationService
       .create({ patientId: match.patientId, hospitalId: this.form.hospitalId })
       .subscribe({
@@ -280,10 +283,14 @@ export class PatientFormComponent implements OnInit {
         },
         error: (err) => {
           this.linking = false;
-          const msg =
+          const serverMessage: unknown = err?.error?.message;
+          const fallback =
             err?.status === 409
               ? this.translate.instant('PATIENTS.ALREADY_REGISTERED_HERE')
               : this.translate.instant('PATIENTS.LINK_ERROR');
+          const msg =
+            typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : fallback;
+          this.linkError = msg;
           this.toast.error(msg);
         },
       });

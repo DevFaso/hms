@@ -3029,4 +3029,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V230 (QA D764): ADMITTED registrations without an open admission
+         become REGISTERED. Plain statement, no DO block. -->
+    <changeSet id="V230-registration-stay-status-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V230__registration_stay_status_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

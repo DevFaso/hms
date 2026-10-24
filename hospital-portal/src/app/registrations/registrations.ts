@@ -64,6 +64,7 @@ export class RegistrationsComponent implements OnInit {
   multiHospitalLoading = signal(false);
 
   readonly stayStatuses: PatientStayStatus[] = [
+    'REGISTERED',
     'ADMITTED',
     'READY_FOR_DISCHARGE',
     'DISCHARGED',
@@ -153,7 +154,7 @@ export class RegistrationsComponent implements OnInit {
   /* ── Create / edit ── */
 
   openCreate(): void {
-    this.form = { stayStatus: 'ADMITTED', active: true };
+    this.form = { stayStatus: 'REGISTERED', active: true };
     this.formPatient.set(null);
     this.editingRegistration.set(null);
     this.showFormModal.set(true);
@@ -168,7 +169,7 @@ export class RegistrationsComponent implements OnInit {
       currentRoom: registration.currentRoom ?? '',
       currentBed: registration.currentBed ?? '',
       attendingPhysicianName: registration.attendingPhysicianName ?? '',
-      stayStatus: registration.stayStatus ?? 'ADMITTED',
+      stayStatus: registration.stayStatus ?? 'REGISTERED',
       readyForDischargeNote: registration.readyForDischargeNote ?? '',
     };
     this.editingRegistration.set(registration);

@@ -82,8 +82,10 @@ public class PatientHospitalRegistration extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "stay_status", nullable = false, length = 40)
+    // QA D764: a registration is not a stay. It is REGISTERED until an
+    // admission opens; the admission service moves it to ADMITTED and back.
     @Builder.Default
-    private PatientStayStatus stayStatus = PatientStayStatus.ADMITTED;
+    private PatientStayStatus stayStatus = PatientStayStatus.REGISTERED;
 
     @Column(name = "stay_status_updated_at")
     private LocalDateTime stayStatusUpdatedAt;
@@ -137,7 +139,7 @@ public class PatientHospitalRegistration extends BaseEntity {
         this.patient = patient;
         this.hospital = hospital;
         this.active  = true;
-        this.stayStatus = PatientStayStatus.ADMITTED;
+        this.stayStatus = PatientStayStatus.REGISTERED;
         this.stayStatusUpdatedAt = LocalDateTime.now();
     }
 
@@ -211,7 +213,7 @@ public class PatientHospitalRegistration extends BaseEntity {
 
     private void ensureTemporalDefaults() {
         if (registrationDate == null) registrationDate = LocalDate.now();
-        if (stayStatus == null) stayStatus = PatientStayStatus.ADMITTED;
+        if (stayStatus == null) stayStatus = PatientStayStatus.REGISTERED;
         if (stayStatusUpdatedAt == null) stayStatusUpdatedAt = LocalDateTime.now();
     }
 
