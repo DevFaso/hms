@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientDiagnosis;
@@ -395,9 +396,10 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                                                           Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
-            List<com.example.hms.model.Prescription> rows = prescriptionRepository
-                    .findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10))
-                    .getContent();
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            List<com.example.hms.model.Prescription> rows = NeverSentRule.prescriptionsReadableHere(
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10))
+                    .getContent(), hospitalId);
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
                             .name(rx.getMedicationName())

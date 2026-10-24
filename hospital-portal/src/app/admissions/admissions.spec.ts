@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -17,6 +18,7 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { AuthService } from '../auth/auth.service';
 import { BedResponse, BedService } from '../services/bed.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
+import { toLocalInputValue } from '../shared/date-utils';
 import { roleContextStub } from '../testing/role-context.stub';
 
 /**
@@ -332,11 +334,23 @@ describe('AdmissionsComponent', () => {
       expect(component.showModal()).toBeFalse();
     });
 
+    it('sends the admission time as the UTC wall clock, not the browser one (QA D622)', () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      component.ngOnInit();
+      component.openCreate();
+      component.form.admissionDateTime = '2026-10-23T07:48';
+      admissionService.create.and.returnValue(of(adm()));
+      component.submitForm();
+      const sent = admissionService.create.calls.mostRecent().args[0];
+      expect(sent.admissionDateTime).toBe(new Date('2026-10-23T07:48').toISOString().slice(0, 19));
+    });
+
     it('edits an existing admission', () => {
       departmentLookup.getActiveDepartments.and.returnValue(of([]));
       component.openEdit(adm({ admissionDateTime: '2026-10-18T10:00:00' }));
       expect(component.editing()).toBeTrue();
-      expect(component.form.admissionDateTime).toBe('2026-10-18');
+      // QA D622: the stored UTC time, in the user's zone (not a bare date that blanks the input).
+      expect(component.form.admissionDateTime).toBe(toLocalInputValue('2026-10-18T10:00:00'));
       expect(component.selectedPatient()?.lastName).toBe('Traore Diallo');
       admissionService.update.and.returnValue(of(adm()));
       component.submitForm();
@@ -395,6 +409,8 @@ describe('AdmissionsComponent', () => {
       bedService.getAvailableBeds.and.returnValue(of([{ id: 'b1' } as BedResponse]));
       component.openBedAssign(adm());
       expect(component.availableBeds().length).toBe(1);
+      // QA D609: the picker asks for the beds this patient may take.
+      expect(bedService.getAvailableBeds).toHaveBeenCalledWith(adm().patientId);
       component.submitBedAssign();
       expect(admissionService.assignBed).not.toHaveBeenCalled();
       component.selectedBedId.set('b1');
@@ -428,7 +444,7 @@ describe('AdmissionsComponent', () => {
  * flag test still green. These render the row and read the DOM.
  */
 describe('AdmissionsComponent row actions (rendered, D527)', () => {
-  function render(roles: string[]): HTMLElement {
+  function render(roles: string[], status = 'ACTIVE', admissionDateTime?: string): HTMLElement {
     const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
     admissions.getAll.and.returnValue(
       of([
@@ -437,8 +453,9 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
           hospitalId: 'h1',
           patientId: 'p1',
           patientName: 'Awa Traore',
-          status: 'ACTIVE',
+          status,
           chiefComplaint: 'Fever',
+          admissionDateTime,
         } as AdmissionResponse,
       ]),
     );
@@ -504,5 +521,22 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     expect(el.querySelector('.delete-link')).not.toBeNull();
     expect(el.querySelector('.discharge-link')).not.toBeNull();
     expect(newButton(el)).not.toBeNull();
+  });
+
+  // QA D603: a discharged (finalized, billed) stay was deleted from the "Sorti" row.
+  for (const status of ['DISCHARGED', 'TRANSFERRED', 'DECEASED', 'CANCELLED']) {
+    it(`offers no Delete on a ${status} stay, even to a doctor`, () => {
+      const el = render(['ROLE_DOCTOR'], status);
+      expect(el.querySelector('.delete-link')).toBeNull();
+    });
+  }
+
+  // QA D622: the admission time is stored as UTC wall clock; the row must show
+  // the user's local date of that instant, not the bare string read as local.
+  it('shows the admission date in the user zone (D622)', () => {
+    const el = render(['ROLE_DOCTOR'], 'ACTIVE', '2026-10-23T02:30:00');
+    const expected = formatDate(new Date(Date.UTC(2026, 9, 23, 2, 30)), 'mediumDate', 'en-US');
+    const cells = Array.from(el.querySelectorAll('td')).map((td) => td.textContent?.trim());
+    expect(cells).toContain(expected);
   });
 });

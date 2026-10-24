@@ -37,6 +37,8 @@ sonar {
 
         // Align SonarQube coverage exclusions with JaCoCo verification exclusions
         property 'sonar.coverage.exclusions', [
+            // CI tooling: runs in GitHub Actions, no coverage report is produced for it
+            '.github/**',
             // Package-level exclusions
             '**/bootstrap/**',
             '**/seed/**',

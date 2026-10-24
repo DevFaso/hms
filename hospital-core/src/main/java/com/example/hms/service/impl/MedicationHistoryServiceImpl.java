@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PharmacyFillMapper;
 import com.example.hms.model.Hospital;
@@ -81,7 +82,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // the reach of the whole timeline accounted once below.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<Prescription> prescriptions = fetchPrescriptions(patientId, readable, startDate, endDate);
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        List<Prescription> prescriptions = NeverSentRule.prescriptionsReadableHere(
+            fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId);
         List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());

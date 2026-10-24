@@ -755,6 +755,81 @@ class GeneralReferralServiceImplTest {
     }
 
     @Test
+    void getReferralsByPatient_receivingHospitalListAgreesWithByIdRead_D623() {
+        // QA D623/D652: as DOCTOR_B, GET /referrals/patient/{A3} listed hospital
+        // A's DRAFT, and GET /referrals/{id} on it returned 404. Same rule now.
+        UUID patientId = UUID.randomUUID();
+        UUID hospA = UUID.randomUUID();
+        UUID hospB = UUID.randomUUID();
+        GeneralReferral draft = buildReferral(UUID.randomUUID());
+        draft.getPatient().setId(patientId);
+        draft.setHospital(buildHospital(hospA, "R9 Hopital A2"));
+        draft.setReceivingHospital(buildHospital(hospB, "R9 Hopital B"));
+        GeneralReferral sent = buildReferral(UUID.randomUUID());
+        sent.getPatient().setId(patientId);
+        sent.setHospital(buildHospital(hospA, "R9 Hopital A2"));
+        sent.setReceivingHospital(buildHospital(hospB, "R9 Hopital B"));
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        sent.setSubmittedAt(LocalDateTime.now());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospB);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospB))).thenReturn(Set.of(hospA, hospB));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospA, hospB)))
+            .thenReturn(List.of(draft, sent));
+        when(referralRepository.findById(draft.getId())).thenReturn(Optional.of(draft));
+
+        List<GeneralReferralResponseDTO> listed = generalReferralService.getReferralsByPatient(patientId);
+
+        assertThat(listed).extracting(GeneralReferralResponseDTO::getId).containsExactly(sent.getId());
+        UUID draftId = draft.getId();
+        assertThrows(ResourceNotFoundException.class, () -> generalReferralService.getReferral(draftId));
+    }
+
+    @Test
+    void getReferral_thirdHospitalSentReferralTheListShowsOpensById_butNoWrite_D652() {
+        // A sent referral from A to C, listed at B on the treatment relationship,
+        // must open by id at B; reading across is still not acting across.
+        UUID patientId = UUID.randomUUID();
+        UUID hospA = UUID.randomUUID();
+        UUID hospB = UUID.randomUUID();
+        GeneralReferral sent = buildReferral(UUID.randomUUID());
+        sent.getPatient().setId(patientId);
+        sent.setHospital(buildHospital(hospA, "R9 Hopital A2"));
+        sent.setReceivingHospital(buildHospital(UUID.randomUUID(), "R9 Hopital C"));
+        sent.setStatus(ReferralStatus.SUBMITTED);
+        sent.setSubmittedAt(LocalDateTime.now());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospB);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospB))).thenReturn(Set.of(hospA, hospB));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospA, hospB)))
+            .thenReturn(List.of(sent));
+        when(referralRepository.findById(sent.getId())).thenReturn(Optional.of(sent));
+
+        assertThat(generalReferralService.getReferralsByPatient(patientId))
+            .extracting(GeneralReferralResponseDTO::getId).containsExactly(sent.getId());
+        assertThat(generalReferralService.getReferral(sent.getId()).getId()).isEqualTo(sent.getId());
+        UUID sentId = sent.getId();
+        assertThrows(ResourceNotFoundException.class, () -> generalReferralService.cancelReferral(sentId, "x"));
+    }
+
+    @Test
+    void getReferralsByPatient_sendingHospitalStillListsItsOwnDraft() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospA = UUID.randomUUID();
+        GeneralReferral draft = buildReferral(UUID.randomUUID());
+        draft.getPatient().setId(patientId);
+        draft.setHospital(buildHospital(hospA, "R9 Hopital A2"));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospA);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospA))).thenReturn(Set.of(hospA));
+        when(referralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(hospA)))
+            .thenReturn(List.of(draft));
+
+        assertThat(generalReferralService.getReferralsByPatient(patientId))
+            .extracting(GeneralReferralResponseDTO::getId).containsExactly(draft.getId());
+    }
+
+    @Test
     void getReferralsByReferringProvider_scopedToHospital() {
         UUID providerId = UUID.randomUUID();
         UUID activeHospId = UUID.randomUUID();

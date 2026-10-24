@@ -59,6 +59,13 @@ describe('BedService', () => {
     req.flush([]);
   });
 
+  it('asks for the beds a given patient may take (QA D609)', () => {
+    service.getAvailableBeds('p1').subscribe();
+    const req = httpMock.expectOne((r) => r.url === '/beds/available');
+    expect(req.request.params.get('patientId')).toBe('p1');
+    req.flush([]);
+  });
+
   it('POSTs a new bed under its ward', () => {
     service.createBed('w1', { bedNumber: 'B01' }).subscribe();
     const req = httpMock.expectOne('/wards/w1/beds');

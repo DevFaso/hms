@@ -102,8 +102,11 @@ public class BedManagementController {
     @GetMapping("/beds/available")
     @PreAuthorize(READ_ROLES)
     @Operation(summary = "List assignable beds (active + AVAILABLE) across the active hospital")
-    public ResponseEntity<List<BedResponseDTO>> getAvailableBeds() {
-        return ResponseEntity.ok(bedManagementService.getAvailableBeds());
+    public ResponseEntity<List<BedResponseDTO>> getAvailableBeds(
+        @org.springframework.web.bind.annotation.RequestParam(required = false) UUID patientId
+    ) {
+        // QA D609: with a patient, the beds of a ward they cannot take are left out.
+        return ResponseEntity.ok(bedManagementService.getAvailableBeds(patientId));
     }
 
     @PostMapping("/wards/{wardId}/beds")

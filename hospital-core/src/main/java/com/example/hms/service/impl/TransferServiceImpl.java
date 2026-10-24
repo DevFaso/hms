@@ -107,6 +107,10 @@ public class TransferServiceImpl implements TransferService {
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
             throw new BusinessException("transfer.r7.alreadyInBed");
         }
+        // QA D609: the same sex and age rule bed assignment applies, checked when
+        // the transfer is ORDERED. It was only checked on completion, so a
+        // 6-year-old's transfer reserved a maternity bed and then stuck at 400.
+        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient());
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
                 throw new BusinessException("transfer.r7.destinationTaken",

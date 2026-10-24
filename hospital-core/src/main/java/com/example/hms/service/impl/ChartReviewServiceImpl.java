@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.ImagingOrder;
@@ -232,10 +233,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                                      int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
         List<Prescription> source = readable != null
-            ? prescriptionRepository
+            ? NeverSentRule.prescriptionsReadableHere(prescriptionRepository
                 .findByPatient_IdAndHospital_IdIn(patientId, readable, page)
-                .getContent()
+                .getContent(), hospitalId)
             : prescriptionRepository
                 .findByPatient_Id(patientId, page)
                 .getContent();
@@ -248,10 +250,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                               int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit);
+        // QA D652: less another hospital's never-sent DRAFTs (NeverSentRule).
         List<ImagingOrder> orders = readable != null
-            ? imagingOrderRepository
+            ? NeverSentRule.imagingOrdersReadableHere(imagingOrderRepository
                 .findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable, page)
-                .getContent()
+                .getContent(), hospitalId)
             : imagingOrderRepository
                 .findByPatient_IdOrderByOrderedAtDesc(patientId, page)
                 .getContent();

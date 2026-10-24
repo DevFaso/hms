@@ -92,6 +92,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+    private final com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository;
+
+    /** QA D603: the stay statuses that may still be cancelled. */
+    private static final java.util.Set<com.example.hms.enums.AdmissionStatus> CANCELLABLE_STATUSES = java.util.EnumSet.of(
+        com.example.hms.enums.AdmissionStatus.PENDING, com.example.hms.enums.AdmissionStatus.ACTIVE,
+        com.example.hms.enums.AdmissionStatus.ON_LEAVE);
 
     /**
      * QA D84 (D28 family): the admitting and attending providers must hold a
@@ -307,6 +313,16 @@ public class AdmissionServiceImpl implements AdmissionService {
     public void cancelAdmission(UUID admissionId) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        // QA D603: a discharged, finalized and PAID stay was cancelled by a DELETE,
+        // leaving the summary and the invoice pointing at a cancelled stay. Only a
+        // stay still in progress, and never one already billed, may be cancelled.
+        if (!CANCELLABLE_STATUSES.contains(admission.getStatus())) {
+            throw new ConflictException("admission.cancel.notInProgress");
+        }
+        if (billingInvoiceRepository.existsByEncounter_AdmissionIdAndStatusNot(admission.getId(),
+                com.example.hms.enums.InvoiceStatus.CANCELLED)) {
+            throw new ConflictException("admission.cancel.billed");
+        }
         admission.cancel();
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);

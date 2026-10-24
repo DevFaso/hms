@@ -3511,6 +3511,7 @@ class PrescriptionServiceImplTest {
         Prescription foreignRx = new Prescription();
         foreignRx.setId(UUID.randomUUID());
         foreignRx.setHospital(other);
+        foreignRx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
             .thenReturn(Set.of(hospitalId, otherHospitalId));
@@ -3524,6 +3525,110 @@ class PrescriptionServiceImplTest {
         assertThat(result).extracting(PrescriptionResponseDTO::getId).containsExactly(localRx.getId(), foreignRx.getId());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    // ═══════════════ QA D652: a list never shows what its by-id read refuses ═══════════════
+
+    /** Hospital A's prescription for the patient, as DOCTOR_A wrote it (8b3ca231 in the re-test was a DRAFT). */
+    private Prescription foreignPrescription(UUID otherHospitalId, com.example.hms.enums.PrescriptionStatus status) {
+        Hospital other = new Hospital();
+        other.setId(otherHospitalId);
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setHospital(other);
+        rx.setPatient(patient);
+        rx.setStatus(status);
+        return rx;
+    }
+
+    @Test
+    void d652PagedListAcrossHospitalsAsksForTheSentRowsOnly() {
+        // GET /prescriptions?patientId=<A3> as DOCTOR_B, X-Hospital-Id=B.
+        UUID hospitalA = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 100);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+        when(prescriptionRepository.findSentAcrossHospitals(patientId, Set.of(hospitalId, hospitalA),
+            hospitalId, PrescriptionServiceImpl.NEVER_SENT, pageable))
+            .thenReturn(new PageImpl<>(List.of()));
+
+        prescriptionService.list(patientId, null, null, null, pageable, Locale.ENGLISH);
+
+        verify(prescriptionRepository, never()).findByPatient_IdAndHospital_IdIn(any(), any(), any(Pageable.class));
+        assertThat(PrescriptionServiceImpl.NEVER_SENT).containsExactlyInAnyOrder(
+            com.example.hms.enums.PrescriptionStatus.DRAFT, com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE);
+    }
+
+    @Test
+    void d652UnpagedPatientListLeavesOutAnotherHospitalsDraft() {
+        UUID hospitalA = UUID.randomUUID();
+        Prescription draftAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.DRAFT);
+        Prescription signedAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.SIGNED);
+        Hospital local = new Hospital();
+        local.setId(hospitalId);
+        Prescription ownDraft = new Prescription();
+        ownDraft.setId(UUID.randomUUID());
+        ownDraft.setHospital(local);
+        ownDraft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, Set.of(hospitalId, hospitalA)))
+            .thenReturn(List.of(draftAtA, signedAtA, ownDraft));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
+            .thenAnswer(inv -> PrescriptionResponseDTO.builder().id(((Prescription) inv.getArgument(0)).getId()).build());
+
+        List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
+
+        assertThat(result).extracting(PrescriptionResponseDTO::getId)
+            .containsExactly(signedAtA.getId(), ownDraft.getId());
+    }
+
+    @Test
+    void d652ByIdReadOfAnotherHospitalsDraftIs404() {
+        // GET /prescriptions/<8b3ca231> as DOCTOR_B, X-Hospital-Id=B: 404, so the list must not show it.
+        UUID hospitalA = UUID.randomUUID();
+        Prescription draftAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.DRAFT);
+        UUID id = draftAtA.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(draftAtA));
+        org.mockito.Mockito.lenient().when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+
+        assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(), any(), anyString());
+    }
+
+    @Test
+    void d652ByIdReadOpensAnotherHospitalsSentPrescriptionTheListShows() {
+        UUID hospitalA = UUID.randomUUID();
+        Prescription signedAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID id = signedAtA.getId();
+        PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(id).build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(signedAtA));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
+            .thenReturn(Set.of(hospitalId, hospitalA));
+        when(prescriptionMapper.toResponseDTO(signedAtA)).thenReturn(dto);
+
+        assertThat(prescriptionService.getPrescriptionById(id, Locale.ENGLISH)).isSameAs(dto);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), any(), isNull(),
+            eq(Map.of(hospitalA.toString(), 1L)), anyString());
+    }
+
+    @Test
+    void d652ByIdReadOfAHospitalOutsideTheReadableSetIs404() {
+        UUID hospitalA = UUID.randomUUID();
+        Prescription signedAtA = foreignPrescription(hospitalA, com.example.hms.enums.PrescriptionStatus.SIGNED);
+        UUID id = signedAtA.getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(signedAtA));
+        when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId))).thenReturn(Set.of(hospitalId));
+
+        assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     // ═══════════════ withdrawal takes the partner offers with it ═══════════════
