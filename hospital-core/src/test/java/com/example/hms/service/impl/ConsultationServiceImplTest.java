@@ -236,6 +236,7 @@ class ConsultationServiceImplTest {
 
     @Test void updateConsultation_setsScheduledStatus() {
         ConsultationUpdateDTO u = new ConsultationUpdateDTO(); u.setScheduledAt(LocalDateTime.now().plusDays(1));
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // QA D735: a coordinator reschedules
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.ACKNOWLEDGED)));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.updateConsultation(consultationId, u).getStatus()).isEqualTo(ConsultationStatus.SCHEDULED);

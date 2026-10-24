@@ -398,7 +398,27 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO updateConsultation(UUID consultationId, ConsultationUpdateDTO updateDTO) {
         Consultation consultation = getConsultationInScope(consultationId);
 
-        if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
+        // QA D735: changing the consultant here is a reassignment (coordinator
+        // only); the schedule is the consultant's or the coordinator's; the
+        // clinical answer is the assigned consultant's alone.
+        boolean changesConsultant = updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null);
+        boolean changesClinical = updateDTO.getConsultantNote() != null || updateDTO.getRecommendations() != null
+            || updateDTO.getFollowUpRequired() != null || updateDTO.getFollowUpInstructions() != null;
+        if (changesConsultant) {
+            requireCoordinator(consultation);
+        }
+        if (changesClinical) {
+            requireAssignedConsultant(consultation);
+        } else if (updateDTO.getScheduledAt() != null) {
+            requireAssignedConsultantOrCoordinator(consultation);
+        }
+        if (consultation.getStatus() == ConsultationStatus.COMPLETED
+                || consultation.getStatus() == ConsultationStatus.CANCELLED
+                || consultation.getStatus() == ConsultationStatus.DECLINED) {
+            throw new BusinessException("consultation.schedule.badStatus", consultation.getStatus());
+        }
+
+        if (changesConsultant && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
             Staff consultant = resolveStaffAt(updateDTO.getConsultantId(), consultation.getHospital() != null ? consultation.getHospital().getId() : null)
                 .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, updateDTO.getConsultantId()));
             requireConsultantAtHospital(consultant, consultation);
@@ -522,6 +542,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             consultation.getStatus() == ConsultationStatus.DECLINED) {
             throw new BusinessException("consultation.schedule.badStatus", consultation.getStatus());
         }
+        requireAssignedConsultantOrCoordinator(consultation);
 
         consultation.setScheduledAt(scheduledAt);
         consultation.setStatus(ConsultationStatus.SCHEDULED);
@@ -587,6 +608,9 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
             throw new BusinessException("consultation.assign.badStatus", consultation.getStatus());
         }
+        // QA D704/D735: assigning is the coordinator's call, never a self-claim
+        // of someone else's consult by any doctor.
+        requireCoordinator(consultation);
 
         Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
@@ -630,6 +654,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
             throw new BusinessException("consultation.reassign.cancelled");
         }
+        requireCoordinator(consultation);
 
         Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
@@ -841,6 +866,40 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID consultantUserId = consultant != null && consultant.getUser() != null ? consultant.getUser().getId() : null;
         if (caller == null || !caller.equals(consultantUserId)) {
             throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.notAssignedConsultant"));
+        }
+    }
+
+    /**
+     * QA D704/D735: who may decide who answers a consult — the requester, a
+     * hospital admin of the consultation's hospital (the coordinator role), or
+     * a verified super-admin. Any other doctor could assign it to himself and
+     * then acknowledge, start and complete it.
+     */
+    private void requireCoordinator(Consultation consultation) {
+        if (!isCoordinator(consultation)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.assign.notCoordinator"));
+        }
+    }
+
+    private boolean isCoordinator(Consultation consultation) {
+        if (scopeResolver.isVerifiedSuperAdmin()) {
+            return true;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller == null) {
+            return false;
+        }
+        Staff requester = consultation.getRequestingProvider();
+        if (requester != null && requester.getUser() != null && caller.equals(requester.getUser().getId())) {
+            return true;
+        }
+        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
+        return hospitalId != null && roleValidator.isHospitalAdmin(caller, hospitalId);
+    }
+
+    private void requireAssignedConsultantOrCoordinator(Consultation consultation) {
+        if (!isCoordinator(consultation)) {
+            requireAssignedConsultant(consultation);
         }
     }
 

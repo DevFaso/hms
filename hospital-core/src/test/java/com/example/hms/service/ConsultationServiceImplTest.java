@@ -669,6 +669,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("updates consultant, scheduledAt, and transitions to SCHEDULED")
         void updatesConsultantAndSchedules() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation consultation = buildConsultation(ConsultationStatus.ACKNOWLEDGED);
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
@@ -684,16 +685,17 @@ class ConsultationServiceImplTest {
             ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder()
                     .consultantId(newConsultantId)
                     .scheduledAt(LocalDateTime.now().plusDays(1))
-                    .consultantNote("Note")
-                    .recommendations("Rest")
-                    .followUpRequired(true)
-                    .followUpInstructions("Follow up in 2 weeks")
                     .build();
 
             ConsultationResponseDTO result = service.updateConsultation(consultationId, updateDTO);
 
             assertThat(result.getStatus()).isEqualTo(ConsultationStatus.SCHEDULED);
-            assertThat(result.getConsultantNote()).isEqualTo("Note");
+            assertThat(consultation.getConsultant()).isEqualTo(newConsultant);
+
+            // QA D735: the clinical answer stays the assigned consultant's, even for the requester.
+            ConsultationUpdateDTO answer = ConsultationUpdateDTO.builder().recommendations("Rest").build();
+            assertThatThrownBy(() -> service.updateConsultation(consultationId, answer))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         }
 
         @Test
@@ -1110,6 +1112,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("assigns a requested consultation to a consultant")
         void assignsRequested() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
             consultation.setConsultant(null);
             com.example.hms.model.User consultantUser = new com.example.hms.model.User();
@@ -1143,6 +1146,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("throws when consultant not found")
         void throwsWhenConsultantNotFound() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(consultantId)).thenReturn(Optional.empty());
@@ -1177,6 +1181,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("is refused on assign, reassign and update with a 400, and nothing is saved")
         void isRefusedEverywhere() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
             requested.setConsultant(null);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
@@ -1206,6 +1211,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("reassigns an assigned consultation")
         void reassignsAssigned() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation consultation = buildConsultation(ConsultationStatus.ASSIGNED);
             UUID newConsultantId = UUID.randomUUID();
             Staff newConsultant = new Staff();
@@ -1569,6 +1575,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("D704: a reassignment still hands the consult to another doctor")
         void reassignmentStillWorks() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             Consultation consultation = buildConsultation(ConsultationStatus.ACKNOWLEDGED);
             Staff other = new Staff();
             other.setId(UUID.randomUUID());
@@ -1588,6 +1595,7 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("D715: a nurse cannot be the consultant, on create, assign, reassign or update")
         void nurseCannotBeTheConsultant() {
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId()); // the requester coordinates (QA D735)
             when(roleValidator.isDoctor(consultant.getUser().getId(), hospitalId)).thenReturn(false);
             when(staffRepository.findById(consultantId)).thenReturn(Optional.of(consultant));
             Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
@@ -1632,6 +1640,61 @@ class ConsultationServiceImplTest {
             assertThatThrownBy(() -> service.createConsultation(request, staffId))
                 .isInstanceOf(BusinessException.class).extracting("messageKey").isEqualTo("consultation.consultant.notAtHospital");
             verify(consultationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D735 replay: an uninvolved doctor POSTs /assign to himself on a REQUESTED consult and is refused")
+        void uninvolvedDoctorCannotAssignToHimself() {
+            UUID hijacker = UUID.randomUUID();
+            Staff hijackerStaff = new Staff();
+            hijackerStaff.setId(UUID.randomUUID());
+            hijackerStaff.setHospital(hospital);
+            hijackerStaff.setUser(new com.example.hms.model.User());
+            hijackerStaff.getUser().setId(hijacker);
+            // As in the re-test: requested with a preferred consultant, still REQUESTED.
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(roleValidator.getCurrentUserId()).thenReturn(hijacker);
+            org.mockito.Mockito.lenient().when(staffRepository.findByUserIdAndHospitalId(hijacker, hospitalId)).thenReturn(Optional.of(hijackerStaff));
+            ConsultationUpdateDTO update = new ConsultationUpdateDTO();
+            update.setConsultantId(hijackerStaff.getId());
+            ConsultationUpdateDTO answer = new ConsultationUpdateDTO();
+            answer.setRecommendations("mine now");
+
+            for (Runnable call : List.<Runnable>of(
+                    () -> service.assignConsultation(consultationId, hijacker, hijacker, null),
+                    () -> service.reassignConsultation(consultationId, hijacker, hijacker, "taking it"),
+                    () -> service.updateConsultation(consultationId, update),
+                    () -> service.updateConsultation(consultationId, answer),
+                    () -> service.scheduleConsultation(consultationId, LocalDateTime.now().plusDays(1), null))) {
+                assertThatThrownBy(call::run).isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            }
+            assertThat(consultation.getConsultant()).isEqualTo(consultant);
+            assertThat(consultation.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
+            verify(consultationRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D735: the current consultant cannot reassign the consult to himself or anyone; the requester and a hospital admin can")
+        void onlyCoordinatorsAssign() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(staffRepository.findById(consultantId)).thenReturn(Optional.of(consultant));
+            when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            // default caller = the consultant
+            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, consultant.getUser().getId(), null))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+
+            when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+            assertThat(service.assignConsultation(consultationId, consultantId, staff.getUser().getId(), null).getStatus())
+                .isEqualTo(ConsultationStatus.ASSIGNED);
+
+            UUID admin = UUID.randomUUID();
+            when(roleValidator.getCurrentUserId()).thenReturn(admin);
+            when(roleValidator.isHospitalAdmin(admin, hospitalId)).thenReturn(true);
+            assertThat(service.reassignConsultation(consultationId, consultantId, admin, "cover").getStatus())
+                .isEqualTo(ConsultationStatus.ASSIGNED);
         }
 
         @Test
