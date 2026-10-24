@@ -1716,7 +1716,7 @@ class ConsultationServiceImplTest {
             colleague.setUser(new com.example.hms.model.User());
             colleague.getUser().setId(UUID.randomUUID());
             org.mockito.Mockito.lenient().when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
-            // D749: the consultant's handover is covered by currentConsultantHandsOver;
+            // D749: the consultant handing over is covered by the currentConsultantHandsOver test,
             // another doctor who is neither requester nor consultant is refused.
             UUID otherDoctor = UUID.randomUUID();
             when(roleValidator.getCurrentUserId()).thenReturn(otherDoctor);
