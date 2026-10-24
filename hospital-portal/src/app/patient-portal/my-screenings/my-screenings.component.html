@@ -131,7 +131,7 @@
                     {{ 'PRO.MY.RECORDED' | translate }}
                   }
                 </span>
-                <span class="pli-meta">{{ h.administeredAt | date: 'medium' }}</span>
+                <span class="pli-meta">{{ h.administeredAt | serverTime | date: 'medium' }}</span>
               </div>
             </div>
           }

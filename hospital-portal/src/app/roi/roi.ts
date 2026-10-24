@@ -28,6 +28,7 @@ import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 
@@ -47,7 +48,14 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 @Component({
   selector: 'app-roi',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './roi.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './roi.scss',

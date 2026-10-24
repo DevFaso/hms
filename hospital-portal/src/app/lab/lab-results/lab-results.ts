@@ -28,7 +28,7 @@ import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hos
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
-import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
+import { toLocalInputValue, toServerDateTime, serverInstant } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
@@ -609,7 +609,7 @@ export class LabResultsComponent implements OnInit {
   sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
     const history = r.trendHistory ?? [];
     return [...history].sort(
-      (a, b) => new Date(b.resultDate).getTime() - new Date(a.resultDate).getTime(),
+      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
     );
   }
 

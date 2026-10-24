@@ -128,17 +128,17 @@
                   </span>
                 </div>
               </td>
-              <td>{{ row.enrolledOn | date: 'mediumDate' }}</td>
+              <td>{{ row.enrolledOn | serverTime | date: 'mediumDate' }}</td>
               <td>{{ 'REGISTRIES.EVERY_N_DAYS' | translate: { days: row.visitCadenceDays } }}</td>
               <td>
                 @if (row.lastVisitOn) {
-                  {{ row.lastVisitOn | date: 'mediumDate' }}
+                  {{ row.lastVisitOn | serverTime | date: 'mediumDate' }}
                 } @else {
                   <span class="muted">{{ 'REGISTRIES.NO_VISIT_YET' | translate }}</span>
                 }
               </td>
               <td>
-                {{ row.nextExpectedVisit | date: 'mediumDate' }}
+                {{ row.nextExpectedVisit | serverTime | date: 'mediumDate' }}
                 @if (row.overdueDays > 0) {
                   <span class="overdue-chip" data-testid="overdue-chip">
                     {{ 'REGISTRIES.OVERDUE_DAYS' | translate: { days: row.overdueDays } }}

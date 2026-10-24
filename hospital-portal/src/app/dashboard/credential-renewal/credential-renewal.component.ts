@@ -13,6 +13,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { CredentialRenewal, CredentialingService } from '../../services/credentialing.service';
 import { ToastService } from '../../core/toast.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /** The subset of a licence alert this dialog needs. */
 export interface CredentialRenewalTarget {
@@ -38,7 +39,7 @@ export interface CredentialRenewalTarget {
 @Component({
   selector: 'app-credential-renewal',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './credential-renewal.component.html',
   styleUrl: './credential-renewal.component.scss',

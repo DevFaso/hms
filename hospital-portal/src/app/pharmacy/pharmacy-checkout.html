@@ -35,7 +35,7 @@
           @for (d of dispenses(); track d.id) {
             <option [value]="d.id">
               {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
-              {{ d.dispensedAt | date: 'dd/MM/yyyy HH:mm' }}
+              {{ d.dispensedAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
             </option>
           }
         </select>

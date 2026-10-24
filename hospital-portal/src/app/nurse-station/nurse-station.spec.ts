@@ -319,6 +319,34 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(fixture.nativeElement.querySelector('app-triage-form')).toBeTruthy();
     });
 
+    // QA D777/D784 re-test: Salif's card read 15:33 in both Ouagadougou and
+    // New York for an arrival stamped 2026-10-24T15:33:17 (UTC, no zone).
+    // On a workstation outside UTC this fails without `serverTime`; the
+    // zone-independent check is scripts/lib/server-time.test.mjs.
+    it('shows the triage card arrival time in the reader zone (D777/D784)', () => {
+      const salif = {
+        id: 'e9',
+        patientName: 'Salif K',
+        status: 'ARRIVED',
+        encounterType: 'OUTPATIENT',
+        encounterDate: '2026-10-24T15:33:17.25607', // the raw value of GET /encounters (t7.js)
+      } as never;
+      encounterSpy.list.and.callFake(((f: { status?: string }) =>
+        of(f?.status === 'ARRIVED' ? [salif] : [])) as never);
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component.activeSection.set('workboard');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+
+      const card = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="awaiting-triage"] .workboard-card-meta',
+      );
+      expect(card?.textContent?.replace(/\s+/g, ' ')).toContain(
+        formatDate('2026-10-24T15:33:17Z', 'shortTime', 'en-US').replace(/\s+/g, ' '),
+      );
+    });
+
     it('a non-nurse gets no triage list and no encounter query', () => {
       component.loadFlow$().subscribe();
       expect(encounterSpy.list).not.toHaveBeenCalled();

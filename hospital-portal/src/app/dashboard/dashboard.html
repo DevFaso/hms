@@ -37,7 +37,8 @@
             }}
             @if (oc.isOnCall && oc.shiftEnd) {
               <span class="oncall-until"
-                >{{ 'DASHBOARD.UNTIL' | translate }} {{ oc.shiftEnd | date: 'shortTime' }}</span
+                >{{ 'DASHBOARD.UNTIL' | translate }}
+                {{ oc.shiftEnd | serverTime | date: 'shortTime' }}</span
               >
             }
           </div>
@@ -452,7 +453,7 @@
                     auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 70 + 4 : 4
                   "
                 ></div>
-                <span class="trend-day">{{ day.date | date: 'EEE' }}</span>
+                <span class="trend-day">{{ day.date | serverTime | date: 'EEE' }}</span>
               </div>
             }
           </div>
@@ -697,8 +698,10 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
-              <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[0]?.date | serverTime | date: 'MMM d' }}</span>
+              <span>{{
+                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | date: 'MMM d'
+              }}</span>
             </div>
           </div>
         </section>
@@ -1427,7 +1430,7 @@
                         <span class="mrn-tag">{{ p.mrn }}</span>
                       }
                       @if (p.dateOfBirth) {
-                        <span>{{ p.dateOfBirth | date: 'mediumDate' }}</span>
+                        <span>{{ p.dateOfBirth | serverTime | date: 'mediumDate' }}</span>
                       }
                     </span>
                   </div>
@@ -1493,7 +1496,9 @@
                         [class]="'sev-' + (alert.severity | lowercase)"
                         >{{ alert.severity | enumLabel: 'alertSeverity' }}</span
                       >
-                      <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
+                      <span class="alert-time">{{
+                        alert.timestamp | serverTime | date: 'shortTime'
+                      }}</span>
                     </div>
                     <strong class="alert-title">{{ alert.title }}</strong>
                     <p class="alert-msg">{{ alert.message }}</p>
@@ -1789,7 +1794,9 @@
                         [class]="'sev-' + (alert.severity | lowercase)"
                         >{{ alert.severity | enumLabel: 'alertSeverity' }}</span
                       >
-                      <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
+                      <span class="alert-time">{{
+                        alert.timestamp | serverTime | date: 'shortTime'
+                      }}</span>
                     </div>
                     <strong class="alert-title">{{ alert.title }}</strong>
                     <p class="alert-msg">{{ alert.message }}</p>
@@ -2885,8 +2892,8 @@
             @for (appt of upcomingAppointments(); track appt.id) {
               <div class="patient-appt-card">
                 <div class="appt-date-badge">
-                  <span class="appt-month">{{ appt.date | date: 'MMM' }}</span>
-                  <span class="appt-day">{{ appt.date | date: 'd' }}</span>
+                  <span class="appt-month">{{ appt.date | serverTime | date: 'MMM' }}</span>
+                  <span class="appt-day">{{ appt.date | serverTime | date: 'd' }}</span>
                 </div>
                 <div class="appt-details">
                   <span class="appt-provider">{{
@@ -2997,7 +3004,7 @@
                     </span>
                   }
                 </div>
-                <span class="lab-date">{{ lab.collectedDate | date: 'MMM d' }}</span>
+                <span class="lab-date">{{ lab.collectedDate | serverTime | date: 'MMM d' }}</span>
               </div>
             }
           }
@@ -3028,7 +3035,7 @@
                   <span class="bill-desc">{{
                     inv.description || inv.facility || ('DASHBOARD.MEDICAL_SERVICES' | translate)
                   }}</span>
-                  <span class="bill-date">{{ inv.date | date: 'mediumDate' }}</span>
+                  <span class="bill-date">{{ inv.date | serverTime | date: 'mediumDate' }}</span>
                 </div>
                 <div class="bill-amount-wrap">
                   <!-- QA D254 (dashboard): the invoice total, and what is left when anything is -->
@@ -3083,7 +3090,7 @@
                 @if (pcp.startDate) {
                   <span class="ctm-role">{{
                     'PORTAL.CARE_TEAM.SINCE'
-                      | translate: { date: pcp.startDate | date: 'mediumDate' }
+                      | translate: { date: pcp.startDate | serverTime | date: 'mediumDate' }
                   }}</span>
                 }
               </div>

@@ -27,6 +27,7 @@ import { PatientResponse } from '../services/patient.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
 
@@ -54,7 +55,7 @@ interface RegistryLoad {
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './registries.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './registries.scss',

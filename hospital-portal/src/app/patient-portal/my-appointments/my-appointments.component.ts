@@ -21,6 +21,7 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localDateString } from '../../shared/date-utils';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /** Sort key of a visit: its wire date and 24 h start time (QA D642). */
 function visitKey(a: PortalAppointment): string {
@@ -31,6 +32,7 @@ function visitKey(a: PortalAppointment): string {
   selector: 'app-my-appointments',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     DatePipe,
     EnumLabelPipe,

@@ -18,6 +18,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
@@ -30,7 +31,14 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 @Component({
   selector: 'app-mortality',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './mortality.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './mortality.scss',

@@ -461,19 +461,19 @@
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
-            <span>{{ row.assignedAt ? (row.assignedAt | date: 'medium') : '—' }}</span>
+            <span>{{ row.assignedAt ? (row.assignedAt | serverTime | date: 'medium') : '—' }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_SENT' | translate }}</span>
             <span>{{
-              row.confirmationSentAt ? (row.confirmationSentAt | date: 'medium') : '—'
+              row.confirmationSentAt ? (row.confirmationSentAt | serverTime | date: 'medium') : '—'
             }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.CONFIRMATION_VERIFIED' | translate }}</span>
             <span>{{
               row.confirmationVerifiedAt
-                ? (row.confirmationVerifiedAt | date: 'medium')
+                ? (row.confirmationVerifiedAt | serverTime | date: 'medium')
                 : ('ASSIGN_ADMIN.NOT_VERIFIED' | translate)
             }}</span>
           </div>

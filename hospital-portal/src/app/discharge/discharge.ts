@@ -19,6 +19,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -26,7 +27,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 @Component({
   selector: 'app-discharge',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './discharge.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './discharge.scss',

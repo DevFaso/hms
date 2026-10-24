@@ -367,7 +367,7 @@
                 </td>
                 <td>{{ 'MATERNITY.TRANSFER_' + r.transferType | translate }}</td>
                 <td>
-                  {{ r.slaDueAt ? (r.slaDueAt | date: 'short') : '—' }}
+                  {{ r.slaDueAt ? (r.slaDueAt | serverTime | date: 'short') : '—' }}
                   @if (isOverdue(r)) {
                     <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
                   }
@@ -485,13 +485,13 @@
               {{ 'MATERNITY.LMP' | translate }}:
               {{
                 h.menstrualHistory.lastMenstrualPeriod
-                  ? (h.menstrualHistory.lastMenstrualPeriod | date: 'mediumDate')
+                  ? (h.menstrualHistory.lastMenstrualPeriod | serverTime | date: 'mediumDate')
                   : '—'
               }}
               · {{ 'MATERNITY.EDD' | translate }}:
               {{
                 h.menstrualHistory.estimatedDueDate
-                  ? (h.menstrualHistory.estimatedDueDate | date: 'mediumDate')
+                  ? (h.menstrualHistory.estimatedDueDate | serverTime | date: 'mediumDate')
                   : '—'
               }}
             </p>
@@ -1085,7 +1085,7 @@
           </p>
           @if (r.slaDueAt) {
             <p class="muted">
-              {{ 'MATERNITY.SLA_DUE' | translate }}: {{ r.slaDueAt | date: 'medium' }}
+              {{ 'MATERNITY.SLA_DUE' | translate }}: {{ r.slaDueAt | serverTime | date: 'medium' }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
               }

@@ -371,7 +371,7 @@
                   <span class="field-label">{{ 'PRESCRIPTIONS.COSIGN_STATE' | translate }}</span
                   ><span class="field-value">{{
                     rx.cosignedAt
-                      ? (rx.cosignedAt | date: 'medium')
+                      ? (rx.cosignedAt | serverTime | date: 'medium')
                       : ('PRESCRIPTIONS.COSIGN_PENDING' | translate)
                   }}</span>
                 </div>
@@ -383,7 +383,7 @@
                   }}</span
                   ><span class="field-value">{{
                     rx.twoFactorVerifiedAt
-                      ? (rx.twoFactorVerifiedAt | date: 'medium')
+                      ? (rx.twoFactorVerifiedAt | serverTime | date: 'medium')
                       : ('PRESCRIPTIONS.TWO_FACTOR_PENDING' | translate)
                   }}</span>
                 </div>
@@ -399,7 +399,7 @@
                   }}</span
                   ><span class="field-value">{{
                     rx.pharmacistVerifiedAt
-                      ? (rx.pharmacistVerifiedAt | date: 'medium')
+                      ? (rx.pharmacistVerifiedAt | serverTime | date: 'medium')
                       : ('PRESCRIPTIONS.PHARMACIST_VERIFY_PENDING' | translate)
                   }}</span>
                 </div>
@@ -468,7 +468,7 @@
                       ) | translate
                     }}</span
                     ><span class="field-value" data-testid="rx-dispatched-at">{{
-                      rx.dispatchedAt | date: 'medium'
+                      rx.dispatchedAt | serverTime | date: 'medium'
                     }}</span>
                   </div>
                 }
@@ -496,7 +496,7 @@
                     ><span class="field-value" data-testid="rx-last-pharmacy-event">
                       {{ rx.lastPharmacyEvent | enumLabel: 'prescriptionStatus' }}
                       @if (rx.lastPharmacyEventAt) {
-                        — {{ rx.lastPharmacyEventAt | date: 'medium' }}
+                        — {{ rx.lastPharmacyEventAt | serverTime | date: 'medium' }}
                       }
                     </span>
                   </div>
@@ -595,7 +595,9 @@
                     <tbody>
                       @for (d of dispenseHistory(); track d.id) {
                         <tr>
-                          <td>{{ d.dispensedAt ? (d.dispensedAt | date: 'short') : '—' }}</td>
+                          <td>
+                            {{ d.dispensedAt ? (d.dispensedAt | serverTime | date: 'short') : '—' }}
+                          </td>
                           <td>{{ d.medicationName || '—' }}</td>
                           <td>
                             {{ d.quantityDispensed }} / {{ d.quantityRequested }} {{ d.unit }}
@@ -632,7 +634,9 @@
                     <tbody>
                       @for (r of routingHistory(); track r.id) {
                         <tr>
-                          <td>{{ r.decidedAt ? (r.decidedAt | date: 'short') : '—' }}</td>
+                          <td>
+                            {{ r.decidedAt ? (r.decidedAt | serverTime | date: 'short') : '—' }}
+                          </td>
                           <td>{{ r.routingType | enumLabel: 'routingType' }}</td>
                           <td>{{ r.targetPharmacyName || '—' }}</td>
                           <td>{{ r.remainingQuantity ?? '—' }}</td>
@@ -665,7 +669,10 @@
                               <span class="cell-sub">{{
                                 'PRESCRIPTIONS.HISTORY.RESTOCK_ETA'
                                   | translate
-                                    : { date: (r.estimatedRestockDate | date: 'shortDate') }
+                                    : {
+                                        date:
+                                          (r.estimatedRestockDate | serverTime | date: 'shortDate'),
+                                      }
                               }}</span>
                             }
                             @if (

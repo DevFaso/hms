@@ -80,7 +80,7 @@
               <td>{{ a.changeType || '—' }}</td>
               <td>{{ a.requestedBy || '—' }}</td>
               <td>{{ a.severity || '—' }}</td>
-              <td>{{ a.requiredBy ? (a.requiredBy | date: 'short') : '—' }}</td>
+              <td>{{ a.requiredBy ? (a.requiredBy | serverTime | date: 'short') : '—' }}</td>
             </tr>
           }
         </tbody>

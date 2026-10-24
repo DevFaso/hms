@@ -88,7 +88,7 @@
               <tr>
                 <td>{{ a.patientName }}</td>
                 <td>{{ a.nurseName }}</td>
-                <td>{{ a.requestedAt | date: 'short' }}</td>
+                <td>{{ a.requestedAt | serverTime | date: 'short' }}</td>
                 <td class="truncate-cell">{{ a.nurseSummary || '—' }}</td>
                 <td>
                   <span class="status-badge" [class]="statusClass(a.status)">
@@ -213,7 +213,7 @@
             @for (s of summaries(); track s.id) {
               <tr>
                 <td>{{ s.patientName }}</td>
-                <td>{{ s.dischargeDate | date: 'mediumDate' }}</td>
+                <td>{{ s.dischargeDate | serverTime | date: 'mediumDate' }}</td>
                 <td>{{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}</td>
                 <td>{{ s.dischargingProviderName }}</td>
                 <td>
@@ -766,7 +766,7 @@
         <div class="view-section">
           <h4>{{ 'DISCHARGE.DISCHARGE_DATE' | translate }}</h4>
           <p>
-            {{ s.dischargeDate | date: 'mediumDate' }} —
+            {{ s.dischargeDate | serverTime | date: 'mediumDate' }} —
             {{ 'DISCHARGE.DISPOSITION_' + s.disposition | translate }}
             @if (s.isFinalized) {
               <span class="finalized-badge">{{ 'DISCHARGE.FINALIZED' | translate }}</span>
@@ -818,7 +818,7 @@
                 <li>
                   {{ t.testType }}: {{ t.testName }}
                   @if (t.expectedResultDate) {
-                    ({{ t.expectedResultDate | date: 'mediumDate' }})
+                    ({{ t.expectedResultDate | serverTime | date: 'mediumDate' }})
                   }
                 </li>
               }
@@ -833,7 +833,7 @@
                 <li>
                   {{ f.appointmentType }} — {{ f.providerName }}
                   @if (f.appointmentDate) {
-                    ({{ f.appointmentDate | date: 'mediumDate' }})
+                    ({{ f.appointmentDate | serverTime | date: 'mediumDate' }})
                   }
                 </li>
               }
@@ -843,7 +843,7 @@
         @if (s.providerSignature) {
           <div class="view-section">
             <h4>{{ 'DISCHARGE.SIGNED_BY' | translate }}</h4>
-            <p>{{ s.providerSignature }} — {{ s.finalizedAt | date: 'short' }}</p>
+            <p>{{ s.providerSignature }} — {{ s.finalizedAt | serverTime | date: 'short' }}</p>
           </div>
         }
       </div>

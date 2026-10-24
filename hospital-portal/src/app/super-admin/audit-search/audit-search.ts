@@ -40,6 +40,7 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 type ActiveTab = 'support' | 'aggregated';
 
 import { EnumLabelService } from '../../core/enum-label.service';
+import { toServerDateTime } from '../../shared/date-utils';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
@@ -273,7 +274,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   private toIsoDateTime(value: string): string | undefined {
     const v = this.trimOrUndefined(value);
     if (!v) return undefined;
-    return v.length === 16 ? `${v}:00` : v;
+    // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+    return toServerDateTime(v);
   }
 
   exportCsv(): void {

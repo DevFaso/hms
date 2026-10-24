@@ -305,13 +305,15 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SUBMITTED' | translate }}</span
               ><span class="field-value">{{
-                ref.submittedAt ? (ref.submittedAt | date: 'medium') : '—'
+                ref.submittedAt ? (ref.submittedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.SCHEDULED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.scheduledAppointmentAt ? (ref.scheduledAppointmentAt | date: 'medium') : '—'
+                ref.scheduledAppointmentAt
+                  ? (ref.scheduledAppointmentAt | serverTime | date: 'medium')
+                  : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -321,7 +323,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'REFERRALS.STARTED_AT' | translate }}</span
               ><span class="field-value">{{
-                ref.startedAt ? (ref.startedAt | date: 'medium') : '—'
+                ref.startedAt ? (ref.startedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">

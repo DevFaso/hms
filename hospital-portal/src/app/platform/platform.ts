@@ -27,6 +27,8 @@ import {
   PlatformServiceType,
   AutomationTask,
 } from '../services/platform.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 /* ── View state types ── */
 
@@ -167,7 +169,7 @@ function linkKey(serviceId: string, hospitalId: string): string {
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
@@ -879,8 +881,9 @@ export class PlatformComponent implements OnInit {
       name: f.name,
       description: f.description || undefined,
       environment: f.environment,
-      startsAt: f.startsAt,
-      endsAt: f.endsAt,
+      // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+      startsAt: toServerDateTime(f.startsAt),
+      endsAt: toServerDateTime(f.endsAt),
       freezeChanges: f.freezeChanges,
       ownerTeam: f.ownerTeam || undefined,
       notes: f.notes || undefined,

@@ -17,6 +17,7 @@ import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { EncounterNoteRequest, EncounterNoteTemplate } from '../../services/encounter.service';
 import { SmartPhrase, SmartPhraseService } from '../../services/smart-phrase.service';
+import { toServerDateTime } from '../../shared/date-utils';
 
 type NoteFieldKey =
   | 'chiefComplaint'
@@ -304,7 +305,10 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
     }
     if (value.lateEntry) {
       payload.lateEntry = true;
-      payload.eventOccurredAt = value.eventOccurredAt;
+      // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+      payload.eventOccurredAt = value.eventOccurredAt
+        ? toServerDateTime(value.eventOccurredAt)
+        : undefined;
     }
     payload.attestAccuracy = value.attestAccuracy ?? false;
     payload.attestNoAbbreviations = value.attestNoAbbreviations ?? false;

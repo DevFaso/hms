@@ -17,6 +17,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -30,7 +32,14 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
   selector: 'app-procedure-orders',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './procedure-orders.html',
   styleUrl: './procedure-orders.scss',
 })
@@ -233,7 +242,9 @@ export class ProcedureOrdersComponent implements OnInit {
     const order = this.viewedOrder();
     this.detailAction.set(action);
     if (action === 'schedule') {
-      this.scheduleDatetime = order?.scheduledDatetime?.substring(0, 16) ?? '';
+      this.scheduleDatetime = order?.scheduledDatetime
+        ? toLocalInputValue(order.scheduledDatetime)
+        : '';
     } else if (action === 'consent') {
       const profile = this.auth.getUserProfile();
       this.consentBy = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
@@ -254,7 +265,8 @@ export class ProcedureOrdersComponent implements OnInit {
     // rescheduling from POSTPONED also lands back on SCHEDULED.
     this.applyUpdate(
       order,
-      { status: 'SCHEDULED', scheduledDatetime: this.scheduleDatetime },
+      // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+      { status: 'SCHEDULED', scheduledDatetime: toServerDateTime(this.scheduleDatetime) },
       'PROCEDURES.SCHEDULED_SUCCESS',
     );
   }

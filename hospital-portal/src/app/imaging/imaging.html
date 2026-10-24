@@ -143,7 +143,7 @@
                     o.priority | enumLabel: 'imagingOrderPriority'
                   }}</span>
                 </td>
-                <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
+                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getStatusClass(o.status) }}">{{
                     o.status | enumLabel: 'imagingOrderStatus'
@@ -376,7 +376,7 @@
                   @if (rep.criticalNotifiedAt) {
                     {{
                       'IMAGING.CRITICAL_NOTIFIED_AT'
-                        | translate: { time: rep.criticalNotifiedAt | date: 'short' }
+                        | translate: { time: rep.criticalNotifiedAt | serverTime | date: 'short' }
                     }}
                   } @else {
                     {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
@@ -404,7 +404,7 @@
           @if (rep.criticalResultAcknowledgedAt) {
             <p class="muted">
               {{ 'IMAGING.CRITICAL_ACKED_BY' | translate }} {{ rep.criticalResultAckByName }} —
-              {{ rep.criticalResultAcknowledgedAt | date: 'short' }}
+              {{ rep.criticalResultAcknowledgedAt | serverTime | date: 'short' }}
             </p>
           }
           <div class="detail-grid">
@@ -495,7 +495,7 @@
               <ul class="status-history">
                 @for (h of rep.statusHistory; track h.id) {
                   <li>
-                    {{ h.changedAt | date: 'short' }} —
+                    {{ h.changedAt | serverTime | date: 'short' }} —
                     {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
                     {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
                     {{ h.statusReason ? '· ' + h.statusReason : '' }}
@@ -733,7 +733,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.orderedAt ? (ord.orderedAt | date: 'medium') : '—'
+                ord.orderedAt ? (ord.orderedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">

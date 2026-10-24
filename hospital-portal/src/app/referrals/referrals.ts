@@ -32,6 +32,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-referrals',
@@ -539,7 +540,11 @@ export class ReferralsComponent implements OnInit {
     if (!ref || !this.scheduleAppointmentTime) return;
     this.actionLoading.set(true);
     this.referralService
-      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .schedule(
+        ref.id,
+        toServerDateTime(this.scheduleAppointmentTime), // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        this.scheduleLocation || undefined,
+      )
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));

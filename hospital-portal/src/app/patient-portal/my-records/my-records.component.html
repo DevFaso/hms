@@ -19,7 +19,7 @@
           @if (summary()!.profile.dateOfBirth) {
             <span class="profile-stat"
               >{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}:
-              {{ summary()!.profile.dateOfBirth | date: 'mediumDate' }}</span
+              {{ summary()!.profile.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (summary()!.profile.bloodType) {
@@ -82,7 +82,9 @@
             @for (l of labs().slice(0, 4); track l.id) {
               <div class="card-item" [class.card-item-abnormal]="l.isAbnormal">
                 <span class="card-item-name">{{ l.testName }}</span>
-                <span class="card-item-detail">{{ l.collectedDate | date: 'mediumDate' }}</span>
+                <span class="card-item-detail">{{
+                  l.collectedDate | serverTime | date: 'mediumDate'
+                }}</span>
               </div>
             }
             @if (labs().length > 4) {
@@ -140,7 +142,9 @@
             @for (im of immunizations().slice(0, 4); track im.id) {
               <div class="card-item">
                 <span class="card-item-name">{{ im.vaccineName }}</span>
-                <span class="card-item-detail">{{ im.dateAdministered | date: 'mediumDate' }}</span>
+                <span class="card-item-detail">{{
+                  im.dateAdministered | serverTime | date: 'mediumDate'
+                }}</span>
               </div>
             }
             @if (immunizations().length > 4) {

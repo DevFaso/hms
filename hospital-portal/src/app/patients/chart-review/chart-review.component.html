@@ -366,7 +366,7 @@
                     @if (i.scheduledFor) {
                       <span>
                         · {{ 'CHART_REVIEW.SCHEDULED' | translate }}:
-                        {{ i.scheduledFor | date: 'mediumDate' }}</span
+                        {{ i.scheduledFor | serverTime | date: 'mediumDate' }}</span
                       >
                     }
                     @if (i.priority) {

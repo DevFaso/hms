@@ -22,6 +22,7 @@ import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
+import { serverInstant } from '../../shared/date-utils';
 
 interface QcPoint {
   x: number;
@@ -360,7 +361,9 @@ export class LabApprovalQueueComponent implements OnInit {
     for (const level of levels) {
       const levelEvents = events
         .filter((e) => e.qcLevel === level)
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+        .sort(
+          (a, b) => serverInstant(a.recordedAt).getTime() - serverInstant(b.recordedAt).getTime(),
+        );
 
       if (levelEvents.length === 0) continue;
 
@@ -442,7 +445,7 @@ export class LabApprovalQueueComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone: 'ok' | 'warn' | 'fail' = dev > 2 ? 'fail' : dev > 1 ? 'warn' : 'ok';
-        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        const dateStr = serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
@@ -466,7 +469,7 @@ export class LabApprovalQueueComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
         });

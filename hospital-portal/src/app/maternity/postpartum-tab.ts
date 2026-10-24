@@ -46,7 +46,7 @@ import {
   ProInstrumentFormComponent,
   unansweredItems,
 } from '../shared/pro-instrument-form/pro-instrument-form.component';
-import { nowLocalDatetime, withServerDateTimes, fromServerDateTime } from '../shared/date-utils';
+import { nowLocalDatetime, withServerDateTimes, serverInstant } from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -382,9 +382,7 @@ export class PostpartumTabComponent {
   /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
   deliveryLabel(d: DeliveryRecordResponse): string {
     const when = d.birthDateTime
-      ? (fromServerDateTime(d.birthDateTime) ?? new Date(d.birthDateTime)).toLocaleDateString(
-          currentLocale(),
-        )
+      ? serverInstant(d.birthDateTime).toLocaleDateString(currentLocale())
       : '';
     return `${when} — ${d.deliveryMode ?? ''}`.trim();
   }

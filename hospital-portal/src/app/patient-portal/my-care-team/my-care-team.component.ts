@@ -14,6 +14,7 @@ import {
   PrimaryCareEntry,
   VisitClinicianEntry,
 } from '../../services/patient-portal.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * The patient's care team, as GET /me/patient/care-team defines it: the
@@ -24,7 +25,7 @@ import {
 @Component({
   selector: 'app-my-care-team',
   standalone: true,
-  imports: [DatePipe, TranslateModule],
+  imports: [ServerTimePipe, DatePipe, TranslateModule],
   templateUrl: './my-care-team.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-care-team.component.scss', '../patient-portal-pages.scss'],

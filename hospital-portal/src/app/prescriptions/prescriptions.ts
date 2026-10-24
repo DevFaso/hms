@@ -42,6 +42,7 @@ import { PrescriptionClarificationComponent } from '../shared/prescription-clari
 import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -521,7 +522,7 @@ export class PrescriptionsComponent implements OnInit {
   /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
   encounterLabel(e: EncounterResponse): string {
     const date = e.encounterDate
-      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
       : '';
     return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }

@@ -31,6 +31,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -630,7 +631,7 @@ export class ConsultationsComponent implements OnInit {
     this.consultService
       .schedule(
         this.schedulingItem()!.id,
-        this.scheduleForm.scheduledAt,
+        toServerDateTime(this.scheduleForm.scheduledAt), // QA D777/D784: the picker gives local wall time; the server keeps UTC.
         this.scheduleForm.scheduleNote || undefined,
       )
       .subscribe({

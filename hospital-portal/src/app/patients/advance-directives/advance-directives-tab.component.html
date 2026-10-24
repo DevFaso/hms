@@ -56,12 +56,16 @@
                 @if (d.status === 'REVOKED' && d.lastReviewedAt) {
                   <span class="reviewed-at">
                     {{ 'DIRECTIVES.LAST_REVIEWED' | translate }}
-                    {{ d.lastReviewedAt | date: 'short' }}
+                    {{ d.lastReviewedAt | serverTime | date: 'short' }}
                   </span>
                 }
               </td>
-              <td>{{ d.effectiveDate ? (d.effectiveDate | date: 'mediumDate') : '—' }}</td>
-              <td>{{ d.expirationDate ? (d.expirationDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{ d.effectiveDate ? (d.effectiveDate | serverTime | date: 'mediumDate') : '—' }}
+              </td>
+              <td>
+                {{ d.expirationDate ? (d.expirationDate | serverTime | date: 'mediumDate') : '—' }}
+              </td>
               <td>{{ d.physicianName || '—' }}</td>
               <td class="actions-cell">
                 @if (d.status !== 'REVOKED') {

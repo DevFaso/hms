@@ -84,7 +84,9 @@
                   {{ 'PROCEDURES.URGENCY_' + (o.urgency || 'ROUTINE') | translate }}
                 </span>
               </td>
-              <td>{{ o.scheduledDatetime ? (o.scheduledDatetime | date: 'short') : '—' }}</td>
+              <td>
+                {{ o.scheduledDatetime ? (o.scheduledDatetime | serverTime | date: 'short') : '—' }}
+              </td>
               <td>
                 @if (o.consentObtained) {
                   <span class="status-badge status-completed">
@@ -163,13 +165,13 @@
           <p class="muted">
             {{ 'PROCEDURES.ORDERED_BY' | translate }}: {{ o.orderingProviderName || '—' }}
             @if (o.orderedAt) {
-              — {{ o.orderedAt | date: 'medium' }}
+              — {{ o.orderedAt | serverTime | date: 'medium' }}
             }
           </p>
           @if (o.scheduledDatetime) {
             <p>
               {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}:
-              {{ o.scheduledDatetime | date: 'medium' }}
+              {{ o.scheduledDatetime | serverTime | date: 'medium' }}
             </p>
           }
           @if (o.laterality) {
@@ -236,7 +238,7 @@
                 — {{ o.consentObtainedBy }}
               }
               @if (o.consentObtainedAt) {
-                ({{ o.consentObtainedAt | date: 'medium' }})
+                ({{ o.consentObtainedAt | serverTime | date: 'medium' }})
               }
             </p>
             @if (o.consentFormLocation) {

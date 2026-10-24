@@ -295,7 +295,8 @@ describe('ReferralsComponent', () => {
     const req = httpMock.expectOne('/referrals/r1/schedule');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
-      appointmentTime: '2026-06-01T09:30',
+      // QA D777/D784: local wall time sent as the server's UTC.
+      appointmentTime: new Date(2026, 5, 1, 9, 30).toISOString().slice(0, 19),
       location: 'Clinic 4',
     });
     req.flush({ id: 'r1', status: 'SCHEDULED' });

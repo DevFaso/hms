@@ -161,7 +161,7 @@
                   [attr.data-test-purged]="row.id"
                   [title]="
                     'INTEGRATION_MESSAGES.CONTENT_PURGED_TITLE'
-                      | translate: { date: (row.payloadPurgedAt | date: 'medium') }
+                      | translate: { date: (row.payloadPurgedAt | serverTime | date: 'medium') }
                   "
                 >
                   {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}

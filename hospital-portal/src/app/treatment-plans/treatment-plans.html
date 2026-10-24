@@ -137,7 +137,13 @@
               </td>
               <td class="problem-cell">{{ p.problemStatement || '—' }}</td>
               <td>{{ p.authorStaffName || '—' }}</td>
-              <td>{{ p.timelineStartDate ? (p.timelineStartDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{
+                  p.timelineStartDate
+                    ? (p.timelineStartDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
+              </td>
               <td>
                 <span class="status-badge {{ getStatusClass(p.status) }}">{{
                   p.status | enumLabel: 'treatmentPlanStatus'
@@ -239,7 +245,7 @@
               @for (f of plan.followUps; track f.id) {
                 <div class="followup-item">
                   <strong>{{ f.label }}</strong
-                  ><span>{{ f.dueOn ? (f.dueOn | date: 'mediumDate') : '—' }}</span
+                  ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
                   ><span
                     class="status-badge {{
                       f.status === 'COMPLETED' ? 'status-completed' : 'status-pending'

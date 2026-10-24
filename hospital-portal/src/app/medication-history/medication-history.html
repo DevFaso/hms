@@ -191,8 +191,8 @@
                   }
                 </td>
                 <td>
-                  {{ e.startDate ? (e.startDate | date: 'shortDate') : '—' }} —
-                  {{ e.endDate ? (e.endDate | date: 'shortDate') : '…' }}
+                  {{ e.startDate ? (e.startDate | serverTime | date: 'shortDate') : '—' }} —
+                  {{ e.endDate ? (e.endDate | serverTime | date: 'shortDate') : '…' }}
                   @if (e.daysSupply) {
                     <span class="muted">({{ e.daysSupply }}d)</span>
                   }
@@ -271,7 +271,7 @@
                       <span class="muted">{{ f.strength }}</span>
                     }
                   </td>
-                  <td>{{ f.fillDate ? (f.fillDate | date: 'mediumDate') : '—' }}</td>
+                  <td>{{ f.fillDate ? (f.fillDate | serverTime | date: 'mediumDate') : '—' }}</td>
                   <td>
                     {{ f.quantityDispensed ?? '—' }} {{ f.quantityUnit || '' }}
                     @if (f.daysSupply) {
@@ -282,7 +282,9 @@
                   <td>{{ f.pharmacyName || f.sourceSystem || '—' }}</td>
                   <td>
                     {{
-                      f.expectedDepletionDate ? (f.expectedDepletionDate | date: 'mediumDate') : '—'
+                      f.expectedDepletionDate
+                        ? (f.expectedDepletionDate | serverTime | date: 'mediumDate')
+                        : '—'
                     }}
                   </td>
                   <td class="actions-cell">

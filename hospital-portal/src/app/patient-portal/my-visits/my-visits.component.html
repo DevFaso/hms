@@ -44,7 +44,7 @@
                 }
               </span>
               <span class="pli-meta">
-                {{ enc.date | date: 'mediumDate' }}
+                {{ enc.date | serverTime | date: 'mediumDate' }}
                 @if (enc.chiefComplaint) {
                   · {{ enc.chiefComplaint }}
                 }
@@ -64,7 +64,7 @@
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.DATE' | translate }}</span>
-                  <span class="dv">{{ enc.date | date: 'fullDate' }}</span>
+                  <span class="dv">{{ enc.date | serverTime | date: 'fullDate' }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.VISITS.PROVIDER' | translate }}</span>

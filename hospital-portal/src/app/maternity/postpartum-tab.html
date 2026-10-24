@@ -44,7 +44,8 @@
             {{ 'POSTPARTUM.MINUTES' | translate }}
           }
           @if (s.nextDueAt) {
-            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}: {{ s.nextDueAt | date: 'short' }}
+            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}:
+            {{ s.nextDueAt | serverTime | date: 'short' }}
           }
           @if (s.overdue) {
             <span class="risk-badge risk-high">{{ 'POSTPARTUM.OVERDUE' | translate }}</span>
@@ -88,7 +89,8 @@
         }
         @if (sc.lastAdministeredAt) {
           <p>
-            {{ 'PRO.LAST_SCREEN' | translate }}: {{ sc.lastAdministeredAt | date: 'short' }} ·
+            {{ 'PRO.LAST_SCREEN' | translate }}:
+            {{ sc.lastAdministeredAt | serverTime | date: 'short' }} ·
             <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
             @if (sc.lastCriticalItemPositive) {
               <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
@@ -134,7 +136,7 @@
             <tbody>
               @for (r of screenings(); track r.id) {
                 <tr class="data-row" [class.screening-critical]="needsAcknowledgement(r)">
-                  <td>{{ r.administeredAt | date: 'short' }}</td>
+                  <td>{{ r.administeredAt | serverTime | date: 'short' }}</td>
                   <td>{{ 'PRO.SOURCE_' + r.source | translate }}</td>
                   <td>
                     {{ r.totalScore }} / {{ r.maxScore }}

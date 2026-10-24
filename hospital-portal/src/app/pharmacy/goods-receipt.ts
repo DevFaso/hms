@@ -11,11 +11,12 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',

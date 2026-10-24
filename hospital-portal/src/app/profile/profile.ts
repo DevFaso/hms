@@ -29,6 +29,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverInstant } from '../shared/date-utils';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
@@ -180,7 +181,7 @@ export class ProfileComponent implements OnInit {
   memberSince(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
-    return new Date(u.createdAt).toLocaleDateString(this.dateLocale(), {
+    return serverInstant(u.createdAt).toLocaleDateString(this.dateLocale(), {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -190,7 +191,7 @@ export class ProfileComponent implements OnInit {
   lastLogin(): string {
     const u = this.user();
     if (!u?.lastLoginAt) return this.translate.instant('PROFILE.NEVER');
-    return new Date(u.lastLoginAt).toLocaleString(this.dateLocale(), {
+    return serverInstant(u.lastLoginAt).toLocaleString(this.dateLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -227,7 +228,7 @@ export class ProfileComponent implements OnInit {
   accountAge(): string {
     const u = this.user();
     if (!u?.createdAt) return '';
-    const created = new Date(u.createdAt);
+    const created = serverInstant(u.createdAt);
     const now = new Date();
     const diffMs = now.getTime() - created.getTime();
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
