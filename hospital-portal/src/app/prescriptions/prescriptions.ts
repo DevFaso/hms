@@ -498,7 +498,12 @@ export class PrescriptionsComponent implements OnInit {
       next: (list) => {
         if (this.form.patientId !== patientId) return;
         this.patientEncounters.set(
-          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+          // QA D739 (r10 re-test 3): a completed or cancelled encounter
+          // cannot take a new order (the server refuses it), so it is not
+          // offered. An edit keeps its own encounter as "linked encounter".
+          list
+            .filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED')
+            .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },
       error: () => this.patientEncounters.set([]),

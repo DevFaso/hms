@@ -3019,4 +3019,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V228 (QA D726): security.notifications.subject_id, so a matching
+         critical-value read-back marks its notifications read. Plain
+         statements, no DO block. -->
+    <changeSet id="V228-notification-subject" author="hms-team" runOnChange="false">
+        <sqlFile path="V228__notification_subject.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

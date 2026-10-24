@@ -1129,7 +1129,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 10);
+            // QA D720: the summary's "current medications" (health summary and
+            // the proxy view) are the courses still running, never a completed
+            // or discontinued one. Filtered before the cap so ten current ones
+            // are not crowded out by finished ones.
+            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
+                .filter(m -> "ACTIVE".equals(m.getStatus()))
+                .limit(10)
+                .toList();
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();

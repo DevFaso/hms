@@ -1,3 +1,4 @@
+import { currentMedications } from '../patient-portal/current-medications';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -131,14 +132,7 @@ interface NavTile {
 
 // ────────────────────────────────────────────────────────────────────────────
 
-/**
- * QA D316: the patient dashboard card is "current" medications, so only the
- * courses still running; a completed or discontinued one stays on the
- * medications page.
- */
-export function currentMedications(meds: MedicationSummary[]): MedicationSummary[] {
-  return meds.filter((m) => m.status === 'ACTIVE');
-}
+export { currentMedications };
 
 @Component({
   selector: 'app-dashboard',

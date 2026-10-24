@@ -92,6 +92,18 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void d726_theCriticalNotificationNamesTheResultItIsAbout() {
+        result.setId(UUID.randomUUID());
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        Notification stored = new Notification();
+        when(notificationService.created(anyString(), anyString(), anyString())).thenReturn(stored);
+
+        service.notifyIfCritical(result);
+
+        assertThat(stored.getSubjectId()).isEqualTo(result.getId());
+    }
+
+    @Test
     void notifiesOrderingProviderForHl7CriticalFlag() {
         result.setAbnormalFlag(AbnormalFlag.CRITICAL);
 
@@ -568,6 +580,9 @@ class CriticalValueNotificationServiceTest {
         assertThat(updated.getCriticalReadBackValue()).isEqualTo("7.1");
         assertThat(updated.getCriticalReadBackByDisplay()).isEqualTo("Dr Diallo");
         assertThat(updated.isAcknowledged()).isTrue();
+        // QA D726: the alert and its escalations no longer read as unread.
+        verify(notificationService).markReadForSubject(result.getId(),
+            java.util.List.of("CRITICAL_LAB_RESULT", "CRITICAL_LAB_RESULT_ESCALATION"));
     }
 
     @Test
@@ -602,6 +617,8 @@ class CriticalValueNotificationServiceTest {
         assertThat(reloaded.isAcknowledged()).isFalse();
         assertThat(result.getCriticalReadBackAt()).isNull();
         assertThat(result.isAcknowledged()).isFalse();
+        // QA D726: a wrong read-back answers nothing; the alert stays unread.
+        verify(notificationService, never()).markReadForSubject(any(), any());
     }
 
     @Test

@@ -4586,6 +4586,7 @@
       "EMPTY_TITLE": "No medications found",
       "EMPTY_DESC": "You don't have any active medications.",
       "ACTIVE": "Active Medications",
+      "PAST": "Past medications",
       "PRESCRIPTIONS": "Prescriptions",
       "MEDICATION": "Medication",
       "DOSAGE": "Dosage",

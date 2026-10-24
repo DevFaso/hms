@@ -18,11 +18,11 @@
       <p>{{ 'PORTAL.MEDICATIONS.EMPTY_DESC' | translate }}</p>
     </div>
   } @else {
-    @if (medications().length > 0) {
+    @for (group of medicationGroups(); track group.titleKey) {
       <section class="portal-section">
-        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.ACTIVE' | translate }}</h2>
+        <h2 class="portal-section-title">{{ group.titleKey | translate }}</h2>
         <div class="portal-list">
-          @for (med of medications(); track med.id) {
+          @for (med of group.meds; track med.id) {
             <div
               class="portal-list-item clickable"
               (click)="toggleMed(med.id)"

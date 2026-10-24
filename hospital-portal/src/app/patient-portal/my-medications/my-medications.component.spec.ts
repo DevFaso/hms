@@ -45,6 +45,22 @@ describe('MyMedicationsComponent', () => {
     expect(component.loading()).toBe(false);
   });
 
+  it('D720: lists a completed course under past medications, not active', () => {
+    const base = { medicationName: 'X', dosage: '1', frequency: 'od' } as MedicationSummary;
+    component.medications.set([
+      { ...base, id: 'a', status: 'ACTIVE' },
+      { ...base, id: 'c', status: 'COMPLETED' },
+      { ...base, id: 'd', status: 'DISCONTINUED' },
+    ]);
+    const groups = component.medicationGroups();
+    expect(groups.map((g) => g.titleKey)).toEqual([
+      'PORTAL.MEDICATIONS.ACTIVE',
+      'PORTAL.MEDICATIONS.PAST',
+    ]);
+    expect(groups[0].meds.map((m) => m.id)).toEqual(['a']);
+    expect(groups[1].meds.map((m) => m.id)).toEqual(['c', 'd']);
+  });
+
   it('should toggle medication expand', () => {
     component.toggleMed('m1');
     expect(component.expandedMedId()).toBe('m1');
