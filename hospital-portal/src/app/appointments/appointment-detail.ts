@@ -14,6 +14,7 @@ import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
 const STATUS_UPDATE_ROLES: readonly string[] = [
@@ -51,7 +52,7 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-detail.scss',

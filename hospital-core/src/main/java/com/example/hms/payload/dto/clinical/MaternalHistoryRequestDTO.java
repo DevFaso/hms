@@ -31,33 +31,42 @@ public class MaternalHistoryRequestDTO {
     private UUID recordedByStaffId;
 
     @NotNull(message = "{maternalHistory.recordedDate.required}")
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime recordedDate;
 
     @Size(max = 500, message = "{maternalHistory.updateReason.size}")
     private String updateReason;
 
     // ===== Menstrual and Reproductive History =====
+    @jakarta.validation.Valid
     private MenstrualHistoryDTO menstrualHistory;
 
     // ===== Obstetric History =====
+    @jakarta.validation.Valid
     private ObstetricHistoryDTO obstetricHistory;
 
     // ===== Complications History =====
+    @jakarta.validation.Valid
     private ComplicationsHistoryDTO complicationsHistory;
 
     // ===== Medical History =====
+    @jakarta.validation.Valid
     private MedicalHistoryDTO medicalHistory;
 
     // ===== Medications and Immunizations =====
+    @jakarta.validation.Valid
     private MedicationsImmunizationsDTO medicationsImmunizations;
 
     // ===== Family History =====
+    @jakarta.validation.Valid
     private FamilyHistoryDTO familyHistory;
 
     // ===== Lifestyle Factors =====
+    @jakarta.validation.Valid
     private LifestyleFactorsDTO lifestyleFactors;
 
     // ===== Psychosocial Factors =====
+    @jakarta.validation.Valid
     private PsychosocialFactorsDTO psychosocialFactors;
 
     // ===== Clinical Assessment =====
@@ -78,9 +87,11 @@ public class MaternalHistoryRequestDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class MenstrualHistoryDTO {
+        @com.example.hms.validation.NotInClinicalFuture
         private LocalDate lastMenstrualPeriod;
         private LocalDate estimatedDueDate;
         private LocalDate estimatedDueDateByUltrasound;
+        @com.example.hms.validation.NotInClinicalFuture
         private LocalDate ultrasoundConfirmationDate;
 
         @PositiveOrZero
@@ -168,6 +179,7 @@ public class MaternalHistoryRequestDTO {
     public static class MedicationsImmunizationsDTO {
         private String currentMedications;
         private Boolean prenatalVitaminsStarted;
+        @com.example.hms.validation.NotInClinicalFuture
         private LocalDate prenatalVitaminsStartDate;
         private Boolean folicAcidSupplementation;
 
@@ -180,8 +192,10 @@ public class MaternalHistoryRequestDTO {
 
         private Boolean hepatitisBVaccination;
         private Boolean tdapVaccination;
+        @com.example.hms.validation.NotInClinicalFuture
         private LocalDate tdapVaccinationDate;
         private Boolean fluVaccinationCurrentSeason;
+        @com.example.hms.validation.NotInClinicalFuture
         private LocalDate fluVaccinationDate;
         private Boolean covid19Vaccination;
         private String immunizationNotes;
@@ -211,6 +225,8 @@ public class MaternalHistoryRequestDTO {
 
         @PositiveOrZero
         private Integer cigarettesPerDay;
+
+        @com.example.hms.validation.NotInClinicalFuture
 
         private LocalDate smokingCessationDate;
 

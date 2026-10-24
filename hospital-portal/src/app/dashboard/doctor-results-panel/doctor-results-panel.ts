@@ -5,6 +5,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+/** QA D731 sibling: resultedAt is a zone-less UTC wall time. */
+const SERVER_TIME = new ServerTimePipe();
 
 const LOCALE_MAP: Record<string, string> = {
   en: 'en-US',
@@ -93,7 +97,7 @@ export class DoctorResultsPanelComponent {
 
   formatDate(iso: string): string {
     if (!iso) return '';
-    const d = new Date(iso);
+    const d = new Date(SERVER_TIME.transform(iso));
     const lang = this.translate.currentLang || this.translate.defaultLang || 'en';
     const locale = LOCALE_MAP[lang] ?? 'en-US';
     // 12-hour clock for English; 24-hour for French/Spanish per regional convention.

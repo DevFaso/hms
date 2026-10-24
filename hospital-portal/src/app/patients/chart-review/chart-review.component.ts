@@ -15,6 +15,7 @@ import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import { ChartReview, ChartReviewService } from '../../services/chart-review.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -44,7 +45,7 @@ const ABNORMAL_DANGER = new Set(['CRITICAL', 'ABNORMAL']);
 @Component({
   selector: 'app-chart-review',
   standalone: true,
-  imports: [CommonModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './chart-review.component.html',
   styleUrl: './chart-review.component.scss',

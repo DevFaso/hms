@@ -137,7 +137,7 @@
       <tbody>
         @for (row of rows(); track row.id) {
           <tr [attr.data-test-row]="row.id">
-            <td>{{ row.receivedAt | date: 'short' }}</td>
+            <td>{{ row.receivedAt | serverTime | date: 'short' }}</td>
             <td>
               <code>{{ row.integrationId }}</code>
             </td>

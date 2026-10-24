@@ -68,7 +68,7 @@
             @if (culture.collectedAt) {
               <span>
                 {{ 'MICRO.COLLECTED_AT' | translate }}:
-                {{ culture.collectedAt | date: 'short' }}
+                {{ culture.collectedAt | serverTime | date: 'short' }}
               </span>
             }
             @if (culture.specimenAccessionNumber) {

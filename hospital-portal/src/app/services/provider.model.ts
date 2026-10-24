@@ -360,6 +360,18 @@ export function isEvidenceComplete(evidence: ProviderEvidence): boolean {
 export function serverMessage(error: unknown): string | null {
   const body = (error as { error?: unknown } | null)?.error;
   if (body && typeof body === 'object') {
+    // QA D732/D746: a bean-validation refusal carries the generic "the request
+    // has validation errors" as `message` and the reason the user can act on
+    // (e.g. an LMP in the future) under `fieldErrors`; the field reasons win.
+    const fieldErrors = (body as { fieldErrors?: unknown }).fieldErrors;
+    if (fieldErrors && typeof fieldErrors === 'object') {
+      const reasons = Object.values(fieldErrors as Record<string, unknown>).filter(
+        (v): v is string => typeof v === 'string' && v.trim() !== '',
+      );
+      if (reasons.length > 0) {
+        return [...new Set(reasons)].join('. ');
+      }
+    }
     const message = (body as { message?: unknown }).message;
     if (typeof message === 'string' && message.trim() !== '') {
       return message;

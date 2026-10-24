@@ -17,6 +17,10 @@ import { DashboardService, DoctorResultQueueItem } from '../../services/dashboar
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+/** QA D731: the server sends resultedAt as a zone-less UTC wall time. */
+const SERVER_TIME = new ServerTimePipe();
 
 /** One severity bucket of the review queue, as the template renders it. */
 interface LabResultGroup {
@@ -308,7 +312,9 @@ export class LabResultsInboxComponent {
 
   formatDate(iso: string | null | undefined): string {
     if (!iso) return LabResultsInboxComponent.NO_VALUE;
-    const parsed = new Date(iso);
+    // QA D731: read the zone-less UTC time as UTC, exactly as the in-basket
+    // panel below does; read as local, the same result showed 4 h apart.
+    const parsed = new Date(SERVER_TIME.transform(iso));
     // A blank cell reads as a rendering fault; missing data reads as missing.
     if (Number.isNaN(parsed.getTime())) return LabResultsInboxComponent.NO_VALUE;
     // The queue has no date window and no reviewed state, so it carries every

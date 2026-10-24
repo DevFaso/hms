@@ -10,11 +10,20 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    EnumLabelPipe,
+    TranslateModule,
+  ],
   templateUrl: './my-family-access.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-family-access.component.scss', '../patient-portal-pages.scss'],

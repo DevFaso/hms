@@ -397,7 +397,31 @@ export class PatientFormComponent implements OnInit {
             err?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
           );
           this.saving = false;
+          // QA D725: the server refuses an e-mail/phone that already belongs to
+          // a patient (the debounced check may not have answered before the
+          // click). Fetch the match now so the card offers the existing record.
+          if (err?.status === 409) {
+            this.refreshMatchesNow();
+          }
         },
+      });
+  }
+
+  private refreshMatchesNow(): void {
+    const email = (this.form.email ?? '').trim();
+    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    this.patientService
+      .registrationMatch({
+        email: email.includes('@') ? email : undefined,
+        phone: phone.length >= 6 ? phone : undefined,
+        hospitalId: this.form.hospitalId || undefined,
+      })
+      .pipe(catchError(() => of(null)))
+      .subscribe((matches) => {
+        if (matches && matches.length > 0) {
+          this.registrationMatches = matches;
+          this.matchDismissed = false;
+        }
       });
   }
 

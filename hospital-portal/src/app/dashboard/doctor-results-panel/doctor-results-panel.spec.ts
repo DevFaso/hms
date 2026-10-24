@@ -35,6 +35,13 @@ describe('DoctorResultsPanelComponent', () => {
     fixture = TestBed.createComponent(DoctorResultsPanelComponent);
   });
 
+  it('QA D731 sibling: reads the zone-less server time as UTC', () => {
+    const component = fixture.componentInstance;
+    expect(component.formatDate('2026-10-24T04:39:00')).toBe(
+      component.formatDate('2026-10-24T04:39:00Z'),
+    );
+  });
+
   it('renders the empty state when the queue is genuinely empty', () => {
     fixture.componentRef.setInput('results', []);
     fixture.componentRef.setInput('loadError', false);

@@ -412,6 +412,28 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     expect(component.cancelError()).toBe('Appointment is already cancelled');
   });
 
+  it('QA D718: the reschedule dialog fits a 375px phone without horizontal scroll', () => {
+    component.openReschedule(appt({ rawStartTime: '09:30', rawEndTime: '10:30' }));
+    fixture.detectChanges();
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[data-testid="reschedule-overlay"] .booking-form-card',
+    )!;
+    // 375px viewport minus the 16px gutters: the width the round-10 phone gave it.
+    card.style.width = '343px';
+    card.style.maxWidth = '343px';
+    // CI's Linux fonts render wider than a dev laptop's; widen every glyph so the
+    // check does not depend on which font the headless browser picked.
+    card.style.letterSpacing = '2px';
+    expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth);
+    const right = card.getBoundingClientRect().right;
+    for (const id of ['reschedDate', 'reschedStart', 'reschedEnd', 'reschedReason']) {
+      const field = card.querySelector<HTMLElement>(`#${id}`)!;
+      expect(field.getBoundingClientRect().right)
+        .withContext(id)
+        .toBeLessThanOrEqual(right + 0.5);
+    }
+  });
+
   it('openReschedule prefills the form from the raw HH:mm times', () => {
     component.openReschedule(
       appt({ date: '2027-02-01', rawStartTime: '10:00', rawEndTime: '10:30' }),

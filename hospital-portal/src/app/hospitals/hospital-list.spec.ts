@@ -104,4 +104,58 @@ describe('HospitalListComponent (QA D36)', () => {
     const label = (fixture.nativeElement as HTMLElement).querySelector('label[for="hAddress"]');
     expect(label === null || label.textContent!.includes('*')).toBeTrue();
   });
+
+  it('QA D734/D747: the street is always marked and enforced, a P.O. box does not replace it', async () => {
+    const hospitalService = jasmine.createSpyObj<HospitalService>('HospitalService', [
+      'list',
+      'create',
+    ]);
+    hospitalService.list.and.returnValue(of([]));
+    hospitalService.create.and.returnValue(of({ id: 'h-9' } as HospitalResponse));
+    const orgService = jasmine.createSpyObj<OrganizationService>('OrganizationService', ['list']);
+    orgService.list.and.returnValue(of({ content: [] } as unknown as OrganizationPage));
+    TestBed.configureTestingModule({
+      imports: [HospitalListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: HospitalService, useValue: hospitalService },
+        { provide: OrganizationService, useValue: orgService },
+        { provide: RoleContextService, useValue: { isSuperAdmin: signal(true) } },
+      ],
+    });
+    const fixture = TestBed.createComponent(HospitalListComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.openCreate();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const label = (id: string) => el.querySelector(`label[for="${id}"]`)!.textContent!;
+    const required = (id: string) => (el.querySelector(`#${id}`) as HTMLInputElement).required;
+
+    // Round 10 re-test (hosp2.js): a P.O. box and an empty or blank street
+    // were saved. The street is required whatever the P.O. box holds.
+    expect(label('hAddress')).toContain('*');
+    expect(label('hPoBox')).not.toContain('*');
+    for (const street of ['', '   ']) {
+      Object.assign(cmp.form, {
+        name: 'Centre Médical Saint-Camille de Koudougou',
+        city: 'Koudougou',
+        country: 'Burkina Faso',
+        phoneNumber: '+22625441122',
+        address: street,
+        poBox: '01 BP 1234',
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(required('hAddress')).toBeTrue();
+      cmp.submitForm();
+    }
+    expect(hospitalService.create).not.toHaveBeenCalled();
+
+    cmp.form.address = 'Avenue de la Nation';
+    cmp.submitForm();
+    expect(hospitalService.create).toHaveBeenCalled();
+  });
 });

@@ -45,6 +45,7 @@ import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner
 import { ChartReviewComponent } from './chart-review/chart-review.component';
 import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type TabKey =
   | 'overview'
@@ -66,6 +67,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterLink,

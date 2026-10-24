@@ -233,6 +233,36 @@ describe('PatientFormComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
+  it('QA D725: a 409 for an existing patient shows the server reason and offers the existing record', () => {
+    // The round-10 click landed before the debounced match check answered.
+    userSpy.adminRegister.and.returnValue(
+      throwError(() => ({
+        status: 409,
+        error: { message: 'Un patient ... est déjà enregistré.' },
+      })),
+    );
+    patientSpy.registrationMatch.and.returnValue(of([mockMatch()]));
+    fillValidForm();
+    component.onSubmit();
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Un patient ... est déjà enregistré.');
+    expect(patientSpy.registrationMatch).toHaveBeenCalledWith({
+      email: undefined,
+      phone: '+22670707070',
+      hospitalId: 'h1',
+    });
+    expect(component.registrationMatches.length).toBe(1);
+    expect(component.matchDismissed).toBeFalse();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('QA D725: any other refusal does not re-query the match', () => {
+    userSpy.adminRegister.and.returnValue(throwError(() => ({ status: 400, error: {} })));
+    fillValidForm();
+    component.onSubmit();
+    expect(patientSpy.registrationMatch).not.toHaveBeenCalled();
+  });
+
   it('sends and confirms an SMS verification code, then attaches the challenge to the create payload', () => {
     patientSpy.requestPhoneVerification.and.returnValue(
       of({

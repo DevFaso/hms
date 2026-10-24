@@ -482,7 +482,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
-              ><span class="value">{{ p.createdAt | date: 'mediumDate' }}</span>
+              ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
             </div>
           </div>
         </div>

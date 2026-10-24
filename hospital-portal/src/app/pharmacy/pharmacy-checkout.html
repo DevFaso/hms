@@ -119,7 +119,7 @@
         <h1>Reçu de pharmacie</h1>
         <p class="receipt-meta">
           Nº {{ receiptNumber(r.id) }}<br />
-          Émis le : {{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}
+          Émis le : {{ r.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
         </p>
       </header>
       <div class="receipt-body">

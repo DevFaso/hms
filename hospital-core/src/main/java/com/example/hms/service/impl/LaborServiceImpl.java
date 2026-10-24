@@ -71,6 +71,9 @@ import com.example.hms.utility.ObstetricEligibility;
 @Transactional
 public class LaborServiceImpl implements LaborService {
 
+    /** QA D714: tolerated clock skew between the charting device and the server. */
+    static final long PARTOGRAPH_FUTURE_SKEW_MINUTES = 10;
+
     /** Null-check message for the required patient identifier. */
     private static final String PATIENT_ID_REQUIRED = "patientId is required";
 
@@ -267,6 +270,19 @@ public class LaborServiceImpl implements LaborService {
         LaborEpisode episode = loadEpisode(patientId, episodeId, request.getHospitalId());
         if (episode.getStatus() != LaborStatus.ACTIVE) {
             throw new BusinessException("maternity.partograph.laborNotActive");
+        }
+
+        // QA D714: an observation cannot be charted in the future. A small
+        // allowance covers device clock skew; anything beyond it is rejected
+        // before it can raise an alert or be drawn on the partograph.
+        if (request.getObservationTime() != null
+                && request.getObservationTime().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
+            throw new BusinessException("maternity.partograph.futureTime");
+        }
+        // QA D745: nor before the labour it charts began.
+        if (request.getObservationTime() != null && episode.getLaborOnsetAt() != null
+                && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
+            throw new BusinessException("maternity.partograph.beforeOnset");
         }
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());

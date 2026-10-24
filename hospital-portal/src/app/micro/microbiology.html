@@ -97,7 +97,7 @@
                 (keydown.enter)="select(culture)"
                 tabindex="0"
               >
-                <td>{{ culture.createdAt | date: 'short' }}</td>
+                <td>{{ culture.createdAt | serverTime | date: 'short' }}</td>
                 <td>{{ culture.patientName || '—' }}</td>
                 <td>{{ culture.labTestName || '—' }}</td>
                 <td>{{ culture.specimenSource || '—' }}</td>

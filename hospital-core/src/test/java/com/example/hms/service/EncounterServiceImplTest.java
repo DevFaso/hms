@@ -954,6 +954,45 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void qaD744_checkOut_storesTheSignedNoteInstructionsAndPlanForThePatient() {
+        // Round 10 re-test: the patient AVS (the stored discharge summary)
+        // showed only the checkout follow-up text.
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+        note.setPatientInstructions("Marcher 30 minutes par jour.");
+        note.setPlan("Metformine 500 mg deux fois par jour.");
+        note.setSignedAt(java.time.LocalDateTime.now().minusMinutes(5));
+        encounter.setEncounterNote(note);
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpInstructions("Revoir dans 3 mois avec le résultat HbA1c")
+            .build();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+            .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+        service.checkOut(encounterId, request, "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+        verify(dischargeSummaryRepository).save(saved.capture());
+        assertThat(saved.getValue().getFollowUpInstructions())
+            .contains("Revoir dans 3 mois avec le résultat HbA1c")
+            .contains("Marcher 30 minutes par jour.")
+            .contains("Metformine 500 mg deux fois par jour.");
+    }
+
+    @Test
     void checkOut_notificationOrEmailFailure_doesNotRollback() {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
