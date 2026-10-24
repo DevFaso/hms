@@ -966,6 +966,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             && (orderOfCurrentStay(rx, currentStay) || givenDuringOpenEmergencyVisit(rx));
     }
 
+    /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */
+    private static final Duration ED_TO_WARD_CARRY_OVER = Duration.ofHours(24);
+
     /**
      * QA D702: D514 only asked whether the patient is in a bed, so once a
      * patient was admitted every live prescription he had, including the
@@ -975,9 +978,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * or on no encounter at all, written since the admission. An order of an
      * outpatient visit is the visit's, never a nursing dose.
      */
-    /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */
-    private static final Duration ED_TO_WARD_CARRY_OVER = Duration.ofHours(24);
-
     static boolean orderOfCurrentStay(Prescription rx, Admission stay) {
         if (stay == null) return false;
         com.example.hms.model.Encounter encounter = rx.getEncounter();

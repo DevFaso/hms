@@ -766,13 +766,8 @@ public class EncounterServiceImpl implements EncounterService {
         // client-asserted signatures: the note form always promised signing
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
-        if (!isNew && !newStayEntry && note.isSigned()) {
-            throw new BusinessException("encounter.note.signedLocked");
-        }
-        // D406: a session author may only revise their own note. Another
-        // clinician's text is never overwritten nor re-attributed; they add an addendum.
-        if (!isNew && !newStayEntry && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
-            throw new BusinessException("encounter.note.otherAuthor");
+        if (!isNew && !newStayEntry) {
+            assertNoteEditable(note, author);
         }
         if (isNew) {
             note.setEncounter(encounter);
@@ -784,9 +779,7 @@ public class EncounterServiceImpl implements EncounterService {
             // #940 review: the closing entry's addenda and links belong to it.
             // Snapshot them (full content) into its history before detaching,
             // or a day-1 correction shows under the day-2 entry and author.
-            String closedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
-                ? trimToNull(actorOverride) : author.actorIdentifier();
-            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED, closedBy);
+            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED, historyActor(author, actorOverride));
             startNewStayEntry(note, request);
         }
 
@@ -800,11 +793,27 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setEncounterNote(saved);
 
         // A session author is the history's actor; a body-supplied name is not.
-        String changedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
-            ? trimToNull(actorOverride) : author.actorIdentifier();
         recordNoteHistory(encounter, saved, isNew || newStayEntry ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED,
-            changedBy);
+            historyActor(author, actorOverride));
         return saved;
+    }
+
+    /** The edit locks on an existing note entry (P3 #20 signature lock, D406 author lock). */
+    private void assertNoteEditable(EncounterNote note, NoteAuthor author) {
+        if (note.isSigned()) {
+            throw new BusinessException("encounter.note.signedLocked");
+        }
+        // D406: a session author may only revise their own note. Another
+        // clinician's text is never overwritten nor re-attributed; they add an addendum.
+        if (author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
+            throw new BusinessException("encounter.note.otherAuthor");
+        }
+    }
+
+    /** A session author is the history's actor; a body-supplied name only stands in without a session. */
+    private String historyActor(NoteAuthor author, String actorOverride) {
+        String override = trimToNull(actorOverride);
+        return !author.sessionResolved() && override != null ? override : author.actorIdentifier();
     }
 
     /** QA D711: clears the previous stay entry's sections and timing before the new entry is applied. */
@@ -1221,30 +1230,38 @@ public class EncounterServiceImpl implements EncounterService {
         List<Map<String, Object>> addendaEntries = new ArrayList<>();
         if (note.getAddenda() != null) {
             for (EncounterNoteAddendum addendum : note.getAddenda()) {
-                Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("authorUserId", addendum.getAuthor() != null ? addendum.getAuthor().getId() : null);
-                entry.put("authorName", addendum.getAuthorName());
-                entry.put("authorCredentials", addendum.getAuthorCredentials());
-                entry.put("content", addendum.getContent());
-                entry.put("eventOccurredAt", addendum.getEventOccurredAt() != null ? addendum.getEventOccurredAt().toString() : null);
-                entry.put("documentedAt", addendum.getDocumentedAt() != null ? addendum.getDocumentedAt().toString() : null);
-                entry.put("signedAt", addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
-                addendaEntries.add(entry);
+                addendaEntries.add(addendumSnapshot(addendum));
             }
         }
         snapshot.put("addendaEntries", addendaEntries);
         List<Map<String, Object>> linkEntries = new ArrayList<>();
         for (EncounterNoteLink link : note.getLinks()) {
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("artifactType", link.getArtifactType() != null ? link.getArtifactType().name() : null);
-            entry.put("artifactId", link.getArtifactId());
-            entry.put("artifactCode", link.getArtifactCode());
-            entry.put("artifactDisplay", link.getArtifactDisplay());
-            entry.put("artifactStatus", link.getArtifactStatus());
-            linkEntries.add(entry);
+            linkEntries.add(linkSnapshot(link));
         }
         snapshot.put("links", linkEntries);
         return toJson(snapshot);
+    }
+
+    private static Map<String, Object> addendumSnapshot(EncounterNoteAddendum addendum) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("authorUserId", addendum.getAuthor() != null ? addendum.getAuthor().getId() : null);
+        entry.put("authorName", addendum.getAuthorName());
+        entry.put("authorCredentials", addendum.getAuthorCredentials());
+        entry.put("content", addendum.getContent());
+        entry.put("eventOccurredAt", addendum.getEventOccurredAt() != null ? addendum.getEventOccurredAt().toString() : null);
+        entry.put("documentedAt", addendum.getDocumentedAt() != null ? addendum.getDocumentedAt().toString() : null);
+        entry.put("signedAt", addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
+        return entry;
+    }
+
+    private static Map<String, Object> linkSnapshot(EncounterNoteLink link) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("artifactType", link.getArtifactType() != null ? link.getArtifactType().name() : null);
+        entry.put("artifactId", link.getArtifactId());
+        entry.put("artifactCode", link.getArtifactCode());
+        entry.put("artifactDisplay", link.getArtifactDisplay());
+        entry.put("artifactStatus", link.getArtifactStatus());
+        return entry;
     }
 
     private String buildNoteMetadataSnapshot(EncounterNote note) {
