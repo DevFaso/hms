@@ -950,6 +950,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * QA D345: a card, transfer or mobile-money reference names one provider
      * transaction; a second live row with it (any invoice of the hospital)
      * would count the same money twice. Cash has no provider reference.
+     *
+     * <p>QA D782 (decision): the check stays PER HOSPITAL on purpose. A
+     * cross-hospital check would answer "already recorded" for a reference
+     * held by another tenant, which tells a clerk of hospital B that a given
+     * operator transaction id was paid at some other hospital (a disclosure
+     * of another tenant's transactions, and a probe for them). A reference
+     * reused across hospitals is reconciled against the operator's statement
+     * by each hospital, not refused here.
      */
     private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
         if (method == PaymentMethod.CASH || reference == null || reference.isBlank() || invoice.getHospital() == null) {
