@@ -27,6 +27,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.service.ChartReviewService;
@@ -209,9 +210,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // patient-only finder left. With an acting hospital a result is
         // readable where its order is handled (#751): ordered in the readable
         // set, or performed by this hospital's own laboratory.
-        List<LabResult> source = readable != null
+        // QA D741: a superseded result and a legacy duplicate are not current.
+        List<LabResult> source = ClinicalLabResultView.current(readable != null
             ? labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, page)
-            : labResultRepository.findAllPatientResults(patientId, page);
+            : labResultRepository.findAllPatientResults(patientId, page));
         account(reach, hospitalId, source.stream()
             .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
             .map(ChartReviewServiceImpl::orderingHospitalIdOf)
@@ -485,15 +487,19 @@ public class ChartReviewServiceImpl implements ChartReviewService {
                 orderingStaffName = os.getFullName();
             }
         }
+        // QA D740: an unreleased value is not a result yet. The row is listed
+        // as pending; its value, unit and flag never leave the laboratory, so
+        // the PDF built from this DTO cannot print them either.
+        boolean showsValue = ClinicalLabResultView.showsValue(r);
         return ResultEntryDTO.builder()
             .id(r.getId())
             .labOrderId(order != null ? order.getId() : null)
             .testName(testName)
             .testCode(testCode)
-            .resultValue(r.getResultValue())
-            .resultUnit(r.getResultUnit())
-            .abnormalFlag(gradedSeverity(r))
-            .abnormalDirection(gradedDirection(r))
+            .resultValue(showsValue ? r.getResultValue() : null)
+            .resultUnit(showsValue ? r.getResultUnit() : null)
+            .abnormalFlag(showsValue ? gradedSeverity(r) : null)
+            .abnormalDirection(showsValue ? gradedDirection(r) : null)
             .resultDate(r.getResultDate())
             .orderingStaffName(orderingStaffName)
             .acknowledged(r.isAcknowledged())

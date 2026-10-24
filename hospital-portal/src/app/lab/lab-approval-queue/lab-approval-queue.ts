@@ -94,6 +94,24 @@ export class LabApprovalQueueComponent implements OnInit {
     return !!this.currentUserId && !!def.submittedById && def.submittedById === this.currentUserId;
   }
 
+  /** QA D722: the signed-in user did this definition's QA review. */
+  isOwnReview(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.reviewedById && def.reviewedById === this.currentUserId;
+  }
+
+  /**
+   * QA D707 / D722, mirroring the server: the QA reviewer approves only when the server
+   * says so (the sole-director exception); otherwise any director who did not review may
+   * approve, the submitter included, because an independent reviewer stands between them.
+   * With no recorded reviewer, the submitter may not approve.
+   */
+  canApprove(def: LabTestDefinition): boolean {
+    if (this.isOwnReview(def)) {
+      return def.reviewerMayApprove === true;
+    }
+    return !!def.reviewedById || !this.isOwnSubmission(def);
+  }
+
   // Approval modal
   showApprovalModal = signal(false);
   approvalTarget = signal<LabTestDefinition | null>(null);

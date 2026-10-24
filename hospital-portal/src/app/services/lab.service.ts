@@ -136,6 +136,8 @@ export interface LabTestDefinition {
   /** QA D534: the submitter, never offered the QA pass or the approval. */
   submittedById?: string | null;
   reviewedById: string | null;
+  /** QA D722: set for the QA reviewer only - whether the server accepts their approval too. */
+  reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
   unit: string | null;

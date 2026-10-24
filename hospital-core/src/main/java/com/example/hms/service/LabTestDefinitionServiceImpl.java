@@ -202,6 +202,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         if (dto.getReferenceRanges() != null) {
             assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
+        assertClinicalFieldsEditable(existing, dto);
         // Activation belongs to the approval workflow: an edit may switch a
         // definition off, never on (QA D159, same bypass as the ranges).
         if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
@@ -253,9 +254,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             active = Boolean.TRUE;
             approvalStatus = LabTestDefinitionApprovalStatus.ACTIVE;
         }
+        User caller = currentUserOrNull();
         return repository.search(keyword, unit, category, active, approvalStatus,
                 everyHospital, activeHospitalId, normalizedPageable)
-                .map(mapper::toDto);
+                .map(definition -> withApproveHint(caller, definition));
+    }
+
+    /**
+     * QA D722: the queue offered "Approve" to the QA reviewer and the server
+     * then refused it. Whether this caller, as the reviewer, may also approve
+     * (the sole-director exception) is decided here, so the UI shows the
+     * button only when the server will accept it.
+     */
+    private LabTestDefinitionResponseDTO withApproveHint(User caller, LabTestDefinition definition) {
+        LabTestDefinitionResponseDTO dto = mapper.toDto(definition);
+        if (dto != null && caller != null
+            && definition.getApprovalStatus() == LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL
+            && reviewerIsApprover(caller, definition)) {
+            dto.setReviewerMayApprove(isSoleDirector(caller, definition)
+                && !caller.getId().equals(definition.getSubmittedById()));
+        }
+        return dto;
+    }
+
+    private User currentUserOrNull() {
+        String username = SecurityUtils.getCurrentUsername();
+        return username == null ? null : userRepository.findByUsername(username).orElse(null);
     }
 
     private static boolean callerManagesCatalogue() {
@@ -409,6 +433,43 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         return definition == null || definition.getHospital() == null;
     }
 
+    /** The APPROVE step; returns whether the sole director did the combined review-approval (D417). */
+    private boolean approve(User currentUser, LabTestDefinition definition) {
+        assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+        assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+        // QA D314 / D417: the director may also have done the QA review.
+        // Four eyes means two people, the author and an independent
+        // reviewer-approver; requiring a third (allowed only when the
+        // hospital had a single director) left a lab with a second,
+        // absent director unable to activate anything. The combined
+        // review is recorded in the audit row. The submitter rule holds.
+        requireRangesBeforeReview(definition);
+        boolean singleDirectorException = reviewerIsApprover(currentUser, definition);
+        // QA D523: the combined review-approval (D417) is allowed only
+        // when the hospital has exactly one active lab director, and
+        // it is then recorded in the audit row. With two directors, or
+        // for anyone else (the super-admin included), the approver
+        // must be someone other than the QA reviewer.
+        if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
+            throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
+        }
+        // QA D707: four eyes is two people. When an independent
+        // reviewer (never the submitter, enforced at COMPLETE_QA_REVIEW)
+        // stands between, the submitting director may approve: one
+        // director plus a quality manager, or two directors, can bring
+        // a test live. The approver must differ from the submitter only
+        // when no independent review sits between them (the combined
+        // sole-director review, or a legacy row with no reviewer).
+        if (singleDirectorException || definition.getReviewedById() == null) {
+            assertNotSameUser(currentUser, definition.getSubmittedById(),
+                "lab.definition.fourEyes.approverNotSubmitter");
+        }
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.setApprovedById(currentUser.getId());
+        definition.setApprovedAt(LocalDateTime.now());
+        return singleDirectorException;
+    }
+
     @Override
     @org.springframework.transaction.annotation.Transactional
     public LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto) {
@@ -427,7 +488,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         switch (action) {
             case "SUBMIT_FOR_QA" -> {
-                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                // QA D707: the quality manager may author too; the four-eyes
+                // rules below still need a second person to review.
+                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
                 // QA D417: ranges lock from submission on, and activation needs
                 // one, so a definition submitted without a range came out of
@@ -457,31 +520,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
             }
-            case "APPROVE" -> {
-                assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
-                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
-                // QA D314 / D417: the director may also have done the QA review.
-                // Four eyes means two people, the author and an independent
-                // reviewer-approver; requiring a third (allowed only when the
-                // hospital had a single director) left a lab with a second,
-                // absent director unable to activate anything. The combined
-                // review is recorded in the audit row. The submitter rule holds.
-                requireRangesBeforeReview(definition);
-                singleDirectorException = reviewerIsApprover(currentUser, definition);
-                // QA D523: the combined review-approval (D417) is allowed only
-                // when the hospital has exactly one active lab director, and
-                // it is then recorded in the audit row. With two directors, or
-                // for anyone else (the super-admin included), the approver
-                // must be someone other than the QA reviewer.
-                if (singleDirectorException && !isSoleDirector(currentUser, definition)) {
-                    throw new BusinessException("lab.definition.fourEyes.approverNotReviewer");
-                }
-                assertNotSameUser(currentUser, definition.getSubmittedById(),
-                    "lab.definition.fourEyes.approverNotSubmitter");
-                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
-                definition.setApprovedById(currentUser.getId());
-                definition.setApprovedAt(LocalDateTime.now());
-            }
+            case "APPROVE" -> singleDirectorException = approve(currentUser, definition);
             case "ACTIVATE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
@@ -679,8 +718,36 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         List<LabTestReferenceRange> next = proposed == null ? List.of() : proposed;
         if (!current.equals(next)) {
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
-                "lab.definition.rangesLocked", String.valueOf(definition.getApprovalStatus())));
+                "lab.definition.rangesLocked", statusLabel(definition.getApprovalStatus())));
         }
+    }
+
+    /**
+     * QA D705 / D721: D617 locked only the reference ranges, so the unit,
+     * sample type, test code or LOINC of a definition under review, approved
+     * or live could still move through this PUT. A range in mmol/L then graded
+     * a value reported in g/L. These fields are what QA and the director
+     * approved together with the ranges, so they lock with them; a change
+     * goes back through REJECT (to edit) or a new definition.
+     */
+    private void assertClinicalFieldsEditable(LabTestDefinition definition, LabTestDefinitionRequestDTO dto) {
+        if (!RANGES_LOCKED.contains(definition.getApprovalStatus())) {
+            return;
+        }
+        boolean changed = (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
+            || !sameText(definition.getUnit(), dto.getUnit())
+            || !sameText(definition.getSampleType(), dto.getSampleType())
+            || !sameText(definition.getLoincCode(), dto.getLoincCode());
+        if (changed) {
+            throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
+                "lab.definition.clinicalFieldsLocked", statusLabel(definition.getApprovalStatus())));
+        }
+    }
+
+    private static boolean sameText(String current, String proposed) {
+        String a = current == null ? "" : current.trim();
+        String b = proposed == null ? "" : proposed.trim();
+        return a.equals(b);
     }
 
     /** QA D314 / D318 (round 5): a status the reader can read, not the enum name. */

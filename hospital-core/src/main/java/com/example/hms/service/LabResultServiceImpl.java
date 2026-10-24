@@ -20,6 +20,7 @@ import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
 import com.example.hms.payload.dto.LabResultTrendPointDTO;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.ElapsedTime;
@@ -218,9 +219,7 @@ public class LabResultServiceImpl implements LabResultService {
         // its test are loaded.
         labResultEntryGuard.requireMayEnterResult(labOrder.getLabTestDefinition());
         if (!ingested) {
-            request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
-            request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
-            LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+            checkInteractiveEntry(request, labOrder);
         }
 
     UUID currentUserId = authService.getCurrentUserId();
@@ -268,6 +267,11 @@ public class LabResultServiceImpl implements LabResultService {
             requireSpecimenTaken(committedStatus, lockedOrder);
         }
 
+        // QA D708 (round 10) narrows what follows: an order is one test
+        // definition, one analyte, and the portal enters one value for it. A
+        // second plain result on it is refused below, by the live-result check;
+        // a correction names the result it replaces. Only the ingest path,
+        // whose ORU carries one OBX per analyte, records several rows.
         // A retried post records a second result, deliberately. Detecting the
         // retry meant comparing the fields a request carries, and the portal's
         // entry form carries too few to tell two results apart: no analyte
@@ -301,7 +305,11 @@ public class LabResultServiceImpl implements LabResultService {
             }
         }
 
-        LabResult superseded = ingested ? null : requireSupersedable(request.getSupersedesResultId(), lockedOrder);
+        LabResult superseded = null;
+        if (!ingested) {
+            superseded = requireSupersedable(request.getSupersedesResultId(), lockedOrder);
+            requireNoLiveResult(superseded, lockedOrder);
+        }
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         if (!ingested) {
             // Ingest-only fields: a hand-entered result is nobody's
@@ -310,8 +318,6 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingApplication(null);
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
-        }
-        if (!ingested) {
             // QA D286: a positive qualitative answer is abnormal. An ingested
             // result keeps the analyzer's own OBX-8 flag.
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
@@ -638,7 +644,9 @@ public class LabResultServiceImpl implements LabResultService {
 
     private LabResultResponseDTO readLabResultById(UUID id, boolean includeUnreleased) {
         LabResult labResult = labResultRepository.findById(id)
-            .filter(r -> includeUnreleased || r.isReleased())
+            // QA D741: outside the laboratory a superseded row or a legacy
+            // duplicate is not the result, judged against its order's rows.
+            .filter(r -> includeUnreleased || isCurrentForReader(r))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         requireResultInActiveHospital(labResult);
@@ -704,16 +712,40 @@ public class LabResultServiceImpl implements LabResultService {
         if (hospitalId == null) {
             // Verified super-admin in global view. QA D211 (round 5): this
             // branch applied neither the patientId filter nor released-only.
-            return labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
+            return currentForReader(labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
                     patientId == null ? NO_HOSPITAL : patientId,
-                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE))
+                    com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased)
                 .map(labResultMapper::toResponseDTO);
         }
-        Page<LabResult> page = labResultRepository.findHandledByHospitalForReader(hospitalId,
+        Page<LabResult> page = currentForReader(labResultRepository.findHandledByHospitalForReader(hospitalId,
             !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
-            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE));
+            com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased);
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);
+    }
+
+    /** QA D741: released, and current against every row of its order. */
+    private boolean isCurrentForReader(LabResult row) {
+        LabOrder order = row.getLabOrder();
+        List<LabResult> siblings = order == null || order.getId() == null
+            ? List.of() : labResultRepository.findByLabOrder_Id(order.getId());
+        return ClinicalLabResultView.isReleasedAndCurrent(row, siblings);
+    }
+
+    /**
+     * QA D741: the query drops unreleased rows, rows with a back-link and rows
+     * a released correction names; a legacy duplicate carries no link at all,
+     * so each page is judged again against every row of its orders.
+     */
+    private Page<LabResult> currentForReader(Page<LabResult> page, boolean includeUnreleased) {
+        if (includeUnreleased || page.isEmpty()) {
+            return page;
+        }
+        List<LabResult> kept = ClinicalLabResultView.releasedAndCurrentAmongOrders(page.getContent(),
+            labResultRepository::findByLabOrder_IdIn);
+        long hiddenHere = (long) page.getNumberOfElements() - kept.size();
+        return new org.springframework.data.domain.PageImpl<>(kept, page.getPageable(),
+            Math.max(kept.size(), page.getTotalElements() - hiddenHere));
     }
 
     @Override
@@ -884,6 +916,42 @@ public class LabResultServiceImpl implements LabResultService {
     }
 
     /**
+     * QA D708: two POSTs 240 ms apart both recorded a result on a single-test
+     * order; one was never released, so the patient saw a permanent "pending"
+     * row and the chart and record PDF listed the result twice. The order row
+     * is locked here, so the second of two concurrent posts sees the first.
+     * An unreleased result is edited, a released one is corrected (the
+     * request names it in supersedesResultId); neither is a second result.
+     */
+    private void requireNoLiveResult(LabResult superseded, LabOrder lockedOrder) {
+        if (superseded != null) {
+            return;
+        }
+        boolean hasLiveResult = labResultRepository.findByLabOrder_Id(lockedOrder.getId()).stream()
+            .anyMatch(existing -> !isSupersededByLiveResult(existing));
+        if (hasLiveResult) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolve("labresult.alreadyRecorded"));
+        }
+    }
+
+    /** A hand-entered result: the order's patient, a plausible date and a valid value. */
+    private void checkInteractiveEntry(LabResultRequestDTO request, LabOrder labOrder) {
+        requireOrderPatient(request.getPatientId(), labOrder);
+        request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
+        request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
+        LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+    }
+
+    /** QA D708: a patient id that is not the order's patient is a wrong request, not a detail to drop. */
+    private static void requireOrderPatient(UUID requestedPatientId, LabOrder labOrder) {
+        if (requestedPatientId != null && labOrder.getPatient() != null
+            && !requestedPatientId.equals(labOrder.getPatient().getId())) {
+            throw new BusinessException("labresult.patientMismatch");
+        }
+    }
+
+    /**
      * D81: a correction names the released result it replaces. It must be a
      * released result on the SAME order (the order row is locked here, so two
      * corrections cannot both claim it) that no correction has replaced yet.
@@ -994,6 +1062,7 @@ public class LabResultServiceImpl implements LabResultService {
         // acknowledge, and thereby silence, another hospital's critical
         // result by guessing the UUID.
         requireResultInActiveHospital(labResult);
+        requireReleasedForClinician(labResult);
         acknowledgeResult(labResult, currentUserId);
         // QA D429: the acknowledge route returns no body; name the patient here.
         com.example.hms.security.audit.WriteAuditDetail.describe(AuditEventType.LAB_RESULT_ACKNOWLEDGED, labResult.getId(),
@@ -1014,6 +1083,7 @@ public class LabResultServiceImpl implements LabResultService {
         // well as a write, and a matching read-back removes the row from
         // the escalation sweep permanently.
         requireResultInActiveHospital(labResult);
+        requireReleasedForClinician(labResult);
 
         UUID actorId = authService.getCurrentUserId();
         LabResult updated = criticalValueNotificationService.recordReadBack(
@@ -1291,6 +1361,8 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         labResultRepository.save(labResult);
+        // QA D709: the critical page goes out on release, not on entry.
+        criticalValueNotificationService.notifyIfCritical(labResult, severityOf(labResult));
         // Both halves of this line's history: #716 closes the order once every
         // result on it is released, and the release then transmits its final
         // form. Domain write first — the message is the consequence, and it is
@@ -1770,6 +1842,17 @@ public class LabResultServiceImpl implements LabResultService {
             || roleValidator.hasRole(userId, hospitalId, "ROLE_QUALITY_MANAGER");
     }
 
+    /**
+     * QA D709: the read-back answered 200 and marked acknowledged a result
+     * whose GET was 404 because it was not released. Acting on a result is
+     * reading it, so an unreleased result answers the same 404 here.
+     */
+    private static void requireReleasedForClinician(LabResult result) {
+        if (!result.isReleased()) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
+    }
+
     private void acknowledgeResult(LabResult result, UUID userId) {
         if (result.isAcknowledged()) {
             LOG.debug("Lab result {} already acknowledged", result.getId());
@@ -1851,24 +1934,26 @@ public class LabResultServiceImpl implements LabResultService {
             org.springframework.data.domain.PageRequest.of(0, TREND_WINDOW);
         if (actingHospitalId == null) {
             // PostgreSQL rejects an empty IN list; the nil UUID names no hospital.
-            return labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
-                Set.of(NO_HOSPITAL), null, true, window)
-                .stream()
-                .filter(r -> includeUnreleased || r.isReleased())
-                .toList();
+            List<LabResult> rows = labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                Set.of(NO_HOSPITAL), null, true, window);
+            return includeUnreleased ? rows
+                : ClinicalLabResultView.releasedAndCurrentAmongOrders(rows, labResultRepository::findByLabOrder_IdIn);
         }
         Set<UUID> readable = new java.util.HashSet<>(
             recordAccessPolicy.readableHospitalIds(currentPrincipalUserId(), patientId, actingHospitalId));
         readable.add(actingHospitalId);
-        return labResultRepository.findTrendReadableAt(patientId, testDefinitionId, readable, actingHospitalId,
-                false, window)
+        List<LabResult> readableRows = labResultRepository.findTrendReadableAt(patientId, testDefinitionId,
+                readable, actingHospitalId, false, window)
             .stream()
             .filter(r -> isReadableAt(r, actingHospitalId, readable))
-            // QA D211: outside the laboratory an unreleased value is not a
-            // result yet, in a trend any more than on its own.
-            .filter(r -> includeUnreleased || r.isReleased())
-            .limit(TREND_WINDOW)
             .toList();
+        // QA D211: outside the laboratory an unreleased value is not a result
+        // yet, in a trend any more than on its own. QA D741: nor is a released
+        // value its correction or a newer duplicate replaced, judged against
+        // every row of its order, not the row's own back-link.
+        List<LabResult> shown = includeUnreleased ? readableRows
+            : ClinicalLabResultView.releasedAndCurrentAmongOrders(readableRows, labResultRepository::findByLabOrder_IdIn);
+        return shown.stream().limit(TREND_WINDOW).toList();
     }
 
     private static boolean isReadableAt(LabResult result, UUID actingHospitalId, Set<UUID> readableHospitalIds) {
@@ -1974,7 +2059,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Transactional(readOnly = true)
     public LabResultComparisonDTO compareLabResults(UUID currentResultId, Locale locale, boolean includeUnreleased) {
         LabResult current = labResultRepository.findById(currentResultId)
-            .filter(r -> includeUnreleased || r.isReleased())
+            // QA D741: outside the laboratory a superseded row or a legacy
+            // duplicate is not the result, judged against its order's rows.
+            .filter(r -> includeUnreleased || isCurrentForReader(r))
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
         // Hospital scope enforcement: the shared single-row comparison, which

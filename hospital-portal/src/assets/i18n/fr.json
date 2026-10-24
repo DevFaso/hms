@@ -8583,7 +8583,8 @@
       "ACTIVATE": "Activer",
       "ACTIVATE_TITLE": "Activer pour la prescription",
       "OWN_SUBMISSION_HINT_QA": "Vous avez soumis cet examen : un autre responsable qualité ou directeur de laboratoire doit en effectuer la revue qualité (principe des quatre yeux).",
-      "OWN_SUBMISSION_HINT_APPROVE": "Vous avez soumis cet examen : un autre directeur de laboratoire doit l'approuver (principe des quatre yeux)."
+      "OWN_SUBMISSION_HINT_APPROVE": "Vous avez soumis cet examen : un autre directeur de laboratoire doit l'approuver (principe des quatre yeux).",
+      "OWN_REVIEW_HINT_APPROVE": "Vous avez fait la revue qualité de cet examen : un autre directeur de laboratoire, ou son auteur, doit l'approuver (principe des quatre yeux)."
     },
     "EMPTY": {
       "TITLE": "La file d'attente est vide",
