@@ -137,6 +137,13 @@ class NurseTaskServiceImplTest {
         @Override public java.util.Iterator<UUID> iterator() { return java.util.Collections.emptyIterator(); }
         @Override public int size() { return 0; }
     };
+    /** The open stay every listed patient is in, for MAR tests not about D514/D702. */
+    private static final Admission EVERY_PATIENTS_STAY = new Admission();
+    private static final java.util.Map<UUID, Admission> EVERY_PATIENT_IN_A_STAY = new java.util.AbstractMap<>() {
+        @Override public Admission get(Object o) { return EVERY_PATIENTS_STAY; }
+        @Override public boolean containsKey(Object o) { return true; }
+        @Override public java.util.Set<java.util.Map.Entry<UUID, Admission>> entrySet() { return java.util.Set.of(); }
+    };
     @org.mockito.Mock
     private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
@@ -169,6 +176,7 @@ class NurseTaskServiceImplTest {
         // below that are about windows, names and counts treat every listed
         // patient as admitted. The D220 tests call the real method.
         lenient().doReturn(EVERY_PATIENT).when(service).activelyAdmittedPatientIds(any());
+        lenient().doReturn(EVERY_PATIENT_IN_A_STAY).when(service).activeStaysByPatient(any());
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -3404,6 +3412,90 @@ class NurseTaskServiceImplTest {
         assertThat(mar.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
     }
 
+    /* ── QA round 10 (D702) ─────────────────────────────────────────── */
+
+    @Test
+    void d702_theEmarOfAnAdmittedPatientListsOnlyTheOrdersOfTheCurrentStay() {
+        // QA D702: PATIENT_A2's consultation orders (paracetamol SIGNED, an
+        // antimalarial already dispensed for home) were listed as due doses
+        // once he was admitted, next to the stay's own paracetamol.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusHours(3));
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Encounter stayEncounter = new Encounter();
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        stayEncounter.setAdmissionId(stay.getId());
+
+        Prescription takeHome = scheduledRx(hospitalId, "q6h");
+        takeHome.setStatus(PrescriptionStatus.SIGNED);
+        takeHome.setMedicationName("Paracetamol 500 mg");
+        takeHome.setEncounter(consultation);
+        UUID patientId = takeHome.getPatient().getId();
+        Prescription dispensedForHome = scheduledRx(hospitalId, "q12h");
+        dispensedForHome.setPatient(takeHome.getPatient());
+        dispensedForHome.setStatus(PrescriptionStatus.TRANSMITTED);
+        dispensedForHome.setMedicationName("Artemether-Lumefantrine");
+        dispensedForHome.setEncounter(consultation);
+        Prescription stayOrder = scheduledRx(hospitalId, "q6h");
+        stayOrder.setPatient(takeHome.getPatient());
+        stayOrder.setStatus(PrescriptionStatus.SIGNED);
+        stayOrder.setMedicationName("Paracetamol 1 g");
+        stayOrder.setEncounter(stayEncounter);
+        Prescription unanchoredBeforeStay = scheduledRx(hospitalId, "q8h");
+        unanchoredBeforeStay.setPatient(takeHome.getPatient());
+        unanchoredBeforeStay.setStatus(PrescriptionStatus.SIGNED);
+        unanchoredBeforeStay.setMedicationName("Old order");
+        unanchoredBeforeStay.setCreatedAt(LocalDateTime.now().minusDays(2));
+
+        doReturn(java.util.Map.of(patientId, stay)).when(service).activeStaysByPatient(hospitalId);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(takeHome, dispensedForHome, stayOrder, unanchoredBeforeStay));
+
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, null))
+            .extracting(NurseMedicationTaskResponseDTO::getMedication)
+            .containsExactly("Paracetamol 1 g");
+    }
+
+    @Test
+    void d702_anOrderOfAnEarlierStayIsNotTheCurrentStays() {
+        Admission current = new Admission();
+        current.setId(UUID.randomUUID());
+        Encounter earlier = new Encounter();
+        earlier.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        earlier.setAdmissionId(UUID.randomUUID());
+        Prescription rx = new Prescription();
+        rx.setEncounter(earlier);
+        rx.setCreatedAt(LocalDateTime.now());
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(rx, current)).isFalse();
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(rx, null)).isFalse();
+        Prescription unanchored = new Prescription();
+        unanchored.setCreatedAt(LocalDateTime.now());
+        current.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(unanchored, current)).isTrue();
+    }
+
+    @Test
+    void d702_activeStaysByPatientMapsEachAdmittedPatientToTheirStay() {
+        UUID hospitalId = UUID.randomUUID();
+        doCallRealMethod().when(service).activeStaysByPatient(any());
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setId(UUID.randomUUID());
+        stay.setPatient(p);
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(stay));
+        assertThat(service.activeStaysByPatient(hospitalId)).containsEntry(p.getId(), stay);
+        assertThat(service.activeStaysByPatient(null)).isEmpty();
+    }
+
     /* ── QA round 8 (D514, D525) ─────────────────────────────────────── */
 
     @Test
@@ -3419,7 +3511,7 @@ class NurseTaskServiceImplTest {
         consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
         rx.setEncounter(consultation);
         UUID patientId = rx.getPatient().getId();
-        doReturn(java.util.Set.of()).when(service).activelyAdmittedPatientIds(hospitalId);
+        doReturn(java.util.Map.of()).when(service).activeStaysByPatient(hospitalId);
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
@@ -3441,7 +3533,7 @@ class NurseTaskServiceImplTest {
         consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
         rx.setEncounter(consultation);
         UUID patientId = rx.getPatient().getId();
-        doReturn(java.util.Set.of()).when(service).activelyAdmittedPatientIds(hospitalId);
+        doReturn(java.util.Map.of()).when(service).activeStaysByPatient(hospitalId);
         lenient().when(nurseDashboardService.getPatientsForNurse(eq(nurseId), eq(hospitalId), any()))
             .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
@@ -3468,7 +3560,7 @@ class NurseTaskServiceImplTest {
         inEd.setEncounter(ed);
         UUID admittedId = inBed.getPatient().getId();
         UUID edId = inEd.getPatient().getId();
-        doReturn(java.util.Set.of(admittedId)).when(service).activelyAdmittedPatientIds(hospitalId);
+        doReturn(java.util.Map.of(admittedId, new Admission())).when(service).activeStaysByPatient(hospitalId);
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
             .thenReturn(List.of(patient(admittedId, "Awa Kabore", "Awa", "Kabore"),
                 patient(edId, "Issa Sawadogo", "Issa", "Sawadogo")));

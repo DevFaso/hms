@@ -63,7 +63,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
     private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
-        "The prescriber is not on the care team of this patient's stay.";
+        "The prescriber does not work at the hospital of this patient's stay.";
 
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
@@ -1439,6 +1439,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
     }
 
+    /**
+     * QA D703: the stay is the hospital's, not the admitting doctor's. Any
+     * prescriber of the stay's hospital who treats the patient (the doctor on
+     * call at night, a colleague covering the ward) may order on it; the
+     * prescribing role itself is enforced on the endpoint. Tenant scoping is
+     * kept: a prescriber of another hospital is refused.
+     */
     private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
         UUID staffId = staff != null ? staff.getId() : null;
         if (staffId == null) {
@@ -1448,10 +1455,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             || sameStaff(admission.getAdmittingProvider(), staffId)) {
             return true;
         }
-        List<java.util.Map<String, String>> consultants = admission.getConsultingPhysicians();
-        String id = staffId.toString();
-        return consultants != null && consultants.stream()
-            .anyMatch(c -> c != null && id.equalsIgnoreCase(c.get("staffId")));
+        UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
+        UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        return stayHospital != null && stayHospital.equals(staffHospital);
     }
 
     private static boolean sameStaff(Staff member, UUID staffId) {

@@ -25,6 +25,27 @@ public interface NotificationService {
     Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type);
 
     /**
+     * {@link #createNotification(String, Object[], String, String)} for a
+     * notification about one record ({@code subjectId}, QA D726), which
+     * {@link #markReadForSubject} can later mark read.
+     */
+    default Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type,
+                                            java.util.UUID subjectId) {
+        Notification created = createNotification(messageKey, args, recipientUsername, type);
+        if (created != null) {
+            created.setSubjectId(subjectId);
+        }
+        return created;
+    }
+
+    /**
+     * QA D726: marks read every unread notification of {@code types} about
+     * {@code subjectId} (the record was resolved, so the alert is answered).
+     * Returns how many were marked.
+     */
+    int markReadForSubject(java.util.UUID subjectId, java.util.Collection<String> types);
+
+    /**
      * Free text somebody TYPED (an administrator's message, an announcement, a
      * chat line): there is nothing to translate, so it is stored and shown as
      * written. Never for text the system composes: that goes through

@@ -396,6 +396,40 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
+    void d711_aSecondProgressNoteOnAStayIsANewEntryWithoutYesterdaysSections() {
+        // QA D711: the second POST /notes on the stay was a NOTE_UPDATED and
+        // the day-1 objective stayed under the day-2 assessment.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setObjective("Day 1: febrile 39.2");
+        note.setAssessment("Day 1 assessment");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(note.getObjective()).isNull();
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_CREATED");
+    }
+
+    @Test
+    void d711_aVisitNoteRevisionStillKeepsTheSectionsItDoesNotResend() {
+        // Path re-verified: an outpatient visit's note is still revised in place.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(null);
+        note.setObjective("Kept");
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Revised").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(note.getObjective()).isEqualTo("Kept");
+    }
+
+    @Test
     void d406_aNurseWritesTheFirstNoteInHerOwnName() {
         encounter.setEncounterNote(null);
         when(encounterNoteRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.empty());

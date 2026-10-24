@@ -4010,6 +4010,7 @@ class PrescriptionServiceImplTest {
         com.example.hms.model.Admission stayAdmission = new com.example.hms.model.Admission();
         stayAdmission.setId(stay.getAdmissionId());
         stayAdmission.addConsultingPhysician(staffId, "Consultant", "Cardiology");
+        stayAdmission.setHospital(encounter.getHospital());
         when(admissionRepository.findById(stay.getAdmissionId())).thenReturn(Optional.of(stayAdmission));
         Staff lead = new Staff();
         lead.setId(UUID.randomUUID());
@@ -4068,15 +4069,41 @@ class PrescriptionServiceImplTest {
         stay.setStaff(lead);
         admission.setAttendingPhysician(lead);
         admission.addConsultingPhysician(UUID.randomUUID(), "Someone else", "Surgery");
+        admission.setHospital(encounter.getHospital());
         return stay;
     }
 
+    /** QA D703: the colleague belongs to another hospital (tenant scoping kept). */
+    private void moveAdmissionToAnotherHospital(com.example.hms.model.Admission admission) {
+        com.example.hms.model.Hospital other = new com.example.hms.model.Hospital();
+        other.setId(UUID.randomUUID());
+        admission.setHospital(other);
+    }
+
     @Test
-    void gap1_anUnrelatedDoctorIsRefusedOnAnotherDoctorsStayViaTheImplicitPath() {
+    void d703_aColleagueOfTheSameHospitalMayPrescribeOnAnotherDoctorsStayViaTheImplicitPath() {
         stubPrescriberWithoutEncounter();
         com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
         admission.setId(UUID.randomUUID());
         Encounter stay = strangersStay(admission);
+        when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
+                eq(patientId), eq(hospitalId), any())).thenReturn(Optional.of(stay));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(stay));
+    }
+
+    @Test
+    void d703_aDoctorOfAnotherHospitalIsStillRefusedOnTheStayViaTheImplicitPath() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter stay = strangersStay(admission);
+        moveAdmissionToAnotherHospital(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository
             .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
@@ -4089,11 +4116,28 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void gap1_anUnrelatedDoctorIsRefusedOnAnotherDoctorsStayViaAnExplicitEncounterId() {
+    void d703_aColleagueOfTheSameHospitalMayPrescribeOnAnotherDoctorsStayViaAnExplicitEncounterId() {
         stubPrescriberWithoutEncounter();
         com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
         admission.setId(UUID.randomUUID());
         Encounter stay = strangersStay(admission);
+        when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+        when(encounterRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+        request.setEncounterId(stay.getId());
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(stay));
+    }
+
+    @Test
+    void d703_aDoctorOfAnotherHospitalIsStillRefusedOnTheStayViaAnExplicitEncounterId() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        Encounter stay = strangersStay(admission);
+        moveAdmissionToAnotherHospital(admission);
         when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
         when(encounterRepository.findById(stay.getId())).thenReturn(Optional.of(stay));
         PrescriptionRequestDTO request = requestWithoutEncounter();
@@ -4105,12 +4149,37 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void gap1_anUnrelatedDoctorDoesNotOpenAnotherDoctorsStay() {
+    void d703_aColleagueOfTheSameHospitalOpensTheStayAndPrescribes() {
         stubPrescriberWithoutEncounter();
         com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
         admission.setId(UUID.randomUUID());
         admission.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
         strangersStay(admission);
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(admission));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+
+        Encounter opened = new Encounter();
+        opened.setId(UUID.randomUUID());
+        opened.setHospital(encounter.getHospital());
+        opened.setPatient(patient);
+        opened.setAdmissionId(admission.getId());
+        when(stayEncounters.openStayEncounter(admission)).thenReturn(opened);
+        lenient().when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(opened));
+    }
+
+    @Test
+    void d703_aDoctorOfAnotherHospitalDoesNotOpenTheStay() {
+        stubPrescriberWithoutEncounter();
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(UUID.randomUUID());
+        admission.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        strangersStay(admission);
+        moveAdmissionToAnotherHospital(admission);
         when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
             .thenReturn(List.of(admission));
         PrescriptionRequestDTO request = requestWithoutEncounter();

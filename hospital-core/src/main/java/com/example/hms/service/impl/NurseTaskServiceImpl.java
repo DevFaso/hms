@@ -288,7 +288,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         // QA D514: the eMAR is the ward's dose list. It listed the take-home
         // prescriptions of outpatients nobody admitted as due doses.
-        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
+        java.util.Map<UUID, Admission> admitted = activeStaysByPatient(hospitalId);
         List<NurseMedicationTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
             tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now, admitted));
@@ -299,7 +299,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Build medication tasks for a single patient from their real prescriptions. */
     private List<NurseMedicationTaskResponseDTO> buildMedicationTasksForPatient(
-        PatientContext ctx, UUID hospitalId, String statusFilter, LocalDateTime now, Set<UUID> admitted
+        PatientContext ctx, UUID hospitalId, String statusFilter, LocalDateTime now, java.util.Map<UUID, Admission> admitted
     ) {
         if (ctx.patientId() == null || hospitalId == null) return List.of();
 
@@ -309,9 +309,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
 
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
-        boolean inBed = admitted.contains(ctx.patientId());
+        Admission stay = admitted.get(ctx.patientId());
         for (Prescription rx : prescriptions) {
-            if (!onWardMar(rx, closedStays, inBed)) continue;
+            if (!onWardMar(rx, closedStays, stay)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -956,10 +956,60 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .toList();
     }
 
-    /** Whether an order belongs on the ward MAR (QA D514): active, not ended by a stay, and the patient is in a bed or an open emergency visit. */
-    private boolean onWardMar(Prescription rx, List<Admission> closedStays, boolean inBed) {
+    /**
+     * Whether an order belongs on the ward MAR (QA D514, D702): active, not
+     * ended by a stay, and either an order of the patient's current stay or
+     * one given during an open emergency visit.
+     */
+    static boolean onWardMar(Prescription rx, List<Admission> closedStays, Admission currentStay) {
         return ACTIVE_RX_STATUSES.contains(rx.getStatus()) && !endedWithAStay(rx, closedStays)
-            && (inBed || givenDuringOpenEmergencyVisit(rx));
+            && (orderOfCurrentStay(rx, currentStay) || givenDuringOpenEmergencyVisit(rx));
+    }
+
+    /**
+     * QA D702: D514 only asked whether the patient is in a bed, so once a
+     * patient was admitted every live prescription he had, including the
+     * take-home orders of an earlier consultation, became a due dose. A dose
+     * is due on the ward only for an order of the current stay: filed on the
+     * stay's own encounter, or (no admission link) on an INPATIENT encounter
+     * or on no encounter at all, written since the admission. An order of an
+     * outpatient visit is the visit's, never a nursing dose.
+     */
+    /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */
+    private static final Duration ED_TO_WARD_CARRY_OVER = Duration.ofHours(24);
+
+    static boolean orderOfCurrentStay(Prescription rx, Admission stay) {
+        if (stay == null) return false;
+        com.example.hms.model.Encounter encounter = rx.getEncounter();
+        if (encounter != null && encounter.getAdmissionId() != null) {
+            return encounter.getAdmissionId().equals(stay.getId());
+        }
+        LocalDateTime written = rx.getCreatedAt();
+        LocalDateTime from = stay.getAdmissionDateTime();
+        if (encounter != null && encounter.getEncounterType() == com.example.hms.enums.EncounterType.EMERGENCY) {
+            // The department's orders carry on to the ward: the emergency
+            // visit ends with the admission (QA D712), its treatment does not.
+            return written != null && (from == null || !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER)));
+        }
+        if (encounter != null && encounter.getEncounterType() != com.example.hms.enums.EncounterType.INPATIENT) {
+            return false;
+        }
+        // An order with no write time (never, for an order written here) is
+        // kept: it names no outpatient visit, and dropping a ward dose is not
+        // the safe direction.
+        return written == null || from == null || !written.isBefore(from);
+    }
+
+    /** The active stay of each patient in a bed at this hospital (QA D702). */
+    java.util.Map<UUID, Admission> activeStaysByPatient(UUID hospitalId) {
+        if (hospitalId == null) return java.util.Map.of();
+        java.util.Map<UUID, Admission> stays = new java.util.HashMap<>();
+        for (Admission a : admissionRepository.findActiveAdmissionsByHospital(hospitalId)) {
+            if (a.getPatient() != null && a.getPatient().getId() != null) {
+                stays.putIfAbsent(a.getPatient().getId(), a);
+            }
+        }
+        return stays;
     }
 
     /** Count medications by status (DUE / OVERDUE). Returns {due, overdue}. */
@@ -967,15 +1017,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         long due = 0;
         long overdue = 0;
         // QA D514: counted on the same rule as the eMAR list itself.
-        Set<UUID> admitted = activelyAdmittedPatientIds(hospitalId);
+        java.util.Map<UUID, Admission> admitted = activeStaysByPatient(hospitalId);
         for (PatientContext ctx : patients) {
             if (ctx.patientId() == null || hospitalId == null) continue;
             List<Prescription> prescriptions = prescriptionRepository
                 .findByPatient_IdAndHospital_Id(ctx.patientId(), hospitalId);
             List<Admission> closedStays = closedStaysFor(ctx.patientId(), hospitalId, prescriptions);
-            boolean inBed = admitted.contains(ctx.patientId());
+            Admission stay = admitted.get(ctx.patientId());
             for (Prescription rx : prescriptions) {
-                if (!onWardMar(rx, closedStays, inBed)) continue;
+                if (!onWardMar(rx, closedStays, stay)) continue;
                 String marStatus = resolveMarStatus(rx, now);
                 switch (marStatus) {
                     case STATUS_DUE -> due++;

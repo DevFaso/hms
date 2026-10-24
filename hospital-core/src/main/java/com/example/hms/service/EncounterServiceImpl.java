@@ -365,7 +365,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy(), null);
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy(), null, false);
         }
 
         recordHistory(saved, "CREATED", resolveHistoryActor(request.getCreatedBy(), ctx.staff()), null);
@@ -419,7 +419,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy(), previousStatus);
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy(), previousStatus, false);
         }
 
         // Mirror the dedicated checkout flow: whenever an update transitions the
@@ -507,7 +507,7 @@ public class EncounterServiceImpl implements EncounterService {
         NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
         EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null,
-            encounter.getStatus());
+            encounter.getStatus(), true);
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -739,7 +739,8 @@ public class EncounterServiceImpl implements EncounterService {
                                                       EncounterNoteRequestDTO request,
                                                       Locale locale,
                                                       String actorOverride,
-                                                      EncounterStatus statusBefore) {
+                                                      EncounterStatus statusBefore,
+                                                      boolean progressEntryPost) {
         // QA D513 (#922 review): the lock lives HERE, on every write path —
         // PUT /encounters/{id} with a nested note reached this method without
         // the guard. Keyed on the status before this request, so the update
@@ -771,6 +772,14 @@ public class EncounterServiceImpl implements EncounterService {
             note.setHospital(encounter.getHospital());
             note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
         }
+        // QA D711: on an inpatient stay each POST is the day's progress entry,
+        // not an edit of yesterday's. A section the new entry leaves out is
+        // empty, never yesterday's text under today's assessment; the earlier
+        // entry stays whole in the note history (NOTE_CREATED per entry).
+        boolean newStayEntry = progressEntryPost && !isNew && encounter.getAdmissionId() != null;
+        if (newStayEntry) {
+            startNewStayEntry(note, request);
+        }
 
         applyNoteFields(note, request, author);
 
@@ -784,8 +793,20 @@ public class EncounterServiceImpl implements EncounterService {
         // A session author is the history's actor; a body-supplied name is not.
         String changedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
             ? trimToNull(actorOverride) : author.actorIdentifier();
-        recordNoteHistory(encounter, saved, isNew ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED, changedBy);
+        recordNoteHistory(encounter, saved, isNew || newStayEntry ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED,
+            changedBy);
         return saved;
+    }
+
+    /** QA D711: clears the previous stay entry's sections and timing before the new entry is applied. */
+    private static void startNewStayEntry(EncounterNote note, EncounterNoteRequestDTO request) {
+        NOTE_TEXT_FIELDS.forEach(mapping -> mapping.noteSetter().accept(note, null));
+        note.setLateEntry(false);
+        note.setEventOccurredAt(null);
+        note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
+        note.setAttestAccuracy(false);
+        note.setAttestNoAbbreviations(false);
+        note.setAttestSpellCheck(false);
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {

@@ -66,4 +66,13 @@ public class Notification {
     @Column(nullable = false)
     private String recipientUsername;
 
+    /**
+     * QA D726 (V228): the record the notification is about (a critical lab
+     * result), so resolving that record can mark it read. Null on rows that
+     * name none.
+     */
+    @JsonIgnore
+    @Column(name = "subject_id")
+    private UUID subjectId;
+
 }
