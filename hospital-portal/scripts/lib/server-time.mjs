@@ -250,3 +250,204 @@ export function convertsBeforeSending(source, field) {
     new RegExp(String.raw`withServerDateTimes\([^;]*'${field}'`).test(source)
   );
 }
+
+/**
+ * The same direction in code (#948 review). A date and time built from a
+ * picked day (`day + 'T00:00:00'`, `` `${day}T23:59:59` ``) is the reader's
+ * wall clock with no zone; sent as is, the API stored it as if it were UTC,
+ * and the screens that read it back through `serverTime` showed the day
+ * before (an encounter created in New York) or after (a proxy expiry east of
+ * UTC). Every such string must be parsed locally right there
+ * (`new Date(...)`) or sent through `toServerDateTime(...)`, or be listed
+ * here with the reason it need not be. Keyed `<path under src/app>:<text as
+ * written>`. Allowances may only shrink.
+ */
+export const BUILT_DATE_TIME_EXEMPT = new Map([
+  [
+    "patient-portal/my-appointments/my-appointments.component.ts:`${a.date ?? ''}T${a.rawStartTime ?? ''}`",
+    'sort key of a visit (wall-clock date and start time), never sent',
+  ],
+]);
+
+const TIME_TEXT = /T\d{2}:\d{2}/;
+
+/** Whether the literal parts of a `+` chain or template carry a time (`T08:00`, or `T${time}`). */
+function buildsDateTime(node) {
+  if (ts.isTemplateExpression(node)) {
+    const parts = [node.head.text, ...node.templateSpans.map((s) => s.literal.text)];
+    return parts.some(
+      (text, i) => TIME_TEXT.test(text) || (i < parts.length - 1 && /(^|\d)T$/.test(text)),
+    );
+  }
+  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+    const literal = (n) =>
+      (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) && TIME_TEXT.test(n.text);
+    const sides = (n) =>
+      ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken
+        ? [...sides(n.left), ...sides(n.right)]
+        : [n];
+    return sides(node).some((n) => literal(n) || buildsDateTime(n));
+  }
+  return false;
+}
+
+/** The parent of `node`, past any parentheses. */
+function parentOf(node) {
+  let parent = node.parent;
+  while (parent && ts.isParenthesizedExpression(parent)) parent = parent.parent;
+  return parent;
+}
+
+/**
+ * Whether a built date and time is parsed locally, converted, or only
+ * compared (a `localeCompare` sort key) where it is built.
+ */
+function convertedInPlace(node) {
+  const parent = parentOf(node);
+  if (!parent) return false;
+  if (ts.isNewExpression(parent) && parent.expression.getText() === 'Date') return true;
+  if (ts.isPropertyAccessExpression(parent) && parent.name.text === 'localeCompare') return true;
+  if (
+    ts.isCallExpression(parent) &&
+    ts.isPropertyAccessExpression(parent.expression) &&
+    parent.expression.name.text === 'localeCompare'
+  ) {
+    return true;
+  }
+  return ts.isCallExpression(parent) && parent.expression.getText() === 'toServerDateTime';
+}
+
+/**
+ * Every date and time string built in a TypeScript source that is neither
+ * parsed locally nor converted with `toServerDateTime` where it is built,
+ * minus the `BUILT_DATE_TIME_EXEMPT` allowances of `file`.
+ *
+ * @returns {{ line: number, text: string }[]}
+ */
+export function unconvertedDateTimes(source, file = '') {
+  if (!/T\d{2}:\d{2}|T\$\{/.test(source)) return [];
+  const sf = ts.createSourceFile('x.ts', source, ts.ScriptTarget.Latest, true);
+  const found = [];
+  const visit = (node) => {
+    const isPlus =
+      ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken;
+    if (isPlus || ts.isTemplateExpression(node)) {
+      const parent = parentOf(node);
+      const innerOfChain =
+        isPlus &&
+        parent &&
+        ts.isBinaryExpression(parent) &&
+        parent.operatorToken.kind === ts.SyntaxKind.PlusToken;
+      if (!innerOfChain && buildsDateTime(node)) {
+        const text = node.getText().replace(/\s+/g, ' ');
+        if (!convertedInPlace(node) && !BUILT_DATE_TIME_EXEMPT.has(`${file}:${text}`)) {
+          found.push({ line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1, text });
+        }
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}
+
+/**
+ * And reading one back (#948 review): cutting the calendar day out of a
+ * server time (`e.encounterDate.substring(0, 10)`, `.slice(0, 10)`,
+ * `.split('T')[0]`) gives its UTC day, so a 21:00 New York visit was listed
+ * under the next day and an edit form pre-filled the wrong date. A server
+ * value goes through `serverLocalDate(...)` instead. The same cut from
+ * `x.toISOString()` is the UTC day of a local Date — "today" was tomorrow
+ * after 20:00 in New York, and a staff week grid built from local midnights
+ * shifted by a day east of UTC — so it is caught too; `localDateString(x)`
+ * gives the reader's day. A value read from a field (`a.b`, `a?.b!`) or a
+ * `toISOString()` call is checked; other receivers (an array, a call that
+ * builds an id) are not dates. Fields that are not server times (a
+ * `LocalDate` sent as a string, a wall-clock booking) are listed here with
+ * the reason, keyed `<path under src/app>:<receiver as written>`. Allowances
+ * may only shrink.
+ */
+export const SLICED_DAY_EXEMPT = new Map([
+  ['billing/billing.ts:inv.invoiceDate', 'LocalDate sent as a string: already a calendar day'],
+  ['billing/billing.ts:inv.dueDate', 'LocalDate sent as a string: already a calendar day'],
+  [
+    'services/patient-portal.service.ts:f.appointmentTime',
+    'booked follow-up visit time (wall clock), used only when appointmentDate is absent',
+  ],
+]);
+
+/** `x`, `x!` or `(x)` down to the expression they wrap. */
+function unwrap(node) {
+  let n = node;
+  while (ts.isNonNullExpression(n) || ts.isParenthesizedExpression(n)) n = n.expression;
+  return n;
+}
+
+const isNumber = (n, value) => ts.isNumericLiteral(n) && Number(n.text) === value;
+
+/** The field a `.substring(0, 10)` / `.slice(0, 10)` / `.split('T')[0]` cuts a day from, or null. */
+function slicedField(node) {
+  let call;
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ['substring', 'slice'].includes(node.expression.name.text) &&
+    node.arguments.length === 2 &&
+    isNumber(node.arguments[0], 0) &&
+    isNumber(node.arguments[1], 10)
+  ) {
+    call = node;
+  } else if (
+    ts.isElementAccessExpression(node) &&
+    isNumber(node.argumentExpression, 0) &&
+    ts.isCallExpression(unwrap(node.expression))
+  ) {
+    const split = unwrap(node.expression);
+    const arg = split.arguments[0];
+    if (
+      ts.isPropertyAccessExpression(split.expression) &&
+      split.expression.name.text === 'split' &&
+      arg &&
+      (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) &&
+      arg.text === 'T'
+    ) {
+      call = split;
+    }
+  }
+  if (!call) return null;
+  const receiver = unwrap(call.expression.expression);
+  if (ts.isPropertyAccessExpression(receiver)) return receiver;
+  const isoString =
+    ts.isCallExpression(receiver) &&
+    ts.isPropertyAccessExpression(receiver.expression) &&
+    receiver.expression.name.text === 'toISOString';
+  return isoString ? receiver : null;
+}
+
+/**
+ * Every calendar day cut from a field of a TypeScript source, minus the
+ * `SLICED_DAY_EXEMPT` allowances of `file`.
+ *
+ * @returns {{ line: number, field: string }[]}
+ */
+export function slicedServerDays(source, file = '') {
+  if (!/substring\(0|slice\(0|split\(/.test(source)) return [];
+  const sf = ts.createSourceFile('x.ts', source, ts.ScriptTarget.Latest, true);
+  const found = [];
+  const visit = (node) => {
+    const field = slicedField(node);
+    if (field) {
+      const text = field.getText().replace(/\s+/g, ' ');
+      if (!SLICED_DAY_EXEMPT.has(`${file}:${text}`)) {
+        found.push({
+          line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+          field: text,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}

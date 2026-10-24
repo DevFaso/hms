@@ -299,9 +299,16 @@ describe('NurseStationComponent — two-tier polling', () => {
     it('a nurse sees ARRIVED/TRIAGE outpatients and opens the triage form on one', () => {
       authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
       component.loadFlow$().subscribe();
+      // #948 review: "today" starts at the reader's local midnight, sent on
+      // the server's UTC clock (encounterDate is compared on it), not as the
+      // local wall clock.
       const d = new Date();
-      const p = (n: number) => String(n).padStart(2, '0');
-      const fromDate = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T00:00:00`;
+      const localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const fromDate = localMidnight.toISOString().slice(0, 19);
+      const sent = encounterSpy.list.calls.mostRecent().args[0] as { fromDate: string };
+      expect(new Date(`${sent.fromDate}Z`).getTime())
+        .withContext('fromDate is local midnight read as UTC')
+        .toBe(localMidnight.getTime());
       expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'ARRIVED', fromDate, size: 100 });
       expect(encounterSpy.list).toHaveBeenCalledWith({ status: 'TRIAGE', fromDate, size: 100 });
       expect(component.awaitingTriage().map((e) => e.id)).toEqual(['e1']);

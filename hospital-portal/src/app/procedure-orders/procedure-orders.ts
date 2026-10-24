@@ -18,7 +18,12 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toLocalInputValue, toServerDateTime, withServerDateTimes } from '../shared/date-utils';
+import {
+  nowLocalDatetime,
+  toLocalInputValue,
+  toServerDateTime,
+  withServerDateTimes,
+} from '../shared/date-utils';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -166,13 +171,6 @@ export class ProcedureOrdersComponent implements OnInit {
     return !order.consentObtained && !this.isTerminal(order);
   }
 
-  /** Local-timezone yyyy-MM-ddTHH:mm for datetime-local inputs. */
-  private nowLocalDatetime(): string {
-    const d = new Date();
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   /* ── Create ── */
 
   emptyOrderForm(): ProcedureOrderRequest {
@@ -280,7 +278,7 @@ export class ProcedureOrdersComponent implements OnInit {
       order,
       {
         consentObtained: true,
-        consentObtainedAt: this.nowLocalDatetime(),
+        consentObtainedAt: nowLocalDatetime(),
         consentObtainedBy: this.consentBy.trim(),
         consentFormLocation: this.consentFormLocation.trim() || undefined,
       },

@@ -24,6 +24,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { nowLocalDatetime } from '../shared/date-utils';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
@@ -263,9 +264,7 @@ export class OnCallComponent implements OnInit {
 
   /** ISO (with offset) → the local "YYYY-MM-DDTHH:mm" a datetime-local input needs. */
   private toLocalInput(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return nowLocalDatetime(new Date(iso));
   }
 
   private emptyForm(): OnCallFormModel {

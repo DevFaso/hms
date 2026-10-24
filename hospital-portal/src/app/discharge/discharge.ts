@@ -20,6 +20,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverLocalDate } from '../shared/date-utils';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -638,7 +639,9 @@ export class DischargeComponent implements OnInit {
   }
 
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate ? e.encounterDate.substring(0, 10) : '';
+    // #948 review: the reader's day; slicing the UTC string listed a 21:00
+    // New York visit under the next day.
+    const date = serverLocalDate(e.encounterDate);
     return `${date} — ${e.encounterType ?? ''} (${e.status ?? ''})`.trim();
   }
 

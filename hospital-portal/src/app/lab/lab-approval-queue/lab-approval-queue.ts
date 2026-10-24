@@ -22,7 +22,7 @@ import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
-import { serverInstant } from '../../shared/date-utils';
+import { serverInstant, localDateString } from '../../shared/date-utils';
 
 interface QcPoint {
   x: number;
@@ -290,7 +290,7 @@ export class LabApprovalQueueComponent implements OnInit {
   emptyStudyForm(): LabTestValidationStudyRequest {
     return {
       studyType: 'PRECISION',
-      studyDate: new Date().toISOString().split('T')[0],
+      studyDate: localDateString(),
       passed: false,
     };
   }

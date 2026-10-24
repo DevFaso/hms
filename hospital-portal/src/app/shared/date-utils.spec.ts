@@ -3,6 +3,7 @@ import {
   nowLocalDatetime,
   serverDateOrInstant,
   serverInstant,
+  serverLocalDate,
   withServerDateTimes,
 } from './date-utils';
 
@@ -72,5 +73,22 @@ describe('serverDateOrInstant (#948 review)', () => {
     expect(serverDateOrInstant('2026-10-24T15:33:17').getTime()).toBe(
       Date.UTC(2026, 9, 24, 15, 33, 17),
     );
+  });
+});
+
+describe('serverLocalDate (#948 review)', () => {
+  it('gives the reader day of a UTC server time, not its UTC day', () => {
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    expect(serverLocalDate(stored)).toBe('2026-10-24');
+  });
+
+  it('keeps a bare calendar date as that day', () => {
+    expect(serverLocalDate('2026-10-24')).toBe('2026-10-24');
+  });
+
+  it('is empty for an empty or unreadable value', () => {
+    expect(serverLocalDate(null)).toBe('');
+    expect(serverLocalDate('')).toBe('');
+    expect(serverLocalDate('not a date')).toBe('');
   });
 });

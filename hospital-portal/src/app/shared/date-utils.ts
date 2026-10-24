@@ -83,6 +83,20 @@ export function serverDateOrInstant(serverValue: string): Date {
 }
 
 /**
+ * #948 review: the reader's calendar date of a server value, as yyyy-MM-dd
+ * for an `<input type="date">` or a label. Slicing the string
+ * (`encounterDate.substring(0, 10)`) gave the UTC date, so a 21:00 visit in
+ * New York was listed as the next day. '' when empty or unreadable.
+ */
+export function serverLocalDate(serverValue: string | null | undefined): string {
+  if (!serverValue) {
+    return '';
+  }
+  const instant = serverDateOrInstant(serverValue);
+  return Number.isNaN(instant.getTime()) ? '' : localDateString(instant);
+}
+
+/**
  * #941 review: clinical-time forms (labor, delivery, postpartum, maternal
  * history) are checked against the server's UTC clock, so their
  * `datetime-local` values must be sent as UTC too. Sent as browser wall time,

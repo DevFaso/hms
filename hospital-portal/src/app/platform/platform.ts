@@ -28,7 +28,7 @@ import {
   AutomationTask,
 } from '../services/platform.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toServerDateTime } from '../shared/date-utils';
+import { toServerDateTime, localDateString } from '../shared/date-utils';
 
 /* ── View state types ── */
 
@@ -355,7 +355,7 @@ export class PlatformComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `platform-snapshot-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = `platform-snapshot-${localDateString()}.json`;
         a.click();
         URL.revokeObjectURL(url);
         this.toast.success(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORTED'));

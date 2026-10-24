@@ -16,10 +16,14 @@ import { walk } from './walk.mjs';
 import {
   bareDatePipes,
   bareServerParses,
+  BUILT_DATE_TIME_EXEMPT,
   convertsBeforeSending,
   datetimeLocalFields,
   DATETIME_LOCAL_EXEMPT,
   LOCAL_PARSES,
+  SLICED_DAY_EXEMPT,
+  slicedServerDays,
+  unconvertedDateTimes,
   WALL_CLOCK,
 } from './server-time.mjs';
 
@@ -191,6 +195,118 @@ test('every datetime-local input reaches the API as UTC', () => {
   // Allowances only shrink: each must still name an unconverted input.
   assert.deepEqual(
     [...DATETIME_LOCAL_EXEMPT.keys()].filter((key) => !used.has(key)),
+    [],
+  );
+});
+
+const built = (source, file) => unconvertedDateTimes(source, file).map((h) => h.text);
+
+test('a date and time built from a picked day and sent raw is caught (#948 review)', () => {
+  // encounters.ts submitForm, my-family-access grantAccess and the nurse
+  // station's triage "today" bound before the fix.
+  assert.deepEqual(built(`const p = { encounterDate: this.form.encounterDate + 'T00:00:00' };`), [
+    "this.form.encounterDate + 'T00:00:00'",
+  ]);
+  assert.deepEqual(built('this.form.expiresAt = `${this.expiresOn}T23:59:59`;'), [
+    '`${this.expiresOn}T23:59:59`',
+  ]);
+  assert.deepEqual(built('const fromDate = `${y}-${pad(m)}-${pad(d)}T00:00:00`;'), [
+    '`${y}-${pad(m)}-${pad(d)}T00:00:00`',
+  ]);
+  assert.deepEqual(built('const at = `${day}T${time}`; const b = day + "T" + time;'), [
+    '`${day}T${time}`',
+  ]);
+});
+
+test('a built date and time parsed locally or converted in place passes', () => {
+  assert.deepEqual(
+    built(
+      `new Date(start + 'T00:00:00'); new Date(\`\${d}T23:59:59\`).toISOString();
+       toServerDateTime(\`\${day}T00:00\`); toServerDateTime((day + 'T00:00'));
+       const id = \`ALERT\${n}\`; const s = 'PAT' + id;
+       \`\${a.d}T\${a.t}\`.localeCompare(\`\${b.d}T\${b.t}\`);`,
+    ),
+    [],
+  );
+});
+
+test('no date and time string is built and sent unconverted', () => {
+  const offenders = [];
+  const used = new Set();
+  for (const file of walk(appDir, ['.ts'])) {
+    const rel = relative(appDir, file).replace(/\\/g, '/');
+    if (rel.endsWith('.spec.ts') || rel === 'shared/date-utils.ts') continue;
+    const source = readFileSync(file, 'utf8');
+    for (const hit of unconvertedDateTimes(source, rel)) {
+      offenders.push(`${rel}:${hit.line} ${hit.text}`);
+    }
+    for (const hit of unconvertedDateTimes(source)) {
+      if (BUILT_DATE_TIME_EXEMPT.has(`${rel}:${hit.text}`)) used.add(`${rel}:${hit.text}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+  assert.deepEqual(
+    [...BUILT_DATE_TIME_EXEMPT.keys()].filter((key) => !used.has(key)),
+    [],
+  );
+});
+
+const sliced = (source, file) => slicedServerDays(source, file).map((h) => h.field);
+
+test('a calendar day cut from a server field is caught (#948 review)', () => {
+  // discharge.ts encounterLabel and encounters.ts openEdit before the fix.
+  assert.deepEqual(
+    sliced(
+      `const a = e.encounterDate ? e.encounterDate.substring(0, 10) : '';
+       const b = enc.encounterDate?.split('T')[0] || '';
+       const c = row.createdAt!.slice(0, 10);`,
+    ),
+    ['e.encounterDate', 'enc.encounterDate', 'row.createdAt'],
+  );
+});
+
+test('the UTC day of a local Date is caught too', () => {
+  // appointment-list todayIso and staff-detail toISODate before #948 review.
+  assert.deepEqual(
+    sliced(`new Date().toISOString().split('T')[0]; d.toISOString().slice(0, 10);`),
+    ['new Date().toISOString()', 'd.toISOString()'],
+  );
+});
+
+test('a non-day slice, or a converted value, passes', () => {
+  assert.deepEqual(
+    sliced(
+      `[n, ...list].slice(0, 10); this.items.slice(0, 5); name.split(' ')[0];
+       (id ?? '').replace(/-/g, '').substring(0, 10); d.toISOString().slice(0, 19);
+       serverLocalDate(e.encounterDate); localDateString(d);`,
+    ),
+    [],
+  );
+});
+
+test('a sliced-day allowance covers only its own file', () => {
+  const src = `inv.invoiceDate?.substring(0, 10)`;
+  assert.deepEqual(sliced(src, 'billing/billing.ts'), []);
+  assert.deepEqual(sliced(src, 'discharge/discharge.ts'), ['inv.invoiceDate']);
+});
+
+test('no screen cuts the UTC day out of a server time', () => {
+  const offenders = [];
+  const used = new Set();
+  for (const file of walk(appDir, ['.ts'])) {
+    const rel = relative(appDir, file).replace(/\\/g, '/');
+    if (rel.endsWith('.spec.ts') || rel === 'shared/date-utils.ts') continue;
+    const source = readFileSync(file, 'utf8');
+    for (const hit of slicedServerDays(source, rel)) {
+      offenders.push(`${rel}:${hit.line} ${hit.field}`);
+    }
+    for (const hit of slicedServerDays(source)) {
+      if (SLICED_DAY_EXEMPT.has(`${rel}:${hit.field}`)) used.add(`${rel}:${hit.field}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+  assert.deepEqual(
+    [...SLICED_DAY_EXEMPT.keys()].filter((key) => !used.has(key)),
     [],
   );
 });
