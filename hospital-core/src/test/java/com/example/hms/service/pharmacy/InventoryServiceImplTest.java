@@ -681,6 +681,54 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D733: a receipt of 1e9 units is refused")
+        void hugeReceiptIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("1000000000"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D733: the same lot received twice adds to the one row")
+        void sameLotTwiceAddsToTheRow() {
+            StockLotRequestDTO dto = buildLotRequest();
+            StockLot existing = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate()))
+                    .thenReturn(List.of(existing));
+
+            service.receiveStock(dto);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+        }
+
+        @Test
+        @DisplayName("QA D710: a lot expiring today is refused at goods receipt")
+        void lotExpiringTodayIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setExpiryDate(LocalDate.now());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D341: a negative received quantity is refused with a readable message")
         void negativeQuantityIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();

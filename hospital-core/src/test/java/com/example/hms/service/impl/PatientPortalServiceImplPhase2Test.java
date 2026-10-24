@@ -763,6 +763,23 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("QA D719: requestMedicationRefill — refuses a completed controlled substance")
+        void requestRefill_refusesControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(true);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth,
+                    MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("no longer be refilled");
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
         @DisplayName("requestMedicationRefill — a dispensed prescription is still refillable")
         void requestRefill_allowsDispensedPrescription() {
             stubPatientResolution();

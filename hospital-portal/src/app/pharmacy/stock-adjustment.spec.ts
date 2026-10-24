@@ -54,6 +54,22 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     expect(c.formTransactionTypes).not.toContain('DISPENSE');
   });
 
+  it('QA D710: refuses to receive a lot that expires today', () => {
+    const c = create();
+    c.openForm();
+    c.onTypeChange('RECEIPT');
+    c.form.inventoryItemId = 'item-1';
+    c.form.quantity = 10;
+    c.receiptLotNumber = 'TODAY-1';
+    const d = new Date();
+    c.receiptExpiryDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    c.submitForm();
+
+    expect(toast.error).toHaveBeenCalledWith('PHARMACY.RECEIPT_LOT_EXPIRED');
+    expect(svc.receiveStock).not.toHaveBeenCalled();
+  });
+
   it('refuses to receive a lot that is already expired', () => {
     const c = create();
     c.openForm();

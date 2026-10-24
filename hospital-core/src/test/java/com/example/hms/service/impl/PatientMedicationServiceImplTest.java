@@ -251,6 +251,16 @@ class PatientMedicationServiceImplTest {
     }
 
     @Test
+    void qaD719_completedControlledSubstanceIsNotRefillable() {
+        Prescription p = refillablePrescription();
+        p.setControlledSubstance(true);
+        stubMedicationsFor(p);
+
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
+                .isFalse();
+    }
+
+    @Test
     void getMedications_surfacesTheLatestRefillDecision() {
         Prescription p = refillablePrescription();
         RefillRequest denied = new RefillRequest();

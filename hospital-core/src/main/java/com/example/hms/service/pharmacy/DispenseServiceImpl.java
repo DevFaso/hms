@@ -696,6 +696,29 @@ public class DispenseServiceImpl implements DispenseService {
      * @param openPreparationKey the 409 message when the prescription already
      *                           has an open preparation
      */
+    /**
+     * QA D706: 40 morphine ampoules were handed over for "10 mg x1", because
+     * nothing compared a fill with what was prescribed. Under the
+     * prescription lock, the fills to date plus this one stay within the
+     * prescribed quantity (once per fill owed). A prescription with no
+     * quantity predates the field: a controlled substance is refused until
+     * the prescriber states one; any other keeps the D95 behaviour.
+     */
+    private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
+        if (prescription.getQuantity() == null) {
+            if (prescription.isControlledSubstance()) {
+                throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
+            }
+            return;
+        }
+        BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
+        BigDecimal remaining = FillAccounting.remaining(prescription, dispensedToDate);
+        if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
+            throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
+                    remaining.stripTrailingZeros().toPlainString());
+        }
+    }
+
     private FillContext validateFill(DispenseRequestDTO dto, String openPreparationKey) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
@@ -705,6 +728,7 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
         // Checked under the prescription lock taken just above.
         requireNoOpenPreparation(prescription, openPreparationKey);
+        requireWithinPrescribedQuantity(prescription, dto.getQuantityDispensed());
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -1125,7 +1149,9 @@ public class DispenseServiceImpl implements DispenseService {
                 // QA D335: an expired lot is not dispensable (the fill refuses
                 // it), so it is not offered; shortest-dated first (FEFO).
                 .filter(lot -> lot.getExpiryDate() != null
-                        && !lot.getExpiryDate().isBefore(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
+                        // QA D710: a lot is expired ON its expiry date, the
+                        // same rule as the receipt, the check and the report.
+                        && lot.getExpiryDate().isAfter(java.time.LocalDate.now(java.time.ZoneId.systemDefault())))
                 .filter(lot -> lot.getInventoryItem() != null && lot.getInventoryItem().isActive()
                         && lot.getInventoryItem().getMedicationCatalogItem() != null
                         && dispenseVerificationService.matchesPrescribedDrug(prescription,

@@ -51,6 +51,10 @@ import java.util.Locale;
 @Slf4j
 public class InventoryServiceImpl implements InventoryService {
 
+    /** QA D733: the most one goods receipt may count in (per lot line). */
+    static final BigDecimal MAX_RECEIPT_QUANTITY = new BigDecimal("1000000");
+
+
     private final InventoryItemRepository inventoryItemRepository;
     private final StockLotRepository stockLotRepository;
     private final StockTransactionRepository stockTransactionRepository;
@@ -199,7 +203,8 @@ public class InventoryServiceImpl implements InventoryService {
         // D108: an expired lot is not stock. It was accepted at goods receipt
         // and counted on hand, where the FEFO picker skips it but every total,
         // reorder decision and report counted it.
-        if (dto.getExpiryDate() != null && dto.getExpiryDate().isBefore(LocalDate.now(ZoneId.systemDefault()))) {
+        if (dto.getExpiryDate() != null && !dto.getExpiryDate().isAfter(LocalDate.now(ZoneId.systemDefault()))) {
+            // QA D710: a lot expiring today is already expired.
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.expired"));
         }
@@ -210,6 +215,12 @@ public class InventoryServiceImpl implements InventoryService {
             || (dto.getRemainingQuantity() != null && dto.getRemainingQuantity().signum() < 0)) {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.positive"));
+        }
+        // QA D733: 1e9 units were accepted; no single delivery is that size.
+        if (dto.getInitialQuantity().compareTo(MAX_RECEIPT_QUANTITY) > 0) {
+            throw new BusinessException(
+                com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.tooLarge",
+                    MAX_RECEIPT_QUANTITY.toPlainString()));
         }
         // QA D334: a delivery cannot have been received in the future.
         if (dto.getReceivedDate() != null
@@ -247,21 +258,42 @@ public class InventoryServiceImpl implements InventoryService {
         User witness = ControlledStockWitness.isControlled(item)
             ? controlledStockWitness.resolve(dto.getWitnessedBy(), item, receivedByUser) : null;
 
-        StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
-        StockLot savedLot = stockLotRepository.save(lot);
+        // QA D733: the same lot received twice made two rows, so the FEFO
+        // pick, the counts and the expiry report saw two batches. A further
+        // delivery of a batch adds to its row; the item row is locked so two
+        // receipts of a new lot at once still make one row.
+        BigDecimal received = dto.getRemainingQuantity() != null
+            ? dto.getRemainingQuantity() : dto.getInitialQuantity();
+        StockLot savedLot = null;
+        if (dto.getLotNumber() != null && dto.getExpiryDate() != null) {
+            inventoryItemRepository.lockById(item.getId());
+            List<StockLot> same = stockLotRepository.findSameLot(item.getId(), dto.getLotNumber().trim(),
+                dto.getExpiryDate());
+            if (!same.isEmpty()) {
+                savedLot = same.get(0);
+                stockLotRepository.addReceipt(savedLot.getId(), dto.getInitialQuantity(),
+                    LocalDateTime.now(ZoneId.systemDefault()));
+                received = dto.getInitialQuantity();
+                refreshIfManaged(savedLot);
+            }
+        }
+        if (savedLot == null) {
+            StockLot lot = stockLotMapper.toEntity(dto, item, receivedByUser);
+            savedLot = stockLotRepository.save(lot);
+        }
 
         // Update quantity on hand: atomically, so a fill or a return of the
         // same item at the same moment is not overwritten (#825 round 5).
-        inventoryItemRepository.incrementOnHand(item.getId(), savedLot.getRemainingQuantity(), LocalDateTime.now(ZoneId.systemDefault()));
+        inventoryItemRepository.incrementOnHand(item.getId(), received, LocalDateTime.now(ZoneId.systemDefault()));
         refreshIfManaged(item);
 
         // Record stock transaction
         recordStockTransaction(item, savedLot, StockTransactionType.RECEIPT,
-                savedLot.getRemainingQuantity(), "Stock receipt: lot " + savedLot.getLotNumber(), witness);
+                received, "Stock receipt: lot " + savedLot.getLotNumber(), witness);
 
         // Audit
         logAudit(AuditEventType.STOCK_RECEIPT,
-                "Stock received: " + savedLot.getRemainingQuantity() + " units, lot " + savedLot.getLotNumber(),
+                "Stock received: " + received + " units, lot " + savedLot.getLotNumber(),
                 savedLot.getId().toString());
 
         return stockLotMapper.toResponseDTO(savedLot);

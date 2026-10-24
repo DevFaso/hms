@@ -841,7 +841,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
         // approve it.
-        if (prescription.getStatus() != null && !prescription.getStatus().isRefillable()) {
+        if (!prescription.allowsRefill()) {
             throw new BusinessException(
                     "This prescription can no longer be refilled. Please contact your care team "
                             + "for a new prescription.");

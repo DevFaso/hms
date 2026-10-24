@@ -188,7 +188,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      */
     private void releaseRefillToPharmacy(Prescription prescription) {
         PrescriptionStatus status = prescription.getStatus();
-        if (status != null && !status.isRefillable()) {
+        // QA D719: a controlled substance is never refilled, whatever its status.
+        if (!prescription.allowsRefill()) {
             throw new BusinessException(
                 "This prescription can no longer be refilled (status: " + status
                     + "). The patient needs a new prescription.");

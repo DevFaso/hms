@@ -446,6 +446,19 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D719: approve — refuses a refill of a completed controlled substance")
+    void approve_refusesControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("new prescription");
+    }
+
+    @Test
     @DisplayName("reject — leaves the prescription untouched")
     void reject_doesNotReleaseAFill() {
         stubStaffResolution();

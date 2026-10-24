@@ -197,6 +197,9 @@ public class PrescriptionMapper {
         e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
+        // QA D706: the prescribed quantity the pharmacy caps dispenses at.
+        e.setQuantity(dto.getQuantity());
+        e.setQuantityUnit(dto.getQuantityUnit());
 
         if (dto.getStatus() != null) {
             e.setStatus(dto.getStatus());
@@ -242,6 +245,13 @@ public class PrescriptionMapper {
         }
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
+        // QA D706: null leaves the prescribed quantity unchanged.
+        if (dto.getQuantity() != null) {
+            target.setQuantity(dto.getQuantity());
+        }
+        if (dto.getQuantityUnit() != null) {
+            target.setQuantityUnit(dto.getQuantityUnit());
+        }
 
         if (dto.getStatus() != null) {
             target.setStatus(dto.getStatus());

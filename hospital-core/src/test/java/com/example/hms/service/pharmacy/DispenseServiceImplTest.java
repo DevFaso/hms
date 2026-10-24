@@ -527,6 +527,58 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D706: morphine prescribed x3 - a fill of 4, then of 40, is refused")
+        void aFillAbovePrescribedQuantityIsRefused() {
+            prescription.setQuantity(new BigDecimal("3"));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(BigDecimal.ZERO);
+
+            for (String qty : new String[] {"4", "40"}) {
+                DispenseRequestDTO dto = buildRequest();
+                dto.setQuantityRequested(new BigDecimal(qty));
+                dto.setQuantityDispensed(new BigDecimal(qty));
+                assertThatThrownBy(() -> service.createDispense(dto))
+                        .isInstanceOf(BusinessException.class)
+                        .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+            }
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D706: the fills to date count - 2 of 3 given, a further 2 is refused")
+        void cumulativeFillsAreCappedAtThePrescribedQuantity() {
+            prescription.setQuantity(new BigDecimal("3"));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(new BigDecimal("2"));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityRequested(new BigDecimal("2"));
+            dto.setQuantityDispensed(new BigDecimal("2"));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("QA D706: a legacy controlled prescription with no quantity is not filled")
+        void aControlledPrescriptionWithNoQuantityIsRefused() {
+            prescription.setQuantity(null);
+            prescription.setControlledSubstance(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            DispenseRequestDTO dto = buildRequest();
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.quantityUnknownControlled".equals(((BusinessException) e).getMessageKey()));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
         @DisplayName("QA D156: a controlled prescription nobody verified is not filled")
         void anUnverifiedControlledPrescriptionIsRefusedAtTheCounter() {
             prescription.setPharmacistVerifiedAt(null);
@@ -2595,11 +2647,14 @@ class DispenseServiceImplTest {
             expired.setExpiryDate(java.time.LocalDate.now().minusDays(1));
             StockLot soon = lot("paracetamol", "PCM-SOON", BigDecimal.valueOf(10));
             soon.setExpiryDate(java.time.LocalDate.now().plusDays(10));
+            // QA D710: expiring today is expired, and was listed FIRST.
+            StockLot today = lot("paracetamol", "PCM-TODAY", BigDecimal.valueOf(10));
+            today.setExpiryDate(java.time.LocalDate.now());
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(stockLotRepository.findByInventoryItemPharmacyId(eq(pharmacyId), any()))
-                    .thenReturn(new PageImpl<>(List.of(late, expired, soon)));
+                    .thenReturn(new PageImpl<>(List.of(late, expired, today, soon)));
 
             assertThat(service.listDispensableLots(prescriptionId, pharmacyId))
                     .extracting(com.example.hms.payload.dto.pharmacy.StockLotResponseDTO::getLotNumber)

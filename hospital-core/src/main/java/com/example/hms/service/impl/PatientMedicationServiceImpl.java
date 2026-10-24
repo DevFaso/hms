@@ -202,7 +202,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())
-            .refillable(prescription.getStatus() == null || prescription.getStatus().isRefillable())
+            .refillable(prescription.allowsRefill())
             .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
                 ? latestRefill.getStatus().name() : null)
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
