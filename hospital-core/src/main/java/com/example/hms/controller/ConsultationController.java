@@ -257,7 +257,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/assign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "Assign consultation to consultant",
                description = "Assign a REQUESTED consultation to a specific consultant; status changes to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> assignConsultation(
@@ -272,7 +272,7 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/reassign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "Reassign consultation to a different consultant",
                description = "Reassign a consultation to a different consultant with a required reason; status reverts to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> reassignConsultation(
