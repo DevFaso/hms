@@ -4234,6 +4234,42 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
+    void d739_retest2_anOrderIsNotFiledOnTheCompletedConsultationThePrescriberLed() {
+        // r2_3.js: no open encounter; the prescriber's latest one is a finished consultation.
+        stubPrescriberWithoutEncounter();
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
+        Encounter finished = dischargedStayLedByThePrescriber();
+        finished.setAdmissionId(null);
+        finished.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(finished));
+        when(encounterRepository.save(any())).thenReturn(encounter);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(finished));
+        verify(encounterRepository).save(org.mockito.ArgumentMatchers.<Encounter>argThat(e ->
+            Encounter.PRESCRIPTION_ANCHOR_NOTE.equals(e.getNotes())));
+    }
+
+    @Test
+    void d739_retest2_aCancelledConsultationIsNotReusedEither() {
+        stubPrescriberWithoutEncounter();
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
+        Encounter cancelled = dischargedStayLedByThePrescriber();
+        cancelled.setAdmissionId(null);
+        cancelled.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+        cancelled.setStatus(com.example.hms.enums.EncounterStatus.CANCELLED);
+        when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(cancelled));
+        when(encounterRepository.save(any())).thenReturn(encounter);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(cancelled));
+    }
+
+    @Test
     void d739_aLegacyInpatientEncounterWithoutAnAdmissionLinkIsNotReusedEither() {
         stubPrescriberWithoutEncounter();
         when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());

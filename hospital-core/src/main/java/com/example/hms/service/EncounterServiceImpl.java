@@ -618,7 +618,8 @@ public class EncounterServiceImpl implements EncounterService {
         note.setSignatureValue(computeNoteSignatureDigest(canonicalNoteSignaturePayload(note, signedAt)));
 
         EncounterNote saved = encounterNoteRepository.save(note);
-        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, String.valueOf(currentUserId));
+        // QA D751: the same actor format as every other history row, never a raw id.
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, userActor(note.getAuthor()));
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -668,7 +669,7 @@ public class EncounterServiceImpl implements EncounterService {
         note.setCosignedAt(LocalDateTime.now());
 
         EncounterNote saved = encounterNoteRepository.save(note);
-        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_COSIGNED, String.valueOf(currentUserId));
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_COSIGNED, userActor(cosigner.getUser()));
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -686,6 +687,11 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
+    }
+
+    /** QA D751: a history actor for a session-resolved user, in the format the other note rows use. */
+    private String userActor(User user) {
+        return determineActorIdentifier(resolveUserDisplayName(user), user, null, null);
     }
 
     private String resolveUserDisplayName(User user) {

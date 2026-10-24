@@ -170,6 +170,41 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
+    void d751_theSignedHistoryRowNamesTheSignerLikeEveryOtherRow() {
+        authorUser.setEmail("doctor@example.test");
+
+        service.signEncounterNote(encounterId, LOCALE);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_SIGNED");
+        assertThat(history.getValue().getChangedBy()).isEqualTo("doctor@example.test");
+    }
+
+    @Test
+    void d751_theCosignedHistoryRowNamesTheCosignerNotTheirId() {
+        makeSignedRequiringCosign();
+        UUID attendingUserId = UUID.randomUUID();
+        User attendingUser = new User();
+        attendingUser.setId(attendingUserId);
+        attendingUser.setEmail("attending@example.test");
+        Staff attending = Staff.builder().user(attendingUser).build();
+        attending.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(attendingUserId);
+        when(staffRepository.findByUserIdAndHospitalId(attendingUserId, hospitalId))
+            .thenReturn(Optional.of(attending));
+
+        service.cosignEncounterNote(encounterId, LOCALE);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository).save(history.capture());
+        assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_COSIGNED");
+        assertThat(history.getValue().getChangedBy()).isEqualTo("attending@example.test");
+    }
+
+    @Test
     void signRefusedForAnotherClinician() {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 

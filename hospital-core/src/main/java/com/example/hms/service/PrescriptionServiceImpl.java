@@ -1392,7 +1392,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // been discharged (an open one was taken above). An outpatient order
         // filed there reads as a stay order: it is ended by the discharge and
         // shows in the closed stay's chart. It gets an outpatient anchor.
-        if (existing.isPresent() && !isHospitalStay(existing.get())) {
+        // QA D739 (r10 re-test 2): nor is a finished outpatient visit reused:
+        // an order written after that consultation closed is not part of it,
+        // and would show in its chart and summary. Only a still-open visit of
+        // this prescriber anchors the order; otherwise it gets its own anchor.
+        if (existing.isPresent() && isReusableOutpatientAnchor(existing.get())) {
             return existing.get();
         }
 
@@ -1462,6 +1466,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
         UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
         return stayHospital != null && stayHospital.equals(staffHospital);
+    }
+
+    /** An open, non-stay encounter: the only kind an unanchored order may join. */
+    private static boolean isReusableOutpatientAnchor(Encounter encounter) {
+        EncounterStatus status = encounter.getStatus();
+        return !isHospitalStay(encounter)
+            && status != EncounterStatus.COMPLETED
+            && status != EncounterStatus.CANCELLED;
     }
 
     /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */
