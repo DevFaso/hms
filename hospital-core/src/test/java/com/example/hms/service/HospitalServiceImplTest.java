@@ -1047,7 +1047,7 @@ class HospitalServiceImplTest {
         void usNoState() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("No State").city("NY").country("US")
+                    .name("No State").city("NY").country("US").address("1 Main St")
                     .zipCode("10001").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.state.required");
@@ -1061,7 +1061,7 @@ class HospitalServiceImplTest {
         void usNoZip() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("No Zip").city("NY").country("US").state("NY")
+                    .name("No Zip").city("NY").country("US").address("1 Main St").state("NY")
                     .phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
@@ -1075,7 +1075,7 @@ class HospitalServiceImplTest {
         void usaCode() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("USA Hospital").city("LA").country("USA")
+                    .name("USA Hospital").city("LA").country("USA").address("1 Main St")
                     .state("CA").zipCode("90001").phoneNumber("1234567890")
                     .active(true).build();
 
@@ -1094,7 +1094,7 @@ class HospitalServiceImplTest {
         void usBlankState() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Blank State").city("NY").country("US").state("  ")
+                    .name("Blank State").city("NY").country("US").address("1 Main St").state("  ")
                     .zipCode("10001").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.state.required");
@@ -1108,7 +1108,7 @@ class HospitalServiceImplTest {
         void usBlankZip() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Blank Zip").city("NY").country("US").state("NY")
+                    .name("Blank Zip").city("NY").country("US").address("1 Main St").state("NY")
                     .zipCode("  ").phoneNumber("1234567890")
                     .active(true).build();
             stubMessage("hospital.zipCode.required");
@@ -1131,11 +1131,49 @@ class HospitalServiceImplTest {
         }
 
         @Test
-        @DisplayName("foreign country with poBox is valid")
+        @DisplayName("QA D747: a P.O. box no longer stands in for the required street")
+        void qaD747_poBoxWithoutStreetIsRefused() {
+            // Round 10 re-test (hosp3.js): POST /hospitals with address "" and
+            // poBox "BP 45" answered 201.
+            setSuperAdmin();
+            HospitalRequestDTO dto = HospitalRequestDTO.builder()
+                    .name("Clinique Notre-Dame de Fada").city("Fada N'Gourma").country("Burkina Faso")
+                    .address("").poBox("BP 45").phoneNumber("+22640770011").active(true).build();
+            stubMessage("hospital.address.required");
+
+            assertThrows(IllegalArgumentException.class,
+                    () -> hospitalService.createHospital(dto, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
+
+        @Test
+        @DisplayName("QA D747: an update that empties the street is refused; one that omits it keeps it")
+        void qaD747_updateStreetRule() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital stored = new Hospital();
+            stored.setId(id);
+            stored.setName("Centre Médical Saint-Camille");
+            stored.setAddress("Avenue de la Nation");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(stored));
+            stubMessage("hospital.address.required");
+
+            HospitalRequestDTO emptied = HospitalRequestDTO.builder().address("   ").poBox("01 BP 1234").build();
+            assertThrows(IllegalArgumentException.class,
+                    () -> hospitalService.updateHospital(id, emptied, Locale.ENGLISH));
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+            HospitalRequestDTO omitted = HospitalRequestDTO.builder().phoneNumber("+22625441122").build();
+            assertNotNull(hospitalService.updateHospital(id, omitted, Locale.ENGLISH));
+        }
+
+        @Test
+        @DisplayName("foreign country with street and poBox is valid")
         void foreignWithPoBox() {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
-                    .name("Foreign PO").city("Ouaga").country("BF")
+                    .name("Foreign PO").city("Ouaga").country("BF").address("Avenue Kwame Nkrumah")
                     .poBox("BP 123").phoneNumber("1234567890").active(true).build();
 
             when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(any(), any())).thenReturn(false);

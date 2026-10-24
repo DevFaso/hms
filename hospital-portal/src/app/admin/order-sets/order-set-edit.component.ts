@@ -66,11 +66,12 @@ interface EditableItem extends OrderSetItem {
  * sidebar walks the parent chain via {@link OrderSetService#versions}.
  */
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-order-set-edit',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-set-edit.component.html',
   styleUrls: ['./order-set-edit.component.scss'],

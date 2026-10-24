@@ -17,6 +17,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Release worklist (B14).
@@ -45,7 +46,7 @@ import { shortOrderCode } from '../../shared/lab/order-code';
 @Component({
   selector: 'app-lab-release-worklist',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './lab-release-worklist.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './lab-release-worklist.scss',

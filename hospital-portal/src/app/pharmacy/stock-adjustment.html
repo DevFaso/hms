@@ -325,7 +325,7 @@
                 }
               </td>
               <td class="reason-cell">{{ reasonLabel(tx) }}</td>
-              <td>{{ tx.createdAt | date: 'medium' }}</td>
+              <td>{{ tx.createdAt | serverTime | date: 'medium' }}</td>
               <td>
                 {{ tx.performedByName ?? '—' }}
                 @if (tx.witnessedByName) {

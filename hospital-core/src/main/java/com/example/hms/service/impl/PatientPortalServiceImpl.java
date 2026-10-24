@@ -125,6 +125,10 @@ import com.example.hms.utility.RoleNames;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
+    private static final Set<AppointmentStatus> PATIENT_CHANGEABLE_STATUSES = java.util.EnumSet.of(
+            AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED,
+            AppointmentStatus.PENDING, AppointmentStatus.RESCHEDULED);
 
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
@@ -715,10 +719,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("Appointment is already cancelled");
+            throw new BusinessException("appointment.alreadyCancelled");
         }
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed appointment");
+            throw new BusinessException("appointment.cancel.completed");
+        }
+        // QA D717: once the patient has arrived (CHECKED_IN / IN_PROGRESS) or
+        // the visit is closed out (NO_SHOW, FAILED), the portal must not cancel:
+        // the encounter is already open at the desk. Only a not-yet-started
+        // booking is the patient's to cancel.
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -760,13 +771,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("Cannot reschedule a completed appointment");
+            throw new BusinessException("appointment.reschedule.completed");
         }
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("Cannot reschedule a cancelled appointment");
+            throw new BusinessException("appointment.reschedule.cancelled");
+        }
+        // QA D717 sibling: an arrived patient cannot move the visit either.
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
         }
         if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
-            throw new BusinessException("End time must be after start time");
+            throw new BusinessException("appointment.timeRange.invalid");
         }
 
         appointment.setAppointmentDate(dto.getNewDate());

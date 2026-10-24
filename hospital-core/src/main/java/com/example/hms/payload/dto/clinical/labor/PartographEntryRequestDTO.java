@@ -25,6 +25,8 @@ public class PartographEntryRequestDTO {
     private UUID hospitalId;
     private UUID recordedByStaffId;
 
+    @com.example.hms.validation.NotInClinicalFuture
+
     private LocalDateTime observationTime;
     private Boolean lateEntry;
 

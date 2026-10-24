@@ -13,6 +13,7 @@ import {
   PermissionMatrixService,
 } from '../services/permission-matrix.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 interface EditableRow {
   domain: string;
@@ -24,7 +25,7 @@ interface EditableRow {
 @Component({
   selector: 'app-gov-matrix-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './matrix-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -8,6 +8,7 @@ import {
   PharmacyPaymentResponse,
 } from '../../services/pharmacy.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * T-45: patient portal — pharmacy invoices & payment history.
@@ -18,7 +19,7 @@ import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 @Component({
   selector: 'app-my-pharmacy-invoices',
   standalone: true,
-  imports: [CommonModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [ServerTimePipe, CommonModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],

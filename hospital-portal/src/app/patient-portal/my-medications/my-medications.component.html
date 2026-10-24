@@ -266,7 +266,7 @@
                   {{ r.requestedAt | date: 'mediumDate' }}
                   @if (r.updatedAt && r.status !== 'PENDING' && r.status !== 'REQUESTED') {
                     · {{ 'PORTAL.MEDICATIONS.COMPLETED' | translate }}
-                    {{ r.updatedAt | date: 'mediumDate' }}
+                    {{ r.updatedAt | serverTime | date: 'mediumDate' }}
                   }
                 </span>
               </div>

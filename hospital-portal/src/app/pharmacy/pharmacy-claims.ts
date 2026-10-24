@@ -16,6 +16,7 @@ import {
 } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 interface StatusOption {
   value: PharmacyClaimStatus;
@@ -31,7 +32,7 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',

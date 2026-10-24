@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
 
 import { PrenatalTabComponent } from './prenatal-tab';
@@ -160,6 +161,78 @@ describe('PrenatalTabComponent', () => {
     fixture.detectChanges();
     expect(toast.error).toHaveBeenCalledWith('Échec de la génération du calendrier');
     expect(host().querySelector('.loading-state')).toBeNull();
+  });
+
+  it('QA D732: shows the server French reason on a refused schedule, not the generic text', () => {
+    const reason = 'La date des dernières règles ne peut pas être dans le futur.';
+    service.schedule.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: reason } })),
+    );
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.lmpDate = '2027-05-10';
+    component.generate();
+    expect(toast.error).toHaveBeenCalledWith(reason);
+  });
+
+  it('QA D746: the real validation body shows the LMP field reason, and the picker stops at today', () => {
+    // Round 10 re-test: the 400 carries the generic text as `message` and the
+    // reason under `fieldErrors.lastMenstrualPeriodDate`.
+    const reason = 'La date des dernières règles ne peut pas être dans le futur';
+    service.schedule.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: 'La demande contient des erreurs de validation',
+              fieldErrors: { lastMenstrualPeriodDate: reason },
+            },
+          }),
+      ),
+    );
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.lmpDate = '2027-01-01';
+    component.generate();
+    expect(toast.error).toHaveBeenCalledWith(reason);
+
+    fixture.detectChanges();
+    const lmp = host().querySelector<HTMLInputElement>('#pn-lmp');
+    expect(lmp?.getAttribute('max')).toBe(component.today);
+  });
+
+  it('QA D732: a 5xx body never leaks in place of the translated fallback', () => {
+    service.schedule.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'NullPointerException' } }),
+      ),
+    );
+    component.onPatientPicked({ id: 'p-1' } as PatientResponse);
+    component.lmpDate = '2026-05-10';
+    component.generate();
+    expect(toast.error).toHaveBeenCalledWith('Échec de la génération du calendrier');
+  });
+
+  it('QA D732: the reschedule and reminder refusals also carry the server reason', () => {
+    generateFor(schedule());
+    service.reschedule.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 409, error: { message: 'Créneau déjà pris.' } }),
+      ),
+    );
+    component.openReschedule(schedule().existingAppointments[0]);
+    component.rescheduleDate = '2026-10-08';
+    component.rescheduleTime = '10:30';
+    component.submitReschedule();
+    expect(toast.error).toHaveBeenCalledWith('Créneau déjà pris.');
+
+    service.sendReminder.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 400, error: { message: 'Rappel refusé.' } }),
+      ),
+    );
+    component.openReminder(schedule().existingAppointments[0]);
+    component.submitReminder();
+    expect(toast.error).toHaveBeenCalledWith('Rappel refusé.');
   });
 
   it('moves a rescheduled appointment in place, without regenerating', () => {

@@ -26,6 +26,7 @@ import {
 } from '../services/integration-keys.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type ConfirmKind = 'rotate-key' | 'revoke-key' | 'revoke-endpoint' | 'rotate-secret';
 
@@ -48,7 +49,7 @@ interface RevealedSecret {
 @Component({
   selector: 'app-webhooks',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './webhooks.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './webhooks.scss',

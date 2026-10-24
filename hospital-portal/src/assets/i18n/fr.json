@@ -2584,7 +2584,7 @@
     "REGION": "Région",
     "REGION_PLACEHOLDER": "ex. Centre, Île-de-France",
     "REQUIRED_FIELDS": "Le nom, la ville, le pays, le téléphone et une adresse ou une boîte postale sont obligatoires.",
-    "ADDRESS_OR_PO_BOX_HINT": "Indiquez l'adresse ou la boîte postale (l'une des deux est obligatoire).",
+    "ADDRESS_OR_PO_BOX_HINT": "L'adresse (rue) est obligatoire ; la boîte postale est facultative.",
     "SEARCH_PLACEHOLDER": "Rechercher des hôpitaux…",
     "SECTOR": "Secteur / Quartier",
     "SECTOR_PLACEHOLDER": "ex. Secteur 30",

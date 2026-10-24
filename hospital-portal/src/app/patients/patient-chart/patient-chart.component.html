@@ -431,7 +431,9 @@
                   <td>
                     <span class="status-badge">{{ o.status | enumLabel: 'labOrderStatus' }}</span>
                   </td>
-                  <td>{{ o.orderDatetime ? (o.orderDatetime | date: 'short') : '—' }}</td>
+                  <td>
+                    {{ o.orderDatetime ? (o.orderDatetime | serverTime | date: 'short') : '—' }}
+                  </td>
                   <td>{{ o.performingHospitalName || ('CHART.LAB_IN_HOUSE' | translate) }}</td>
                   <td class="hospital-cell">{{ o.hospitalName || '—' }}</td>
                 </tr>
@@ -543,7 +545,7 @@
                   <td>
                     <span [class]="labStatusClass(r)">{{ labStatusKey(r) | translate }}</span>
                   </td>
-                  <td>{{ r.resultedAt ? (r.resultedAt | date: 'short') : '—' }}</td>
+                  <td>{{ r.resultedAt ? (r.resultedAt | serverTime | date: 'short') : '—' }}</td>
                   <td>{{ r.orderedBy || '—' }}</td>
                   <td>{{ r.performedBy || '—' }}</td>
                   <td class="hospital-cell">{{ r.hospitalName || '—' }}</td>

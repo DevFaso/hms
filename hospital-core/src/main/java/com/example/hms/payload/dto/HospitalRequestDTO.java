@@ -24,7 +24,7 @@ public class HospitalRequestDTO {
     @Size(min = 2, max = 100, message = "{hospital.name.size}")
     private String name;
 
-    private String address; // Optional for foreign countries if poBox is provided
+    private String address; // Required for every hospital (QA D747); enforced in HospitalServiceImpl
 
     @NotBlank(message = "{hospital.city.required}")
     private String city;

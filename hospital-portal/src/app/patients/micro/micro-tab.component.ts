@@ -8,6 +8,7 @@ import {
   MicroSusceptibilityInterpretation,
   MicroSusceptibilityMethod,
 } from '../../services/micro.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Microbiology tab on the patient chart (P3 #19) — read-only culture
@@ -17,7 +18,7 @@ import {
 @Component({
   selector: 'app-micro-tab',
   standalone: true,
-  imports: [CommonModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './micro-tab.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './micro-tab.component.scss',
