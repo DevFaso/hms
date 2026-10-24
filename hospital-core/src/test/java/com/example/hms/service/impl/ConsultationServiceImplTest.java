@@ -180,6 +180,7 @@ class ConsultationServiceImplTest {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true); // an unassigned consult: only a coordinator takes it (QA D735)
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
     }

@@ -41,8 +41,11 @@ class ConsultationTransitionActorGuardTest {
                 continue;
             }
             checked++;
-            if (!body.contains("requireAssignedConsultant") && !body.contains("requireCoordinator")
-                    && !body.contains("requireRequesterOrSuperAdmin")) {
+            // The check must be a top-level statement of the method, not inside
+            // an if: a conditional call let /acknowledge on an unassigned consult
+            // skip the actor check entirely (self-review of #938).
+            if (!Pattern.compile("\n        require(AssignedConsultant|Coordinator|RequesterOrSuperAdmin|Acknowledger|Reassigner|AssignedConsultantOrCoordinator|Updater)\\(")
+                    .matcher(body).find()) {
                 unguarded.add(names.get(i));
             }
         }

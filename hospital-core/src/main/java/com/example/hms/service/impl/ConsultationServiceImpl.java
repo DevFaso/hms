@@ -380,9 +380,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
         requireConsultantAtHospital(consultant, consultation);
-        if (consultation.getConsultant() != null) {
-            requireAssignedConsultant(consultation);
-        }
+        requireAcknowledger(consultation);
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
@@ -404,14 +402,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         boolean changesConsultant = updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null);
         boolean changesClinical = updateDTO.getConsultantNote() != null || updateDTO.getRecommendations() != null
             || updateDTO.getFollowUpRequired() != null || updateDTO.getFollowUpInstructions() != null;
-        if (changesConsultant) {
-            requireCoordinator(consultation);
-        }
-        if (changesClinical) {
-            requireAssignedConsultant(consultation);
-        } else if (updateDTO.getScheduledAt() != null) {
-            requireAssignedConsultantOrCoordinator(consultation);
-        }
+        requireUpdater(consultation, changesConsultant, changesClinical, updateDTO.getScheduledAt() != null);
         if (consultation.getStatus() == ConsultationStatus.COMPLETED
                 || consultation.getStatus() == ConsultationStatus.CANCELLED
                 || consultation.getStatus() == ConsultationStatus.DECLINED) {
@@ -654,10 +645,9 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
             throw new BusinessException("consultation.reassign.cancelled");
         }
-        requireCoordinator(consultation);
-
         Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
+        requireReassigner(consultation, consultant);
         requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
@@ -895,6 +885,47 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
         return hospitalId != null && roleValidator.isHospitalAdmin(caller, hospitalId);
+    }
+
+    /**
+     * QA D735: acknowledging a consult already addressed to a doctor is that
+     * doctor's step; acknowledging an unaddressed one makes the caller its
+     * consultant, which is an assignment and therefore the coordinator's call.
+     * Otherwise any doctor could take over a REQUESTED consult via /acknowledge.
+     */
+    private void requireAcknowledger(Consultation consultation) {
+        if (consultation.getConsultant() != null) {
+            requireAssignedConsultant(consultation);
+        } else {
+            requireCoordinator(consultation);
+        }
+    }
+
+    /**
+     * QA D735: a coordinator may reassign to any qualifying doctor; the assigned
+     * consultant may hand the consult over to another doctor, never to himself.
+     */
+    private void requireReassigner(Consultation consultation, Staff target) {
+        if (isCoordinator(consultation)) {
+            return;
+        }
+        requireAssignedConsultant(consultation);
+        Staff current = consultation.getConsultant();
+        if (current == null || target.getId() == null || target.getId().equals(current.getId())) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.assign.notCoordinator"));
+        }
+    }
+
+    /** The actor check of updateConsultation, one rule per kind of field it writes. */
+    private void requireUpdater(Consultation consultation, boolean changesConsultant, boolean changesClinical, boolean changesSchedule) {
+        if (changesConsultant) {
+            requireCoordinator(consultation);
+        }
+        if (changesClinical) {
+            requireAssignedConsultant(consultation);
+        } else if (changesSchedule) {
+            requireAssignedConsultantOrCoordinator(consultation);
+        }
     }
 
     private void requireAssignedConsultantOrCoordinator(Consultation consultation) {
