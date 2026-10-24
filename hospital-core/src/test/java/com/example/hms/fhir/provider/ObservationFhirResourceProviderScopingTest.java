@@ -89,8 +89,8 @@ class ObservationFhirResourceProviderScopingTest {
         LabResult foreign = labResultInHospital(rowId, UUID.randomUUID());
         when(labResultRepository.findById(rowId)).thenReturn(Optional.of(foreign));
 
-        assertThrows(ResourceNotFoundException.class,
-            () -> provider.read(new IdType("Observation", "labresult-" + rowId)));
+        IdType id = new IdType("Observation", "labresult-" + rowId);
+        assertThrows(ResourceNotFoundException.class, () -> provider.read(id));
         verifyNoInteractions(mapper);
     }
 
@@ -197,8 +197,8 @@ class ObservationFhirResourceProviderScopingTest {
         when(labResultRepository.findById(rowId)).thenReturn(Optional.of(stale));
         when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(stale, newer));
 
-        assertThrows(ResourceNotFoundException.class,
-            () -> provider.read(new IdType("Observation", "labresult-" + rowId)));
+        IdType id = new IdType("Observation", "labresult-" + rowId);
+        assertThrows(ResourceNotFoundException.class, () -> provider.read(id));
         verifyNoInteractions(mapper);
     }
 

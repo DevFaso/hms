@@ -110,6 +110,24 @@ public final class ClinicalLabResultView {
         if (page == null || page.isEmpty()) {
             return List.of();
         }
+        Set<UUID> orderIds = orderIdsOf(page);
+        List<LabResult> siblings = orderIds.isEmpty() ? List.of() : siblingsOfOrders.apply(orderIds);
+        List<LabResult> judged = mergeById(siblings, page);
+        Set<UUID> keptIds = new HashSet<>();
+        Set<LabResult> keptRows = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        for (LabResult r : releasedAndCurrent(judged)) {
+            keptRows.add(r);
+            if (r.getId() != null) {
+                keptIds.add(r.getId());
+            }
+        }
+        return page.stream()
+            .filter(Objects::nonNull)
+            .filter(r -> r.getId() == null ? keptRows.contains(r) : keptIds.contains(r.getId()))
+            .toList();
+    }
+
+    private static Set<UUID> orderIdsOf(List<LabResult> page) {
         Set<UUID> orderIds = new HashSet<>();
         for (LabResult row : page) {
             UUID orderId = row == null ? null : orderIdOf(row);
@@ -117,9 +135,13 @@ public final class ClinicalLabResultView {
                 orderIds.add(orderId);
             }
         }
+        return orderIds;
+    }
+
+    /** Siblings first, then the page; one row per id, rows without an id kept last. */
+    private static List<LabResult> mergeById(List<LabResult> siblings, List<LabResult> page) {
         Map<UUID, LabResult> all = new java.util.LinkedHashMap<>();
         List<LabResult> unidentified = new ArrayList<>();
-        List<LabResult> siblings = orderIds.isEmpty() ? List.of() : siblingsOfOrders.apply(orderIds);
         for (LabResult row : siblings == null ? List.<LabResult>of() : siblings) {
             if (row != null && row.getId() != null) {
                 all.putIfAbsent(row.getId(), row);
@@ -137,18 +159,7 @@ public final class ClinicalLabResultView {
         }
         List<LabResult> judged = new ArrayList<>(all.values());
         judged.addAll(unidentified);
-        Set<UUID> keptIds = new HashSet<>();
-        Set<LabResult> keptRows = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-        for (LabResult r : releasedAndCurrent(judged)) {
-            keptRows.add(r);
-            if (r.getId() != null) {
-                keptIds.add(r.getId());
-            }
-        }
-        return page.stream()
-            .filter(Objects::nonNull)
-            .filter(r -> r.getId() == null ? keptRows.contains(r) : keptIds.contains(r.getId()))
-            .toList();
+        return judged;
     }
 
     private static Set<UUID> supersededIds(List<LabResult> rows) {

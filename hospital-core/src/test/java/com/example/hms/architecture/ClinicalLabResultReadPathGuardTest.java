@@ -97,7 +97,7 @@ class ClinicalLabResultReadPathGuardTest {
     private static final Set<String> CLINICAL_DELEGATES = Set.of("currentForReader", "isCurrentForReader");
 
     private static final Pattern METHOD = Pattern.compile(
-        "^    (?:(?:public|private|protected|static|final|synchronized)\\s+)+[\\w<>\\[\\],.? ]+?\\s(\\w+)\\s*\\(",
+        "^    (?:(?:public|private|protected|static|final|synchronized)\\s++)++(?:[\\w<>\\[\\],.?]++\\s++)+?(\\w+)\\s*+\\(",
         Pattern.MULTILINE);
     private static final Pattern REPO_READ = Pattern.compile(
         "labResultRepository\\s*\\.\\s*(?!save|delete|flush)\\w+|labResultRepository::(?!save|delete)\\w+");
