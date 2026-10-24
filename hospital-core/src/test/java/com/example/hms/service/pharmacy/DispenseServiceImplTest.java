@@ -1461,6 +1461,34 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("a fill with no lot counts in the prescription's unit, not the one the request claims: 'ml' on tablets still refuses 2.5")
+        void aFillWithNoLotIgnoresTheRequestUnitWhenThePrescriptionNamesOne() {
+            stubUpToTheLot(false);
+            DispenseRequestDTO dto = fill("2.5", "2.5");
+            dto.setStockLotId(null);
+            dto.setUnit("ml");
+            assertRefusedAndNothingMoved(dto);
+        }
+
+        @Test
+        @DisplayName("a fill with no lot claiming 'comprimé' on a 7.5 ml order does not earn the next whole unit: 8 is refused")
+        void aFillWithNoLotCannotClaimACountedUnitOnAMeasuredOrder() {
+            prescription.setQuantity(new BigDecimal("7.5"));
+            prescription.setQuantityUnit("ml");
+            // refused at the ceiling, before the patient, pharmacy and actors are read
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            DispenseRequestDTO eight = fill("8", "8");
+            eight.setStockLotId(null);
+            eight.setUnit("comprimé");
+            assertThatThrownBy(() -> service.createDispense(eight))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "7.5".equals(((BusinessException) e).getArgs()[0]));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
         @DisplayName("a whole partial fill of the same tablets still goes through")
         void aWholePartialFillIsAccepted() {
             stubUpToTheLot(true);
@@ -1495,8 +1523,10 @@ class DispenseServiceImplTest {
             assertThatThrownBy(() -> service.createDispense(fill("9.5", "9.5")))
                     .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
             DispenseRequestDTO eleven = fill("11", "11");
+            // the refusal names the 10 that is accepted, not the 9.5 the whole-unit rule refuses
             assertThatThrownBy(() -> service.createDispense(eleven))
-                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "10".equals(((BusinessException) e).getArgs()[0]));
 
             DispenseRequestDTO ten = fill("10", "10");
             stubAcceptedFill(ten, "12.5");
@@ -1544,8 +1574,10 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
             DispenseRequestDTO eight = fill("8", "8");
+            // a controlled substance is never met by the next whole unit, so the message keeps 7.5
             assertThatThrownBy(() -> service.createDispense(eight))
-                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "7.5".equals(((BusinessException) e).getArgs()[0]));
             verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
             verify(dispenseRepository, never()).save(any(Dispense.class));
         }

@@ -718,7 +718,22 @@ public class DispenseServiceImpl implements DispenseService {
         if (wholeUnitCeilingAllows(dto, prescription, requested, remaining)) {
             return;
         }
-        requireAtMost(requested, remaining);
+        requireAtMost(requested, remaining, statedCeiling(dto, prescription, remaining));
+    }
+
+    /**
+     * The most the refusal tells the pharmacist they may still give. For a
+     * counted item that is not controlled, a fractional remainder is met by
+     * the next whole unit ({@link #wholeUnitCeilingAllows}), so the message
+     * names that whole number: "at most 9.5" would point at a quantity the
+     * whole-unit rule refuses, and hide the 10 that is accepted.
+     */
+    private BigDecimal statedCeiling(DispenseRequestDTO dto, Prescription prescription, BigDecimal remaining) {
+        if (remaining == null || remaining.stripTrailingZeros().scale() <= 0
+                || controlledResolver.isControlled(prescription) || !isCountedFill(dto, prescription)) {
+            return remaining;
+        }
+        return remaining.setScale(0, java.math.RoundingMode.CEILING);
     }
 
     /**
@@ -752,14 +767,14 @@ public class DispenseServiceImpl implements DispenseService {
                     .map(item -> !WholeUnitQuantity.isMeasured(item.getUnit()))
                     .orElse(false);
         }
-        String unit = firstNonBlank(dto.getUnit(), prescription.getQuantityUnit());
+        String unit = unitOfFillWithoutLot(dto, prescription);
         return unit != null && !WholeUnitQuantity.isMeasured(unit);
     }
 
-    private static void requireAtMost(BigDecimal requested, BigDecimal remaining) {
+    private static void requireAtMost(BigDecimal requested, BigDecimal remaining, BigDecimal stated) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
-                    remaining.stripTrailingZeros().toPlainString());
+                    stated.stripTrailingZeros().toPlainString());
         }
     }
 
@@ -834,7 +849,7 @@ public class DispenseServiceImpl implements DispenseService {
      * lived only on those paths. One rule ({@link WholeUnitQuantity}) for
      * the one-step fill, the prepared fill and every partial fill, checked
      * before anything is written. The unit is the lot's item when stock is
-     * kept in lots; otherwise the one the fill or the prescription names.
+     * kept in lots; otherwise the prescription's ({@link #unitOfFillWithoutLot}).
      */
     private static void requireWholeUnitsOfFill(DispenseRequestDTO dto, StockLot stockLot,
                                                 Prescription prescription) {
@@ -843,9 +858,20 @@ public class DispenseServiceImpl implements DispenseService {
             WholeUnitQuantity.require(stockLot.getInventoryItem(), dto.getQuantityDispensed());
             return;
         }
-        String unit = firstNonBlank(dto.getUnit(), prescription.getQuantityUnit());
+        String unit = unitOfFillWithoutLot(dto, prescription);
         WholeUnitQuantity.requireForUnit(unit, dto.getQuantityRequested(), WholeUnitQuantity.DEFAULT_KEY);
         WholeUnitQuantity.requireForUnit(unit, dto.getQuantityDispensed(), WholeUnitQuantity.DEFAULT_KEY);
+    }
+
+    /**
+     * The unit of a fill with no lot: the prescription's, which is the record
+     * the quantity is counted against. The request's unit is a claim, used
+     * only when the prescription names none; otherwise "ml" on a tablet
+     * order would let 2.5 tablets through, and "comprimé" on a 7.5 ml order
+     * would earn the next-whole-unit allowance.
+     */
+    private static String unitOfFillWithoutLot(DispenseRequestDTO dto, Prescription prescription) {
+        return firstNonBlank(prescription.getQuantityUnit(), dto.getUnit());
     }
 
     private static String firstNonBlank(String first, String second) {
