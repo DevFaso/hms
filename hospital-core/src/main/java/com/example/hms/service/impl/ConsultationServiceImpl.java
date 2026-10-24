@@ -648,7 +648,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
-        requireReassigner(consultation);
+        requireReassigner(consultation, consultant, reassignmentReason);
         requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
@@ -861,9 +861,8 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     /**
-     * QA D704/D735: who may decide who answers a consult — the requester, a
-     * hospital admin of the consultation's hospital (the coordinator role), or
-     * a verified super-admin. Any other doctor could assign it to himself and
+     * QA D704/D735/D749: who may decide who answers a consult — the requester
+     * (whatever clinical role created it) or a verified super-admin. Any other doctor could assign it to himself and
      * then acknowledge, start and complete it.
      */
     private void requireCoordinator(Consultation consultation) {
@@ -881,11 +880,10 @@ public class ConsultationServiceImpl implements ConsultationService {
             return false;
         }
         Staff requester = consultation.getRequestingProvider();
-        if (requester != null && requester.getUser() != null && caller.equals(requester.getUser().getId())) {
-            return true;
-        }
-        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
-        return hospitalId != null && roleValidator.isHospitalAdmin(caller, hospitalId);
+        // QA D749: a hospital admin is deliberately not a coordinator (decision
+        // D5: HOSPITAL_ADMIN stays off the chart, the endpoints never admit the
+        // role), so the refusal message no longer promises one can assign.
+        return requester != null && requester.getUser() != null && caller.equals(requester.getUser().getId());
     }
 
     /**
@@ -903,12 +901,25 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     /**
-     * QA D735: only a coordinator (the requester, a hospital admin of the
-     * consultation's hospital, or a verified super-admin) may reassign. The
-     * assigned consultant who will not do it declines instead.
+     * QA D735/D749: who may reassign — a coordinator (the requester or a
+     * verified super-admin), or the CURRENT consultant handing the consult over
+     * to a different doctor with a reason. Handing it to himself is not a
+     * handover, and nobody else may take it.
      */
-    private void requireReassigner(Consultation consultation) {
-        requireCoordinator(consultation);
+    private void requireReassigner(Consultation consultation, Staff newConsultant, String reason) {
+        if (isCoordinator(consultation)) {
+            return;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        Staff current = consultation.getConsultant();
+        UUID currentUserId = current != null && current.getUser() != null ? current.getUser().getId() : null;
+        UUID newUserId = newConsultant.getUser() != null ? newConsultant.getUser().getId() : null;
+        boolean handover = caller != null && caller.equals(currentUserId)
+            && newUserId != null && !caller.equals(newUserId)
+            && reason != null && !reason.isBlank();
+        if (!handover) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.reassign.notAllowed"));
+        }
     }
 
     /** The actor check of updateConsultation, one rule per kind of field it writes. */
