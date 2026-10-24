@@ -4273,27 +4273,24 @@ class PrescriptionServiceImplTest {
     }
 
     @Test
-    void d739_selfReview_aSecondOrderReusesTheAnchorInsteadOfMintingAnother() {
+    void d739_selfReview_aSecondOrderNeverReusesAnEarlierCompletedAnchor() {
         stubPrescriberWithoutEncounter();
         when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
-        Encounter finished = dischargedStayLedByThePrescriber();
-        finished.setAdmissionId(null);
-        finished.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        // The prescriber's latest encounter is an earlier auto-generated anchor
+        // (completed by design): the replayed order must not land on it.
         Encounter anchor = dischargedStayLedByThePrescriber();
         anchor.setAdmissionId(null);
         anchor.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
         anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
-            patientId, staffId, hospitalId)).thenReturn(Optional.of(finished));
-        when(encounterRepository
-            .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndNotesAndAdmissionIdIsNullOrderByEncounterDateDesc(
-                patientId, staffId, hospitalId, Encounter.PRESCRIPTION_ANCHOR_NOTE)).thenReturn(Optional.of(anchor));
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(anchor));
+        when(encounterRepository.save(any())).thenReturn(encounter);
 
         prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
 
-        verify(encounterRepository, never()).save(any(Encounter.class));
-        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(finished));
-        verify(prescriptionMapper).toEntity(any(), any(), any(), eq(anchor));
+        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(anchor));
+        verify(encounterRepository).save(org.mockito.ArgumentMatchers.<Encounter>argThat(e ->
+            e != anchor && Encounter.PRESCRIPTION_ANCHOR_NOTE.equals(e.getNotes())));
     }
 
     @Test

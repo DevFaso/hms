@@ -59,13 +59,6 @@ public interface EncounterRepository
         UUID staffId,
         UUID hospitalId);
 
-    /** QA D739: the prescriber's own prescription anchor for this patient, reused instead of minting another. */
-    Optional<Encounter> findFirstByPatient_IdAndStaff_IdAndHospital_IdAndNotesAndAdmissionIdIsNullOrderByEncounterDateDesc(
-        UUID patientId,
-        UUID staffId,
-        UUID hospitalId,
-        String notes);
-
     // Date range filtering
     Page<Encounter> findByHospital_IdAndEncounterDateBetween(UUID hospitalId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
