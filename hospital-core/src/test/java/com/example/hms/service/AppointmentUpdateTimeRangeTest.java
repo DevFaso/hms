@@ -71,7 +71,8 @@ class AppointmentUpdateTimeRangeTest {
         request.setStartTime(LocalTime.parse(start));
         request.setEndTime(LocalTime.parse(end));
 
-        assertThatThrownBy(() -> service.updateAppointment(existing.getId(), request, Locale.ENGLISH, "super.admin"))
+        UUID existingId = existing.getId();
+        assertThatThrownBy(() -> service.updateAppointment(existingId, request, Locale.ENGLISH, "super.admin"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("appointment.timeRange.invalid");
         verify(appointmentRepository, never()).save(any());
