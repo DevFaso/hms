@@ -11,7 +11,7 @@
     </div>
     <div class="field">
       <label for="pn-lmp">{{ 'MATERNITY.LMP' | translate }} *</label>
-      <input id="pn-lmp" type="date" [(ngModel)]="lmpDate" />
+      <input id="pn-lmp" type="date" [max]="today" [(ngModel)]="lmpDate" />
     </div>
   </div>
   <div class="form-row">

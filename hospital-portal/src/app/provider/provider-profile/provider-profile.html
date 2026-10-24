@@ -152,7 +152,7 @@
           </div>
           <div>
             <dt>{{ 'PROVIDER.PROFILE.VERIFIED_AT' | translate }}</dt>
-            <dd>{{ p.verifiedAt | date: 'mediumDate' }}</dd>
+            <dd>{{ p.verifiedAt | serverTime | date: 'mediumDate' }}</dd>
           </div>
         </dl>
         <p class="card-help">{{ 'PROVIDER.PROFILE.IDENTITY_HELP' | translate }}</p>

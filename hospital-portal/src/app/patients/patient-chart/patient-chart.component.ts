@@ -43,6 +43,7 @@ import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -59,7 +60,14 @@ const UNSCOPED_KEY = 'UNSCOPED';
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RestrictedRowsComponent,
+  ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',

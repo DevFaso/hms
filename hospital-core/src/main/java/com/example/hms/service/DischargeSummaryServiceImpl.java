@@ -564,7 +564,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 // Build diagnosis text from JSON array stored on encounter
                 String diagText = buildDiagnosisTextFromEncounter(enc);
                 summary.setDischargeDiagnosis(diagText);
-                summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+                summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                        enc.getFollowUpInstructions(), enc.getEncounterNote()));
 
                 // Encounter notes → hospitalCourse (visit summary)
                 if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
@@ -628,6 +629,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                     summary.setHospitalCourse(enc.getNotes());
                     changed = true;
                 }
+            }
+
+            // QA D744: a summary written before the checkout path carried the
+            // signed note (encounter 81b42d8d in the round-10 re-test) gains
+            // the note's instructions and plan; the join adds only what is missing.
+            String followUp = com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                    summary.getFollowUpInstructions(), enc.getEncounterNote());
+            if (followUp != null && !followUp.equals(summary.getFollowUpInstructions())) {
+                summary.setFollowUpInstructions(followUp);
+                changed = true;
             }
 
             // Enrich medications from prescriptions if missing

@@ -18,11 +18,12 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentMedications } from '../current-medications';
 import { ToastService } from '../../core/toast.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-medications',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-medications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-medications.component.scss', '../patient-portal-pages.scss'],

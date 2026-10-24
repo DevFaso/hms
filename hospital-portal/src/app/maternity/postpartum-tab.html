@@ -174,7 +174,7 @@
                       }
                     } @else if (r.acknowledgedAt) {
                       {{ r.acknowledgedByDisplay || '—' }} ·
-                      {{ r.acknowledgedAt | date: 'short' }}
+                      {{ r.acknowledgedAt | serverTime | date: 'short' }}
                       @if (r.acknowledgementNote) {
                         <span class="muted" [title]="r.acknowledgementNote">
                           · {{ r.acknowledgementNote }}
@@ -234,7 +234,9 @@
           <tbody>
             @for (o of observations(); track o.id) {
               <tr class="data-row">
-                <td>{{ o.observationTime ? (o.observationTime | date: 'short') : '—' }}</td>
+                <td>
+                  {{ o.observationTime ? (o.observationTime | serverTime | date: 'short') : '—' }}
+                </td>
                 <td>
                   {{ o.temperatureCelsius ?? '—' }}°C · {{ o.systolicBpMmHg ?? '—' }}/{{
                     o.diastolicBpMmHg ?? '—'
@@ -306,7 +308,7 @@
             @for (a of assessments(); track a.id) {
               <tr class="data-row">
                 <td>
-                  {{ a.assessmentTime ? (a.assessmentTime | date: 'short') : '—' }}
+                  {{ a.assessmentTime ? (a.assessmentTime | serverTime | date: 'short') : '—' }}
                   @if (a.deliveryRecordId) {
                     <!-- The linkage was invisible even when set via API: no
                          template anywhere rendered deliveryRecordId. -->

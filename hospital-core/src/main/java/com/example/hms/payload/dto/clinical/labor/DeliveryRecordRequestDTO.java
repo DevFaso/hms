@@ -24,6 +24,8 @@ public class DeliveryRecordRequestDTO {
     private UUID hospitalId;
     private UUID deliveredByStaffId;
 
+    @com.example.hms.validation.NotInClinicalFuture
+
     private LocalDateTime birthDateTime;
 
     @NotNull
@@ -46,6 +48,8 @@ public class DeliveryRecordRequestDTO {
     private Integer apgarOneMinute;
     @Min(0) @Max(10)
     private Integer apgarFiveMinute;
+
+    @com.example.hms.validation.NotInClinicalFuture
 
     private LocalDateTime placentaDeliveredAt;
     private Boolean placentaComplete;

@@ -335,7 +335,49 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.alreadyCancelled");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717: an arrived or closed-out appointment cannot be cancelled from the portal")
+        void arrivedAppointment_cannotBeCancelled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            CancelAppointmentRequestDTO dto = CancelAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).reason("Changement").build();
+
+            assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717 sibling: an arrived appointment cannot be rescheduled from the portal")
+        void arrivedAppointment_cannotBeRescheduled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
         }
 
         @Test
@@ -352,7 +394,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot cancel a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.cancel.completed");
         }
 
         @Test
@@ -510,7 +552,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.completed");
         }
 
         @Test
@@ -531,7 +573,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.cancelled");
         }
 
         @Test
@@ -552,7 +594,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("End time must be after start time");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.timeRange.invalid");
 
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
         }

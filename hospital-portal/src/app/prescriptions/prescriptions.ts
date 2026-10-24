@@ -41,6 +41,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -136,6 +137,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

@@ -353,7 +353,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.COMPLETED' | translate }}</span
               ><span class="field-value">{{
-                con.completedAt ? (con.completedAt | date: 'medium') : '—'
+                con.completedAt ? (con.completedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             @if (con.assignedAt) {
@@ -371,7 +371,9 @@
             @if (con.acknowledgedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.ACKNOWLEDGED' | translate }}</span
-                ><span class="field-value">{{ con.acknowledgedAt | date: 'medium' }}</span>
+                ><span class="field-value">{{
+                  con.acknowledgedAt | serverTime | date: 'medium'
+                }}</span>
               </div>
             }
             @if (con.scheduledAt) {

@@ -55,6 +55,18 @@ describe('provider model helpers', () => {
     expect(serverMessage({ error: { message: '  ' } })).toBeNull();
     expect(serverMessage({ error: 'text' })).toBeNull();
     expect(serverMessage(null)).toBeNull();
+    // QA D732/D746: the field-level reason beats the generic validation text.
+    expect(
+      serverMessage({
+        error: {
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: {
+            lastMenstrualPeriodDate: 'La date des dernières règles ne peut pas être dans le futur',
+          },
+        },
+      }),
+    ).toBe('La date des dernières règles ne peut pas être dans le futur');
+    expect(serverMessage({ error: { message: 'Refused', fieldErrors: {} } })).toBe('Refused');
   });
 });
 

@@ -21,6 +21,7 @@ import {
 } from '../../services/instrument-outbox.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Instrument outbox monitor (P2 #17).
@@ -33,7 +34,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-lab-outbox',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './lab-outbox.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-outbox.scss',

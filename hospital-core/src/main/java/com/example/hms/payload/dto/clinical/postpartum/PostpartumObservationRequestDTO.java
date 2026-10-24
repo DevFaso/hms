@@ -38,7 +38,10 @@ public class PostpartumObservationRequestDTO {
     private UUID recordedByStaffId;
     private UUID supersedesObservationId;
 
+    @com.example.hms.validation.NotInClinicalFuture
+
     private LocalDateTime observationTime;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime deliveryOccurredAt;
 
     private Boolean stabilizationConfirmed;
@@ -65,6 +68,7 @@ public class PostpartumObservationRequestDTO {
     private Boolean educationCompleted;
 
     private Boolean lateEntry;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime originalEntryTime;
 
     // --- Vital signs ---
@@ -117,5 +121,6 @@ public class PostpartumObservationRequestDTO {
 
     private String signoffName;
     private String signoffCredentials;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime signedAt;
 }

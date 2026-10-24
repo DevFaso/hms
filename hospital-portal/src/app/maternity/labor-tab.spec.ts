@@ -1,3 +1,4 @@
+import { nowLocalDatetime } from '../shared/date-utils';
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -156,7 +157,7 @@ describe('LaborTabComponent', () => {
   it('D214: a refused start shows the server reason and sends the override', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     laborSpy.startEpisode.and.returnValue(
-      throwError(() => ({ error: { message: 'Naissance récente : motif requis' } })),
+      throwError(() => ({ status: 400, error: { message: 'Naissance récente : motif requis' } })),
     );
 
     component.openStartForm();
@@ -221,6 +222,25 @@ describe('LaborTabComponent', () => {
     expect(laborSpy.recordDelivery).not.toHaveBeenCalled();
   });
 
+  it('QA D745/D746: a delivery dated in the future shows the field reason', () => {
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.episodes.set([episode('e1', 'ACTIVE')]);
+    laborSpy.recordDelivery.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { birthDateTime: 'Cette heure ne peut pas être dans le futur.' },
+        },
+      })),
+    );
+    component.openDeliveryForm();
+    component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    component.submitDelivery();
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Cette heure ne peut pas être dans le futur.');
+  });
+
   it('submitDelivery posts and closes the form', () => {
     component.patient.set({ id: 'p1' } as PatientResponse);
     component.episodes.set([episode('e1', 'ACTIVE')]);
@@ -254,9 +274,14 @@ describe('LaborTabComponent', () => {
     // Mirror real usage: the mode is chosen after the form opens (opening
     // resets the form to its live-birth defaults).
     component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    // #941 review: "now" on the workstation's wall clock goes out as UTC.
+    component.deliveryForm.birthDateTime = nowLocalDatetime(new Date(Date.UTC(2026, 9, 24, 9, 0)));
     component.submitDelivery();
 
     expect(laborSpy.recordDelivery).toHaveBeenCalledWith('p1', 'e1', jasmine.any(Object));
+    expect(laborSpy.recordDelivery.calls.mostRecent().args[2].birthDateTime).toBe(
+      '2026-10-24T09:00:00',
+    );
     expect(component.deliveryFormOpen()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
   });

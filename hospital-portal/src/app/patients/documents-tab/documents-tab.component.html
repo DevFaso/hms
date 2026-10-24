@@ -69,7 +69,7 @@
               </td>
               <td>{{ doc.collectionDate ? (doc.collectionDate | date: 'mediumDate') : '—' }}</td>
               <td>
-                {{ doc.createdAt | date: 'medium' }}
+                {{ doc.createdAt | serverTime | date: 'medium' }}
                 @if (doc.uploadedByDisplayName) {
                   <span class="muted">
                     · {{ 'PATIENT_DOCUMENTS.BY' | translate }} {{ doc.uploadedByDisplayName }}

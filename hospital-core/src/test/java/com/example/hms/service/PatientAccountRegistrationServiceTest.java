@@ -35,6 +35,7 @@ class PatientAccountRegistrationServiceTest {
     private PatientService patientService;
     private PatientAccountRegistrationService service;
     private ActingScopeResolver resolver;
+    private com.example.hms.repository.PatientRepository patientRepository;
 
     @BeforeEach
     void setUp() {
@@ -42,7 +43,9 @@ class PatientAccountRegistrationServiceTest {
         patientService = mock(PatientService.class);
         resolver = mock(ActingScopeResolver.class);
         when(resolver.current()).thenReturn(new ActingScope.Global(null));
-        service = new PatientAccountRegistrationService(userService, patientService, validator, resolver);
+        patientRepository = mock(com.example.hms.repository.PatientRepository.class);
+        service = new PatientAccountRegistrationService(userService, patientService, validator, resolver,
+            patientRepository);
     }
 
     private static AdminSignupRequest signup(UUID hospitalId, PatientRequestDTO patient) {
@@ -120,5 +123,40 @@ class PatientAccountRegistrationServiceTest {
         assertThat(PatientAccountRegistrationService.class
             .getMethod("registerPatient", AdminSignupRequest.class, Locale.class)
             .isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class)).isTrue();
+    }
+
+    @Test
+    void qaD725AnIdentityThatAlreadyHasAPatientRecordIsRefusedNotSilentlyLinked() {
+        // Round 10: hospital B registered a phone already used by a patient of
+        // hospital A; the existing record was linked and B's typed fields lost.
+        UUID hospitalB = UUID.randomUUID();
+        UUID existingUserId = UUID.randomUUID();
+        UserResponseDTO reused = new UserResponseDTO();
+        reused.setId(existingUserId);
+        when(userService.createUserWithRolesAndHospital(any())).thenReturn(reused);
+        when(patientRepository.findByUserId(existingUserId))
+            .thenReturn(java.util.Optional.of(new com.example.hms.model.Patient()));
+
+        AdminSignupRequest request = signup(hospitalB, validPatient());
+        assertThatThrownBy(() -> service.registerPatient(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.PatientAlreadyRegisteredException.class);
+        verify(patientService, never()).createPatientByStaff(any(), any());
+    }
+
+    @Test
+    void qaD725AnExistingAccountWithoutAPatientRecordStillGetsOne() {
+        // A staff member registered as a patient: the account exists, the record does not.
+        UUID hospital = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UserResponseDTO user = new UserResponseDTO();
+        user.setId(userId);
+        when(userService.createUserWithRolesAndHospital(any())).thenReturn(user);
+        when(patientRepository.findByUserId(userId)).thenReturn(java.util.Optional.empty());
+        PatientResponseDTO created = new PatientResponseDTO();
+        created.setId(UUID.randomUUID());
+        when(patientService.createPatientByStaff(any(), any())).thenReturn(created);
+
+        assertThat(service.registerPatient(signup(hospital, validPatient()), Locale.FRENCH).getPatientId())
+            .isEqualTo(created.getId());
     }
 }

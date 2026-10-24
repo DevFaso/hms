@@ -26,6 +26,7 @@ import {
   MicroSusceptibilityMethod,
   SUSCEPTIBILITY_METHODS,
 } from '../services/micro.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -37,7 +38,7 @@ import {
 @Component({
   selector: 'app-microbiology',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './microbiology.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './microbiology.scss',

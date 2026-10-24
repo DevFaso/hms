@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
@@ -136,8 +137,10 @@ describe('LabReleaseWorklistComponent', () => {
     const cells = Array.from(
       host().querySelectorAll('[data-testid="release-row-result-1"] td'),
     ).map((c) => c.textContent ?? '');
-    expect(cells.some((t) => t.includes('8:00'))).toBeTrue();
-    expect(cells.some((t) => t.includes('2:30'))).toBeTrue();
+    // QA D731: both are zone-less UTC server times, shown in the reader's zone.
+    const shown = (iso: string) => formatDate(`${iso}Z`, 'short', 'en-US');
+    expect(cells.some((t) => t.includes(shown('2026-09-20T08:00:00')))).toBeTrue();
+    expect(cells.some((t) => t.includes(shown('2026-09-20T14:30:00')))).toBeTrue();
   });
 
   it("tells an analyzer's preliminary from its final, and both from a typed result", () => {

@@ -253,7 +253,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span
               ><span class="field-value">{{
-                enc.createdAt ? (enc.createdAt | date: 'medium') : '—'
+                enc.createdAt ? (enc.createdAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>
@@ -342,7 +342,7 @@
               @if (note.signedAt) {
                 <p class="note-meta" data-testid="note-signed-line">
                   {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
-                  {{ note.signedAt | date: 'short' }}
+                  {{ note.signedAt | serverTime | date: 'short' }}
                   @if (note.signedByName) {
                     — {{ note.signedByName }}
                   }

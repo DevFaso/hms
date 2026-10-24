@@ -29,6 +29,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -42,7 +43,14 @@ export { toServerDateTime, toLocalInputValue };
 @Component({
   selector: 'app-lab-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-results.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-results.scss',

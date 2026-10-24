@@ -13,6 +13,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -26,7 +27,7 @@ import { CfaPipe } from '../shared/pipes/cfa.pipe';
 @Component({
   selector: 'app-pharmacy-checkout',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './pharmacy-checkout.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-checkout.scss',

@@ -279,11 +279,14 @@
                 />
               </div>
               <div class="field">
+                <!-- QA D734/D747: the street is required for every hospital, on create
+                     and edit; the server refuses an empty one too. -->
                 <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }} *</label>
                 <input
                   id="hAddress"
                   type="text"
                   [(ngModel)]="form.address"
+                  required
                   name="address"
                   [placeholder]="'HOSPITALS.ADDRESS_PLACEHOLDER' | translate"
                   aria-describedby="hAddressHint"
