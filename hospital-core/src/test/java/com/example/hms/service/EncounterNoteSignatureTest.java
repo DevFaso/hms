@@ -480,6 +480,28 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
+    void d738_theClosingEntrysSnapshotIsAttributedToItsAuthorNotToTheNextOne() {
+        // QA D738 (r10 re-test s5.js): MULTI_A wrote J2, DOCTOR2_A posted J3;
+        // the NOTE_UPDATED row holding the J2 text named DOCTOR2_A.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setAssessment("J2: improving");
+        nurseStaff();
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("J3: stable").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
+        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
+        assertThat(history.getAllValues().get(0).getChangedBy()).isEqualTo("doctor@example.test");
+        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
+        assertThat(history.getAllValues().get(1).getChangedBy()).isEqualTo("nurse@example.test");
+    }
+
+    @Test
     void d711_anOutpatientNoteOfAnotherAuthorIsStillLocked() {
         encounter.setEncounterNote(note);
         encounter.setAdmissionId(null);

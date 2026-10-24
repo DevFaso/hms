@@ -1342,7 +1342,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // QA D525 (D431): an order written into a hospital stay after the
             // discharge closed it was accepted, and would surface as a due
             // dose for a patient who has gone home.
-            if (named.getAdmissionId() != null
+            if (isHospitalStay(named)
                     && (named.getStatus() == EncounterStatus.COMPLETED
                         || named.getStatus() == EncounterStatus.CANCELLED)) {
                 throw new BusinessException("prescription.encounter.stayClosed");
@@ -1388,7 +1388,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId);
-        if (existing.isPresent()) {
+        // QA D739: the prescriber's latest encounter may be a stay that has
+        // been discharged (an open one was taken above). An outpatient order
+        // filed there reads as a stay order: it is ended by the discharge and
+        // shows in the closed stay's chart. It gets an outpatient anchor.
+        if (existing.isPresent() && !isHospitalStay(existing.get())) {
             return existing.get();
         }
 
@@ -1458,6 +1462,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
         UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
         return stayHospital != null && stayHospital.equals(staffHospital);
+    }
+
+    /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */
+    private static boolean isHospitalStay(Encounter encounter) {
+        return encounter.getAdmissionId() != null || encounter.getEncounterType() == EncounterType.INPATIENT;
     }
 
     private static boolean sameStaff(Staff member, UUID staffId) {

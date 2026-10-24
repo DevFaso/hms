@@ -4204,6 +4204,64 @@ class PrescriptionServiceImplTest {
         verify(encounterRepository).save(any(Encounter.class));
     }
 
+    /** QA D739 (r10 re-test s1.js): the prescriber's latest encounter is the stay they led, now discharged. */
+    private Encounter dischargedStayLedByThePrescriber() {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(encounter.getHospital());
+        stay.setPatient(patient);
+        stay.setStaff(staff);
+        stay.setAdmissionId(UUID.randomUUID());
+        stay.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        return stay;
+    }
+
+    @Test
+    void d739_anOutpatientOrderIsNotFiledOnTheDischargedStayThePrescriberLed() {
+        stubPrescriberWithoutEncounter();
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
+        Encounter discharged = dischargedStayLedByThePrescriber();
+        when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(discharged));
+        when(encounterRepository.save(any())).thenReturn(encounter);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(discharged));
+        verify(encounterRepository).save(org.mockito.ArgumentMatchers.<Encounter>argThat(e ->
+            e.getAdmissionId() == null && e.getEncounterType() == com.example.hms.enums.EncounterType.CONSULTATION));
+    }
+
+    @Test
+    void d739_aLegacyInpatientEncounterWithoutAnAdmissionLinkIsNotReusedEither() {
+        stubPrescriberWithoutEncounter();
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any())).thenReturn(List.of());
+        Encounter legacy = dischargedStayLedByThePrescriber();
+        legacy.setAdmissionId(null);
+        when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(legacy));
+        when(encounterRepository.save(any())).thenReturn(encounter);
+
+        prescriptionService.createPrescription(requestWithoutEncounter(), Locale.ENGLISH);
+
+        verify(prescriptionMapper, never()).toEntity(any(), any(), any(), eq(legacy));
+    }
+
+    @Test
+    void d739_aClosedLegacyInpatientEncounterNamedExplicitlyIsRefusedAsAClosedStay() {
+        stubPrescriberWithoutEncounter();
+        Encounter legacy = dischargedStayLedByThePrescriber();
+        legacy.setAdmissionId(null);
+        when(encounterRepository.findById(legacy.getId())).thenReturn(Optional.of(legacy));
+        PrescriptionRequestDTO request = requestWithoutEncounter();
+        request.setEncounterId(legacy.getId());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .matches(e -> ((BusinessException) e).getMessageKey().equals("prescription.encounter.stayClosed"));
+    }
+
     @Test
     void d432_theAllergyAlertCitesTheMostSevereMatchingEntry() {
         PrescriptionRequestDTO request = buildRequest();

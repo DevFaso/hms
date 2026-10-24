@@ -81,6 +81,7 @@ class PatientSnapshotServiceImplTest {
     @Mock private PatientAllergyRepository patientAllergyRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabResultRepository labResultRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -344,6 +345,57 @@ class PatientSnapshotServiceImplTest {
         assertEquals("Metformin", med.getName());
         assertEquals("500mg", med.getDose());
         assertEquals("BID", med.getFrequency());
+    }
+
+    private static Prescription rx(String name, com.example.hms.enums.PrescriptionStatus status,
+                                   com.example.hms.model.Encounter encounter) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        p.setStatus(status);
+        p.setEncounter(encounter);
+        p.setDuration("5 days");
+        p.setCreatedAt(java.time.LocalDateTime.now().minusHours(2));
+        return p;
+    }
+
+    private static com.example.hms.model.Encounter stay(com.example.hms.enums.EncounterStatus status) {
+        com.example.hms.model.Encounter e = new com.example.hms.model.Encounter();
+        e.setId(UUID.randomUUID());
+        e.setAdmissionId(UUID.randomUUID());
+        e.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        e.setStatus(status);
+        return e;
+    }
+
+    @Test
+    void d737_activeMedicationsAreTheRunningCoursesOnly() {
+        // QA D720/D737 (r10 re-test s8.js): the snapshot listed the discharged
+        // stay's completed courses and drafts as active medications.
+        UUID patientId = UUID.randomUUID();
+        givenPatient(patientId, stubPatient(patientId));
+        com.example.hms.model.Encounter discharged = stay(com.example.hms.enums.EncounterStatus.COMPLETED);
+        com.example.hms.model.Encounter current = stay(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Prescription morphineOfTheOldStay = rx("Morphine", com.example.hms.enums.PrescriptionStatus.SIGNED, discharged);
+        Prescription draft = rx("Draft course", com.example.hms.enums.PrescriptionStatus.DRAFT, null);
+        Prescription withdrawn = rx("Withdrawn", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, null);
+        Prescription amoxicillin = rx("Amoxicilline 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+        Prescription paracetamol = rx("Paracetamol 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(List.of(morphineOfTheOldStay, draft, withdrawn, amoxicillin, paracetamol)));
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(List.of("Amoxicilline 1 g", "Paracetamol 1 g"),
+                result.getActiveMedications().stream().map(PatientSnapshotDTO.MedicationItem::getName).toList());
     }
 
     @Test

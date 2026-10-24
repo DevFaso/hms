@@ -779,7 +779,10 @@ public class EncounterServiceImpl implements EncounterService {
             // #940 review: the closing entry's addenda and links belong to it.
             // Snapshot them (full content) into its history before detaching,
             // or a day-1 correction shows under the day-2 entry and author.
-            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED, historyActor(author, actorOverride));
+            // QA D738: that snapshot is the closing entry's text, so its row
+            // names that entry's author, never the clinician starting the next.
+            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED,
+                closingEntryActor(note, historyActor(author, actorOverride)));
             startNewStayEntry(note, request);
         }
 
@@ -814,6 +817,13 @@ public class EncounterServiceImpl implements EncounterService {
     private String historyActor(NoteAuthor author, String actorOverride) {
         String override = trimToNull(actorOverride);
         return !author.sessionResolved() && override != null ? override : author.actorIdentifier();
+    }
+
+    /** QA D738: the author of the stay entry being closed; the current actor only when none is recorded. */
+    private String closingEntryActor(EncounterNote closing, String fallback) {
+        String actor = determineActorIdentifier(trimToNull(closing.getAuthorName()), closing.getAuthor(),
+            closing.getAuthorStaff(), null);
+        return actor != null ? actor : fallback;
     }
 
     /** QA D711: clears the previous stay entry's sections and timing before the new entry is applied. */
