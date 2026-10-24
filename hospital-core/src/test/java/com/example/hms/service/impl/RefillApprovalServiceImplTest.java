@@ -174,7 +174,7 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("APPROVED");
+                .hasMessageContaining("patient.refill.decision.notPending");
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
@@ -268,7 +268,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("   ").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
         verify(refillRequestRepository, never()).findById(any());
     }
 
@@ -277,7 +277,7 @@ class RefillApprovalServiceImplTest {
     void pause_requiresBody() {
         assertThatThrownBy(() -> service.pause(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
     }
 
     @Test
@@ -305,6 +305,45 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D753: approving a CANCELLED refill answers a translated key, not English prose")
+    void d753_approveNonPendingUsesTranslatedKey() {
+        stubStaffResolution();
+        RefillRequest cancelled = pendingRefill();
+        cancelled.setStatus(RefillStatus.CANCELLED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(cancelled));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getMessageKey()).isEqualTo("patient.refill.decision.notPending");
+                    assertThat(ex.getArgs()).containsExactly("CANCELLED");
+                });
+    }
+
+    @Test
+    @DisplayName("QA D753 guard: every refusal in RefillApprovalServiceImpl is a bundle key present in EN/FR/ES")
+    void d753_guard_noProseRefusals() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/example/hms/service/impl/RefillApprovalServiceImpl.java"));
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:BusinessException|AccessDeniedException|ResourceNotFoundException)\\(\\s*\"([^\"]*)\"")
+                .matcher(src);
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        while (m.find()) {
+            keys.add(m.group(1));
+        }
+        assertThat(keys).isNotEmpty().allSatisfy(k -> assertThat(k).doesNotContain(" "));
+        for (String locale : new String[] {"en", "fr", "es"}) {
+            java.util.Properties props = new java.util.Properties();
+            try (java.io.Reader r = java.nio.file.Files.newBufferedReader(java.nio.file.Path.of(
+                    "src/main/resources/i18n/messages-patient_" + locale + ".properties"))) {
+                props.load(r);
+            }
+            keys.stream().filter(k -> k.startsWith("patient.refill."))
+                    .forEach(k -> assertThat(props.getProperty(k)).as(locale + " " + k).isNotBlank());
+        }
+    }
+
+    @Test
     @DisplayName("pause — refuses to re-pause, which would only re-notify the patient")
     void pause_rejectsAlreadyPaused() {
         stubStaffResolution();
@@ -315,7 +354,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("still waiting").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PAUSED");
+                .hasMessageContaining("patient.refill.decision.notPending");
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
@@ -330,7 +369,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("reconsidering").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("DENIED");
+                .hasMessageContaining("patient.refill.decision.notPending");
     }
 
     @Test
@@ -560,6 +599,6 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.countPendingForProvider(auth))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("staff record");
+                .hasMessageContaining("patient.refill.decision.noStaffRecord");
     }
 }

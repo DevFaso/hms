@@ -708,16 +708,9 @@ public class DispenseServiceImpl implements DispenseService {
             // non-controlled row without a quantity had no ceiling at all. Its
             // ceiling is read from the regimen; an unreadable regimen is
             // refused until the quantity is recorded.
-            BigDecimal perFill = PrescribedQuantityEstimate.perFill(prescription);
-            if (perFill == null) {
+            if (FillAccounting.perFillQuantity(prescription) == null) {
                 throw new BusinessException("pharmacy.dispense.quantityUnknown");
             }
-            int refillsUsed = prescription.getRefillsUsed() != null ? prescription.getRefillsUsed() : 0;
-            BigDecimal owed = perFill.multiply(BigDecimal.valueOf(1L + refillsUsed));
-            BigDecimal committed = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
-            BigDecimal left = owed.subtract(committed != null ? committed : BigDecimal.ZERO);
-            requireAtMost(requested, left.signum() > 0 ? left : BigDecimal.ZERO);
-            return;
         }
         BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
         requireAtMost(requested, FillAccounting.remaining(prescription, dispensedToDate));

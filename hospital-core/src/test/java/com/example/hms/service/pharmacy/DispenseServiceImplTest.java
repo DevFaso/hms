@@ -1071,7 +1071,8 @@ class DispenseServiceImplTest {
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
             when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(10));
-            when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+            // QA D752: the derived cap decides, not the count of complete fills.
+            org.mockito.Mockito.lenient().when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(1L);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
@@ -1083,7 +1084,7 @@ class DispenseServiceImplTest {
         }
 
         @Test
-        @DisplayName("D95: a short fill of a prescription with no quantity stays PARTIALLY_FILLED")
+        @DisplayName("D95 + QA D752: a short fill below the derived cap stays PARTIALLY_FILLED even when the fill itself is complete")
         void shortFillWithoutPrescribedQuantityStaysPartial() {
             prescription.setQuantity(null);
             // A legacy regimen the dispense can read: 1 tablet x 2/day x 5 days = 10.
@@ -1103,8 +1104,9 @@ class DispenseServiceImplTest {
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
             when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.valueOf(5));
-            when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
-                    .thenReturn(0L);
+            // QA D752: the derived cap decides, not the count of complete fills.
+            org.mockito.Mockito.lenient().when(dispenseRepository.countCompleteFillsForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(1L);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().id(dispenseId).build());
             when(roleValidator.getCurrentUserId()).thenReturn(userId);

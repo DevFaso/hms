@@ -255,6 +255,37 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D752: a legacy prescription with no stored quantity stays dispensable until its derived cap (9) is reached")
+    void d752_legacyPartialDispenseKeepsTheRestOfTheDerivedCap() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        // A legacy row: no stored quantity, regimen 1 tablet three times a day for 3 days = 9.
+        transactionTemplate.executeWithoutResult(tx -> {
+            Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
+            rx.setQuantity(null);
+            rx.setDosage("1 tablet");
+            rx.setFrequency("TID");
+            rx.setDuration("3 days");
+        });
+
+        for (int[] step : new int[][] {{4, 0}, {4, 0}, {1, 1}}) {
+            mockMvc.perform(apiPost(DISPENSE)
+                            .with(pharmacist(pharmacistA, hospitalA))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(dispenseBody(rxId, dispensaryA, pharmacistA, step[0], null)))
+                    .andExpect(status().isCreated());
+            assertThat(statusOf(rxId)).isEqualTo(step[1] == 1
+                    ? PrescriptionStatus.DISPENSED : PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        // Anything beyond the derived cap is refused.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 1, null)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("QA D512: POST /pharmacy/dispense with no pharmacist verification is refused, and it can still be done after")
     void d512_aFillWithoutVerificationIsRefused() throws Exception {
         UUID rxId = createAndSignPrescription();
