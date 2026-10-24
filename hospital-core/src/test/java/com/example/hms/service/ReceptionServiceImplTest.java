@@ -1342,6 +1342,26 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D630: an appointment for tomorrow is not checked in today, and no encounter is opened")
+        void checkInTheDayBeforeIsRefused_D630() {
+            Appointment appointment = scheduledAppointment();
+            appointment.setAppointmentDate(java.time.LocalDate.now().plusDays(1));
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .chiefComplaint("toux")
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                    .isEqualTo("reception.checkin.notToday"));
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+            verify(encounterRepo, never()).save(any(Encounter.class));
+        }
+
+        @Test
         @DisplayName("QA D149: no copay, no invoice")
         void noCopayNoInvoice_D149() {
             Appointment appointment = scheduledAppointment();

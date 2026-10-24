@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -278,7 +279,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
      * acting across.
      */
     private ImagingOrder getOrderReadableHere(UUID orderId) {
-        ImagingOrder order = getOrderEntity(orderId);
+        // QA D623: the scoped findById filtered the foreign row out before the
+        // readable-hospitals rule below ever ran, so D508 never held for real.
+        ImagingOrder order = imagingOrderRepository.findByIdUnscoped(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("imaging.order.notFound", orderId));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
@@ -286,7 +290,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
         UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
         UUID requesterUserId = roleValidator.getCurrentUserId();
+        // QA D652: another hospital's never-sent DRAFT is its work in progress (NeverSentRule).
         if (patientId == null
+                || !NeverSentRule.readableHere(orderHospitalId, activeHospitalId, wasSent(order))
                 || !recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId)
                     .contains(orderHospitalId)) {
             throw new ResourceNotFoundException("imaging.order.notFound", orderId);
@@ -295,6 +301,10 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             CrossHospitalReachRecorder.reachOf(List.of(orderHospitalId), activeHospitalId),
             "Cross-hospital imaging order read on the treatment relationship");
         return order;
+    }
+
+    private static boolean wasSent(ImagingOrder order) {
+        return NeverSentRule.sent(order.getStatus());
     }
 
     @Override
@@ -328,6 +338,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             orders = status != null
                 ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
+            // QA D652: less another hospital's never-sent DRAFTs, as the by-id read (NeverSentRule).
+            orders = NeverSentRule.imagingOrdersReadableHere(orders, activeHospitalId);
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital imaging order read on the treatment relationship");

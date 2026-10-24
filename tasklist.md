@@ -5084,7 +5084,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   or in the future. The general fix (send instants with an offset, or one portal-wide
   conversion) touches every date the portal renders, so it is its own PR. The QA
   rounds' D182 and D236 (zone-less `datetime-local` inputs) are this item; deferred
-  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Open.
+  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Round 9's D622 (the
+  admission form) is converted like the lab result form, through the shared
+  `toServerDateTime` / `toLocalInputValue` in `shared/date-utils.ts`
+  (fix/qa-r9-tenancy-admissions), and its two displays (admissions list, nurse
+  station pending admissions) read it as UTC through `fromServerDateTime`; the
+  general fix is still open. Open.
+- **Break-the-glass reach = the caller's patient search scope (QA D624, user decision).**
+  `BreakGlassServiceImpl.declare` answers 403 `breakGlass.patient.outOfScope` (same body
+  for an unknown id and an out-of-scope one) unless
+  `PatientRepository.isFindableByPatientSearch` holds, which uses the same tenant clause as
+  `searchPatientsExtended`. D409 is kept inside that scope. Closed.
 - **A one-person laboratory cannot activate its own test definitions.** Since D48 only
   an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
   SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded

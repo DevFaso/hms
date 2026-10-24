@@ -56,6 +56,36 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 
+    /**
+     * QA D652 - the paged list across the readable hospitals, less the rows
+     * another hospital never sent ({@code NeverSentRule}): a foreign row in
+     * {@code unsent} is that hospital's work in progress, and its by-id read
+     * answers 404 here. Rows of the acting hospital are kept whatever their status.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)")
+    Page<Prescription> findSentAcrossHospitals(@Param("patientId") UUID patientId,
+                                               @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                               @Param("actingHospitalId") UUID actingHospitalId,
+                                               @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                               Pageable pageable);
+
+    /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses")
+    Page<Prescription> findSentAcrossHospitalsAndStatusIn(@Param("patientId") UUID patientId,
+                                                          @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                          @Param("actingHospitalId") UUID actingHospitalId,
+                                                          @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                                          @Param("statuses") Collection<PrescriptionStatus> statuses,
+                                                          Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId, Pageable pageable);
 

@@ -908,6 +908,12 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
             throw new BusinessException("reception.checkin.notEligible", String.valueOf(currentStatus));
         }
+        // QA D630: a check-in is the patient at the desk TODAY. A 24 Oct
+        // appointment was checked in on 23 Oct and opened an encounter dated
+        // the 23rd. Another day's appointment is rescheduled, not checked in.
+        if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
+            throw new BusinessException("reception.checkin.notToday", String.valueOf(appointment.getAppointmentDate()));
+        }
 
         // 2. Transition appointment to CHECKED_IN
         appointment.setStatus(AppointmentStatus.CHECKED_IN);

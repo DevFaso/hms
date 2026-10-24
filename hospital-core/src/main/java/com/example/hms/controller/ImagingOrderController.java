@@ -37,6 +37,7 @@ import java.util.UUID;
 public class ImagingOrderController {
 
 	private final ImagingOrderService imagingOrderService;
+	private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
 	@PostMapping("/orders")
 	@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
@@ -100,10 +101,13 @@ public class ImagingOrderController {
 	@Operation(summary = "List imaging orders for a patient")
 	public ResponseEntity<List<ImagingOrderResponseDTO>> getOrdersByPatient(
 		@PathVariable UUID patientId,
-		@RequestParam(required = false) ImagingOrderStatus status
+		@RequestParam(required = false) ImagingOrderStatus status,
+		Authentication auth
 	) {
 		List<ImagingOrderResponseDTO> results = imagingOrderService.getOrdersByPatient(patientId, status);
-		return ResponseEntity.ok(results);
+		// QA D610 (D504): a list narrowed by the patient's opt-out says so.
+		return org.springframework.http.ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId,
+			com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())).body(results);
 	}
 
 	@GetMapping("/orders")

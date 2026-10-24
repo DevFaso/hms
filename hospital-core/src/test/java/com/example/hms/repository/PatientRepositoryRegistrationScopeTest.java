@@ -133,6 +133,45 @@ class PatientRepositoryRegistrationScopeTest {
         assertThat(patientRepository.findById(patientId)).isPresent();
     }
 
+    @Test
+    @DisplayName("QA D624: break-the-glass reach is exactly what the caller's patient search finds")
+    void findableByPatientSearch() {
+        // Caller working at C who also holds a role at A: the search finds the
+        // patient (registered at A), so C may break the glass (D409 kept).
+        scopedToHospitals(elsewhere, Set.of(elsewhere.getId(), first.getId()));
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(searchFinds()).isTrue();
+
+        // Caller at C alone: search finds nothing, and neither id is reachable.
+        scopedTo(elsewhere);
+        assertThat(searchFinds()).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+
+        // No scope at all: nothing.
+        HospitalContextHolder.setContext(HospitalContext.builder().principalUserId(UUID.randomUUID()).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isFalse();
+
+        // Unpinned super-admin: global view, as in search.
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        assertThat(patientRepository.isFindableByPatientSearch(patientId)).isTrue();
+        assertThat(patientRepository.isFindableByPatientSearch(UUID.randomUUID())).isFalse();
+    }
+
+    private boolean searchFinds() {
+        return patientRepository.searchPatientsExtended(null, null, null, null, null, null, null,
+                org.springframework.data.domain.PageRequest.of(0, 10))
+            .stream().anyMatch(p -> p.getId().equals(patientId));
+    }
+
+    private static void scopedToHospitals(Hospital acting, Set<UUID> permitted) {
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .principalUserId(UUID.randomUUID())
+            .activeHospitalId(acting.getId())
+            .permittedHospitalIds(permitted)
+            .build());
+    }
+
     private static void scopedTo(Hospital hospital) {
         HospitalContextHolder.setContext(HospitalContext.builder()
             .principalUserId(UUID.randomUUID())
