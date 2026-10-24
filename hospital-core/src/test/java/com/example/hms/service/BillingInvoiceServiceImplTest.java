@@ -1031,6 +1031,81 @@ class BillingInvoiceServiceImplTest {
         verify(paymentTransactionRepository).save(row.capture());
         assertEquals(com.example.hms.enums.PaymentMethod.OTHER, row.getValue().getPaymentMethod());
     }
+
+    /** QA D767: an invoice created as SENT at 0 F CFA was outstanding forever. */
+    @Test
+    void qaD767_createdSentAtZeroIsRefused() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        BillingInvoiceRequestDTO request = requestFor(patient).status(InvoiceStatus.SENT).build();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        assertEquals("billing.invoice.zeroTotal", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    /** QA D767: a 0 F CFA draft may still be created while its lines are added. */
+    @Test
+    void qaD767_zeroDraftIsStillCreated() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        billingInvoiceService.createInvoice(requestFor(patient).build(), Locale.ENGLISH);
+        verify(invoiceRepository).saveAndFlush(any());
+    }
+
+    /** QA D767: issuing a 0 F CFA draft by PUT {status:SENT} is refused and it stays DRAFT. */
+    @Test
+    void qaD767_issuingAZeroDraftIsRefused() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        invoice.setTotalAmount(BigDecimal.ZERO);
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO issue = editOf().status(InvoiceStatus.SENT).build();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, issue, Locale.ENGLISH));
+        assertEquals("billing.invoice.zeroTotal", refused.getMessageKey());
+        assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
+    }
+
+    /** QA D768: a MOBILE_MONEY or INSURANCE payment with no reference was accepted. */
+    @Test
+    void qaD768_tracedMethodsNeedAReference() {
+        for (String method : List.of("MOBILE_MONEY", "INSURANCE", "BANK_TRANSFER")) {
+            BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+            when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+            UUID invoiceId = invoice.getId();
+            com.example.hms.payload.dto.StaffPaymentRequestDTO noRef =
+                new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10"), method, "  ", null);
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.recordStaffPayment(invoiceId, noRef, null, Locale.ENGLISH));
+            assertEquals("billing.payment.referenceRequired", refused.getMessageKey(), method);
+        }
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    /** QA D768: the QA's body named the field "referenceNumber"; it was dropped, so the reuse check never ran. */
+    @Test
+    void qaD768_referenceNumberInTheBodyIsTheReference_andAReuseIsRefused() throws Exception {
+        com.example.hms.payload.dto.StaffPaymentRequestDTO dto = tools.jackson.databind.json.JsonMapper.builder().build()
+            .readValue("{\"amount\":100,\"method\":\"INSURANCE\",\"referenceNumber\":\"CNAMU-R11-1\"}",
+                com.example.hms.payload.dto.StaffPaymentRequestDTO.class);
+        assertEquals("CNAMU-R11-1", dto.getReference());
+
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL_ID);
+        invoice.setHospital(hospital);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.existsLiveReference(any(), eq("cnamu-r11-1"), any())).thenReturn(true);
+        UUID invoiceId = invoice.getId();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, dto, null, Locale.ENGLISH));
+        assertEquals("billing.payment.duplicateReference", refused.getMessageKey());
+    }
+
     // ---- QA D140 / D142 / D184: pending, confirmation, reversal, whole francs ----
 
     private com.example.hms.model.PaymentTransaction ledgerRow(BillingInvoice invoice, String amount,

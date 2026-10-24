@@ -26,6 +26,7 @@ import {
 } from '../services/digital-signature.service';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { serverInstant, toServerDateTime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-digital-signatures',
@@ -231,7 +232,7 @@ export class DigitalSignaturesComponent implements OnInit {
       parts.push(r.patientName);
     }
     if (r.createdAt) {
-      parts.push(new Date(r.createdAt).toLocaleDateString(currentLocale()));
+      parts.push(serverInstant(r.createdAt).toLocaleDateString(currentLocale()));
     }
     return parts.join(' · ');
   }
@@ -268,7 +269,8 @@ export class DigitalSignaturesComponent implements OnInit {
         hospitalId,
         signatureValue: this.signValue().trim(),
         signatureNotes: this.signNotes().trim() || undefined,
-        expiresAt: this.signExpiresAt() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        expiresAt: this.signExpiresAt() ? toServerDateTime(this.signExpiresAt()) : undefined,
       })
       .subscribe({
         next: (created) => {
@@ -416,7 +418,7 @@ export class DigitalSignaturesComponent implements OnInit {
 
   formatDate(dt: string | undefined): string {
     if (!dt) return '—';
-    return new Date(dt).toLocaleDateString(currentLocale(), {
+    return serverInstant(dt).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

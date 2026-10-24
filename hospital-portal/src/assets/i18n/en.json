@@ -1384,7 +1384,23 @@
     "WRITE_PUT": "Updated: {{entity}}",
     "WRITE_PATCH": "Updated: {{entity}}",
     "WRITE_DELETE": "Deleted: {{entity}}",
-    "WRITE_ENTITY_UNKNOWN": "record"
+    "WRITE_ENTITY_UNKNOWN": "record",
+    "DESC": {
+      "PATIENT_RECORD_VIEWED": "Patient record viewed",
+      "USER_PROFILE_UPDATED": "User profile updated",
+      "USER_CREATED": "New user account created",
+      "USER_DELETED": "User account deleted",
+      "USER_RESTORED": "User account restored",
+      "DOCTOR_RECORD_VIEW": "Record viewed by a doctor",
+      "DOCTOR_TIMELINE_VIEW": "Timeline viewed by a doctor",
+      "MFA_CHALLENGE_ISSUED": "Two-factor challenge issued",
+      "TOTP_ENROLLMENT_VERIFIED": "Authenticator app enrolment verified",
+      "FIRST_SIGN_IN_COMPLETED": "First sign-in setup completed",
+      "ROLE_ASSIGNMENT_REFUSED": "Role assignment refused: the caller may not grant this role there",
+      "ROLE_ASSIGNED": "Role {{role}} assigned to {{name}}",
+      "ASSIGNMENT_CONFIRMED": "Assignment {{role}} confirmed for {{name}}",
+      "LAB_DEFINITION_STEP": "Lab test definition {{code}}: approval step {{step}}, new status {{status}}."
+    }
   },
   "BILLING": {
     "ALL_STATUSES": "All statuses",
@@ -3762,7 +3778,8 @@
       "NOTE_FAILED": "Failed to save care note",
       "NO_ENCOUNTER": "No active encounter found for this patient.",
       "ENCOUNTER_LOOKUP_FAILED": "Failed to look up encounter.",
-      "HANDOFF_SITUATION_REQUIRED": "Describe the situation (the S of SBAR) before handing over."
+      "HANDOFF_SITUATION_REQUIRED": "Describe the situation (the S of SBAR) before handing over.",
+      "HANDOFF_RECIPIENT_REQUIRED": "Choose the colleague the patient is handed over to."
     },
     "MED_ACTION": {
       "GIVEN": "given",
@@ -3783,7 +3800,10 @@
     "ACVPU_PAIN": "Responds to pain",
     "ACVPU_UNRESPONSIVE": "Unresponsive",
     "OVERRIDE_EXPLAIN": "The bedside five-rights scan is done in the eMAR. To record this dose as given from here, enter the reason for the override.",
-    "OPEN_EMAR": "Open the eMAR to scan instead"
+    "OPEN_EMAR": "Open the eMAR to scan instead",
+    "HANDOFF_RECIPIENT": "Handed over to",
+    "HANDOFF_RECIPIENT_PLACEHOLDER": "Choose a colleague",
+    "HANDOFF_TO": "to"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -6105,6 +6125,14 @@
         "VITAMIN": "Vitamin",
         "VACCINE": "Vaccine",
         "OTHER": "Other"
+      },
+      "LAB_DEFINITION_ACTION": {
+        "SUBMIT_FOR_QA": "Submit for QA review",
+        "COMPLETE_QA_REVIEW": "Complete QA review",
+        "APPROVE": "Approve",
+        "ACTIVATE": "Activate",
+        "REJECT": "Reject",
+        "RETIRE": "Retire"
       }
     },
     "DOCUMENTS": {
@@ -6321,6 +6349,7 @@
     "SIGN": "Sign",
     "COSIGN": "Co-sign",
     "REQUIRES_COSIGN": "Requires co-signature by a second prescriber",
+    "TAKE_HOME": "Take-home medication (continues after discharge)",
     "SIGNED_AT": "Signed",
     "COSIGN_STATE": "Co-signature",
     "COSIGN_PENDING": "Pending — a second prescriber must co-sign",
@@ -7634,7 +7663,8 @@
     "USER": "User",
     "USERNAME": "Username",
     "USERS_PLURAL": "Users",
-    "USER_SINGULAR": "User"
+    "USER_SINGULAR": "User",
+    "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page."
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -7871,6 +7901,8 @@
     "error": "Check-out failed. Please try again."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Discharge diagnosis",
+    "DIAGNOSIS_REQUIRED": "The discharge diagnosis is required",
     "ACTIVITY_RESTRICTIONS": "Activity restrictions",
     "ADDITIONAL_NOTES": "Additional notes",
     "ADD_FOLLOW_UP": "Add follow-up",
@@ -8506,7 +8538,8 @@
     "UNIT_PRICE": "Unit price (F CFA)",
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
-    "PRICE_SAVE_FAILED": "The price could not be saved."
+    "PRICE_SAVE_FAILED": "The price could not be saved.",
+    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

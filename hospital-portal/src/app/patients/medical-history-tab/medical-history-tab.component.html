@@ -131,7 +131,7 @@
           <p class="notes-block">{{ s.additionalNotes }}</p>
         }
         <p class="muted">
-          v{{ s.versionNumber ?? 1 }} — {{ s.recordedDate | date: 'mediumDate' }}
+          v{{ s.versionNumber ?? 1 }} — {{ s.recordedDate | serverTime | date: 'mediumDate' }}
           @if (s.recordedByName) {
             — {{ s.recordedByName }}
           }
@@ -295,12 +295,20 @@
                   }
                 </td>
                 <td>
-                  {{ im.administrationDate ? (im.administrationDate | date: 'mediumDate') : '—' }}
+                  {{
+                    im.administrationDate
+                      ? (im.administrationDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                 </td>
                 <td>{{ doseLabel(im) }}</td>
                 <td>{{ (im.status | enumLabel: 'immunizationStatus') || '—' }}</td>
                 <td>
-                  {{ im.nextDoseDueDate ? (im.nextDoseDueDate | date: 'mediumDate') : '—' }}
+                  {{
+                    im.nextDoseDueDate
+                      ? (im.nextDoseDueDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                   @if (isOverdue(im)) {
                     <span class="flag-badge danger">{{ 'MED_HISTORY.OVERDUE' | translate }}</span>
                   } @else if (im.nextDoseDueDate && im.reminderSent) {

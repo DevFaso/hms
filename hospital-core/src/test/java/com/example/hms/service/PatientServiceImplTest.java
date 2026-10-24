@@ -215,6 +215,9 @@ class PatientServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D763: the one MRN generator, real, over the mocked repository.
+        org.springframework.test.util.ReflectionTestUtils.setField(patientService, "mrnGenerator",
+            new PatientMrnGenerator(registrationRepository));
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
 

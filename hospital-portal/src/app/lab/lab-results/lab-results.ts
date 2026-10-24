@@ -28,7 +28,12 @@ import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hos
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
-import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
+import {
+  nowLocalDatetime,
+  toLocalInputValue,
+  toServerDateTime,
+  serverInstant,
+} from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
@@ -294,12 +299,6 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
   }
 
-  /** Format a Date as YYYY-MM-DDTHH:mm in the user's local timezone (for datetime-local inputs). */
-  private toLocalDatetime(d: Date): string {
-    const pad = (n: number): string => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   emptyForm(): LabResultRequest {
     return {
       labOrderId: '',
@@ -307,7 +306,7 @@ export class LabResultsComponent implements OnInit {
       patientId: '',
       resultValue: '',
       resultUnit: '',
-      resultDate: this.toLocalDatetime(new Date()),
+      resultDate: nowLocalDatetime(),
       notes: '',
     };
   }
@@ -353,7 +352,7 @@ export class LabResultsComponent implements OnInit {
       patientId: r.patientId ?? '',
       resultValue: r.resultValue ?? '',
       resultUnit: r.resultUnit ?? '',
-      resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : this.toLocalDatetime(new Date()),
+      resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : nowLocalDatetime(),
       notes: r.notes ?? '',
     };
     this.editing.set(true);
@@ -609,7 +608,7 @@ export class LabResultsComponent implements OnInit {
   sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
     const history = r.trendHistory ?? [];
     return [...history].sort(
-      (a, b) => new Date(b.resultDate).getTime() - new Date(a.resultDate).getTime(),
+      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
     );
   }
 

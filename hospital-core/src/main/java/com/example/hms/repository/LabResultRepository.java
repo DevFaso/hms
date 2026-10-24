@@ -293,6 +293,7 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
           AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
                AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE (r.labOrder.hospital.id = :hospitalId
@@ -300,11 +301,14 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
           AND (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
                AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
     """)
     Page<LabResult> findHandledByHospitalForReader(@Param("hospitalId") UUID hospitalId,
                                                    @Param("releasedOnly") boolean releasedOnly,
                                                    @Param("anyPatient") boolean anyPatient,
                                                    @Param("patientId") UUID patientId,
+                                                   @Param("anyOrder") boolean anyOrder,
+                                                   @Param("labOrderId") UUID labOrderId,
                                                    Pageable pageable);
 
     /**
@@ -328,15 +332,19 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
                AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE (:releasedOnly = false OR (r.released = true AND r.supersededByResultId IS NULL
                AND NOT EXISTS (SELECT 1 FROM LabResult n WHERE n.supersedesResultId = r.id AND n.released = true)))
           AND (:anyPatient = true OR r.labOrder.patient.id = :patientId)
+          AND (:anyOrder = true OR r.labOrder.id = :labOrderId)
     """)
     Page<LabResult> findAllForReader(@Param("releasedOnly") boolean releasedOnly,
                                      @Param("anyPatient") boolean anyPatient,
                                      @Param("patientId") UUID patientId,
+                                     @Param("anyOrder") boolean anyOrder,
+                                     @Param("labOrderId") UUID labOrderId,
                                      Pageable pageable);
 
     @EntityGraph(attributePaths = {

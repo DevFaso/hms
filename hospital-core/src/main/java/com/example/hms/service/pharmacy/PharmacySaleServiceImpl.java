@@ -133,6 +133,9 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                     || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
                 throw new BusinessException("Stock lot does not belong to the selling pharmacy");
             }
+            // QA D779: a counter sale from a lot is the same movement as a
+            // fill: half a tablet of a counted item is refused here too.
+            WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
         }
 
         BigDecimal lineTotal = lineDto.getQuantity()

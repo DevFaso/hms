@@ -176,4 +176,40 @@ class EncounterAutoCompletionServiceTest {
         assertThat(EncounterAutoCompletionService.ledToAdmission(
             visit(com.example.hms.enums.EncounterType.SURGERY, admittedAt.minusHours(1)), admittedAt)).isFalse();
     }
+
+    /* ── QA D760 (D712 not fixed) ── */
+
+    @Test
+    void d760_aWalkInOpenedSecondsBeforeABackdatedAdmissionEndsWithIt() {
+        // The QA scenario: reception registers the emergency walk-in, then the
+        // doctor admits with admissionDateTime = now - 60 s. The walk-in began
+        // after the stated admission time but before the admission was recorded.
+        java.time.LocalDateTime recordedAt = java.time.LocalDateTime.of(2026, 10, 24, 15, 41, 0);
+        java.time.LocalDateTime admittedAt = recordedAt.minusSeconds(60);
+        com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+        admission.setId(admissionId);
+        admission.setAdmissionDateTime(admittedAt);
+        admission.setCreatedAt(recordedAt);
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        admission.setPatient(patient);
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        admission.setHospital(hospital);
+        Encounter walkIn = visit(com.example.hms.enums.EncounterType.EMERGENCY, recordedAt.minusSeconds(20));
+        walkIn.setStatus(EncounterStatus.ARRIVED);
+        Encounter later = visit(com.example.hms.enums.EncounterType.EMERGENCY, recordedAt.plusHours(2));
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+                eq(patient.getId()), eq(hospital.getId()), anyCollection()))
+                .thenReturn(List.of(walkIn, later));
+
+        service.completeVisitsThatLedToAdmission(admission);
+
+        assertThat(walkIn.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+        // Never checked out before it began.
+        assertThat(walkIn.getCheckoutTimestamp()).isEqualTo(recordedAt);
+        // Path re-verified: a visit begun after the admission was recorded stays open.
+        assertThat(later.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository).saveAll(List.of(walkIn));
+    }
 }

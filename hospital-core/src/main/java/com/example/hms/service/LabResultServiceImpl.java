@@ -696,29 +696,39 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
-        return readLabResultsPage(pageable, null, true);
+        return readLabResultsPage(pageable, null, null, true);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
                                                         UUID patientId, boolean includeUnreleased) {
-        return readLabResultsPage(pageable, patientId, includeUnreleased);
+        return readLabResultsPage(pageable, patientId, null, includeUnreleased);
     }
 
-    private Page<LabResultResponseDTO> readLabResultsPage(Pageable pageable, UUID patientId,
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                        UUID patientId, UUID labOrderId, boolean includeUnreleased) {
+        return readLabResultsPage(pageable, patientId, labOrderId, includeUnreleased);
+    }
+
+    private Page<LabResultResponseDTO> readLabResultsPage(Pageable pageable, UUID patientId, UUID labOrderId,
                                                           boolean includeUnreleased) {
+        // QA D781: the labOrderId filter was ignored and every result of the hospital came back.
+        boolean anyOrder = labOrderId == null;
+        UUID orderParam = anyOrder ? NO_HOSPITAL : labOrderId;
         UUID hospitalId = listScopeOrVerifiedGlobalView();
         if (hospitalId == null) {
             // Verified super-admin in global view. QA D211 (round 5): this
             // branch applied neither the patientId filter nor released-only.
             return currentForReader(labResultRepository.findAllForReader(!includeUnreleased, patientId == null,
-                    patientId == null ? NO_HOSPITAL : patientId,
+                    patientId == null ? NO_HOSPITAL : patientId, anyOrder, orderParam,
                     com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased)
                 .map(labResultMapper::toResponseDTO);
         }
         Page<LabResult> page = currentForReader(labResultRepository.findHandledByHospitalForReader(hospitalId,
-            !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId,
+            !includeUnreleased, patientId == null, patientId == null ? NO_HOSPITAL : patientId, anyOrder, orderParam,
             com.example.hms.utility.PageBounds.atMost(pageable, MAX_RESULT_PAGE_SIZE)), includeUnreleased);
         recordPerformedHereReach(page.getContent());
         return page.map(labResultMapper::toResponseDTO);

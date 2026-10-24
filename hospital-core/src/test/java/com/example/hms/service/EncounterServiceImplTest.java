@@ -227,6 +227,26 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void getEncountersByPatientId_leavesPrescriptionAnchorsOut() {
+        // QA D759: the clinician's visit list showed each prescription anchor
+        // as a COMPLETED consultation; only the patient portal filtered them.
+        UUID patientId = UUID.randomUUID();
+        Encounter visit = new Encounter();
+        visit.setId(UUID.randomUUID());
+        Encounter anchor = new Encounter();
+        anchor.setId(UUID.randomUUID());
+        anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+
+        when(patientRepository.existsById(patientId)).thenReturn(true);
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(visit, anchor));
+        when(encounterMapper.toEncounterResponseDTO(visit)).thenReturn(dto);
+
+        assertThat(service.getEncountersByPatientId(patientId, locale)).containsExactly(dto);
+        verify(encounterMapper, never()).toEncounterResponseDTO(anchor);
+    }
+
+    @Test
     void getEncountersByPatientId_patientNotFound() {
         UUID patientId = UUID.randomUUID();
         when(patientRepository.existsById(patientId)).thenReturn(false);
@@ -2532,6 +2552,54 @@ class EncounterServiceImplTest {
                 .matches(e -> "encounter.note.closedLocked".equals(((BusinessException) e).getMessageKey()));
             assertThat(mine.getAssessment()).isEqualTo("original");
             verify(encounterNoteRepository, never()).save(any());
+        }
+
+        @Test
+        void d761_aWalkInPostedAsArrivedIsStoredArrived() {
+            // The QA call: the reception's walk-in dialog posts POST /encounters
+            // with status ARRIVED; the entity's IN_PROGRESS default won, and
+            // triage then answered 400 "expected ARRIVED or TRIAGE".
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS); // the entity default
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            request.setStatus(EncounterStatus.ARRIVED);
+
+            service.createEncounter(request, locale);
+
+            org.mockito.ArgumentCaptor<Encounter> saved = org.mockito.ArgumentCaptor.forClass(Encounter.class);
+            verify(encounterRepository).save(saved.capture());
+            assertThat(saved.getValue().getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+        }
+
+        @Test
+        void d761_aClinicianEncounterWithNoStatusKeepsItsInProgressDefault() {
+            // Path re-verified: the encounters page posts no status.
+            Encounter fresh = encounter();
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+
+            service.createEncounter(request(null, LocalDateTime.now()), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        @Test
+        void d761_aNewEncounterCannotBeCreatedCompleted() {
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setStatus(EncounterStatus.COMPLETED);
+
+            assertThatThrownBy(() -> service.createEncounter(request, locale))
+                .isInstanceOf(BusinessException.class);
+            verify(encounterRepository, never()).save(any());
         }
 
         @Test

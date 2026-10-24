@@ -24,6 +24,7 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
@@ -37,7 +38,7 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 @Component({
   selector: 'app-medical-history-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './medical-history-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medical-history-tab.component.scss',

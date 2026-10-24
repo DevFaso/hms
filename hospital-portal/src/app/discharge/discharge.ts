@@ -19,6 +19,8 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverLocalDate } from '../shared/date-utils';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -26,7 +28,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 @Component({
   selector: 'app-discharge',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
   templateUrl: './discharge.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './discharge.scss',
@@ -82,6 +84,7 @@ export class DischargeComponent implements OnInit {
   decisionMode = signal<'approve' | 'reject'>('approve');
   decisionTarget = signal<DischargeApproval | null>(null);
   decisionNote = '';
+  decisionDiagnosis = '';
   decisionSubmitting = signal(false);
 
   showCancelModal = signal(false);
@@ -222,6 +225,7 @@ export class DischargeComponent implements OnInit {
     this.decisionTarget.set(approval);
     this.decisionMode.set(mode);
     this.decisionNote = '';
+    this.decisionDiagnosis = '';
     this.showDecisionModal.set(true);
   }
 
@@ -238,12 +242,18 @@ export class DischargeComponent implements OnInit {
       this.toast.error(this.translate.instant('DISCHARGE.REJECTION_REASON_REQUIRED'));
       return;
     }
+    // QA D766: an approval discharges the stay, so it needs a diagnosis.
+    if (mode === 'approve' && !this.decisionDiagnosis.trim()) {
+      this.toast.error(this.translate.instant('DISCHARGE.DIAGNOSIS_REQUIRED'));
+      return;
+    }
     this.decisionSubmitting.set(true);
     const decision = {
       doctorStaffId: this.staffId!,
       doctorAssignmentId: this.assignmentId!,
       doctorNote: mode === 'approve' ? this.decisionNote.trim() || undefined : undefined,
       rejectionReason: mode === 'reject' ? this.decisionNote.trim() : undefined,
+      dischargeDiagnosis: mode === 'approve' ? this.decisionDiagnosis.trim() : undefined,
     };
     const op =
       mode === 'approve'
@@ -629,7 +639,9 @@ export class DischargeComponent implements OnInit {
   }
 
   encounterLabel(e: EncounterResponse): string {
-    const date = e.encounterDate ? e.encounterDate.substring(0, 10) : '';
+    // #948 review: the reader's day; slicing the UTC string listed a 21:00
+    // New York visit under the next day.
+    const date = serverLocalDate(e.encounterDate);
     return `${date} — ${e.encounterType ?? ''} (${e.status ?? ''})`.trim();
   }
 

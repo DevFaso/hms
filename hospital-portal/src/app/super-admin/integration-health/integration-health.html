@@ -171,9 +171,19 @@
                             {{ 'INTEGRATION_HEALTH.STATUS.' + org.status | translate }}
                           </span>
                         </td>
-                        <td>{{ org.lastSuccessAt ? (org.lastSuccessAt | date: 'short') : '—' }}</td>
                         <td>
-                          {{ org.lastFailureAt ? (org.lastFailureAt | date: 'short') : '—' }}
+                          {{
+                            org.lastSuccessAt
+                              ? (org.lastSuccessAt | serverTime | date: 'short')
+                              : '—'
+                          }}
+                        </td>
+                        <td>
+                          {{
+                            org.lastFailureAt
+                              ? (org.lastFailureAt | serverTime | date: 'short')
+                              : '—'
+                          }}
                           @if (org.lastErrorMessage) {
                             <span class="err-tooltip" [title]="org.lastErrorMessage">
                               <span class="material-symbols-outlined" aria-hidden="true">info</span>

@@ -44,6 +44,8 @@ public class StockLotRequestDTO {
     @Size(max = 255)
     private String supplier;
 
+    /** QA D778: a purchase price is never negative. */
+    @jakarta.validation.constraints.PositiveOrZero(message = "{stockTransaction.unitCost.min}")
     private BigDecimal unitCost;
 
     @NotNull(message = "{stockLot.receivedDate.required}")

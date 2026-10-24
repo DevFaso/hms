@@ -40,7 +40,7 @@
                 <span class="ct-contact">
                   {{
                     'PORTAL.CARE_TEAM.SINCE'
-                      | translate: { date: pcp.startDate | date: 'mediumDate' }
+                      | translate: { date: pcp.startDate | serverTime | date: 'mediumDate' }
                   }}
                 </span>
               }
@@ -70,7 +70,7 @@
                   <span class="ct-contact">
                     {{
                       'PORTAL.CARE_TEAM.VISIT_ON'
-                        | translate: { date: v.visitDate | date: 'mediumDate' }
+                        | translate: { date: v.visitDate | serverTime | date: 'mediumDate' }
                     }}
                   </span>
                 }
@@ -96,8 +96,8 @@
                   <span class="ct-role">{{ e.hospitalName }}</span>
                 }
                 <span class="ct-contact">
-                  {{ e.startDate ? (e.startDate | date: 'mediumDate') : '—' }} –
-                  {{ e.endDate ? (e.endDate | date: 'mediumDate') : '—' }}
+                  {{ e.startDate ? (e.startDate | serverTime | date: 'mediumDate') : '—' }} –
+                  {{ e.endDate ? (e.endDate | serverTime | date: 'mediumDate') : '—' }}
                 </span>
               </div>
             </div>

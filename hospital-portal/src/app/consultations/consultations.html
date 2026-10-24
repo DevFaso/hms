@@ -187,7 +187,7 @@
                   c.urgency | enumLabel: 'consultationUrgency'
                 }}</span>
               </td>
-              <td>{{ c.requestedAt ? (c.requestedAt | date: 'mediumDate') : '—' }}</td>
+              <td>{{ c.requestedAt ? (c.requestedAt | serverTime | date: 'mediumDate') : '—' }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(c.status) }}">{{
                   c.status | enumLabel: 'consultationStatus'
@@ -347,7 +347,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'CONSULTATIONS.REQUESTED' | translate }}</span
               ><span class="field-value">{{
-                con.requestedAt ? (con.requestedAt | date: 'medium') : '—'
+                con.requestedAt ? (con.requestedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -359,13 +359,13 @@
             @if (con.assignedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.ASSIGNED' | translate }}</span
-                ><span class="field-value">{{ con.assignedAt | date: 'medium' }}</span>
+                ><span class="field-value">{{ con.assignedAt | serverTime | date: 'medium' }}</span>
               </div>
             }
             @if (con.startedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.STARTED' | translate }}</span
-                ><span class="field-value">{{ con.startedAt | date: 'medium' }}</span>
+                ><span class="field-value">{{ con.startedAt | serverTime | date: 'medium' }}</span>
               </div>
             }
             @if (con.acknowledgedAt) {
@@ -379,13 +379,15 @@
             @if (con.scheduledAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.SCHEDULED_FOR' | translate }}</span
-                ><span class="field-value">{{ con.scheduledAt | date: 'medium' }}</span>
+                ><span class="field-value">{{
+                  con.scheduledAt | serverTime | date: 'medium'
+                }}</span>
               </div>
             }
             @if (con.declinedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.DECLINED' | translate }}</span
-                ><span class="field-value">{{ con.declinedAt | date: 'medium' }}</span>
+                ><span class="field-value">{{ con.declinedAt | serverTime | date: 'medium' }}</span>
               </div>
             }
             @if (con.followUpRequired !== null) {
@@ -400,7 +402,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'CONSULTATIONS.SLA_DUE' | translate }}</span
                 ><span class="field-value" [class.overdue-text]="isOverdue(con)">{{
-                  con.slaDueBy | date: 'medium'
+                  con.slaDueBy | serverTime | date: 'medium'
                 }}</span>
               </div>
             }
@@ -463,7 +465,7 @@
                   <div class="timeline-event">
                     <span class="timeline-dot"></span>
                     <span class="timeline-label">{{ evt.label }}</span>
-                    <span class="timeline-date">{{ evt.date | date: 'medium' }}</span>
+                    <span class="timeline-date">{{ evt.date | serverTime | date: 'medium' }}</span>
                   </div>
                 }
               </div>

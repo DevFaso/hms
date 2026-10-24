@@ -471,7 +471,7 @@
             <span class="material-icons">history</span>
             <div class="kpi-body">
               <span class="kpi-value snapshot-val">{{
-                s.actions.lastReleaseWindowChangeAt | date: 'short'
+                s.actions.lastReleaseWindowChangeAt | serverTime | date: 'short'
               }}</span>
               <span class="kpi-label">{{ 'PLATFORM.LAST_RELEASE_WINDOW_CHANGE' | translate }}</span>
             </div>
@@ -524,7 +524,10 @@
               </div>
               <div class="release-detail">
                 <span class="material-icons">schedule</span>
-                <span>{{ rel.startsAt | date: 'short' }} → {{ rel.endsAt | date: 'short' }}</span>
+                <span
+                  >{{ rel.startsAt | serverTime | date: 'short' }} →
+                  {{ rel.endsAt | serverTime | date: 'short' }}</span
+                >
               </div>
               @if (rel.ownerTeam) {
                 <div class="release-detail">

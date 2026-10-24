@@ -32,6 +32,8 @@ import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -105,7 +107,8 @@ function storeClaimFilter(filter: QueueClaimFilter): void {
 function eventTime(primary?: string | null, fallback?: string | null): number {
   const raw = primary ?? fallback;
   if (!raw) return 0;
-  const parsed = Date.parse(raw);
+  // #948 review: a zone-less UTC server time (daysWaiting counts from it).
+  const parsed = serverInstant(raw).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
@@ -125,6 +128,7 @@ export const UNRECOGNISED_ATTENTION = {
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

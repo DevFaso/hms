@@ -15,6 +15,7 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
 
 /** Roles permitted to update appointment status (confirm / complete / no-show). */
 const STATUS_UPDATE_ROLES: readonly string[] = [
@@ -188,7 +189,8 @@ export class AppointmentDetailComponent implements OnInit {
       return;
     }
 
-    const selectedDate = new Date(this.rescheduleDate);
+    // #948 review: the date input's value is that local day, compared with local midnight.
+    const selectedDate = serverDateOrInstant(this.rescheduleDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     if (selectedDate < today) {

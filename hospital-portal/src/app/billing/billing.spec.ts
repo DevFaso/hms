@@ -356,7 +356,7 @@ describe('BillingComponent', () => {
     expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
   });
 
-  it('sendEmail splits recipients and reloads after success', () => {
+  it('sendEmail splits recipients after success', () => {
     fixture.detectChanges();
     billingSpy.emailInvoice.and.returnValue(of({}) as never);
     billingSpy.searchInvoices.calls.reset();
@@ -367,8 +367,38 @@ describe('BillingComponent', () => {
     const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
     expect(payload.to).toEqual(['a@x.test', 'b@x.test']);
     expect(payload.attachPdf).toBeTrue();
-    // Email flips the invoice to SENT server-side → list is re-fetched.
-    expect(billingSpy.searchInvoices).toHaveBeenCalled();
+    // QA D758: emailing no longer changes the status, so nothing is re-fetched.
+    expect(billingSpy.searchInvoices).not.toHaveBeenCalled();
+  });
+
+  it('QA D758: a refused email shows the server reason', () => {
+    billingSpy.emailInvoice.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Brouillon: émettez-la d abord' },
+      })) as never,
+    );
+    component.emailInv.set(mockInvoice());
+    component.emailTo.set('a@x.test');
+    component.sendEmail();
+    expect(toastSpy.error).toHaveBeenCalledWith('Brouillon: émettez-la d abord');
+  });
+
+  it('QA D758: no email action on a DRAFT or CANCELLED invoice row', () => {
+    billingSpy.searchInvoices.and.returnValue(
+      of(
+        mockPage([
+          mockInvoice({ id: 'd', status: 'DRAFT' }),
+          mockInvoice({ id: 'c', status: 'CANCELLED' }),
+          mockInvoice({ id: 's', status: 'SENT' }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+    const mailButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.material-symbols-outlined'),
+    ).filter((el) => el.textContent?.trim() === 'email');
+    expect(mailButtons.length).toBe(1);
   });
 
   it('QA D529: a stay already invoiced asks before a supplementary invoice', () => {

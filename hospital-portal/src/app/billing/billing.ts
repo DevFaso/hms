@@ -23,13 +23,21 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
@@ -699,15 +707,13 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           this.emailSending.set(false);
           this.toast.success(this.translate.instant('BILLING.EMAIL_SENT'));
           this.closeEmail();
-          // Sending flips the invoice to SENT server-side.
-          this.loadInvoices(this.page());
         },
         error: (err: HttpErrorResponse) => {
           this.emailSending.set(false);
           this.toast.error(
             err.status === 503
               ? this.translate.instant('BILLING.EMAIL_UNAVAILABLE')
-              : this.translate.instant('BILLING.EMAIL_FAILED'),
+              : (err.error?.message ?? this.translate.instant('BILLING.EMAIL_FAILED')),
           );
         },
       });

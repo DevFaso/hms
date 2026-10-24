@@ -1384,7 +1384,23 @@
     "WRITE_PUT": "Modification : {{entity}}",
     "WRITE_PATCH": "Modification : {{entity}}",
     "WRITE_DELETE": "Suppression : {{entity}}",
-    "WRITE_ENTITY_UNKNOWN": "enregistrement"
+    "WRITE_ENTITY_UNKNOWN": "enregistrement",
+    "DESC": {
+      "PATIENT_RECORD_VIEWED": "Dossier patient consulté",
+      "USER_PROFILE_UPDATED": "Profil utilisateur mis à jour",
+      "USER_CREATED": "Nouveau compte utilisateur créé",
+      "USER_DELETED": "Compte utilisateur supprimé",
+      "USER_RESTORED": "Compte utilisateur restauré",
+      "DOCTOR_RECORD_VIEW": "Dossier consulté par un médecin",
+      "DOCTOR_TIMELINE_VIEW": "Chronologie consultée par un médecin",
+      "MFA_CHALLENGE_ISSUED": "Défi de double authentification envoyé",
+      "TOTP_ENROLLMENT_VERIFIED": "Inscription de l’application d’authentification vérifiée",
+      "FIRST_SIGN_IN_COMPLETED": "Configuration de la première connexion terminée",
+      "ROLE_ASSIGNMENT_REFUSED": "Attribution de rôle refusée : l’auteur ne peut pas attribuer ce rôle dans cet établissement",
+      "ROLE_ASSIGNED": "Rôle {{role}} attribué à {{name}}",
+      "ASSIGNMENT_CONFIRMED": "Affectation {{role}} confirmée pour {{name}}",
+      "LAB_DEFINITION_STEP": "Examen de laboratoire {{code}} : étape d’approbation {{step}}, nouveau statut {{status}}."
+    }
   },
   "BILLING": {
     "ALL_STATUSES": "Tous les statuts",
@@ -3762,7 +3778,8 @@
       "NOTE_FAILED": "Échec de l'enregistrement de la note de soins",
       "NO_ENCOUNTER": "Aucune consultation active trouvée pour ce patient.",
       "ENCOUNTER_LOOKUP_FAILED": "Échec de la recherche de la consultation.",
-      "HANDOFF_SITUATION_REQUIRED": "Décrivez la situation (le S de SBAR) avant la transmission."
+      "HANDOFF_SITUATION_REQUIRED": "Décrivez la situation (le S de SBAR) avant la transmission.",
+      "HANDOFF_RECIPIENT_REQUIRED": "Choisissez le collègue à qui le patient est transmis."
     },
     "MED_ACTION": {
       "GIVEN": "administré",
@@ -3783,7 +3800,10 @@
     "ACVPU_PAIN": "Répond à la douleur",
     "ACVPU_UNRESPONSIVE": "Aréactif",
     "OVERRIDE_EXPLAIN": "Le scan des cinq bons au chevet se fait dans l'eMAR. Pour enregistrer cette dose comme administrée depuis cet écran, indiquez le motif de la dérogation.",
-    "OPEN_EMAR": "Ouvrir l'eMAR pour scanner"
+    "OPEN_EMAR": "Ouvrir l'eMAR pour scanner",
+    "HANDOFF_RECIPIENT": "Transmis à",
+    "HANDOFF_RECIPIENT_PLACEHOLDER": "Choisir un collègue",
+    "HANDOFF_TO": "à"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -6071,6 +6091,14 @@
         "VITAMIN": "Vitamine",
         "VACCINE": "Vaccin",
         "OTHER": "Autre"
+      },
+      "LAB_DEFINITION_ACTION": {
+        "SUBMIT_FOR_QA": "Soumission à la revue qualité",
+        "COMPLETE_QA_REVIEW": "Revue qualité terminée",
+        "APPROVE": "Approbation",
+        "ACTIVATE": "Activation",
+        "REJECT": "Rejet",
+        "RETIRE": "Retrait"
       }
     },
     "DOCUMENTS": {
@@ -6321,6 +6349,7 @@
     "SIGN": "Signer",
     "COSIGN": "Contresigner",
     "REQUIRES_COSIGN": "Contreseing d'un second prescripteur requis",
+    "TAKE_HOME": "Traitement de sortie (poursuivi après la sortie)",
     "SIGNED_AT": "Signée",
     "COSIGN_STATE": "Contreseing",
     "COSIGN_PENDING": "En attente — un second prescripteur doit contresigner",
@@ -7634,7 +7663,8 @@
     "USER": "Utilisateur",
     "USERNAME": "Nom d'utilisateur",
     "USERS_PLURAL": "Utilisateurs",
-    "USER_SINGULAR": "Utilisateur"
+    "USER_SINGULAR": "Utilisateur",
+    "ROLES_EDIT_HINT": "Les rôles s’attribuent et se retirent par établissement depuis la page des affectations de rôles."
   },
   "TRIAGE": {
     "ACUITY": "Niveau d'acuité",
@@ -7871,6 +7901,8 @@
     "error": "Échec de la sortie. Veuillez réessayer."
   },
   "DISCHARGE": {
+    "DISCHARGE_DIAGNOSIS": "Diagnostic de sortie",
+    "DIAGNOSIS_REQUIRED": "Le diagnostic de sortie est obligatoire",
     "ACTIVITY_RESTRICTIONS": "Restrictions d'activité",
     "ADDITIONAL_NOTES": "Notes complémentaires",
     "ADD_FOLLOW_UP": "Ajouter un suivi",
@@ -8506,7 +8538,8 @@
     "UNIT_PRICE": "Prix unitaire (F CFA)",
     "PRICE_SAVED": "Prix enregistré.",
     "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
-    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré."
+    "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré.",
+    "UNIT_COST_NEGATIVE": "Le coût unitaire ne peut pas être négatif."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

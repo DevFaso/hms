@@ -160,9 +160,12 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
+        // QA D785: the viewer is always the caller, whatever the list filter.
+        UUID viewerId = authUtils.resolveUserId(auth).orElse(null);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
-        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit, status));
+        return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, viewerId, scopedHospital,
+            effectiveLimit, status));
     }
 
     @PostMapping("/handoffs")
@@ -179,6 +182,20 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         NurseHandoffSummaryDTO created = nurseTaskService.createHandoff(nurseId, scopedHospital, request);
         return ResponseEntity.status(201).body(created);
+    }
+
+    @GetMapping("/handoffs/recipients")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Colleagues an SBAR handoff can be addressed to (QA D776)")
+    public ResponseEntity<List<com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO>> getHandoffRecipients(
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getHandoffRecipients(nurseId, scopedHospital));
     }
 
     @PutMapping("/handoffs/{handoffId}/complete")

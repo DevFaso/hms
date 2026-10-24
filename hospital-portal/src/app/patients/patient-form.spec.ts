@@ -164,6 +164,18 @@ describe('PatientFormComponent', () => {
     expect(routerSpy.navigate).not.toHaveBeenCalled();
   });
 
+  it('QA D756: shows the server message on the card when the link fails with 404', () => {
+    registrationSpy.create.and.returnValue(
+      throwError(() => ({ status: 404, error: { message: 'Patient introuvable' } })),
+    );
+    component.form.hospitalId = 'h1';
+    component.linkExistingPatient(mockMatch());
+    expect(component.linkError).toBe('Patient introuvable');
+    expect(toastSpy.error).toHaveBeenCalledWith('Patient introuvable');
+    expect(component.linking).toBeFalse();
+    expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
   it('blocks submission while a match is neither linked nor dismissed', () => {
     Object.assign(component.form, {
       firstName: 'Jane',

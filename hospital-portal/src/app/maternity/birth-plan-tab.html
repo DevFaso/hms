@@ -67,7 +67,7 @@
             <td>
               {{
                 p.introduction?.expectedDueDate
-                  ? (p.introduction.expectedDueDate | date: 'mediumDate')
+                  ? (p.introduction.expectedDueDate | serverTime | date: 'mediumDate')
                   : '—'
               }}
             </td>
@@ -78,10 +78,13 @@
                 <span class="status-badge status-completed">
                   {{ 'BIRTH_PLAN.REVIEWED' | translate }}
                 </span>
-              } @else {
+              } @else if (p.providerReviewRequired !== false) {
+                <!-- QA D770: "pending review" only where the worklist lists it -->
                 <span class="status-badge status-submitted">
                   {{ 'BIRTH_PLAN.PENDING_REVIEW' | translate }}
                 </span>
+              } @else {
+                —
               }
             </td>
             <td class="actions-cell">
@@ -176,7 +179,7 @@
             {{ 'MATERNITY.EDD' | translate }}:
             {{
               p.introduction?.expectedDueDate
-                ? (p.introduction.expectedDueDate | date: 'mediumDate')
+                ? (p.introduction.expectedDueDate | serverTime | date: 'mediumDate')
                 : '—'
             }}
             · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·
@@ -248,7 +251,11 @@
             <h3>{{ 'BIRTH_PLAN.PROVIDER_REVIEW' | translate }}</h3>
             <p>
               {{ p.providerSignature }} —
-              {{ p.providerSignatureDate ? (p.providerSignatureDate | date: 'medium') : '' }}
+              {{
+                p.providerSignatureDate
+                  ? (p.providerSignatureDate | serverTime | date: 'medium')
+                  : ''
+              }}
             </p>
             @if (p.providerComments) {
               <p class="muted">{{ p.providerComments }}</p>

@@ -25,6 +25,7 @@ import { WalkInDialogComponent } from '../walkin-dialog/walkin-dialog.component'
 import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.component';
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
+import { localDateString } from '../../shared/date-utils';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
 type StatusFilter =
@@ -38,7 +39,7 @@ type StatusFilter =
   | 'WALK_IN';
 
 function todayIso(): string {
-  return new Date().toISOString().split('T')[0];
+  return localDateString();
 }
 
 @Component({

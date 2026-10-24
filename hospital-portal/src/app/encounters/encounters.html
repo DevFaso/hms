@@ -159,7 +159,11 @@
                   {{ enc.encounterType ? (enc.encounterType | enumLabel: 'encounterType') : '—' }}
                 </span>
               </td>
-              <td>{{ enc.encounterDate ? (enc.encounterDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                {{
+                  enc.encounterDate ? (enc.encounterDate | serverTime | date: 'mediumDate') : '—'
+                }}
+              </td>
               <td>
                 <span class="status-badge {{ getStatusClass(enc.status) }}">{{
                   enc.status | enumLabel: 'encounterStatus'
@@ -247,7 +251,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
               ><span class="field-value">{{
-                enc.encounterDate ? (enc.encounterDate | date: 'medium') : '—'
+                enc.encounterDate ? (enc.encounterDate | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -323,7 +327,7 @@
                       @if (n.authorName) {
                         {{ n.authorName }} —
                       }
-                      {{ n.changedAt | date: 'short' }}
+                      {{ n.changedAt | serverTime | date: 'short' }}
                     </span>
                     @for (section of n.sections; track section.labelKey) {
                       <p class="notes-content">
@@ -370,7 +374,7 @@
                 @if (note.cosignedAt) {
                   <p class="note-meta" data-testid="note-cosigned-line">
                     {{ 'ENCOUNTERS.NOTE_COSIGNED_AT' | translate }}
-                    {{ note.cosignedAt | date: 'short' }}
+                    {{ note.cosignedAt | serverTime | date: 'short' }}
                     @if (note.cosignedByName) {
                       — {{ note.cosignedByName }}
                     }
@@ -502,7 +506,7 @@
       <div class="modal-body">
         <div class="avs-meta">
           <p>
-            {{ summary.visitDate | date: 'medium' }} · {{ summary.providerName }} ·
+            {{ summary.visitDate | serverTime | date: 'medium' }} · {{ summary.providerName }} ·
             {{ summary.departmentName }} · {{ summary.hospitalName }}
           </p>
         </div>

@@ -173,10 +173,10 @@
               </td>
               <td>{{ inv.hospitalName || '—' }}</td>
               <td class="date-cell">
-                {{ inv.invoiceDate ? (inv.invoiceDate | date: 'mediumDate') : '—' }}
+                {{ inv.invoiceDate ? (inv.invoiceDate | serverTime | date: 'mediumDate') : '—' }}
               </td>
               <td class="date-cell">
-                {{ inv.dueDate ? (inv.dueDate | date: 'mediumDate') : '—' }}
+                {{ inv.dueDate ? (inv.dueDate | serverTime | date: 'mediumDate') : '—' }}
               </td>
               <td class="amount">{{ formatCurrency(inv.totalAmount) }}</td>
               <td class="amount paid-amount">{{ formatCurrency(inv.amountPaid) }}</td>
@@ -218,7 +218,7 @@
                       <span class="material-symbols-outlined">payments</span>
                     </button>
                   }
-                  @if (canEmail) {
+                  @if (canEmail && inv.status !== 'DRAFT' && inv.status !== 'CANCELLED') {
                     <button
                       class="action-link"
                       [title]="'BILLING.EMAIL_INVOICE' | translate"
@@ -318,11 +318,13 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'BILLING.INVOICE_DATE' | translate }}</span
-              ><span class="field-value">{{ inv.invoiceDate | date: 'longDate' }}</span>
+              ><span class="field-value">{{
+                inv.invoiceDate | serverTime | date: 'longDate'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'BILLING.DUE_DATE' | translate }}</span
-              ><span class="field-value">{{ inv.dueDate | date: 'longDate' }}</span>
+              ><span class="field-value">{{ inv.dueDate | serverTime | date: 'longDate' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
@@ -493,7 +495,11 @@
                 <tbody>
                   @for (p of payments(); track p.id) {
                     <tr>
-                      <td>{{ p.paymentDate ? (p.paymentDate | date: 'mediumDate') : '—' }}</td>
+                      <td>
+                        {{
+                          p.paymentDate ? (p.paymentDate | serverTime | date: 'mediumDate') : '—'
+                        }}
+                      </td>
                       <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>

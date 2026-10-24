@@ -250,7 +250,7 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
 
         assertNull(response.getDeliveryRecordId());
-        verify(deliveryRecordRepository, org.mockito.Mockito.never()).findById(any());
+        verify(deliveryRecordRepository, never()).findById(any());
     }
 
     @Test
@@ -267,7 +267,7 @@ class NewbornAssessmentServiceImplTest {
 
         assertThrows(BusinessException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(assessmentRepository, never()).save(any());
     }
 
     @Test
@@ -284,7 +284,7 @@ class NewbornAssessmentServiceImplTest {
 
         assertThrows(ResourceNotFoundException.class,
             () -> service.recordAssessment(patientId, request, recorderId));
-        verify(assessmentRepository, org.mockito.Mockito.never()).save(any());
+        verify(assessmentRepository, never()).save(any());
     }
 
     @Test
@@ -378,6 +378,42 @@ class NewbornAssessmentServiceImplTest {
         NewbornAssessmentResponseDTO response = service.recordAssessment(patientId, request, recorderId);
 
         assertEquals(delivery.getId(), response.getDeliveryRecordId());
+    }
+
+    /** QA D762, the exact replay: an assessment at birth -3 h on the mother's chart returned 201. */
+    @Test
+    void recordAssessmentBeforeTheBirthIsRefused() {
+        patient.setDateOfBirth(LocalDate.of(1995, 5, 1));
+        patient.setGender("F");
+        com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordAt(hospitalId);
+        delivery.setPatient(patient);
+        java.time.LocalDateTime birth = java.time.LocalDateTime.now().minusHours(5);
+        delivery.setBirthDateTime(birth);
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(delivery));
+        NewbornAssessmentRequestDTO early = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).assessmentTime(birth.minusHours(3)).apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, early, recorderId));
+        assertEquals("maternity.newborn.assessmentTime.beforeBirth", ex.getMessageKey());
+        verify(assessmentRepository, never()).save(any());
+
+        NewbornAssessmentRequestDTO after = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).assessmentTime(birth.plusHours(1)).apgarOneMinute(8).apgarFiveMinute(9).build();
+        assertNotNull(service.recordAssessment(patientId, after, recorderId));
+    }
+
+    /** QA D762 on the newborn's own chart: before its date of birth is before the birth. */
+    @Test
+    void recordAssessmentBeforeTheNeonateDateOfBirthIsRefused() {
+        NewbornAssessmentRequestDTO early = NewbornAssessmentRequestDTO.builder()
+            .hospitalId(hospitalId).assessmentTime(LocalDate.now().atStartOfDay().minusHours(3))
+            .apgarOneMinute(8).apgarFiveMinute(9).build();
+
+        BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+            () -> service.recordAssessment(patientId, early, recorderId));
+        assertEquals("maternity.newborn.assessmentTime.beforeBirth", ex.getMessageKey());
     }
 
     /** QA D517: a delivery older than the neonatal period has no newborn left to assess. */

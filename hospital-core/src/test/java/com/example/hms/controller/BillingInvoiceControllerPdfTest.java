@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -53,6 +54,34 @@ class BillingInvoiceControllerPdfTest {
 
     @MockitoBean
     private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+
+    /** QA D755: another hospital's (or an unknown) invoice is a 404 here too; the catch-all made it a 500. */
+    @Test
+    void emailOfAnInvoiceOutOfScopeIs404Not500() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.ResourceNotFoundException("billinginvoice.notfound", invoiceId))
+            .when(invoiceEmailService).emailInvoice(eq(invoiceId), org.mockito.ArgumentMatchers.any());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/billing-invoices/{id}/email", invoiceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":[\"q@example.test\"],\"attachPdf\":true}"))
+            .andExpect(status().isNotFound());
+    }
+
+    /** QA D758: a refused draft is a 4xx with its reason, not a 500. */
+    @Test
+    void emailOfADraftIsABadRequest() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.BusinessException("billing.invoice.emailDraft"))
+            .when(invoiceEmailService).emailInvoice(eq(invoiceId), org.mockito.ArgumentMatchers.any());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .post("/billing-invoices/{id}/email", invoiceId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"to\":[\"q@example.test\"],\"attachPdf\":true}"))
+            .andExpect(status().is4xxClientError());
+    }
 
     @Test
     void downloadInvoicePdfRespondsWithAttachment() throws Exception {

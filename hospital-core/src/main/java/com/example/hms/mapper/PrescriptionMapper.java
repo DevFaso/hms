@@ -114,6 +114,7 @@ public class PrescriptionMapper {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
+            .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
             // Tier 2 item 33. requiresPharmacistVerification mirrors
@@ -213,6 +214,8 @@ public class PrescriptionMapper {
         if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
             e.setRequiresCosign(true);
         }
+        // QA D757: a take-home order is marked as such by its prescriber.
+        e.setTakeHome(Boolean.TRUE.equals(dto.getTakeHome()));
 
         return e;
     }
@@ -264,6 +267,9 @@ public class PrescriptionMapper {
         }
         if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
             target.setRequiresCosign(true);
+        }
+        if (dto.getTakeHome() != null) {
+            target.setTakeHome(dto.getTakeHome());
         }
     }
 

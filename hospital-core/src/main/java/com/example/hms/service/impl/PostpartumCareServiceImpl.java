@@ -115,6 +115,12 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         PostpartumObservation superseded = resolveSupersededObservation(patientId, hospital.getId(), request.getSupersedesObservationId());
 
         PostpartumObservation observation = buildObservation(patient, hospital, registration, carePlan, staff, documentedBy, superseded, request);
+        // QA D762: a check at birth -3 h was accepted and counted toward the
+        // immediate-recovery checks. A postpartum check follows the birth.
+        if (carePlan.getDeliveryOccurredAt() != null && observation.getObservationTime() != null
+            && observation.getObservationTime().isBefore(carePlan.getDeliveryOccurredAt())) {
+            throw new BusinessException("maternity.postpartum.observationTime.beforeBirth");
+        }
         AlertEvaluation evaluation = evaluateObservation(observation);
 
         ScheduleSnapshot snapshot = applyObservationToPlan(carePlan, observation, request, evaluation.escalateMonitoring());

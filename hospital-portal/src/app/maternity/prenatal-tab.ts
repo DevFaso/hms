@@ -17,11 +17,19 @@ import { refusalReason } from '../shared/refusal-reason';
 import { localDateString } from '../shared/date-utils';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-prenatal-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './prenatal-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

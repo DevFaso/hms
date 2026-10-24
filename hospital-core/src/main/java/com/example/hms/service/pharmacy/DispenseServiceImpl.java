@@ -698,7 +698,8 @@ public class DispenseServiceImpl implements DispenseService {
      * the prescriber states one; any other is capped at its regimen
      * (dose x frequency x duration), or refused when that is unreadable.
      */
-    private void requireWithinPrescribedQuantity(Prescription prescription, BigDecimal requested) {
+    private void requireWithinPrescribedQuantity(Prescription prescription, DispenseRequestDTO dto) {
+        BigDecimal requested = dto.getQuantityDispensed();
         if (prescription.getQuantity() == null) {
             if (controlledResolver.isControlled(prescription)) {
                 throw new BusinessException("pharmacy.dispense.quantityUnknownControlled");
@@ -713,13 +714,73 @@ public class DispenseServiceImpl implements DispenseService {
             }
         }
         BigDecimal dispensedToDate = dispenseRepository.sumQuantityCommittedForPrescription(prescription.getId());
-        requireAtMost(requested, FillAccounting.remaining(prescription, dispensedToDate));
+        BigDecimal remaining = FillAccounting.remaining(prescription, dispensedToDate);
+        if (wholeUnitCeilingAllows(dto, prescription, requested, remaining)) {
+            return;
+        }
+        requireAtMost(requested, remaining, statedCeiling(dto, prescription, remaining));
     }
 
-    private static void requireAtMost(BigDecimal requested, BigDecimal remaining) {
+    /**
+     * The most the refusal tells the pharmacist they may still give. A
+     * counted fill is whole units, so "at most 7.5" would point at a quantity
+     * the whole-unit rule refuses and hide the one that is accepted. For a
+     * counted item that is not controlled, a fractional remainder is met by
+     * the next whole unit ({@link #wholeUnitCeilingAllows}): the message names
+     * 8 (or 10 after a legacy 2.5). A controlled substance never goes above
+     * the prescription, so its message names the whole units below: 7 (or 9).
+     * A measured fill (ml) keeps the exact figure.
+     */
+    private BigDecimal statedCeiling(DispenseRequestDTO dto, Prescription prescription, BigDecimal remaining) {
+        if (remaining == null || remaining.stripTrailingZeros().scale() <= 0
+                || !isCountedFill(dto, prescription)) {
+            return remaining;
+        }
+        java.math.RoundingMode toWhole = controlledResolver.isControlled(prescription)
+                ? java.math.RoundingMode.FLOOR
+                : java.math.RoundingMode.CEILING;
+        return remaining.setScale(0, toWhole);
+    }
+
+    /**
+     * QA D779: a counted item is filled in whole units, so a fractional
+     * remainder (7.5 tablets for a half-tablet regimen, or 9.5 left after a
+     * legacy 2.5 fill) is met by the next whole unit: 8, or 10. Without this
+     * the whole-unit rule would leave the half tablet owed for good. Only a
+     * whole request up to that ceiling, and only for a counted item; a
+     * measured item (ml) and a controlled substance keep the exact ceiling.
+     */
+    private boolean wholeUnitCeilingAllows(DispenseRequestDTO dto, Prescription prescription,
+                                           BigDecimal requested, BigDecimal remaining) {
+        if (requested == null || remaining == null || requested.compareTo(remaining) <= 0
+                || requested.stripTrailingZeros().scale() > 0
+                || remaining.stripTrailingZeros().scale() <= 0
+                || requested.compareTo(remaining.setScale(0, java.math.RoundingMode.CEILING)) > 0) {
+            return false;
+        }
+        // A controlled substance never leaves above what was prescribed,
+        // not even half a tablet: the remainder goes back to the prescriber.
+        return !controlledResolver.isControlled(prescription) && isCountedFill(dto, prescription);
+    }
+
+    /** Whether the fill's item is counted in whole units (the lot's item, else the unit named). */
+    private boolean isCountedFill(DispenseRequestDTO dto, Prescription prescription) {
+        if (dto.getStockLotId() != null) {
+            // Ownership is checked when the lot is loaded for the fill; a
+            // missing lot keeps the exact ceiling and fails there.
+            return stockLotRepository.findById(dto.getStockLotId())
+                    .map(StockLot::getInventoryItem)
+                    .map(item -> !WholeUnitQuantity.isMeasured(item.getUnit()))
+                    .orElse(false);
+        }
+        String unit = unitOfFillWithoutLot(dto, prescription);
+        return unit != null && !WholeUnitQuantity.isMeasured(unit);
+    }
+
+    private static void requireAtMost(BigDecimal requested, BigDecimal remaining, BigDecimal stated) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
-                    remaining.stripTrailingZeros().toPlainString());
+                    stated.stripTrailingZeros().toPlainString());
         }
     }
 
@@ -741,7 +802,7 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
         // Checked under the prescription lock taken just above.
         requireNoOpenPreparation(prescription, openPreparationKey);
-        requireWithinPrescribedQuantity(prescription, dto.getQuantityDispensed());
+        requireWithinPrescribedQuantity(prescription, dto);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
@@ -772,6 +833,7 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        requireWholeUnitsOfFill(dto, stockLot, prescription);
         MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A
         // fill with no lot used to be accepted as DISPENSED with no stock
@@ -785,6 +847,44 @@ public class DispenseServiceImpl implements DispenseService {
         applyVerificationOutcome(dto, verification);
 
         return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification);
+    }
+
+    /**
+     * QA D779 (re-test): the fill is a stock movement like a receipt or a
+     * return, and it took 2.5 then 9.5 tablets because the whole-unit rule
+     * lived only on those paths. One rule ({@link WholeUnitQuantity}) for
+     * the one-step fill, the prepared fill and every partial fill, checked
+     * before anything is written. The unit is the lot's item when stock is
+     * kept in lots; otherwise the prescription's ({@link #unitOfFillWithoutLot}).
+     */
+    private static void requireWholeUnitsOfFill(DispenseRequestDTO dto, StockLot stockLot,
+                                                Prescription prescription) {
+        if (stockLot != null) {
+            WholeUnitQuantity.require(stockLot.getInventoryItem(), dto.getQuantityRequested());
+            WholeUnitQuantity.require(stockLot.getInventoryItem(), dto.getQuantityDispensed());
+            return;
+        }
+        String unit = unitOfFillWithoutLot(dto, prescription);
+        WholeUnitQuantity.requireForUnit(unit, dto.getQuantityRequested(), WholeUnitQuantity.DEFAULT_KEY);
+        WholeUnitQuantity.requireForUnit(unit, dto.getQuantityDispensed(), WholeUnitQuantity.DEFAULT_KEY);
+    }
+
+    /**
+     * The unit of a fill with no lot: the prescription's, which is the record
+     * the quantity is counted against. The request's unit is a claim, used
+     * only when the prescription names none; otherwise "ml" on a tablet
+     * order would let 2.5 tablets through, and "comprimé" on a 7.5 ml order
+     * would earn the next-whole-unit allowance.
+     */
+    private static String unitOfFillWithoutLot(DispenseRequestDTO dto, Prescription prescription) {
+        return firstNonBlank(prescription.getQuantityUnit(), dto.getUnit());
+    }
+
+    private static String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) {
+            return first;
+        }
+        return second != null && !second.isBlank() ? second : null;
     }
 
     /** What {@link #validateFill} established, for the half that writes. */
@@ -822,7 +922,13 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
-            throw new BusinessException("pharmacy.dispense.notDispensable", String.valueOf(prescription.getStatus()));
+            throw new BusinessException("pharmacy.dispense.notDispensable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
+        }
+        // QA D757: a ward order of a stay that has ended is not handed over,
+        // even when it is still SIGNED (written before discharge closed its
+        // orders, or a row older than that rule). A take-home order is.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
         }
 
         // The patient must match the prescription's patient — do not trust DTO in isolation
@@ -1401,7 +1507,7 @@ public class DispenseServiceImpl implements DispenseService {
             }
             case UNCLAIMED -> prescriptionRepository.findWorkQueueUnclaimed(hospitalId, statuses,
                     queueClaimService.activeAfter(), pageable);
-            case ALL -> prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, statuses, pageable);
+            case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
         };
     }
 

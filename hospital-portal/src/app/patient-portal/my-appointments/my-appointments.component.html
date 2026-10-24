@@ -202,8 +202,8 @@
             [class.expanded]="expandedId() === appt.id"
           >
             <div class="pac-date">
-              <span class="pac-month">{{ appt.date | date: 'MMM' }}</span>
-              <span class="pac-day">{{ appt.date | date: 'd' }}</span>
+              <span class="pac-month">{{ appt.date | serverTime | date: 'MMM' }}</span>
+              <span class="pac-day">{{ appt.date | serverTime | date: 'd' }}</span>
             </div>
             <div class="pac-body">
               <span class="pac-provider">{{
@@ -227,7 +227,7 @@
               <div class="appt-detail-grid">
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}</span>
-                  <span class="adv">{{ appt.date | date: 'fullDate' }}</span>
+                  <span class="adv">{{ appt.date | serverTime | date: 'fullDate' }}</span>
                 </div>
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
@@ -326,8 +326,8 @@
             [class.expanded]="expandedId() === appt.id"
           >
             <div class="pac-date">
-              <span class="pac-month">{{ appt.date | date: 'MMM' }}</span>
-              <span class="pac-day">{{ appt.date | date: 'd' }}</span>
+              <span class="pac-month">{{ appt.date | serverTime | date: 'MMM' }}</span>
+              <span class="pac-day">{{ appt.date | serverTime | date: 'd' }}</span>
             </div>
             <div class="pac-body">
               <span class="pac-provider">{{
@@ -336,7 +336,7 @@
               <span class="pac-detail">{{
                 appt.reason || appt.department || ('PORTAL.APPOINTMENTS.GENERAL_VISIT' | translate)
               }}</span>
-              <span class="pac-time">{{ appt.date | date: 'mediumDate' }}</span>
+              <span class="pac-time">{{ appt.date | serverTime | date: 'mediumDate' }}</span>
             </div>
             <span class="pac-status" [attr.data-status]="appt.status">{{
               appt.status | enumLabel: 'appointmentStatus'
@@ -348,7 +348,7 @@
               <div class="appt-detail-grid">
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}</span>
-                  <span class="adv">{{ appt.date | date: 'fullDate' }}</span>
+                  <span class="adv">{{ appt.date | serverTime | date: 'fullDate' }}</span>
                 </div>
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
@@ -435,7 +435,7 @@
             {{ 'PORTAL.APPOINTMENTS.CANCEL.CONFIRM_TEXT' | translate }}
           </p>
           <p class="appt-modal-target">
-            <strong>{{ target.date | date: 'fullDate' }}</strong>
+            <strong>{{ target.date | serverTime | date: 'fullDate' }}</strong>
             {{ target.startTime }}
             {{ target.providerName ? '· ' + target.providerName : '' }}
           </p>
@@ -512,7 +512,7 @@
           }
 
           <p class="appt-modal-target">
-            <strong>{{ target.date | date: 'fullDate' }}</strong>
+            <strong>{{ target.date | serverTime | date: 'fullDate' }}</strong>
             {{ target.startTime }}
             {{ target.providerName ? '· ' + target.providerName : '' }}
           </p>

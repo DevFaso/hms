@@ -2383,7 +2383,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     // Hospital-admin summary
     if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
       pending++;
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateString();
       this.dashboardService.getHospitalAdminSummary(today).subscribe({
         next: (s) => {
           this.hospitalAdminSummary.set(s);
@@ -2572,7 +2572,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.canAccessRoute('/appointments')
     ) {
       pending++;
-      const today = new Date().toISOString().split('T')[0];
+      const today = localDateString();
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
         next: (appts) => {
           const sorted = [...appts].sort((a, b) => a.startTime.localeCompare(b.startTime));

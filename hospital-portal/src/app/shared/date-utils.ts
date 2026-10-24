@@ -51,6 +51,51 @@ export function fromServerDateTime(serverValue: string | null | undefined): Date
   return Number.isNaN(instant.getTime()) ? null : instant;
 }
 
+/** A zone-less date AND time, as the API sends its UTC `LocalDateTime`s. */
+const NAIVE_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/**
+ * QA D777/D784: `new Date(serverValue)` for code, as `serverTime` is for
+ * templates. `new Date('2026-10-24T15:33:17')` reads the zone-less UTC server
+ * time as the browser's local time, so a label or an "expired?" check was off
+ * by the reader's UTC offset. Only a zone-less date AND time is marked UTC
+ * (the `serverTime` rule): a value with a zone or a bare date is read as is,
+ * and an unreadable one gives an Invalid Date, as `new Date` would.
+ */
+export function serverInstant(serverValue: string): Date {
+  return new Date(NAIVE_DATE_TIME.test(serverValue) ? `${serverValue}Z` : serverValue);
+}
+
+/** A bare calendar date, as the API sends a `LocalDate` and `<input type="date">` gives one. */
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * #948 review: `new Date('2026-10-24')` is UTC midnight, which is still
+ * 23 October west of UTC, so a calendar date read that way showed the day
+ * before (staff dates, trend labels) or failed a "not in the past" check made
+ * against local midnight (appointment reschedule). A bare date is read here as
+ * local midnight of that day; anything else goes through `serverInstant`.
+ */
+export function serverDateOrInstant(serverValue: string): Date {
+  return BARE_DATE.test(serverValue)
+    ? new Date(`${serverValue}T00:00:00`)
+    : serverInstant(serverValue);
+}
+
+/**
+ * #948 review: the reader's calendar date of a server value, as yyyy-MM-dd
+ * for an `<input type="date">` or a label. Slicing the string
+ * (`encounterDate.substring(0, 10)`) gave the UTC date, so a 21:00 visit in
+ * New York was listed as the next day. '' when empty or unreadable.
+ */
+export function serverLocalDate(serverValue: string | null | undefined): string {
+  if (!serverValue) {
+    return '';
+  }
+  const instant = serverDateOrInstant(serverValue);
+  return Number.isNaN(instant.getTime()) ? '' : localDateString(instant);
+}
+
 /**
  * #941 review: clinical-time forms (labor, delivery, postpartum, maternal
  * history) are checked against the server's UTC clock, so their

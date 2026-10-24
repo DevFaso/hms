@@ -12,6 +12,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { DashboardService, KpiDashboard } from '../../services/dashboard.service';
 import { KpiSparklineComponent } from './kpi-sparkline.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { localDateString } from '../../shared/date-utils';
 
 interface KpiCard {
   /** Translation key prefix; the template appends ".label" and ".help". */
@@ -125,7 +126,7 @@ export class KpiCardsComponent implements OnInit {
   }
 
   private toIsoDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
+    return localDateString(d);
   }
 
   private formatMinutes(value: number | undefined): string {

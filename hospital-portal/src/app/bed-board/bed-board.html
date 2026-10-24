@@ -221,7 +221,7 @@
                           @if (o.expectedDischargeAt) {
                             <div>
                               <dt>{{ 'BED_BOARD.EDD' | translate }}</dt>
-                              <dd>{{ o.expectedDischargeAt | date: 'shortDate' }}</dd>
+                              <dd>{{ o.expectedDischargeAt | serverTime | date: 'shortDate' }}</dd>
                             </div>
                           }
                           @if (o.attendingPhysicianName) {

@@ -39,6 +39,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -151,7 +153,7 @@ class PharmacySaleServiceImplTest {
         service.createSale(dto);
 
         ArgumentCaptor<PharmacySale> captor = ArgumentCaptor.forClass(PharmacySale.class);
-        org.mockito.Mockito.verify(saleRepository).save(captor.capture());
+        verify(saleRepository).save(captor.capture());
         PharmacySale saved = captor.getValue();
 
         assertThat(saved.getLines()).hasSize(2);
@@ -179,7 +181,7 @@ class PharmacySaleServiceImplTest {
 
         service.createSale(dto);
 
-        org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findById(any());
+        verify(patientRepository, never()).findById(any());
     }
 
     @Test
@@ -209,6 +211,31 @@ class PharmacySaleServiceImplTest {
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("does not belong to the selling pharmacy");
+    }
+
+    @Test
+    @DisplayName("QA D779: a counter sale of 2.5 tablets from a counted lot is refused, nothing is saved")
+    void rejectsAFractionOfACountedLot() {
+        UUID stockLotId = UUID.randomUUID();
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).unit("comprimé").build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        lot.setId(stockLotId);
+        SaleLineRequestDTO l = line(new BigDecimal("2.5"), BigDecimal.TEN);
+        l.setStockLotId(stockLotId);
+        PharmacySaleRequestDTO dto = request(List.of(l));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
+        verify(saleRepository, never()).save(any());
     }
 
     @Test

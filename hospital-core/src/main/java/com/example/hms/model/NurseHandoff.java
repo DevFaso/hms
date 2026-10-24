@@ -98,4 +98,16 @@ public class NurseHandoff extends BaseEntity {
 
     @Column(name = "completed_at")
     private LocalDateTime completedAt;
+
+    /** QA D776 (V232): the author; null on rows written before V232. */
+    @Column(name = "created_by_user_id")
+    private java.util.UUID createdByUserId;
+
+    /** QA D776 (V232): the colleague the handoff is addressed to, who alone completes it. */
+    @Column(name = "recipient_user_id")
+    private java.util.UUID recipientUserId;
+
+    @Size(max = 200)
+    @Column(name = "recipient_name", length = 200)
+    private String recipientName;
 }

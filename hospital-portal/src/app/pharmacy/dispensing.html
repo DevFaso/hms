@@ -132,7 +132,7 @@
               @for (lot of dispensableLots(); track lot.id) {
                 <option [value]="lot.id">
                   {{ lot.lotNumber }} · {{ 'PHARMACY.EXP_SHORT' | translate }}
-                  {{ lot.expiryDate | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
+                  {{ lot.expiryDate | serverTime | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
                 </option>
               }
             </select>
@@ -400,7 +400,8 @@
             | translate
               : {
                   name: claimShownFor(action.rx)?.claimedByName ?? '',
-                  time: (claimShownFor(action.rx)?.claimedAt | date: 'shortTime') ?? '',
+                  time:
+                    (claimShownFor(action.rx)?.claimedAt | serverTime | date: 'shortTime') ?? '',
                 }
         }}
       </p>
@@ -510,7 +511,8 @@
                       >{{ 'PHARMACY.READY_FOR_COLLECTION' | translate }}</span
                     >
                     <span class="refill-note">{{
-                      'PHARMACY.READY_SINCE' | translate: { date: (ready.readyAt | date: 'short') }
+                      'PHARMACY.READY_SINCE'
+                        | translate: { date: (ready.readyAt | serverTime | date: 'short') }
                     }}</span>
                   }
                   <!-- G13: who is preparing this order (advisory) -->
@@ -532,7 +534,7 @@
                       ·
                       {{
                         'PHARMACY.QUEUE_CLAIM.SINCE'
-                          | translate: { time: (claim.claimedAt | date: 'shortTime') }
+                          | translate: { time: (claim.claimedAt | serverTime | date: 'shortTime') }
                       }}
                     </span>
                   }
@@ -802,7 +804,7 @@
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
-                <td>{{ d.dispensedAt ? (d.dispensedAt | date: 'short') : '—' }}</td>
+                <td>{{ d.dispensedAt ? (d.dispensedAt | serverTime | date: 'short') : '—' }}</td>
                 <td>
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->

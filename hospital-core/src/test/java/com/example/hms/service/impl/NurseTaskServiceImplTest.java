@@ -160,6 +160,8 @@ class NurseTaskServiceImplTest {
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
                 null, null, null, java.time.Clock.systemUTC());
     private final ObjectMapper objectMapper = new ObjectMapper();
+    @Mock
+    private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @BeforeEach
     void setUp() {
@@ -170,7 +172,8 @@ class NurseTaskServiceImplTest {
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
-            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository)));
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
+            assignmentRepository));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -355,7 +358,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(first, second));
 
         // limit 0 clamps to 1 — nurseUserId null means no assignee scope
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0, null);
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, null, hospitalId, 0, null);
 
         assertThat(handoffs).hasSize(1);
         NurseHandoffSummaryDTO dto = handoffs.get(0);
@@ -365,6 +368,65 @@ class NurseTaskServiceImplTest {
         assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
         assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
         assertThat(dto.getStatus()).isEqualTo("PENDING");
+    }
+
+    /** QA D776: the recipient sees the handoff addressed to her even when the patient is not on her list. */
+    @Test
+    void getHandoffSummaries_includesAHandoffAddressedToMe_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        com.example.hms.payload.dto.PatientResponseDTO mine = new com.example.hms.payload.dto.PatientResponseDTO();
+        mine.setId(UUID.randomUUID());
+        when(nurseDashboardService.getPatientsForNurse(me, hospitalId, null)).thenReturn(List.of(mine));
+
+        Patient other = mock(Patient.class);
+        when(other.getId()).thenReturn(UUID.randomUUID());
+        NurseHandoff toMe = NurseHandoff.builder().patient(other).direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(me).build();
+        NurseHandoff notMine = NurseHandoff.builder().patient(other).direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(toMe, notMine));
+
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(me, me, hospitalId, 20, null);
+
+        assertThat(handoffs).singleElement().satisfies(dto -> {
+            assertThat(dto.getRecipientUserId()).isEqualTo(me);
+            assertThat(dto.getCompletableByMe()).isTrue();
+        });
+    }
+
+    /**
+     * QA D785 re-test: NURSE_A, the recipient of PENDING handoff e32e65ef,
+     * got completableByMe=true with assignee=me but false from
+     * GET /api/nurse/handoffs?hospitalId=A (no assignee): the flag was
+     * computed for the list filter, which is null without assignee=me.
+     */
+    @Test
+    void getHandoffSummaries_completableByMeFollowsTheCallerNotTheFilter_D785() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        UUID author = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        NurseHandoff toMe = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(me).build();
+        NurseHandoff toSomeoneElse = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(toMe, toSomeoneElse));
+
+        // hospitalId only: no assignee filter, the caller is the recipient
+        List<NurseHandoffSummaryDTO> whole = service.getHandoffSummaries(null, me, hospitalId, 20, null);
+
+        assertThat(whole).extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(true, false);
+        // the author and a bystander still read false on the same list
+        assertThat(service.getHandoffSummaries(null, author, hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
+        assertThat(service.getHandoffSummaries(null, UUID.randomUUID(), hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
     }
 
     @Test
@@ -389,7 +451,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(done));
 
         List<NurseHandoffSummaryDTO> handoffs =
-            service.getHandoffSummaries(null, hospitalId, 20, "COMPLETED");
+            service.getHandoffSummaries(null, null, hospitalId, 20, "COMPLETED");
 
         assertThat(handoffs).singleElement().satisfies(dto -> {
             assertThat(dto.getStatus()).isEqualTo("COMPLETED");
@@ -402,7 +464,7 @@ class NurseTaskServiceImplTest {
     @Test
     void getHandoffSummariesRefusesAnUnknownStatus() {
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> service.getHandoffSummaries(null, UUID.randomUUID(), 20, "ARCHIVED"))
+                () -> service.getHandoffSummaries(null, null, UUID.randomUUID(), 20, "ARCHIVED"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasMessageContaining("ARCHIVED");
     }
@@ -509,11 +571,14 @@ class NurseTaskServiceImplTest {
         when(nurseHandoffRepository.save(any(NurseHandoff.class)))
             .thenAnswer(inv -> inv.getArgument(0));
 
+        UUID recipientId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveWitness(eq(recipientId), eq(hospitalId), any())).thenReturn(true);
         NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
             .patientId(patientId)
             .direction("  shift_change  ")
             .situation(" Stable overnight. ")
             .background("")
+            .recipientUserId(recipientId)
             .build();
 
         NurseHandoffSummaryDTO created = service.createHandoff(nurseId, hospitalId, request);
@@ -527,6 +592,135 @@ class NurseTaskServiceImplTest {
         ArgumentCaptor<NurseHandoff> captor = ArgumentCaptor.forClass(NurseHandoff.class);
         verify(nurseHandoffRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo("PENDING");
+        // QA D776: the handoff names its author and its recipient.
+        assertThat(captor.getValue().getCreatedByUserId()).isEqualTo(nurseId);
+        assertThat(captor.getValue().getRecipientUserId()).isEqualTo(recipientId);
+        assertThat(created.getRecipientUserId()).isEqualTo(recipientId);
+        assertThat(created.getCompletableByMe()).isFalse(); // the author cannot complete it
+    }
+
+    private NurseHandoffCreateRequestDTO validHandoff(UUID patientId, UUID recipientId) {
+        return NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId).direction("SHIFT_CHANGE").situation("Stable").recipientUserId(recipientId).build();
+    }
+
+    private UUID stubHandoffPatient(UUID hospitalId) {
+        UUID patientId = UUID.randomUUID();
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
+        Patient patientEntity = mock(Patient.class);
+        when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
+        return patientId;
+    }
+
+    /** QA D776, the exact replay: POST /nurse/handoffs with no recipient was 201. */
+    @Test
+    void createHandoff_refusesNoRecipient_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, null);
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    @Test
+    void createHandoff_refusesSelfAsRecipient_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        UUID actor = UUID.randomUUID();
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, actor);
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    @Test
+    void createHandoff_refusesARecipientNotOnStaffHere_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        UUID stranger = UUID.randomUUID();
+        when(assignmentRepository.existsActiveWitness(eq(stranger), eq(hospitalId), any())).thenReturn(false);
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, stranger);
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.invalid");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    /** QA D776, the exact replay: PUT /nurse/handoffs/{id}/complete by the author was 204. */
+    @Test
+    void completeHandoff_refusesTheAuthor_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID author = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        assertThatThrownBy(() -> service.completeHandoff(handoffId, author, hospitalId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(handoff.getStatus()).isEqualTo("PENDING");
+        verify(nurseHandoffRepository, never()).save(any(NurseHandoff.class));
+    }
+
+    @Test
+    void completeHandoff_refusesAThirdColleague_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        UUID other = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeHandoff(handoffId, other, hospitalId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void completeHandoff_theRecipientCompletes_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recipient = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(recipient).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        service.completeHandoff(handoffId, recipient, hospitalId);
+
+        assertThat(handoff.getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void getHandoffRecipients_listsClinicalColleaguesHereButNotTheCaller_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        com.example.hms.model.User self = new com.example.hms.model.User();
+        self.setId(me); self.setFirstName("Me"); self.setActive(true);
+        com.example.hms.model.User nurse = new com.example.hms.model.User();
+        nurse.setId(UUID.randomUUID()); nurse.setFirstName("Awa"); nurse.setLastName("Sanou"); nurse.setActive(true);
+        com.example.hms.model.User cashier = new com.example.hms.model.User();
+        cashier.setId(UUID.randomUUID()); cashier.setFirstName("Cash"); cashier.setActive(true);
+        when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
+            assignment(self, "ROLE_NURSE"), assignment(nurse, "ROLE_NURSE"), assignment(cashier, "ROLE_CASHIER")));
+
+        assertThat(service.getHandoffRecipients(me, hospitalId))
+            .extracting(com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO::userId)
+            .containsExactly(nurse.getId());
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignment(com.example.hms.model.User u, String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        a.setUser(u);
+        a.setRole(role);
+        a.setActive(true);
+        return a;
     }
 
     @Test
@@ -2958,7 +3152,8 @@ class NurseTaskServiceImplTest {
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
-            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository));
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
+            assignmentRepository);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();

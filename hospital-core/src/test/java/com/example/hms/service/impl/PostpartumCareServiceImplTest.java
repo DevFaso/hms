@@ -490,6 +490,34 @@ class PostpartumCareServiceImplTest {
         assertFalse(response.getSchedule().isOverdue(), "a check due in the future is not overdue");
     }
 
+    /** QA D762, the exact replay: a postpartum check at birth -3 h returned 201 and counted. */
+    @Test
+    void anObservationBeforeTheBirthIsRefusedAndNothingCounts_D762() {
+        LocalDateTime birth = LocalDateTime.now().minusHours(2);
+        PostpartumCarePlan plan = PostpartumCarePlan.builder()
+            .patient(patient).hospital(hospital).deliveryOccurredAt(birth).build();
+        plan.setId(UUID.randomUUID());
+        plan.setActive(true);
+        plan.setImmediateObservationTarget(4);
+        plan.setImmediateObservationsCompleted(0);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(birth.minusHours(3))
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+            () -> service.recordObservation(patientId, request, recorderId));
+        assertEquals("maternity.postpartum.observationTime.beforeBirth", ex.getMessageKey());
+        assertEquals(0, plan.getImmediateObservationsCompleted());
+        verify(observationRepository, never()).save(any());
+    }
+
     @Test
     void urgentPostpartumNotificationsAreFrenchWithATranslatedType() {
         when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))

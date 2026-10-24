@@ -81,8 +81,14 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        // QA D668 (returns), D779 (every movement): an item counted in whole
+        // units never moves by a fraction, or its stock shows decimals.
+        if (!correctsALegacyFraction(dto, item, lot)) {
+            WholeUnitQuantity.require(item, dto.getQuantity(),
+                    dto.getTransactionType() == StockTransactionType.RETURN
+                            ? "stockTransaction.return.wholeUnitsOnly" : WholeUnitQuantity.DEFAULT_KEY);
+        }
         if (dto.getTransactionType() == StockTransactionType.RETURN) {
-            requireWholeUnitsWhenCounted(item, dto.getQuantity()); // QA D668
             // QA D604: the dispense row first (the lock its cancel takes), then the item.
             requireReturnWithinDispense(dto, item, lot);
             requireReturnWithinIssued(item, lot, dto.getQuantity());
@@ -355,23 +361,21 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             java.util.EnumSet.of(StockTransactionType.TRANSFER);
 
     /**
-     * QA D668: a return of 0.5 was accepted on a lot counted in tablets.
-     * An item whose unit is not a measure (ml, g, ...) is counted in whole
-     * units, so its returns are whole too.
+     * QA D779: fills taken before the whole-unit rule left counted lots at
+     * 7.5 tablets (the re-test item shows 3001434.5 on hand). Only an
+     * adjustment can put that right, and the rule refused every fractional
+     * one, so the half tablet could never be written off. An adjustment is
+     * let through when it is exactly that correction: the count it moves
+     * (the lot, else the item) is fractional now and whole afterwards.
      */
-    static void requireWholeUnitsWhenCounted(InventoryItem item, BigDecimal quantity) {
-        if (quantity == null || quantity.stripTrailingZeros().scale() <= 0) {
-            return;
+    private static boolean correctsALegacyFraction(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        if (dto.getTransactionType() != StockTransactionType.ADJUSTMENT || dto.getQuantity() == null) {
+            return false;
         }
-        String unit = item.getUnit() == null ? "" : item.getUnit().trim().toLowerCase(java.util.Locale.ROOT);
-        if (!MEASURED_UNITS.contains(unit)) {
-            throw new BusinessException("stockTransaction.return.wholeUnitsOnly");
-        }
+        BigDecimal current = lot != null ? lot.getRemainingQuantity() : item.getQuantityOnHand();
+        return current != null && !WholeUnitQuantity.isWhole(current)
+                && WholeUnitQuantity.isWhole(current.add(dto.getQuantity()));
     }
-
-    /** Units a quantity is measured (not counted) in; anything else is counted. */
-    static final Set<String> MEASURED_UNITS = Set.of(
-            "ml", "l", "cl", "dl", "g", "mg", "kg", "mcg", "µg", "ug", "ui", "iu");
 
     private static BigDecimal nz(BigDecimal value) {
         return value == null ? BigDecimal.ZERO : value;

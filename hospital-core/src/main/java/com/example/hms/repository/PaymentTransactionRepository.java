@@ -93,6 +93,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
     /**
      * QA D345: whether a provider reference is already on a pending or
      * confirmed row of the same hospital, compared without case or spaces.
+     * Scoped to one hospital by design (QA D782): a check across hospitals
+     * would disclose another tenant's transaction ids.
      */
     @Query("""
            SELECT COUNT(pt) > 0

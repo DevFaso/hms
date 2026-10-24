@@ -91,6 +91,19 @@ export class ReferralsComponent implements OnInit {
     };
   });
 
+  /**
+   * QA D775 (D611 sibling): acknowledge, reject, schedule, start and complete
+   * belong to the hospital the referral is addressed to (the receiving
+   * hospital, or the sending one for an internal referral) —
+   * GeneralReferralServiceImpl.requireReceivingSide. The role map alone
+   * offered the sender "Prendre en compte" and "Refuser", which ended in 403.
+   */
+  isReceivingSide(r: ReferralResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    const target = r.receivingHospitalId || r.hospitalId;
+    return !!active && !!target && active === target;
+  }
+
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
   isMyDraft(r: ReferralResponse): boolean {
     const staffId = this.auth.getUserProfile()?.staffId;
@@ -539,7 +552,15 @@ export class ReferralsComponent implements OnInit {
     if (!ref || !this.scheduleAppointmentTime) return;
     this.actionLoading.set(true);
     this.referralService
-      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .schedule(
+        ref.id,
+        // #948 review: kept as the hospital's wall clock, NOT converted to UTC.
+        // The server copies it into the booked Appointment's date and start
+        // time, which are wall-clock fields (calendar, check-in, reminders,
+        // patient emails), so 10:00 must arrive as 10:00.
+        this.scheduleAppointmentTime,
+        this.scheduleLocation || undefined,
+      )
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));

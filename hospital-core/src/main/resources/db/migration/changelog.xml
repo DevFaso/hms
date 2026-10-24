@@ -3029,4 +3029,44 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V230 (QA D764): ADMITTED registrations without an open admission
+         become REGISTERED. Plain statement, no DO block. -->
+    <changeSet id="V230-registration-stay-status-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V230__registration_stay_status_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V232 (QA D776): clinical.nurse_handoffs.created_by_user_id,
+         recipient_user_id and recipient_name, so a handoff is addressed to
+         someone and only that person completes it. Plain statements, no DO block. -->
+    <changeSet id="V232-nurse-handoff-recipient" author="hms-team" runOnChange="false">
+        <sqlFile path="V232__nurse_handoff_recipient.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V231 (QA D757): clinical.prescriptions.take_home, so a ward order
+         ends with its stay unless it is marked for home. Plain statements,
+         no DO block. -->
+    <changeSet id="V231-prescription-take-home" author="hms-team" runOnChange="false">
+        <sqlFile path="V231__prescription_take_home.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V229 (QA D783): issued invoices with a total of 0, no amount paid
+         and no payment row, left from before the D767 guard, are cancelled
+         (never deleted), with one SYSTEM audit row each. One DO block
+         (splitStatements=false). Idempotent. -->
+    <changeSet id="V229-cancel-issued-zero-total-invoices" author="hms-team" runOnChange="false">
+        <sqlFile path="V229__cancel_issued_zero_total_invoices.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

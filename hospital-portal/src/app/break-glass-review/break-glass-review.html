@@ -65,9 +65,10 @@
           @for (s of sessions(); track s.id) {
             <tr [attr.data-testid]="'session-' + s.id" [class.unreviewed]="!s.reviewed">
               <td>
-                {{ s.startedAt | date: 'short' }}
+                {{ s.startedAt | serverTime | date: 'short' }}
                 <div class="muted">
-                  {{ 'BREAK_GLASS_REVIEW.EXPIRES' | translate }} {{ s.expiresAt | date: 'short' }}
+                  {{ 'BREAK_GLASS_REVIEW.EXPIRES' | translate }}
+                  {{ s.expiresAt | serverTime | date: 'short' }}
                 </div>
               </td>
               <td>{{ s.userName }}</td>
@@ -127,7 +128,7 @@
                     'BREAK_GLASS_REVIEW.OUTCOME_' + s.reviewOutcome | translate
                   }}</span>
                   <div class="muted">
-                    {{ s.reviewedByUserName }} · {{ s.reviewedAt | date: 'short' }}
+                    {{ s.reviewedByUserName }} · {{ s.reviewedAt | serverTime | date: 'short' }}
                   </div>
                   @if (s.reviewNote) {
                     <div class="muted note">{{ s.reviewNote }}</div>

@@ -22,6 +22,7 @@ import {
 import { SuperAdminProviderService } from '../../../services/super-admin-provider.service';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
 import { verificationBadgeClass } from '../provider-status';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
 const PAGE_SIZE = 20;
 
@@ -33,7 +34,7 @@ const PAGE_SIZE = 20;
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, DatePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './provider-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './provider-list.scss',

@@ -216,7 +216,7 @@
                 <td>
                   <span class="code-chip">{{ lot.lotNumber }}</span>
                 </td>
-                <td>{{ lot.expiryDate | date: 'mediumDate' }}</td>
+                <td>{{ lot.expiryDate | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   @if (getDaysUntilExpiry(lot.expiryDate) <= 0) {
                     <span class="expiry-badge expired">{{

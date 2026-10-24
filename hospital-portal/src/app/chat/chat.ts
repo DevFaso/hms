@@ -26,6 +26,7 @@ import { Observable, catchError, forkJoin, of } from 'rxjs';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { serverInstant } from '../shared/date-utils';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -658,7 +659,7 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   formatTime(timestamp: string): string {
     if (!timestamp) return '';
-    const d = new Date(timestamp);
+    const d = serverInstant(timestamp);
     return d.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' });
   }
 }

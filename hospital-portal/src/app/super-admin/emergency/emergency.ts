@@ -21,6 +21,7 @@ import { Subject, debounceTime, switchMap, of, catchError, map } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../../services/step-up';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 interface PanelState {
   busy: boolean;
@@ -50,7 +51,15 @@ export const RESET_ALL_PHRASE = 'RESET ALL MFA';
 @Component({
   selector: 'app-super-admin-emergency',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe, RoleLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './emergency.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './emergency.scss',

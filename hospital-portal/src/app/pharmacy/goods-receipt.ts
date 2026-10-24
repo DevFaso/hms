@@ -11,11 +11,13 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { localDateString } from '../shared/date-utils';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',
@@ -154,6 +156,11 @@ export class GoodsReceiptComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY.RECEIPT_QUANTITY_POSITIVE'));
       return;
     }
+    // QA D778: a purchase price is never negative (the server refuses it too).
+    if (this.form.unitCost != null && this.form.unitCost < 0) {
+      this.toast.error(this.translate.instant('PHARMACY.UNIT_COST_NEGATIVE'));
+      return;
+    }
     if (!this.form.lotNumber || !this.form.expiryDate || !this.form.initialQuantity) {
       this.toast.error(this.translate.instant('PHARMACY.LOT_FIELDS_REQUIRED'));
       return;
@@ -199,7 +206,7 @@ export class GoodsReceiptComponent implements OnInit {
       initialQuantity: 0,
       supplier: '',
       unitCost: 0,
-      receivedDate: new Date().toISOString().split('T')[0],
+      receivedDate: localDateString(),
       witnessedBy: undefined as string | undefined,
     };
   }

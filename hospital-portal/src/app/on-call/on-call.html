@@ -76,8 +76,8 @@
                 }
               </td>
               <td>{{ entry.departmentName || ('ON_CALL.HOSPITAL_WIDE' | translate) }}</td>
-              <td>{{ entry.startTime | date: 'short' }}</td>
-              <td>{{ entry.endTime | date: 'short' }}</td>
+              <td>{{ entry.startTime | serverTime | date: 'short' }}</td>
+              <td>{{ entry.endTime | serverTime | date: 'short' }}</td>
               <td class="notes-cell" [title]="entry.notes ?? ''">{{ entry.notes || '—' }}</td>
               @if (canManage()) {
                 <td class="actions-cell">
@@ -212,7 +212,8 @@
         <h2>{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
         <p>
           <strong>{{ target.staffName || target.staffId }}</strong>
-          — {{ target.startTime | date: 'short' }} → {{ target.endTime | date: 'short' }}
+          — {{ target.startTime | serverTime | date: 'short' }} →
+          {{ target.endTime | serverTime | date: 'short' }}
         </p>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="cancelDelete()">

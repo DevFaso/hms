@@ -87,6 +87,8 @@ public class PrescriptionResponseDTO {
      */
     private boolean controlledSubstance;
     private boolean requiresCosign;
+    /** QA D757: a take-home order outlives its stay; every other stay order ends at discharge. */
+    private boolean takeHome;
     private java.time.LocalDateTime twoFactorVerifiedAt;
     private java.time.LocalDateTime cosignedAt;
     private java.util.UUID cosignedByStaffId;

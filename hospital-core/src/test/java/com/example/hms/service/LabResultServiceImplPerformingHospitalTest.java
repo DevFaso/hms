@@ -450,7 +450,7 @@ class LabResultServiceImplPerformingHospitalTest {
         PageRequest page = PageRequest.of(0, 10);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
         when(labResultRepository.findHandledByHospitalForReader(performing.getId(), false, true,
-                new UUID(0L, 0L), page))
+                new UUID(0L, 0L), true, new UUID(0L, 0L), page))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
@@ -464,7 +464,7 @@ class LabResultServiceImplPerformingHospitalTest {
         UUID patientId = UUID.randomUUID();
         result.setReleased(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), page))
             .thenReturn(new PageImpl<>(List.of(result)));
         when(labResultMapper.toResponseDTO(result)).thenReturn(mapped);
 
@@ -484,7 +484,7 @@ class LabResultServiceImplPerformingHospitalTest {
         newer.setId(UUID.randomUUID());
         newer.setReleased(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
-        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, page))
+        when(labResultRepository.findHandledByHospitalForReader(performing.getId(), true, false, patientId, true, new UUID(0L, 0L), page))
             .thenReturn(new PageImpl<>(List.of(result), page, 2));
         when(labResultRepository.findByLabOrder_IdIn(any())).thenReturn(List.of(result, newer));
 

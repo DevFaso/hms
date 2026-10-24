@@ -19,6 +19,7 @@ import {
 } from '../../services/registration-extras.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
@@ -31,7 +32,7 @@ import { ToastService } from '../../core/toast.service';
   selector: 'app-coverage-tab',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './coverage-tab.component.html',
   styleUrl: './coverage-tab.component.scss',
 })

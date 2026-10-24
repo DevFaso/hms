@@ -175,6 +175,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         invoice.setAmountPaid(BigDecimal.ZERO);
         invoice.setTotalAmount(dto.getTotalAmount() != null ? dto.getTotalAmount() : BigDecimal.ZERO);
         invoice.setStatus(requestedStatusOnCreate(dto.getStatus()));
+        requireIssuableTotal(invoice.getStatus(), invoice.getTotalAmount());
         invoice.setClientRequestId(dto.getClientRequestId());
         // QA D428: no auditing listener stamps it, so the creator is set here.
         invoice.setCreatedBy(roleValidator.getCurrentUserId());
@@ -382,6 +383,21 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         return encounter;
     }
 
+    /**
+     * QA D767: an invoice issued at 0 showed as sent and outstanding forever
+     * (nothing can ever be paid on it). Issuing needs a positive total; a
+     * draft may still be 0 while its lines are added.
+     */
+    private static void requireIssuableTotal(InvoiceStatus status, BigDecimal total) {
+        if (status == InvoiceStatus.SENT && (total == null || total.signum() <= 0)) {
+            throw new BusinessException("billing.invoice.zeroTotal");
+        }
+    }
+
+    /** QA D768: methods whose money can only be traced by its transaction reference. */
+    private static final java.util.Set<PaymentMethod> REFERENCE_REQUIRED =
+        java.util.EnumSet.of(PaymentMethod.MOBILE_MONEY, PaymentMethod.INSURANCE, PaymentMethod.BANK_TRANSFER);
+
     /** QA D91: a new invoice is DRAFT or SENT; a paid status follows payments. */
     private static InvoiceStatus requestedStatusOnCreate(InvoiceStatus requested) {
         if (requested == null || requested == InvoiceStatus.DRAFT) {
@@ -543,6 +559,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             invoice.setTotalAmount(dto.getTotalAmount());
         }
         // QA D91: amountPaid is never taken from the form.
+        if (wasDraft) {
+            requireIssuableTotal(nextStatus, invoice.getTotalAmount());
+        }
         invoice.setStatus(nextStatus);
         // D656: an issued invoice keeps its notes (checked unchanged above).
         if (wasDraft) {
@@ -931,6 +950,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * QA D345: a card, transfer or mobile-money reference names one provider
      * transaction; a second live row with it (any invoice of the hospital)
      * would count the same money twice. Cash has no provider reference.
+     *
+     * <p>QA D782 (decision): the check stays PER HOSPITAL on purpose. A
+     * cross-hospital check would answer "already recorded" for a reference
+     * held by another tenant, which tells a clerk of hospital B that a given
+     * operator transaction id was paid at some other hospital (a disclosure
+     * of another tenant's transactions, and a probe for them). A reference
+     * reused across hospitals is reconciled against the operator's statement
+     * by each hospital, not refused here.
      */
     private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
         if (method == PaymentMethod.CASH || reference == null || reference.isBlank() || invoice.getHospital() == null) {
@@ -1059,6 +1086,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? PaymentMethod.OTHER
             : parsePaymentMethod(payment.getMethod());
         requireWholeAmount(payment.getAmount());
+        if (REFERENCE_REQUIRED.contains(method)
+                && (payment.getReference() == null || payment.getReference().isBlank())) {
+            throw new BusinessException("billing.payment.referenceRequired");
+        }
         rejectReusedReference(invoice, method, payment.getReference());
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
         creditCheckInCopays(invoice);

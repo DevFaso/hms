@@ -17,6 +17,13 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import {
+  nowLocalDatetime,
+  toLocalInputValue,
+  toServerDateTime,
+  withServerDateTimes,
+} from '../shared/date-utils';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -30,7 +37,14 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
   selector: 'app-procedure-orders',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, TranslateModule, PatientPickerComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './procedure-orders.html',
   styleUrl: './procedure-orders.scss',
 })
@@ -157,13 +171,6 @@ export class ProcedureOrdersComponent implements OnInit {
     return !order.consentObtained && !this.isTerminal(order);
   }
 
-  /** Local-timezone yyyy-MM-ddTHH:mm for datetime-local inputs. */
-  private nowLocalDatetime(): string {
-    const d = new Date();
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   /* ── Create ── */
 
   emptyOrderForm(): ProcedureOrderRequest {
@@ -203,7 +210,9 @@ export class ProcedureOrdersComponent implements OnInit {
     }
     form.hospitalId = this.hospitalId ?? '';
     this.orderSaving.set(true);
-    this.orderService.create(form).subscribe({
+    // #948 review: the datetime-local is the user's wall clock; the server keeps
+    // UTC and the list reads it back through serverTime.
+    this.orderService.create(withServerDateTimes(form, ['scheduledDatetime'])).subscribe({
       next: (created) => {
         this.toast.success(this.translate.instant('PROCEDURES.CREATED'));
         this.orderSaving.set(false);
@@ -233,7 +242,9 @@ export class ProcedureOrdersComponent implements OnInit {
     const order = this.viewedOrder();
     this.detailAction.set(action);
     if (action === 'schedule') {
-      this.scheduleDatetime = order?.scheduledDatetime?.substring(0, 16) ?? '';
+      this.scheduleDatetime = order?.scheduledDatetime
+        ? toLocalInputValue(order.scheduledDatetime)
+        : '';
     } else if (action === 'consent') {
       const profile = this.auth.getUserProfile();
       this.consentBy = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
@@ -254,7 +265,8 @@ export class ProcedureOrdersComponent implements OnInit {
     // rescheduling from POSTPONED also lands back on SCHEDULED.
     this.applyUpdate(
       order,
-      { status: 'SCHEDULED', scheduledDatetime: this.scheduleDatetime },
+      // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+      { status: 'SCHEDULED', scheduledDatetime: toServerDateTime(this.scheduleDatetime) },
       'PROCEDURES.SCHEDULED_SUCCESS',
     );
   }
@@ -266,7 +278,9 @@ export class ProcedureOrdersComponent implements OnInit {
       order,
       {
         consentObtained: true,
-        consentObtainedAt: this.nowLocalDatetime(),
+        // #948 review: the list reads this back through serverTime, so it is
+        // sent on the server's UTC clock, not the browser's wall clock.
+        consentObtainedAt: toServerDateTime(nowLocalDatetime()),
         consentObtainedBy: this.consentBy.trim(),
         consentFormLocation: this.consentFormLocation.trim() || undefined,
       },

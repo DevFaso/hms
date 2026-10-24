@@ -59,7 +59,8 @@
       {{ 'PRENATAL.RESULT_TITLE' | translate }} — {{ 'PRENATAL.CURRENT_WEEK' | translate }}
       {{ s.currentGestationalWeek }}
       @if (s.estimatedDueDate) {
-        · {{ 'MATERNITY.EDD' | translate }}: {{ s.estimatedDueDate | date: 'mediumDate' }}
+        · {{ 'MATERNITY.EDD' | translate }}:
+        {{ s.estimatedDueDate | serverTime | date: 'mediumDate' }}
       }
       @if (s.highRisk) {
         <span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
@@ -91,10 +92,10 @@
             <tr class="data-row">
               <td>{{ r.gestationalWeek }}</td>
               <td>{{ 'PRENATAL.VISIT_' + r.visitType | translate }}</td>
-              <td>{{ r.targetDate ? (r.targetDate | date: 'mediumDate') : '—' }}</td>
+              <td>{{ r.targetDate ? (r.targetDate | serverTime | date: 'mediumDate') : '—' }}</td>
               <td>
-                {{ r.windowStart ? (r.windowStart | date: 'shortDate') : '—' }} —
-                {{ r.windowEnd ? (r.windowEnd | date: 'shortDate') : '—' }}
+                {{ r.windowStart ? (r.windowStart | serverTime | date: 'shortDate') : '—' }} —
+                {{ r.windowEnd ? (r.windowEnd | serverTime | date: 'shortDate') : '—' }}
               </td>
               <td>
                 @if (r.scheduled) {
@@ -131,7 +132,7 @@
           @for (a of s.existingAppointments; track a.appointmentId) {
             <tr class="data-row">
               <td>{{ a.gestationalWeek }}</td>
-              <td>{{ a.appointmentDate | date: 'mediumDate' }}</td>
+              <td>{{ a.appointmentDate | serverTime | date: 'mediumDate' }}</td>
               <td>{{ a.startTime || '—' }}</td>
               <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">

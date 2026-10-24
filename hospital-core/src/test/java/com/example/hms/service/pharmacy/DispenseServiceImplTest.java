@@ -328,7 +328,7 @@ class DispenseServiceImplTest {
             other.setId(UUID.randomUUID());
             other.setStatus(PrescriptionStatus.SIGNED);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription, other)));
             when(queueClaimService.activeClaimsFor(List.of(prescription, other)))
                     .thenReturn(java.util.Map.of(prescriptionId, claimDto(false)));
@@ -356,7 +356,7 @@ class DispenseServiceImplTest {
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
                     .hasSize(1);
-            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+            verify(prescriptionRepository, never()).findWorkQueue(any(), any(), any());
         }
 
         @Test
@@ -372,7 +372,7 @@ class DispenseServiceImplTest {
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.UNCLAIMED).getContent())
                     .hasSize(1);
-            verify(prescriptionRepository, never()).findByHospital_IdAndStatusIn(any(), any(), any());
+            verify(prescriptionRepository, never()).findWorkQueue(any(), any(), any());
         }
 
         @Test
@@ -381,7 +381,7 @@ class DispenseServiceImplTest {
             Pageable pageable = PageRequest.of(0, 20);
             when(queueClaimService.isEnabled()).thenReturn(false);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription)));
 
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
@@ -421,6 +421,29 @@ class DispenseServiceImplTest {
             verify(dispenseRepository).save(any(Dispense.class));
             verify(prescriptionRepository).save(any(Prescription.class));
             verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("QA D757: a SIGNED ward order of a discharged stay is refused at the counter; a take-home one is not")
+        void aWardOrderOfAnEndedStayIsNotDispensed() {
+            // The QA scenario: IV ceftriaxone, signed on the stay, still SIGNED
+            // after discharge (a row from before the discharge ended orders).
+            com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+            stayEncounter.setAdmissionId(UUID.randomUUID());
+            stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            prescription.setEncounter(stayEncounter);
+            DispenseRequestDTO dto = buildRequest();
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+
+            // Path re-verified: the same order marked take-home passes this gate.
+            prescription.setTakeHome(true);
+            assertThat(com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)).isFalse();
         }
 
         @Test
@@ -1380,6 +1403,247 @@ class DispenseServiceImplTest {
         }
     }
 
+    /**
+     * QA D779 re-test: receipt, adjustment and lot PUT refused 2.5 tablets,
+     * but POST /pharmacy/dispense took 2.5 then 9.5 Paracetamol 500 mg
+     * tablets (prescription of 12) and the order became DISPENSED through
+     * half-tablet movements. The fill now asks the same rule.
+     */
+    @Nested
+    @DisplayName("QA D779: whole units on every fill")
+    class WholeUnitFill {
+
+        @BeforeEach
+        void paracetamolTablets() {
+            catalogItem.setGenericName("Paracetamol");
+            catalogItem.setNameFr("Paracétamol 500 mg comprimé");
+            inventoryItem.setUnit("comprimé");
+            prescription.setMedicationName("Paracétamol 500 mg comprimé");
+            prescription.setQuantity(new BigDecimal("12"));
+            prescription.setQuantityUnit("comprimé");
+        }
+
+        private DispenseRequestDTO fill(String requested, String dispensed) {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            dto.setMedicationName("paracetamol");
+            dto.setUnit("comprimé");
+            dto.setQuantityRequested(new BigDecimal(requested));
+            dto.setQuantityDispensed(new BigDecimal(dispensed));
+            return dto;
+        }
+
+        private void stubUpToTheLot(boolean withLot) {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            if (withLot) {
+                when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            }
+        }
+
+        private void assertRefusedAndNothingMoved(DispenseRequestDTO dto) {
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo("100");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(inventoryItemRepository, never()).decrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @ParameterizedTest
+        @CsvSource({"2.5,2.5", "9.5,9.5", "12,2.5", "2.5,2"})
+        @DisplayName("a fraction of a tablet from a lot is refused before anything moves (the re-test 2.5 and 9.5)")
+        void aFractionOfATabletIsRefused(String requested, String dispensed) {
+            stubUpToTheLot(true);
+            assertRefusedAndNothingMoved(fill(requested, dispensed));
+        }
+
+        @Test
+        @DisplayName("a lot with no unit on record is counted: 2.5 is refused")
+        void aLotWithNoUnitIsCounted() {
+            inventoryItem.setUnit(null);
+            stubUpToTheLot(true);
+            assertRefusedAndNothingMoved(fill("2.5", "2.5"));
+        }
+
+        @Test
+        @DisplayName("a fill with no lot is refused on the prescription's counted unit")
+        void aFillWithNoLotUsesThePrescriptionUnit() {
+            stubUpToTheLot(false);
+            DispenseRequestDTO dto = fill("2.5", "2.5");
+            dto.setStockLotId(null);
+            dto.setUnit(null);
+            assertRefusedAndNothingMoved(dto);
+        }
+
+        @Test
+        @DisplayName("a fill with no lot counts in the prescription's unit, not the one the request claims: 'ml' on tablets still refuses 2.5")
+        void aFillWithNoLotIgnoresTheRequestUnitWhenThePrescriptionNamesOne() {
+            stubUpToTheLot(false);
+            DispenseRequestDTO dto = fill("2.5", "2.5");
+            dto.setStockLotId(null);
+            dto.setUnit("ml");
+            assertRefusedAndNothingMoved(dto);
+        }
+
+        @Test
+        @DisplayName("a fill with no lot claiming 'comprimé' on a 7.5 ml order does not earn the next whole unit: 8 is refused")
+        void aFillWithNoLotCannotClaimACountedUnitOnAMeasuredOrder() {
+            prescription.setQuantity(new BigDecimal("7.5"));
+            prescription.setQuantityUnit("ml");
+            // refused at the ceiling, before the patient, pharmacy and actors are read
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            DispenseRequestDTO eight = fill("8", "8");
+            eight.setStockLotId(null);
+            eight.setUnit("comprimé");
+            assertThatThrownBy(() -> service.createDispense(eight))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "7.5".equals(((BusinessException) e).getArgs()[0]));
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("a whole partial fill of the same tablets still goes through")
+        void aWholePartialFillIsAccepted() {
+            stubUpToTheLot(true);
+            DispenseRequestDTO dto = fill("12", "3");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(new BigDecimal("3"));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+
+            service.createDispense(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("47");
+            assertThat(inventoryItem.getQuantityOnHand()).isEqualByComparingTo("97");
+        }
+
+        private void stubAcceptedFill(DispenseRequestDTO dto, String dispensedAfter) {
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(new BigDecimal(dispensedAfter));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+        }
+
+        @Test
+        @DisplayName("the re-test order (12, a legacy 2.5 given): 9.5 is refused, 10 completes it, 11 is above the prescription")
+        void aLegacyHalfTabletRemainderIsMetByTheNextWholeTablet() {
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(new BigDecimal("2.5"));
+            stubUpToTheLot(true);
+            assertThatThrownBy(() -> service.createDispense(fill("9.5", "9.5")))
+                    .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
+            DispenseRequestDTO eleven = fill("11", "11");
+            // the refusal names the 10 that is accepted, not the 9.5 the whole-unit rule refuses
+            assertThatThrownBy(() -> service.createDispense(eleven))
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "10".equals(((BusinessException) e).getArgs()[0]));
+
+            DispenseRequestDTO ten = fill("10", "10");
+            stubAcceptedFill(ten, "12.5");
+            service.createDispense(ten);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("40");
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        }
+
+        @Test
+        @DisplayName("a half-tablet regimen of 7.5 tablets is filled with 8")
+        void aFractionalPrescriptionOfTabletsIsFilledWithTheNextWholeTablet() {
+            prescription.setQuantity(new BigDecimal("7.5"));
+            stubUpToTheLot(true);
+            DispenseRequestDTO eight = fill("8", "8");
+            stubAcceptedFill(eight, "8");
+
+            service.createDispense(eight);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("42");
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        }
+
+        @Test
+        @DisplayName("the next-whole-unit ceiling is for counted items only: 8 ml against 7.5 ml is refused")
+        void aMeasuredItemKeepsTheExactCeiling() {
+            inventoryItem.setUnit("ml");
+            prescription.setQuantity(new BigDecimal("7.5"));
+            // refused at the ceiling, before the patient, pharmacy and actors are read
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO eight = fill("8", "8");
+            assertThatThrownBy(() -> service.createDispense(eight))
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("a controlled substance is never met by the next whole unit: 8 tablets against 7.5 is refused, and the message names 7")
+        void aControlledSubstanceNamesTheWholeUnitsBelowTheCeiling() {
+            prescription.setQuantity(new BigDecimal("7.5"));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO eight = fill("8", "8");
+            // 7.5 would be refused as fractional; 7 is the most that is accepted
+            assertThatThrownBy(() -> service.createDispense(eight))
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "7".equals(((BusinessException) e).getArgs()[0]));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("a controlled substance with 9.5 left after a legacy 2.5 fill: 10 is refused, and the message names 9")
+        void aControlledSubstanceAfterALegacyHalfFillNamesNine() {
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.sumQuantityCommittedForPrescription(prescriptionId)).thenReturn(new BigDecimal("2.5"));
+            DispenseRequestDTO ten = fill("10", "10");
+            assertThatThrownBy(() -> service.createDispense(ten))
+                    .matches(e -> "pharmacy.dispense.exceedsPrescribed".equals(((BusinessException) e).getMessageKey()))
+                    .matches(e -> "9".equals(((BusinessException) e).getArgs()[0]));
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("a measured item (ml) still dispenses a fraction")
+        void aMeasuredItemDispensesAFraction() {
+            inventoryItem.setUnit("ml");
+            prescription.setQuantityUnit("ml");
+            stubUpToTheLot(true);
+            DispenseRequestDTO dto = fill("12", "2.5");
+            dto.setUnit("ml");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                    .thenReturn(new BigDecimal("2.5"));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+
+            service.createDispense(dto);
+
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("47.5");
+        }
+    }
+
     @Nested
     @DisplayName("getDispense")
     class GetDispense {
@@ -1949,7 +2213,7 @@ class DispenseServiceImplTest {
         void getWorkQueueShouldMap() {
             Pageable pageable = PageRequest.of(0, 20);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(prescription)));
 
@@ -1983,7 +2247,7 @@ class DispenseServiceImplTest {
             org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
                     org.mockito.ArgumentCaptor.forClass(List.class);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), asked.capture(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(backOrdered, refused, answered)));
 
@@ -2019,7 +2283,7 @@ class DispenseServiceImplTest {
             org.mockito.ArgumentCaptor<List<PrescriptionStatus>> asked =
                     org.mockito.ArgumentCaptor.forClass(List.class);
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+            when(prescriptionRepository.findWorkQueue(
                     eq(hospitalId), asked.capture(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(failed)));
 
@@ -2051,7 +2315,7 @@ class DispenseServiceImplTest {
             backOrder.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(partiallyFilled)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(backOrder));
@@ -2080,7 +2344,7 @@ class DispenseServiceImplTest {
             backOrder.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(filled)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(backOrder));
@@ -2109,7 +2373,7 @@ class DispenseServiceImplTest {
             later.setDispensedAt(resolvedAt.plusHours(1));
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(justAnswered, actedOn)));
             when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                     any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
@@ -2138,7 +2402,7 @@ class DispenseServiceImplTest {
             plain.setStatus(PrescriptionStatus.SIGNED);
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(answeredOnBackOrder, plain)));
 
             List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
@@ -2165,7 +2429,7 @@ class DispenseServiceImplTest {
             later.setDispensedAt(resolvedAt.plusHours(1));
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(actedOn)));
             when(dispenseRepository.findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
                     any(), eq(DispenseStatus.CANCELLED))).thenReturn(List.of(later));
@@ -2194,7 +2458,7 @@ class DispenseServiceImplTest {
             refusal.setId(UUID.randomUUID());
 
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(eq(hospitalId), any(), eq(pageable)))
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
                     .thenReturn(new PageImpl<>(List.of(refused)));
             when(routingDecisionRepository.findByPrescription_IdInOrderByDecidedAtDesc(any()))
                     .thenReturn(List.of(refusal));
@@ -2775,6 +3039,43 @@ class DispenseServiceImplTest {
             assertThatThrownBy(() -> service.listDispensableLots(prescriptionId, pharmacyId))
                     .isInstanceOf(ResourceNotFoundException.class);
             verify(stockLotRepository, never()).findByInventoryItemPharmacyId(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D780: the not-dispensable refusal names the status in words")
+    class NotDispensableLabel {
+
+        @org.junit.jupiter.api.AfterEach
+        void resetLocale() {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+
+        @Test
+        @DisplayName("a second fill of a DISPENSED order reads 'délivrée' in French, never the raw code")
+        void dispensedIsWordedInFrench() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO request = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("délivrée")
+                    .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage()).doesNotContain("DISPENSED"));
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(PrescriptionStatus.class)
+        @DisplayName("every status has a label in EN, FR and ES (no raw code can leak)")
+        void everyStatusIsLabelled(PrescriptionStatus status) {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            for (java.util.Locale locale : java.util.List.of(java.util.Locale.ENGLISH, java.util.Locale.FRENCH, java.util.Locale.of("es"))) {
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+                org.assertj.core.api.Assertions.assertThat(status.localizedLabel()).isNotEqualTo(status.name());
+            }
         }
     }
 }

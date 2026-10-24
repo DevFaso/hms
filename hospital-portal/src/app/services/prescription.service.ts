@@ -56,6 +56,8 @@ export interface PrescriptionResponse {
   /** Safeguard state (P2 #15) — why a sign/dispense was refused, made visible. */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D757: a take-home order outlives its stay. */
+  takeHome?: boolean;
   twoFactorVerifiedAt?: string | null;
   cosignedAt?: string | null;
   cosignedByStaffId?: string | null;
@@ -191,6 +193,8 @@ export interface PrescriptionRequest {
    */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D757: the order goes home with the patient; every other stay order ends at discharge. */
+  takeHome?: boolean;
   /** QA D660: mandatory when a SIGNED prescription is cancelled or discontinued. */
   withdrawalReason?: string;
 }

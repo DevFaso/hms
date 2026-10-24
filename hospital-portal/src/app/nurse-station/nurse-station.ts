@@ -26,6 +26,7 @@ import {
   NurseOrderTask,
   NurseHandoff,
   NurseHandoffCreateRequest,
+  NurseHandoffRecipient,
   NurseAnnouncement,
   NurseDashboardSummary,
   NurseWorkboardPatient,
@@ -42,7 +43,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { fromServerDateTime } from '../shared/date-utils';
+import { fromServerDateTime, localDateString, toServerDateTime } from '../shared/date-utils';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
@@ -61,6 +62,16 @@ type SectionType =
   | 'admissions'
   | 'tasks'
   | 'inbox';
+
+/**
+ * QA D777: a `datetime-local` value (`2026-10-24T14:00`, the reader's wall
+ * time) as a UTC ISO instant, or undefined when empty or unreadable.
+ */
+export function localInputToUtcIso(value: string | undefined | null): string | undefined {
+  if (!value) return undefined;
+  const instant = new Date(value);
+  return Number.isNaN(instant.getTime()) ? undefined : instant.toISOString();
+}
 
 @Component({
   selector: 'app-nurse-station',
@@ -143,6 +154,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* Handoff create dialog (P0 #1 — real SBAR handoffs) */
   handoffCreateOpen = signal(false);
   handoffForm = signal<Partial<NurseHandoffCreateRequest>>({});
+  /** QA D776: the colleagues the handoff can be addressed to. */
+  handoffRecipients = signal<NurseHandoffRecipient[]>([]);
   handoffPatient = signal<PatientResponse | null>(null);
   handoffCreating = signal(false);
 
@@ -651,6 +664,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.handoffForm.set({});
     this.handoffPatient.set(null);
     this.handoffCreateOpen.set(true);
+    this.nurseService.getHandoffRecipients().subscribe({
+      next: (rows) => this.handoffRecipients.set(rows),
+      error: () => this.handoffRecipients.set([]),
+    });
   }
 
   closeHandoffCreate(): void {
@@ -681,6 +698,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     // QA D331: the S of SBAR is required; the server refuses a blank one too.
     if (!form.situation?.trim()) {
       this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_SITUATION_REQUIRED'));
+      return;
+    }
+    // QA D776: a handoff is handed to a named colleague; the server refuses none.
+    if (!form.recipientUserId) {
+      this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_RECIPIENT_REQUIRED'));
       return;
     }
     this.handoffCreating.set(true);
@@ -722,6 +744,14 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.completedHandoffsLoading.set(false);
       },
     });
+  }
+
+  /**
+   * QA D776: only the colleague a handoff is addressed to completes it (the
+   * server decides and says so per row); the author is never offered it.
+   */
+  canCompleteHandoff(h: NurseHandoff): boolean {
+    return h.status === 'PENDING' && h.completableByMe === true;
   }
 
   completeHandoff(handoffId: string): void {
@@ -769,7 +799,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       return;
     }
     this.taskCreating.set(true);
-    this.nurseService.createNursingTask(form as NurseTaskCreateRequest).subscribe({
+    // QA D777: the picker gives the nurse's local wall time with no zone; the
+    // server keeps UTC, so the instant is sent with its zone.
+    const request: NurseTaskCreateRequest = {
+      ...(form as NurseTaskCreateRequest),
+      dueAt: localInputToUtcIso(form.dueAt),
+    };
+    this.nurseService.createNursingTask(request).subscribe({
       next: (task) => {
         this.toast.success(
           this.translate.instant('NURSE.TOAST.TASK_CREATED', { patient: task.patientName }),
@@ -909,9 +945,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     if (!this.canTriage()) return of([]);
     // Today's visits only (stale ARRIVED rows from earlier days are not a
     // queue), and one page large enough that a busy clinic hides no one.
-    const now = new Date();
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const fromDate = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00:00`;
+    // #948 review: "today" starts at the reader's local midnight, sent on the
+    // server's UTC clock that encounterDate is compared on. Sent as the local
+    // wall clock, New York listed the previous evening's 20:00-24:00 visits
+    // and a reader east of UTC lost the early-morning arrivals.
+    const fromDate = toServerDateTime(`${localDateString()}T00:00`);
     const byStatus = (status: 'ARRIVED' | 'TRIAGE') =>
       this.encounterService
         .list({ status, fromDate, size: 100 })

@@ -27,9 +27,20 @@ describe('AuditLogsComponent (QA D330)', () => {
     });
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('fr', {
-      AUDIT: { WRITE_POST: 'Création : {{entity}}', WRITE_ENTITY_UNKNOWN: 'enregistrement' },
+      AUDIT: {
+        WRITE_POST: 'Création : {{entity}}',
+        WRITE_ENTITY_UNKNOWN: 'enregistrement',
+        DESC: {
+          PATIENT_RECORD_VIEWED: 'Dossier patient consulté',
+          ROLE_ASSIGNED: 'Rôle {{role}} attribué à {{name}}',
+          LAB_DEFINITION_STEP: 'Examen {{code}} : étape {{step}}, statut {{status}}.',
+        },
+      },
+      LAB: { APPROVAL_STATUS: { PENDING_QA_REVIEW: 'En attente de revue qualité' } },
       PORTAL: {
         ENUM: {
+          ROLE: { PATIENT: 'Patient(e)', NURSE: 'Infirmier(ère)' },
+          LAB_DEFINITION_ACTION: { SUBMIT_FOR_QA: 'Soumission à la revue qualité' },
           AUDIT_ENTITY_TYPE: {
             LAB_TEST_DEFINITION: 'Définition d’examen de laboratoire',
             REFERRAL: 'Orientation',
@@ -61,6 +72,46 @@ describe('AuditLogsComponent (QA D330)', () => {
     expect(component.describe(row({ eventDescription: 'Lab test definition approval step' }))).toBe(
       'Lab test definition approval step',
     );
+  });
+
+  it('D774: reads a known English description in the reader language', () => {
+    expect(component.describe(row({ eventDescription: 'Patient record viewed' }))).toBe(
+      'Dossier patient consulté',
+    );
+    expect(
+      component.describe(row({ eventDescription: "Assigned role 'ROLE_PATIENT' to Awa Traoré" })),
+    ).toBe('Rôle Patient(e) attribué à Awa Traoré');
+  });
+
+  it('D774: never shows a raw role or action code in a description', () => {
+    const text = component.describe(
+      row({
+        eventDescription:
+          'Examen de laboratoire GLU : étape d’approbation SUBMIT_FOR_QA, nouveau statut En revue (ROLE_NURSE).',
+      }),
+    );
+    expect(text).toContain('Soumission à la revue qualité');
+    expect(text).toContain('Infirmier(ère)');
+    expect(text).not.toMatch(/SUBMIT_FOR_QA|ROLE_NURSE/);
+  });
+
+  it('D774: keeps identifiers verbatim (test codes, person names, underscore codes)', () => {
+    expect(
+      component.describe(
+        row({ eventDescription: 'Lab test GLU and HB_A1C updated by ROLE_NURSE' }),
+      ),
+    ).toBe('Lab test GLU and HB_A1C updated by Infirmier(ère)');
+    expect(
+      component.describe(row({ eventDescription: "Assigned role 'ROLE_PATIENT' to AWA TRAORE" })),
+    ).toBe('Rôle Patient(e) attribué à AWA TRAORE');
+    expect(
+      component.describe(
+        row({
+          eventDescription:
+            'Lab test definition GLU: approval step SUBMIT_FOR_QA, new status PENDING_QA_REVIEW.',
+        }),
+      ),
+    ).toBe('Examen GLU : étape Soumission à la revue qualité, statut En attente de revue qualité.');
   });
 
   it('does not glue the stat-card number to its label', () => {

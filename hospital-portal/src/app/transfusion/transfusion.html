@@ -120,7 +120,7 @@
                     'TRANSFUSION.REQUEST_STATUS_' + r.status | translate
                   }}</span>
                 </td>
-                <td>{{ r.requestedAt | date: 'short' }}</td>
+                <td>{{ r.requestedAt | serverTime | date: 'short' }}</td>
                 <td>
                   <div class="action-group">
                     <button
@@ -184,7 +184,7 @@
                 </td>
                 <td>{{ u.volumeMl ? u.volumeMl + ' mL' : '—' }}</td>
                 <td>
-                  {{ u.expiresOn | date: 'mediumDate' }}
+                  {{ u.expiresOn | serverTime | date: 'mediumDate' }}
                   @if (u.expired) {
                     <span class="expired-flag">{{ 'TRANSFUSION.EXPIRED' | translate }}</span>
                   }

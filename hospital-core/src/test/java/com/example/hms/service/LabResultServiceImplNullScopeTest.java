@@ -232,7 +232,8 @@ class LabResultServiceImplNullScopeTest {
                 .isExactlyInstanceOf(BusinessException.class);
             verify(labResultRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
             verify(labResultRepository, never()).findAllForReader(
-                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
             verify(labResultRepository, never()).findHandledByHospitals(any());
         }
     }
@@ -263,6 +264,7 @@ class LabResultServiceImplNullScopeTest {
         void stillPagesEveryTenant() {
             PageRequest page = PageRequest.of(0, 20);
             when(labResultRepository.findAllForReader(org.mockito.ArgumentMatchers.eq(false),
+                    org.mockito.ArgumentMatchers.eq(true), any(),
                     org.mockito.ArgumentMatchers.eq(true), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
@@ -275,7 +277,7 @@ class LabResultServiceImplNullScopeTest {
             PageRequest page = PageRequest.of(0, 20);
             UUID patientId = UUID.randomUUID();
             result.setReleased(true);
-            when(labResultRepository.findAllForReader(true, false, patientId, page))
+            when(labResultRepository.findAllForReader(true, false, patientId, true, new UUID(0L, 0L), page))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
             assertThat(service.getLabResultsPage(page, Locale.ENGLISH, patientId, false).getContent())

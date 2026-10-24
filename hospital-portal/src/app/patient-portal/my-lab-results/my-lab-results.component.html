@@ -53,7 +53,7 @@
                 </span>
               }
               <span class="pli-meta"
-                >{{ lab.collectedDate | date: 'mediumDate' }} ·
+                >{{ lab.collectedDate | serverTime | date: 'mediumDate' }} ·
                 {{ lab.status | enumLabel: 'status' }}</span
               >
             </div>
@@ -89,7 +89,7 @@
                 }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.COLLECTION_DATE' | translate }}</span>
-                  <span class="dv">{{ lab.collectedDate | date: 'medium' }}</span>
+                  <span class="dv">{{ lab.collectedDate | serverTime | date: 'medium' }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>

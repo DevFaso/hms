@@ -32,6 +32,8 @@ public class AdmissionDischargeRequestDTO {
      * the discharge summary states it instead of "not specified".
      */
     @jakarta.validation.constraints.Size(max = 2000, message = "{dischargeSummary.dischargeDiagnosis.size}")
+    // QA D766: a discharge with no diagnosis left the after-visit summary with none.
+    @NotBlank(message = "{admissionDischarge.dischargeDiagnosis.required}")
     private String dischargeDiagnosis;
 
     @NotNull(message = "{admissionDischarge.dischargingProviderId.required}")

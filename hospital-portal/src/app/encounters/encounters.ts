@@ -37,6 +37,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-encounters',
@@ -152,6 +153,12 @@ export class EncountersComponent implements OnInit {
   editing = signal(false);
   saving = signal(false);
   editingId = '';
+  /**
+   * The edited encounter's stored date and time, sent back unchanged when the
+   * day is not changed, so saving a note edit does not move the visit to
+   * midnight.
+   */
+  private editingOriginalDate = '';
   form: EncounterRequest = this.emptyForm();
   encounterTypes: EncounterType[] = [
     'OUTPATIENT',
@@ -341,6 +348,7 @@ export class EncountersComponent implements OnInit {
     this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
     this.editing.set(false);
     this.editingId = '';
+    this.editingOriginalDate = '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.departments.set([]);
@@ -357,13 +365,15 @@ export class EncountersComponent implements OnInit {
   openEdit(enc: EncounterResponse): void {
     this.editing.set(true);
     this.editingId = enc.id;
+    this.editingOriginalDate = enc.encounterDate ?? '';
     this.form = {
       patientId: enc.patientId,
       staffId: enc.staffId,
       hospitalId: enc.hospitalId,
       departmentId: enc.departmentId || undefined,
       encounterType: enc.encounterType,
-      encounterDate: enc.encounterDate?.split('T')[0] || '',
+      // #948 review: the reader's day, not the UTC day of the stored time.
+      encounterDate: serverLocalDate(enc.encounterDate),
       notes: enc.notes || undefined,
     };
     // Pre-fill patient picker display with existing data
@@ -381,11 +391,34 @@ export class EncountersComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /**
+   * #948 review: the date picker gives the reader's calendar day, and the API
+   * stores encounter times on its UTC clock (the list reads them back through
+   * `serverTime`). Sent as `<day>T00:00:00`, a 24 October visit created in
+   * New York was stored as UTC midnight and listed as 23 October, 8:00 PM.
+   * Local midnight of the day is converted to UTC; an edit that keeps the day
+   * sends the stored time back as it was.
+   */
+  private encounterDatePayload(): string {
+    const day = this.form.encounterDate;
+    if (!day) {
+      return '';
+    }
+    if (
+      this.editing() &&
+      this.editingOriginalDate &&
+      serverLocalDate(this.editingOriginalDate) === day
+    ) {
+      return this.editingOriginalDate;
+    }
+    return toServerDateTime(`${day}T00:00`);
+  }
+
   submitForm(): void {
     this.saving.set(true);
     const payload = {
       ...this.form,
-      encounterDate: this.form.encounterDate ? this.form.encounterDate + 'T00:00:00' : '',
+      encounterDate: this.encounterDatePayload(),
     };
     const op = this.editing()
       ? this.encounterService.update(this.editingId, payload)

@@ -33,6 +33,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
 
 @Component({
   selector: 'app-lab',
@@ -342,7 +343,7 @@ export class LabComponent implements OnInit {
   /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
   encounterLabel(e: EncounterResponse): string {
     const date = e.encounterDate
-      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
       : '';
     return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }

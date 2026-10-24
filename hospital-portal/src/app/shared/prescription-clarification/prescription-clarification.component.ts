@@ -21,6 +21,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { expandRoleEquivalents, roleSatisfies } from '../../core/role-equivalence';
 import { ToastService } from '../../core/toast.service';
 import { PrescriptionService } from '../../services/prescription.service';
+import { ServerTimePipe } from '../pipes/server-time.pipe';
 
 /** Which half of the exchange this instance offers. */
 export type ClarificationMode = 'PHARMACY' | 'PRESCRIBER';
@@ -81,7 +82,7 @@ const HIDDEN_ANSWER = {
 @Component({
   selector: 'app-prescription-clarification',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './prescription-clarification.component.html',
   styleUrl: './prescription-clarification.component.scss',

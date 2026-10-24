@@ -38,7 +38,7 @@
             <div class="announcement-icon">
               <span class="material-symbols-outlined">campaign</span>
             </div>
-            <span class="announcement-date">{{ a.date | date: 'medium' }}</span>
+            <span class="announcement-date">{{ a.date | serverTime | date: 'medium' }}</span>
           </div>
           <p class="announcement-text">{{ a.text }}</p>
           <div class="announcement-actions">

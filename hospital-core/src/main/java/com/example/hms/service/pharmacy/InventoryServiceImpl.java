@@ -29,6 +29,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityManager;
+import com.example.hms.validation.PickedDayNotInFutureValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -37,6 +38,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -72,6 +74,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final ControlledStockWitness controlledStockWitness;
     /** Re-reads an entity after an atomic quantity UPDATE (#825 round 5). */
     private final EntityManager entityManager;
+    /** The server's clock (UTC), for the picked-day check of a receipt. */
+    private final Clock clock;
 
     // ── Inventory items ──────────────────────────────────────────────────
 
@@ -195,7 +199,7 @@ public class InventoryServiceImpl implements InventoryService {
     // ── Stock lots ───────────────────────────────────────────────────────
 
     /** Field checks on a goods receipt, before anything is read or written. */
-    private static void validateReceiptQuantitiesAndDates(StockLotRequestDTO dto) {
+    private void validateReceiptQuantitiesAndDates(StockLotRequestDTO dto) {
         // D108: an expired lot is not stock. It was accepted at goods receipt
         // and counted on hand, where the FEFO picker skips it but every total,
         // reorder decision and report counted it.
@@ -218,9 +222,10 @@ public class InventoryServiceImpl implements InventoryService {
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.tooLarge",
                     MAX_RECEIPT_QUANTITY.toPlainString()));
         }
-        // QA D334: a delivery cannot have been received in the future.
-        if (dto.getReceivedDate() != null
-            && dto.getReceivedDate().isAfter(LocalDate.now(ZoneId.systemDefault()))) {
+        // QA D334: a delivery cannot have been received in the future. #948
+        // review: the portal defaults it to the reader's today, which east of
+        // UTC is already tomorrow on the server's calendar, so that day passes.
+        if (!PickedDayNotInFutureValidator.isAllowed(dto.getReceivedDate(), clock)) {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
         }
@@ -251,6 +256,15 @@ public class InventoryServiceImpl implements InventoryService {
         enforceHospitalScope(item.getPharmacy());
 
         validateReceiptQuantitiesAndDates(dto);
+        // QA D779: a receipt is a stock movement like any other (D668 guarded
+        // only returns): 2.5 tablets left the item at 3001182.5 on hand.
+        WholeUnitQuantity.require(item, dto.getInitialQuantity());
+        WholeUnitQuantity.require(item, dto.getRemainingQuantity());
+        // QA D778: the DTO constraint is the first gate; this one holds for
+        // any caller that skips bean validation.
+        if (dto.getUnitCost() != null && dto.getUnitCost().signum() < 0) {
+            throw new BusinessException("stockTransaction.unitCost.min");
+        }
         requireConsistentLotExpiry(item, dto);
 
         // The receipt is recorded against the signed-in user (D82): a
