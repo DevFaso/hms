@@ -40,7 +40,9 @@ interface DescriptionPattern {
   readonly key: string;
   readonly params?: (m: RegExpExecArray) => Record<string, string>;
   /** Params that are codes to read in the reader's language; every other param is verbatim. */
-  readonly localise?: Readonly<Record<string, 'role' | 'labDefinitionAction'>>;
+  readonly localise?: Readonly<
+    Record<string, 'role' | 'labDefinitionAction' | 'labApprovalStatus'>
+  >;
 }
 const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
   { re: /^Patient record viewed$/, key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED' },
@@ -73,7 +75,7 @@ const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
     re: /^Lab test definition (\S+): approval step (\S+), new status (.+?)\.$/,
     key: 'AUDIT.DESC.LAB_DEFINITION_STEP',
     params: (m) => ({ code: m[1], step: m[2], status: m[3] }),
-    localise: { step: 'labDefinitionAction' },
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
   },
 ];
 /** A raw enum token in free text: ROLE_PATIENT, SUBMIT_FOR_QA, PENDING_QA_REVIEW. */
@@ -133,12 +135,21 @@ export class AuditLogsComponent implements OnInit {
         const localised: Record<string, string> = {};
         for (const [k, v] of Object.entries(params)) {
           const domain = p.localise?.[k];
-          localised[k] = domain ? this.label(v, domain) : v;
+          if (domain === 'labApprovalStatus') localised[k] = this.approvalStatus(v);
+          else localised[k] = domain ? this.label(v, domain) : v;
         }
         return this.translate.instant(p.key, localised);
       }
     }
     return description.replaceAll(RAW_TOKEN, (token) => this.label(token));
+  }
+
+  /** QA D774: a lab-definition status through LAB.APPROVAL_STATUS; an unknown code stays verbatim. */
+  private approvalStatus(value: string): string {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
+    const key = `LAB.APPROVAL_STATUS.${value}`;
+    const label: unknown = this.translate.instant(key);
+    return typeof label === 'string' && label !== key ? label : value;
   }
 
   /**

@@ -36,6 +36,7 @@ describe('AuditLogsComponent (QA D330)', () => {
           LAB_DEFINITION_STEP: 'Examen {{code}} : étape {{step}}, statut {{status}}.',
         },
       },
+      LAB: { APPROVAL_STATUS: { PENDING_QA_REVIEW: 'En attente de revue qualité' } },
       PORTAL: {
         ENUM: {
           ROLE: { PATIENT: 'Patient(e)', NURSE: 'Infirmier(ère)' },
@@ -110,7 +111,7 @@ describe('AuditLogsComponent (QA D330)', () => {
             'Lab test definition GLU: approval step SUBMIT_FOR_QA, new status PENDING_QA_REVIEW.',
         }),
       ),
-    ).toBe('Examen GLU : étape Soumission à la revue qualité, statut PENDING_QA_REVIEW.');
+    ).toBe('Examen GLU : étape Soumission à la revue qualité, statut En attente de revue qualité.');
   });
 
   it('does not glue the stat-card number to its label', () => {
