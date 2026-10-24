@@ -342,4 +342,180 @@ class StaffSchedulingServiceImplTest {
         user.setLastName("User");
         return user;
     }
+
+    // ── QA D602: a shift is loaded by id AND the acting hospital ────────────
+
+    private void actAt(UUID hospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalId)
+                .permittedHospitalIds(java.util.Set.of(hospitalId))
+                .hospitalAdmin(true)
+                .build());
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearScope() {
+        com.example.hms.security.context.HospitalContextHolder.clear();
+    }
+
+    private StaffShift shiftAt(Staff staff) {
+        StaffShift shift = StaffShift.builder()
+            .staff(staff).hospital(staff.getHospital())
+            .shiftDate(TODAY.plusDays(1)).startTime(LocalTime.of(8, 0)).endTime(LocalTime.of(16, 0))
+            .shiftType(StaffShiftType.MORNING).build();
+        shift.setId(UUID.randomUUID());
+        when(shiftRepository.findDetailedById(shift.getId())).thenReturn(Optional.of(shift));
+        return shift;
+    }
+
+    /** QA D602: HOSPITAL_ADMIN_B PUTs hospital A's shift with DOCTOR_B and hospital B in the body: 404, nothing moves. */
+    @Test
+    void d602_adminOfHospitalB_cannotTakeOverHospitalAsShift() {
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        Staff doctorA = buildStaff(UUID.randomUUID(), hospitalA);
+        Staff doctorB = buildStaff(UUID.randomUUID(), hospitalB);
+        StaffShift shift = shiftAt(doctorA);
+        lenient().when(staffRepository.findById(doctorB.getId())).thenReturn(Optional.of(doctorB));
+        lenient().when(hospitalRepository.findClinicalById(hospitalB)).thenReturn(Optional.of(doctorB.getHospital()));
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        lenient().when(roleValidator.isHospitalAdmin(any(), eq(hospitalB))).thenReturn(true);
+        actAt(hospitalB);
+
+        StaffShiftRequestDTO takeOver = new StaffShiftRequestDTO(doctorB.getId(), hospitalB, null,
+            TODAY.plusDays(1), LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.updateShift(shift.getId(), takeOver, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThat(shift.getHospital().getId()).isEqualTo(hospitalA);
+        assertThat(shift.getStaff()).isSameAs(doctorA);
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    /** QA D602 sibling: the status PUT on another hospital's shift is a 404 too. */
+    @Test
+    void d602_statusOfAnotherHospitalsShift_isNotFound() {
+        UUID hospitalA = UUID.randomUUID();
+        StaffShift shift = shiftAt(buildStaff(UUID.randomUUID(), hospitalA));
+        actAt(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.updateShiftStatus(shift.getId(),
+                new com.example.hms.payload.dto.StaffShiftStatusUpdateDTO(
+                    com.example.hms.enums.StaffShiftStatus.CANCELLED, "x"), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    /** QA D602 sibling: a leave of another hospital cannot be decided or cancelled from here. */
+    @Test
+    void d602_leaveOfAnotherHospital_isNotFound() {
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.model.StaffLeaveRequest leave = com.example.hms.model.StaffLeaveRequest.builder()
+            .hospital(buildStaff(UUID.randomUUID(), hospitalA).getHospital())
+            .build();
+        leave.setId(UUID.randomUUID());
+        when(leaveRepository.findDetailedById(leave.getId())).thenReturn(Optional.of(leave));
+        actAt(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.decideLeave(leave.getId(),
+                new com.example.hms.payload.dto.StaffLeaveDecisionDTO(
+                    com.example.hms.enums.StaffLeaveStatus.APPROVED, null), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.cancelLeave(leave.getId(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(leaveRepository, never()).save(any());
+    }
+
+    /** QA D602: hospital A's own admin cannot move A's shift to hospital B through the body either. */
+    @Test
+    void d602_ownAdmin_cannotMoveTheShiftToAnotherHospital() {
+        UUID hospitalA = UUID.randomUUID();
+        UUID hospitalB = UUID.randomUUID();
+        Staff doctorA = buildStaff(UUID.randomUUID(), hospitalA);
+        StaffShift shift = shiftAt(doctorA);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.isHospitalAdmin(any(), eq(hospitalA))).thenReturn(true);
+        actAt(hospitalA);
+
+        StaffShiftRequestDTO move = new StaffShiftRequestDTO(doctorA.getId(), hospitalB, null,
+            TODAY.plusDays(1), LocalTime.of(8, 0), LocalTime.of(16, 0), StaffShiftType.MORNING, null);
+
+        UUID shiftId = shift.getId();
+        assertThatThrownBy(() -> service.updateShift(shiftId, move, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("schedule.shift.hospital.immutable");
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    /** D602 path re-verified: hospital A's admin still edits A's shift (new time, same staff). */
+    @Test
+    void d602_ownAdmin_stillEditsTheShift() {
+        UUID hospitalA = UUID.randomUUID();
+        Staff doctorA = buildStaff(UUID.randomUUID(), hospitalA);
+        StaffShift shift = shiftAt(doctorA);
+        UUID actor = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(actor);
+        when(roleValidator.isHospitalAdmin(any(), eq(hospitalA))).thenReturn(true);
+        when(staffRepository.findById(doctorA.getId())).thenReturn(Optional.of(doctorA));
+        when(hospitalRepository.findClinicalById(hospitalA)).thenReturn(Optional.of(doctorA.getHospital()));
+        lenient().when(staffAvailabilityRepository.findByStaff_IdAndDate(any(), any())).thenReturn(Optional.empty());
+        lenient().when(staffAvailabilityRepository.save(any(StaffAvailability.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(leaveRepository.findLeavesOverlappingDate(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(userRepository.findById(actor)).thenReturn(Optional.of(buildUser(actor, "admin@example.com")));
+        when(shiftRepository.save(any(StaffShift.class))).thenAnswer(i -> i.getArgument(0));
+        actAt(hospitalA);
+
+        StaffShiftRequestDTO edit = new StaffShiftRequestDTO(doctorA.getId(), hospitalA, null,
+            TODAY.plusDays(1), LocalTime.of(9, 0), LocalTime.of(17, 0), StaffShiftType.MORNING, null);
+
+        service.updateShift(shift.getId(), edit, Locale.ENGLISH);
+
+        assertThat(shift.getStartTime()).isEqualTo(LocalTime.of(9, 0));
+        assertThat(shift.getHospital().getId()).isEqualTo(hospitalA);
+    }
+
+    // ── QA D635: only a shift type that runs past midnight may end before it starts ──
+
+    @Test
+    void d635_morningShiftFrom16To08_isRefused() {
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        StaffShiftRequestDTO backwards = new StaffShiftRequestDTO(staffId, hospitalId, null, TODAY.plusDays(1),
+            LocalTime.of(16, 0), LocalTime.of(8, 0), StaffShiftType.MORNING, null);
+
+        assertThatThrownBy(() -> service.scheduleShift(backwards, Locale.ENGLISH))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("schedule.shift.timeRange.invalid");
+        verify(shiftRepository, never()).save(any(StaffShift.class));
+    }
+
+    /** D635 path re-verified: a NIGHT shift 22:00 to 06:00 is still accepted. */
+    @Test
+    void d635_nightShiftAcrossMidnight_isStillAccepted() {
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID actorId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
+        when(roleValidator.getCurrentUserId()).thenReturn(actorId);
+        lenient().when(staffAvailabilityRepository.findByStaff_IdAndDate(any(), any())).thenReturn(Optional.empty());
+        lenient().when(staffAvailabilityRepository.save(any(StaffAvailability.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(leaveRepository.findLeavesOverlappingDate(any(), any(), any())).thenReturn(Collections.emptyList());
+        when(userRepository.findById(actorId)).thenReturn(Optional.of(buildUser(actorId, "a@example.com")));
+        when(shiftRepository.save(any(StaffShift.class))).thenAnswer(i -> i.getArgument(0));
+
+        StaffShiftRequestDTO night = new StaffShiftRequestDTO(staffId, hospitalId, null, TODAY.plusDays(1),
+            LocalTime.of(22, 0), LocalTime.of(6, 0), StaffShiftType.NIGHT, null);
+
+        assertThat(service.scheduleShift(night, Locale.ENGLISH)).isNotNull();
+    }
 }

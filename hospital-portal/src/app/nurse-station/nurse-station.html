@@ -824,7 +824,7 @@
                     <td>{{ a.roomBed || '—' }}</td>
                     <td>{{ a.departmentName || '—' }}</td>
                     <td>{{ a.admittingDoctor || '—' }}</td>
-                    <td>{{ a.admissionDateTime | date: 'short' }}</td>
+                    <td>{{ fromServerDateTime(a.admissionDateTime) | date: 'short' }}</td>
                     <td>
                       {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
                     </td>

@@ -66,6 +66,7 @@ class AdmissionServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
+    @Mock private com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository;
 
     @InjectMocks
     private AdmissionServiceImpl service;
@@ -231,6 +232,41 @@ class AdmissionServiceImplTest {
         service.cancelAdmission(admissionId);
 
         verify(admissionRepository).save(admission);
+    }
+
+    /** QA D603: DELETE /api/admissions/{id} on a discharged (closed) stay is refused and changes nothing. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AdmissionStatus.class,
+        names = {"DISCHARGED", "AWAITING_DISCHARGE", "TRANSFERRED", "DECEASED", "CANCELLED"})
+    void d603_cancelAdmission_refusesAClosedStay(AdmissionStatus status) {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(status);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("admission.cancel.notInProgress");
+        assertThat(admission.getStatus()).isEqualTo(status);
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    /** QA D603: a stay with a live invoice on its encounter is not cancelled either. */
+    @Test
+    void d603_cancelAdmission_refusesABilledStay() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(billingInvoiceRepository.existsByEncounter_AdmissionIdAndStatusNot(admissionId,
+            com.example.hms.enums.InvoiceStatus.CANCELLED)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("admission.cancel.billed");
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test

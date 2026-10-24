@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -135,6 +136,24 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         // remain the second gate.
         HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
         assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D623: the by-id READ loader is not tenant-filtered, so the service's readable rule decides")
+    void byIdReadLoaderSeesTheForeignRowTheScopedFinderHides() {
+        // D508 did not hold on a real database: the scoped findById hid the row
+        // the by-patient list had just shown, and the service's own
+        // readable-hospitals check never ran. The read loader must see it.
+        HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
+        assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isEmpty();
+        assertThat(imagingOrderRepository.findByIdUnscoped(orderAtA2.getId()))
+            .get().extracting(ImagingOrder::getId).isEqualTo(orderAtA2.getId());
+    }
+
+    @Test
+    @DisplayName("QA D623: GET by id of a sibling order with no treatment relationship still answers 404")
+    void readOfUnrelatedSiblingOrderAnswersLikeMissing() throws Exception {
+        assertSameAsMissing(id -> get(API + "/imaging/orders/{id}", id));
     }
 
     @Test

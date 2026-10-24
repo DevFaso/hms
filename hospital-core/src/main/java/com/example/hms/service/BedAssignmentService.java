@@ -116,7 +116,7 @@ public class BedAssignmentService {
      * whose record says they are outside it; a missing sex or birth date is let
      * through (an incomplete record must not block an admission).
      */
-    static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+    public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
         if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
             return;
         }
