@@ -27,10 +27,14 @@ import { PartographChartComponent } from './partograph-chart.component';
  * Labor & Delivery tab (P1 #6): start a labor episode, chart WHO partograph
  * timepoints against the alert/action lines, file the delivery record.
  */
+import { withServerDateTimes } from '../shared/date-utils';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+
 @Component({
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -162,21 +166,28 @@ export class LaborTabComponent {
     // QA D295: an episode needs its onset time; the button is disabled without it.
     if (!patient || !this.startForm.laborOnsetAt) return;
     this.saving.set(true);
-    this.laborService.startEpisode(patient.id, this.startForm).subscribe({
-      next: () => {
-        this.toast.success(this.translate.instant('LABOR.EPISODE_STARTED'));
-        this.saving.set(false);
-        this.startFormOpen.set(false);
-        this.loadEpisodes(patient.id);
-      },
-      error: (err: unknown) => {
-        // QA D214: the server's reason (e.g. a recent delivery needs an
-        // override) is shown, not hidden behind a generic failure; QA D746:
-        // a field reason (an admission in the future) included.
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.EPISODE_START_ERROR'));
-        this.saving.set(false);
-      },
-    });
+    this.laborService
+      .startEpisode(
+        patient.id,
+        withServerDateTimes(this.startForm, ['laborOnsetAt', 'admittedAt', 'membraneRuptureAt']),
+      )
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('LABOR.EPISODE_STARTED'));
+          this.saving.set(false);
+          this.startFormOpen.set(false);
+          this.loadEpisodes(patient.id);
+        },
+        error: (err: unknown) => {
+          // QA D214: the server's reason (e.g. a recent delivery needs an
+          // override) is shown, not hidden behind a generic failure; QA D746:
+          // a field reason (an admission in the future) included.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('LABOR.EPISODE_START_ERROR'),
+          );
+          this.saving.set(false);
+        },
+      });
   }
 
   /* ── Partograph entries ────────────────────────────────── */
@@ -205,26 +216,28 @@ export class LaborTabComponent {
       return;
     }
     this.saving.set(true);
-    this.laborService.addEntry(patient.id, episode.id, form).subscribe({
-      next: (entry) => {
-        this.toast.success(this.translate.instant('LABOR.ENTRY_SAVED'));
-        for (const alert of entry.alerts ?? []) {
-          if (alert.severity === 'URGENT') {
-            this.toast.error(alert.message);
-          } else if (alert.severity === 'CAUTION') {
-            this.toast.info(alert.message);
+    this.laborService
+      .addEntry(patient.id, episode.id, withServerDateTimes(form, ['observationTime']))
+      .subscribe({
+        next: (entry) => {
+          this.toast.success(this.translate.instant('LABOR.ENTRY_SAVED'));
+          for (const alert of entry.alerts ?? []) {
+            if (alert.severity === 'URGENT') {
+              this.toast.error(alert.message);
+            } else if (alert.severity === 'CAUTION') {
+              this.toast.info(alert.message);
+            }
           }
-        }
-        this.saving.set(false);
-        this.entryForm = {};
-        this.entryFormOpen.set(false);
-        this.loadEpisodes(patient.id);
-      },
-      error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.ENTRY_SAVE_ERROR'));
-        this.saving.set(false);
-      },
-    });
+          this.saving.set(false);
+          this.entryForm = {};
+          this.entryFormOpen.set(false);
+          this.loadEpisodes(patient.id);
+        },
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.ENTRY_SAVE_ERROR'));
+          this.saving.set(false);
+        },
+      });
   }
 
   /* ── Delivery ──────────────────────────────────────────── */
@@ -248,7 +261,14 @@ export class LaborTabComponent {
     }
     this.saving.set(true);
     this.laborService
-      .recordDelivery(patient.id, episode.id, this.deliveryForm as DeliveryRecordRequest)
+      .recordDelivery(
+        patient.id,
+        episode.id,
+        withServerDateTimes(this.deliveryForm as DeliveryRecordRequest, [
+          'birthDateTime',
+          'placentaDeliveredAt',
+        ]),
+      )
       .subscribe({
         next: (delivery) => {
           this.toast.success(this.translate.instant('LABOR.DELIVERY_SAVED'));

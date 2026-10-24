@@ -1,3 +1,4 @@
+import { nowLocalDatetime } from '../shared/date-utils';
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -273,9 +274,14 @@ describe('LaborTabComponent', () => {
     // Mirror real usage: the mode is chosen after the form opens (opening
     // resets the form to its live-birth defaults).
     component.deliveryForm.deliveryMode = 'SPONTANEOUS_VAGINAL';
+    // #941 review: "now" on the workstation's wall clock goes out as UTC.
+    component.deliveryForm.birthDateTime = nowLocalDatetime(new Date(Date.UTC(2026, 9, 24, 9, 0)));
     component.submitDelivery();
 
     expect(laborSpy.recordDelivery).toHaveBeenCalledWith('p1', 'e1', jasmine.any(Object));
+    expect(laborSpy.recordDelivery.calls.mostRecent().args[2].birthDateTime).toBe(
+      '2026-10-24T09:00:00',
+    );
     expect(component.deliveryFormOpen()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
   });

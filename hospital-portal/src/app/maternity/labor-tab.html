@@ -133,7 +133,7 @@
         </div>
       </div>
       <p class="muted">
-        {{ 'LABOR.ADMITTED' | translate }}: {{ episode.admittedAt | date: 'short' }}
+        {{ 'LABOR.ADMITTED' | translate }}: {{ episode.admittedAt | serverTime | date: 'short' }}
         @if (episode.gestationalAgeWeeks) {
           · {{ 'MATERNITY.GESTATIONAL_AGE' | translate }}: {{ episode.gestationalAgeWeeks }}
           {{ 'MATERNITY.WEEKS' | translate }}
@@ -149,7 +149,7 @@
         }
         @if (episode.activePhaseStartAt) {
           · {{ 'LABOR.ACTIVE_PHASE_SINCE' | translate }}:
-          {{ episode.activePhaseStartAt | date: 'shortTime' }}
+          {{ episode.activePhaseStartAt | serverTime | date: 'shortTime' }}
         } @else {
           · {{ 'LABOR.LATENT_PHASE' | translate }}
         }
@@ -166,7 +166,7 @@
           <span class="risk-badge risk-low">{{ 'LABOR.STATUS_DELIVERED' | translate }}</span>
         </h3>
         <p>
-          {{ record.birthDateTime | date: 'medium' }} ·
+          {{ record.birthDateTime | serverTime | date: 'medium' }} ·
           {{ 'LABOR.MODE_' + record.deliveryMode | translate }}
           @if (record.infantSex) {
             · {{ 'LABOR.SEX_' + record.infantSex | translate }}
@@ -216,7 +216,7 @@
         <tbody>
           @for (entry of entries(); track entry.id) {
             <tr class="data-row {{ entryAlertClass(entry) }}">
-              <td>{{ entry.observationTime | date: 'shortTime' }}</td>
+              <td>{{ entry.observationTime | serverTime | date: 'shortTime' }}</td>
               <td>{{ entry.fetalHeartRateBpm ?? '—' }}</td>
               <td>
                 {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
@@ -275,7 +275,7 @@
           <tbody>
             @for (episode of episodes(); track episode.id) {
               <tr class="data-row">
-                <td>{{ episode.admittedAt | date: 'short' }}</td>
+                <td>{{ episode.admittedAt | serverTime | date: 'short' }}</td>
                 <td>{{ 'LABOR.STATUS_' + episode.status | translate }}</td>
                 <td>
                   {{ episode.outcome ? ('LABOR.OUTCOME_' + episode.outcome | translate) : '—' }}

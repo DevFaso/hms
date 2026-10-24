@@ -50,3 +50,22 @@ export function fromServerDateTime(serverValue: string | null | undefined): Date
   const instant = new Date(zoned);
   return Number.isNaN(instant.getTime()) ? null : instant;
 }
+
+/**
+ * #941 review: clinical-time forms (labor, delivery, postpartum, maternal
+ * history) are checked against the server's UTC clock, so their
+ * `datetime-local` values must be sent as UTC too. Sent as browser wall time,
+ * "now" from a UTC+1 workstation was refused as the future, and a workstation
+ * west of UTC could chart hours ahead. Returns a copy with the named fields
+ * converted; empty fields are left out of the conversion.
+ */
+export function withServerDateTimes<F extends object>(form: F, fields: (keyof F)[]): F {
+  const copy = { ...form };
+  for (const field of fields) {
+    const value = copy[field];
+    if (typeof value === 'string' && value) {
+      copy[field] = toServerDateTime(value) as F[keyof F];
+    }
+  }
+  return copy;
+}

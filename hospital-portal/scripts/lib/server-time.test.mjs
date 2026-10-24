@@ -15,11 +15,29 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
 
 /** Server-stamped instant fields (LocalDateTime in UTC on the API). */
 const INSTANT_FIELDS = [
-  'resultDate', 'releasedAt', 'acknowledgedAt', 'criticalReadBackAt', 'resultedAt',
-  'createdAt', 'updatedAt', 'eventTimestamp', 'signedAt', 'collectedAt', 'orderDatetime',
-  'receivedAt', 'verifiedAt', 'completedAt', 'sentAt', 'readAt',
+  'resultDate',
+  'releasedAt',
+  'acknowledgedAt',
+  'criticalReadBackAt',
+  'resultedAt',
+  'createdAt',
+  'updatedAt',
+  'eventTimestamp',
+  'signedAt',
+  'collectedAt',
+  'orderDatetime',
+  'receivedAt',
+  'verifiedAt',
+  'completedAt',
+  'sentAt',
+  'readAt',
 ];
-const BARE_DATE = new RegExp(`\b(${INSTANT_FIELDS.join('|')})\s*\|\s*date\b`, 'g');
+const BARE_DATE = new RegExp(String.raw`\b(${INSTANT_FIELDS.join('|')})\s*\|\s*date\b`, 'g');
+
+test('the guard regex catches a bare instant and spares a piped one', () => {
+  assert.equal([...'{{ a.createdAt | date }}'.matchAll(BARE_DATE)].length, 1);
+  assert.equal([...'{{ a.createdAt | serverTime | date }}'.matchAll(BARE_DATE)].length, 0);
+});
 
 test('server instants go through serverTime before the date pipe', () => {
   const offenders = [];

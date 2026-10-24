@@ -33,7 +33,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { nowLocalDatetime } from '../shared/date-utils';
+import { nowLocalDatetime, withServerDateTimes } from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
@@ -470,8 +470,8 @@ export class MaternityComponent implements OnInit {
     this.historySaving.set(true);
     const editingId = this.editingHistoryId();
     const op = editingId
-      ? this.maternityService.update(editingId, form)
-      : this.maternityService.create(form);
+      ? this.maternityService.update(editingId, withServerDateTimes(form, ['recordedDate']))
+      : this.maternityService.create(withServerDateTimes(form, ['recordedDate']));
     op.subscribe({
       next: () => {
         this.toast.success(

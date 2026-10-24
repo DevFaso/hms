@@ -140,7 +140,7 @@
             @for (h of histories(); track h.id) {
               <tr class="data-row">
                 <td>{{ patientName(h.patientId) }}</td>
-                <td>{{ h.recordedDate | date: 'medium' }}</td>
+                <td>{{ h.recordedDate | serverTime | date: 'medium' }}</td>
                 <td>v{{ h.versionNumber ?? 1 }}</td>
                 <td>
                   <span class="{{ riskClass(h.riskCategory) }}">
@@ -521,7 +521,7 @@
             <ul class="version-list">
               @for (v of historyVersions(); track v.id) {
                 <li>
-                  v{{ v.versionNumber ?? 1 }} — {{ v.recordedDate | date: 'medium' }}
+                  v{{ v.versionNumber ?? 1 }} — {{ v.recordedDate | serverTime | date: 'medium' }}
                   @if (v.updateReason) {
                     <span class="muted">({{ v.updateReason }})</span>
                   }

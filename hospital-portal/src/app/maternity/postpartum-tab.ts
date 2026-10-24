@@ -46,7 +46,7 @@ import {
   ProInstrumentFormComponent,
   unansweredItems,
 } from '../shared/pro-instrument-form/pro-instrument-form.component';
-import { nowLocalDatetime } from '../shared/date-utils';
+import { nowLocalDatetime, withServerDateTimes, fromServerDateTime } from '../shared/date-utils';
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -382,7 +382,9 @@ export class PostpartumTabComponent {
   /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
   deliveryLabel(d: DeliveryRecordResponse): string {
     const when = d.birthDateTime
-      ? new Date(d.birthDateTime).toLocaleDateString(currentLocale())
+      ? (fromServerDateTime(d.birthDateTime) ?? new Date(d.birthDateTime)).toLocaleDateString(
+          currentLocale(),
+        )
       : '';
     return `${when} — ${d.deliveryMode ?? ''}`.trim();
   }
@@ -424,25 +426,27 @@ export class PostpartumTabComponent {
     // QA D86: without a care plan the backend needs the acting hospital.
     this.observationForm.hospitalId = this.actingHospitalId();
     this.observationSaving.set(true);
-    this.postpartumService.createObservation(patient.id, this.observationForm).subscribe({
-      next: (created) => {
-        this.toast.success(this.translate.instant('POSTPARTUM.OBSERVATION_SAVED'));
-        this.observationSaving.set(false);
-        this.closeObservation();
-        if (created.schedule) this.schedule.set(created.schedule);
-        this.observations.update((list) => [created, ...list]);
-        for (const alert of created.alerts ?? []) {
-          if (alert.severity === 'URGENT') this.toast.error(alert.message);
-          else this.toast.info(alert.message);
-        }
-      },
-      error: (err: unknown) => {
-        this.toast.error(
-          refusalReason(err) ?? this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
-        );
-        this.observationSaving.set(false);
-      },
-    });
+    this.postpartumService
+      .createObservation(patient.id, withServerDateTimes(this.observationForm, ['observationTime']))
+      .subscribe({
+        next: (created) => {
+          this.toast.success(this.translate.instant('POSTPARTUM.OBSERVATION_SAVED'));
+          this.observationSaving.set(false);
+          this.closeObservation();
+          if (created.schedule) this.schedule.set(created.schedule);
+          this.observations.update((list) => [created, ...list]);
+          for (const alert of created.alerts ?? []) {
+            if (alert.severity === 'URGENT') this.toast.error(alert.message);
+            else this.toast.info(alert.message);
+          }
+        },
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
+          );
+          this.observationSaving.set(false);
+        },
+      });
   }
 
   /* ── Newborn assessment ── */
@@ -476,24 +480,29 @@ export class PostpartumTabComponent {
     this.assessmentForm.followUpActions = [...this.selectedFollowUps];
     this.assessmentForm.hospitalId = this.actingHospitalId();
     this.assessmentSaving.set(true);
-    this.postpartumService.createNewbornAssessment(patient.id, this.assessmentForm).subscribe({
-      next: (created) => {
-        this.toast.success(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVED'));
-        this.assessmentSaving.set(false);
-        this.closeAssessment();
-        this.assessments.update((list) => [created, ...list]);
-        for (const alert of created.alerts ?? []) {
-          if (alert.severity === 'URGENT') this.toast.error(alert.message);
-          else this.toast.info(alert.message);
-        }
-      },
-      error: (err: unknown) => {
-        this.toast.error(
-          refusalReason(err) ?? this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
-        );
-        this.assessmentSaving.set(false);
-      },
-    });
+    this.postpartumService
+      .createNewbornAssessment(
+        patient.id,
+        withServerDateTimes(this.assessmentForm, ['assessmentTime']),
+      )
+      .subscribe({
+        next: (created) => {
+          this.toast.success(this.translate.instant('POSTPARTUM.ASSESSMENT_SAVED'));
+          this.assessmentSaving.set(false);
+          this.closeAssessment();
+          this.assessments.update((list) => [created, ...list]);
+          for (const alert of created.alerts ?? []) {
+            if (alert.severity === 'URGENT') this.toast.error(alert.message);
+            else this.toast.info(alert.message);
+          }
+        },
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
+          );
+          this.assessmentSaving.set(false);
+        },
+      });
   }
 
   apgarSummary(a: NewbornAssessmentResponse): string {
