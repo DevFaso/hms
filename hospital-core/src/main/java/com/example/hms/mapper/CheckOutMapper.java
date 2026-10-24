@@ -111,6 +111,26 @@ public class CheckOutMapper {
             trimToNull(note.getPlan())));
     }
 
+    /** Room left in {@code discharge_summaries.follow_up_instructions}. */
+    public static final int STORED_FOLLOW_UP_MAX = 3000;
+
+    /**
+     * QA D730/D744: the patient's after-visit summary is the stored discharge
+     * summary, not this DTO, so the round-10 fix above never reached it. Both
+     * paths now share this rule: the follow-up typed at checkout, then the
+     * signed note's patient instructions, then its plan, each once. An
+     * unsigned draft adds nothing. Capped to the stored column.
+     */
+    public static String followUpWithSignedNote(String followUp, EncounterNote note) {
+        String typed = trimToNull(followUp);
+        if (note == null || note.getSignedAt() == null) {
+            return typed;
+        }
+        String joined = joinDistinct(typed, trimToNull(note.getPatientInstructions()), trimToNull(note.getPlan()));
+        return joined != null && joined.length() > STORED_FOLLOW_UP_MAX
+            ? joined.substring(0, STORED_FOLLOW_UP_MAX) : joined;
+    }
+
     private static String joinDistinct(String first, String second, String third) {
         StringBuilder out = new StringBuilder();
         for (String part : new String[] {first, second, third}) {

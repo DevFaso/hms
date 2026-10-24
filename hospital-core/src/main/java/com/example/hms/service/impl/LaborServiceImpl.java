@@ -279,6 +279,11 @@ public class LaborServiceImpl implements LaborService {
                 && request.getObservationTime().isAfter(LocalDateTime.now().plusMinutes(PARTOGRAPH_FUTURE_SKEW_MINUTES))) {
             throw new BusinessException("maternity.partograph.futureTime");
         }
+        // QA D745: nor before the labour it charts began.
+        if (request.getObservationTime() != null && episode.getLaborOnsetAt() != null
+                && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
+            throw new BusinessException("maternity.partograph.beforeOnset");
+        }
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
         if (recordedBy != null) {

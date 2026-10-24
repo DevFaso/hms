@@ -2350,7 +2350,10 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setDischargeTime(checkoutTime);
         summary.setDisposition(DischargeDisposition.HOME);
         summary.setDischargeDiagnosis(buildDischargeDiagnosisText(encounter, request));
-        summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
+        // QA D744: the patient reads this row, so it carries the signed note's
+        // instructions and plan exactly as the staff AVS does.
+        summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+            encounter.getFollowUpInstructions(), encounter.getEncounterNote()));
         // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
         // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
         if (request != null) {

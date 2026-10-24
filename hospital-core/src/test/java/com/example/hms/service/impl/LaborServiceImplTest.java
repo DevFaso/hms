@@ -300,6 +300,20 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void qaD745AnEntryBeforeLabourOnsetIsRefused() {
+        // Round 10 re-test: an entry dated 6 h ago on an episode whose onset
+        // was 3 h ago answered 201.
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(3));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(6));
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.beforeOnset");
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
     void qaD714ASmallClockSkewIsStillAccepted() {
         PartographEntryRequestDTO request = entryRequest();
         request.setObservationTime(LocalDateTime.now().plusMinutes(LaborServiceImpl.PARTOGRAPH_FUTURE_SKEW_MINUTES - 2));
