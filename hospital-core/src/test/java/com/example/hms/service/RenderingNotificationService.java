@@ -20,7 +20,11 @@ public abstract class RenderingNotificationService implements NotificationServic
     private static final MessageSource MESSAGES = TestMessageSources.bundles();
     private static final NotificationLocalizer LOCALIZER = new NotificationLocalizer(MESSAGES);
 
-    /** What a test verifies: the stored (French) body, the recipient and the type. */
+    /**
+     * What a test verifies: the stored (French) body, the recipient and the type.
+     * A Mockito verification hook: the parameters ARE the matcher surface, never read here.
+     */
+    @SuppressWarnings("java:S1172")
     public Notification created(String message, String recipientUsername, String type) {
         return null;
     }

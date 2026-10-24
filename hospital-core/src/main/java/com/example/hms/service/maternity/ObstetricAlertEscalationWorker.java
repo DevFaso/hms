@@ -71,6 +71,7 @@ public class ObstetricAlertEscalationWorker {
     private static final List<String> REMINDER_ROLES = List.of("ROLE_DOCTOR", "ROLE_MIDWIFE", "ROLE_NURSE");
     private static final int TITLE_MAX = 500;
     static final String REMINDER_KEY = "obstetric.alert.escalation";
+    private static final String PATIENT_FALLBACK = "patient.fallback.generic";
 
     private final ObstetricAlertEscalationRepository escalationRepository;
     private final InBasketItemRepository inBasketItemRepository;
@@ -110,7 +111,7 @@ public class ObstetricAlertEscalationWorker {
         // staff-locale text only titles the in-basket item.
         Object[] args = {typeLabelArg(alert.sourceType(), alert.alertType(), alert.typeLabel()),
             alert.patientName() == null || alert.patientName().isBlank()
-                ? NotificationLocalizer.key("patient.fallback.generic") : alert.patientName(),
+                ? NotificationLocalizer.key(PATIENT_FALLBACK) : alert.patientName(),
             alertMessageArg(alert.alertMessageKey(), alert.alertMessageArgs(), alert.alertMessage())};
         int reached = deliver(row, firstNoticeKey(alert.sourceType()), args, alert.notificationText(),
             alert.patientName(), recipients, NOTIFICATION_TYPE);
@@ -169,9 +170,9 @@ public class ObstetricAlertEscalationWorker {
             .map(Patient::getFullName)
             .filter(n -> !n.isBlank());
         String patientName = knownName
-            .orElseGet(() -> messageSource.getMessage("patient.fallback.generic", null, locale));
+            .orElseGet(() -> messageSource.getMessage(PATIENT_FALLBACK, null, locale));
         Object patientArg = knownName.<Object>map(n -> n)
-            .orElseGet(() -> NotificationLocalizer.key("patient.fallback.generic"));
+            .orElseGet(() -> NotificationLocalizer.key(PATIENT_FALLBACK));
         Object[] reminderArgs = {String.valueOf(next),
             typeLabelArg(row.getSourceType(), row.getAlertType(), row.getTypeLabel()), patientArg,
             alertMessageArg(row.getAlertMessageKey(), row.getAlertMessageArgs(), row.getAlertMessage())};

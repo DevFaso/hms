@@ -25,6 +25,8 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// Identity is the id, as for every BaseEntity row; adding columns adds no equality.
+@SuppressWarnings("java:S2160")
 public class ObstetricAlertEscalation extends BaseEntity {
 
     @Column(name = "hospital_id", nullable = false)

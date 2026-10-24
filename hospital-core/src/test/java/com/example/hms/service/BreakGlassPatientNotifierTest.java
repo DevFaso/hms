@@ -14,11 +14,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /** QA D410: break-the-glass overrides an opt-out, and the patient is told. */
@@ -73,7 +73,7 @@ class BreakGlassPatientNotifierTest {
     @Test
     void aNotificationFailureNeverBlocksEmergencyAccess() {
         when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient.getId())).thenReturn(true);
-        Hospital broken = org.mockito.Mockito.mock(Hospital.class);
+        Hospital broken = mock(Hospital.class);
         when(broken.getName()).thenThrow(new IllegalStateException("down"));
 
         assertThat(notifier.notifyIfOptedOut(patient, broken)).isFalse();

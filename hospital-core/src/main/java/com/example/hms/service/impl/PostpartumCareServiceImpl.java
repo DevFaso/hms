@@ -57,6 +57,8 @@ import com.example.hms.utility.ObstetricEligibility;
 @Transactional
 public class PostpartumCareServiceImpl implements PostpartumCareService {
 
+    private static final String ALERT_MSG_PREFIX = "postpartum.alert.msg.";
+
     private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
     private static final double FEVER_THRESHOLD_C = 38.0;
@@ -551,7 +553,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
      * stored and read by staff, so it is never composed in English in code.
      */
     private String alertText(String code) {
-        return messageSource.getMessage("postpartum.alert.msg." + code, null, NotificationLocales.STAFF);
+        return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);
     }
 
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
@@ -562,7 +564,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .type(type)
             .severity(severity)
             .code(code)
-            .message(messageSource.getMessage("postpartum.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .message(messageSource.getMessage(ALERT_MSG_PREFIX + code, null, message, NotificationLocales.STAFF))
             .triggeredBy(messageSource.getMessage("postpartum.alert.trigger." + code, null, triggeredBy,
                 NotificationLocales.STAFF))
             .build();
@@ -773,24 +775,29 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .forEach(alert -> publishUrgentAlert(alert, observation, documentedBy, fullName, notifyDocumenter));
     }
 
+    /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
+    private void notifyDocumenter(PostpartumObservationAlert alert, User documentedBy, String fullName, String messageKey) {
+        // Read by the documenting clinician, in her language (QA D665).
+        // QA D216: the type is a translated label, never the raw enum.
+        Object typeKey = alert.getType() == null ? ""
+            : NotificationLocalizer.key("postpartum.alert.type." + alert.getType().name());
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        try {
+            notificationService.createNotification("postpartum.alert.notification",
+                new Object[]{typeKey, patientArg,
+                    com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
+        }
+    }
+
     private void publishUrgentAlert(PostpartumObservationAlert alert, PostpartumObservation observation, User documentedBy,
                                     String fullName, boolean notifyDocumenter) {
         // QA D665: the alert sentence travels as its key, rendered per reader.
-        String messageKey = alert.getCode() == null ? null : "postpartum.alert.msg." + alert.getCode();
+        String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode();
         if (notifyDocumenter) {
-            // Read by the documenting clinician, in her language (QA D665).
-            // QA D216: the type is a translated label, never the raw enum.
-            Object typeKey = alert.getType() == null ? ""
-                : NotificationLocalizer.key("postpartum.alert.type." + alert.getType().name());
-            Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
-            try {
-                notificationService.createNotification("postpartum.alert.notification",
-                    new Object[]{typeKey, patientArg,
-                        com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                            messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
-            } catch (RuntimeException ex) {
-                log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
-            }
+            notifyDocumenter(alert, documentedBy, fullName, messageKey);
         }
         if (obstetricAlertEscalation != null && observation.getHospital() != null && observation.getPatient() != null) {
             // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).

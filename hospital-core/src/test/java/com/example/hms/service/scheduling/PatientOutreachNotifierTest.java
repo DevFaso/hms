@@ -16,7 +16,6 @@ import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.repository.NotificationPreferenceRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.service.SmsService;
 import java.util.List;
 import java.util.UUID;
@@ -75,8 +74,7 @@ class PatientOutreachNotifierTest {
         boolean dispatched = notifier.notifyPatient(patient, RECALL, java.util.Locale.FRENCH);
 
         assertThat(dispatched).isTrue();
-        verify(notificationService).created(
-            eq(RECALL_FR), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
+        verify(notificationService).created(RECALL_FR, "awa.traore", "APPOINTMENT_REMINDER");
         verify(smsService).send("+22670707070", RECALL_FR);
     }
 

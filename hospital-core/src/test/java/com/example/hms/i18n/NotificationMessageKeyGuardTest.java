@@ -39,7 +39,7 @@ class NotificationMessageKeyGuardTest {
         "NotificationController.java",
         "PrenatalSchedulingServiceImpl.java");
 
-    private static final Pattern CREATE = Pattern.compile("\\.createNotification\\(\\s*([^,]+),");
+    private static final Pattern CREATE = Pattern.compile("\\.createNotification\\(\\s*+([^,]++),");
 
     @Test
     @DisplayName("NotificationService has no createNotification(String message, String recipient[, String type])")

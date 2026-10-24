@@ -38,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -364,7 +365,7 @@ class MedicationHistoryServiceImplTest {
 
     @Test void qaD678CatalogControlledMorphineWithoutTheTickIsControlledInTheHistory() {
         com.example.hms.repository.MedicationCatalogItemRepository catalog =
-            org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+            mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
         UUID item = UUID.randomUUID();
         com.example.hms.model.medication.MedicationCatalogItem morphine =
             new com.example.hms.model.medication.MedicationCatalogItem();

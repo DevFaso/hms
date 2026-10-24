@@ -15,7 +15,6 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.NotificationService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -27,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.example.hms.i18n.TestMessageSources;
 
 /**
  * The nightly licence sweep (Tier 2 item 40).

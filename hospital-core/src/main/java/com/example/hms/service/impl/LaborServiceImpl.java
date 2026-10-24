@@ -739,6 +739,21 @@ public class LaborServiceImpl implements LaborService {
                 patientArg, notifyDocumenter));
     }
 
+    /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
+    private void notifyDocumenter(com.example.hms.model.labor.LaborAlert alert, User documentedBy, Object patientArg, String messageKey, List<Object> messageArgs) {
+        // QA D172 (D61/D121): the type is a translated label, never the raw enum.
+        Object typeKey = alert.getType() == null ? ""
+            : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
+        try {
+            notificationService.createNotification("labor.alert.notification",
+                new Object[]{typeKey, patientArg,
+                    com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to create labor alert notification: {}", ex.getMessage());
+        }
+    }
+
     private void publishUrgentAlert(com.example.hms.model.labor.LaborAlert alert, LaborEpisode episode,
                                     User documentedBy, String sourceType, UUID sourceId,
                                     Object patientArg, boolean notifyDocumenter) {
@@ -748,17 +763,7 @@ public class LaborServiceImpl implements LaborService {
             ? null : "labor.alert.msg." + alert.getCode();
         List<Object> messageArgs = messageKey == null ? null : NotificationLocalizer.storable(alert.getMessageArgs());
         if (notifyDocumenter) {
-            // QA D172 (D61/D121): the type is a translated label, never the raw enum.
-            Object typeKey = alert.getType() == null ? ""
-                : NotificationLocalizer.key("labor.alert.type." + alert.getType().name());
-            try {
-                notificationService.createNotification("labor.alert.notification",
-                    new Object[]{typeKey, patientArg,
-                        com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                            messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
-            } catch (RuntimeException ex) {
-                log.warn("Failed to create labor alert notification: {}", ex.getMessage());
-            }
+            notifyDocumenter(alert, documentedBy, patientArg, messageKey, messageArgs);
         }
         if (obstetricAlertEscalation != null && episode.getHospital() != null && episode.getPatient() != null) {
             // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).

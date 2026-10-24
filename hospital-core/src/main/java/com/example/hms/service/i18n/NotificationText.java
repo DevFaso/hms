@@ -31,9 +31,9 @@ public record NotificationText(String key, Object[] args) {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof NotificationText that
-            && java.util.Objects.equals(key, that.key)
-            && java.util.Arrays.equals(args, that.args);
+        return other instanceof NotificationText(String otherKey, Object[] otherArgs)
+            && java.util.Objects.equals(key, otherKey)
+            && java.util.Arrays.equals(args, otherArgs);
     }
 
     @Override

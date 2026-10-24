@@ -54,7 +54,7 @@ public class LaborAlert {
      */
     @jakarta.persistence.Transient
     @EqualsAndHashCode.Exclude
-    private transient Object[] messageArgs;
+    private Object[] messageArgs;
 
     @PrePersist
     void onCreate() {
