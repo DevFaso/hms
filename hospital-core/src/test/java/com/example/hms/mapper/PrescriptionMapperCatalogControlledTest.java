@@ -68,4 +68,49 @@ class PrescriptionMapperCatalogControlledTest {
         PrescriptionMapper mapper = mapperWithCatalog(false);
         assertThat(mapper.toResponseDTO(morphineWithoutTick(mapper)).isControlledSubstance()).isFalse();
     }
+
+    /**
+     * QA r3/d654.js: POST /prescriptions with medicationName + medicationCatalogItemId
+     * of a controlled item whose code is NULL (created in the UI). The flag
+     * comes from the item id, at create and on every later read.
+     */
+    @Test
+    void aCatalogPickWithANullCodeReportsTheItemsControlledFlag() {
+        UUID itemId = UUID.randomUUID();
+        MedicationCatalogItem item = new MedicationCatalogItem();
+        item.setControlled(true);
+        MedicationCatalogItemRepository repo = mock(MedicationCatalogItemRepository.class);
+        when(repo.findByIdAndHospital_Id(itemId, HOSPITAL_ID)).thenReturn(Optional.of(item));
+        PrescriptionMapper mapper = new PrescriptionMapper();
+        mapper.setCatalogRepository(repo);
+
+        PrescriptionRequestDTO dto = new PrescriptionRequestDTO();
+        dto.setMedicationName("QA R9 Morphine 12878");
+        dto.setMedicationCatalogItemId(itemId);
+        Prescription rx = mapper.toEntity(dto, null, null, null);
+        Hospital h = new Hospital();
+        h.setId(HOSPITAL_ID);
+        rx.setHospital(h);
+
+        assertThat(rx.getMedicationCode()).isNull();
+        assertThat(rx.getMedicationCatalogItemId()).isEqualTo(itemId);
+        assertThat(mapper.toResponseDTO(rx).isControlledSubstance()).isTrue();
+    }
+
+    @Test
+    void aCatalogItemOfAnotherHospitalDoesNotMarkTheOrder() {
+        UUID itemId = UUID.randomUUID();
+        MedicationCatalogItemRepository repo = mock(MedicationCatalogItemRepository.class);
+        when(repo.findByIdAndHospital_Id(itemId, HOSPITAL_ID)).thenReturn(Optional.empty());
+        PrescriptionMapper mapper = new PrescriptionMapper();
+        mapper.setCatalogRepository(repo);
+        PrescriptionRequestDTO dto = new PrescriptionRequestDTO();
+        dto.setMedicationName("X");
+        dto.setMedicationCatalogItemId(itemId);
+        Prescription rx = mapper.toEntity(dto, null, null, null);
+        Hospital h = new Hospital();
+        h.setId(HOSPITAL_ID);
+        rx.setHospital(h);
+        assertThat(mapper.toResponseDTO(rx).isControlledSubstance()).isFalse();
+    }
 }

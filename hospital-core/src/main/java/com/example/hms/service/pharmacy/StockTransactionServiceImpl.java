@@ -278,6 +278,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         com.example.hms.model.pharmacy.Dispense dispense =
                 dispenseRepository.findLockedById(dto.getReferenceId()).orElse(null);
         if (dispense == null) {
+            requireReturnOfTransfer(dto, item, lot);
             return;
         }
         if (dispense.getStatus() != com.example.hms.enums.DispenseStatus.COMPLETED
@@ -295,6 +296,32 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         }
         BigDecimal returnable = nz(dispense.getQuantityDispensed()).subtract(nz(
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
+        if (dto.getQuantity().compareTo(returnable) > 0) {
+            throw new BusinessException("stockTransaction.return.exceedsDispensed",
+                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+        }
+    }
+
+    /**
+     * QA D668/D675: a referenceId that is not a dispense (a prescription id,
+     * a random UUID) was accepted and created stock. It must then be a
+     * TRANSFER out of this lot (or item, for an unlotted item), and the
+     * return is capped at what that transfer moved and has not come back.
+     */
+    private void requireReturnOfTransfer(StockTransactionRequestDTO dto, InventoryItem item, StockLot lot) {
+        StockTransaction transfer = stockTransactionRepository.findById(dto.getReferenceId())
+                .filter(t -> t.getTransactionType() == StockTransactionType.TRANSFER)
+                .orElseThrow(() -> new BusinessException(
+                        MessageUtil.resolve("stockTransaction.return.referenceNotReturnable")));
+        boolean sameStock = transfer.getStockLot() != null
+                ? lot != null && transfer.getStockLot().getId().equals(lot.getId())
+                : lot == null && transfer.getInventoryItem() != null
+                    && item.getId().equals(transfer.getInventoryItem().getId());
+        if (!sameStock) {
+            throw new BusinessException(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+        }
+        BigDecimal returnable = nz(transfer.getQuantity()).subtract(nz(
+                stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
             throw new BusinessException("stockTransaction.return.exceedsDispensed",
                     returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());

@@ -105,6 +105,10 @@ public class Prescription extends BaseEntity {
     @Column(name = "medication_code", length = 64)
     private String medicationCode;
 
+    /** D654: the catalog item picked at order time (V221); the controlled flag is read from it. */
+    @Column(name = "medication_catalog_item_id")
+    private java.util.UUID medicationCatalogItemId;
+
     @Size(max = 255)
     @Column(name = "medication_display_name", length = 255)
     private String medicationDisplayName;

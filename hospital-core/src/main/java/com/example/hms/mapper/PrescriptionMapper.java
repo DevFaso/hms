@@ -108,7 +108,8 @@ public class PrescriptionMapper {
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(p.isControlledSubstance()
-                || catalogControlled(resolveHospitalId(hospital, enc), p.getMedicationCode()))
+                || catalogControlled(resolveHospitalId(hospital, enc),
+                    p.getMedicationCatalogItemId(), p.getMedicationCode()))
             .requiresCosign(p.isRequiresCosign())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -183,6 +184,7 @@ public class PrescriptionMapper {
 
         e.setMedicationName(dto.getMedicationName());
         e.setMedicationCode(dto.getMedicationCode());
+        e.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
         e.setMedicationDisplayName(dto.getMedicationName());
 
         e.setDosage(dto.getDosage());
@@ -222,6 +224,8 @@ public class PrescriptionMapper {
         if (dto.getMedicationCode() != null) {
             target.setMedicationCode(dto.getMedicationCode());
         }
+        // D654: an edit names its catalog pick again, or falls back to the code.
+        target.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
         if (!notBlank(target.getMedicationDisplayName())) {
             target.setMedicationDisplayName(dto.getMedicationName());
         }
@@ -294,9 +298,18 @@ public class PrescriptionMapper {
         return safeInit(enc.getHospital(), "Encounter", enc.getId(), "hospital");
     }
 
-    private boolean catalogControlled(java.util.UUID hospitalId, String medicationCode) {
-        if (catalogRepository == null || hospitalId == null
-            || medicationCode == null || medicationCode.isBlank()) {
+    private boolean catalogControlled(java.util.UUID hospitalId, java.util.UUID catalogItemId,
+                                      String medicationCode) {
+        if (catalogRepository == null || hospitalId == null) {
+            return false;
+        }
+        // D654: the picked item decides; a UI-created item has no code.
+        if (catalogItemId != null) {
+            return catalogRepository.findByIdAndHospital_Id(catalogItemId, hospitalId)
+                .map(MedicationCatalogItem::isControlled)
+                .orElse(false);
+        }
+        if (medicationCode == null || medicationCode.isBlank()) {
             return false;
         }
         return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())

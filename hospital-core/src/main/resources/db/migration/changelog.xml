@@ -2964,4 +2964,13 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V221 (QA D654): clinical.prescriptions.medication_catalog_item_id, the
+         catalog pick the controlled flag is read from. Plain statements. -->
+    <changeSet id="V221-prescription-catalog-item-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V221__prescription_catalog_item_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

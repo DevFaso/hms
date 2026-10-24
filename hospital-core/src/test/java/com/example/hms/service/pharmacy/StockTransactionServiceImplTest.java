@@ -824,6 +824,72 @@ class StockTransactionServiceImplTest {
             verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
         }
 
+        /**
+         * QA D668/D675 (r3/d668.js): POST /api/pharmacy/stock-transactions as
+         * PHARMACIST_A, RETURN of 1 on lot 69e536f6 with referenceId a
+         * prescription id or a random UUID: 201 and the lot rose. Refused now.
+         */
+        @Test
+        @DisplayName("D675: a return whose reference is neither a dispense nor a transfer is refused")
+        void refusesAReturnReferencingNeitherADispenseNorATransfer() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            UUID prescriptionId = UUID.randomUUID();
+            when(dispenseRepository.findLockedById(prescriptionId)).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, BigDecimal.ONE);
+            request.setReferenceId(prescriptionId);
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D675: a return referencing a receipt (not a transfer) of this lot is refused")
+        void refusesAReturnReferencingANonTransferMovement() {
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            StockTransaction receipt = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.RECEIPT).quantity(new BigDecimal("10")).build();
+            receipt.setId(UUID.randomUUID());
+            when(dispenseRepository.findLockedById(receipt.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(receipt.getId())).thenReturn(Optional.of(receipt));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, BigDecimal.ONE);
+            request.setReferenceId(receipt.getId());
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(MessageUtil.resolve("stockTransaction.return.referenceNotReturnable"));
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
+        @Test
+        @DisplayName("D675: a return of a transfer out of this lot is capped at what that transfer moved")
+        void aReturnOfATransferIsCappedByTheTransfer() {
+            StockTransaction transfer = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.TRANSFER).quantity(new BigDecimal("3")).build();
+            transfer.setId(UUID.randomUUID());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findLockedById(transfer.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(transfer.getId())).thenReturn(Optional.of(transfer));
+            when(stockTransactionRepository.sumQuantityForReference(transfer.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
+
+            StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("2"));
+            request.setReferenceId(transfer.getId());
+            assertThatThrownBy(() -> service.recordTransaction(request))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsDispensed");
+            verify(stockTransactionRepository, never()).save(any(StockTransaction.class));
+        }
+
         @Test
         @DisplayName("D604: a return naming a dispense of another lot is refused")
         void refusesAReturnOnAnotherLot() {
@@ -880,21 +946,25 @@ class StockTransactionServiceImplTest {
         }
 
         @Test
-        @DisplayName("D604: a reference that is no dispense (a transfer) keeps only the lot bound")
-        void aNonDispenseReferenceFallsBackToTheLotBound() {
+        @DisplayName("D604/D675: a return of a real transfer of this lot still meets the lot bound")
+        void aTransferReferenceStillMeetsTheLotBound() {
             StockTransactionRequestDTO request = buildRequest(StockTransactionType.RETURN, new BigDecimal("9.00"));
-            UUID transferId = UUID.randomUUID();
-            request.setReferenceId(transferId);
+            StockTransaction transfer = StockTransaction.builder().inventoryItem(inventoryItem).stockLot(stockLot)
+                    .transactionType(StockTransactionType.TRANSFER).quantity(new BigDecimal("20")).build();
+            transfer.setId(UUID.randomUUID());
+            request.setReferenceId(transfer.getId());
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findLockedById(transferId)).thenReturn(Optional.empty());
+            when(dispenseRepository.findLockedById(transfer.getId())).thenReturn(Optional.empty());
+            when(stockTransactionRepository.findById(transfer.getId())).thenReturn(Optional.of(transfer));
+            when(stockTransactionRepository.sumQuantityForReference(transfer.getId(),
+                    java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(BigDecimal.ZERO);
             stubLotMovements(new BigDecimal("10.00"), new BigDecimal("2.00"));
 
             assertThatThrownBy(() -> service.recordTransaction(request))
                     .isInstanceOf(BusinessException.class)
                     .hasFieldOrPropertyWithValue("messageKey", "stockTransaction.return.exceedsIssued");
-            verify(stockTransactionRepository, never()).sumQuantityForReference(any(), any());
         }
 
         @Test
