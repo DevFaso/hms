@@ -21,10 +21,10 @@ import java.util.regex.Pattern;
  */
 public final class PrescribedQuantityEstimate {
 
-    private static final Pattern AMOUNT = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*([A-Z]*)");
+    private static final Pattern AMOUNT = Pattern.compile("(\\d++(?:[.,]\\d++)?+)\\s*+([A-Z]*+)");
     private static final Pattern DURATION =
         Pattern.compile("^(\\d{1,3})\\s*(D|J|DAY|DAYS|JOUR|JOURS|DIA|DIAS|W|WK|WEEK|WEEKS|SEMAINE|SEMAINES|SEMANA|SEMANAS)$");
-    private static final Pattern STRENGTH = Pattern.compile("(\\d+(?:[.,]\\d+)?)\\s*(MCG|UG|MG|G)\\b");
+    private static final Pattern STRENGTH = Pattern.compile("(\\d++(?:[.,]\\d++)?+)\\s*+(MCG|UG|MG|G)\\b");
 
     private PrescribedQuantityEstimate() {
     }
