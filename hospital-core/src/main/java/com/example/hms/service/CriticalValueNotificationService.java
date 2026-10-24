@@ -166,7 +166,8 @@ public class CriticalValueNotificationService {
                 result.getId());
         } else {
             NotificationText text = buildText(result, false);
-            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE,
+                result.getId());
             String message = text.render(messageSource, NotificationLocales.STAFF);
             // The gateway call waits for the commit: a hung gateway must
             // not hold the clinical transaction's row locks, and an SMS
@@ -284,7 +285,8 @@ public class CriticalValueNotificationService {
         String message = text.render(messageSource, NotificationLocales.STAFF);
 
         for (String recipient : escalationRecipients(result, round)) {
-            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE,
+                result.getId());
         }
         // SMS once per round, not once per recipient: the transport targets the
         // result's chart context, so fanning it out would send the same text
@@ -403,7 +405,11 @@ public class CriticalValueNotificationService {
         result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
-        return labResultRepository.save(result);
+        LabResult saved = labResultRepository.save(result);
+        // QA D726: the alert is answered, so its notifications (to the
+        // orderer and to every escalation recipient) no longer read as unread.
+        notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
+        return saved;
     }
 
     /**

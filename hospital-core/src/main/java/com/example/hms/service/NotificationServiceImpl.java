@@ -81,10 +81,30 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type) {
+        return storeKeyed(messageKey, args, recipientUsername, type, null);
+    }
+
+    @Override
+    public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type,
+                                           UUID subjectId) {
+        return storeKeyed(messageKey, args, recipientUsername, type, subjectId);
+    }
+
+    private Notification storeKeyed(String messageKey, Object[] args, String recipientUsername, String type,
+                                    UUID subjectId) {
         List<Object> stored = com.example.hms.service.i18n.NotificationLocalizer.storable(args);
         String french = localizer.render(messageKey, stored,
             com.example.hms.service.i18n.NotificationLocales.STAFF);
-        return store(capped(french), messageKey, stored, recipientUsername, type);
+        return store(capped(french), messageKey, stored, recipientUsername, type, subjectId);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int markReadForSubject(UUID subjectId, java.util.Collection<String> types) {
+        if (subjectId == null || types == null || types.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.markReadForSubject(subjectId, types);
     }
 
     /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
@@ -100,7 +120,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public Notification createLiteralNotification(String message, String recipientUsername, String type) {
-        return store(message, null, null, recipientUsername, type);
+        return store(message, null, null, recipientUsername, type, null);
     }
 
     @Override
@@ -126,13 +146,14 @@ public class NotificationServiceImpl implements NotificationService {
      * has nothing to wait for.
      */
     private Notification store(String message, String messageKey, List<Object> messageArgs,
-                               String recipientUsername, String type) {
+                               String recipientUsername, String type, UUID subjectId) {
         Notification notification = Notification.builder()
                 .message(message)
                 .messageKey(messageKey)
                 .messageArgs(messageArgs)
                 .recipientUsername(recipientUsername)
                 .type(type)
+                .subjectId(subjectId)
                 .createdAt(LocalDateTime.now())
                 .read(false)
                 .build();

@@ -50,7 +50,7 @@ class ClientSuppliedIdentityGuardTest {
     private static final Pattern IDENTITY = Pattern.compile(
         "(?i)^(providerId|signerId|authorId|orderingProviderId|staffId"
             + "|(signedBy|performedBy|authoredBy|recordedBy|verifiedBy|administeredBy|cancelledBy|approvedBy"
-            + "|reviewedBy|enteredBy|orderedBy|dispensedBy|collectedBy|revokedBy|finalizedBy)(Staff|User)?Id"
+            + "|reviewedBy|enteredBy|orderedBy|dispensedBy|collectedBy|revokedBy|finalizedBy|requestedBy|completedBy)(Staff|User)?Id"
             + "|(signer|author|performer|verifier|recorder)(Staff|User)Id"
             + "|(ordering|discharging|signing|attending|authoring)Provider(Staff|User)?Id"
             + "|(doctor|nurse|midwife|pharmacist|clinician)(Staff|User)Id)$");
@@ -119,6 +119,8 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("StaffSchedulingController#scheduleShift{staffId}", SUBJECT),
         Map.entry("StaffSchedulingController#updateShift{staffId}", SUBJECT),
         Map.entry("TransferController#cancelTransfer{cancelledByStaffId}", CHECKED),
+        Map.entry("TransferController#completeTransfer{completedByStaffId}", CHECKED),
+        Map.entry("TransferController#requestTransfer{requestedByStaffId}", CHECKED),
         Map.entry("TransfusionController#startAdministration{verifiedByStaffId}", "checked: the independent second checker, an active staff member at this hospital and never the caller"),
         Map.entry("TreatmentPlanController#create{authorStaffId}", CHECKED),
         Map.entry("TreatmentPlanController#update{authorStaffId}", "checked: an edit keeps the author; a new author must be the caller")

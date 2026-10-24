@@ -65,6 +65,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -365,7 +366,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy(), null);
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getCreatedBy(), null, false);
         }
 
         recordHistory(saved, "CREATED", resolveHistoryActor(request.getCreatedBy(), ctx.staff()), null);
@@ -419,7 +420,7 @@ public class EncounterServiceImpl implements EncounterService {
             // D406: a note nested in the encounter body is authored by the session too.
             EncounterNoteRequestDTO nested = request.getNote();
             upsertEncounterNoteInternal(saved, resolveSessionNoteAuthor(saved, nested.getAuthorStaffId(),
-                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy(), previousStatus);
+                nested.getAuthorUserId(), nested.getAuthorName(), locale), nested, locale, request.getUpdatedBy(), previousStatus, false);
         }
 
         // Mirror the dedicated checkout flow: whenever an update transitions the
@@ -507,7 +508,7 @@ public class EncounterServiceImpl implements EncounterService {
         NoteAuthor sessionAuthor = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
         EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null,
-            encounter.getStatus());
+            encounter.getStatus(), true);
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -617,7 +618,8 @@ public class EncounterServiceImpl implements EncounterService {
         note.setSignatureValue(computeNoteSignatureDigest(canonicalNoteSignaturePayload(note, signedAt)));
 
         EncounterNote saved = encounterNoteRepository.save(note);
-        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, String.valueOf(currentUserId));
+        // QA D751: the same actor format as every other history row, never a raw id.
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_SIGNED, userActor(note.getAuthor()));
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -667,7 +669,7 @@ public class EncounterServiceImpl implements EncounterService {
         note.setCosignedAt(LocalDateTime.now());
 
         EncounterNote saved = encounterNoteRepository.save(note);
-        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_COSIGNED, String.valueOf(currentUserId));
+        recordNoteHistory(saved.getEncounter(), saved, NOTE_HISTORY_COSIGNED, userActor(cosigner.getUser()));
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
@@ -685,6 +687,11 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
+    }
+
+    /** QA D751: a history actor for a session-resolved user, in the format the other note rows use. */
+    private String userActor(User user) {
+        return determineActorIdentifier(resolveUserDisplayName(user), user, null, null);
     }
 
     private String resolveUserDisplayName(User user) {
@@ -739,7 +746,8 @@ public class EncounterServiceImpl implements EncounterService {
                                                       EncounterNoteRequestDTO request,
                                                       Locale locale,
                                                       String actorOverride,
-                                                      EncounterStatus statusBefore) {
+                                                      EncounterStatus statusBefore,
+                                                      boolean progressEntryPost) {
         // QA D513 (#922 review): the lock lives HERE, on every write path —
         // PUT /encounters/{id} with a nested note reached this method without
         // the guard. Keyed on the status before this request, so the update
@@ -753,23 +761,35 @@ public class EncounterServiceImpl implements EncounterService {
             .orElseGet(() -> encounterNoteRepository.findByEncounter_Id(encounter.getId()).orElse(new EncounterNote()));
 
         boolean isNew = note.getId() == null;
+        // QA D711: on an inpatient stay each POST is the day's progress entry,
+        // not an edit of yesterday's. A section the new entry leaves out is
+        // empty, never yesterday's text under today's assessment; the earlier
+        // entry stays whole in the note history (NOTE_CREATED per entry).
+        // Decided BEFORE the edit locks: a new entry edits nothing, so a signed
+        // day-1 note or another clinician's earlier entry does not block it.
+        boolean newStayEntry = progressEntryPost && !isNew && encounter.getAdmissionId() != null;
         // The lock the sign ceremony creates (P3 #20). Includes pre-V125
         // client-asserted signatures: the note form always promised signing
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
-        if (!isNew && note.isSigned()) {
-            throw new BusinessException("encounter.note.signedLocked");
-        }
-        // D406: a session author may only revise their own note. Another
-        // clinician's text is never overwritten nor re-attributed; they add an addendum.
-        if (!isNew && author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
-            throw new BusinessException("encounter.note.otherAuthor");
+        if (!isNew && !newStayEntry) {
+            assertNoteEditable(note, author);
         }
         if (isNew) {
             note.setEncounter(encounter);
             note.setPatient(encounter.getPatient());
             note.setHospital(encounter.getHospital());
             note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
+        }
+        if (newStayEntry) {
+            // #940 review: the closing entry's addenda and links belong to it.
+            // Snapshot them (full content) into its history before detaching,
+            // or a day-1 correction shows under the day-2 entry and author.
+            // QA D738: that snapshot is the closing entry's text, so its row
+            // names that entry's author, never the clinician starting the next.
+            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED,
+                closingEntryActor(note, historyActor(author, actorOverride)));
+            startNewStayEntry(note, request);
         }
 
         applyNoteFields(note, request, author);
@@ -782,10 +802,60 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setEncounterNote(saved);
 
         // A session author is the history's actor; a body-supplied name is not.
-        String changedBy = !author.sessionResolved() && trimToNull(actorOverride) != null
-            ? trimToNull(actorOverride) : author.actorIdentifier();
-        recordNoteHistory(encounter, saved, isNew ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED, changedBy);
+        recordNoteHistory(encounter, saved, isNew || newStayEntry ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED,
+            historyActor(author, actorOverride));
         return saved;
+    }
+
+    /** The edit locks on an existing note entry (P3 #20 signature lock, D406 author lock). */
+    private void assertNoteEditable(EncounterNote note, NoteAuthor author) {
+        if (note.isSigned()) {
+            throw new BusinessException("encounter.note.signedLocked");
+        }
+        // D406: a session author may only revise their own note. Another
+        // clinician's text is never overwritten nor re-attributed; they add an addendum.
+        if (author.sessionResolved() && !isSameUser(note.getAuthor(), author.user())) {
+            throw new BusinessException("encounter.note.otherAuthor");
+        }
+    }
+
+    /** A session author is the history's actor; a body-supplied name only stands in without a session. */
+    private String historyActor(NoteAuthor author, String actorOverride) {
+        String override = trimToNull(actorOverride);
+        return !author.sessionResolved() && override != null ? override : author.actorIdentifier();
+    }
+
+    /** QA D738: the author of the stay entry being closed; the current actor only when none is recorded. */
+    private String closingEntryActor(EncounterNote closing, String fallback) {
+        String actor = determineActorIdentifier(trimToNull(closing.getAuthorName()), closing.getAuthor(),
+            closing.getAuthorStaff(), null);
+        return actor != null ? actor : fallback;
+    }
+
+    /** QA D711: clears the previous stay entry's sections and timing before the new entry is applied. */
+    private static void startNewStayEntry(EncounterNote note, EncounterNoteRequestDTO request) {
+        NOTE_TEXT_FIELDS.forEach(mapping -> mapping.noteSetter().accept(note, null));
+        note.setLateEntry(false);
+        note.setEventOccurredAt(null);
+        note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
+        note.setAttestAccuracy(false);
+        note.setAttestNoAbbreviations(false);
+        note.setAttestSpellCheck(false);
+        // The previous entry's signature and co-signature belong to that
+        // entry (kept in the note history), never to the new unsigned text.
+        note.setSignedAt(null);
+        note.setSignedByName(null);
+        note.setSignedByCredentials(null);
+        note.setSignedByUserId(null);
+        note.setSignatureAlgorithm(null);
+        note.setSignatureValue(null);
+        note.setCosignedBy(null);
+        note.setCosignedAt(null);
+        // Addenda and links were snapshotted into the closing entry's history.
+        if (note.getAddenda() != null) {
+            note.getAddenda().clear();
+        }
+        note.clearLinks();
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
@@ -1173,7 +1243,41 @@ public class EncounterServiceImpl implements EncounterService {
         snapshot.put("patientInstructions", note.getPatientInstructions());
         snapshot.put("summary", note.getSummary());
         snapshot.put("addenda", note.getAddenda() != null ? note.getAddenda().size() : 0);
+        List<Map<String, Object>> addendaEntries = new ArrayList<>();
+        if (note.getAddenda() != null) {
+            for (EncounterNoteAddendum addendum : note.getAddenda()) {
+                addendaEntries.add(addendumSnapshot(addendum));
+            }
+        }
+        snapshot.put("addendaEntries", addendaEntries);
+        List<Map<String, Object>> linkEntries = new ArrayList<>();
+        for (EncounterNoteLink link : note.getLinks()) {
+            linkEntries.add(linkSnapshot(link));
+        }
+        snapshot.put("links", linkEntries);
         return toJson(snapshot);
+    }
+
+    private static Map<String, Object> addendumSnapshot(EncounterNoteAddendum addendum) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("authorUserId", addendum.getAuthor() != null ? addendum.getAuthor().getId() : null);
+        entry.put("authorName", addendum.getAuthorName());
+        entry.put("authorCredentials", addendum.getAuthorCredentials());
+        entry.put("content", addendum.getContent());
+        entry.put("eventOccurredAt", addendum.getEventOccurredAt() != null ? addendum.getEventOccurredAt().toString() : null);
+        entry.put("documentedAt", addendum.getDocumentedAt() != null ? addendum.getDocumentedAt().toString() : null);
+        entry.put("signedAt", addendum.getSignedAt() != null ? addendum.getSignedAt().toString() : null);
+        return entry;
+    }
+
+    private static Map<String, Object> linkSnapshot(EncounterNoteLink link) {
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("artifactType", link.getArtifactType() != null ? link.getArtifactType().name() : null);
+        entry.put("artifactId", link.getArtifactId());
+        entry.put("artifactCode", link.getArtifactCode());
+        entry.put("artifactDisplay", link.getArtifactDisplay());
+        entry.put("artifactStatus", link.getArtifactStatus());
+        return entry;
     }
 
     private String buildNoteMetadataSnapshot(EncounterNote note) {
