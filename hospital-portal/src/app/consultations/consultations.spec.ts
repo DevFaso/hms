@@ -10,6 +10,7 @@ import {
   ConsultationService,
   ConsultationResponse,
   ConsultationStats,
+  ConsultationStatus,
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -303,6 +304,27 @@ describe('ConsultationsComponent', () => {
     component.submitAssign();
     expect(consultSpy.assign).toHaveBeenCalledWith('c1', 'st1', undefined);
     expect(component.showAssignModal()).toBeFalse();
+  });
+
+  it('offers Reassign while the consult is held, not only when ASSIGNED (D749)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    const statuses: ConsultationStatus[] = [
+      'ASSIGNED',
+      'ACKNOWLEDGED',
+      'SCHEDULED',
+      'IN_PROGRESS',
+      'COMPLETED',
+      'REQUESTED',
+    ];
+    fixture.componentInstance.filtered.set(
+      statuses.map((status, i) => mockConsult({ id: 'r' + i, status })),
+    );
+    fixture.detectChanges();
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('tr.data-row'));
+    expect(rows.length).toBe(statuses.length);
+    const offered = rows.map((r) => !!r.querySelector('.reassign-btn'));
+    expect(offered).toEqual([true, true, true, true, false, false]);
   });
 
   it('reassign requires a reason before calling the service', () => {
