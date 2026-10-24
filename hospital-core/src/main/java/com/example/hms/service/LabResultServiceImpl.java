@@ -304,8 +304,9 @@ public class LabResultServiceImpl implements LabResultService {
             }
         }
 
-        LabResult superseded = ingested ? null : requireSupersedable(request.getSupersedesResultId(), lockedOrder);
+        LabResult superseded = null;
         if (!ingested) {
+            superseded = requireSupersedable(request.getSupersedesResultId(), lockedOrder);
             requireNoLiveResult(superseded, lockedOrder);
         }
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
@@ -316,8 +317,6 @@ public class LabResultServiceImpl implements LabResultService {
             result.setSourceSendingApplication(null);
             result.setSourceSendingFacility(null);
             result.setSourceMessageControlId(null);
-        }
-        if (!ingested) {
             // QA D286: a positive qualitative answer is abnormal. An ingested
             // result keeps the analyzer's own OBX-8 flag.
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));

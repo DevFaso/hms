@@ -520,9 +520,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 definition.setReviewedById(currentUser.getId());
                 definition.setReviewedAt(LocalDateTime.now());
             }
-            case "APPROVE" -> {
-                singleDirectorException = approve(currentUser, definition);
-            }
+            case "APPROVE" -> singleDirectorException = approve(currentUser, definition);
             case "ACTIVATE" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
