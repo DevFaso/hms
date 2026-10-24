@@ -1698,7 +1698,7 @@ class ConsultationServiceImplTest {
         }
 
         @Test
-        @DisplayName("D735: the current consultant can hand the consult to another doctor but not to himself, and cannot /assign; the requester and a hospital admin can")
+        @DisplayName("D735: the current consultant can neither /assign nor reassign (to himself or another doctor); the requester and a hospital admin can")
         void onlyCoordinatorsAssign() {
             Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
@@ -1715,12 +1715,10 @@ class ConsultationServiceImplTest {
             colleague.setHospital(hospital);
             colleague.setUser(new com.example.hms.model.User());
             colleague.getUser().setId(UUID.randomUUID());
-            when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
-            assertThat(service.reassignConsultation(consultationId, colleague.getId(), consultant.getUser().getId(), "handover").getStatus())
-                .isEqualTo(ConsultationStatus.ASSIGNED);
-            assertThat(consultation.getConsultant()).isEqualTo(colleague);
-            consultation.setConsultant(consultant);
-            consultation.setStatus(ConsultationStatus.REQUESTED);
+            org.mockito.Mockito.lenient().when(staffRepository.findById(colleague.getId())).thenReturn(Optional.of(colleague));
+            assertThatThrownBy(() -> service.reassignConsultation(consultationId, colleague.getId(), consultant.getUser().getId(), "handover"))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThat(consultation.getConsultant()).isEqualTo(consultant);
 
             when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
             assertThat(service.assignConsultation(consultationId, consultantId, staff.getUser().getId(), null).getStatus())

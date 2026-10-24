@@ -647,7 +647,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
-        requireReassigner(consultation, consultant);
+        requireReassigner(consultation);
         requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
@@ -902,18 +902,12 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     /**
-     * QA D735: a coordinator may reassign to any qualifying doctor; the assigned
-     * consultant may hand the consult over to another doctor, never to himself.
+     * QA D735: only a coordinator (the requester, a hospital admin of the
+     * consultation's hospital, or a verified super-admin) may reassign. The
+     * assigned consultant who will not do it declines instead.
      */
-    private void requireReassigner(Consultation consultation, Staff target) {
-        if (isCoordinator(consultation)) {
-            return;
-        }
-        requireAssignedConsultant(consultation);
-        Staff current = consultation.getConsultant();
-        if (current == null || target.getId() == null || target.getId().equals(current.getId())) {
-            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.assign.notCoordinator"));
-        }
+    private void requireReassigner(Consultation consultation) {
+        requireCoordinator(consultation);
     }
 
     /** The actor check of updateConsultation, one rule per kind of field it writes. */
