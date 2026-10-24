@@ -218,7 +218,7 @@
                       <span class="material-symbols-outlined">payments</span>
                     </button>
                   }
-                  @if (canEmail) {
+                  @if (canEmail && inv.status !== 'DRAFT' && inv.status !== 'CANCELLED') {
                     <button
                       class="action-link"
                       [title]="'BILLING.EMAIL_INVOICE' | translate"

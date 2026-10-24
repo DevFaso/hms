@@ -699,15 +699,13 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           this.emailSending.set(false);
           this.toast.success(this.translate.instant('BILLING.EMAIL_SENT'));
           this.closeEmail();
-          // Sending flips the invoice to SENT server-side.
-          this.loadInvoices(this.page());
         },
         error: (err: HttpErrorResponse) => {
           this.emailSending.set(false);
           this.toast.error(
             err.status === 503
               ? this.translate.instant('BILLING.EMAIL_UNAVAILABLE')
-              : this.translate.instant('BILLING.EMAIL_FAILED'),
+              : (err.error?.message ?? this.translate.instant('BILLING.EMAIL_FAILED')),
           );
         },
       });

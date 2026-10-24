@@ -256,15 +256,31 @@ class LabResultPatientReadableQueryTest {
         UUID sentinel = new UUID(0L, 0L);
 
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, true, sentinel,
-            Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            true, sentinel, Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactlyInAnyOrder(orderedAtB.getId(), otherPatientAtB.getId());
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, false,
-            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            patient.getId(), true, patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactly(orderedAtB.getId());
         // The laboratory still reads its unreleased rows, filtered by patient.
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, false,
-            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            patient.getId(), true, patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactlyInAnyOrder(orderedAtB.getId(), performedAtBForA.getId(), otherTestAtB.getId());
+    }
+
+    @Test
+    @DisplayName("QA D781: GET /lab-results?labOrderId= lists that order's results only, in both scopes")
+    void labOrderFilterNarrowsTheStaffList() {
+        UUID sentinel = new UUID(0L, 0L);
+        UUID orderId = orderedAtB.getLabOrder().getId();
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, true, sentinel,
+            false, orderId, Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactly(orderedAtB.getId());
+        assertThat(labResultRepository.findAllForReader(false, true, sentinel, false, orderId,
+            Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactly(orderedAtB.getId());
+        // An unknown order lists nothing rather than the whole hospital.
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, true, sentinel,
+            false, UUID.randomUUID(), Pageable.unpaged()).getContent()).isEmpty();
     }
 
     @Test

@@ -56,6 +56,10 @@ public interface LabResultService {
     Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
                                                  UUID patientId, boolean includeUnreleased);
 
+    /** QA D781: as above, also narrowed to one lab order when {@code labOrderId} is set. */
+    Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale,
+                                                 UUID patientId, UUID labOrderId, boolean includeUnreleased);
+
     /** QA D211: an unreleased result is not found for a non-laboratory reader. */
     LabResultResponseDTO getLabResultById(UUID id, Locale locale, boolean includeUnreleased);
 
