@@ -315,6 +315,37 @@ class StaffSchedulingServiceImplTest {
         verify(staffAvailabilityRepository, never()).save(any(StaffAvailability.class));
     }
 
+    /**
+     * QA D754: with a valid leaveType the end-before-start rule must be the
+     * one that answers, in the caller's language (the re-test could never reach it).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "fr|La date de fin du congé ne peut pas être avant la date de début.",
+        "es|La fecha de fin del permiso no puede ser anterior a la fecha de inicio."
+    })
+    void d754_leaveEndingBeforeItStartsIsRefusedInTheCallersLanguage(String lang, String expected) {
+        StaffSchedulingServiceImpl realBundles = new StaffSchedulingServiceImpl(
+            shiftRepository, leaveRepository, staffRepository, hospitalRepository, departmentRepository,
+            staffAvailabilityRepository, new com.example.hms.mapper.StaffSchedulingMapper(), roleValidator,
+            com.example.hms.i18n.TestMessageSources.bundles(), userRepository, FIXED);
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff staff = buildStaff(staffId, hospitalId);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(staff.getHospital()));
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+
+        com.example.hms.payload.dto.StaffLeaveRequestDTO backwards = new com.example.hms.payload.dto.StaffLeaveRequestDTO(
+            staffId, hospitalId, null, TODAY.plusDays(10), TODAY.plusDays(5), null, null,
+            com.example.hms.enums.StaffLeaveType.VACATION, null, "x");
+
+        assertThatThrownBy(() -> realBundles.requestLeave(backwards, Locale.forLanguageTag(lang)))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessage(expected);
+        verify(leaveRepository, never()).save(any());
+    }
+
     private Staff buildStaff(UUID staffId, UUID hospitalId) {
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);
