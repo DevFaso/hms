@@ -422,27 +422,25 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="sign-type">{{ 'SIGNATURES.REPORT_TYPE' | translate }} *</label>
-            <select
-              id="sign-type"
-              [ngModel]="signReportType()"
-              (ngModelChange)="signReportType.set($event)"
-            >
-              <option value="">—</option>
-              @for (t of reportTypes; track t) {
-                <option [value]="t">{{ formatReportType(t) }}</option>
-              }
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="sign-report-id">{{ 'SIGNATURES.REPORT_ID' | translate }} *</label>
-            <input
-              id="sign-report-id"
-              type="text"
-              [placeholder]="'SIGNATURES.REPORT_ID_PLACEHOLDER' | translate"
-              [ngModel]="signReportId()"
-              (ngModelChange)="signReportId.set($event)"
-            />
+            <label for="sign-report">{{ 'SIGNATURES.REPORT' | translate }} *</label>
+            @if (signableLoading()) {
+              <p class="muted">{{ 'SIGNATURES.SIGNABLE_LOADING' | translate }}</p>
+            } @else if (signableReports().length === 0) {
+              <p class="muted" data-testid="no-signable">
+                {{ 'SIGNATURES.NO_SIGNABLE_REPORTS' | translate }}
+              </p>
+            } @else {
+              <select
+                id="sign-report"
+                [ngModel]="signPick()"
+                (ngModelChange)="pickSignable($event)"
+              >
+                <option value="">{{ 'SIGNATURES.PICK_REPORT' | translate }}</option>
+                @for (r of signableReports(); track signableKey(r)) {
+                  <option [value]="signableKey(r)">{{ signableLabel(r) }}</option>
+                }
+              </select>
+            }
           </div>
           <div class="form-group">
             <label for="sign-value">{{ 'SIGNATURES.SIGNATURE_VALUE' | translate }} *</label>

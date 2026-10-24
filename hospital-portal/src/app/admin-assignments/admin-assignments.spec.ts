@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { ActivatedRoute } from '@angular/router';
-import { TranslateService } from '@ngx-translate/core';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { AdminAssignmentsComponent } from './admin-assignments';
@@ -62,5 +62,82 @@ describe('AdminAssignmentsComponent — patient assignments start inactive (QA D
     expect(component.patientRoleSelected()).toBeFalse();
     component.submitCreate();
     expect(service.create.calls.mostRecent().args[0].active).toBeTrue();
+  });
+});
+
+/**
+ * QA D664 replay (rendered): HOSPITAL_ADMIN_A opens /admin-assignments and
+ * "Nouvelle affectation". The role dropdown offered Patient(e), Super
+ * administrateur, Administrateur and Administrateur hôpital, each refused by
+ * the server on submit. It now lists only what the caller may grant.
+ */
+describe('AdminAssignmentsComponent — the role dropdown lists only grantable roles (QA D664)', () => {
+  const roleRows = [
+    { id: 'r-patient', code: 'ROLE_PATIENT', name: 'ROLE_PATIENT', authority: 'ROLE_PATIENT' },
+    {
+      id: 'r-super',
+      code: 'ROLE_SUPER_ADMIN',
+      name: 'ROLE_SUPER_ADMIN',
+      authority: 'ROLE_SUPER_ADMIN',
+    },
+    { id: 'r-admin', code: 'ROLE_ADMIN', name: 'ROLE_ADMIN', authority: 'ROLE_ADMIN' },
+    {
+      id: 'r-hadmin',
+      code: 'ROLE_HOSPITAL_ADMIN',
+      name: 'ROLE_HOSPITAL_ADMIN',
+      authority: 'ROLE_HOSPITAL_ADMIN',
+    },
+    { id: 'r-nurse', code: 'ROLE_NURSE', name: 'ROLE_NURSE', authority: 'ROLE_NURSE' },
+  ] as RoleResponse[];
+
+  function render(superAdmin: boolean) {
+    const service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', [
+      'list',
+    ]);
+    service.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0 }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [AdminAssignmentsComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: { list: () => of([]) } },
+        { provide: RoleService, useValue: { list: () => of(roleRows) } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: () => superAdmin,
+            hasAnyActiveRole: () => superAdmin,
+            activeHospitalId: 'hosp-a',
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(AdminAssignmentsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '[role="dialog"] select',
+    ) as HTMLSelectElement;
+    return Array.from(select.options)
+      .map((o) => o.value)
+      .filter((v) => v !== '');
+  }
+
+  it('offers a hospital admin neither the patient role nor any admin role', () => {
+    expect(render(false)).toEqual(['r-nurse']);
+  });
+
+  it('offers a super-admin the admin roles, but never the patient role', () => {
+    expect(render(true)).toEqual(['r-super', 'r-admin', 'r-hadmin', 'r-nurse']);
   });
 });

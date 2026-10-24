@@ -26,7 +26,6 @@ import org.springframework.security.access.AccessDeniedException;
 import com.example.hms.security.PrincipalUserIds;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,9 +44,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import com.example.hms.repository.PatientRepository;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.service.i18n.PatientLocaleResolver;
 
 @Slf4j
 @Service
@@ -99,15 +95,12 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final ChatMessageMapper chatMessageMapper;
-    private final MessageSource messageSource;
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final NotificationService notificationService;
     private final ChatAttachmentRepository chatAttachmentRepository;
     private final FileUploadService fileUploadService;
-    private final PatientRepository patientRepository;
     private final com.example.hms.repository.PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
-    private final PatientLocaleResolver patientLocaleResolver;
 
     @Override
     @Transactional
@@ -192,17 +185,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         List<ChatAttachment> persistedAttachments = persistAttachments(saved, dto.getAttachments());
 
-        // The bell entry is read by the RECIPIENT, so it is rendered in their
-        // language, not the sender's request locale: a patient's stated
-        // language when they have one, otherwise the staff locale.
-        Locale recipientLocale = patientRepository.findByUserId(recipient.getId())
-            .map(patient -> patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK))
-            .orElse(NotificationLocales.STAFF);
-        notificationService.createNotification(
-            messageSource.getMessage("chat.newMessage.notification",
-                new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()}, recipientLocale),
-            recipient.getUsername()
-        );
+        // The bell entry is read by the RECIPIENT, so it is rendered in the
+        // language they read it in, never the sender's (QA D665).
+        notificationService.createNotification("chat.newMessage.notification",
+            new Object[]{(sender.getFirstName() + " " + sender.getLastName()).trim()},
+            recipient.getUsername(), null);
 
         return chatMessageMapper.toChatMessageResponseDTO(saved, persistedAttachments);
     }

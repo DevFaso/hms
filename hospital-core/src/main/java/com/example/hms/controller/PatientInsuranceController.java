@@ -113,9 +113,9 @@ public class PatientInsuranceController {
     ) {
         patientInsuranceService.deletePatientInsurance(insuranceId, locale);
         String rawMsg = messageSource.getMessage("patientinsurance.deleted", new Object[]{insuranceId}, locale);
-        String safeMsg = HtmlUtils.htmlEscape(rawMsg);
+        String safeMsg = HtmlUtils.htmlEscape(rawMsg, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMsg);
     }
 }

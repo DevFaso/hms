@@ -7,7 +7,6 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.repository.AdmissionRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.NewsScoreCalculator;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.support.StaticMessageSource;
@@ -31,10 +30,10 @@ import static org.mockito.Mockito.when;
 class News2EscalationServiceTest {
 
     private final AdmissionRepository admissionRepository = mock(AdmissionRepository.class);
-    private final NotificationService notificationService = mock(NotificationService.class);
+    private final com.example.hms.service.RenderingNotificationService notificationService = mock(com.example.hms.service.RenderingNotificationService.class, org.mockito.Answers.CALLS_REAL_METHODS);
     private final StaticMessageSource messages = new StaticMessageSource();
     private final News2EscalationService service =
-        new News2EscalationService(admissionRepository, notificationService, messages);
+        new News2EscalationService(admissionRepository, notificationService);
 
     private static PatientVitalSign qaSet(Patient patient) {
         // NURSE_A's QA set for A3: T 38.9, HR 112, RR 26, BP 95/60, SpO2 91.
@@ -67,8 +66,8 @@ class News2EscalationServiceTest {
             service.escalateIfNeeded(qaSet(patient), patient.getId(), hospitalId, "nurse_a");
 
         assertThat(score.riskBand()).isEqualTo(NewsScoreCalculator.RiskBand.HIGH);
-        verify(notificationService).createNotification(anyString(), eq("nurse_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("dr_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+        verify(notificationService).created(anyString(), eq("nurse_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+        verify(notificationService).created(anyString(), eq("dr_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
     }
 
     @Test
@@ -84,8 +83,8 @@ class News2EscalationServiceTest {
 
         service.escalateIfNeeded(qaSet(patient), patient.getId(), UUID.randomUUID(), "nurse_a");
 
-        verify(notificationService).createNotification(anyString(), eq("nurse_a"), anyString());
-        verify(notificationService, never()).createNotification(anyString(), eq("dr_a"), anyString());
+        verify(notificationService).created(anyString(), eq("nurse_a"), anyString());
+        verify(notificationService, never()).created(anyString(), eq("dr_a"), anyString());
     }
 
     @Test
@@ -105,8 +104,8 @@ class News2EscalationServiceTest {
             service.escalateIfNeeded(triage, patient.getId(), UUID.randomUUID(), "nurse_a", "dr_a");
 
         assertThat(score.riskBand()).isEqualTo(NewsScoreCalculator.RiskBand.HIGH);
-        verify(notificationService).createNotification(anyString(), eq("nurse_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
-        verify(notificationService).createNotification(anyString(), eq("dr_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+        verify(notificationService).created(anyString(), eq("nurse_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
+        verify(notificationService).created(anyString(), eq("dr_a"), eq(News2EscalationService.NOTIFICATION_TYPE));
     }
 
     @Test
@@ -117,7 +116,7 @@ class News2EscalationServiceTest {
 
         service.escalateIfNeeded(calm, UUID.randomUUID(), UUID.randomUUID(), "nurse_a");
 
-        verify(notificationService, never()).createNotification(any(), any(), any());
+        verify(notificationService, never()).created(any(), any(), any());
     }
 
     @Test
@@ -144,6 +143,6 @@ class News2EscalationServiceTest {
 
         service.escalateIfNeeded(qaSet(child), child.getId(), UUID.randomUUID(), "nurse_a", "dr_a");
 
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 }

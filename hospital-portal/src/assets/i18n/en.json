@@ -1517,7 +1517,9 @@
       "CONFIRMED": "Confirmed",
       "REJECTED": "Rejected",
       "REVERSED": "Reversed"
-    }
+    },
+    "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
+    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5429,12 +5431,10 @@
         "INVOICE_UPDATED": "Invoice Updated",
         "LAB_ORDER_CREATED": "Lab Order Created",
         "LAB_ORDER_UPDATED": "Lab Order Updated",
-        "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_SPECIMEN_UPDATED": "Lab Specimen Updated",
         "LAB_RESULT_CREATED": "Lab Result Created",
         "LAB_RESULT_ACKNOWLEDGED": "Lab Result Acknowledged",
         "LAB_RESULT_RELEASED": "Lab Result Released",
-        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
         "LAB_RESULT_UPDATED": "Lab Result Updated",
         "LOGIN": "Login",
         "LOGIN_FAILURE": "Login Failure",
@@ -5537,7 +5537,9 @@
         "PRESCRIPTION_QUEUE_CLAIM_RELEASED": "Work-queue claim released",
         "PRESCRIPTION_QUEUE_CLAIM_TAKEN_OVER": "Work-queue claim taken over",
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
-        "USER_RESTORE": "User Restored"
+        "USER_RESTORE": "User Restored",
+        "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -5641,13 +5643,19 @@
       },
       "NOTIFICATION_TYPE": {
         "APPOINTMENT_REMINDER": "Appointment Reminder",
+        "BREAK_GLASS_OPT_OUT_OVERRIDE": "Emergency access to your record",
         "CRITICAL_IMAGING_FINDING": "Critical Imaging Finding",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Critical Imaging Finding Escalation",
         "CRITICAL_LAB_RESULT": "Critical Lab Result",
         "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
         "DISCHARGE_SUMMARY": "Discharge Summary",
+        "LAB_ORDER_RECEIVED": "Lab order received",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
+        "NEWS2_ESCALATION": "NEWS2 escalation",
+        "OBSTETRIC_ALERT": "Urgent Obstetric Alert",
+        "OBSTETRIC_ALERT_ESCALATION": "Urgent Obstetric Alert Escalation",
+        "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
@@ -6064,6 +6072,38 @@
         "PEDIATRIC_MESSAGING": "Paediatric messaging",
         "ORTHO_IMAGING": "Orthopaedic imaging",
         "RESP_TELEMED": "Respiratory telemedicine"
+      },
+      "PROFILE_TYPE": {
+        "STAFF": "Staff",
+        "PATIENT": "Patient"
+      },
+      "TRACKER_ACUITY": {
+        "ESI-1": "ESI 1 - Resuscitation",
+        "ESI-2": "ESI 2 - Emergent",
+        "ESI-3": "ESI 3 - Urgent",
+        "ESI-4": "ESI 4 - Less urgent",
+        "ESI-5": "ESI 5 - Non-urgent",
+        "EMERGENT": "Emergent",
+        "URGENT": "Urgent",
+        "ROUTINE": "Routine",
+        "LOW": "Low"
+      },
+      "MEDICATION_CATEGORY": {
+        "ANALGESIC": "Analgesic",
+        "ANTIBIOTIC": "Antibiotic",
+        "ANTIMALARIAL": "Antimalarial",
+        "ANTIPYRETIC": "Antipyretic",
+        "ANTI_INFLAMMATORY": "Anti-inflammatory",
+        "ANTIHYPERTENSIVE": "Antihypertensive",
+        "ANTIDIABETIC": "Antidiabetic",
+        "ANTIRETROVIRAL": "Antiretroviral",
+        "ANTIFUNGAL": "Antifungal",
+        "ANTIPARASITIC": "Antiparasitic",
+        "ANTIHISTAMINE": "Antihistamine",
+        "ANTICOAGULANT": "Anticoagulant",
+        "VITAMIN": "Vitamin",
+        "VACCINE": "Vaccine",
+        "OTHER": "Other"
       }
     },
     "DOCUMENTS": {
@@ -6340,6 +6380,9 @@
     "REFILLS_VALUE": "{{remaining}} of {{allowed}} remaining",
     "LIST_TRUNCATED": "Only the most recent prescriptions are listed, so these counts are a minimum. Use the search box to find an older one.",
     "ROUTE_NOT_RECORDED": "Not recorded",
+    "SIGNED_EDIT_HINT": "This prescription is signed: it can only be cancelled or discontinued, with a reason. To change anything else, write a new prescription.",
+    "CHOOSE_WITHDRAWAL": "Choose Cancelled or Discontinued",
+    "WITHDRAWAL_REASON": "Reason for withdrawal",
     "ROUTES": {
       "PO": "Oral (PO)",
       "IV": "Intravenous (IV)",
@@ -6811,6 +6854,7 @@
     "ACK_NOTES_PLACEHOLDER": "Enter acknowledgement notes…",
     "ACTION_ACKNOWLEDGE": "Acknowledge",
     "ACTION_COMPLETE": "Complete",
+    "ACTION_FORBIDDEN": "You are not allowed to do this on this referral. Only the clinician who wrote it can cancel or send it.",
     "ACTION_REJECT": "Reject",
     "ACTION_SCHEDULE": "Schedule",
     "ACTION_START": "Start",
@@ -7329,7 +7373,7 @@
     "SIGN_VALUE_PLACEHOLDER": "e.g. Dr. Jane Doe",
     "SIGN_VALUE_HINT": "Type your full legal name exactly — verification matches this text character for character.",
     "EXPIRES_AT": "Expires at (optional)",
-    "SIGN_REQUIRED": "Report type, report ID and signature are required",
+    "SIGN_REQUIRED": "A report and a signature are required",
     "SIGN_NO_CONTEXT": "A staff profile and an active hospital are required to sign",
     "SIGNED_OK": "Report signed",
     "SIGN_ERROR": "Signing failed",
@@ -7343,7 +7387,13 @@
     "LOOKUP_ERROR": "Report lookup failed",
     "LOOKUP_NONE": "No signatures on this report",
     "REPORT_SIGNED": "Report is signed",
-    "REPORT_NOT_SIGNED": "Report is not signed"
+    "REPORT_NOT_SIGNED": "Report is not signed",
+    "REPORT_ID_INVALID": "The report ID must be a record identifier (UUID), for example copied from the report page.",
+    "REPORT": "Report",
+    "PICK_REPORT": "Choose a report to sign",
+    "SIGNABLE_LOADING": "Loading your reports…",
+    "NO_SIGNABLE_REPORTS": "You have no unsigned report to sign in this hospital.",
+    "SIGNABLE_LOAD_ERROR": "Could not load your reports to sign."
   },
   "STAFF": {
     "ADD_STAFF": "Add Staff",

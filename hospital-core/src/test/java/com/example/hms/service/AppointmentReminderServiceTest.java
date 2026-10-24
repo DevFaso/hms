@@ -39,7 +39,7 @@ class AppointmentReminderServiceTest {
 
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private NotificationPreferenceRepository preferenceRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private SmsService smsService;
     @Mock private MessageSource messageSource;
     @Mock private ReminderClaimService reminderClaimService;
@@ -96,7 +96,7 @@ class AppointmentReminderServiceTest {
         lenient().when(reminderClaimService.claim(any(), any())).thenReturn(true);
         lenient().when(appointmentRepository.save(any(Appointment.class)))
             .thenAnswer(inv -> inv.getArgument(0));
-        lenient().when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        lenient().when(notificationService.created(anyString(), anyString(), anyString()))
             .thenReturn(new Notification());
         lenient().when(smsService.deliversRealSms()).thenReturn(true);
         lenient().when(preferenceRepository.findByUser_IdAndNotificationType(
@@ -116,7 +116,7 @@ class AppointmentReminderServiceTest {
         int reminded = service.sendDueReminders();
 
         assertThat(reminded).isEqualTo(1);
-        verify(notificationService).createNotification(
+        verify(notificationService).created(
             contains("Rappel"), eq("awa.traore"), eq("APPOINTMENT_REMINDER"));
         verify(smsService).send(eq("+22670707070"), contains("Rappel"));
         verify(reminderClaimService).claim(eq(appointment.getId()), any());
@@ -180,7 +180,7 @@ class AppointmentReminderServiceTest {
         service.sendDueReminders();
 
         verify(smsService, never()).send(anyString(), anyString());
-        verify(notificationService).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -212,7 +212,7 @@ class AppointmentReminderServiceTest {
 
     @Test
     void notificationFailureDoesNotStopSmsOrStamp() {
-        when(notificationService.createNotification(anyString(), anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), anyString()))
             .thenThrow(new IllegalStateException("broker down"));
         feed(appointment);
 
@@ -247,7 +247,7 @@ class AppointmentReminderServiceTest {
         int reminded = service.sendDueReminders();
 
         assertThat(reminded).isZero();
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
         verify(smsService, never()).send(anyString(), anyString());
     }
 }

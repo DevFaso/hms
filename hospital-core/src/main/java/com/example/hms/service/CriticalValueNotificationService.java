@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.LabOrder;
@@ -163,8 +165,9 @@ public class CriticalValueNotificationService {
             log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
                 result.getId());
         } else {
-            String message = buildMessage(result, false);
-            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            NotificationText text = buildText(result, false);
+            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE);
+            String message = text.render(messageSource, NotificationLocales.STAFF);
             // The gateway call waits for the commit: a hung gateway must
             // not hold the clinical transaction's row locks, and an SMS
             // for a result that then rolled back would be worse than a
@@ -277,10 +280,11 @@ public class CriticalValueNotificationService {
 
     private void escalateOne(LabResult result) {
         int round = result.getCriticalEscalationLevel() + 1;
-        String message = buildMessage(result, true);
+        NotificationText text = buildText(result, true);
+        String message = text.render(messageSource, NotificationLocales.STAFF);
 
         for (String recipient : escalationRecipients(result, round)) {
-            notificationService.createNotification(message, recipient, ESCALATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE);
         }
         // SMS once per round, not once per recipient: the transport targets the
         // result's chart context, so fanning it out would send the same text
@@ -505,27 +509,27 @@ public class CriticalValueNotificationService {
      * administrators) — never by the caller, and a sweep has no request
      * locale anyway — so the body is rendered in the staff locale.
      */
-    private String buildMessage(LabResult result, boolean escalation) {
+    private NotificationText buildText(LabResult result, boolean escalation) {
         java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
-        String testName;
+        // QA D665: keyed so the reader's language is used; QA D648: an order
+        // whose definition was deleted names a deleted test.
+        Object testName;
         if (order == null) {
-            testName = messageSource.getMessage("lab.test.fallback", null, locale);
+            testName = NotificationLocalizer.key("lab.test.fallback");
         } else if (order.getLabTestDefinition() != null) {
             testName = order.getLabTestDefinition().getName();
         } else {
-            // QA D648: an order whose definition was deleted names a deleted test.
-            testName = messageSource.getMessage(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL, null, locale);
+            testName = NotificationLocalizer.key(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
         }
-        String patientName = order != null && order.getPatient() != null
+        Object patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
-            : messageSource.getMessage("patient.fallback.generic", null, locale);
+            : NotificationLocalizer.key("patient.fallback.generic");
         String value = localizedValue(result.getResultValue(), locale)
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
-        return messageSource.getMessage(
+        return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
-            new Object[]{testName, value, patientName},
-            locale);
+            testName, value, patientName);
     }
 
     /**

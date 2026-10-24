@@ -17,6 +17,15 @@
     "(`{}`) or a misspelled key — otherwise silence would be the cheapest way",
     "out."
   ],
+  "profileType": {
+    "reason": "UserResponseDTO.profileType is a String UserMapper.deriveProfileType DERIVES: STAFF or PATIENT (null otherwise). PORTAL.ENUM.PROFILE_TYPE keys both; check by hand when that method changes (QA D528/D663)."
+  },
+  "medicationCategory": {
+    "reason": "MedicationCatalogItem.category is a free-text String column; rows carry coded therapeutic classes (ANALGESIC, ANTIBIOTIC ...) that PORTAL.ENUM.MEDICATION_CATEGORY keys, any other typed text falls back to the pipe's Title Case (QA D528/D663)."
+  },
+  "trackerAcuity": {
+    "reason": "PatientTrackerItemDTO.acuityLevel is a String PatientTrackerMapper.deriveAcuityLevel DERIVES: ESI-<score> (1-5), else an EncounterUrgency name (EMERGENT, URGENT, ROUTINE, LOW), else ROUTINE. PORTAL.ENUM.TRACKER_ACUITY keys all nine; check by hand when that method or EncounterUrgency changes (QA D528/D663)."
+  },
   "fulfillmentMode": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyFulfillmentMode.java"
   },
@@ -131,7 +140,7 @@
     "enum": "hospital-core/src/main/java/com/example/hms/enums/NewbornAlertType.java"
   },
   "notificationType": {
-    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across 13 call sites: APPOINTMENT_REMINDER, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
+    "reason": "NOT the NotificationType enum, which governs notification PREFERENCES. The field the portal pipes is Notification.type, a free String column (length 40, nullable) that NotificationServiceImpl.createNotification writes from whatever literal its caller passes, across its call sites (hospital-core NotificationTypeLabelCoverageTest reads them from the sources and fails on an unkeyed one, QA D641): APPOINTMENT_REMINDER, BREAK_GLASS_OPT_OUT_OVERRIDE, LAB_ORDER_RECEIVED, NEWS2_ESCALATION, PHARMACY_EVENT, CRITICAL_IMAGING_FINDING, CRITICAL_IMAGING_FINDING_ESCALATION, CRITICAL_LAB_RESULT, CRITICAL_LAB_RESULT_ESCALATION, DISCHARGE_SUMMARY, LICENSE_EXPIRY, MEDICATION_REFILL, POSITIVE_CULTURE_RESULT, PRO_CRITICAL_ITEM, PRO_CRITICAL_ITEM_ESCALATION, PRO_SCREEN_POSITIVE, REORDER_ALERT — and null, which the two-argument overload passes. Ten of those are not enum constants, so declaring the enum here made the coverage gate certify eight values the column may never hold while the ten it does hold went unkeyed."
   },
   "orderSourceType": {
     "reason": "no enum holds it: a fixed token per source, stamped by two services onto one badge vocabulary — PatientSnapshotServiceImpl writes VITALS on every recent-vital row and LAB on every pending-order row of the snapshot drawer (only lab orders are collected there), and NurseTaskServiceImpl writes LAB, IMAGING or PROCEDURE per order source on the nurse station board. These were two groups (snapshotItemType, orderTaskType) keying LAB twice until #664 round 3 merged them. Every value was an English word (Vitals, Lab, Imaging, Procedure) until the tranche that tokenized them; a wire value the portal must render has to be a token, not a word the server already chose the language for."

@@ -43,6 +43,23 @@ export const SIGNATURE_TYPES: SignatureType[] = [
   'GENERIC_REPORT',
 ];
 
+/**
+ * QA D627: the types the server can sign — SignableReportLocator.SIGNABLE,
+ * mirrored by SignableTypesMirrorTest. OPERATIVE_NOTE, PATHOLOGY_REPORT,
+ * CARE_PLAN and GENERIC_REPORT have no record store, so a signature over them
+ * is always refused; the sign modal does not offer them.
+ */
+export const SIGNABLE_TYPES: SignatureType[] = [
+  'DISCHARGE_SUMMARY',
+  'LAB_RESULT',
+  'IMAGING_REPORT',
+  'CONSULTATION_NOTE',
+  'PROGRESS_NOTE',
+  'PROCEDURE_REPORT',
+  'ED_NOTE',
+  'MEDICATION_ORDER',
+];
+
 export type SignatureStatus = 'PENDING' | 'SIGNED' | 'REVOKED' | 'EXPIRED' | 'INVALID';
 
 export interface SignatureResponse {
@@ -66,6 +83,14 @@ export interface SignatureResponse {
   lastVerifiedAt?: string;
   isValid?: boolean;
   createdAt?: string;
+}
+
+/** QA D627: one report the caller can sign; the id is sent, never shown. */
+export interface SignableReport {
+  reportType: SignatureType;
+  reportId: string;
+  patientName?: string | null;
+  createdAt?: string | null;
 }
 
 export interface SignatureRequest {
@@ -111,6 +136,11 @@ export interface SignatureAuditEntry {
 export class DigitalSignatureService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = '/signatures';
+
+  /** QA D627: the caller's own unsigned, signable reports at the acting hospital. */
+  listSignable(): Observable<SignableReport[]> {
+    return this.http.get<SignableReport[]>(`${this.baseUrl}/signable`);
+  }
 
   sign(req: SignatureRequest): Observable<SignatureResponse> {
     return this.http.post<SignatureResponse>(`${this.baseUrl}/sign`, req);

@@ -45,6 +45,14 @@ public class PrescriptionRequestDTO {
     @Size(max = 64)
     private String medicationCode;
 
+    /**
+     * D654: the catalog item the prescriber picked. When present and no
+     * {@link #medicationCode} is sent, the code is taken from this item (in
+     * the prescription's hospital), so the response shows the catalog's
+     * controlled flag and the CDS engine sees the formulary code.
+     */
+    private UUID medicationCatalogItemId;
+
     @Size(max = 100)
     private String dosage;
 
@@ -96,6 +104,13 @@ public class PrescriptionRequestDTO {
 
     /** Same contract as {@link #controlledSubstance}, for the co-sign gate. */
     private Boolean requiresCosign;
+
+    /**
+     * QA D660: required when a SIGNED prescription is cancelled or
+     * discontinued, the only edit a signed order accepts.
+     */
+    @Size(max = 1000)
+    private String withdrawalReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

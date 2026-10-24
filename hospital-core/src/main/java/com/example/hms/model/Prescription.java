@@ -105,6 +105,10 @@ public class Prescription extends BaseEntity {
     @Column(name = "medication_code", length = 64)
     private String medicationCode;
 
+    /** D654: the catalog item picked at order time (V221); the controlled flag is read from it. */
+    @Column(name = "medication_catalog_item_id")
+    private java.util.UUID medicationCatalogItemId;
+
     @Size(max = 255)
     @Column(name = "medication_display_name", length = 255)
     private String medicationDisplayName;
@@ -291,6 +295,16 @@ public class Prescription extends BaseEntity {
     @Column(name = "clarification_reason", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)
     private String clarificationReason;
+
+    /**
+     * QA D660: why a signed order was cancelled or discontinued. Mandatory on
+     * that withdrawal, the only change a signed order still accepts. Clinical
+     * narrative, so encrypted like {@code clarificationReason}.
+     */
+    @Size(max = 1000)
+    @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String withdrawalReason;
 
     @Column(name = "clarification_requested_at")
     private LocalDateTime clarificationRequestedAt;

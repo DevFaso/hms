@@ -1239,15 +1239,25 @@ class DoctorWorklistServiceImplTest {
         when(vital.getSystolicBpMmHg()).thenReturn(120);
         when(vital.getDiastolicBpMmHg()).thenReturn(80);
         when(vital.getSpo2Percent()).thenReturn(98);
+        // QA D628: the febrile reading must reach the worklist.
+        when(vital.getTemperatureCelsius()).thenReturn(38.9);
         when(patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patientId))
                 .thenReturn(Optional.of(vital));
 
-        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+            List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+            assertEquals("Temp 38.9 °C · HR 78 · BP 120/80 · SpO2 98%",
+                result.get(0).getLatestVitalsSummary());
 
-        assertNotNull(result.get(0).getLatestVitalsSummary());
-        assertTrue(result.get(0).getLatestVitalsSummary().contains("HR: 78"));
-        assertTrue(result.get(0).getLatestVitalsSummary().contains("BP: 120/80"));
-        assertTrue(result.get(0).getLatestVitalsSummary().contains("SpO2: 98%"));
+            // QA D628: the exact QA screen was French — no English abbreviations.
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            String fr = service.getWorklist(userId, null, null, null).get(0).getLatestVitalsSummary();
+            assertEquals("T° 38,9 °C · FC 78 · TA 120/80 · SpO2 98 %", fr);
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
     }
 
     @Test

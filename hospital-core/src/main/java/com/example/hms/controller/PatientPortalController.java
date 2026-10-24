@@ -730,7 +730,9 @@ public class PatientPortalController {
             @PageableDefault(size = 20) Pageable pageable) {
         String username = auth.getName();
         Page<Notification> page = notificationService.getNotificationsForUser(username, read, search, pageable);
-        return ResponseEntity.ok(ApiResponseWrapper.success(page));
+        // In the reader's language, from Accept-Language (QA D665).
+        java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(ApiResponseWrapper.success(page.map(n -> notificationService.localize(n, locale))));
     }
 
     @Operation(summary = "Get unread notification count")

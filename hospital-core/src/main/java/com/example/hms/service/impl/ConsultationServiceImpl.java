@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.exception.BusinessException;
@@ -34,8 +35,6 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
@@ -57,8 +56,6 @@ import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
 import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 @Slf4j
 @Service
@@ -455,18 +452,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         try {
             if (consultation.getRequestingProvider() != null) {
                 String requesterUsername = consultation.getRequestingProvider().getUser().getUsername();
-                // Stored for the requesting provider, not the caller: staff locale.
-                Locale locale = NotificationLocales.STAFF;
-                String consultantName = consultation.getConsultant() != null
+                // Read by the requesting provider, in their language (QA D665).
+                Object consultantName = consultation.getConsultant() != null
                     ? consultation.getConsultant().getFullName()
-                    : messageSource.getMessage("consultation.completed.consultantFallback", null, locale);
-                String patientName = consultation.getPatient() != null
+                    : NotificationLocalizer.key("consultation.completed.consultantFallback");
+                Object patientName = consultation.getPatient() != null
                     ? consultation.getPatient().getFullName()
-                    : messageSource.getMessage("patient.fallback.yours", null, locale);
-                notificationService.createNotification(
-                    messageSource.getMessage("consultation.completed.notification",
-                        new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName}, locale),
-                    requesterUsername);
+                    : NotificationLocalizer.key("patient.fallback.yours");
+                notificationService.createNotification("consultation.completed.notification",
+                    new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName},
+                    requesterUsername, null);
             }
         } catch (Exception e) {
             log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
@@ -588,15 +583,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         // Notify the assigned consultant
         try {
             String consultantUsername = consultant.getUser().getUsername();
-            // Stored for the consultant, not the caller: staff locale.
-            Locale locale = NotificationLocales.STAFF;
-            String patientName = consultation.getPatient() != null
+            // Read by the consultant, in their language (QA D665).
+            Object patientName = consultation.getPatient() != null
                 ? consultation.getPatient().getFullName()
-                : messageSource.getMessage("patient.fallback.indefinite", null, locale);
-            notificationService.createNotification(
-                messageSource.getMessage("consultation.assigned.notification",
-                    new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()}, locale),
-                consultantUsername);
+                : NotificationLocalizer.key("patient.fallback.indefinite");
+            notificationService.createNotification("consultation.assigned.notification",
+                new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()},
+                consultantUsername, null);
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
         }

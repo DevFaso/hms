@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -83,6 +84,22 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("hospitalId") UUID hospitalId,
         @Param("status") InBasketItemStatus status,
         @Param("itemType") InBasketItemType itemType);
+
+    /**
+     * QA D605: the first acknowledgement of an item filed for a reference by
+     * anyone other than {@code excludedUserId} (the clinician who raised it).
+     */
+    @Query("""
+        SELECT i FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+          AND i.acknowledgedAt IS NOT NULL
+          AND (:excludedUserId IS NULL OR i.acknowledgedBy <> :excludedUserId)
+        ORDER BY i.acknowledgedAt ASC
+        """)
+    List<InBasketItem> findAcknowledgedForReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType,
+        @Param("excludedUserId") UUID excludedUserId);
 
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(

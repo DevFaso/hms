@@ -118,6 +118,28 @@ export class AdmissionsComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
+  /**
+   * QA D618 (D176/D527): the server records the caller as the discharging
+   * provider (only a super-admin in global view may name another), so the
+   * discharge form offers the caller alone. It listed every physician and a
+   * pick other than oneself was refused with a 403.
+   */
+  readonly dischargeProviders = computed<Pick<StaffResponse, 'id' | 'name' | 'email'>[]>(() => {
+    if (this.isSuperAdmin() && this.globalView()) {
+      return this.staffMembers();
+    }
+    const profile = this.auth.getUserProfile();
+    const myStaffId = profile?.staffId;
+    if (!myStaffId) {
+      return [];
+    }
+    const mine = this.staffMembers().find((s) => s.id === myStaffId);
+    if (mine) {
+      return [mine];
+    }
+    const name = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
+    return [{ id: myStaffId, name, email: profile?.email ?? '' }];
+  });
   private allStaff: StaffResponse[] = [];
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);

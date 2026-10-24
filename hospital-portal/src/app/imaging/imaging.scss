@@ -670,3 +670,10 @@
     opacity: 0.85;
   }
 }
+
+/* QA D611: the server's refusal, shown in the open order modal. */
+.modal-error {
+  margin: 0 1.5rem 0.75rem;
+  color: var(--danger, #b42318);
+  font-size: 0.875rem;
+}

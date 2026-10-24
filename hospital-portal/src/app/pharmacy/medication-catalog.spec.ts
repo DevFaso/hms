@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import { of } from 'rxjs';
 
 import { MedicationCatalogComponent } from './medication-catalog';
@@ -80,5 +82,52 @@ describe('MedicationCatalogComponent ATC format (QA D129)', () => {
     for (const code of bad) {
       expect(MedicationCatalogComponent.ATC_PATTERN.test(code)).withContext(code).toBeFalse();
     }
+  });
+});
+
+/** QA D528/D663 replay: HOSPITAL_ADMIN_A opens /medication-catalog in FR, then ES; the category read ANALGESIC. */
+describe('MedicationCatalogComponent — the category column is labelled (QA D528/D663)', () => {
+  function renderIn(lang: 'fr' | 'es'): string[] {
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'listMedications',
+      'searchMedications',
+    ]);
+    svc.listMedications.and.returnValue(
+      of({
+        content: [{ ...item, category: 'ANALGESIC' } as MedicationCatalogItemResponse],
+        totalElements: 1,
+        totalPages: 1,
+        size: 20,
+        number: 0,
+      }),
+    );
+    TestBed.configureTestingModule({
+      imports: [MedicationCatalogComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyService, useValue: svc },
+        { provide: RoleContextService, useValue: { hasAnyActiveRoleExactly: () => true } },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('es', es);
+    translate.use(lang);
+    const fixture = TestBed.createComponent(MedicationCatalogComponent);
+    fixture.detectChanges();
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody td')).map(
+      (td) => td.textContent?.trim() ?? '',
+    );
+  }
+
+  it('shows Analgésique in French, never the token', () => {
+    const cells = renderIn('fr');
+    expect(cells).toContain('Analgésique');
+    expect(cells).not.toContain('ANALGESIC');
+  });
+
+  it('shows Analgésico in Spanish, never the token', () => {
+    const cells = renderIn('es');
+    expect(cells).toContain('Analgésico');
+    expect(cells).not.toContain('ANALGESIC');
   });
 });

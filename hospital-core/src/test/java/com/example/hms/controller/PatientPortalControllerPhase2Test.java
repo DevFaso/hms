@@ -388,6 +388,43 @@ class PatientPortalControllerPhase2Test {
     // ══════════════════════════════════════════════════════════════════════
 
     @Nested
+    @DisplayName("GET /me/patient/notifications in the reader's language (QA D665)")
+    class NotificationsInTheReaderLanguage {
+
+        @Autowired private NotificationService notificationService;
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "Accept-Language {0}")
+        @org.junit.jupiter.params.provider.CsvSource({"fr", "es", "en"})
+        @DisplayName("a patient notification written once is read in fr, es and en")
+        void patientReadsInTheirLanguage(String language) throws Exception {
+            org.springframework.context.MessageSource messages = com.example.hms.i18n.TestMessageSources.bundles();
+            NotificationRepository repository = mock(NotificationRepository.class);
+            when(repository.save(any(Notification.class))).thenAnswer(invocation -> invocation.getArgument(0));
+            @SuppressWarnings("unchecked")
+            ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
+            NotificationService real = new NotificationServiceImpl(repository,
+                mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
+                mock(UserRepository.class), noResolver,
+                new com.example.hms.service.i18n.NotificationLocalizer(messages));
+            Notification row = real.createNotification("breakGlass.patient.optOutOverridden",
+                new Object[]{"Hôpital B"}, "patient.jane", "BREAK_GLASS_OPT_OUT_OVERRIDE");
+            when(notificationService.getNotificationsForUser(eq("patient.jane"), any(), any(), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(row),
+                    org.springframework.data.domain.PageRequest.of(0, 20), 1));
+            when(notificationService.localize(any(), any()))
+                .thenAnswer(invocation -> real.localize(invocation.getArgument(0), invocation.getArgument(1)));
+            Locale locale = Locale.of(language);
+
+            mockMvc.perform(get("/me/patient/notifications").header("Accept-Language", language).principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.content[0].message").value(messages.getMessage(
+                        "breakGlass.patient.optOutOverridden", new Object[]{"Hôpital B"}, locale)));
+            assertThat(row.getMessage()).isEqualTo(messages.getMessage(
+                "breakGlass.patient.optOutOverridden", new Object[]{"Hôpital B"}, Locale.FRENCH));
+        }
+    }
+
+    @Nested
     @DisplayName("PUT /me/patient/notifications/{notificationId}/read")
     class MarkNotificationRead {
 
@@ -434,7 +471,7 @@ class PatientPortalControllerPhase2Test {
             ObjectProvider<ProviderCallerResolver> noResolver = mock(ObjectProvider.class);
             NotificationService real = new NotificationServiceImpl(repository,
                 mock(NotificationWebSocketController.class), mock(NotificationPreferenceRepository.class),
-                mock(UserRepository.class), noResolver);
+                mock(UserRepository.class), noResolver, new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles()));
             when(notificationService.markAsRead(eq(id), any(), eq(false)))
                 .thenAnswer(invocation -> real.markAsRead(id, invocation.getArgument(1), invocation.getArgument(2)));
 

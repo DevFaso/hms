@@ -90,6 +90,32 @@ class InvoiceItemServiceImplTest {
         verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
     }
 
+    /** QA D633: a line whose total overflows numeric(12,2) answered in English ("numeric value out of bounds"). */
+    @Test
+    void aLineTotalOutOfRangeIsRefusedInTheCallersLanguage_D633() {
+        InvoiceItemRequestDTO huge = line();
+        huge.setUnitPrice(new BigDecimal("9999999999"));
+        huge.setQuantity(5);
+        assertThatThrownBy(() -> service.createInvoiceItem(huge, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.totalOutOfRange");
+        org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
+
+        UUID id = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateInvoiceItem(id, huge, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "billing.item.totalOutOfRange");
+    }
+
+    @Test
+    void theLargestLineTotalStillFits_D633() {
+        InvoiceItemRequestDTO max = line();
+        max.setUnitPrice(new BigDecimal("4999999999"));
+        max.setQuantity(2);
+        service.createInvoiceItem(max, Locale.ENGLISH);
+        verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
+    }
+
     @Test
     void aDecimalXofPriceIsRefusedButZeroCentsAreWhole_D307() {
         InvoiceItemRequestDTO decimal = line();
@@ -121,6 +147,19 @@ class InvoiceItemServiceImplTest {
         var request = line();
         assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
+    }
+
+    /** QA D656: POST /invoice-items on SENT invoice ae8e18f2 returned 201 and the total became 2000. */
+    @Test
+    void anIssuedInvoiceTakesNoNewLines_D656() {
+        invoice.setStatus(InvoiceStatus.SENT);
+
+        var request = line();
+        assertThatThrownBy(() -> service.createInvoiceItem(request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("billing.invoice.issuedLinesLocked");
+        verify(itemRepository, never()).save(any());
+        org.mockito.Mockito.verifyNoInteractions(billingInvoiceService);
     }
 
     @Test

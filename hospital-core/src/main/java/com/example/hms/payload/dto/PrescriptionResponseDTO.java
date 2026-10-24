@@ -146,6 +146,8 @@ public class PrescriptionResponseDTO {
     private LocalDateTime clarificationRequestedAt;
     private String clarificationResponse;
     private LocalDateTime clarificationResolvedAt;
+    /** QA D660: why a signed order was withdrawn; null otherwise. */
+    private String withdrawalReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

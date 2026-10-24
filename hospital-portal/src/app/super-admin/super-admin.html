@@ -183,10 +183,10 @@
               <div class="audit-line">
                 <strong>{{ event.eventType | enumLabel: 'auditEventType' }}</strong>
                 @if (event.entityType) {
-                  <span class="audit-entity">· {{ event.entityType }}</span>
+                  <span class="audit-entity">· {{ entityLabel(event.entityType) }}</span>
                 }
                 @if (event.resourceName) {
-                  <span class="audit-resource">{{ event.resourceName }}</span>
+                  <span class="audit-resource">{{ entityLabel(event.resourceName) }}</span>
                 }
               </div>
               <div class="audit-meta">

@@ -706,4 +706,27 @@ class ChartReviewServiceImplTest {
             .singleElement()
             .satisfies(r -> assertThat(r.getAbnormalDirection()).isEqualTo(com.example.hms.enums.AbnormalDirection.HIGH));
     }
+
+    @Test
+    void qaD678CatalogControlledMorphineWithoutTheTickShowsAsControlled() {
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        UUID item = UUID.randomUUID();
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(catalog.findByIdAndHospital_Id(item, HOSPITAL_ID)).thenReturn(Optional.of(morphine));
+        service.setControlledResolver(new com.example.hms.service.pharmacy.PrescriptionControlledResolver(catalog));
+        Prescription rx = prescription("Morphine", null, LocalDateTime.now().minusDays(1));
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(item);
+        when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(rx)));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(rx.isControlledSubstance()).isFalse();
+        assertThat(dto.getMedications()).singleElement()
+            .extracting(ChartReviewDTO.MedicationEntryDTO::isControlledSubstance).isEqualTo(true);
+    }
 }

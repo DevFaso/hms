@@ -25,7 +25,6 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -74,8 +73,11 @@ class InventoryServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    /** QA D655: the controlled-stock witness rule. */
+    @Mock private ControlledStockWitness controlledStockWitness;
 
     @InjectMocks
     private InventoryServiceImpl service;
@@ -512,6 +514,65 @@ class InventoryServiceImplTest {
                     .build();
             lot.setId(stockLotId);
             return lot;
+        }
+
+        private void makeItemControlled() {
+            com.example.hms.model.medication.MedicationCatalogItem morphine =
+                    new com.example.hms.model.medication.MedicationCatalogItem();
+            morphine.setId(UUID.randomUUID());
+            morphine.setControlled(true);
+            inventoryItem.setMedicationCatalogItem(morphine);
+        }
+
+        /**
+         * QA D655, the exact replay: POST /pharmacy/inventory/lots for
+         * morphine, 10 units, as PHARMACIST_A with no witness: 201 and
+         * witnessed_by NULL. Nothing is written now.
+         */
+        @Test
+        @DisplayName("D655: a controlled lot is not received without a witness")
+        void d655_controlledReceiptNeedsAWitness() {
+            makeItemControlled();
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("10"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(null, inventoryItem, user))
+                    .thenThrow(new BusinessException("stockTransaction.witness.required"));
+
+            assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D655: a witnessed controlled receipt records its witness on the RECEIPT movement")
+        void d655_witnessedControlledReceiptIsRecorded() {
+            makeItemControlled();
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setWitnessedBy(witnessId);
+            StockLot lot = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
+            when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+
+            service.receiveStock(dto);
+
+            org.mockito.ArgumentCaptor<StockTransaction> tx = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
         }
 
         @Test
@@ -1011,7 +1072,7 @@ class InventoryServiceImplTest {
 
             service.triggerReorderAlerts();
 
-            verify(notificationService).createNotification(
+            verify(notificationService).created(
                     any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
@@ -1024,7 +1085,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(notificationService, never()).createNotification(any(), any(), any());
+            verify(notificationService, never()).created(any(), any(), any());
         }
 
         @Test
@@ -1046,7 +1107,7 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId))
                     .thenReturn(Optional.of(user))
                     .thenReturn(Optional.of(user));
-            when(notificationService.createNotification(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
+            when(notificationService.created(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
                     .thenThrow(new RuntimeException("Notification service down"))
                     .thenReturn(null);
 

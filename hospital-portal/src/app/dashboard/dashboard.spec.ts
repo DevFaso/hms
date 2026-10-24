@@ -191,6 +191,39 @@ describe('Dashboard navigation & RBAC', () => {
     expect(admin.auditResourceLabel('Cardiologie')).toBe('Cardiologie');
   });
 
+  it('recent activity reads an entity token in the reader language (D619)', () => {
+    const admin = createComponent(['ROLE_HOSPITAL_ADMIN'], []);
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { BILLING_INVOICE: 'Facture' } } },
+    });
+    translate.use('fr');
+    expect(admin.auditResourceLabel('BILLING_INVOICE')).toBe('Facture');
+    expect(admin.auditResourceLabel('BillingInvoice')).toBe('Facture');
+  });
+
+  it('upcoming card lists the next visits soonest first, today included, completed left out (D642)', () => {
+    const patient = createComponent(['ROLE_PATIENT'], []);
+    const d = new Date();
+    const iso = (offset: number) => {
+      const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
+      return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+    };
+    const appt = (id: string, date: string, time: string, status: string) =>
+      ({ id, date, rawStartTime: time, status }) as any;
+    patient.myAppointments.set([
+      appt('later', iso(5), '09:00', 'SCHEDULED'),
+      appt('done', iso(1), '08:00', 'COMPLETED'),
+      appt('tomorrow', iso(1), '10:00', 'CONFIRMED'),
+      appt('today', iso(0), '23:30', 'SCHEDULED'),
+    ]);
+    expect(patient.upcomingAppointments().map((a: any) => a.id)).toEqual([
+      'today',
+      'tomorrow',
+      'later',
+    ]);
+  });
+
   // ── Doctor quick actions include Lab and Referrals ───────────
 
   it('doctor quick actions should include Lab Orders', () => {
@@ -1910,6 +1943,39 @@ describe('Dashboard invoice aging (QA D283)', () => {
     expect(text).toContain('1 à 30 jours');
     expect(text).not.toContain('Current');
     expect(text).not.toContain('$');
+  });
+
+  it('recent activity shows the entity label, never a raw record id (QA D672)', () => {
+    const fixture = render();
+    TestBed.inject(TranslateService).setTranslation(
+      'fr',
+      { PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { PATIENT: 'Patient' } } } },
+      true,
+    );
+    const evt = (id: string, resourceName: string) => ({
+      id,
+      eventType: 'DATA_CREATE',
+      status: 'SUCCESS',
+      entityType: 'PATIENT',
+      resourceName,
+      userName: 'QA Admin',
+      eventTimestamp: '2026-10-23T10:00:00',
+    });
+    fixture.componentInstance.hospitalAdminSummary.set({
+      recentAuditEvents: [
+        evt('a1', '19ffd52b-aae7-4820-8408-6622564a3ac3'),
+        evt('a2', 'Patient 19ffd52b-aae7-4820-8408-6622564a3ac3'),
+      ],
+    } as any);
+    fixture.detectChanges();
+    const rows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.audit-row .audit-summary'),
+    ).map((r) => r.textContent ?? '');
+    expect(rows.length).toBe(2);
+    for (const text of rows) {
+      expect(text).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}/);
+      expect(text).toContain('Patient');
+    }
   });
 });
 

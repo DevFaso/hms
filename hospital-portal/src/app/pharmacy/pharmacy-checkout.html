@@ -141,9 +141,7 @@
         </dl>
         <div class="total-row">
           <span>Total payé</span>
-          <span class="amount">{{
-            r.amount | currency: r.currency || 'XOF' : 'symbol' : '1.0-0'
-          }}</span>
+          <span class="amount">{{ r.amount | cfa: r.currency }}</span>
         </div>
         @if (r.notes) {
           <p class="notes">{{ r.notes }}</p>

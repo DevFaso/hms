@@ -22,6 +22,11 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localDateString } from '../../shared/date-utils';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 
+/** Sort key of a visit: its wire date and 24 h start time (QA D642). */
+function visitKey(a: PortalAppointment): string {
+  return `${a.date ?? ''}T${a.rawStartTime ?? ''}`;
+}
+
 @Component({
   selector: 'app-my-appointments',
   standalone: true,
@@ -140,13 +145,25 @@ export class MyAppointmentsComponent implements OnInit {
         const today = localDateString();
         const isClosed = (a: PortalAppointment) =>
           a.status === 'COMPLETED' || a.status === 'CANCELLED';
-        this.upcoming.set(appts.filter((a) => !isClosed(a) && a.date >= today));
+        // QA D642: "À venir" listed 30 Oct before 28 Oct — soonest first.
+        this.upcoming.set(
+          appts
+            .filter((a) => !isClosed(a) && a.date >= today)
+            .sort((a, b) => visitKey(a).localeCompare(visitKey(b))),
+        );
         // QA D542: a cancelled visit still ahead is listed under "Cancelled",
         // not "Past"; it stays visible after the patient cancels.
         const cancelledAhead = (a: PortalAppointment) =>
           a.status === 'CANCELLED' && a.date >= today;
-        this.cancelled.set(appts.filter(cancelledAhead));
-        this.past.set(appts.filter((a) => !cancelledAhead(a) && (isClosed(a) || a.date < today)));
+        this.cancelled.set(
+          appts.filter(cancelledAhead).sort((a, b) => visitKey(a).localeCompare(visitKey(b))),
+        );
+        // QA D642: "past" reads newest first.
+        this.past.set(
+          appts
+            .filter((a) => !cancelledAhead(a) && (isClosed(a) || a.date < today))
+            .sort((a, b) => visitKey(b).localeCompare(visitKey(a))),
+        );
         this.loading.set(false);
         this.applyDeepLink(appts);
       },

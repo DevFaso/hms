@@ -151,7 +151,7 @@
               <td>
                 <span class="role-chip">{{ (user.roleName | roleLabel) || '—' }}</span>
               </td>
-              <td>{{ user.profileType || '—' }}</td>
+              <td>{{ user.profileType ? (user.profileType | enumLabel: 'profileType') : '—' }}</td>
               <td>
                 <span
                   class="status-badge"

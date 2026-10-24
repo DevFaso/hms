@@ -14,8 +14,26 @@ import org.springframework.data.domain.Pageable;
 public interface NotificationService {
     List<Notification> getNotificationsForUser(String username);
     Page<Notification> getNotificationsForUser(String username, Boolean read, String search, Pageable pageable);
-    Notification createNotification(String message, String recipientUsername);
-    Notification createNotification(String message, String recipientUsername, String type);
+    /**
+     * Writes a notification whose body is the message-bundle {@code messageKey}
+     * with {@code args} (QA D665). The key and arguments are stored, and every
+     * reader gets the body in their own language; the French rendering is
+     * stored as the message too, for clients that read it as is and for search.
+     * An argument that is itself translatable goes in as
+     * {@link com.example.hms.service.i18n.NotificationLocalizer#key(String)}.
+     */
+    Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type);
+
+    /**
+     * Free text somebody TYPED (an administrator's message, an announcement, a
+     * chat line): there is nothing to translate, so it is stored and shown as
+     * written. Never for text the system composes: that goes through
+     * {@link #createNotification(String, Object[], String, String)}.
+     */
+    Notification createLiteralNotification(String message, String recipientUsername, String type);
+
+    /** {@code notification} with its body in {@code locale} (a copy; the stored text when it has no key). */
+    Notification localize(Notification notification, java.util.Locale locale);
     /** What {@link #markAsRead} did. */
     enum ReadOutcome {
         /** The caller's own notification, or a broadcast the caller may mark, is now read. */

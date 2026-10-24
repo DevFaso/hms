@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.PostpartumAlertSeverity;
 import com.example.hms.enums.PostpartumAlertType;
 import com.example.hms.enums.PostpartumFundusTone;
@@ -49,13 +50,14 @@ import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.utility.ObstetricEligibility;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class PostpartumCareServiceImpl implements PostpartumCareService {
+
+    private static final String ALERT_MSG_PREFIX = "postpartum.alert.msg.";
 
     private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
@@ -77,6 +79,8 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final PostpartumObservationMapper mapper;
     /** Tier 2 item 47: the mental-health screen rides on the schedule. */
     private final com.example.hms.service.pro.ProResponseService proResponseService;
@@ -549,7 +553,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
      * stored and read by staff, so it is never composed in English in code.
      */
     private String alertText(String code) {
-        return messageSource.getMessage("postpartum.alert.msg." + code, null, NotificationLocales.STAFF);
+        return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);
     }
 
     private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
@@ -560,7 +564,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .type(type)
             .severity(severity)
             .code(code)
-            .message(messageSource.getMessage("postpartum.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .message(messageSource.getMessage(ALERT_MSG_PREFIX + code, null, message, NotificationLocales.STAFF))
             .triggeredBy(messageSource.getMessage("postpartum.alert.trigger." + code, null, triggeredBy,
                 NotificationLocales.STAFF))
             .build();
@@ -761,30 +765,55 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             return;
         }
         User documentedBy = observation.getDocumentedBy();
-        if (documentedBy == null || documentedBy.getUsername() == null) {
-            return;
-        }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
-        String patientName = observation.getPatient() != null
+        // QA D605: the team is told even when the documenter is unknown.
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
+        String fullName = observation.getPatient() != null
             ? (observation.getPatient().getFirstName() + " " + observation.getPatient().getLastName()).trim()
-            : fallbackName;
+            : "";
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("postpartum.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
-                try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, observation, documentedBy, fullName, notifyDocumenter));
+    }
+
+    /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
+    private void notifyDocumenter(PostpartumObservationAlert alert, User documentedBy, String fullName, String messageKey) {
+        // Read by the documenting clinician, in her language (QA D665).
+        // QA D216: the type is a translated label, never the raw enum.
+        Object typeKey = alert.getType() == null ? ""
+            : NotificationLocalizer.key("postpartum.alert.type." + alert.getType().name());
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        try {
+            notificationService.createNotification("postpartum.alert.notification",
+                new Object[]{typeKey, patientArg,
+                    com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
+        }
+    }
+
+    private void publishUrgentAlert(PostpartumObservationAlert alert, PostpartumObservation observation, User documentedBy,
+                                    String fullName, boolean notifyDocumenter) {
+        // QA D665: the alert sentence travels as its key, rendered per reader.
+        String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode();
+        if (notifyDocumenter) {
+            notifyDocumenter(alert, documentedBy, fullName, messageKey);
+        }
+        if (obstetricAlertEscalation != null && observation.getHospital() != null && observation.getPatient() != null) {
+            // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
+            java.util.Locale locale = NotificationLocales.STAFF;
+            String patientName = fullName.isBlank()
+                ? messageSource.getMessage("patient.fallback.generic", null, locale) : fullName;
+            String typeLabel = alert.getType() == null ? ""
+                : messageSource.getMessage("postpartum.alert.type." + alert.getType().name(), null, locale);
+            String message = messageSource.getMessage("postpartum.alert.notification",
+                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                observation.getHospital().getId(), observation.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM, observation.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message, messageKey, null));
+        }
     }
 
     private record AlertEvaluation(List<PostpartumObservationAlert> alerts,

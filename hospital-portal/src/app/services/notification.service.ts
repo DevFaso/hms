@@ -4,6 +4,7 @@ import { Observable, Subject } from 'rxjs';
 import { Client, IMessage } from '@stomp/stompjs';
 
 import { AuthService } from '../auth/auth.service';
+import { storedLang } from '../shared/i18n/app-locale';
 import {
   SockJsConstructor,
   WS_TICKET_URL,
@@ -171,6 +172,9 @@ export class NotificationService {
           // Disable StompJS's built-in reconnect (it would reuse the stale ticket).
           // We drive reconnects via scheduleReconnect() to mint a fresh ticket.
           reconnectDelay: 0,
+
+          // QA D665: the server renders each pushed notification in this language.
+          connectHeaders: { 'Accept-Language': storedLang() },
 
           beforeConnect: () => {
             if (this.auth.isExpired()) {

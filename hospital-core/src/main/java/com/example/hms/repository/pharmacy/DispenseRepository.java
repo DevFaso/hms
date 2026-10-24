@@ -48,6 +48,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
 
+    /** QA D653: the fills taken from one lot in the given states, newest first. */
+    List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+                                                                    Collection<DispenseStatus> statuses);
+
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler
      * to find patients whose supply is running out.

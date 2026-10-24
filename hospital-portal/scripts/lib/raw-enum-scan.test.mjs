@@ -294,3 +294,27 @@ test('a resolving helper argument is not on screen; a plain helper argument stil
   // Only the named helpers resolve: an arbitrary method echoing its input does not.
   assert.deepEqual(exprs('<i>{{ fmt(r.targetSpecialty) }}</i>'), ['r.targetSpecialty']);
 });
+
+test('QA D620: an option that echoes its own value as its label', () => {
+  assert.deepEqual(
+    exprs('@for (m of modalities; track m) {\n<option [value]="m">{{ m }}</option>\n}'),
+    ['<option>m'],
+  );
+  assert.deepEqual(
+    exprs('<option [value]="m">{{ m | enumLabel: \'imagingModality\' }}</option>'),
+    [],
+  );
+  assert.deepEqual(exprs('<option [value]="h.id">{{ h.name }}</option>'), []);
+});
+
+test('QA D619: an audit resourceName is an entity token', () => {
+  assert.deepEqual(exprs('<span>{{ label(evt.resourceName) }}</span>'), ['evt.resourceName']);
+  // The dashboard's shape: the render is an @if alias.
+  assert.deepEqual(exprs('@if (echo(evt.resourceName); as resource) { — {{ resource }} }'), [
+    'evt.resourceName',
+  ]);
+  // An aliased object whose FIELDS are printed is not a render of the expression.
+  assert.deepEqual(exprs('@if (panel().result; as r) { {{ r.message }} }'), []);
+  // A resolving helper is clean in that shape too.
+  assert.deepEqual(exprs('@if (auditResourceLabel(evt.resourceName); as r) { {{ r }} }'), []);
+});

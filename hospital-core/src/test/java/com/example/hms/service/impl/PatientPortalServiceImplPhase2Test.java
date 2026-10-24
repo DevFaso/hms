@@ -132,7 +132,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
     @Mock private com.example.hms.repository.UserRepository userRepository;
-    @Mock private com.example.hms.service.NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private com.example.hms.service.EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
@@ -846,8 +846,8 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
 
             assertThat(result).isNotNull();
-            verify(notificationService).createNotification(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
-            verify(notificationService).createNotification(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
             verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
         }
@@ -884,7 +884,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospital.getId(), department.getId()))
                     .thenReturn(List.of(doctor));
             doThrow(new RuntimeException("notification down"))
-                    .when(notificationService).createNotification(any(), any(), eq("MEDICATION_REFILL"));
+                    .when(notificationService).created(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))
                     .when(emailService).sendHtml(any(), any(), any(), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {

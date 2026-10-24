@@ -10,6 +10,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -59,7 +60,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',

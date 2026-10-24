@@ -80,8 +80,8 @@ public class InvoiceItemController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         invoiceItemService.deleteInvoiceItem(id, locale);
         return ResponseEntity.ok()
-                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .contentType(org.springframework.http.MediaType.parseMediaType(org.springframework.http.MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(org.springframework.web.util.HtmlUtils.htmlEscape(
-                        messageSource.getMessage("invoiceitem.deleted", new Object[]{id}, locale)));
+                        messageSource.getMessage("invoiceitem.deleted", new Object[]{id}, locale), "UTF-8"));
     }
 }

@@ -40,7 +40,6 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.NotificationService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -73,7 +72,8 @@ class LaborServiceImplTest {
     @Mock private MaternalHistoryRepository maternalHistoryRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
+    @Mock private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
@@ -97,7 +97,8 @@ class LaborServiceImplTest {
             patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService);
+            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
+            obstetricAlertEscalation);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -222,6 +223,47 @@ class LaborServiceImplTest {
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
     }
 
+    /** QA D629: the screen names nobody, so the recorder is the admitting clinician. */
+    @Test
+    void startEpisodeWithNoAdmittingStaffNamesTheRecorder() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getAdmittedByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    /** QA D629: the delivery names the recorder when no delivering clinician is sent. */
+    @Test
+    void recordDeliveryWithNoDeliveringStaffNamesTheRecorder() {
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(response.getDeliveredByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    private com.example.hms.model.Staff recorderStaff() {
+        User named = new User();
+        named.setId(recorderUserId);
+        named.setUsername("midwife.nina");
+        named.setFirstName("Nina");
+        named.setLastName("Kabore");
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(named);
+        staff.setHospital(hospital);
+        return staff;
+    }
+
     @Test
     void getEpisodesRequiresHospitalScope() {
         assertThatThrownBy(() -> service.getEpisodes(patientId, null, 10))
@@ -276,7 +318,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-alert-line");
                 assertThat(alert.getSeverity()).isEqualTo("CAUTION");
             });
-        verify(notificationService, never()).createNotification(anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -293,7 +335,13 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).createNotification(contains("Alerte de travail"), eq("midwife.nina"));
+        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: the on-call team is told too, not only the documenter.
+        verify(obstetricAlertEscalation, org.mockito.Mockito.atLeastOnce()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && patientId.equals(a.patientId())
+                && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH.equals(a.sourceType())
+                && recorderUserId.equals(a.documentedByUserId())
+                && a.notificationText().contains("Alerte de travail")));
     }
 
     @Test
@@ -307,7 +355,7 @@ class LaborServiceImplTest {
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
         // QA D172: a translated type label and French text, never the raw enum or English.
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(text.capture(), eq("midwife.nina"));
+        verify(notificationService).created(text.capture(), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
         assertThat(text.getValue())
             .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
             .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
@@ -360,7 +408,7 @@ class LaborServiceImplTest {
     void notificationFailureDoesNotFailTheEntrySave() {
         PartographEntryRequestDTO request = entryRequest();
         request.setFetalHeartRateBpm(90);
-        when(notificationService.createNotification(anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
             .thenThrow(new IllegalStateException("broker down"));
 
         PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
@@ -521,7 +569,14 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("hémorragie"), eq("midwife.nina"));
+        verify(notificationService).created(contains("hémorragie"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: a PPH reaches the on-call team and escalates.
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(a.sourceType())
+                && a.alertMessage().toLowerCase().contains("hémorragie")
+                // QA D665: the sentence also travels as its key and its numbers.
+                && "labor.alert.msg.labor-pph".equals(a.alertMessageKey())
+                && a.alertMessageArgs() != null && a.alertMessageArgs().size() == 1));
     }
 
     @Test

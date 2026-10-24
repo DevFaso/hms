@@ -138,6 +138,8 @@ class PrescriptionServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     /** D414: the open stay a consultant's order belongs to. */
     @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
+    /** D654: a catalog pick carries its code into the order. */
+    @Mock private com.example.hms.repository.MedicationCatalogItemRepository catalogRepo;
     @Mock private AdmissionStayEncounterService stayEncounters;
 
     @InjectMocks
@@ -271,6 +273,67 @@ class PrescriptionServiceImplTest {
         assertThat(result).isSameAs(responseDTO);
         assertThat(mappedEntity.getAssignment()).isEqualTo(encounterAssignment);
         verify(prescriptionRepository).save(mappedEntity);
+    }
+
+    /**
+     * D654 replay: ctl3.js posts medicationCatalogItemId (morphine) and no
+     * medicationCode. The order must take the item's code, which is what the
+     * mapper reads the catalog's controlled flag by.
+     */
+    @Test
+    void createPrescriptionFromACatalogPickTakesTheItemCode() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationCode(null);
+        UUID catalogId = UUID.randomUUID();
+        request.setMedicationCatalogItemId(catalogId);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setCode("N02AA01");
+        item.setControlled(true);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(catalogRepo.findByIdAndHospital_Id(catalogId, hospitalId)).thenReturn(Optional.of(item));
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCode()).isEqualTo("N02AA01");
+        // the signing block stays on the prescriber's tick
+        assertThat(request.getControlledSubstance()).isNull();
+    }
+
+    @Test
+    void createPrescriptionRefusesACatalogItemOfAnotherHospital() {
+        PrescriptionRequestDTO request = buildRequest();
+        UUID catalogId = UUID.randomUUID();
+        request.setMedicationCatalogItemId(catalogId);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(catalogRepo.findByIdAndHospital_Id(catalogId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test
@@ -1631,8 +1694,8 @@ class PrescriptionServiceImplTest {
      * Tier 2 item 33 — the load-bearing rule, proved through the real update
      * path rather than against the service in isolation.
      *
-     * <p>updatePrescription has NO status guard, so a SIGNED prescription's
-     * medication and dosage stay editable. A verification that outlived that
+     * <p>A TRANSMITTED prescription's medication and dosage stay editable
+     * (a SIGNED one no longer is, QA D660). A verification that outlived that
      * edit would assert a pharmacist checked a drug they never saw, which is
      * a false assurance rather than an absent one.
      */
@@ -1641,9 +1704,9 @@ class PrescriptionServiceImplTest {
         UUID prescriptionId = UUID.randomUUID();
         Prescription existing = new Prescription();
         existing.setId(prescriptionId);
-        existing.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.TRANSMITTED);
         existing.setControlledSubstance(true);
-        // The real ControlledSubstanceGuard refuses a SIGNED controlled
+        // The real ControlledSubstanceGuard refuses a signed controlled
         // substance without two-factor, so this is what a valid one looks
         // like — the test stays about the verification rule, not that one.
         existing.setTwoFactorVerifiedAt(java.time.LocalDateTime.now().minusHours(3));
@@ -3226,7 +3289,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3282,7 +3345,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3364,7 +3427,7 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be set directly");
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("prescription.status.notAssertable");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3720,7 +3783,7 @@ class PrescriptionServiceImplTest {
     void withdrawalVoidsTheOpenPreparation(com.example.hms.enums.PrescriptionStatus withdrawnTo) {
         UUID prescriptionId = UUID.randomUUID();
         Prescription existing = stubUpdateTo(prescriptionId,
-            com.example.hms.enums.PrescriptionStatus.SIGNED, withdrawnTo);
+            com.example.hms.enums.PrescriptionStatus.TRANSMITTED, withdrawnTo);
 
         prescriptionService.updatePrescription(prescriptionId, requestWithStatus(withdrawnTo), Locale.ENGLISH);
 
@@ -3741,18 +3804,6 @@ class PrescriptionServiceImplTest {
             com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_CHANGED);
     }
 
-    @Test
-    void anEditOfAnAlreadyWithdrawnOrderHasNothingToVoid() {
-        UUID prescriptionId = UUID.randomUUID();
-        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
-            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-
-        prescriptionService.updatePrescription(prescriptionId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
-
-        verifyNoInteractions(preparedFills);
-    }
-
     // ═══════════════ G13: withdrawal and edit end the work-queue claim (AC-11) ═══════════════
 
     @org.junit.jupiter.params.ParameterizedTest
@@ -3762,7 +3813,7 @@ class PrescriptionServiceImplTest {
         // global view (no pinned hospital): findByIdForUpdate, a super-admin's path; no scope call here
         UUID prescriptionId = UUID.randomUUID();
         Prescription existing = stubUpdateTo(prescriptionId,
-            com.example.hms.enums.PrescriptionStatus.SIGNED, withdrawnTo);
+            com.example.hms.enums.PrescriptionStatus.TRANSMITTED, withdrawnTo);
         UUID actor = staff.getUser().getId();
         when(authService.getCurrentUserId()).thenReturn(actor);
 
@@ -3777,8 +3828,8 @@ class PrescriptionServiceImplTest {
     void anyEditEndsTheQueueClaimAsChanged() {
         UUID prescriptionId = UUID.randomUUID();
         Prescription existing = stubUpdateTo(prescriptionId,
-            com.example.hms.enums.PrescriptionStatus.SIGNED,
-            com.example.hms.enums.PrescriptionStatus.SIGNED);
+            com.example.hms.enums.PrescriptionStatus.TRANSMITTED,
+            com.example.hms.enums.PrescriptionStatus.TRANSMITTED);
         UUID actor = staff.getUser().getId();
         when(authService.getCurrentUserId()).thenReturn(actor);
 
@@ -3854,23 +3905,6 @@ class PrescriptionServiceImplTest {
         verifyNoInteractions(withdrawnOrders);
     }
 
-    @Test
-    void movingBetweenWithdrawnStatesDoesNotTellThePartnersAgain() {
-        UUID cancelledId = UUID.randomUUID();
-        stubUpdateTo(cancelledId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
-            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-        prescriptionService.updatePrescription(cancelledId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
-
-        UUID discontinuedId = UUID.randomUUID();
-        stubUpdateTo(discontinuedId, com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
-            com.example.hms.enums.PrescriptionStatus.CANCELLED);
-        prescriptionService.updatePrescription(discontinuedId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
-
-        verifyNoInteractions(withdrawnOrders);
-    }
-
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
         "CANCELLED,DRAFT", "CANCELLED,PENDING_SIGNATURE", "CANCELLED,SIGNED",
@@ -3891,32 +3925,6 @@ class PrescriptionServiceImplTest {
         assertThat(existing.getStatus()).isEqualTo(withdrawn);
         verify(prescriptionRepository, never()).save(any());
         verifyNoInteractions(withdrawnOrders, prescriptionMapper);
-    }
-
-    @Test
-    void aWithdrawnPrescriptionMayMoveToTheOtherWithdrawnState() {
-        UUID prescriptionId = UUID.randomUUID();
-        Prescription existing = stubUpdateTo(prescriptionId,
-            com.example.hms.enums.PrescriptionStatus.CANCELLED,
-            com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-
-        prescriptionService.updatePrescription(prescriptionId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED), Locale.ENGLISH);
-
-        assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
-        verify(prescriptionRepository).save(existing);
-    }
-
-    @Test
-    void reSavingAnAlreadyCancelledOrderDoesNotTellThePartnersAgain() {
-        UUID prescriptionId = UUID.randomUUID();
-        stubUpdateTo(prescriptionId, com.example.hms.enums.PrescriptionStatus.CANCELLED,
-            com.example.hms.enums.PrescriptionStatus.CANCELLED);
-
-        prescriptionService.updatePrescription(prescriptionId,
-            requestWithStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED), Locale.ENGLISH);
-
-        verifyNoInteractions(withdrawnOrders);
     }
 
     // ═══════════════ QA D83: allergy check covers accents, class, and needs a reason ═══════════════
@@ -4202,4 +4210,189 @@ class PrescriptionServiceImplTest {
 
         verify(prescriptionRepository).save(mappedEntity);
     }
+
+    // ═══════════════ QA D660: a signed prescription only accepts its withdrawal ═══════════════
+
+    private Prescription signedRow(UUID id) {
+        Prescription rx = new Prescription();
+        rx.setId(id);
+        rx.setHospital(encounter.getHospital());
+        rx.setPatient(patient);
+        rx.setStaff(staff);
+        rx.setEncounter(encounter);
+        rx.setMedicationName(TEST_MEDICATION);
+        rx.setDosage(TEST_DOSAGE);
+        rx.setFrequency(TEST_FREQUENCY);
+        rx.setDuration("5d");
+        rx.setNotes("Take with food");
+        rx.setRoute("PO");
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        return rx;
+    }
+
+    /** The QA call: the portal's PUT with the whole form echoed and a new dose. */
+    @Test
+    void qaD660_signedPrescriptionRefusesADoseChange() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        PrescriptionRequestDTO request = buildRequest();
+        request.setDosage("1000mg");
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("Wrong dose");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.signed.onlyWithdrawal");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD660_signedPrescriptionRefusesAnUnchangedFormWithoutAWithdrawal() {
+        UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(signedRow(id)));
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.signed.onlyWithdrawal");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD660_signedPrescriptionWithdrawalNeedsAReason() {
+        UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(signedRow(id)));
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        request.setWithdrawalReason("   ");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.signed.withdrawalReason.required");
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD660_signedPrescriptionIsCancelledWithItsReasonAndNothingElseChanges() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setRoute("po");
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("  Patient allergic  ");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThat(rx.getWithdrawalReason()).isEqualTo("Patient allergic");
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+        verify(prescriptionMapper, never()).updateEntity(any(), any(), any(), any(), any());
+        verify(withdrawnOrders).withdrawPartnerOffers(rx);
+        verify(preparedFills).voidPreparedFill(rx, com.example.hms.enums.ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
+        verify(queueClaimService).releaseOnExit(rx, com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN,
+            staff.getUser().getId(), com.example.hms.enums.QueueClaimExitActor.OTHER);
+    }
+
+    @Test
+    void qaD660_signedPrescriptionWithdrawalStillNeedsAPrescriber() {
+        UUID id = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(signedRow(id)));
+        when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .status(com.example.hms.enums.PrescriptionStatus.DISCONTINUED)
+            .withdrawalReason("Course complete")
+            .build();
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    // ═══════════════ QA D660 re-test 2: a withdrawn prescription is read-only ═══════════════
+
+    /**
+     * The QA call (r2 rx660b.js): PUT /prescriptions/{id} on a signed order
+     * already DISCONTINUED, {status: DISCONTINUED, medicationName: 'morphine QA',
+     * dosage: '999 mg'}. It used to reach updateEntity and keep the signature.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "DISCONTINUED,DISCONTINUED", "DISCONTINUED,CANCELLED", "CANCELLED,CANCELLED", "CANCELLED,DISCONTINUED"})
+    void qaD660_withdrawnSignedPrescriptionIsReadOnly(com.example.hms.enums.PrescriptionStatus withdrawn,
+                                                      com.example.hms.enums.PrescriptionStatus requested) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(withdrawn);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(requested);
+        request.setMedicationName("morphine QA");
+        request.setDosage("999 mg");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.withdrawn.readOnly");
+        assertThat(rx.getMedicationName()).isEqualTo(TEST_MEDICATION);
+        assertThat(rx.getDosage()).isEqualTo(TEST_DOSAGE);
+        assertThat(rx.getStatus()).isEqualTo(withdrawn);
+        verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriptionMapper, withdrawnOrders, preparedFills);
+    }
+
+    // ═══════════════ QA D670: who may withdraw a signed prescription ═══════════════
+
+    /** The QA call (r2 uirx3.js): NURSE_A discontinues DOCTOR_A's signed order. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"NURSE", "MIDWIFE"})
+    void qaD670_aNurseOrMidwifeCannotWithdrawAnotherPrescribersSignedOrder(String role) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        request.setWithdrawalReason("QA " + role);
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD670_anotherDoctorOfTheHospitalMayWithdrawASignedOrder() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        request.setWithdrawalReason("Course complete");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+    }
+
 }

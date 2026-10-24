@@ -33,6 +33,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -714,6 +715,51 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("Reactivate that assignment");
     }
 
+    /**
+     * QA D626/D664 replay: HOSPITAL_ADMIN_A POSTs /assignments
+     * {userId: NURSE2_A, hospitalId: A, roleName: 'ROLE_PATIENT'}; the grant
+     * check lets a hospital admin grant non-admin roles, so the row used to be
+     * saved (200, a pending patient assignment). Now the same 400 as admin-register.
+     */
+    @Test
+    void qaD664_postAssignmentsWithRolePatient_isRefusedAndSavesNothing() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        when(roleRepository.findByNameIgnoreCase("ROLE_PATIENT")).thenReturn(Optional.of(patient));
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setUserId(assignee.getId());
+        dto.setHospitalId(hospital.getId());
+        dto.setRoleName("ROLE_PATIENT");
+
+        assertThatThrownBy(() -> service.assignRole(dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    /** QA D664, the update sibling: PUT /assignments/{id} turning a nurse row into a patient row. */
+    @Test
+    void qaD664_putAssignmentChangingTheRoleToPatient_isRefused() {
+        Role patient = new Role();
+        patient.setId(UUID.randomUUID());
+        patient.setName("ROLE_PATIENT");
+        patient.setCode("ROLE_PATIENT");
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(roleRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+        com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO dto =
+            new com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO();
+        dto.setRoleId(patient.getId());
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessageContaining("Register the patient from the patient form");
+        verify(assignmentRepository, never()).save(any());
+    }
+
     /** QA D521: hospital admin A asks for a role it may not grant; the FAILURE row reaches A's audit log. */
     @Test
     void d521_aRefusedGrantIsAnchoredAtTheActingHospital() {
@@ -744,6 +790,39 @@ class UserRoleHospitalAssignmentServiceImplTest {
             assertThat(audit.getValue().getHospitalId()).isEqualTo(hospital.getId());
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    /**
+     * QA D671 replay: HOSPITAL_ADMIN_A, Accept-Language fr, POSTs
+     * /api/assignments/bulk-import with a row granting ROLE_SUPER_ADMIN. The
+     * grant check refuses it with its internal "Access denied", which used to
+     * be copied verbatim into results[0].message; the row now says it in the
+     * request's language.
+     */
+    @Test
+    void qaD671_bulkImportRowTheCallerMayNotGrantIsRefusedInTheRequestLanguage() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            org.mockito.Mockito.lenient().when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+            org.mockito.Mockito.lenient().when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+            org.mockito.Mockito.lenient().when(hospitalRepository.findById(hospital.getId())).thenReturn(Optional.of(hospital));
+            when(accountAccess.requireMayGrant(any()))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException("Access denied"));
+            when(messageSource.getMessage(eq("error.access.denied"), any(), anyString(), eq(java.util.Locale.FRENCH)))
+                .thenReturn("Accès refusé");
+            String csv = "user_id,role_id,hospital_id\n"
+                + assignee.getId() + "," + role.getId() + "," + hospital.getId() + "\n";
+
+            com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO result =
+                service.bulkImportAssignments(com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO.builder()
+                    .csvContent(csv).delimiter(",").skipConflicts(true).build());
+
+            assertThat(result.getFailed()).isEqualTo(1);
+            assertThat(result.getResults().get(0).getMessage()).isEqualTo("Accès refusé");
+            verify(assignmentRepository, never()).save(any());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
         }
     }
 

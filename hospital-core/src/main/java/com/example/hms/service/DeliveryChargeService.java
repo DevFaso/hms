@@ -102,6 +102,13 @@ public class DeliveryChargeService {
             .amountPaid(BigDecimal.ZERO)
             .status(InvoiceStatus.DRAFT)
             .createdBy(recorderUserId)
+            // QA D608: the draft said nothing (no notes, no total when the
+            // hospital has no priced delivery service), so billing could not
+            // tell it was the birth's charge. It names the delivery and its date.
+            .notes(MessageUtil.resolve("maternity.delivery.charge.note",
+                MessageUtil.resolveOrRaw(caesarean
+                    ? "maternity.delivery.charge.caesarean" : "maternity.delivery.charge.vaginal"),
+                delivery.getBirthDateTime() != null ? delivery.getBirthDateTime().toLocalDate().toString() : today.toString()))
             .build();
         InvoiceItem line = InvoiceItem.builder()
             .itemDescription(MessageUtil.resolveOrRaw(caesarean

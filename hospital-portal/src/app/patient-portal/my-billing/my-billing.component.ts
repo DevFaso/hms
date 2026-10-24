@@ -1,5 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
-import { CommonModule, DatePipe, CurrencyPipe } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -8,11 +8,12 @@ import {
   PatientPaymentRequest,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 
 @Component({
   selector: 'app-my-billing',
   standalone: true,
-  imports: [CommonModule, DatePipe, CurrencyPipe, FormsModule, EnumLabelPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule, CfaPipe],
   templateUrl: './my-billing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-billing.component.scss', '../patient-portal-pages.scss'],

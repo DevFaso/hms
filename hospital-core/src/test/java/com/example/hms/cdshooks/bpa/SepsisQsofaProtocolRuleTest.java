@@ -134,4 +134,29 @@ class SepsisQsofaProtocolRuleTest {
             List.of(), List.of(), List.of());
         assertThat(rule.evaluate(empty)).isEmpty();
     }
+
+    /** QA D606: the exact QA case — a 6-year-old, RR 24-28, SBP 95-100. */
+    @Test
+    void noAdultCardForASixYearOld() {
+        when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
+            .thenReturn(Optional.of(activeProtocol()));
+        Patient child = patient();
+        child.setDateOfBirth(java.time.LocalDate.now().minusYears(6));
+        BpaRuleContext ctx = new BpaRuleContext(child, UUID.randomUUID(),
+            List.of(vitals(28, 95, LocalDateTime.now().minusHours(1)),
+                vitals(24, 100, LocalDateTime.now().minusHours(2))),
+            List.of(), List.of());
+        assertThat(rule.evaluate(ctx)).isEmpty();
+    }
+
+    @Test
+    void adultWithABirthDateStillGetsTheCard() {
+        when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))
+            .thenReturn(Optional.of(activeProtocol()));
+        Patient adult = patient();
+        adult.setDateOfBirth(java.time.LocalDate.now().minusYears(18));
+        BpaRuleContext ctx = new BpaRuleContext(adult, UUID.randomUUID(),
+            List.of(vitals(24, 95, LocalDateTime.now().minusHours(1))), List.of(), List.of());
+        assertThat(rule.evaluate(ctx)).hasSize(1);
+    }
 }

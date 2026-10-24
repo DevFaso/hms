@@ -52,6 +52,12 @@ public class StockLotRequestDTO {
 
     private UUID receivedBy;
 
+    /**
+     * QA D655: the second person who witnessed the receipt of a controlled
+     * substance (required then, ignored otherwise).
+     */
+    private UUID witnessedBy;
+
     @Size(max = 1000)
     private String notes;
 }

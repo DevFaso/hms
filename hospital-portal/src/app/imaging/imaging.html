@@ -177,7 +177,7 @@
                       </button>
                     }
                     @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
-                      @if (canEditOrder()) {
+                      @if (canEditThisOrder(o)) {
                         <button
                           class="action-link"
                           (click)="openEdit(o)"
@@ -228,7 +228,7 @@
         >
           <option value="">{{ 'IMAGING.ALL_MODALITIES' | translate }}</option>
           @for (m of modalities; track m) {
-            <option [value]="m">{{ m }}</option>
+            <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
           }
         </select>
         <label class="critical-toggle">
@@ -857,7 +857,7 @@
               [title]="'IMAGING.MODALITY' | translate"
             >
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>
@@ -869,7 +869,7 @@
               [title]="'IMAGING.PRIORITY' | translate"
             >
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'imagingOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -919,6 +919,9 @@
           </div>
         </div>
       </div>
+      @if (formError()) {
+        <p class="modal-error" role="alert" data-testid="imaging-form-error">{{ formError() }}</p>
+      }
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

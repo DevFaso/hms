@@ -59,6 +59,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
     private final MessageSource messageSource;
     private final SignableReportLocator reportLocator;
     private final com.example.hms.repository.UserRepository userRepository;
+    private final SignableReportFinder signableReportFinder;
 
     private static String normaliseName(String value) {
         return value == null ? "" : value.trim().replaceAll("\s+", " ").toLowerCase(Locale.ROOT);
@@ -91,6 +92,11 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             .orElseThrow(() -> new AccessDeniedException("No staff record for you in this hospital."));
         if (!staff.getId().equals(request.getSignedByStaffId())) {
             throw new AccessDeniedException("You can only sign in your own name.");
+        }
+        // QA D627: a type with no record store can never be signed; say so
+        // instead of a 404 that reads as "wrong id".
+        if (request.getReportType() != null && !SignableReportLocator.SIGNABLE.contains(request.getReportType())) {
+            throw new BusinessException(text("signature.reportType.notSignable", LocaleContextHolder.getLocale()));
         }
         UUID reportHospitalId = reportLocator.owningHospitalId(request.getReportType(), request.getReportId())
             .orElseThrow(() -> new ResourceNotFoundException("signature.report.notFound", request.getReportId()));
@@ -143,6 +149,19 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             saved.getReportType(), saved.getReportId(), staff.getFullName());
 
         return signatureMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.signature.SignableReportDTO> listSignableReports() {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID currentUserId = authService.getCurrentUserId();
+        if (activeHospitalId == null || currentUserId == null) {
+            return List.of();
+        }
+        return staffRepository.findByUserIdAndHospitalId(currentUserId, activeHospitalId)
+            .map(staff -> signableReportFinder.find(activeHospitalId, staff.getId(), currentUserId))
+            .orElseGet(List::of);
     }
 
     @Override

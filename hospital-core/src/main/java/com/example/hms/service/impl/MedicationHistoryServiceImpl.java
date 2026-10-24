@@ -272,6 +272,22 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .toList();
     }
 
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
     private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx) {
         LocalDate startDate = rx.getCreatedAt() != null ? rx.getCreatedAt().toLocalDate() : null;
         LocalDate endDate = calculateEndDate(startDate, rx.getDuration());
@@ -296,7 +312,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .prescriberName(rx.getStaff() != null ? rx.getStaff().getFullName() : null)
             .pharmacyName(rx.getPharmacyName())
             .status(rx.getStatus() != null ? rx.getStatus().name() : null)
-            .controlledSubstance(rx.isControlledSubstance())
+            .controlledSubstance(controlled(rx))
             .hasOverlap(false)
             .overlappingWith(new ArrayList<>())
             .hasInteraction(false)

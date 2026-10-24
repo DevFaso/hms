@@ -87,9 +87,9 @@ public class PermissionController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         permissionService.deletePermission(id, locale);
         String rawMessage = messageSource.getMessage("permission.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 

@@ -137,6 +137,7 @@ describe('DispensingComponent', () => {
       'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
       'getDispenseSettings',
       'markReady',
       'handOver',
@@ -155,6 +156,9 @@ describe('DispensingComponent', () => {
     pharmacySvc.listDispensableLots.and.returnValue(of({ data: mockLots.data.content } as any));
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({ data: { readyForCollectionEnabled: true } } as any),
+    );
+    pharmacySvc.listWitnessCandidates.and.returnValue(
+      of({ data: [{ userId: 'user-2', displayName: 'Pharmacist B' }] } as any),
     );
 
     // Roadmap row 4 / T-68 — substitute the offline queue with a stub so the
@@ -303,8 +307,92 @@ describe('DispensingComponent', () => {
 
     component.cancelDispense('d-1');
 
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1');
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', undefined);
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
+  });
+
+  // ── QA D654: a controlled substance moves only in front of a witness ──
+
+  function makeAmoxicillinControlled(): void {
+    component.inventoryItems.set([
+      {
+        id: 'inv-1',
+        medicationCatalogItemId: 'cat-1',
+        medicationName: 'Morphine',
+        quantityOnHand: 100,
+        controlled: true,
+      } as any,
+    ]);
+  }
+
+  it('QA D654: a fill from a controlled lot shows the witness picker and sends the witness', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    makeAmoxicillinControlled();
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('#dispWitness')).toBeNull();
+
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    fixture.detectChanges();
+    const picker = el.querySelector<HTMLSelectElement>('#dispWitness');
+    expect(picker).not.toBeNull();
+    expect(picker!.textContent).toContain('Pharmacist B');
+
+    component.submitDispense();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+
+    component.form.witnessedBy = 'user-2';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBe('user-2');
+  });
+
+  it('QA D654: an ordinary lot sends no witness', () => {
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    component.selectPrescription(mockWorkQueue.data.content[0]);
+    component.form.stockLotId = 'lot-fresh';
+    component.form.witnessedBy = 'user-2';
+    component.onLotChange();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('#dispWitness')).toBeNull();
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBeUndefined();
+  });
+
+  it('QA D654: cancelling a controlled fill asks for the witness and sends it', () => {
+    const confirmSpy = spyOn(window, 'confirm').and.returnValue(true);
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    makeAmoxicillinControlled();
+    component.recentDispenses.set([
+      {
+        id: 'd-1',
+        medicationName: 'Morphine',
+        medicationCatalogItemId: 'cat-1',
+        stockLotId: 'lot-fresh',
+        status: 'COMPLETED',
+      } as any,
+    ]);
+    fixture.detectChanges();
+
+    component.cancelDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="cancel-witness"] #cancelWitness')).not.toBeNull();
+
+    component.confirmWitnessedCancel();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
+
+    component.cancelWitnessId = 'user-2';
+    component.confirmWitnessedCancel();
+    fixture.detectChanges();
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'user-2');
+    expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
   });
 
   // ── Tier 2 item 34 — the lot picker and the counter-side scan ────────
@@ -664,11 +752,13 @@ describe('DispensingComponent — refill context on the work queue', () => {
       'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
       'getDispenseSettings',
     ]);
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({ data: { readyForCollectionEnabled: false } }) as never,
     );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     // The component only loads the work queue once a pharmacy is selected,
     // so an empty pharmacy list would leave the queue permanently unrendered.
     pharmacySvc.listPharmacies.and.returnValue(
@@ -828,11 +918,13 @@ describe('DispensingComponent — clarification control on the work queue', () =
       'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
       'getDispenseSettings',
     ]);
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({ data: { readyForCollectionEnabled: false } }) as never,
     );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     pharmacySvc.listPharmacies.and.returnValue(
       of({
         content: [{ id: 'ph-1', name: 'Main Pharmacy' }],
@@ -1059,6 +1151,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       'listDispensableLots',
       'createDispense',
       'cancelDispense',
+      'listWitnessCandidates',
       'getDispenseSettings',
       'markReady',
       'claimQueueRow',
@@ -1074,6 +1167,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
         },
       }) as never,
     );
+    pharmacySvc.listWitnessCandidates.and.returnValue(of({ data: [] }) as never);
     pharmacySvc.listPharmacies.and.returnValue(
       of({
         content: [

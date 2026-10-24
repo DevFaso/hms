@@ -475,8 +475,15 @@ class UserEndpointAuthorizationIT extends BaseIT {
         assertThat(patient.getResponse().getStatus()).isEqualTo(201);
         UUID patientId = idOf(patient);
         createdUsers.add(patientId);
+        UUID recordId = UUID.fromString(objectMapper.readTree(
+            patient.getResponse().getContentAsString()).get("patientId").asText());
+        createdPatients.add(recordId);
         assertThat(assignmentRepository.findByUserId(patientId))
             .allSatisfy(a -> assertThat(a.getHospital().getId()).isEqualTo(hospitalA.getId()));
+        // QA D626: the record exists with the account, at the same hospital.
+        assertThat(patientRepository.findByUserId(patientId)).map(p -> p.getId()).contains(recordId);
+        assertThat(registrationRepository.findByPatientId(recordId))
+            .anySatisfy(r -> assertThat(r.getHospital().getId()).isEqualTo(hospitalA.getId()));
     }
 
     @Test
@@ -783,6 +790,25 @@ class UserEndpointAuthorizationIT extends BaseIT {
 
     private Map<String, Object> signup(String prefix, String role, Hospital hospital) {
         String suffix = next();
+        if ("PATIENT".equals(role)) {
+            // The patient form's step 1 says it is one (QA D626).
+            return Map.of(
+                "username", prefix + suffix,
+                "email", prefix + suffix + "@signup.test",
+                "firstName", prefix,
+                "lastName", "Signup" + suffix,
+                "phoneNumber", "+226770" + suffix,
+                "roleNames", List.of(role),
+                "hospitalId", hospital.getId().toString(),
+                "patientRegistration", true,
+                // ...and carries the record it creates in the same transaction.
+                "patient", Map.of(
+                    "firstName", prefix,
+                    "lastName", "Signup" + suffix,
+                    "dateOfBirth", "1990-01-01",
+                    "gender", "F",
+                    "phoneNumberPrimary", "+226770" + suffix));
+        }
         return Map.of(
             "username", prefix + suffix,
             "email", prefix + suffix + "@signup.test",

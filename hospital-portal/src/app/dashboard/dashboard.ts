@@ -76,6 +76,7 @@ import { LabService } from '../services/lab.service';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
 import { EnumLabelService } from '../core/enum-label.service';
 import { RoleContextService } from '../core/role-context.service';
 import {
@@ -83,7 +84,7 @@ import {
   CredentialRenewalTarget,
 } from './credential-renewal/credential-renewal.component';
 
-import { currentLocale } from '../shared/i18n/app-locale';
+import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -1149,10 +1150,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
    * PATIENT…) repeated what the translated event type already says, and the
    * audit writer's "Unknown Resource" placeholder is not a name (D260).
    */
-  auditResourceLabel(resourceName: string | null | undefined): string | null {
-    const name = resourceName?.trim();
-    if (!name || name === 'Unknown Resource') return null;
-    return name;
+  auditResourceLabel(
+    resourceName: string | null | undefined,
+    entityType?: string | null,
+  ): string | null {
+    // QA D619: a write audit's resourceName is the entity token (TRANSFER,
+    // BILLING_INVOICE); echoing it put English wire tokens on the FR/ES card.
+    // QA D672: a resourceName that is only a record id falls back to the
+    // row's entity type, so the line reads like its neighbours.
+    return (
+      this.enumLabels.auditEntityLabel(resourceName) ?? this.enumLabels.auditEntityLabel(entityType)
+    );
   }
 
   // ── MVP 17: Staffing by department ──────────────────────────
@@ -2064,9 +2072,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Upcoming appointments for patient (computed from portal data) ────
   upcomingAppointments = computed(() => {
-    const now = new Date();
+    // QA D642: the NEXT three, in date order (the service sorts), counted in
+    // the patient's own calendar days (D433): new Date('yyyy-MM-dd') is UTC
+    // midnight, so today's visit used to drop off the card.
+    const today = localDateString();
     return this.myAppointments()
-      .filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now)
+      .filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED' && a.date >= today)
+      .sort((a, b) =>
+        `${a.date}T${a.rawStartTime ?? ''}`.localeCompare(`${b.date}T${b.rawStartTime ?? ''}`),
+      )
       .slice(0, 3);
   });
 
@@ -2323,11 +2337,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   /** Mirrors the billing page's XOF formatting so amounts read identically. */
   formatInvoiceAmount(amount: number): string {
-    return new Intl.NumberFormat(currentLocale(), {
-      style: 'currency',
-      currency: 'XOF',
-      maximumFractionDigits: 0,
-    }).format(amount ?? 0);
+    // QA D621: "4 000 F CFA" in every language, not XOF / F CFA4,000.
+    return formatCfa(amount);
   }
 
   private initProfile(): void {

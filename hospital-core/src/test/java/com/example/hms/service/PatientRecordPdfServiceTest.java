@@ -366,4 +366,17 @@ class PatientRecordPdfServiceTest {
         assertThat(PatientRecordPdfService.label(t, "WAITING_FOR_PHYSICIAN")).isEqualTo("waiting for physician");
         assertThat(PatientRecordPdfService.label(t, null)).isNull();
     }
+
+    @Test
+    void qaD678AControlledMedicationFromTheChartIsMarkedInThePdf() throws Exception {
+        // The chart review now marks catalog-controlled orders (ChartReviewServiceImplTest); the PDF prints that flag.
+        echoKeys();
+        ChartReviewDTO.MedicationEntryDTO m = new ChartReviewDTO.MedicationEntryDTO();
+        m.setMedicationName("Morphine");
+        m.setControlledSubstance(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().medications(List.of(m)).build();
+        byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
+            chart, null, PdfLabels.of(messageSource, Locale.FRENCH));
+        assertThat(textOf(pdf)).contains("pdf.record.medication.controlled");
+    }
 }

@@ -40,6 +40,10 @@ public class ControlledSubstanceGuard {
             return;
         }
 
+        // QA D678 / user decision D654: the prescriber's own tick ONLY, never
+        // PrescriptionControlledResolver's catalog answer. A catalog-controlled
+        // drug would otherwise be unsignable, as no two-factor step exists yet
+        // (tasklist standing debt). Verification, chart, history and PDF do use it.
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
             throw new BusinessException(
                 "CONTROLLED_SUBSTANCE: a prescription flagged as a controlled substance cannot be "

@@ -40,6 +40,7 @@ class DigitalSignatureServiceImplTenantTest {
     @Mock private RoleValidator roleValidator;
     @Mock private SignableReportLocator reportLocator;
     @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private SignableReportFinder signableReportFinder;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
 
@@ -130,6 +131,81 @@ class DigitalSignatureServiceImplTenantTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(request(staffId, hospital, reportId)))
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void qaD627_thePickerListsOnlyTheCallersOwnReportsInTheActingHospital() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        var row = new com.example.hms.payload.dto.signature.SignableReportDTO(
+            com.example.hms.enums.SignatureType.DISCHARGE_SUMMARY, UUID.randomUUID(), "Awa Traore", null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        when(signableReportFinder.find(hospital, staffId, user)).thenReturn(java.util.List.of(row));
+
+        org.assertj.core.api.Assertions.assertThat(service.listSignableReports()).containsExactly(row);
+    }
+
+    @Test
+    void qaD627_noStaffRecordInTheActingHospitalMeansNothingToSign() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.empty());
+
+        org.assertj.core.api.Assertions.assertThat(service.listSignableReports()).isEmpty();
+        verify(signableReportFinder, never()).find(org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    /** The QA call replayed: a picked id from another hospital is still refused by the server. */
+    @Test
+    void qaD627_aReportOfAnotherHospitalIsRefusedEvenIfPosted() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID reportId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        when(reportLocator.owningHospitalId(com.example.hms.enums.SignatureType.DISCHARGE_SUMMARY, reportId))
+            .thenReturn(java.util.Optional.of(UUID.randomUUID()));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(request(staffId, hospital, reportId)))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void qaD627_anUnsignableReportTypeIsRefusedInTheReaderLanguage() {
+        UUID hospital = UUID.randomUUID();
+        UUID user = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        com.example.hms.model.Staff mine = me(staffId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospital);
+        when(authService.getCurrentUserId()).thenReturn(user);
+        when(staffRepository.findByUserIdAndHospitalId(user, hospital)).thenReturn(java.util.Optional.of(mine));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            for (var type : new com.example.hms.enums.SignatureType[] {
+                    com.example.hms.enums.SignatureType.OPERATIVE_NOTE, com.example.hms.enums.SignatureType.PATHOLOGY_REPORT,
+                    com.example.hms.enums.SignatureType.CARE_PLAN, com.example.hms.enums.SignatureType.GENERIC_REPORT}) {
+                var req = request(staffId, hospital, UUID.randomUUID());
+                req.setReportType(type);
+                org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.signReport(req))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("Ce type de rapport ne peut pas être signé ici.");
+            }
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        verify(reportLocator, never()).owningHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
         verify(signatureRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 

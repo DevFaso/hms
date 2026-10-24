@@ -49,6 +49,7 @@ public class UserController {
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     private final UserService userService;
+    private final com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
 
@@ -78,6 +79,24 @@ public class UserController {
         final boolean isPatientOnly = effectiveRoles.size() == 1 &&
             (effectiveRoles.contains(ROLE_PATIENT) || effectiveRoles.contains("ROLE_PATIENT"));
 
+        // QA D626 (regression of D329): D329 refused PATIENT only NEXT TO a
+        // staff role, so a staff onboarding that ticked the patient role alone
+        // still answered 201 with an account and no patient record. Only the
+        // patient form (which says so) or a receptionist (whose roles are
+        // forced to PATIENT above) registers a patient here.
+        if (!callerIsReceptionistOnly
+            && effectiveRoles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.replaceFirst("(?i)^ROLE_", "")))
+            && !Boolean.TRUE.equals(request.getPatientRegistration())) {
+            throw new com.example.hms.exception.BusinessException("users.roles.patientFromPatientForm");
+        }
+        // QA D626 (verification): the flag alone proves nothing, the client sets
+        // it. A patient registration carries the patient record and both are
+        // written in one transaction, so no PATIENT account is left without one.
+        final boolean patientRegistration = Boolean.TRUE.equals(request.getPatientRegistration());
+        if (patientRegistration && request.getPatient() == null) {
+            throw new com.example.hms.exception.BusinessException("users.patientRegistration.patientRequired");
+        }
+
         // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
         // Skip the hospital-presence check so the request reaches the service, which
         // correctly returns null for the hospitalId when registering a SUPER_ADMIN.
@@ -95,7 +114,10 @@ public class UserController {
         // instead of a green 201 over a silent WARN log.
         com.example.hms.utility.ActivationDeliveryTracker.open();
         try {
-            UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
+            UserResponseDTO dto = patientRegistration
+                ? patientAccountRegistrationService.registerPatient(request,
+                    org.springframework.context.i18n.LocaleContextHolder.getLocale())
+                : userService.createUserWithRolesAndHospital(request);
             dto.setActivationDelivery(com.example.hms.utility.ActivationDeliveryTracker.close());
             return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
         } finally {

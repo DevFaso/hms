@@ -67,4 +67,20 @@ class BillingInvoiceControllerPdfTest {
             .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("invoice-INV-2042.pdf")))
             .andExpect(content().bytes(pdfBytes));
     }
+
+    /** QA D646: the delete message read "supprim&eacute;e avec succ&egrave;s". */
+    @Test
+    void deleteMessageKeepsItsAccentsButStillEscapesMarkup() throws Exception {
+        UUID invoiceId = UUID.randomUUID();
+        when(messageSource.getMessage(eq("billinginvoice.deleted"), org.mockito.ArgumentMatchers.any(),
+                nullable(Locale.class)))
+            .thenReturn("Facture <b>X</b> supprimée avec succès");
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                .delete("/billing-invoices/{id}", invoiceId).header(HttpHeaders.ACCEPT_LANGUAGE, "fr"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("supprimée avec succès")))
+            .andExpect(content().string(containsString("&lt;b&gt;")))
+            .andExpect(content().string(org.hamcrest.Matchers.not(containsString("&eacute;"))));
+    }
 }

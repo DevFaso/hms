@@ -191,6 +191,12 @@ public class LaborPartographEntry extends BaseEntity {
 
     public void addAlert(LaborAlertType type, LaborAlertSeverity severity,
                          String code, String message, String triggeredBy) {
+        addAlert(type, severity, code, message, triggeredBy, null);
+    }
+
+    /** QA D665: {@code messageArgs} are the alert text's own arguments, so a notice can re-render it per reader. */
+    public void addAlert(LaborAlertType type, LaborAlertSeverity severity,
+                         String code, String message, String triggeredBy, Object[] messageArgs) {
         if (alerts == null) {
             alerts = new ArrayList<>();
         }
@@ -200,6 +206,7 @@ public class LaborPartographEntry extends BaseEntity {
             .code(code)
             .message(message)
             .triggeredBy(triggeredBy)
+            .messageArgs(messageArgs)
             .createdAt(LocalDateTime.now())
             .build());
     }

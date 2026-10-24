@@ -136,6 +136,8 @@ export interface StockLotRequest {
   unitCost?: number;
   receivedDate?: string;
   notes?: string;
+  /** QA D655: the colleague who witnessed the receipt of a controlled substance. */
+  witnessedBy?: string;
 }
 
 export interface StockLotResponse {
@@ -245,6 +247,9 @@ export interface DispenseRequest {
    * contract: see DispenseRequestDTO.idempotencyKey + V94 migration.
    */
   idempotencyKey?: string;
+
+  /** QA D654: the colleague who witnessed a controlled substance leaving the shelf. */
+  witnessedBy?: string;
 
   /**
    * Tier 2 item 34 — raw value scanned from the patient wristband (the bare
@@ -951,8 +956,12 @@ export class PharmacyService {
     );
   }
 
-  cancelDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
-    return this.http.post<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}/cancel`, {});
+  /** QA D654: a controlled fill goes back on the shelf in front of a witness. */
+  cancelDispense(id: string, witnessedBy?: string): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(
+      `/pharmacy/dispense/${id}/cancel`,
+      witnessedBy ? { witnessedBy } : {},
+    );
   }
 
   // ── Ready for collection (G15) ──

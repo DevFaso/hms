@@ -65,6 +65,18 @@ import com.example.hms.model.Hospital;
 @SuppressWarnings("java:S100")
 class PatientSnapshotServiceImplTest {
 
+    /** QA D628: the vitals summary is rendered from the real bundles, in English here. */
+    @org.junit.jupiter.api.BeforeEach
+    void englishBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private com.example.hms.service.support.PatientChartAccess patientChartAccess;
     @Mock private PatientAllergyRepository patientAllergyRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
@@ -364,10 +376,11 @@ class PatientSnapshotServiceImplTest {
         // The sibling of the LAB token: a revert to the word "Vitals"
         // passed the whole suite until this line existed.
         assertEquals("VITALS", v.getType());
-        assertTrue(v.getValue().contains("T:37.0°C"));
-        assertTrue(v.getValue().contains("HR:80"));
-        assertTrue(v.getValue().contains("BP:120/80"));
-        assertTrue(v.getValue().contains("SpO2:98%"));
+        // QA D628: the shared, localized summary (request locale = English here).
+        assertTrue(v.getValue().contains("Temp 37 °C"), v.getValue());
+        assertTrue(v.getValue().contains("HR 80"));
+        assertTrue(v.getValue().contains("BP 120/80"));
+        assertTrue(v.getValue().contains("SpO2 98%"));
     }
 
     @Test
@@ -702,10 +715,10 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getRecentVitals().size());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
-        assertTrue(v.getValue().contains("HR:72"));
-        assertTrue(v.getValue().contains("SpO2:97%"));
-        assertFalse(v.getValue().contains("T:"));
-        assertFalse(v.getValue().contains("BP:"));
+        assertTrue(v.getValue().contains("HR 72"));
+        assertTrue(v.getValue().contains("SpO2 97%"));
+        assertFalse(v.getValue().contains("Temp"));
+        assertFalse(v.getValue().contains("BP "));
         assertEquals("", v.getTimestamp());
     }
 

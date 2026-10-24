@@ -92,6 +92,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
+    private static final String MSG_PATIENT_FROM_PATIENT_FORM = "assignments.roles.patientFromPatientForm";
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String GLOBAL_SCOPE = "GLOBAL";
     private static final String MSG_ASSIGNMENT_NOT_FOUND = "roleAssignment.notFound";
@@ -250,6 +251,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // a refused caller learns nothing from the user lookup either; then
         // the hospital once it is resolved. The same two steps as admin-register.
         UserAccountAccess.Grant grant = adminRequest ? requireMayGrant(roleCode) : null;
+        if (adminRequest) {
+            requireNotPatientGrant(roleCode);
+        }
 
         enforceRoleScopeConstraints(dto, roleCode, adminRequest);
 
@@ -320,6 +324,20 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             locale));
     }
 
+    /**
+     * QA D626/D664: no {@code /assignments} write (single, multi-scope, bulk,
+     * or an update that changes the role) grants PATIENT, whoever asks. A
+     * patient is registered from the patient form, which creates the patient
+     * record with the grant; a bare PATIENT row here left an account with a
+     * patient role and no patient. The same 400 as admin-register. An update
+     * that keeps an existing PATIENT row a PATIENT row is not a grant.
+     */
+    private void requireNotPatientGrant(String roleCode) {
+        if (isRoleCode(roleCode, ROLE_PATIENT)) {
+            throw new BusinessException(MSG_PATIENT_FROM_PATIENT_FORM);
+        }
+    }
+
     private void enforceRoleScopeConstraints(UserRoleHospitalAssignmentRequestDTO dto, String roleCode,
                                              boolean adminRequest) {
         if (isRoleCode(roleCode, ROLE_SUPER_ADMIN)) {
@@ -384,6 +402,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         String newRoleCode = getRoleCode(newRole);
         requireGrantAt(requireMayGrant(newRoleCode), newHospital, newRoleCode);
+        if (!isRoleCode(getRoleCode(target.getRole()), ROLE_PATIENT)) {
+            requireNotPatientGrant(newRoleCode);
+        }
         facilityAssignmentGuard.requireCompatible(newRoleCode, newHospital);
         requireActivationThroughCode(dto, target);
         // Decided before the mapper overwrites the row's current role and hospital.
@@ -1485,9 +1506,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 throw conflict;
             }
             return BulkImportOutcome.skipped(buildFailureResult(rowNumber, tokens, headerIndex, conflict.getMessage()));
-        } catch (BusinessException | ResourceNotFoundException | AccessDeniedException ex) {
+        } catch (AccessDeniedException denied) {
             // A row the caller may not grant fails on its own, nothing saved
-            // for it; the rest of the file still imports.
+            // for it; the rest of the file still imports. Only a
+            // ClientSafeAccessDeniedException carries a sentence written for
+            // the caller; any other refusal (UserAccountAccess's internal
+            // "Access denied") is answered in the request's language, as
+            // GlobalExceptionHandler does for a whole request (QA D671).
+            String message = denied instanceof com.example.hms.exception.ClientSafeAccessDeniedException
+                ? denied.getMessage()
+                : messageSource.getMessage("error.access.denied", null, "Access denied", LocaleContextHolder.getLocale());
+            return BulkImportOutcome.failed(buildFailureResult(rowNumber, tokens, headerIndex, message));
+        } catch (BusinessException | ResourceNotFoundException ex) {
             return BulkImportOutcome.failed(buildFailureResult(rowNumber, tokens, headerIndex, ex.getMessage()));
         }
     }

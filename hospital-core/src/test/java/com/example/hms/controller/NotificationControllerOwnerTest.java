@@ -90,7 +90,8 @@ class NotificationControllerOwnerTest {
         when(callerResolverProvider.getIfAvailable()).thenReturn(callerResolver);
         NotificationController withRealService = new NotificationController(
             new NotificationServiceImpl(repository, mock(NotificationWebSocketController.class),
-                mock(NotificationPreferenceRepository.class), mock(UserRepository.class), callerResolverProvider),
+                mock(NotificationPreferenceRepository.class), mock(UserRepository.class), callerResolverProvider,
+                new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles())),
             mock(ControllerAuthUtils.class));
         HospitalContextHolder.clear();
 
