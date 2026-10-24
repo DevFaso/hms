@@ -20,7 +20,9 @@ import {
   convertsBeforeSending,
   datetimeLocalFields,
   DATETIME_LOCAL_EXEMPT,
+  LOCAL_INPUT_EXEMPT,
   LOCAL_PARSES,
+  localInputValuesOffInputs,
   SLICED_DAY_EXEMPT,
   slicedServerDays,
   unconvertedDateTimes,
@@ -307,6 +309,71 @@ test('no screen cuts the UTC day out of a server time', () => {
   assert.deepEqual(offenders, []);
   assert.deepEqual(
     [...SLICED_DAY_EXEMPT.keys()].filter((key) => !used.has(key)),
+    [],
+  );
+});
+
+const offInputs = (source, fields = [], file = '') =>
+  localInputValuesOffInputs(source, new Set(fields), file).map((h) => h.target);
+
+test('a wall-clock helper value sent outside a datetime-local input is caught (#948 review)', () => {
+  // procedure-orders.ts submitConsent before the fix: no input, no built string.
+  assert.deepEqual(
+    offInputs(`this.applyUpdate(order, { consentObtainedAt: nowLocalDatetime() }, 'K');`, [
+      'scheduleDatetime',
+    ]),
+    ['consentObtainedAt'],
+  );
+  assert.deepEqual(offInputs(`this.form.at = toLocalInputValue(v);`), ['at']);
+  assert.deepEqual(offInputs(`class C { f() { return nowLocalDatetime(); } }`), ['return in f']);
+  assert.deepEqual(offInputs(`send(nowLocalDatetime());`), ['nowLocalDatetime()']);
+});
+
+test('a converted value, or the default of a tracked input, passes', () => {
+  assert.deepEqual(
+    offInputs(
+      `x = { consentObtainedAt: toServerDateTime(nowLocalDatetime()) };
+       y = { resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : nowLocalDatetime() };
+       this.screeningAdministeredAt = nowLocalDatetime();`,
+      ['resultDate', 'screeningAdministeredAt'],
+    ),
+    [],
+  );
+  // The condition of a choice is not where the value goes.
+  assert.deepEqual(offInputs(`if (nowLocalDatetime() ? a : b) {}`), ['nowLocalDatetime()']);
+});
+
+test('a local-input allowance covers only its own file', () => {
+  const source = `class C { toLocalInput(iso: string) { return nowLocalDatetime(new Date(iso)); } }`;
+  assert.deepEqual(offInputs(source, [], 'on-call/on-call.ts'), []);
+  assert.deepEqual(offInputs(source, [], 'other/other.ts'), ['return in toLocalInput']);
+});
+
+test('wall-clock helper values only fill datetime-local inputs', () => {
+  const fieldsOf = new Map();
+  for (const { file, text } of templatesIn(appDir)) {
+    const component = file.endsWith('.html') ? `${file.slice(0, -'.html'.length)}.ts` : file;
+    const fields = fieldsOf.get(component) ?? new Set();
+    for (const { field } of datetimeLocalFields(text)) if (field) fields.add(field);
+    fieldsOf.set(component, fields);
+  }
+  const offenders = [];
+  const used = new Set();
+  for (const file of walk(appDir, ['.ts'])) {
+    const rel = relative(appDir, file).replace(/\\/g, '/');
+    if (rel.endsWith('.spec.ts') || rel === 'shared/date-utils.ts') continue;
+    const source = readFileSync(file, 'utf8');
+    const fields = fieldsOf.get(file) ?? new Set();
+    for (const hit of localInputValuesOffInputs(source, fields, rel)) {
+      offenders.push(`${rel}:${hit.line} ${hit.target}`);
+    }
+    for (const hit of localInputValuesOffInputs(source, fields)) {
+      if (LOCAL_INPUT_EXEMPT.has(`${rel}:${hit.target}`)) used.add(`${rel}:${hit.target}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+  assert.deepEqual(
+    [...LOCAL_INPUT_EXEMPT.keys()].filter((key) => !used.has(key)),
     [],
   );
 });

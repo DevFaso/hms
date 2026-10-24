@@ -278,7 +278,9 @@ export class ProcedureOrdersComponent implements OnInit {
       order,
       {
         consentObtained: true,
-        consentObtainedAt: nowLocalDatetime(),
+        // #948 review: the list reads this back through serverTime, so it is
+        // sent on the server's UTC clock, not the browser's wall clock.
+        consentObtainedAt: toServerDateTime(nowLocalDatetime()),
         consentObtainedBy: this.consentBy.trim(),
         consentFormLocation: this.consentFormLocation.trim() || undefined,
       },

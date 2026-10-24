@@ -451,3 +451,114 @@ export function slicedServerDays(source, file = '') {
   visit(sf);
   return found;
 }
+
+/**
+ * And the helpers that make a wall-clock value (#948 review). `nowLocalDatetime()`
+ * and `toLocalInputValue(...)` give the reader's wall clock with no zone: right
+ * for a `datetime-local` input, whose value the gate above already requires to
+ * be converted before it is sent, and wrong anywhere else. The consent time of
+ * a procedure order was set straight from `nowLocalDatetime()` in the update
+ * payload, so it reached the API as wall clock, and the detail (which reads it
+ * back through `serverTime`) showed a 14:00 New York consent at 10:00. No gate
+ * saw it: there was no input to check and no string built in place. So a call
+ * to either helper is accepted only when it is converted right there
+ * (`toServerDateTime(nowLocalDatetime())`) or is the default of a field a
+ * `datetime-local` input of the component binds (`resultDate: nowLocalDatetime()`
+ * with `[(ngModel)]="form.resultDate"`), or is listed here with the reason.
+ * Keyed `<path under src/app>:<target>`, where the target is the field
+ * assigned, or `return in <method>` for a value returned. Allowances may only
+ * shrink.
+ */
+export const LOCAL_INPUT_EXEMPT = new Map([
+  [
+    'on-call/on-call.ts:return in toLocalInput',
+    'fills the startLocal/endLocal datetime-local inputs, which are sent zoned',
+  ],
+  [
+    'super-admin/audit-search/audit-search.ts:return in fromIsoForInput',
+    'fills the fromDate/toDate datetime-local inputs, converted by toIsoDateTime()',
+  ],
+]);
+
+const LOCAL_INPUT_HELPERS = new Set(['nowLocalDatetime', 'toLocalInputValue']);
+
+/** The name of the method or function that encloses `node`, or `?`. */
+function enclosingName(node) {
+  for (let n = node.parent; n; n = n.parent) {
+    if (
+      (ts.isMethodDeclaration(n) || ts.isFunctionDeclaration(n) || ts.isGetAccessor(n)) &&
+      n.name
+    ) {
+      return n.name.getText();
+    }
+  }
+  return '?';
+}
+
+/**
+ * Where the value of a helper call goes: `{ converted: true }`, a field it is
+ * the value of (`{ field }`), or a label for anything else (`{ label }`). A
+ * `cond ? helper() : other` is followed to where the whole choice goes.
+ */
+function localInputTarget(call) {
+  let node = call;
+  let parent = parentOf(node);
+  while (parent && ts.isConditionalExpression(parent) && unwrap(parent.condition) !== node) {
+    node = parent;
+    parent = parentOf(node);
+  }
+  if (!parent) return { label: call.getText() };
+  if (ts.isCallExpression(parent) && parent.expression.getText() === 'toServerDateTime') {
+    return { converted: true };
+  }
+  if (ts.isPropertyAssignment(parent) && unwrap(parent.initializer) === node) {
+    return { field: parent.name.getText() };
+  }
+  if (
+    ts.isBinaryExpression(parent) &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    unwrap(parent.right) === node
+  ) {
+    const left = unwrap(parent.left);
+    if (ts.isPropertyAccessExpression(left)) return { field: left.name.text };
+    if (ts.isIdentifier(left)) return { field: left.text };
+  }
+  if (ts.isReturnStatement(parent)) return { label: `return in ${enclosingName(parent)}` };
+  return { label: call.getText().replace(/\s+/g, ' ') };
+}
+
+/**
+ * Every `nowLocalDatetime(...)` / `toLocalInputValue(...)` of a TypeScript
+ * source that is neither converted in place nor the default of one of
+ * `fields` (the fields its component's `datetime-local` inputs bind), minus
+ * the `LOCAL_INPUT_EXEMPT` allowances of `file`.
+ *
+ * @returns {{ line: number, target: string }[]}
+ */
+export function localInputValuesOffInputs(source, fields, file = '') {
+  if (!/nowLocalDatetime|toLocalInputValue/.test(source)) return [];
+  const sf = ts.createSourceFile('x.ts', source, ts.ScriptTarget.Latest, true);
+  const found = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      LOCAL_INPUT_HELPERS.has(node.expression.text)
+    ) {
+      const target = localInputTarget(node);
+      const allowed =
+        target.converted ||
+        (target.field !== undefined && fields.has(target.field)) ||
+        LOCAL_INPUT_EXEMPT.has(`${file}:${target.field ?? target.label}`);
+      if (!allowed) {
+        found.push({
+          line: sf.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+          target: target.field ?? target.label,
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return found;
+}

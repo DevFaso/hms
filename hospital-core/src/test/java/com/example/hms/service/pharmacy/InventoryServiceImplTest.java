@@ -78,6 +78,8 @@ class InventoryServiceImplTest {
 
     /** QA D655: the controlled-stock witness rule. */
     @Mock private ControlledStockWitness controlledStockWitness;
+    /** The server's clock; real time unless a test pins it. */
+    @Mock private java.time.Clock clock;
 
     @InjectMocks
     private InventoryServiceImpl service;
@@ -97,6 +99,8 @@ class InventoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(clock.instant()).thenAnswer(i -> java.time.Instant.now());
+        org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");
@@ -752,6 +756,44 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, the reader's today east of UTC (tomorrow on the server) passes the date check")
+        void readersTodayEastOfUtcPassesTheDateCheck() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            // 00:30 on the 25th in a UTC+1 hospital: the portal's default.
+            dto.setReceivedDate(LocalDate.of(2026, 10, 25));
+            // The next check fails on purpose, so reaching it proves the date passed.
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, a day after the reader's today is still refused")
+        void dayAfterTheGraceIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedDate(LocalDate.of(2026, 10, 26));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
             verify(stockLotRepository, never()).save(any());
         }
 
