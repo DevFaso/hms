@@ -321,6 +321,18 @@ describe('LabResultsInboxComponent', () => {
     expect(component.formatDate(undefined)).toBe('—');
     expect(component.formatDate('not-a-date')).toBe('—');
   });
+
+  it('QA D731: reads the zone-less server time as UTC, like the in-basket panel', () => {
+    setup([item()]);
+
+    // The round-10 result: one release shown at 0:39 in the panel and 4:39 here.
+    expect(component.formatDate('2026-10-24T04:39:00')).toBe(
+      component.formatDate('2026-10-24T04:39:00Z'),
+    );
+    expect(component.formatDate('2026-10-24T04:39:00.123456')).toBe(
+      component.formatDate('2026-10-24T04:39:00.123Z'),
+    );
+  });
   /*
    * ── The queue is hospital-scoped (PR #742) ──────────────────────────────
    *

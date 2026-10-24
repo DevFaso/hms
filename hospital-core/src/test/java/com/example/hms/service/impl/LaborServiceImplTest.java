@@ -284,6 +284,39 @@ class LaborServiceImplTest {
     }
 
     @Test
+    void qaD714AnEntryFiveHoursAheadIsRefusedBeforeAnyAlertOrSave() {
+        // Round 10: observationTime = now + 5 h answered 201, raised a CAUTION
+        // alert and was drawn on the chart.
+        episode.setActivePhaseStartAt(LocalDateTime.now().minusHours(4));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusHours(5));
+        request.setCervicalDilationCm(6);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.futureTime");
+        verify(entryRepository, never()).save(any());
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD714ASmallClockSkewIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusMinutes(LaborServiceImpl.PARTOGRAPH_FUTURE_SKEW_MINUTES - 2));
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
+    }
+
+    @Test
+    void qaD714ALateEntryInThePastIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(3));
+        request.setLateEntry(true);
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
+    }
+
+    @Test
     void addEntryAnchorsActivePhaseAtFourCentimetres() {
         PartographEntryRequestDTO request = entryRequest();
         request.setCervicalDilationCm(4);

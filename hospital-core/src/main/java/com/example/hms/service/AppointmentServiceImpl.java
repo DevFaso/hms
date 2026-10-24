@@ -322,7 +322,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
         if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException("Appointment end time must be after start time");
+            throw new BusinessException("appointment.timeRange.invalid");
         }
 
         // schedule check

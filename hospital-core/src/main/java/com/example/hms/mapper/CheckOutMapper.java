@@ -84,9 +84,9 @@ public class CheckOutMapper {
      * The summary used to read only the checkout form and the two encounter
      * columns it writes, so a visit documented in a signed note but checked out
      * with an empty form produced a summary with nothing in it (QA D42). Each
-     * blank section now falls back to the signed note: chief complaint, the
-     * assessment as the diagnosis, and the patient instructions (or the plan)
-     * as follow-up. Anything the clinician typed at checkout still wins, and an
+     * blank section now falls back to the signed note: chief complaint and the
+     * assessment as the diagnosis; the patient instructions and the plan are
+     * always added to the follow-up (QA D730). Anything typed at checkout comes first, and an
      * unsigned draft is never shown to the patient.
      */
     private static void fillFromSignedNote(AfterVisitSummaryDTO summary, EncounterNote note) {
@@ -100,10 +100,29 @@ public class CheckOutMapper {
             String assessment = trimToNull(note.getAssessment());
             summary.setDischargeDiagnoses(assessment != null ? List.of(assessment) : Collections.emptyList());
         }
-        if (isBlank(summary.getFollowUpInstructions())) {
-            String instructions = trimToNull(note.getPatientInstructions());
-            summary.setFollowUpInstructions(instructions != null ? instructions : trimToNull(note.getPlan()));
+        // QA D730: the summary kept only ONE of the note's two patient-facing
+        // sections (instructions, else plan) and dropped both as soon as the
+        // checkout form carried any follow-up text. The patient now gets what
+        // was typed at checkout, then the signed instructions, then the plan,
+        // each once.
+        summary.setFollowUpInstructions(joinDistinct(
+            trimToNull(summary.getFollowUpInstructions()),
+            trimToNull(note.getPatientInstructions()),
+            trimToNull(note.getPlan())));
+    }
+
+    private static String joinDistinct(String first, String second, String third) {
+        StringBuilder out = new StringBuilder();
+        for (String part : new String[] {first, second, third}) {
+            if (part == null || out.indexOf(part) >= 0) {
+                continue;
+            }
+            if (!out.isEmpty()) {
+                out.append("\n\n");
+            }
+            out.append(part);
         }
+        return out.isEmpty() ? null : out.toString();
     }
 
     private static boolean isBlank(String value) {

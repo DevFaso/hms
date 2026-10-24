@@ -13,6 +13,7 @@ import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { serverMessage } from '../services/provider.model';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
@@ -91,8 +92,10 @@ export class PrenatalTabComponent implements OnInit {
         this.schedule.set(schedule);
         this.generating.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PRENATAL.GENERATE_ERROR'));
+      error: (err: unknown) => {
+        // QA D732: the server's localised reason (e.g. an LMP in the future)
+        // is what the midwife needs; the generic text is only the fallback.
+        this.toast.error(this.reasonOr(err, 'PRENATAL.GENERATE_ERROR'));
         this.generating.set(false);
       },
     });
@@ -152,8 +155,8 @@ export class PrenatalTabComponent implements OnInit {
           );
           this.closeReschedule();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRENATAL.RESCHEDULE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(this.reasonOr(err, 'PRENATAL.RESCHEDULE_ERROR'));
           this.rescheduleBusy.set(false);
         },
       });
@@ -189,10 +192,18 @@ export class PrenatalTabComponent implements OnInit {
           this.reminderBusy.set(false);
           this.closeReminder();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRENATAL.REMINDER_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(this.reasonOr(err, 'PRENATAL.REMINDER_ERROR'));
           this.reminderBusy.set(false);
         },
       });
+  }
+
+  /** QA D732: a 4xx carries the backend's reason in the caller's language. */
+  private reasonOr(err: unknown, fallbackKey: string): string {
+    const status = (err as { status?: unknown } | null)?.status;
+    const reason =
+      typeof status === 'number' && status >= 400 && status < 500 ? serverMessage(err) : null;
+    return reason ?? this.translate.instant(fallbackKey);
   }
 }
