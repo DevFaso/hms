@@ -42,6 +42,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       ones counted by shape in the NOTICE;</li>
  *   <li>an open back order holds nothing: its order ends and it is
  *       CANCELLED;</li>
+ *   <li>an order a partner refused (PARTNER_REJECTED, no offer left open)
+ *       is ended too;</li>
  *   <li>a second run changes nothing.</li>
  * </ul>
  */
@@ -261,6 +263,46 @@ class EndedStayWardOrderMigrationIT {
             assertThat(notices).anyMatch(n -> n.contains(
                 "1 ward order(s) of ended stays discontinued (1 open back order(s) cancelled), 1 left")
                 && n.contains("open_stay_encounter 1,"));
+            assertThat(auditCount(stmt)).isEqualTo(1);
+        }
+    }
+
+    /**
+     * #953 review, round 3: a partner refused the order (by SMS, recorded by a
+     * pharmacist, or the timeout sweep), so it went back to the in-house work
+     * queue as PARTNER_REJECTED with its decision REJECTED. No hold is left
+     * and no partner event will ever come for it: it is ended like any live
+     * order. A refused order re-offered to another partner is still held.
+     */
+    @Test
+    void anOrderRefusedByItsPartnerIsDiscontinuedWithAnAuditRow() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAdmission(stmt, 1, "DISCHARGED", ADMITTED, DISCHARGED);
+            // An INPATIENT encounter with no admission link (V193 did not backfill).
+            plantEncounter(stmt, 2, "INPATIENT", "IN_PROGRESS", null, null);
+            plantPrescription(stmt, 50, 2, "PARTNER_REJECTED", false, "2026-10-24 04:20:00");
+            plantRouting(stmt, 50, "PARTNER", "REJECTED");
+            // Refused by one partner, then offered to another that has not answered.
+            plantPrescription(stmt, 51, 2, "PARTNER_REJECTED", false, "2026-10-24 04:21:00");
+            plantRouting(stmt, 51, "PARTNER", "REJECTED");
+            plantRouting(stmt, 51, "PARTNER", "PENDING");
+
+            List<String> notices = runV233(stmt);
+
+            assertThat(status(stmt, 50)).isEqualTo("DISCONTINUED");
+            assertThat(withdrawalReason(stmt, 50)).isNotBlank();
+            assertThat(status(stmt, 51)).isEqualTo("PARTNER_REJECTED");
+            try (ResultSet rs = stmt.executeQuery("SELECT actor_type, event_type, details "
+                    + "FROM support.audit_event_logs WHERE target_resource_id = '" + rxId(50) + "'")) {
+                assertThat(rs.next()).as("one audit row for the refused order").isTrue();
+                assertThat(rs.getString("actor_type")).isEqualTo("SYSTEM");
+                assertThat(rs.getString("event_type")).isEqualTo("PRESCRIPTION_DISCONTINUED");
+                assertThat(rs.getString("details")).contains("PARTNER_REJECTED -> DISCONTINUED");
+                assertThat(rs.next()).as("exactly one row").isFalse();
+            }
+            assertThat(notices).anyMatch(n -> n.contains(
+                "1 ward order(s) of ended stays discontinued (0 open back order(s) cancelled), 1 left")
+                && n.contains("unlinked_inpatient 1,"));
             assertThat(auditCount(stmt)).isEqualTo(1);
         }
     }

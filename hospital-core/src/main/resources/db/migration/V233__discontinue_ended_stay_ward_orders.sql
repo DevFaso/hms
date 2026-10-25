@@ -7,7 +7,12 @@
 -- An order is ended when ALL hold:
 --   * it is live: DRAFT, PENDING_SIGNATURE, SIGNED, TRANSMITTED,
 --     TRANSMISSION_FAILED, PENDING_CLARIFICATION, PENDING_STOCK or
---     PARTIALLY_FILLED (StayOrderDiscontinuation.LIVE_STATUSES);
+--     PARTIALLY_FILLED (StayOrderDiscontinuation.LIVE_STATUSES), or
+--     PARTNER_REJECTED: a partner refused it (by SMS, recorded by a
+--     pharmacist, or the timeout sweep), so it is back in the in-house work
+--     queue with no offer left that could ever end it. SENT_TO_PARTNER and
+--     PARTNER_ACCEPTED are left to the application, which can tell the
+--     partner (an order a partner still holds ends when its offer closes);
 --   * it is NOT marked take_home (V231): a take-home order outlives its stay;
 --   * it belongs to a stay that has ended, by the rule the discharge applies
 --     (InpatientOrderEnd.orderOfStay; InpatientOrderEnd.endedWithAnEndedStay
@@ -81,7 +86,7 @@ BEGIN
          WHERE p.take_home = FALSE
            AND p.status IN ('DRAFT', 'PENDING_SIGNATURE', 'SIGNED', 'TRANSMITTED',
                             'TRANSMISSION_FAILED', 'PENDING_CLARIFICATION',
-                            'PENDING_STOCK', 'PARTIALLY_FILLED')
+                            'PENDING_STOCK', 'PARTIALLY_FILLED', 'PARTNER_REJECTED')
            AND (
                 (e.admission_id IS NOT NULL
                  AND (e.status IN ('COMPLETED', 'CANCELLED')

@@ -67,6 +67,12 @@ class RefillApprovalServiceImplTest {
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
+    /** QA D792: real, over a mocked stay history, so the guard applies the rule itself. */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository =
+            org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class);
+    @Spy private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+            new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
+
     @InjectMocks private RefillApprovalServiceImpl service;
 
     private UUID userId;
@@ -511,6 +517,48 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
                 .matches(e -> "patient.refill.approveNotRefillable".equals(((BusinessException) e).getMessageKey()));
+    }
+
+    /**
+     * QA D792 (#953 review, round 3): approving a refill of a ward order of a
+     * discharged stay put it back to SIGNED in the pharmacy work queue, where
+     * every action on it is refused (stayEnded) and nothing ends it.
+     */
+    @Test
+    @DisplayName("QA D792: approve — refuses a refill of a ward order of a discharged stay")
+    void approve_refusesAWardOrderOfAnEndedStay() {
+        stubStaffResolution();
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(UUID.randomUUID());
+        prescription.setHospital(hospital);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setHospital(hospital);
+        stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+        stayEncounter.setAdmissionId(stay.getId());
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        prescription.setEncounter(stayEncounter);
+        when(admissionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId()))
+                .thenReturn(List.of(stay));
+        RefillRequest pending = pendingRefill();
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveEndedStayOrder".equals(((BusinessException) e).getMessageKey()));
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+        verify(prescriptionRepository, never()).save(any(Prescription.class));
+        verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+
+        // A take-home order of the same stay goes home, and is refilled as asked.
+        prescription.setTakeHome(true);
+        when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> inv.getArgument(0));
+        service.approve(auth, refillId, null);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
     }
 
     @Test

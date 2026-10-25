@@ -40,11 +40,11 @@ import java.util.UUID;
  * dispensed (IV ceftriaxone for a patient at home) and printed on the
  * after-visit summary as medicines to take home, while the MAR had already
  * dropped them. Every discharge path (direct, and the approval flow) calls
- * this before the stay's encounter is closed: each live order of the stay
- * (the rule the MAR uses, {@link InpatientOrderEnd#orderOfStay}) that is not
- * marked take-home is DISCONTINUED with a reason, exactly as a prescriber's
- * withdrawal: its prepared fill voided, its queue claim released and its
- * partner offers withdrawn.
+ * this before the stay's encounter is closed: each live or partner-status
+ * order of the stay (the rule the MAR uses, {@link InpatientOrderEnd#orderOfStay})
+ * that is not marked take-home is DISCONTINUED with a reason, exactly as a
+ * prescriber's withdrawal: its prepared fill voided, its queue claim released
+ * and its partner offers withdrawn; its open back order is closed too.
  */
 @Slf4j
 @Service
@@ -89,7 +89,8 @@ public class StayOrderDiscontinuation {
     }
 
     /**
-     * Discontinues the live, not take-home orders of the stay. Returns the
+     * Discontinues the live (or partner-status, {@link #ENDABLE_STATUSES}),
+     * not take-home orders of the stay. Returns the
      * orders it ended (for the caller's tests and audit); ids only are logged.
      */
     @Transactional
@@ -109,6 +110,9 @@ public class StayOrderDiscontinuation {
             rx.setStatus(PrescriptionStatus.DISCONTINUED);
             rx.setWithdrawalReason(reason);
             withdrawnOrders.withdrawPartnerOffers(rx);
+            // #953 review, round 3: nothing is owed on a stopped order, so its
+            // open back order closes with it, as in discontinueIfStayEnded.
+            closeOpenBackOrders(rx);
             preparedFills.voidPreparedFill(rx, ReadyCancelReason.PRESCRIPTION_WITHDRAWN);
             queueClaims.releaseOnExit(rx, QueueClaimReleaseReason.WITHDRAWN, actorUserId, QueueClaimExitActor.OTHER);
             ended.add(rx);
@@ -133,8 +137,8 @@ public class StayOrderDiscontinuation {
      *
      * <p>Exactly what the discharge does to the stay's orders: DISCONTINUED
      * with the discharge reason, its partner offers withdrawn (the partner is
-     * told after the commit), its queue claim released; plus the open back
-     * order closed (nothing is owed on a stopped order) and one
+     * told after the commit), its open back order closed (nothing is owed on
+     * a stopped order), its queue claim released; plus one
      * PRESCRIPTION_DISCONTINUED audit row (ids only), written after the commit.
      *
      * <p>A prepared fill still waiting at the counter is a hold of its own:
@@ -205,10 +209,18 @@ public class StayOrderDiscontinuation {
         });
     }
 
-    /** A live order of this stay, not marked for home. */
+    /**
+     * An order of this stay, not marked for home, that is live or sits on a
+     * partner status (#953 review, round 3). A PARTNER_REJECTED order is back
+     * in the in-house work queue with no offer left to end it, so a discharge
+     * that skipped it left it there with every action refused; an order a
+     * partner still holds ends too, its offer withdrawn and the partner told
+     * ({@link WithdrawnOrderPartnerHandler#withdrawPartnerOffers}), exactly as
+     * a prescriber's withdrawal.
+     */
     static boolean endsWithStay(Prescription rx, Admission stay) {
         return rx != null && !rx.isTakeHome()
-            && rx.getStatus() != null && LIVE_STATUSES.contains(rx.getStatus())
+            && rx.getStatus() != null && ENDABLE_STATUSES.contains(rx.getStatus())
             && InpatientOrderEnd.orderOfStay(rx, stay);
     }
 }

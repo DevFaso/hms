@@ -1433,6 +1433,13 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = dispense.getPrescription();
         if (RECOMPUTABLE_AFTER_CANCEL.contains(prescription.getStatus())) {
             updatePrescriptionStatusFromHistory(prescription, false);
+            // QA D792 (#953 review, round 3): a ward order of a stay that has
+            // since ended, put back to SIGNED or PARTIALLY_FILLED by undoing
+            // its fill, would sit in the work queue with every action refused
+            // (stayEnded) and nothing to end it. It ends now, as the discharge
+            // would have ended it. The prescription lock is held (above).
+            stayOrderDiscontinuation.discontinueIfStayEnded(prescription,
+                    roleValidator.getCurrentUserId(), "dispense cancelled");
         }
 
         logAudit(AuditEventType.DISPENSE_CANCELLED,
