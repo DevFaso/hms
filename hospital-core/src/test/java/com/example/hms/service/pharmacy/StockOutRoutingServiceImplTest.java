@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -75,7 +77,7 @@ class StockOutRoutingServiceImplTest {
     /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
     @org.mockito.Spy
     private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
-        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
 
     /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
 
@@ -373,7 +375,7 @@ class StockOutRoutingServiceImplTest {
     void anyShapeTheGuardRefusesIsNotRoutable() {
         prescription.setEncounter(null);
         prescription.setStatus(PrescriptionStatus.SIGNED);
-        org.mockito.Mockito.doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
+        doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
         String stayEnded = com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded");

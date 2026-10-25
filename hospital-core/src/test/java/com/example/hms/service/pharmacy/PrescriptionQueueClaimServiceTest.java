@@ -98,7 +98,7 @@ class PrescriptionQueueClaimServiceTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new PrescriptionQueueClaimService(claimRepository, prescriptionRepository, dispenseRepository,
-                userRepository, roleValidator, auditEventLogService, CLOCK, new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
+                userRepository, roleValidator, auditEventLogService, CLOCK, new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
         prescription = new Prescription();
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
@@ -332,7 +332,7 @@ class PrescriptionQueueClaimServiceTest {
             stay.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 0));
             stay.setActualDischargeDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 43));
             com.example.hms.repository.AdmissionRepository admissions =
-                    org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class);
+                    mock(com.example.hms.repository.AdmissionRepository.class);
             when(admissions.findByPatient_IdAndHospital_Id(prescription.getPatient().getId(), hospitalId))
                     .thenReturn(java.util.List.of(stay));
             service = new PrescriptionQueueClaimService(claimRepository, prescriptionRepository, dispenseRepository,

@@ -36,6 +36,10 @@ import java.util.regex.Pattern;
  */
 public final class BetaLactamCrossReactivity {
 
+    /** Shared stem of "penicillin" / "pénicilline" / "penicilina". */
+    private static final String PENICIL_STEM = "penicil";
+
+
     /** A word starting with "cef" or "ceph": ceftriaxone, céfalexine, cephalexin, cefixime. */
     private static final Pattern CEPHALOSPORIN = Pattern.compile("\\b(cef|ceph)[a-z]");
     /** A word ending in "penem": imipenem, méropénem, ertapenem, doripenem. */
@@ -95,7 +99,7 @@ public final class BetaLactamCrossReactivity {
                 continue;
             }
             String allergen = normalize(allergy.getAllergenDisplay());
-            if (!allergen.isEmpty() && allergen.contains("penicil") && isPenicillin(med)) {
+            if (!allergen.isEmpty() && allergen.contains(PENICIL_STEM) && isPenicillin(med)) {
                 return Optional.of(allergy.getAllergenDisplay().trim());
             }
         }
@@ -118,7 +122,7 @@ public final class BetaLactamCrossReactivity {
         if (allergen.contains(med) || med.contains(allergen)) {
             return true;
         }
-        return allergen.contains("penicil") && isPenicillin(med);
+        return allergen.contains(PENICIL_STEM) && isPenicillin(med);
     }
 
     static Family familyOfDrug(String med) {
@@ -138,7 +142,7 @@ public final class BetaLactamCrossReactivity {
         if (BETA_LACTAM_CLASS.matcher(allergen).find()) {
             return Family.ANY_BETA_LACTAM;
         }
-        if (allergen.contains("penicil") || isPenicillin(allergen)) {
+        if (allergen.contains(PENICIL_STEM) || isPenicillin(allergen)) {
             return Family.PENICILLIN;
         }
         if (CEPHALOSPORIN_CLASS.matcher(allergen).find() || CEPHALOSPORIN.matcher(allergen).find()) {
@@ -151,7 +155,7 @@ public final class BetaLactamCrossReactivity {
     }
 
     private static boolean isPenicillin(String text) {
-        return text.contains("penicil") || text.contains("cillin") || text.contains("cilin");
+        return text.contains(PENICIL_STEM) || text.contains("cillin") || text.contains("cilin");
     }
 
     /** Lower-case and accent-free: "Céfalexine" and "cefalexin" must meet. */

@@ -10,6 +10,7 @@ import com.example.hms.model.Prescription;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.Objects;
 
 /**
@@ -103,15 +104,7 @@ public final class InpatientOrderEnd {
         }
         Encounter encounter = rx.getEncounter();
         if (encounter != null && encounter.getAdmissionId() != null) {
-            for (Admission stay : stays) {
-                if (stay != null && encounter.getAdmissionId().equals(stay.getId())
-                    && sameHospital(rx, stay)
-                    && (stay.getStatus() == AdmissionStatus.DISCHARGED
-                        || stay.getStatus() == AdmissionStatus.CANCELLED)) {
-                    return true;
-                }
-            }
-            return false;
+            return linkedStayEnded(rx, encounter.getAdmissionId(), stays);
         }
         boolean emergency = encounter != null && encounter.getEncounterType() == EncounterType.EMERGENCY;
         if (encounter != null && !emergency && encounter.getEncounterType() != EncounterType.INPATIENT) {
@@ -122,19 +115,43 @@ public final class InpatientOrderEnd {
             return false;
         }
         for (Admission stay : stays) {
-            if (stay == null || !sameHospital(rx, stay)) continue;
-            LocalDateTime from = stay.getAdmissionDateTime();
-            LocalDateTime to = stay.getActualDischargeDateTime();
-            if (from == null || to == null || written.isAfter(to)) continue;
-            if (!emergency) {
-                if (!written.isBefore(from)) return true;
-                continue;
+            if (writtenDuringEndedStay(rx, encounter, emergency, written, stay)) {
+                return true;
             }
-            LocalDateTime checkout = encounter.getCheckoutTimestamp();
-            boolean openAtAdmission = checkout == null || !checkout.isBefore(from);
-            if (openAtAdmission && !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER))) return true;
         }
         return false;
+    }
+
+    /** Rule 1: the order is filed on a stay's own encounter and that stay has ended. */
+    private static boolean linkedStayEnded(Prescription rx, UUID admissionId, List<Admission> stays) {
+        for (Admission stay : stays) {
+            if (stay != null && admissionId.equals(stay.getId())
+                && sameHospital(rx, stay)
+                && (stay.getStatus() == AdmissionStatus.DISCHARGED
+                    || stay.getStatus() == AdmissionStatus.CANCELLED)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Rules 2 and 3: an unlinked order written within (or, for the ED, carried into) an ended stay. */
+    private static boolean writtenDuringEndedStay(Prescription rx, Encounter encounter, boolean emergency,
+                                                  LocalDateTime written, Admission stay) {
+        if (stay == null || !sameHospital(rx, stay)) {
+            return false;
+        }
+        LocalDateTime from = stay.getAdmissionDateTime();
+        LocalDateTime to = stay.getActualDischargeDateTime();
+        if (from == null || to == null || written.isAfter(to)) {
+            return false;
+        }
+        if (!emergency) {
+            return !written.isBefore(from);
+        }
+        LocalDateTime checkout = encounter.getCheckoutTimestamp();
+        boolean openAtAdmission = checkout == null || !checkout.isBefore(from);
+        return openAtAdmission && !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER));
     }
 
     /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */

@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.mock;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.DispenseStatus;
@@ -117,7 +118,7 @@ class DispenseServiceImplTest {
     /** QA D156: real, so the tests exercise the rule and not a stub of it. */
     @org.mockito.Spy
     private PharmacistVerificationService pharmacistVerificationService =
-        new PharmacistVerificationService(null, null, null, FIXED_CLOCK, new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
+        new PharmacistVerificationService(null, null, null, FIXED_CLOCK, new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
 
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
@@ -137,7 +138,7 @@ class DispenseServiceImplTest {
     /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
     @org.mockito.Spy
     private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
-        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
 
     /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
 
@@ -1882,7 +1883,7 @@ class DispenseServiceImplTest {
         void cancellingTheFillOfAnEndedStayOrderDiscontinuesIt() {
             java.time.LocalDateTime admitted = java.time.LocalDateTime.of(2026, 10, 24, 4, 0);
             com.example.hms.repository.AdmissionRepository admissions =
-                    org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class);
+                    mock(com.example.hms.repository.AdmissionRepository.class);
             com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
             stay.setId(UUID.randomUUID());
             stay.setHospital(hospital);
@@ -1899,11 +1900,11 @@ class DispenseServiceImplTest {
             prescription.setStatus(PrescriptionStatus.DISPENSED);
 
             com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders =
-                    org.mockito.Mockito.mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class);
-            AuditEventLogService audit = org.mockito.Mockito.mock(AuditEventLogService.class);
+                    mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class);
+            AuditEventLogService audit = mock(AuditEventLogService.class);
             org.springframework.test.util.ReflectionTestUtils.setField(service, "stayOrderDiscontinuation",
                     new com.example.hms.service.StayOrderDiscontinuation(prescriptionRepository,
-                            org.mockito.Mockito.mock(PreparedFillVoider.class), queueClaimService, withdrawnOrders,
+                            mock(PreparedFillVoider.class), queueClaimService, withdrawnOrders,
                             com.example.hms.i18n.TestMessageSources.bundles(),
                             new com.example.hms.service.EndedStayOrderGuard(admissions),
                             routingDecisionRepository, audit, dispenseRepository));

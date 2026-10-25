@@ -297,7 +297,8 @@ class MedicationAllergyCdsServiceTest {
         a.setActive(true);
         when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
         when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
-        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(mock(CdsRuleContext.class));
+        CdsRuleContext ctx = mock(CdsRuleContext.class);
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(ctx);
         when(ddiRule.evaluate(any())).thenReturn(List.of());
         return service.evaluate(signRequest(patientId, medText));
     }

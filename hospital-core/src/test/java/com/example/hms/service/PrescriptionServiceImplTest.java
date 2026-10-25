@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import static org.mockito.Mockito.mock;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
@@ -108,7 +109,7 @@ class PrescriptionServiceImplTest {
         pharmacistVerificationService =
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
                 null, null, null, java.time.Clock.systemUTC(),
-                new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
+                new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
 
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;

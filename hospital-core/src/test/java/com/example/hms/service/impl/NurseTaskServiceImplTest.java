@@ -159,7 +159,7 @@ class NurseTaskServiceImplTest {
         pharmacistVerificationService =
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
                 null, null, null, java.time.Clock.systemUTC(),
-                new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
+                new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
