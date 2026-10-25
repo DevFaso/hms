@@ -41,6 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,7 +70,7 @@ class RefillApprovalServiceImplTest {
 
     /** QA D792: real, over a mocked stay history, so the guard applies the rule itself. */
     private final com.example.hms.repository.AdmissionRepository admissionRepository =
-            org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class);
+            mock(com.example.hms.repository.AdmissionRepository.class);
     @Spy private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
             new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
 

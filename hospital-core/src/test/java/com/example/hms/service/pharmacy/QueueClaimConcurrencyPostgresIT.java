@@ -113,7 +113,8 @@ import static org.mockito.Mockito.when;
         DispenseVerificationService.class, ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, StockOutRoutingServiceImpl.class,
         DispenseMapper.class, PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class,
         EncryptionKeyHolder.class,
-        com.example.hms.service.EndedStayOrderGuard.class, QueueClaimConcurrencyPostgresIT.Config.class})
+        com.example.hms.service.EndedStayOrderGuard.class, com.example.hms.service.StayOrderDiscontinuation.class,
+        QueueClaimConcurrencyPostgresIT.Config.class})
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class QueueClaimConcurrencyPostgresIT {
 
