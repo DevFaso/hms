@@ -111,9 +111,9 @@ class AssignmentInvitationClosedHospitalGuardTest {
             Paths.get("src/test/java/com/example/hms/service/ArchivedHospitalAssignmentTest.java"),
             StandardCharsets.UTF_8);
         for (Map.Entry<String, String> e : ENTRY_POINTS.entrySet()) {
-            assertThat(replays.contains("void " + e.getValue() + "("))
+            assertThat(replays)
                 .as(e.getKey() + " is replayed by ArchivedHospitalAssignmentTest." + e.getValue())
-                .isTrue();
+                .contains("void " + e.getValue() + "(");
         }
     }
 
@@ -176,7 +176,7 @@ class AssignmentInvitationClosedHospitalGuardTest {
             Set<String> callees = new HashSet<>();
             Matcher c = CALL.matcher(body);
             while (c.find()) {
-                String callee = c.group(1) != null ? c.group(1) : c.group(2);
+                String callee = c.group(c.group(1) != null ? 1 : 2);
                 if (bodies.containsKey(callee) && !callee.equals(e.getKey())) {
                     callees.add(callee);
                 }
