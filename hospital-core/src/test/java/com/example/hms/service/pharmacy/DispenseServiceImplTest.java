@@ -1923,7 +1923,7 @@ class DispenseServiceImplTest {
             assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
             assertThat(prescription.getWithdrawalReason()).isNotBlank();
-            assertThat(DispenseServiceImpl.WORK_QUEUE_STATUSES).doesNotContain(prescription.getStatus());
+            assertThat(prescription.getStatus()).isNotIn(DispenseServiceImpl.WORK_QUEUE_STATUSES);
             verify(withdrawnOrders).withdrawPartnerOffers(prescription);
             verify(queueClaimService).releaseOnExit(prescription,
                     com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN, userId,

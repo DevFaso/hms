@@ -41,7 +41,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,10 +68,14 @@ class RefillApprovalServiceImplTest {
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
     /** QA D792: real, over a mocked stay history, so the guard applies the rule itself. */
-    private final com.example.hms.repository.AdmissionRepository admissionRepository =
-            mock(com.example.hms.repository.AdmissionRepository.class);
-    @Spy private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
-            new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    @Spy private com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+
+    /** The guard needs its repository before Mockito spies and injects the fields, so both arrive here. */
+    RefillApprovalServiceImplTest(@Mock com.example.hms.repository.AdmissionRepository admissionRepository) {
+        this.admissionRepository = admissionRepository;
+        this.endedStayOrders = new com.example.hms.service.EndedStayOrderGuard(admissionRepository);
+    }
 
     @InjectMocks private RefillApprovalServiceImpl service;
 

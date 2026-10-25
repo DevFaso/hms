@@ -987,7 +987,7 @@ class DispenseReadyForCollectionTest {
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
             assertThat(prescription.getWithdrawalReason()).isNotBlank();
             // Off the work queue: every queue query filters on these statuses.
-            assertThat(DispenseServiceImpl.WORK_QUEUE_STATUSES).doesNotContain(prescription.getStatus());
+            assertThat(prescription.getStatus()).isNotIn(DispenseServiceImpl.WORK_QUEUE_STATUSES);
             verify(prescriptionRepository).save(prescription);
             verify(withdrawnOrders).withdrawPartnerOffers(prescription);
             verify(queueClaimService).releaseOnExit(prescription,
