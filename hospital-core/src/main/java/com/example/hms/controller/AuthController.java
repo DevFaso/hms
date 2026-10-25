@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.JwtResponse;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.PasswordResetConfirmDTO;
+import com.example.hms.payload.dto.PasswordResetRequestDTO;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
@@ -1383,16 +1384,37 @@ public class AuthController {
             @NotBlank String currentPassword,
             String newPassword) {}
 
+    /**
+     * The oldest reset request. QA D787: it answered 400 to a phone number or a
+     * username (the parameter was {@code @Email}); like
+     * {@code POST /auth/password/request} it now takes an e-mail address, a
+     * username or a phone number, as {@code identifier}, {@code email} or
+     * {@code phone}, in a JSON body or (older clients) the query string, and is
+     * always 204 for an account it cannot name or reach. Rate-limited per IP in
+     * {@code RateLimitFilter}.
+     */
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(
-            @RequestParam("email") @Email @NotBlank String email,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "identifier", required = false) String identifier,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestBody(required = false) PasswordResetRequestDTO body,
             Locale locale,
             HttpServletRequest request) {
+        String named = body == null ? null : body.effectiveIdentifier();
+        if (named == null) {
+            named = PasswordResetRequestDTO.builder()
+                    .email(email).identifier(identifier).phone(phone).build()
+                    .effectiveIdentifier();
+        }
+        if (named == null) {
+            return ResponseEntity.badRequest().build();
+        }
         String ip = clientIp(request);
         try {
-            authNotification.passwordReset().requestReset(email, locale, ip);
+            authNotification.passwordReset().requestResetByIdentifier(named, locale, ip);
         } catch (ResourceNotFoundException e) {
-            log.debug("Password reset requested for an unknown address");
+            log.debug("Password reset requested for an unknown account");
         }
         return ResponseEntity.noContent().build();
     }

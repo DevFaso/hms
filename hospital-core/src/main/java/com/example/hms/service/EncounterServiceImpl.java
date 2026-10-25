@@ -2976,7 +2976,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     // ------------------------------------------------------------------
-    // Ready-for-discharge: AWAITING_RESULTS → READY_FOR_DISCHARGE
+    // Ready-for-discharge: AWAITING_RESULTS (or, for the clinician, IN_PROGRESS) → READY_FOR_DISCHARGE
     // ------------------------------------------------------------------
 
     @Override
@@ -2992,6 +2992,13 @@ public class EncounterServiceImpl implements EncounterService {
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
             throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
+        }
+        // QA D788: from IN_PROGRESS this step ends the consultation, so it is the
+        // clinician's own (as the check-out of a visit IN_PROGRESS is). The desk
+        // reached READY_FOR_DISCHARGE here and then checked the visit out with an
+        // AVS, skipping the examination. The desk keeps AWAITING_RESULTS.
+        if (current == EncounterStatus.IN_PROGRESS && !EncounterClosureRules.callerIsClinician()) {
+            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", current.name());
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);

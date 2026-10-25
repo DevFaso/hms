@@ -1574,4 +1574,45 @@ class AuthControllerTest {
         verify(email).sendActivationEmail(eq("nurse9@example.com"), any());
         verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
     }
+
+    /**
+     * QA D787: the legacy {@code POST /auth/request-reset} answered 400 to a
+     * phone number ({@code @Email} on the parameter). It names the account the
+     * way {@code /auth/password/request} does and is a 204.
+     */
+    @Test
+    void legacyRequestReset_phoneNumber_is204_routedByIdentifier_D787() throws Exception {
+        com.example.hms.service.PasswordResetService resets = mock(com.example.hms.service.PasswordResetService.class);
+        when(authNotificationFacade.passwordReset()).thenReturn(resets);
+
+        mockMvc.perform(post("/auth/request-reset").param("email", "+22670202020"))
+                .andExpect(status().isNoContent());
+
+        verify(resets).requestResetByIdentifier(eq("+22670202020"), any(), any());
+        verify(resets, never()).requestReset(any(), any(), any());
+    }
+
+    @Test
+    void legacyRequestReset_usernameInTheBody_is204_D787() throws Exception {
+        com.example.hms.service.PasswordResetService resets = mock(com.example.hms.service.PasswordResetService.class);
+        when(authNotificationFacade.passwordReset()).thenReturn(resets);
+
+        mockMvc.perform(post("/auth/request-reset")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"identifier\":\"recep.a\"}"))
+                .andExpect(status().isNoContent());
+
+        verify(resets).requestResetByIdentifier(eq("recep.a"), any(), any());
+    }
+
+    @Test
+    void legacyRequestReset_nothingNamed_is400_andSendsNothing_D787() throws Exception {
+        com.example.hms.service.PasswordResetService resets = mock(com.example.hms.service.PasswordResetService.class);
+        when(authNotificationFacade.passwordReset()).thenReturn(resets);
+
+        mockMvc.perform(post("/auth/request-reset"))
+                .andExpect(status().isBadRequest());
+
+        verify(resets, never()).requestResetByIdentifier(any(), any(), any());
+    }
 }

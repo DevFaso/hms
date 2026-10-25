@@ -2859,6 +2859,40 @@ class EncounterServiceImplTest {
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         }
 
+        @Test
+        @DisplayName("the desk cannot reach a closable status through ready-for-discharge on a visit IN_PROGRESS, so the check-out stays refused")
+        void deskReadyForDischargeMidConsultationIsRefused() {
+            Encounter encounter = visit(EncounterStatus.IN_PROGRESS);
+
+            assertThatThrownBy(() -> service.markReadyForDischarge(encounter.getId(), true, null))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(ex -> assertThat(keyOf(ex))
+                    .isEqualTo("encounter.readyForDischarge.examinationNotCompleted"));
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            verify(encounterRepository, never()).save(any());
+            verify(trackerEventPublisher, never()).publishStatusTransition(any(), any(), any());
+            verify(checkOutMapper, never()).toAfterVisitSummary(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("the desk still marks an examined visit (AWAITING_RESULTS) ready for discharge")
+        void deskReadyForDischargeAfterTheExaminationIsAllowed() {
+            Encounter encounter = visit(EncounterStatus.AWAITING_RESULTS);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.markReadyForDischarge(encounter.getId(), true, null);
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+        }
+
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
         @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
             names = {"AWAITING_RESULTS", "READY_FOR_DISCHARGE"})

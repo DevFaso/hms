@@ -352,7 +352,7 @@ public class EncounterController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Mark encounter ready for discharge",
-        description = "Transitions AWAITING_RESULTS or IN_PROGRESS → READY_FOR_DISCHARGE."
+        description = "Transitions AWAITING_RESULTS → READY_FOR_DISCHARGE; from IN_PROGRESS for a doctor, nurse or midwife only."
     )
     public ResponseEntity<EncounterResponseDTO> markReadyForDischarge(
         @PathVariable UUID encounterId,

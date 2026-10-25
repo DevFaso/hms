@@ -719,8 +719,18 @@ export class EncountersComponent implements OnInit {
     return enc.status === 'IN_PROGRESS';
   }
 
+  /**
+   * QA D788: from IN_PROGRESS this ends the consultation, so the API admits it
+   * for the doctor, nurse or midwife only; the desk keeps AWAITING_RESULTS.
+   */
   canMarkReadyForDischarge(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS' || enc.status === 'AWAITING_RESULTS';
+    if (enc.status === 'AWAITING_RESULTS') {
+      return true;
+    }
+    return (
+      enc.status === 'IN_PROGRESS' &&
+      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    );
   }
 
   completeExamination(enc: EncounterResponse): void {
