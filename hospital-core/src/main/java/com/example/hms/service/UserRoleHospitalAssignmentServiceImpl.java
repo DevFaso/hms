@@ -211,8 +211,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         String assignmentCode = assignment.getAssignmentCode();
         if (assignmentCode != null && !assignmentCode.isBlank()) {
-            dto.setProfileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignmentCode));
-            dto.setAssignerConfirmationUrl(assignmentLinkService.buildAssignerConfirmationUrl(assignmentCode));
+            dto.setProfileCompletionUrl(profileCompletionUrl(assignment));
+            dto.setAssignerConfirmationUrl(assignerConfirmationUrl(assignment));
         }
         dto.setProfileChecklist(buildRoleProfileChecklist(assignment.getRole()));
         dto.setConfirmationVerified(assignment.getConfirmationVerifiedAt() != null);
@@ -962,7 +962,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assigneeName(resolveDisplayName(assignee, null))
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
-            .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
+            .profileCompletionUrl(profileCompletionUrl(assignment))
             .profileChecklist(buildRoleProfileChecklist(role))
             .build();
     }
@@ -1111,7 +1111,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assigneeName(resolveDisplayName(assignee, null))
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
-            .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
+            .profileCompletionUrl(profileCompletionUrl(assignment))
             .profileChecklist(buildRoleProfileChecklist(role))
             .tempUsername(tempUsername)
             .tempPassword(tempPassword)
@@ -1289,6 +1289,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             // Only invitations that went out as a code: a patient row activated
             // by the e-mail link never had one and must not get staff mail.
             .filter(a -> a.getConfirmationSentAt() != null)
+            // QA D789: an invitation to a hospital closed since is not
+            // re-issued. Skipped, not refused: restoring the account must not
+            // fail because one of its old invitations can no longer be used.
+            .filter(a -> !atClosedHospital(a))
             .toList();
         for (UserRoleHospitalAssignment assignment : pending) {
             reissueCode(assignment, true);
@@ -1509,7 +1513,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .assignmentCode(assignment.getAssignmentCode())
                 .hospitalId(assignment.getHospital() != null ? assignment.getHospital().getId() : null)
                 .roleCode(assignment.getRole() != null ? getRoleCode(assignment.getRole()) : null)
-                .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
+                .profileCompletionUrl(profileCompletionUrl(assignment))
                 .build();
 
             return BulkImportOutcome.created(result);
@@ -2133,7 +2137,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String userDisplayName = resolveDisplayName(user, email);
             String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : null;
             String hospitalDisplay = resolveHospitalName(assignment.getHospital());
-            String profileCompletionUrl = assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
+            String completionUrl = profileCompletionUrl(assignment);
 
             emailService.sendRoleAssignmentConfirmationEmail(
                 email,
@@ -2142,7 +2146,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 hospitalDisplay,
                 confirmationCode,
                 assignment.getAssignmentCode(),
-                profileCompletionUrl,
+                completionUrl,
                 assignment.getTempPlainPassword() != null ? user.getUsername() : null,
                 assignment.getTempPlainPassword()
             );
@@ -2310,6 +2314,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     public void sendNotifications(UUID assignmentId, boolean emailCoveredByWelcome) {
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> assignmentNotFound(assignmentId));
+        // QA D789: the AFTER_COMMIT send and the public re-send land here. A
+        // hospital closed in between gets no invitation: nothing is sent, and
+        // there is no caller to answer, so no throw either.
+        if (atClosedHospital(assignment)) {
+            log.info("📭 Assignment '{}' is at a closed hospital; no invitation sent", assignment.getId());
+            return;
+        }
         // The welcome mail carries the code only when this assignment has both
         // the confirmation code and the assignment code it reads
         // (UserServiceImpl.welcomeRoles lists it); without
@@ -2334,8 +2345,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public boolean resendPendingActivationCode(UUID assignmentId, java.time.Duration cooldown) {
         LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
+        // QA D789: the public re-send (/auth/resend-verification) neither
+        // rotates nor sends the code of an invitation to a closed hospital:
+        // the claim refuses the row in the database, and sendNotifications
+        // refuses it again. The endpoint answers the same neutral text either way.
         int claimed = assignmentRepository.claimActivationResend(
-            assignmentId, generateConfirmationCode(), now, now.minus(cooldown));
+            assignmentId, generateConfirmationCode(), now, now.minus(cooldown),
+            FacilityAssignmentGuard.CLOSED_STATES);
         if (claimed == 0) {
             return false;
         }
@@ -2351,7 +2367,38 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void resendNotifications(UUID assignmentId) {
-        notifyAssignee(findChangeable(assignmentId));
+        UserRoleHospitalAssignment assignment = findChangeable(assignmentId);
+        // QA D789 re-test: POST /assignments/{id}/resend-notification for a row
+        // at an archived hospital queued an EMAIL and an SMS activation (200).
+        // It is the same re-invitation as regenerate-code: the same 409.
+        FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
+        notifyAssignee(assignment);
+    }
+
+    /**
+     * QA D789: the row's hospital is closed ({@link FacilityAssignmentGuard#isClosed}),
+     * so it takes no invitation, re-invitation or activation. A global row
+     * (no hospital) is never at a closed one.
+     */
+    private static boolean atClosedHospital(UserRoleHospitalAssignment assignment) {
+        Hospital hospital = assignment.getHospital();
+        return hospital != null && FacilityAssignmentGuard.isClosed(hospital.getLifecycleState());
+    }
+
+    /**
+     * The assignee's invitation link, the one place it is built. QA D789: a
+     * row at a closed hospital has none; the link leads to an activation the
+     * hospital no longer takes.
+     */
+    private String profileCompletionUrl(UserRoleHospitalAssignment assignment) {
+        return atClosedHospital(assignment) ? null
+            : assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
+    }
+
+    /** The registrar's confirmation link, held to the same rule. */
+    private String assignerConfirmationUrl(UserRoleHospitalAssignment assignment) {
+        return atClosedHospital(assignment) ? null
+            : assignmentLinkService.buildAssignerConfirmationUrl(assignment.getAssignmentCode());
     }
 
     private void notifyAssignee(UserRoleHospitalAssignment assignment) {

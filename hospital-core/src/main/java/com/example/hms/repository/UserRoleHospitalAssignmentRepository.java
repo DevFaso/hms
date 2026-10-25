@@ -39,14 +39,23 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
      * stores a fresh code and stamps the send, so the re-sent code is valid
      * for the full expiry window even when the first one had lapsed. Two
      * parallel claims update the row once: the second sees the new stamp.
+     *
+     * <p>QA D789: never for a row at a hospital in one of {@code closedStates}
+     * ({@code FacilityAssignmentGuard.CLOSED_STATES}): an archived hospital's
+     * invitation is neither rotated nor re-sent. A global row (no hospital)
+     * is never at a closed one.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("UPDATE UserRoleHospitalAssignment a SET a.confirmationCode = :code, a.confirmationSentAt = :now "
         + "WHERE a.id = :id AND a.active = false AND a.confirmationCode IS NOT NULL "
-        + "AND (a.confirmationSentAt IS NULL OR a.confirmationSentAt < :cooldownCutoff)")
+        + "AND (a.confirmationSentAt IS NULL OR a.confirmationSentAt < :cooldownCutoff) "
+        + "AND NOT EXISTS (SELECT h.id FROM Hospital h WHERE h.id = a.hospital.id "
+        + "AND h.lifecycleState IN :closedStates)")
     int claimActivationResend(@Param("id") UUID id, @Param("code") String code,
                               @Param("now") java.time.LocalDateTime now,
-                              @Param("cooldownCutoff") java.time.LocalDateTime cooldownCutoff);
+                              @Param("cooldownCutoff") java.time.LocalDateTime cooldownCutoff,
+                              @Param("closedStates")
+                              java.util.Collection<com.example.hms.enums.HospitalLifecycleState> closedStates);
 
     /* ------------ Basic lookups ------------ */
     List<UserRoleHospitalAssignment> findByUserId(UUID userId);

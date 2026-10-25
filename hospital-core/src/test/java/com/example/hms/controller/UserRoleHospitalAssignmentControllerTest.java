@@ -141,6 +141,19 @@ class UserRoleHospitalAssignmentControllerTest {
     }
 
     @Test
+    void resendNotificationAtAnArchivedHospitalIsAConflict_D789() throws Exception {
+        // QA D789 re-test: the same call returned 200 with EMAIL and SMS
+        // activations queued. The service now refuses it; the answer is a 409
+        // and no delivery report.
+        UUID assignmentId = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("assignment.hospital.closed"))
+            .when(assignmentService).resendNotifications(assignmentId);
+
+        mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
     void regenerateAssignmentCodeReturnsUpdatedAssignment() throws Exception {
         UUID assignmentId = UUID.randomUUID();
 

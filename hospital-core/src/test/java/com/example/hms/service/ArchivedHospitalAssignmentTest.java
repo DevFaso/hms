@@ -9,6 +9,7 @@ import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBatchResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
@@ -56,8 +57,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mockingDetails;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -134,6 +138,10 @@ class ArchivedHospitalAssignmentTest {
         });
         when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(assignmentRepository.findByUser_IdAndActiveTrue(assignee.getId())).thenReturn(List.of());
+        when(assignmentLinkService.buildProfileCompletionUrl(anyString()))
+            .thenAnswer(inv -> "https://portal.test/complete/" + inv.getArgument(0));
+        when(assignmentLinkService.buildAssignerConfirmationUrl(anyString()))
+            .thenAnswer(inv -> "https://portal.test/confirm/" + inv.getArgument(0));
         signInAsSuperAdmin();
     }
 
@@ -303,6 +311,143 @@ class ArchivedHospitalAssignmentTest {
             .doesNotThrowAnyException();
     }
 
+    // ------------------------------------------- QA D789 re-test: notification paths
+
+    @Test
+    @DisplayName("the re-test call: POST /assignments/{id}/resend-notification at an archived hospital is a 409 and nothing is sent")
+    void resendNotificationIsRefused() {
+        UserRoleHospitalAssignment pending = invitation(archived);
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+
+        UUID targetId = pending.getId();
+        assertThatThrownBy(() -> service.resendNotifications(targetId))
+            .isInstanceOf(ConflictException.class)
+            .hasMessage(FacilityAssignmentGuard.MSG_HOSPITAL_CLOSED);
+        verifyNoInteractions(emailService, smsService);
+    }
+
+    @Test
+    @DisplayName("resend-notification at an open hospital still sends the e-mail and the SMS")
+    void resendNotificationStillSendsAtAnOpenHospital() {
+        UserRoleHospitalAssignment pending = invitation(open);
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+
+        service.resendNotifications(pending.getId());
+
+        assertThat(mockingDetails(emailService).getInvocations()).isNotEmpty();
+        assertThat(mockingDetails(smsService).getInvocations()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("the AFTER_COMMIT send for a row at a hospital closed in between sends nothing and does not throw")
+    void afterCommitSendIsSkipped() {
+        UserRoleHospitalAssignment pending = invitation(archived);
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+
+        assertThatCode(() -> service.sendNotifications(pending.getId(), false)).doesNotThrowAnyException();
+        assertThatCode(() -> service.sendNotifications(pending.getId(), true)).doesNotThrowAnyException();
+        verifyNoInteractions(emailService, smsService);
+    }
+
+    @Test
+    @DisplayName("the public re-send (/auth/resend-verification) neither rotates nor sends a closed hospital's code")
+    void publicResendNeitherRotatesNorSends() {
+        UserRoleHospitalAssignment pending = invitation(archived);
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        // The claim names the closed states, so the database refuses the row
+        // (AssignmentActivationResendClaimPostgresIT) ...
+        when(assignmentRepository.claimActivationResend(any(), any(), any(), any(),
+            eq(FacilityAssignmentGuard.CLOSED_STATES))).thenReturn(0);
+
+        boolean sent = service.resendPendingActivationCode(pending.getId(), java.time.Duration.ofMinutes(1));
+
+        assertThat(sent).isFalse();
+        verifyNoInteractions(emailService, smsService);
+        // ... and a claim that went through anyway still sends nothing.
+        when(assignmentRepository.claimActivationResend(any(), any(), any(), any(), any())).thenReturn(1);
+        assertThat(service.resendPendingActivationCode(pending.getId(), java.time.Duration.ofMinutes(1))).isTrue();
+        verifyNoInteractions(emailService, smsService);
+    }
+
+    @Test
+    @DisplayName("the public re-send still rotates and sends an open hospital's code")
+    void publicResendStillWorksAtAnOpenHospital() {
+        UserRoleHospitalAssignment pending = invitation(open);
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        when(assignmentRepository.claimActivationResend(any(), any(), any(), any(), any())).thenReturn(1);
+
+        assertThat(service.resendPendingActivationCode(pending.getId(), java.time.Duration.ofMinutes(1))).isTrue();
+        assertThat(mockingDetails(smsService).getInvocations()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("restoring an account re-issues only the invitations of open hospitals, and does not fail on a closed one")
+    void restoredAccountSkipsTheClosedInvitation() {
+        UserRoleHospitalAssignment closedInvite = invitation(archived);
+        UserRoleHospitalAssignment openInvite = invitation(open);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(closedInvite, openInvite));
+        String closedCode = closedInvite.getConfirmationCode();
+
+        int reissued = service.reissuePendingInvitationsForRestoredUser(assignee.getId());
+
+        assertThat(reissued).isEqualTo(1);
+        assertThat(closedInvite.getConfirmationCode()).isEqualTo(closedCode);
+        verify(assignmentRepository, never()).save(closedInvite);
+        verify(assignmentRepository).save(openInvite);
+    }
+
+    @Test
+    @DisplayName("the registrar's confirm of an invitation to an archived hospital is a 409 and the row stays off")
+    void registrarConfirmIsRefused() {
+        UserRoleHospitalAssignment pending = invitation(archived);
+        pending.setRegisteredBy(account(callerId));
+        when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+
+        UUID targetId = pending.getId();
+        assertThatThrownBy(() -> service.confirmAssignment(targetId, "123456"))
+            .isInstanceOf(ConflictException.class)
+            .hasMessage(FacilityAssignmentGuard.MSG_HOSPITAL_CLOSED);
+        assertThat(pending.getActive()).isFalse();
+        assertThat(pending.getConfirmationVerifiedAt()).isNull();
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("GET /assignments/{id} of a row at an archived hospital carries no invitation or confirmation link")
+    void linksAreWithheld() {
+        when(mapper.toResponseDTO(any())).thenAnswer(inv -> new UserRoleHospitalAssignmentResponseDTO());
+        UserRoleHospitalAssignment closedInvite = invitation(archived);
+        UserRoleHospitalAssignment openInvite = invitation(open);
+        when(assignmentRepository.findById(closedInvite.getId())).thenReturn(Optional.of(closedInvite));
+        when(assignmentRepository.findById(openInvite.getId())).thenReturn(Optional.of(openInvite));
+
+        var closedDto = service.getAssignmentById(closedInvite.getId());
+        var openDto = service.getAssignmentById(openInvite.getId());
+
+        assertThat(closedDto.getProfileCompletionUrl()).isNull();
+        assertThat(closedDto.getAssignerConfirmationUrl()).isNull();
+        assertThat(openDto.getProfileCompletionUrl())
+            .isEqualTo("https://portal.test/complete/" + openInvite.getAssignmentCode());
+        assertThat(openDto.getAssignerConfirmationUrl())
+            .isEqualTo("https://portal.test/confirm/" + openInvite.getAssignmentCode());
+    }
+
+    @Test
+    @DisplayName("the public view of an invitation to an archived hospital carries no link to complete it")
+    void publicViewHasNoLink() {
+        UserRoleHospitalAssignment closedInvite = invitation(archived);
+        UserRoleHospitalAssignment openInvite = invitation(open);
+        when(assignmentRepository.findByAssignmentCode(closedInvite.getAssignmentCode()))
+            .thenReturn(Optional.of(closedInvite));
+        when(assignmentRepository.findByAssignmentCode(openInvite.getAssignmentCode()))
+            .thenReturn(Optional.of(openInvite));
+
+        assertThat(service.getAssignmentPublicView(closedInvite.getAssignmentCode()).getProfileCompletionUrl())
+            .isNull();
+        assertThat(service.getAssignmentPublicView(openInvite.getAssignmentCode()).getProfileCompletionUrl())
+            .isNotNull();
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private UserRoleAssignmentMultiRequestDTO multi(boolean skipConflicts) {
@@ -349,6 +494,16 @@ class ArchivedHospitalAssignmentTest {
         a.setActive(active);
         a.setConfirmationCode("123456");
         a.setCreatedAt(LocalDateTime.now().minusDays(1));
+        return a;
+    }
+
+    /** A pending invitation as QA found it (020d3d2c): inactive, with codes, a mail and a phone. */
+    private UserRoleHospitalAssignment invitation(Hospital hospital) {
+        UserRoleHospitalAssignment a = row(nurse, hospital, false);
+        a.setAssignmentCode("ASG-" + hospital.getCode() + "-" + a.getId().toString().substring(0, 6));
+        a.setConfirmationSentAt(LocalDateTime.now().minusDays(1));
+        assignee.setEmail("assignee@example.test");
+        assignee.setPhoneNumber("+22670000000");
         return a;
     }
 

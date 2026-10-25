@@ -317,7 +317,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
     @Test
     void resendPendingActivationCode_claimRefused_sendsNothing_D418() {
-        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any())).thenReturn(0);
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any(), any())).thenReturn(0);
 
         boolean sent = service.resendPendingActivationCode(assignment.getId(), java.time.Duration.ofMinutes(5));
 
@@ -329,7 +329,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Test
     void resendPendingActivationCode_claimed_sendsAFreshSixDigitCodeWithTheCooldownCutoff_D418() {
         assignee.setPhoneNumber("+22670123456");
-        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any())).thenReturn(1);
+        when(assignmentRepository.claimActivationResend(any(), anyString(), any(), any(), any())).thenReturn(1);
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         org.mockito.ArgumentCaptor<String> code = org.mockito.ArgumentCaptor.forClass(String.class);
         org.mockito.ArgumentCaptor<LocalDateTime> now = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
@@ -339,7 +339,8 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         assertThat(sent).isTrue();
         verify(assignmentRepository).claimActivationResend(
-            org.mockito.ArgumentMatchers.eq(assignment.getId()), code.capture(), now.capture(), cutoff.capture());
+            org.mockito.ArgumentMatchers.eq(assignment.getId()), code.capture(), now.capture(), cutoff.capture(),
+            org.mockito.ArgumentMatchers.eq(com.example.hms.security.provider.FacilityAssignmentGuard.CLOSED_STATES));
         assertThat(code.getValue()).matches("[0-9]{6}");
         assertThat(cutoff.getValue()).isEqualTo(now.getValue().minusMinutes(5));
         // The notification went out (it reloads the row the claim updated).

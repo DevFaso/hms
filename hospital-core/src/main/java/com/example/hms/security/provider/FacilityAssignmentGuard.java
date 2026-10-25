@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -54,6 +55,14 @@ public class FacilityAssignmentGuard {
     /** QA D789: a translated 409 for a role granted, activated or re-invited at a closed hospital. */
     public static final String MSG_HOSPITAL_CLOSED = "assignment.hospital.closed";
 
+    /**
+     * The lifecycle states in which a hospital takes no assignment, no
+     * activation and no invitation. One set, read by {@link #isClosed} and by
+     * the database claim of the public activation re-send.
+     */
+    public static final Set<HospitalLifecycleState> CLOSED_STATES = Set.of(
+        HospitalLifecycleState.ARCHIVED, HospitalLifecycleState.PENDING_PURGE, HospitalLifecycleState.PURGED);
+
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final HospitalRepository hospitalRepository;
 
@@ -78,9 +87,7 @@ public class FacilityAssignmentGuard {
 
     /** The lifecycle states in which a hospital takes no assignment. */
     public static boolean isClosed(HospitalLifecycleState state) {
-        return state == HospitalLifecycleState.ARCHIVED
-            || state == HospitalLifecycleState.PENDING_PURGE
-            || state == HospitalLifecycleState.PURGED;
+        return state != null && CLOSED_STATES.contains(state);
     }
 
     /**

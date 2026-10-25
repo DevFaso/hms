@@ -1,5 +1,7 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.HospitalLifecycleState;
+import com.example.hms.security.provider.FacilityAssignmentGuard;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.AfterEach;
@@ -63,12 +65,17 @@ class AssignmentActivationResendClaimPostgresIT {
     @PersistenceContext private EntityManager entityManager;
 
     private final List<UUID> saved = new ArrayList<>();
+    private final List<UUID> hospitals = new ArrayList<>();
 
     @AfterEach
     void removeRows() {
         tx(() -> entityManager.createNativeQuery(
                 "DELETE FROM security.user_role_hospital_assignment WHERE id IN (:ids)")
             .setParameter("ids", saved).executeUpdate());
+        if (!hospitals.isEmpty()) {
+            tx(() -> entityManager.createNativeQuery("DELETE FROM hospital.hospitals WHERE id IN (:ids)")
+                .setParameter("ids", hospitals).executeUpdate());
+        }
     }
 
     @Test
@@ -107,10 +114,47 @@ class AssignmentActivationResendClaimPostgresIT {
         assertThat(code(revoked)).isNull();
     }
 
+    /**
+     * QA D789 re-test: the public re-send rotated and sent the code of an
+     * invitation to an archived hospital. The claim itself refuses a row at a
+     * closed hospital (archived, pending purge, purged), and still takes one at
+     * an active or suspended hospital and a global row.
+     */
+    @Test
+    void aRowAtAClosedHospitalIsNeverClaimed() {
+        LocalDateTime now = LocalDateTime.now();
+        for (HospitalLifecycleState state : FacilityAssignmentGuard.CLOSED_STATES) {
+            UUID row = insert(false, "111111", now.minusDays(1), hospital(state));
+            assertThat(claim(row, "888888", now)).as(state.name()).isZero();
+            assertThat(code(row)).as(state.name()).isEqualTo("111111");
+        }
+        UUID atActive = insert(false, "111111", now.minusDays(1), hospital(HospitalLifecycleState.ACTIVE));
+        UUID atSuspended = insert(false, "111111", now.minusDays(1), hospital(HospitalLifecycleState.SUSPENDED));
+        assertThat(claim(atActive, "999999", now)).isEqualTo(1);
+        assertThat(claim(atSuspended, "999999", now)).isEqualTo(1);
+        assertThat(code(atActive)).isEqualTo("999999");
+    }
+
     private int claim(UUID id, String code, LocalDateTime at) {
         int[] result = {0};
-        tx(() -> result[0] = repository.claimActivationResend(id, code, at, at.minusMinutes(5)));
+        tx(() -> result[0] = repository.claimActivationResend(id, code, at, at.minusMinutes(5),
+            FacilityAssignmentGuard.CLOSED_STATES));
         return result[0];
+    }
+
+    private UUID hospital(HospitalLifecycleState state) {
+        UUID id = UUID.randomUUID();
+        String code = "D789-" + id.toString().substring(0, 8);
+        tx(() -> entityManager.createNativeQuery(
+                "INSERT INTO hospital.hospitals (id, name, code, active, lifecycle_state, created_at, updated_at) "
+                    + "VALUES (:id, :name, :code, TRUE, :state, NOW(), NOW())")
+            .setParameter("id", id)
+            .setParameter("name", "IT " + code)
+            .setParameter("code", code)
+            .setParameter("state", state.name())
+            .executeUpdate());
+        hospitals.add(id);
+        return id;
     }
 
     private String code(UUID id) {
@@ -122,15 +166,20 @@ class AssignmentActivationResendClaimPostgresIT {
     }
 
     private UUID insert(boolean active, String code, LocalDateTime sentAt) {
+        return insert(active, code, sentAt, null);
+    }
+
+    private UUID insert(boolean active, String code, LocalDateTime sentAt, UUID hospitalId) {
         UUID id = UUID.randomUUID();
         Timestamp stamp = Timestamp.valueOf(sentAt);
         tx(() -> {
             entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
             entityManager.createNativeQuery(
-                    "INSERT INTO security.user_role_hospital_assignment (id, user_id, role_id, is_active, "
-                        + "assigned_at, created_at, updated_at, confirmation_code, confirmation_sent_at) "
-                        + "VALUES (:id, :user, :role, :active, :at, :at, :at, :code, :at)")
+                    "INSERT INTO security.user_role_hospital_assignment (id, user_id, role_id, hospital_id, "
+                        + "is_active, assigned_at, created_at, updated_at, confirmation_code, confirmation_sent_at) "
+                        + "VALUES (:id, :user, :role, CAST(:hospital AS uuid), :active, :at, :at, :at, :code, :at)")
                 .setParameter("id", id)
+                .setParameter("hospital", hospitalId == null ? null : hospitalId.toString())
                 .setParameter("user", UUID.randomUUID())
                 .setParameter("role", UUID.randomUUID())
                 .setParameter("active", active)
