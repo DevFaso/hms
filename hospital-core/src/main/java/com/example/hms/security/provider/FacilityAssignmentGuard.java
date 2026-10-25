@@ -1,7 +1,9 @@
 package com.example.hms.security.provider;
 
 import com.example.hms.enums.FacilityType;
+import com.example.hms.enums.HospitalLifecycleState;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -49,9 +52,43 @@ public class FacilityAssignmentGuard {
 
     public static final String MSG_INCOMPATIBLE = "role.facility.incompatible";
     public static final String MSG_MIXED = "role.facility.mixed";
+    /** QA D789: a translated 409 for a role granted, activated or re-invited at a closed hospital. */
+    public static final String MSG_HOSPITAL_CLOSED = "assignment.hospital.closed";
+
+    /**
+     * The lifecycle states in which a hospital takes no assignment, no
+     * activation and no invitation. One set, read by {@link #isClosed} and by
+     * the database claim of the public activation re-send.
+     */
+    public static final Set<HospitalLifecycleState> CLOSED_STATES = Set.of(
+        HospitalLifecycleState.ARCHIVED, HospitalLifecycleState.PENDING_PURGE, HospitalLifecycleState.PURGED);
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final HospitalRepository hospitalRepository;
+
+    /**
+     * QA D789: an ARCHIVED hospital (and one on its way out: PENDING_PURGE,
+     * PURGED) takes no new role, no activation and no re-invitation. A
+     * SUSPENDED one still does: a suspension is lifted, and the staff it
+     * comes back to are prepared while it lasts. Static so every entry point
+     * that writes an assignment row calls the same rule, injected or not;
+     * {@code UserRoleHospitalAssignment}'s {@code @PrePersist} is the backstop.
+     *
+     * @throws ConflictException {@code assignment.hospital.closed}; a
+     *                           {@code null} hospital (a global row) is never refused
+     */
+    public static void requireOpenForAssignment(Hospital hospital) {
+        if (hospital != null && isClosed(hospital.getLifecycleState())) {
+            // Resolved here, not by the handler: the multi-scope and bulk-import
+            // loops report a conflict's message per line as it stands.
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_HOSPITAL_CLOSED));
+        }
+    }
+
+    /** The lifecycle states in which a hospital takes no assignment. */
+    public static boolean isClosed(HospitalLifecycleState state) {
+        return state != null && CLOSED_STATES.contains(state);
+    }
 
     /**
      * @throws BusinessException {@code role.facility.incompatible} when the
@@ -67,15 +104,20 @@ public class FacilityAssignmentGuard {
     /**
      * The same rule for a set of roles at a facility known by id, for
      * admin-register, which resolves the hospital as an id. An id that names
-     * no row is left to the caller's own not-found answer.
+     * no row is left to the caller's own not-found answer. QA D789: and an
+     * archived hospital takes no one ({@link #requireOpenForAssignment(Hospital)},
+     * a 409), whatever the roles.
      */
     public void requireCompatible(Collection<String> roleCodes, UUID hospitalId) {
-        if (hospitalId == null || roleCodes == null || roleCodes.isEmpty()) {
+        if (hospitalId == null) {
             return;
         }
         hospitalRepository.findById(hospitalId).ifPresent(hospital -> {
-            for (String roleCode : roleCodes) {
-                requireCompatible(roleCode, hospital);
+            requireOpenForAssignment(hospital);
+            if (roleCodes != null) {
+                for (String roleCode : roleCodes) {
+                    requireCompatible(roleCode, hospital);
+                }
             }
         });
     }

@@ -94,6 +94,10 @@ public class UserRoleHospitalAssignment extends BaseEntity {
             assignedAt = LocalDateTime.now();
         }
         validateBusinessRules();
+        // QA D789, the BACKSTOP for a new row only: every service entry point
+        // refuses first (FacilityAssignmentGuard.requireOpenForAssignment). An
+        // existing row at a hospital archived since may still be switched off.
+        com.example.hms.security.provider.FacilityAssignmentGuard.requireOpenForAssignment(hospital);
     }
 
     @PreUpdate

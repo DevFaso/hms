@@ -718,10 +718,11 @@
 "login_credentials_required" = "Nom d'utilisateur et mot de passe requis.";
 "biometrics_generic" = "Biométrie";
 "reset_password_title" = "Réinitialiser le mot de passe";
-"forgot_password_instruction" = "Saisissez l'adresse e-mail associée à votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.";
+"forgot_password_instruction" = "Saisissez l'adresse e-mail, le nom d'utilisateur ou le numéro de téléphone de votre compte. Nous enverrons un lien de réinitialisation à son adresse e-mail, ou par SMS.";
 "email_address" = "Adresse e-mail";
 "send_reset_link" = "Envoyer le lien de réinitialisation";
-"reset_link_sent" = "Si cette adresse e-mail est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception.";
+"reset_identifier_label" = "E-mail, nom d'utilisateur ou numéro de téléphone";
+"reset_link_sent" = "Si un compte correspond à ce que vous avez saisi, un lien de réinitialisation a été envoyé à son adresse e-mail ou par SMS. Rien reçu après quelques minutes ? Votre compte n'a peut-être ni adresse e-mail ni numéro joignable : demandez à l'accueil de votre hôpital de réinitialiser votre mot de passe.";
 "reset_have_code_title" = "Vous avez reçu l'e-mail ?";
 "reset_have_code_desc" = "Collez le lien complet de l'e-mail, ou seulement son code, puis choisissez un nouveau mot de passe.";
 "reset_code_placeholder" = "Lien ou code de l'e-mail";

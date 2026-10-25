@@ -17,6 +17,18 @@ export interface UserSummary {
   roleCount: number;
 }
 
+/**
+ * QA D790: one colleague in the chat's new-conversation picker
+ * (`GET /users/chat-recipients`): id, name and role, nothing else.
+ */
+export interface ChatRecipient {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  roleName?: string | null;
+  profileType?: string | null;
+}
+
 export interface UserSummaryPage {
   content: UserSummary[];
   totalElements: number;
@@ -123,6 +135,15 @@ export class UserService {
     if (filters.includeDeleted) params = params.set('includeDeleted', 'true');
     if (filters.onlyDeleted) params = params.set('onlyDeleted', 'true');
     return this.http.get<UserSummaryPage>('/users/search', { params });
+  }
+
+  /**
+   * QA D790: `GET /users` is the administrators' directory; the chat picker
+   * reads the staff-wide, minimal colleague list instead.
+   */
+  chatRecipients(size = 200): Observable<ChatRecipient[]> {
+    const params = new HttpParams().set('size', String(size));
+    return this.http.get<ChatRecipient[]>('/users/chat-recipients', { params });
   }
 
   getById(id: string): Observable<UserDetail> {

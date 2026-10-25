@@ -223,6 +223,7 @@
         [board]="flowBoard()"
         (patientClicked)="openSnapshot($event)"
         (statusChanged)="onFlowBoardStatusChanged($event)"
+        (closeUnseenRequested)="onCloseUnseenRequested($event)"
       />
     </div>
   }
@@ -258,5 +259,15 @@
     [queueItem]="ci"
     (dismissed)="checkinQueueItem.set(null)"
     (checkedIn)="onCheckedIn()"
+  />
+}
+
+@if (closeUnseenTarget(); as target) {
+  <app-close-unseen-dialog
+    [encounterId]="target.encounterId"
+    [patientName]="target.patientName"
+    [initialOutcome]="target.outcome"
+    (dismissed)="onCloseUnseenDismissed()"
+    (closed)="onUnseenVisitClosed()"
   />
 }

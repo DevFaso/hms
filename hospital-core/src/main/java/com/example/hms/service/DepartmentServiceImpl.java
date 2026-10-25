@@ -833,6 +833,8 @@ public class DepartmentServiceImpl implements DepartmentService {
         User user = userRepository.findById(superAdminId)
             .orElseThrow(() -> new ResourceNotFoundException("user.notfound", superAdminId));
 
+        // QA D789: an archived hospital takes no new role, auto-provisioned ones included.
+        com.example.hms.security.provider.FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         ensureUserHasRole(user, hospitalAdminRole);
 
         UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()

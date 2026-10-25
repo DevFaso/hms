@@ -56,7 +56,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
             "/api/auth/credentials/mfa",
             // Anonymous and able to send an SMS or an e-mail (QA D418): per IP
             // here, per assignment in AuthController.
-            "/api/auth/resend-verification"
+            "/api/auth/resend-verification",
+            // The legacy reset pair (QA D787): the request sends an e-mail or an
+            // SMS to the named account; the confirm takes a token. The current
+            // ones are under /api/auth/password above.
+            "/api/auth/request-reset",
+            "/api/auth/reset-password"
     );
 
     private final int requestsPerMinute;

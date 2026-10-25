@@ -92,6 +92,15 @@ public class SecurityConstants {
         "'ROLE_HOSPITAL_ADMIN','ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_MIDWIFE',"
             + "'ROLE_NURSE','ROLE_SUPER_ADMIN'";
 
+    /**
+     * QA D790: who may page or search the user directory ({@code GET /users},
+     * {@code GET /users/search}): the administrators. The service decides the
+     * same from the assignment table ({@code UserAccountAccess.requireDirectoryAccess});
+     * this is the annotation in front of it.
+     */
+    public static final String USER_DIRECTORY_AUTHORITIES =
+        "'ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN'";
+
     /** Every authority admitted to {@code POST /users/admin-register}: both registrar lists. */
     public static final String ADMIN_REGISTER_AUTHORITIES =
         USER_REGISTRAR_AUTHORITIES + "," + PROVIDER_REGISTRAR_AUTHORITIES;

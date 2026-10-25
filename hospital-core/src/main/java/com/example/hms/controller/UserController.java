@@ -193,13 +193,14 @@ public class UserController {
     }
 
     @Operation(summary = "Get all users with pagination (summary view)",
-        description = "Staff only: a caller with no active non-patient assignment gets 403. "
-            + "A super-admin sees every account; anyone else sees the live accounts holding an "
-            + "assignment (any role, active or not) at a hospital where the caller holds an "
-            + "active non-patient assignment. includeDeleted=true also returns soft-deleted "
+        description = "Administrators only (QA D790): a caller with no active HOSPITAL_ADMIN or ADMIN "
+            + "assignment gets 403. A super-admin sees every account; an administrator "
+            + "sees the live accounts holding an assignment (any role, active or not) at a hospital "
+            + "they administer. includeDeleted=true also returns soft-deleted "
             + "accounts; onlyDeleted=true returns only them (the restore worklist). Both are "
             + "honoured only for SUPER_ADMIN; everyone else silently gets the live-only view.")
     @GetMapping
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -259,10 +260,21 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Colleagues the caller may start a chat with",
+        description = "QA D790: the chat's new-conversation picker. Any caller holding an active "
+            + "non-patient assignment; the active, live staff accounts at the caller's hospitals, "
+            + "with id, name and role only (no username, e-mail or status flags). Patients get 403 "
+            + "and use their own care-team pickers.")
+    @GetMapping("/chat-recipients")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.ChatRecipientDTO>> getChatRecipients(
+            @RequestParam(defaultValue = "200") int size) {
+        return ResponseEntity.ok(userService.listChatRecipients(size));
+    }
+
     @Operation(summary = "Search users by name, role, or email with pagination (summary view)",
-        description = "Staff only: a caller with no active non-patient assignment gets 403. "
-            + "Scoped to the caller's hospitals exactly as GET /users is.")
+        description = "Administrators only (QA D790), scoped exactly as GET /users is.")
     @GetMapping("/search")
+    @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")")
     public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String role,

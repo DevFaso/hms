@@ -108,6 +108,8 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final PatientOutreachNotifier outreachNotifier;
     private final MessageSource messageSource;
     private final com.example.hms.service.BillingInvoiceService billingInvoiceService;
+    /** QA D788: the flow board's "completed" drop is a check-out. Lazy: EncounterService is a large graph. */
+    private final org.springframework.beans.factory.ObjectProvider<EncounterService> encounterServiceProvider;
 
     /** Outreach has no request locale — explicit config, French by default. */
     @Value("${hms.scheduling.outreach.locale:fr}")
@@ -850,8 +852,24 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
 
         EncounterStatus previousStatus = encounter.getStatus();
-        encounter.setStatus(status);
-        encounterRepo.save(encounter);
+        // QA D788: the flow board writes a status directly. The desk never sets a
+        // clinical status, and nobody closes a visit here that the check-out
+        // (seen) or close-unseen (never seen) would refuse.
+        if (isAdminActor) {
+            EncounterClosureRules.requireDeskTransition(previousStatus, status);
+        } else {
+            // The encounter's own clinician (checked above): their consultation.
+            EncounterClosureRules.requireDirectTransition(previousStatus, status, true);
+        }
+        if (status == EncounterStatus.COMPLETED && previousStatus != EncounterStatus.COMPLETED) {
+            // A seen, examined visit dropped on "completed" is checked out: the
+            // appointment, the After-Visit Summary and the recall go with it.
+            encounterServiceProvider.getObject().checkOut(encounterId,
+                new com.example.hms.payload.dto.clinical.CheckOutRequestDTO(), callerUsername, false, hospitalId);
+        } else {
+            encounter.setStatus(status);
+            encounterRepo.save(encounter);
+        }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userName(callerUsername)

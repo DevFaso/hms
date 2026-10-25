@@ -817,9 +817,10 @@
     <string name="password_min_length">Password must be at least 8 characters.</string>
     <string name="passwords_mismatch">Passwords do not match.</string>
     <string name="reset_title">Reset password</string>
-    <string name="reset_instruction">Enter the email address associated with your account and we will send you a link to reset your password.</string>
+    <string name="reset_instruction">Enter the e-mail address, username or phone number of your account. We will send a reset link to its e-mail address, or by SMS.</string>
+    <string name="reset_identifier_label">E-mail, username or phone number</string>
     <string name="reset_send_link">Send reset link</string>
-    <string name="reset_link_sent">If that email is registered, a password reset link has been sent. Please check your inbox.</string>
+    <string name="reset_link_sent">If an account matches what you entered, a reset link has been sent to its e-mail address or by SMS. Nothing after a few minutes? Your account may have no e-mail address or phone number we can reach: ask your hospital\'s reception desk to reset your password.</string>
     <string name="reset_code_title">Set a new password</string>
     <string name="reset_code_instruction">Paste the link from the e-mail, or the code at the end of it. The same link also opens the reset page in your browser.</string>
     <string name="reset_code_label">Link or code from the e-mail</string>

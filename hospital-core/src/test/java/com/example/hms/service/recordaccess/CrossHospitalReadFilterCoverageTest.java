@@ -96,6 +96,8 @@ class CrossHospitalReadFilterCoverageTest {
         "DischargeSummaryRepository.findByPatient_IdAndHospital_IdInOrderByDischargeDateDesc",
         "AdmissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc",
         "EncounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc",
+        // QA D791 — the chart review's visits (prescription anchors left out), same readable set.
+        "EncounterRepository.findVisitsByPatientIdAndHospitalIdIn",
         // E9 #60 — the whole-chart surfaces.
         "PatientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",
         "PatientVitalSignRepository.findPageByPatient_IdAndHospital_IdInOrderByRecordedAtDesc",

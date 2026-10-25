@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { Login } from './login';
@@ -168,19 +168,44 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     roleContext.clearSession();
   });
 
-  it('QA D171: a phone number asks for the reset link by SMS, an address by e-mail', () => {
+  it('QA D787: the reset dialog posts what was typed (e-mail, username or phone) as one identifier', () => {
     component.openForgotPassword();
-    component.forgotPasswordEmail = ' 70 20 20 20 ';
-    component.submitForgotPassword();
-    const byPhone = httpMock.expectOne((r) => r.url === '/auth/password/request');
-    expect(byPhone.request.body).toEqual({ phone: '70 20 20 20' });
-    byPhone.flush(null);
+    for (const typed of [' 70 20 20 20 ', 'patient_a3', 'a@b.c']) {
+      component.forgotPasswordEmail = typed;
+      component.submitForgotPassword();
+      const req = httpMock.expectOne((r) => r.url === '/auth/password/request');
+      expect(req.request.body).toEqual({ identifier: typed.trim() });
+      req.flush(null);
+    }
+  });
 
-    component.forgotPasswordEmail = 'a@b.c';
+  it('QA D787: the answer is the same neutral one, and sends a holder nothing reached to reception', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotPassword();
+
+    component.forgotPasswordEmail = 'patient_a3';
     component.submitForgotPassword();
-    const byMail = httpMock.expectOne((r) => r.url === '/auth/password/request');
-    expect(byMail.request.body).toEqual({ email: 'a@b.c' });
-    byMail.flush(null);
+    httpMock.expectOne('/auth/password/request').flush(null);
+    expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
+
+    component.forgotPasswordSuccess = '';
+    component.forgotPasswordEmail = 'nobody';
+    component.submitForgotPassword();
+    httpMock
+      .expectOne('/auth/password/request')
+      .flush({ message: 'x' }, { status: 429, statusText: 'Too Many Requests' });
+    expect(component.forgotPasswordSuccess).toBe('LOGIN.RESET_REQUEST_ACK');
+  });
+
+  it('QA D787: an empty identifier asks for one and posts nothing', () => {
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    component.openForgotPassword();
+    component.forgotPasswordEmail = '   ';
+    component.submitForgotPassword();
+    httpMock.expectNone('/auth/password/request');
+    expect(component.error).toBe('LOGIN.ENTER_RESET_IDENTIFIER');
   });
 
   it('the resend-activation dialog opens alone and posts the address', () => {

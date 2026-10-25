@@ -3310,7 +3310,10 @@
     "SSO_OR_USERNAME": "ou se connecter avec un nom d'utilisateur",
     "SSO_UNAVAILABLE": "L'authentification unique est temporairement indisponible. Veuillez utiliser votre nom d'utilisateur et votre mot de passe pour continuer.",
     "RESET_PASSWORD_TITLE": "Réinitialiser le mot de passe",
-    "FP_INSTRUCTION": "Saisissez l'adresse e-mail ou le numéro de téléphone de votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.",
+    "FP_INSTRUCTION": "Saisissez l'adresse e-mail, le nom d'utilisateur ou le numéro de téléphone de votre compte. Nous enverrons un lien de réinitialisation à son adresse e-mail, ou par SMS.",
+    "FP_IDENTIFIER_LABEL": "E-mail, nom d'utilisateur ou numéro de téléphone",
+    "ENTER_RESET_IDENTIFIER": "Veuillez saisir votre adresse e-mail, votre nom d'utilisateur ou votre numéro de téléphone.",
+    "RESET_REQUEST_ACK": "Si un compte correspond à ce que vous avez saisi, un lien de réinitialisation a été envoyé à son adresse e-mail ou par SMS. Rien reçu après quelques minutes ? Votre compte n'a peut-être ni adresse e-mail ni numéro joignable : demandez à l'accueil de votre hôpital de réinitialiser votre mot de passe.",
     "EMAIL_ADDRESS": "Adresse e-mail",
     "EMAIL_OR_PHONE": "E-mail ou numéro de téléphone",
     "ENTER_EMAIL_OR_PHONE": "Veuillez saisir votre adresse e-mail ou votre numéro de téléphone.",
@@ -6638,6 +6641,18 @@
     "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS."
   },
   "RECEPTION": {
+    "CLOSE_UNSEEN_TITLE": "Clôturer sans consultation",
+    "CLOSE_UNSEEN_EXPLAIN": "Aucun clinicien n'a encore vu ce patient : la visite ne peut pas être clôturée par une sortie. Elle est clôturée comme « parti sans être vu » ou annulée, et n'est pas comptée comme une consultation.",
+    "CLOSE_UNSEEN_OUTCOME": "Comment se termine la visite ?",
+    "CLOSE_UNSEEN_REASON": "Motif",
+    "CLOSE_UNSEEN_REASON_REQUIRED": "Indiquez pourquoi la visite se termine sans consultation.",
+    "CLOSE_UNSEEN_CONFIRM": "Clôturer la visite",
+    "CLOSE_UNSEEN_DONE": "La visite a été clôturée sans consultation.",
+    "CLOSE_UNSEEN_FAILED": "La visite n'a pas pu être clôturée. Réessayez.",
+    "UNSEEN_OUTCOME": {
+      "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",
+      "CANCELLED": "Annulée"
+    },
     "COCKPIT_DATE": "Jour affiché",
     "ACCEPT_OFFER": "Accepter",
     "ACCEPT_OFFER_FAILED": "Échec de l'acceptation de l'offre",

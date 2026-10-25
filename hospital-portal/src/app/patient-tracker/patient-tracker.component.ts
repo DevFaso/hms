@@ -67,6 +67,13 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  /**
+   * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
+   * consultation); the desk waits until the examination is completed.
+   */
+  get isClinician(): boolean {
+    return this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
+  }
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
