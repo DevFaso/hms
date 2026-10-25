@@ -2935,6 +2935,24 @@ class EncounterServiceImplTest {
             verify(trackerEventPublisher).publishStatusTransition(encounter, "ARRIVED", "CANCELLED");
         }
 
+        @Test
+        @DisplayName("QA D788: close-unseen also cancels an appointment the desk had marked COMPLETED by hand")
+        void closeUnseenCancelsAHandCompletedAppointment() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            appointment.setStatus(AppointmentStatus.COMPLETED);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason("Parti avant l'appel").build(),
+                "receptionist1", true, null);
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+            verify(appointmentRepository).save(appointment);
+        }
+
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
         @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
             names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED"})

@@ -2332,10 +2332,12 @@ public class EncounterServiceImpl implements EncounterService {
         trackerEventPublisher.publishStatusTransition(saved,
             previous != null ? previous.name() : null, EncounterStatus.CANCELLED.name());
 
-        // The appointment was not honoured as a consultation either.
+        // The appointment was not honoured as a consultation either. QA D788: an
+        // appointment the desk had already marked COMPLETED by hand (before the
+        // appointment service refused that ahead of the check-out) is cancelled
+        // too: a never-seen visit cannot leave a completed consultation behind.
         Appointment appointment = saved.getAppointment();
         if (appointment != null
-                && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.COMPLETED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
             appointmentRepository.save(appointment);

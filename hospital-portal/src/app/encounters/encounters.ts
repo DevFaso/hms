@@ -35,7 +35,7 @@ import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/elig
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
-import { actionRoles } from '../core/action-permissions';
+import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 
@@ -729,7 +729,7 @@ export class EncountersComponent implements OnInit {
     }
     return (
       enc.status === 'IN_PROGRESS' &&
-      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress])
     );
   }
 

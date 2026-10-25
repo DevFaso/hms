@@ -77,18 +77,21 @@
               appt.status === 'CHECKED_IN' ||
               appt.status === 'IN_PROGRESS'
             ) {
-              <button
-                class="btn-xs btn-complete"
-                (click)="markAsCompleted()"
-                [disabled]="saving() || !hasAppointmentStarted"
-                [title]="
-                  hasAppointmentStarted
-                    ? ('APPOINTMENTS.MARK_COMPLETED' | translate)
-                    : ('APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START' | translate)
-                "
-              >
-                {{ 'APPOINTMENTS.COMPLETE' | translate }}
-              </button>
+              <!-- QA D788: a checked-in visit completes the appointment at its check-out. -->
+              @if (canComplete) {
+                <button
+                  class="btn-xs btn-complete"
+                  (click)="markAsCompleted()"
+                  [disabled]="saving() || !hasAppointmentStarted"
+                  [title]="
+                    hasAppointmentStarted
+                      ? ('APPOINTMENTS.MARK_COMPLETED' | translate)
+                      : ('APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START' | translate)
+                  "
+                >
+                  {{ 'APPOINTMENTS.COMPLETE' | translate }}
+                </button>
+              }
               <button
                 class="btn-xs btn-noshow"
                 (click)="markAsNoShow()"
