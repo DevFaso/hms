@@ -55,6 +55,8 @@ class AuditEventLogHospitalAnchorIT {
     @Autowired
     private AuditEventLogRepository repository;
     @Autowired
+    private TenantExportRepository exportRepository;
+    @Autowired
     private TestEntityManager em;
 
     private Organization organization;
@@ -160,6 +162,15 @@ class AuditEventLogHospitalAnchorIT {
             .collect(Collectors.toMap(row -> row[0].toString(), row -> ((Number) row[1]).longValue()));
 
         assertThat(counts).containsEntry("INVOICE_UPDATED", 1L).containsEntry("USER_CREATE", 1L).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("D786: the hospital's tenant export carries its SYSTEM rows, never another hospital's or a platform row")
+    void theTenantExportCarriesTheHospitalsSystemRows() {
+        Set<UUID> exported = exportRepository.exportAuditEvents(Set.of(hospitalA.getId()), PageRequest.of(0, 50))
+            .stream().map(row -> (UUID) row[0]).collect(Collectors.toSet());
+
+        assertThat(exported).containsExactlyInAnyOrder(v229RowA.getId(), userRowA.getId());
     }
 
     @Test

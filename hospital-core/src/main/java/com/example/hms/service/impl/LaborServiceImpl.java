@@ -173,6 +173,7 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.service.DeliveryChargeService deliveryChargeService;
     /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
     private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
+    private final com.example.hms.mapper.MaternalHistoryMapper maternalHistoryMapper;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -207,8 +208,9 @@ public class LaborServiceImpl implements LaborService {
 
         Staff admittedBy = resolveStaffOrCaller(request.getAdmittedByStaffId(), hospital, recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
-        MaternalHistory history = currentPregnancy(patientId, request)
-            .orElseGet(() -> openPregnancyForUnbookedLabour(patient, hospital, admittedBy, request));
+        java.util.Optional<MaternalHistory> latest = maternalHistoryRepository.findCurrentByPatientId(patientId);
+        MaternalHistory history = currentPregnancy(patientId, latest, request)
+            .orElseGet(() -> openPregnancyForUnbookedLabour(patient, hospital, admittedBy, request, latest.orElse(null)));
 
         LaborEpisode episode = LaborEpisode.builder()
             .patient(patient)
@@ -234,24 +236,15 @@ public class LaborServiceImpl implements LaborService {
     }
 
     /**
-     * QA D796: a labour episode opened for a woman with no pregnancy on record
-     * (gestational age null), and a 14-week antenatal calendar could then be
-     * planned next to it. A woman who arrives in labour with no antenatal
-     * booking must still be admitted, so the episode is not refused outright:
-     * it needs the clinician's estimated gestational age, and that estimate
-     * opens the pregnancy record the episode is linked to (its due date
-     * derived from the estimate), so the chart has one pregnancy, dated, and
-     * the antenatal calendar refuses a pregnancy that is in labour.
-     */
-    /**
      * QA D796: the pregnancy this labour belongs to. The latest pregnancy
      * record, unless a birth has been recorded since it was written (that
      * pregnancy is over, and linking a new labour to it would date it from the
      * old due date), except when the clinician states that this labour
      * continues a recent birth (the D214 override, e.g. a retained twin).
      */
-    private java.util.Optional<MaternalHistory> currentPregnancy(UUID patientId, LaborEpisodeRequestDTO request) {
-        java.util.Optional<MaternalHistory> latest = maternalHistoryRepository.findCurrentByPatientId(patientId);
+    private java.util.Optional<MaternalHistory> currentPregnancy(UUID patientId,
+                                                                 java.util.Optional<MaternalHistory> latest,
+                                                                 LaborEpisodeRequestDTO request) {
         String override = request.getRecentDeliveryOverrideReason();
         if (latest.isEmpty() || latest.get().getRecordedDate() == null || (override != null && !override.isBlank())) {
             return latest;
@@ -261,8 +254,26 @@ public class LaborServiceImpl implements LaborService {
         return deliveredSince ? java.util.Optional.empty() : latest;
     }
 
+    /**
+     * QA D796: a labour episode opened for a woman with no pregnancy on record
+     * (gestational age null), and a 14-week antenatal calendar could then be
+     * planned next to it. A woman who arrives in labour with no antenatal
+     * booking must still be admitted, so the episode is not refused outright:
+     * it needs the clinician's estimated gestational age, and that estimate
+     * opens the pregnancy record the episode is linked to (its due date
+     * derived from the estimate), so the chart has one pregnancy, dated, and
+     * the antenatal calendar refuses a pregnancy that is in labour.
+     *
+     * <p>When she has an earlier history (a delivered pregnancy), the new
+     * record is its next version and becomes her current history, so it
+     * carries her past history forward (previous caesarean sections, PPH,
+     * allergies...) and only the pregnancy's own dating starts afresh.
+     * Gravida and para are the clinician's figures for this admission: the
+     * birth since the previous record and this pregnancy changed both, so
+     * the previous record's counts are not carried as if they were current.
+     */
     private MaternalHistory openPregnancyForUnbookedLabour(Patient patient, Hospital hospital, Staff admittedBy,
-                                                           LaborEpisodeRequestDTO request) {
+                                                           LaborEpisodeRequestDTO request, MaternalHistory previous) {
         Integer weeks = request.getGestationalAgeWeeks();
         if (weeks == null) {
             throw new BusinessException("maternity.labor.pregnancyRequired");
@@ -273,6 +284,7 @@ public class LaborServiceImpl implements LaborService {
         }
         LocalDate today = LocalDate.now();
         MaternalHistory pregnancy = new MaternalHistory();
+        maternalHistoryMapper.carryForwardHistory(previous, pregnancy);
         pregnancy.setPatient(patient);
         pregnancy.setHospital(hospital);
         pregnancy.setRecordedBy(admittedBy);

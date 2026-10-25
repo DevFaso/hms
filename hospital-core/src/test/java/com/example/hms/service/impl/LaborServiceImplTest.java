@@ -98,7 +98,7 @@ class LaborServiceImplTest {
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
             TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
-            obstetricAlertEscalation);
+            obstetricAlertEscalation, new com.example.hms.mapper.MaternalHistoryMapper());
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -1022,6 +1022,66 @@ class LaborServiceImplTest {
         assertThat(opened.getValue()).isNotSameAs(previous);
         assertThat(opened.getValue().getVersionNumber()).isEqualTo(4);
         assertThat(opened.getValue().getEstimatedDueDate()).isEqualTo(LocalDate.now().plusWeeks(4));
+    }
+
+    /**
+     * Review of #954: the opened pregnancy becomes her current history (highest
+     * version), so it must not drop what the previous version knew about her.
+     */
+    @Test
+    void aNewPregnancyCarriesHerPastHistoryForward_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setLastMenstrualPeriod(LocalDate.now().minusYears(2).minusMonths(4));
+        previous.setEstimatedDueDate(LocalDate.now().minusYears(2).plusMonths(5));
+        previous.setEstimatedDueDateByUltrasound(LocalDate.now().minusYears(2).plusMonths(5).plusDays(3));
+        previous.setUltrasoundConfirmationDate(LocalDate.now().minusYears(2).minusMonths(1));
+        previous.setMenstrualCycleLengthDays(30);
+        previous.setGravida(1);
+        previous.setPara(0);
+        previous.setPreviousCesareanSections(1);
+        previous.setPostpartumHemorrhageHistory(Boolean.TRUE);
+        previous.setPreeclampsiaHistory(Boolean.TRUE);
+        previous.setAllergies("Peanuts");
+        previous.setDrugAllergies("Penicillin");
+        previous.setLatexAllergy(Boolean.TRUE);
+        previous.setChronicConditions("Sickle cell trait");
+        previous.setPrenatalVitaminsStarted(Boolean.TRUE);
+        previous.setClinicalNotes("Notes about the previous pregnancy");
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(previous));
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(2);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(37).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        MaternalHistory opened = captor.getValue();
+        assertThat(opened).isNotSameAs(previous);
+        assertThat(opened.getVersionNumber()).isEqualTo(3);
+        assertThat(opened.getPreviousCesareanSections()).isEqualTo(1);
+        assertThat(opened.getPostpartumHemorrhageHistory()).isTrue();
+        assertThat(opened.getPreeclampsiaHistory()).isTrue();
+        assertThat(opened.getAllergies()).isEqualTo("Peanuts");
+        assertThat(opened.getDrugAllergies()).isEqualTo("Penicillin");
+        assertThat(opened.getLatexAllergy()).isTrue();
+        assertThat(opened.getChronicConditions()).isEqualTo("Sickle cell trait");
+        // The previous pregnancy's own dating, supplementation and assessment do not carry over.
+        assertThat(opened.getEstimatedDueDate()).isEqualTo(LocalDate.now().plusWeeks(3));
+        assertThat(opened.getLastMenstrualPeriod()).isNull();
+        assertThat(opened.getEstimatedDueDateByUltrasound()).isNull();
+        assertThat(opened.getUltrasoundConfirmationDate()).isNull();
+        assertThat(opened.getMenstrualCycleLengthDays()).isNull();
+        assertThat(opened.getPrenatalVitaminsStarted()).isFalse();
+        assertThat(opened.getClinicalNotes()).isNull();
+        // Her counts changed with the birth since: not carried as if current.
+        assertThat(opened.getGravida()).isNull();
+        assertThat(opened.getPara()).isNull();
     }
 
     @Test
