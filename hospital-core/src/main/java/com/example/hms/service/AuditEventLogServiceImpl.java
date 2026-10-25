@@ -101,7 +101,7 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     @Transactional(readOnly = true)
     public Page<AuditEventLogResponseDTO> getAuditLogsByHospital(UUID hospitalId, Pageable pageable) {
         return auditRepository
-            .findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable)
+            .findAnchoredAtHospital(hospitalId, pageable)
             .map(auditMapper::toDto);
     }
 
@@ -255,6 +255,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .impersonatorUserId(impersonatorUserId)
                 .impersonatorUsername(impersonatorUsername)
                 .patientId(resolvePatientKey(requestDTO, resourceId))
+                // An assignment's hospital is stamped by the entity itself.
+                .hospitalId(systemRowHospital(requestDTO, user, assignment))
                 .build();
 
         AuditEventLog saved = auditRepository.save(event);
@@ -291,6 +293,20 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 resolvedResourceId);
         }
         return parsed;
+    }
+
+    /**
+     * QA D786: a SYSTEM row (no actor user, so no assignment) that the server
+     * wrote for one hospital's data belongs to that hospital's audit log. Only
+     * for SYSTEM rows: a user's row is anchored on the user's own assignment
+     * there (QA D521/D533), never on a hospital it merely names.
+     */
+    private static UUID systemRowHospital(AuditEventRequestDTO requestDTO, User user,
+                                          UserRoleHospitalAssignment assignment) {
+        if (user != null || assignment != null) {
+            return null;
+        }
+        return requestDTO.getHospitalId();
     }
 
     /**

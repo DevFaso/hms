@@ -32,8 +32,12 @@ public class LaborEpisodeRequestDTO {
 
     /**
      * Optional overrides; when null these are snapshotted from the
-     * patient's current MaternalHistory version.
+     * patient's current MaternalHistory version. QA D796: with no pregnancy
+     * on record, the estimated gestational age is required, and it opens the
+     * pregnancy record the episode is linked to.
      */
+    @jakarta.validation.constraints.Min(20)
+    @jakarta.validation.constraints.Max(45)
     private Integer gestationalAgeWeeks;
     private Integer gravida;
     private Integer para;

@@ -56,6 +56,9 @@ final class SharedClinicalRowsCleanup {
         context.getBean(com.example.hms.repository.LaborPartographEntryRepository.class).deleteAll();
         context.getBean(com.example.hms.repository.DeliveryRecordRepository.class).deleteAll();
         context.getBean(com.example.hms.repository.LaborEpisodeRepository.class).deleteAll();
+        // QA D796: an unbooked labour opens the pregnancy record (maternal
+        // history), which pins the patient, the hospital and the staff.
+        context.getBean(com.example.hms.repository.MaternalHistoryRepository.class).deleteAll();
         context.getBean(PatientHospitalRegistrationRepository.class).deleteAll();
         // patient_problems (and their history) reference staff.
         context.getBean(PatientProblemHistoryRepository.class).deleteAllInBatch();

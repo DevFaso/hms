@@ -50,6 +50,7 @@ import static org.mockito.Mockito.when;
 import com.example.hms.i18n.TestMessageSources;
 import com.example.hms.service.i18n.PatientLocaleResolver;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 @ExtendWith(MockitoExtension.class)
@@ -71,6 +72,8 @@ class PrenatalSchedulingServiceImplTest {
     private PatientLocaleResolver patientLocaleResolver;
     @Mock
     private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    @Mock
+    private com.example.hms.repository.LaborEpisodeRepository laborEpisodeRepository;
 
     private PrenatalSchedulingServiceImpl service;
     private static final String SCHEDULER_USERNAME = "scheduler";
@@ -93,7 +96,8 @@ class PrenatalSchedulingServiceImplTest {
             notificationService,
             fixedClock,
             TestMessageSources.bundles(),
-            deliveryRecordRepository
+            deliveryRecordRepository,
+            laborEpisodeRepository
         );
         // The patient in these fixtures states no language: the resolver
         // answers the fallback, which is what production does too.
@@ -259,7 +263,7 @@ class PrenatalSchedulingServiceImplTest {
             appointmentRepository, patientRepository, hospitalRepository, staffRepository,
             appointmentService, notificationService,
             Clock.fixed(Instant.parse("2024-04-07T10:00:00Z"), ZoneId.of("UTC")),
-            TestMessageSources.bundles(), deliveryRecordRepository);
+            TestMessageSources.bundles(), deliveryRecordRepository, laborEpisodeRepository);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(appointmentRepository.findByHospital_IdAndPatient_Id(hospitalId, patientId)).thenReturn(List.of());
@@ -448,6 +452,30 @@ class PrenatalSchedulingServiceImplTest {
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
                 .isEqualTo("prenatal.pregnancy.delivered"));
+    }
+
+    /**
+     * QA D796, the exact round-12 step: A3 is in labour (an episode is open)
+     * and the Prénatal tab asks for a calendar with an LMP 14 weeks ago. It
+     * was planned at week 14 with no alert; it is refused now.
+     */
+    @Test
+    void noAntenatalPlanWhileThePatientIsInLabour() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(laborEpisodeRepository.existsByPatient_IdAndStatus(patientId, com.example.hms.enums.LaborStatus.ACTIVE))
+            .thenReturn(true);
+        PrenatalScheduleRequestDTO request = PrenatalScheduleRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .lastMenstrualPeriodDate(LocalDate.of(2024, 4, 1).minusWeeks(14))
+            .build();
+
+        assertThatThrownBy(() -> service.generateSchedule(request, Locale.FRENCH, SCHEDULER_USERNAME))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("prenatal.pregnancy.inLabour"));
+        verify(appointmentRepository, never()).findByHospital_IdAndPatient_Id(any(), any());
     }
 
     /* ── QA D249: schedule recommendations in the caller's language ─────── */

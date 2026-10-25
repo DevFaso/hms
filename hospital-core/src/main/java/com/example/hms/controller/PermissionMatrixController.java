@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.PermissionMatrixAuditAction;
 import com.example.hms.enums.PermissionMatrixEnvironment;
 import com.example.hms.payload.dto.PermissionMatrixAuditEventRequestDTO;
@@ -98,6 +99,7 @@ public class PermissionMatrixController {
     }
 
     @GetMapping("/audit")
+    @StrictQueryParams
     @Operation(summary = "List recent audit events")
     public ResponseEntity<List<PermissionMatrixAuditEventResponseDTO>> listAuditEvents(
         @RequestParam(required = false) PermissionMatrixAuditAction action

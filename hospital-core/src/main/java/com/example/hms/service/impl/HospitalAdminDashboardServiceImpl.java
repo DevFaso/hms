@@ -205,7 +205,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
     }
 
     private List<HospitalAdminSummaryDTO.AuditSnippet> buildAuditSnippets(UUID hospitalId, int limit) {
-        var page = auditEventLogRepository.findByAssignment_Hospital_IdOrderByEventTimestampDesc(
+        var page = auditEventLogRepository.findAnchoredAtHospital(
             hospitalId, PageRequest.of(0, Math.max(limit, 1)));
         return page.getContent().stream().map(this::toSnippet).toList();
     }

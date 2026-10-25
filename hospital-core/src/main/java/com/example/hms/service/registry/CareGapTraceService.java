@@ -205,6 +205,10 @@ public class CareGapTraceService {
                 .userName("SYSTEM")
                 .hospitalName(enrollment.getHospital() != null
                     ? enrollment.getHospital().getName() : null)
+                // QA D786: a SYSTEM row has no assignment; without the id the
+                // hospital's own audit view never showed this trace.
+                .hospitalId(enrollment.getHospital() != null
+                    ? enrollment.getHospital().getId() : null)
                 .patientId(enrollment.getPatient() != null
                     ? enrollment.getPatient().getId() : null)
                 .eventDescription("Care-gap sweep created a tracing recall for "

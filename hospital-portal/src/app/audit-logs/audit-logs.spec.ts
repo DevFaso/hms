@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { AuditLogService, AuditEventLog } from '../services/audit-log.service';
@@ -119,5 +119,86 @@ describe('AuditLogsComponent (QA D330)', () => {
     fixture.detectChanges();
     const card = (fixture.nativeElement as HTMLElement).querySelector('.card-info');
     expect(card?.textContent?.replaceAll(/\s+/g, ' ').trim()).toMatch(/^12 \S/);
+  });
+});
+
+describe('AuditLogsComponent (QA D794: the server searches every page)', () => {
+  let component: AuditLogsComponent;
+  let list: jasmine.Spy;
+
+  const page = (content: Partial<AuditEventLog>[], totalPages = 1) =>
+    of({ content: content as AuditEventLog[], totalElements: content.length, totalPages });
+
+  beforeEach(() => {
+    list = jasmine.createSpy('list').and.returnValue(page([]));
+    TestBed.configureTestingModule({
+      imports: [AuditLogsComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AuditLogService, useValue: { list, getEventTypeStatus: () => of([]) } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']),
+        },
+      ],
+    });
+    component = TestBed.createComponent(AuditLogsComponent).componentInstance;
+    component.ngOnInit();
+    list.calls.reset();
+  });
+
+  it('sends the typed search to the server, from the first page, after the user pauses', fakeAsync(() => {
+    component.currentPage.set(3);
+    component.searchTerm = ' Multi91064 ';
+    component.onSearchInput();
+    tick(100);
+    expect(list).not.toHaveBeenCalled();
+    tick(300);
+
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ page: 0, search: 'Multi91064' }),
+    );
+  }));
+
+  it('shows what the server returned for the search, never a client-side filter of the old page', fakeAsync(() => {
+    list.and.returnValue(page([{ userName: 'Awa', eventDescription: 'New user account created' }]));
+    component.searchTerm = 'Multi91064';
+    component.onSearchInput();
+    tick(300);
+
+    expect(component.logs().length).toBe(1);
+  }));
+
+  it('sends the event type to the server and goes back to the first page', () => {
+    component.currentPage.set(2);
+    component.selectedEventType = 'INVOICE_UPDATED';
+    component.onEventTypeChange();
+
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(list.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ page: 0, eventType: 'INVOICE_UPDATED' }),
+    );
+  });
+
+  it('keeps the search and the event type when paging', () => {
+    list.and.returnValue(page([{ userName: 'Awa' }], 3));
+    component.searchTerm = 'awa';
+    component.selectedEventType = 'LOGIN';
+    component.load();
+    list.calls.reset();
+
+    component.nextPage();
+
+    expect(list.calls.mostRecent().args[0]).toEqual(
+      jasmine.objectContaining({ page: 1, search: 'awa', eventType: 'LOGIN' }),
+    );
+  });
+
+  it('sends no search or event type when both are empty', () => {
+    component.load();
+
+    const params = list.calls.mostRecent().args[0] as Record<string, unknown>;
+    expect(params['search']).toBeUndefined();
+    expect(params['eventType']).toBeUndefined();
   });
 });

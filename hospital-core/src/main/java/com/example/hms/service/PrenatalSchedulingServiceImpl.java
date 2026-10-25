@@ -19,6 +19,8 @@ import com.example.hms.payload.dto.prenatal.PrenatalScheduleResponseDTO;
 import com.example.hms.payload.dto.prenatal.PrenatalVisitRecommendationDTO;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.DeliveryRecordRepository;
+import com.example.hms.repository.LaborEpisodeRepository;
+import com.example.hms.enums.LaborStatus;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
@@ -75,6 +77,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private final Clock clock;
     private final MessageSource messageSource;
     private final DeliveryRecordRepository deliveryRecordRepository;
+    private final LaborEpisodeRepository laborEpisodeRepository;
 
     @Override
     public PrenatalScheduleResponseDTO generateSchedule(PrenatalScheduleRequestDTO request, Locale locale, String username) {
@@ -101,6 +104,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         if (deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
                 patient.getId(), lmp.atStartOfDay())) {
             throw new BusinessException("prenatal.pregnancy.delivered");
+        }
+        // QA D796: a calendar at 14 weeks was planned next to an open labour
+        // episode, so the chart showed the same woman in labour and at 14 weeks.
+        if (laborEpisodeRepository.existsByPatient_IdAndStatus(patient.getId(), LaborStatus.ACTIVE)) {
+            throw new BusinessException("prenatal.pregnancy.inLabour");
         }
         LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
