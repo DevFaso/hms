@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.service.PasswordResetRequestDispatcher;
+import com.example.hms.service.PasswordResetRequestDispatcherTestSupport;
 import com.example.hms.service.PasswordResetService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,14 +10,18 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,12 +34,50 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PasswordResetControllerTest {
 
     private PasswordResetService service;
+    /** QA D802: the dispatcher's pool, held here so a test runs (or inspects) the queued work. */
+    private List<Runnable> queued;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         service = mock(PasswordResetService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new PasswordResetController(service)).build();
+        queued = new ArrayList<>();
+        PasswordResetRequestDispatcher dispatcher =
+            PasswordResetRequestDispatcherTestSupport.onExecutor(service, queued::add);
+        mockMvc = MockMvcBuilders.standaloneSetup(new PasswordResetController(service, dispatcher)).build();
+    }
+
+    /** What the pool would do after the answer has gone. */
+    private void drainQueue() {
+        List<Runnable> work = new ArrayList<>(queued);
+        queued.clear();
+        work.forEach(Runnable::run);
+    }
+
+    @Test
+    @DisplayName("QA D802: the answer is sent before any account work; the lookup and send are queued")
+    void theAccountWorkIsHandedToTheExecutor() throws Exception {
+        mockMvc.perform(post("/auth/password/request")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"identifier\":\"known@hospital.test\"}"))
+            .andExpect(status().isNoContent());
+
+        // The request thread did nothing with the account: no lookup, no token, no send.
+        verifyNoInteractions(service);
+        assertThat(queued).hasSize(1);
+
+        drainQueue();
+        verify(service).requestResetByIdentifier(eq("known@hospital.test"), any(Locale.class), anyString());
+    }
+
+    @Test
+    @DisplayName("QA D802: request-reset queues its work the same way")
+    void requestResetIsHandedToTheExecutor() throws Exception {
+        mockMvc.perform(post("/auth/password/request-reset").param("identifier", "patient_a3"))
+            .andExpect(status().isNoContent());
+
+        verifyNoInteractions(service);
+        assertThat(queued).hasSize(1);
     }
 
     @Test
@@ -41,6 +85,7 @@ class PasswordResetControllerTest {
     void requestResetWithAPhoneNumber() throws Exception {
         mockMvc.perform(post("/auth/password/request-reset").param("email", "+22670202020"))
             .andExpect(status().isNoContent());
+        drainQueue();
 
         verify(service).requestResetByIdentifier(eq("+22670202020"), any(Locale.class), anyString());
     }
@@ -52,6 +97,7 @@ class PasswordResetControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"identifier\":\"patient_a3\"}"))
             .andExpect(status().isNoContent());
+        drainQueue();
 
         verify(service).requestResetByIdentifier(eq("patient_a3"), any(Locale.class), anyString());
     }
@@ -67,6 +113,7 @@ class PasswordResetControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"phone\":\"70202020\"}"))
             .andExpect(status().isNoContent());
+        drainQueue();
 
         verify(service).requestResetByIdentifier(eq("a@b.test"), any(Locale.class), anyString());
         verify(service).requestResetByIdentifier(eq("70202020"), any(Locale.class), anyString());
@@ -87,6 +134,7 @@ class PasswordResetControllerTest {
         mockMvc.perform(post("/auth/password/request-reset"))
             .andExpect(status().isBadRequest());
 
+        assertThat(queued).isEmpty();
         verify(service, never()).requestResetByIdentifier(any(), any(), any());
     }
 }

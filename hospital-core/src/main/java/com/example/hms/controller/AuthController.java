@@ -1410,12 +1410,9 @@ public class AuthController {
         if (named == null) {
             return ResponseEntity.badRequest().build();
         }
-        String ip = clientIp(request);
-        try {
-            authNotification.passwordReset().requestResetByIdentifier(named, locale, ip);
-        } catch (ResourceNotFoundException e) {
-            log.debug("Password reset requested for an unknown account");
-        }
+        // QA D802: the account work runs off the request thread, so the answer
+        // takes the same time whether or not the identifier names an account.
+        authNotification.passwordResetRequests().dispatch(named, locale, clientIp(request));
         return ResponseEntity.noContent().build();
     }
 

@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.PasswordResetConfirmDTO;
 import com.example.hms.payload.dto.PasswordResetRequestDTO;
+import com.example.hms.service.PasswordResetRequestDispatcher;
 import com.example.hms.service.PasswordResetService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -24,6 +25,8 @@ import java.util.Locale;
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
+    /** QA D802: the account work for a reset request runs off the request thread. */
+    private final PasswordResetRequestDispatcher resetRequests;
 
     /**
      * QA D787 (D171): the holder names the account by e-mail, username or phone
@@ -93,15 +96,10 @@ public class PasswordResetController {
     }
 
     private ResponseEntity<Void> handleResetRequest(String identifier, Locale locale, HttpServletRequest request) {
-        String ip = clientIp(request);
-        try {
-            // Stores only the token's hash and keeps one active token per user;
-            // silent for an unknown account and for one it cannot reach.
-            passwordResetService.requestResetByIdentifier(identifier, locale, ip);
-        } catch (ResourceNotFoundException e) {
-            // Deliberately do NOT leak whether the account exists
-            log.debug("Password reset requested for an unknown account");
-        }
+        // QA D802: the same constant work for every identifier. The lookup, the
+        // token, the send and the audit run on the dispatcher's pool after this
+        // answer, so neither the status nor the time says whether the account exists.
+        resetRequests.dispatch(identifier, locale, clientIp(request));
         return ResponseEntity.noContent().build(); // 204
     }
 }
