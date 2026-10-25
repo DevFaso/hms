@@ -3069,4 +3069,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V235 (QA D786): support.audit_event_logs.hospital_id, so a SYSTEM
+         row written for one hospital's data (no user, no assignment) reaches
+         that hospital's audit view; backfills the V229 cancellation rows from
+         their invoice and the care-gap tracing rows from their recall. Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V235-audit-event-hospital-id" author="hms-team" runOnChange="false">
+        <sqlFile path="V235__audit_event_hospital_id.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

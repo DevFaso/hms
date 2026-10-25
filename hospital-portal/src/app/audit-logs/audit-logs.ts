@@ -1,11 +1,6 @@
-import {
-  Component,
-  inject,
-  OnInit,
-  signal,
-  computed,
-  ChangeDetectionStrategy,
-} from '@angular/core';
+import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, Subscription, debounceTime, distinctUntilChanged } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -21,6 +16,9 @@ import { EnumLabelService } from '../core/enum-label.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
 import { bareRole } from '../core/role-token';
+
+/** QA D794: how long the search box waits after the last keystroke before asking the server. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 /** QA D330: the write audit's "METHOD /route" description, read as an action. */
 const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
@@ -183,37 +181,43 @@ export class AuditLogsComponent implements OnInit {
   fromDate = '';
   toDate = '';
 
-  filtered = computed(() => {
-    let list = this.logs();
-    if (this.selectedEventType) {
-      list = list.filter((l) => l.eventType === this.selectedEventType);
-    }
-    const term = this.searchTerm.toLowerCase().trim();
-    if (term) {
-      list = list.filter(
-        (l) =>
-          (l.userName ?? '').toLowerCase().includes(term) ||
-          (l.eventDescription ?? '').toLowerCase().includes(term) ||
-          (l.entityType ?? '').toLowerCase().includes(term) ||
-          (l.resourceName ?? '').toLowerCase().includes(term),
-      );
-    }
-    return list;
-  });
+  /**
+   * QA D794: the search box and the event-type filter are applied by the
+   * server over every audit row the reader may see. They used to filter the
+   * 20 rows on screen, so a match on another page was never found.
+   */
+  private readonly searchChanges = new Subject<string>();
+  private loadSub?: Subscription;
+
+  constructor() {
+    this.searchChanges
+      .pipe(debounceTime(SEARCH_DEBOUNCE_MS), distinctUntilChanged(), takeUntilDestroyed())
+      .subscribe(() => {
+        this.currentPage.set(0);
+        this.load();
+      });
+  }
 
   ngOnInit(): void {
     this.load();
+    this.loadEventTypes();
   }
 
   load(): void {
     this.loading.set(true);
-    this.auditService
+    const search = this.searchTerm.trim();
+    // A newer query replaces an older one still in flight, so a slow page
+    // never overwrites the result of the latest search.
+    this.loadSub?.unsubscribe();
+    this.loadSub = this.auditService
       .list({
         page: this.currentPage(),
         size: this.pageSize,
         // QA D777/D784: the picker gives local wall time; the server keeps UTC.
         fromDate: this.fromDate ? toServerDateTime(this.fromDate) : undefined,
         toDate: this.toDate ? toServerDateTime(this.toDate) : undefined,
+        eventType: this.selectedEventType || undefined,
+        search: search || undefined,
       })
       .subscribe({
         next: (res) => {
@@ -227,6 +231,9 @@ export class AuditLogsComponent implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  private loadEventTypes(): void {
     this.auditService.getEventTypeStatus().subscribe({
       next: (types) => this.eventTypes.set(Array.isArray(types) ? types : []),
       error: () => {
@@ -248,7 +255,12 @@ export class AuditLogsComponent implements OnInit {
   }
 
   onEventTypeChange(): void {
-    // event type filter stays client-side within the current page
+    this.currentPage.set(0);
+    this.load();
+  }
+
+  onSearchInput(): void {
+    this.searchChanges.next(this.searchTerm.trim());
   }
 
   prevPage(): void {

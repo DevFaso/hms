@@ -348,6 +348,17 @@ class SuperAdminAuditSearchServiceImplTest {
             .thenReturn(predicate);
         when(cb.and(any(Predicate[].class))).thenReturn(predicate);
         when(path.in(any(List.class))).thenReturn(predicate);
+        // QA D786: the organization / region filters also match a SYSTEM row
+        // through a subquery on the hospital of its own hospitalId.
+        jakarta.persistence.criteria.Subquery subquery = mock(jakarta.persistence.criteria.Subquery.class);
+        Root subRoot = mock(Root.class);
+        org.mockito.Mockito.lenient().when(query.subquery(any(Class.class))).thenReturn(subquery);
+        org.mockito.Mockito.lenient().when(subquery.from(any(Class.class))).thenReturn(subRoot);
+        org.mockito.Mockito.lenient().when(subRoot.get(any(String.class))).thenReturn(path);
+        org.mockito.Mockito.lenient().when(subquery.select(any())).thenReturn(subquery);
+        org.mockito.Mockito.lenient().when(subquery.where(any(Expression.class))).thenReturn(subquery);
+        org.mockito.Mockito.lenient().when(path.in(any(Expression.class))).thenReturn(predicate);
+        org.mockito.Mockito.lenient().when(cb.or(any(Expression.class), any(Expression.class))).thenReturn(predicate);
 
         Predicate result = spec.toPredicate(root, query, cb);
 

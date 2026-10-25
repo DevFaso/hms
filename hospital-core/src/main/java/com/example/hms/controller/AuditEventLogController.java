@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
@@ -16,6 +17,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -70,6 +73,8 @@ public class AuditEventLogController {
      */
     private static final String AUDIT_READ_ROLES =
         "hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','LAB_DIRECTOR','QUALITY_MANAGER')";
+    /** Longest free-text search accepted (QA D794). */
+    private static final int MAX_SEARCH_LENGTH = 200;
     /** The same set as {@link #AUDIT_READ_ROLES}, as authorities, for the in-method check. */
     private static final List<String> AUDIT_READER_AUTHORITIES = List.of(
         "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN", "ROLE_LAB_DIRECTOR", "ROLE_QUALITY_MANAGER");
@@ -107,18 +112,24 @@ public class AuditEventLogController {
 
     private Page<AuditEventLogResponseDTO> scopedPage(Set<UUID> scope, Specification<AuditEventLog> filter,
                                                       Pageable pageable) {
-        Pageable ordered = pageable.getSort().isSorted()
+        return auditRepository.findAll(AuditEventLogSpecifications.anchoredAt(scope).and(filter), newestFirst(pageable))
+            .map(auditMapper::toDto);
+    }
+
+    private static Pageable newestFirst(Pageable pageable) {
+        return pageable.getSort().isSorted()
             ? pageable
             : PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Direction.DESC, "eventTimestamp"));
-        return auditRepository.findAll(AuditEventLogSpecifications.anchoredAt(scope).and(filter), ordered)
-            .map(auditMapper::toDto);
     }
 
     @GetMapping
     @PreAuthorize(AUDIT_READ_ROLES)
-    @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination. Optionally filter by date range.")
+    @Operation(summary = "Get All Audit Logs",
+        description = "Retrieve the audit logs the caller may read, paginated. Optionally filtered by date range, "
+            + "event type and a free-text search, all applied by the server over every row (QA D794).")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
+    @ApiResponse(responseCode = "400", description = "Unknown event type")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
         @Parameter(description = "Start of date range (ISO 8601), e.g. 2024-01-01T00:00:00")
         @RequestParam(required = false)
@@ -126,17 +137,42 @@ public class AuditEventLogController {
         @Parameter(description = "End of date range (ISO 8601), e.g. 2024-12-31T23:59:59")
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
+        @Parameter(description = "Only this event type, e.g. USER_CREATE")
+        @RequestParam(required = false) String eventType,
+        @Parameter(description = "Free text matched against the actor, description, entity type and resource name")
+        @RequestParam(required = false) @Size(max = MAX_SEARCH_LENGTH) String search,
         @PageableDefault(size = 20) Pageable pageable
     ) {
+        AuditEventType type = parseEventType(eventType);
+        Specification<AuditEventLog> filter = AuditEventLogSpecifications.between(fromDate, toDate)
+            .and(AuditEventLogSpecifications.ofType(type))
+            .and(AuditEventLogSpecifications.matching(search));
         Set<UUID> scope = auditScope();
         if (scope != null) {
-            return ResponseEntity.ok(scopedPage(scope, AuditEventLogSpecifications.between(fromDate, toDate), pageable));
+            return ResponseEntity.ok(scopedPage(scope, filter, pageable));
+        }
+        if (type != null || (search != null && !search.isBlank())) {
+            return ResponseEntity.ok(auditRepository.findAll(
+                    AuditEventLogSpecifications.everyRow().and(filter), newestFirst(pageable))
+                .map(auditMapper::toDto));
         }
         if (fromDate != null || toDate != null) {
             return ResponseEntity.ok(auditService.getAuditLogsByDateRange(fromDate, toDate, pageable));
         }
         Page<AuditEventLog> page = auditRepository.findAll(pageable);
         return ResponseEntity.ok(page.map(auditMapper::toDto));
+    }
+
+    /** A blank type is no filter; an unknown one is the caller's error (400), never "every row". */
+    private static AuditEventType parseEventType(String eventType) {
+        if (eventType == null || eventType.isBlank()) {
+            return null;
+        }
+        try {
+            return AuditEventType.valueOf(eventType.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException("audit.eventType.invalid", eventType.trim());
+        }
     }
 
     @GetMapping("/hospital/{hospitalId}")

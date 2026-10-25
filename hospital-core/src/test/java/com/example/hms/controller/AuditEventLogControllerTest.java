@@ -97,11 +97,48 @@ class AuditEventLogControllerTest {
                 .thenReturn(new PageImpl<>(List.of(entity)));
             when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
             assertThat(result.getBody().getContent()).containsExactly(responseDTO);
             verify(auditRepository, never()).findAll(any(Pageable.class));
             verify(auditService, never()).getAuditLogsByDateRange(any(), any(), any());
+        }
+
+        /**
+         * QA D794, the exact round-12 call: HOSPITAL_ADMIN_A searches
+         * "Multi91064". The term and the event type now reach the server
+         * (GET /audit-logs?search=...&eventType=...), which filters inside the
+         * caller's hospital scope rather than the 20 rows on screen.
+         */
+        @Test
+        @SuppressWarnings("unchecked")
+        void searchAndEventTypeAreAppliedByTheServerInsideTheScope_D794() throws Exception {
+            when(auditRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity), PageRequest.of(0, 20), 1));
+            when(auditMapper.toDto(entity)).thenReturn(responseDTO);
+            org.springframework.test.web.servlet.MockMvc mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(controller)
+                .setCustomArgumentResolvers(new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
+                .build();
+
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/audit-logs")
+                    .param("search", "Multi91064").param("eventType", "USER_CREATE").param("page", "0").param("size", "20"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
+            org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+            verify(auditRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), page.capture());
+            assertThat(page.getValue().getPageNumber()).isZero();
+            assertThat(page.getValue().getSort().getOrderFor("eventTimestamp")).isNotNull();
+            verify(auditRepository, never()).findAll(any(Pageable.class));
+        }
+
+        @Test
+        void anUnknownEventTypeIsABadRequestNotEveryRow_D794() {
+            assertThatThrownBy(() -> controller.getAllAuditLogs(null, null, "NOT_A_TYPE", null, pageable))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                    .isEqualTo("audit.eventType.invalid"));
+            org.mockito.Mockito.verifyNoInteractions(auditRepository);
         }
 
         @Test
@@ -160,7 +197,7 @@ class AuditEventLogControllerTest {
         when(auditRepository.findAll(pageable)).thenReturn(page);
         when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isNotNull();
@@ -173,10 +210,35 @@ class AuditEventLogControllerTest {
         Page<AuditEventLog> page = Page.empty(pageable);
         when(auditRepository.findAll(pageable)).thenReturn(page);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody().getContent()).isEmpty();
+    }
+
+    /** QA D794: the super-admin's audit page (global view) searches the whole platform log. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aGlobalSearchFiltersThePlatformLogInTheDatabase_D794() {
+        when(auditRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(entity)));
+        when(auditMapper.toDto(entity)).thenReturn(responseDTO);
+
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result =
+            controller.getAllAuditLogs(null, null, null, "Multi91064", pageable);
+
+        assertThat(result.getBody().getContent()).containsExactly(responseDTO);
+        verify(auditRepository, never()).findAll(any(Pageable.class));
+        verify(auditService, never()).getAuditLogsByDateRange(any(), any(), any());
+    }
+
+    @Test
+    void aBlankSearchKeepsTheUnfilteredPlatformRead_D794() {
+        when(auditRepository.findAll(pageable)).thenReturn(Page.empty(pageable));
+
+        controller.getAllAuditLogs(null, null, " ", "  ", pageable);
+
+        verify(auditRepository).findAll(pageable);
     }
 
     // ─── getLogsByUser ───────────────────────────────────────────

@@ -132,7 +132,8 @@ class AuditEventLogTest {
                 "John Doe",                    // actorLabel
                 null,                          // impersonatorUserId (MVP-4)
                 null,                          // impersonatorUsername (MVP-4)
-                null                           // patientId (V141, Tier 2 item 39)
+                null,                          // patientId (V141, Tier 2 item 39)
+                null                           // hospitalId (V235, QA D786)
             );
 
             assertAll(

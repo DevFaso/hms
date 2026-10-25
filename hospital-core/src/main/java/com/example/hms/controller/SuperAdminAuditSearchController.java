@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -52,6 +53,8 @@ public class SuperAdminAuditSearchController {
         @RequestParam(required = false) UUID userId,
         @RequestParam(required = false) String userName,
         @RequestParam(required = false) List<AuditEventType> eventTypes,
+        // QA D798: the singular form was silently ignored and every row came back.
+        @RequestParam(required = false) AuditEventType eventType,
         @RequestParam(required = false) AuditStatus status,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID organizationId,
@@ -66,9 +69,28 @@ public class SuperAdminAuditSearchController {
         Pageable pageable
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, eventTypes, status, hospitalId, organizationId,
+            userId, userName, withSingular(eventTypes, eventType), status, hospitalId, organizationId,
             impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
         return ResponseEntity.ok(service.search(filter, pageable));
+    }
+
+    /**
+     * QA D798: {@code eventType} (singular) is the same filter as
+     * {@code eventTypes}; both may be given and the row matches any of them.
+     * An unknown value fails conversion (400), never widens to every row.
+     */
+    private static List<AuditEventType> withSingular(List<AuditEventType> eventTypes, AuditEventType eventType) {
+        if (eventType == null) {
+            return eventTypes;
+        }
+        List<AuditEventType> merged = new ArrayList<>();
+        if (eventTypes != null) {
+            merged.addAll(eventTypes);
+        }
+        if (!merged.contains(eventType)) {
+            merged.add(eventType);
+        }
+        return merged;
     }
 
     /**
@@ -84,6 +106,8 @@ public class SuperAdminAuditSearchController {
         @RequestParam(required = false) UUID userId,
         @RequestParam(required = false) String userName,
         @RequestParam(required = false) List<AuditEventType> eventTypes,
+        // QA D798: the singular form was silently ignored and every row came back.
+        @RequestParam(required = false) AuditEventType eventType,
         @RequestParam(required = false) AuditStatus status,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID organizationId,
@@ -96,7 +120,7 @@ public class SuperAdminAuditSearchController {
         @RequestParam(name = "maxRows", required = false, defaultValue = "10000") int maxRows
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, eventTypes, status, hospitalId, organizationId,
+            userId, userName, withSingular(eventTypes, eventType), status, hospitalId, organizationId,
             impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
         byte[] csv = service.exportCsv(filter, maxRows);
         return ResponseEntity.ok()

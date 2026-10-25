@@ -67,9 +67,18 @@ public interface AuditEventLogRepository
     @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a GROUP BY a.eventType")
     List<Object[]> countByEventType();
 
-    /** {@link #countByEventType()} restricted to rows anchored at one of the given hospitals (QA D25). */
-    @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a "
-           + "WHERE a.assignment.hospital.id IN :hospitalIds GROUP BY a.eventType")
+    /**
+     * The WHERE of every hospital-scoped audit read (QA D25, D786): a row is
+     * the hospital's when its assignment is there, or when it carries the
+     * hospital itself (a SYSTEM row: a migration or a job that acted on that
+     * hospital's data has no assignment). The LEFT join keeps those rows; an
+     * inner join through {@code a.assignment} dropped them.
+     */
+    String ANCHORED_AT_HOSPITALS = "(asg.hospital.id IN :hospitalIds OR a.hospitalId IN :hospitalIds)";
+
+    /** {@link #countByEventType()} restricted to rows anchored at one of the given hospitals (QA D25, D786). */
+    @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE " + ANCHORED_AT_HOSPITALS + " GROUP BY a.eventType")
     List<Object[]> countByEventTypeForHospitals(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
     /**
@@ -119,13 +128,23 @@ public interface AuditEventLogRepository
     List<Object[]> countByHospitalIdBetween(@Param("from") LocalDateTime from,
                                             @Param("to") LocalDateTime to);
 
-    /** Hospital-scoped audit events, ordered by timestamp descending. */
-    Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
+    /**
+     * Hospital-scoped audit events, newest first: rows anchored at the
+     * hospital through their assignment or, for a SYSTEM row, through their
+     * own {@code hospitalId} (QA D786: a derived {@code findByAssignment_Hospital_Id}
+     * query inner-joined the assignment and dropped every SYSTEM row).
+     */
+    @Query(value = "SELECT a FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId) "
+           + "ORDER BY a.eventTimestamp DESC",
+        countQuery = "SELECT COUNT(a) FROM AuditEventLog a LEFT JOIN a.assignment asg "
+           + "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId)")
+    Page<AuditEventLog> findAnchoredAtHospital(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
-    /** Daily audit event counts for a hospital within a date range. */
+    /** Daily audit event counts for a hospital within a date range (anchored as {@link #findAnchoredAtHospital}). */
     @Query("SELECT function('date', a.eventTimestamp) AS day, COUNT(a) " +
-           "FROM AuditEventLog a " +
-           "WHERE a.assignment.hospital.id = :hospitalId " +
+           "FROM AuditEventLog a LEFT JOIN a.assignment asg " +
+           "WHERE (asg.hospital.id = :hospitalId OR a.hospitalId = :hospitalId) " +
            "AND a.eventTimestamp >= :from " +
            "GROUP BY function('date', a.eventTimestamp) " +
            "ORDER BY function('date', a.eventTimestamp)")
