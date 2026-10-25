@@ -1112,6 +1112,19 @@ class LaborServiceImplTest {
         elsewhere.setDomesticViolenceDetails("Disclosed at booking");
         elsewhere.setPsychosocialNotes("Social worker referral");
         historiesOnRecord(elsewhere);
+        // The unscoped patient-wide readers would hand back the other hospital's
+        // record, as the real queries do: a fallback to any of them must turn
+        // this test red, not pass on Mockito's empty default.
+        lenient().when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdOrderByVersionDesc(eq(patientId), any()))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdOrderByRecordedDateDesc(patientId))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findAllVersionsByPatientId(patientId)).thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientOrderByRecordedDateDesc(patient))
+            .thenReturn(List.of(elsewhere));
+        lenient().when(maternalHistoryRepository.findByPatientIdAndVersion(eq(patientId), any()))
+            .thenReturn(Optional.of(elsewhere));
         when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
 
         // Not linked: her dated pregnancy elsewhere is invisible here, so an estimate is needed.
@@ -1137,6 +1150,12 @@ class LaborServiceImplTest {
         assertThat(saved.getValue().getMaternalHistory()).isSameAs(opened);
         verify(reachRecorder, never()).recordReach(any(), any(), any(), any(),
             org.mockito.ArgumentMatchers.argThat(reach -> reach != null && !reach.isEmpty()), any());
+        verify(maternalHistoryRepository, never()).findCurrentByPatientId(any());
+        verify(maternalHistoryRepository, never()).findByPatientIdOrderByVersionDesc(any(), any());
+        verify(maternalHistoryRepository, never()).findByPatientIdOrderByRecordedDateDesc(any());
+        verify(maternalHistoryRepository, never()).findAllVersionsByPatientId(any());
+        verify(maternalHistoryRepository, never()).findByPatientOrderByRecordedDateDesc(any());
+        verify(maternalHistoryRepository, never()).findByPatientIdAndVersion(any(), any());
     }
 
     /**
