@@ -1386,7 +1386,7 @@ public class UserServiceImpl implements UserService {
         if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
             return List.of();
         }
-        int bounded = Math.min(Math.max(size, 1), MAX_CHAT_RECIPIENTS);
+        int bounded = Math.clamp(size, 1, MAX_CHAT_RECIPIENTS);
         Pageable pageable = PageRequest.of(0, bounded, Sort.by("lastName", "firstName"));
         return userRepository.findStaffDirectoryPaged(
                 !scope.everyone(), directoryHospitals(scope), false, false, pageable)

@@ -36,8 +36,8 @@ class UserDirectoryAuthorizationTest {
             assertThat(gate.value()).isEqualTo("hasAnyAuthority(" + SecurityConstants.USER_DIRECTORY_AUTHORITIES + ")");
         }
         List<String> admitted = Arrays.asList(SecurityConstants.authorities(SecurityConstants.USER_DIRECTORY_AUTHORITIES));
-        assertThat(admitted).containsExactlyInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN");
-        assertThat(admitted).doesNotContainAnyElementsOf(TESTED_STAFF);
+        assertThat(admitted).containsExactlyInAnyOrder("ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN")
+            .doesNotContainAnyElementsOf(TESTED_STAFF);
     }
 
     @Test

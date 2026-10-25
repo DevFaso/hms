@@ -7,6 +7,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -35,17 +36,17 @@ import java.util.Set;
 public final class EncounterClosureRules {
 
     /** No clinician has seen the patient yet. */
-    public static final Set<EncounterStatus> NEVER_SEEN = EnumSet.of(
+    public static final Set<EncounterStatus> NEVER_SEEN = Collections.unmodifiableSet(EnumSet.of(
         EncounterStatus.SCHEDULED, EncounterStatus.ARRIVED, EncounterStatus.TRIAGE,
-        EncounterStatus.WAITING_FOR_PHYSICIAN);
+        EncounterStatus.WAITING_FOR_PHYSICIAN));
 
     /** The examination is complete: the visit may be checked out. */
-    public static final Set<EncounterStatus> CLINICALLY_COMPLETE = EnumSet.of(
-        EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+    public static final Set<EncounterStatus> CLINICALLY_COMPLETE = Collections.unmodifiableSet(EnumSet.of(
+        EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE));
 
     /** Reached through the clinician's own steps (start, complete examination). */
-    public static final Set<EncounterStatus> CLINICIAN_STATUSES = EnumSet.of(
-        EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+    public static final Set<EncounterStatus> CLINICIAN_STATUSES = Collections.unmodifiableSet(EnumSet.of(
+        EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE));
 
     /** The roles that conduct a consultation (the complete-examination endpoint's clinicians). */
     private static final Set<String> CLINICIAN_AUTHORITIES = Set.of("ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE");
@@ -56,7 +57,7 @@ public final class EncounterClosureRules {
     /** Whether the signed-in caller conducts consultations (doctor, nurse, midwife). */
     public static boolean callerIsClinician() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getAuthorities() == null) {
+        if (auth == null) {
             return false;
         }
         return auth.getAuthorities().stream()
@@ -104,23 +105,18 @@ public final class EncounterClosureRules {
         if (from == EncounterStatus.COMPLETED || from == EncounterStatus.CANCELLED) {
             throw new BusinessException("encounter.status.closed", from.name());
         }
-        switch (to) {
-            case COMPLETED -> {
-                if (!CLINICALLY_COMPLETE.contains(from)
-                        && !(from == EncounterStatus.IN_PROGRESS && clinicianCaller)) {
-                    throw new BusinessException("encounter.status.notCompletable", String.valueOf(from));
-                }
-            }
-            case AWAITING_RESULTS, READY_FOR_DISCHARGE -> {
-                if (isNeverSeen(from)) {
-                    throw new BusinessException("encounter.status.notSeen", String.valueOf(from), to.name());
-                }
-            }
-            case CANCELLED -> throw new BusinessException("encounter.status.cancelThroughCloseUnseen");
-            default -> {
-                // ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN, IN_PROGRESS, SCHEDULED: no closing rule.
-            }
+        if (to == EncounterStatus.CANCELLED) {
+            throw new BusinessException("encounter.status.cancelThroughCloseUnseen");
         }
+        if (to == EncounterStatus.COMPLETED && !CLINICALLY_COMPLETE.contains(from)
+                && !(from == EncounterStatus.IN_PROGRESS && clinicianCaller)) {
+            throw new BusinessException("encounter.status.notCompletable", String.valueOf(from));
+        }
+        if ((to == EncounterStatus.AWAITING_RESULTS || to == EncounterStatus.READY_FOR_DISCHARGE)
+                && isNeverSeen(from)) {
+            throw new BusinessException("encounter.status.notSeen", String.valueOf(from), to.name());
+        }
+        // ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN, IN_PROGRESS, SCHEDULED: no closing rule.
     }
 
     /** The desk (reception, administrators) never sets a clinical status by hand. */

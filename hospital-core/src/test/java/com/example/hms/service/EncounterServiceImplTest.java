@@ -134,8 +134,7 @@ class EncounterServiceImplTest {
      * existing check-out tests are the doctor's, so they run as a doctor. The
      * desk's refusals are in {@code EncounterCloseUnseenTest}.
      */
-    @BeforeEach
-    void signInAsDoctor() {
+    private static void signInAsDoctor() {
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("doctor1", "n/a",
                 org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
@@ -148,6 +147,7 @@ class EncounterServiceImplTest {
 
     @BeforeEach
     void setUpCheckoutDefaults() {
+        signInAsDoctor();
         // The services ask the one PatientSubjectReadGuard; it is built here over
         // this class's authUtils and patientRepository so ownership is decided
         // exactly as before, by those two.

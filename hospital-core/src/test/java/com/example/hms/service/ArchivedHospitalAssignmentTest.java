@@ -146,7 +146,8 @@ class ArchivedHospitalAssignmentTest {
     @Test
     @DisplayName("the QA call: POST /assignments, ROLE_NURSE in the archived hospital, is a 409 and nothing is saved")
     void nurseInArchivedHospital() {
-        assertThatThrownBy(() -> service.assignRole(grant(nurse, archived)))
+        var request = grant(nurse, archived);
+        assertThatThrownBy(() -> service.assignRole(request))
             .isInstanceOf(ConflictException.class)
             .hasMessage(FacilityAssignmentGuard.MSG_HOSPITAL_CLOSED);
         verify(assignmentRepository, never()).save(any());
@@ -156,7 +157,8 @@ class ArchivedHospitalAssignmentTest {
     @Test
     @DisplayName("a hospital on its way to the purge is closed as well")
     void pendingPurgeIsClosed() {
-        assertThatThrownBy(() -> service.assignRole(grant(nurse, pendingPurge)))
+        var request = grant(nurse, pendingPurge);
+        assertThatThrownBy(() -> service.assignRole(request))
             .isInstanceOf(ConflictException.class);
         verify(assignmentRepository, never()).save(any());
     }
@@ -164,7 +166,8 @@ class ArchivedHospitalAssignmentTest {
     @Test
     @DisplayName("account creation (admin-register and patient registration) is held to the same rule")
     void accountCreationPath() {
-        assertThatThrownBy(() -> service.assignRoleOnAccountCreation(grant(nurse, archived)))
+        var request = grant(nurse, archived);
+        assertThatThrownBy(() -> service.assignRoleOnAccountCreation(request))
             .isInstanceOf(ConflictException.class);
         verify(assignmentRepository, never()).save(any());
     }
@@ -196,7 +199,8 @@ class ArchivedHospitalAssignmentTest {
     @Test
     @DisplayName("multi-scope without skipConflicts: the whole request is the 409")
     void multiScopeWithoutSkipIsAConflict() {
-        assertThatThrownBy(() -> service.assignRoleToMultipleScopes(multi(false)))
+        var request = multi(false);
+        assertThatThrownBy(() -> service.assignRoleToMultipleScopes(request))
             .isInstanceOf(ConflictException.class);
     }
 
@@ -240,7 +244,8 @@ class ArchivedHospitalAssignmentTest {
         UserRoleHospitalAssignment pending = row(nurse, archived, false);
         when(assignmentRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
 
-        assertThatThrownBy(() -> service.regenerateAssignmentCode(pending.getId(), true))
+        UUID targetId = pending.getId();
+        assertThatThrownBy(() -> service.regenerateAssignmentCode(targetId, true))
             .isInstanceOf(ConflictException.class);
         verify(assignmentRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any());
@@ -254,7 +259,8 @@ class ArchivedHospitalAssignmentTest {
         UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
         dto.setActive(true);
 
-        assertThatThrownBy(() -> service.updateAssignment(existing.getId(), dto))
+        UUID targetId = existing.getId();
+        assertThatThrownBy(() -> service.updateAssignment(targetId, dto))
             .isInstanceOf(ConflictException.class);
         verify(assignmentRepository, never()).save(any());
     }
@@ -282,7 +288,8 @@ class ArchivedHospitalAssignmentTest {
     @Test
     @DisplayName("the JPA backstop refuses a new row at an archived hospital, inactive or not")
     void backstopOnPersist() {
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(row(nurse, archived, false), "onAssign"))
+        var assignment = row(nurse, archived, false);
+        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(assignment, "onAssign"))
             .isInstanceOf(ConflictException.class);
         assertThatCode(() -> ReflectionTestUtils.invokeMethod(row(nurse, suspended, false), "onAssign"))
             .doesNotThrowAnyException();

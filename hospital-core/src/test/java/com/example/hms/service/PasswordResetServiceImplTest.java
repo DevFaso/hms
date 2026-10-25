@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,7 +109,7 @@ class PasswordResetServiceImplTest {
         when(smsService.deliversRealSms()).thenReturn(true);
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
-        org.mockito.Mockito.doThrow(new IllegalStateException("IKODDI SMS send request failed with status 400"))
+        doThrow(new IllegalStateException("IKODDI SMS send request failed with status 400"))
             .when(smsService).send(any(), any());
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -119,7 +120,7 @@ class PasswordResetServiceImplTest {
     void qaD222_aMailFailureNeverReachesTheCaller() {
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        org.mockito.Mockito.doThrow(new IllegalStateException("smtp down"))
+        doThrow(new IllegalStateException("smtp down"))
             .when(emailService).sendPasswordResetEmail(any(), any());
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -301,7 +302,7 @@ class PasswordResetServiceImplTest {
             .user(user).tokenHash(rawToken.toLowerCase()).expiration(NOW.plusHours(1)).build();
         when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
         when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
-        org.mockito.Mockito.doThrow(new IllegalArgumentException("bad address"))
+        doThrow(new IllegalArgumentException("bad address"))
             .when(emailService).sendPasswordResetConfirmationEmail(any(), any());
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.confirmReset(rawToken, "newPassword"));

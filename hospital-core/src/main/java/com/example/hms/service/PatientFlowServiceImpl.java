@@ -66,6 +66,22 @@ public class PatientFlowServiceImpl implements PatientFlowService {
         }
 
         // Populate from outpatient encounters (ENCOUNTER source)
+        addEncounterItems(flow, staffId);
+
+        // Populate from inpatient admissions (ADMISSION source)
+        for (Admission adm : admissionRepository.findActiveByAdmittingProvider(staffId)) {
+            String column = ADMISSION_STATUS_TO_COLUMN.get(adm.getStatus().name());
+            if (column == null) continue;
+            PatientFlowItemDTO item = buildAdmissionFlowItem(adm, column);
+            if (item != null) {
+                flow.get(column).add(item);
+            }
+        }
+
+        return flow;
+    }
+
+    private void addEncounterItems(Map<String, List<PatientFlowItemDTO>> flow, UUID staffId) {
         for (EncounterStatus es : EncounterStatus.values()) {
             String column = es.name();
             if (!flow.containsKey(column)) {
@@ -82,18 +98,6 @@ public class PatientFlowServiceImpl implements PatientFlowService {
                 }
             }
         }
-
-        // Populate from inpatient admissions (ADMISSION source)
-        for (Admission adm : admissionRepository.findActiveByAdmittingProvider(staffId)) {
-            String column = ADMISSION_STATUS_TO_COLUMN.get(adm.getStatus().name());
-            if (column == null) continue;
-            PatientFlowItemDTO item = buildAdmissionFlowItem(adm, column);
-            if (item != null) {
-                flow.get(column).add(item);
-            }
-        }
-
-        return flow;
     }
 
     private PatientFlowItemDTO buildEncounterFlowItem(Encounter enc, String column) {
