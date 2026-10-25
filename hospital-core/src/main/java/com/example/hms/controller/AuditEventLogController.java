@@ -26,9 +26,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import com.example.hms.controller.support.AuditEventTypeParams;
 import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.controller.support.StrictQueryParams;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -38,7 +39,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -48,6 +48,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @RestController
+@StrictQueryParams
 @WriteAudited(skip = true, reason = "writes here are audit-search housekeeping on the audit log itself")
 @RequestMapping("/audit-logs")
 @Validated
@@ -127,9 +128,11 @@ public class AuditEventLogController {
     @PreAuthorize(AUDIT_READ_ROLES)
     @Operation(summary = "Get All Audit Logs",
         description = "Retrieve the audit logs the caller may read, paginated. Optionally filtered by date range, "
-            + "event type and a free-text search, all applied by the server over every row (QA D794).")
+            + "event types and a free-text search, all applied by the server over every row (QA D794). "
+            + "eventType and eventTypes are the same filter (repeated or comma-separated; a row matches any). "
+            + "An unknown parameter or event type is a 400, never ignored (QA D801).")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Unknown event type")
+    @ApiResponse(responseCode = "400", description = "Unknown event type or unknown parameter")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
         @Parameter(description = "Start of date range (ISO 8601), e.g. 2024-01-01T00:00:00")
         @RequestParam(required = false)
@@ -137,21 +140,23 @@ public class AuditEventLogController {
         @Parameter(description = "End of date range (ISO 8601), e.g. 2024-12-31T23:59:59")
         @RequestParam(required = false)
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
-        @Parameter(description = "Only this event type, e.g. USER_CREATE")
-        @RequestParam(required = false) String eventType,
+        @Parameter(description = "Only these event types, e.g. USER_CREATE (repeated or comma-separated)")
+        @RequestParam(required = false) List<String> eventType,
+        @Parameter(description = "Same filter as eventType; both may be given and a row matches any value")
+        @RequestParam(required = false) List<String> eventTypes,
         @Parameter(description = "Free text matched against the actor, description, entity type and resource name")
         @RequestParam(required = false) @Size(max = MAX_SEARCH_LENGTH) String search,
         @PageableDefault(size = 20) Pageable pageable
     ) {
-        AuditEventType type = parseEventType(eventType);
+        Set<AuditEventType> types = AuditEventTypeParams.parse(eventType, eventTypes);
         Specification<AuditEventLog> filter = AuditEventLogSpecifications.between(fromDate, toDate)
-            .and(AuditEventLogSpecifications.ofType(type))
+            .and(AuditEventLogSpecifications.ofTypes(types))
             .and(AuditEventLogSpecifications.matching(search));
         Set<UUID> scope = auditScope();
         if (scope != null) {
             return ResponseEntity.ok(scopedPage(scope, filter, pageable));
         }
-        if (type != null || (search != null && !search.isBlank())) {
+        if (!types.isEmpty() || (search != null && !search.isBlank())) {
             return ResponseEntity.ok(auditRepository.findAll(
                     AuditEventLogSpecifications.everyRow().and(filter), newestFirst(pageable))
                 .map(auditMapper::toDto));
@@ -161,18 +166,6 @@ public class AuditEventLogController {
         }
         Page<AuditEventLog> page = auditRepository.findAll(pageable);
         return ResponseEntity.ok(page.map(auditMapper::toDto));
-    }
-
-    /** A blank type is no filter; an unknown one is the caller's error (400), never "every row". */
-    private static AuditEventType parseEventType(String eventType) {
-        if (eventType == null || eventType.isBlank()) {
-            return null;
-        }
-        try {
-            return AuditEventType.valueOf(eventType.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException e) {
-            throw new BusinessException("audit.eventType.invalid", eventType.trim());
-        }
     }
 
     @GetMapping("/hospital/{hospitalId}")
@@ -256,35 +249,44 @@ public class AuditEventLogController {
 
     @GetMapping("/event-type-status")
     @PreAuthorize(AUDIT_READ_ROLES)
-    @Operation(summary = "Get Audit Logs by Event Type (with optional status)", description = "Retrieve audit logs filtered by event type and optionally by status.")
+    @Operation(summary = "Get Audit Logs by Event Type (with optional status)",
+        description = "Retrieve audit logs filtered by event types and optionally by status. eventType and "
+            + "eventTypes are the same filter (repeated or comma-separated); at least one value is required.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
-    @ApiResponse(responseCode = "400", description = "Invalid audit event type or status")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid audit event type, invalid status, unknown parameter")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByEventTypeAndStatus(
-        @RequestParam String eventType,
+        @RequestParam(required = false) List<String> eventType,
+        @RequestParam(required = false) List<String> eventTypes,
         @RequestParam(required = false) String status,
         @PageableDefault(size = 20) Pageable pageable) {
 
+        Set<AuditEventType> types = AuditEventTypeParams.parse(eventType, eventTypes);
+        if (types.isEmpty()) {
+            // This endpoint IS the event-type filter: none named is not "every row".
+            throw new BusinessException("audit.eventType.required");
+        }
+        AuditStatus parsedStatus = parseStatus(status);
+        Specification<AuditEventLog> filter = AuditEventLogSpecifications.ofTypes(types, parsedStatus);
+        Set<UUID> scope = auditScope();
+        if (scope != null) {
+            return ResponseEntity.ok(scopedPage(scope, filter, pageable));
+        }
+        return ResponseEntity.ok(auditRepository.findAll(
+                AuditEventLogSpecifications.everyRow().and(filter), newestFirst(pageable))
+            .map(auditMapper::toDto));
+    }
+
+    /** A blank status is no filter; an unknown one is the caller's error, in their language. */
+    private static AuditStatus parseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
         try {
-            AuditEventType parsedType = AuditEventType.valueOf(eventType.trim().toUpperCase());
-
-            AuditStatus parsedStatus = null;
-            if (status != null && !status.isBlank()) {
-                parsedStatus = AuditStatus.valueOf(status.trim().toUpperCase());
-            }
-
-            Set<UUID> scope = auditScope();
-            if (scope != null) {
-                return ResponseEntity.ok(scopedPage(scope,
-                    AuditEventLogSpecifications.byEventType(parsedType, parsedStatus), pageable));
-            }
-            Page<AuditEventLog> page = (parsedStatus == null)
-                ? auditRepository.findByEventType(parsedType, pageable)
-                : auditRepository.findByEventTypeAndStatus(parsedType, parsedStatus, pageable);
-
-            return ResponseEntity.ok(page.map(auditMapper::toDto));
-
+            return AuditStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid eventType or status provided.");
+            String value = status.trim();
+            throw new BusinessException("audit.status.invalid",
+                value.length() <= 64 ? value : value.substring(0, 64) + "…");
         }
     }
 

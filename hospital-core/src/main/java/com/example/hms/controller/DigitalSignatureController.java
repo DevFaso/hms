@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.SignatureType;
 import com.example.hms.payload.dto.signature.SignatureAuditEntryDTO;
 import com.example.hms.payload.dto.signature.SignatureRequestDTO;
@@ -141,6 +142,7 @@ public class DigitalSignatureController {
      * Get audit trail for a signature
      */
     @GetMapping("/{signatureId}/audit-trail")
+    @StrictQueryParams
     @PreAuthorize("hasAnyRole('DOCTOR', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get signature audit trail", 
         description = "Retrieve complete audit trail showing all actions performed on a signature")

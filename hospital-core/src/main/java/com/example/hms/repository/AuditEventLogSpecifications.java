@@ -85,9 +85,17 @@ public final class AuditEventLogSpecifications {
         };
     }
 
-    /** {@code eventType} alone; a null type matches everything. */
-    public static Specification<AuditEventLog> ofType(AuditEventType type) {
-        return (root, query, cb) -> type == null ? cb.conjunction() : cb.equal(root.get(EVENT_TYPE), type);
+    /** Any of {@code types} (QA D801); a null or empty set matches everything. */
+    public static Specification<AuditEventLog> ofTypes(Set<AuditEventType> types) {
+        return (root, query, cb) -> types == null || types.isEmpty()
+            ? cb.conjunction()
+            : root.get(EVENT_TYPE).in(types);
+    }
+
+    /** Any of {@code types}, and {@code status} when one is given. */
+    public static Specification<AuditEventLog> ofTypes(Set<AuditEventType> types, AuditStatus status) {
+        Specification<AuditEventLog> byType = ofTypes(types);
+        return status == null ? byType : byType.and((root, query, cb) -> cb.equal(root.get("status"), status));
     }
 
     private static String escapeLike(String term) {
@@ -111,12 +119,6 @@ public final class AuditEventLogSpecifications {
 
     public static Specification<AuditEventLog> byUser(UUID userId) {
         return (root, query, cb) -> cb.equal(root.get("user").get("id"), userId);
-    }
-
-    public static Specification<AuditEventLog> byEventType(AuditEventType type, AuditStatus status) {
-        return (root, query, cb) -> status == null
-            ? cb.equal(root.get(EVENT_TYPE), type)
-            : cb.and(cb.equal(root.get(EVENT_TYPE), type), cb.equal(root.get("status"), status));
     }
 
     public static Specification<AuditEventLog> byTarget(String entityType, String resourceId) {

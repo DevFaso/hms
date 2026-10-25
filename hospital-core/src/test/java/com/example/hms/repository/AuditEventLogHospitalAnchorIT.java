@@ -139,9 +139,22 @@ class AuditEventLogHospitalAnchorIT {
     void theEventTypeFilterOnTheHospitalPageFindsTheSystemRow() {
         Page<AuditEventLog> page = repository.findAll(
             AuditEventLogSpecifications.anchoredAt(Set.of(hospitalA.getId()))
-                .and(AuditEventLogSpecifications.ofType(AuditEventType.INVOICE_UPDATED)), FIRST_PAGE);
+                .and(AuditEventLogSpecifications.ofTypes(Set.of(AuditEventType.INVOICE_UPDATED))), FIRST_PAGE);
 
         assertThat(ids(page)).containsExactly(v229RowA.getId());
+    }
+
+    @Test
+    @DisplayName("D801: several event types match any of them; none named matches every row")
+    void severalEventTypesMatchAnyOfThem() {
+        Page<AuditEventLog> two = repository.findAll(
+            AuditEventLogSpecifications.everyRow().and(AuditEventLogSpecifications.ofTypes(
+                Set.of(AuditEventType.INVOICE_UPDATED, AuditEventType.USER_CREATE), AuditStatus.SUCCESS)), FIRST_PAGE);
+        Page<AuditEventLog> none = repository.findAll(
+            AuditEventLogSpecifications.everyRow().and(AuditEventLogSpecifications.ofTypes(Set.of())), FIRST_PAGE);
+
+        assertThat(ids(two)).containsExactlyInAnyOrder(v229RowA.getId(), v229RowB.getId(), userRowA.getId());
+        assertThat(ids(none)).contains(v229RowA.getId(), v229RowB.getId(), userRowA.getId(), platformRow.getId());
     }
 
     @Test

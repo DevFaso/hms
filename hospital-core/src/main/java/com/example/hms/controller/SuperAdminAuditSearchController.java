@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.AuditEventTypeParams;
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditSource;
 import com.example.hms.enums.AuditStatus;
@@ -26,7 +28,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.EnumSet;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -36,6 +37,7 @@ import java.util.UUID;
  * optional; results are paged and sorted by eventTimestamp desc by default.
  */
 @RestController
+@StrictQueryParams
 @RequestMapping("/super-admin/audit-search")
 @RequiredArgsConstructor
 @Tag(name = "Super Admin Audit Search",
@@ -52,9 +54,10 @@ public class SuperAdminAuditSearchController {
     public ResponseEntity<AuditSearchPageDTO> search(
         @RequestParam(required = false) UUID userId,
         @RequestParam(required = false) String userName,
-        @RequestParam(required = false) List<AuditEventType> eventTypes,
-        // QA D798: the singular form was silently ignored and every row came back.
-        @RequestParam(required = false) AuditEventType eventType,
+        // QA D798/D801: one filter under two names, read by AuditEventTypeParams
+        // exactly as /audit-logs reads it (repeated or comma-separated, any match).
+        @RequestParam(required = false) List<String> eventTypes,
+        @RequestParam(required = false) List<String> eventType,
         @RequestParam(required = false) AuditStatus status,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID organizationId,
@@ -69,7 +72,7 @@ public class SuperAdminAuditSearchController {
         Pageable pageable
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, withSingular(eventTypes, eventType), status, hospitalId, organizationId,
+            userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
             impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
         return ResponseEntity.ok(service.search(filter, pageable));
     }
@@ -77,20 +80,12 @@ public class SuperAdminAuditSearchController {
     /**
      * QA D798: {@code eventType} (singular) is the same filter as
      * {@code eventTypes}; both may be given and the row matches any of them.
-     * An unknown value fails conversion (400), never widens to every row.
+     * An unknown value is a translated 400 naming it, never every row.
+     * {@code null} when none was named: the service reads that as no filter.
      */
-    private static List<AuditEventType> withSingular(List<AuditEventType> eventTypes, AuditEventType eventType) {
-        if (eventType == null) {
-            return eventTypes;
-        }
-        List<AuditEventType> merged = new ArrayList<>();
-        if (eventTypes != null) {
-            merged.addAll(eventTypes);
-        }
-        if (!merged.contains(eventType)) {
-            merged.add(eventType);
-        }
-        return merged;
+    private static List<AuditEventType> eventTypeFilter(List<String> eventType, List<String> eventTypes) {
+        Set<AuditEventType> types = AuditEventTypeParams.parse(eventType, eventTypes);
+        return types.isEmpty() ? null : List.copyOf(types);
     }
 
     /**
@@ -105,9 +100,10 @@ public class SuperAdminAuditSearchController {
     public ResponseEntity<byte[]> exportCsv(
         @RequestParam(required = false) UUID userId,
         @RequestParam(required = false) String userName,
-        @RequestParam(required = false) List<AuditEventType> eventTypes,
-        // QA D798: the singular form was silently ignored and every row came back.
-        @RequestParam(required = false) AuditEventType eventType,
+        // QA D798/D801: one filter under two names, read by AuditEventTypeParams
+        // exactly as /audit-logs reads it (repeated or comma-separated, any match).
+        @RequestParam(required = false) List<String> eventTypes,
+        @RequestParam(required = false) List<String> eventType,
         @RequestParam(required = false) AuditStatus status,
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID organizationId,
@@ -120,7 +116,7 @@ public class SuperAdminAuditSearchController {
         @RequestParam(name = "maxRows", required = false, defaultValue = "10000") int maxRows
     ) {
         AuditSearchFilter filter = new AuditSearchFilter(
-            userId, userName, withSingular(eventTypes, eventType), status, hospitalId, organizationId,
+            userId, userName, eventTypeFilter(eventType, eventTypes), status, hospitalId, organizationId,
             impersonatorUserId, entityType, resourceId, fromDate, toDate, tenantRegion);
         byte[] csv = service.exportCsv(filter, maxRows);
         return ResponseEntity.ok()
