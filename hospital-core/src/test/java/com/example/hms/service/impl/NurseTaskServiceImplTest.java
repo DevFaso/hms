@@ -2970,7 +2970,7 @@ class NurseTaskServiceImplTest {
         // No false alarm on the paracetamol row, and one allergy read per patient.
         NurseMedicationTaskResponseDTO paraRow = tasks.stream().filter(t -> "Paracétamol".equals(t.getMedication())).findFirst().orElseThrow();
         assertThat(paraRow.getCdsAdvisories()).isEmpty();
-        verify(patientAllergyRepository, org.mockito.Mockito.times(1)).findByPatient_Id(patientId);
+        verify(patientAllergyRepository, times(1)).findByPatient_Id(patientId);
     }
 
     @Test
