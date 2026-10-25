@@ -84,9 +84,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private void addEncounterItems(Map<String, List<PatientFlowItemDTO>> flow, UUID staffId) {
         for (EncounterStatus es : EncounterStatus.values()) {
             String column = es.name();
-            if (!flow.containsKey(column)) {
-                flow.put(column, new ArrayList<>());
-            }
+            List<PatientFlowItemDTO> lane = flow.computeIfAbsent(column, k -> new ArrayList<>());
             for (Encounter enc : encounterRepository.findByStaff_IdAndStatus(staffId, es)) {
                 // QA D791: a prescription's anchor (COMPLETED) is not a visit on the board.
                 if (enc.isPrescriptionAnchor()) {
@@ -94,7 +92,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
                 }
                 PatientFlowItemDTO item = buildEncounterFlowItem(enc, column);
                 if (item != null) {
-                    flow.get(column).add(item);
+                    lane.add(item);
                 }
             }
         }
