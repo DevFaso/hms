@@ -116,6 +116,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final PrescriptionQueueClaimService queueClaimService;
     /** QA D156: an in-scope prescription is verified by a pharmacist before it is filled. */
     private final PharmacistVerificationService pharmacistVerificationService;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -514,7 +516,7 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D792: a fill prepared before the stay ended is not handed over
         // either, whatever the order's status still says (a row older than
         // the D757 discharge rule, or one V233 left for its prepared fill).
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
         controlledSubstanceGuard.requireDispensable(prescription);
@@ -933,7 +935,7 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D757: a ward order of a stay that has ended is not handed over,
         // even when it is still SIGNED (written before discharge closed its
         // orders, or a row older than that rule). A take-home order is.
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
 

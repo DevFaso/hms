@@ -38,7 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       stay, and an emergency-department order carried over to it, too;</li>
  *   <li>a take-home order, an order of a stay still in progress, an
  *       outpatient order, an already dispensed one and orders held by a
- *       prepared fill or an open partner routing are left alone;</li>
+ *       prepared fill or an open partner routing are left alone, the held
+ *       ones counted by shape in the NOTICE;</li>
  *   <li>a second run changes nothing.</li>
  * </ul>
  */
@@ -188,7 +189,42 @@ class EndedStayWardOrderMigrationIT {
             assertThat(status(stmt, 15)).isEqualTo("SIGNED");
             assertThat(status(stmt, 16)).isEqualTo("SIGNED");
             assertThat(status(stmt, 17)).isEqualTo("SIGNED");
-            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued, 2 left"));
+            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued, 2 left")
+                && n.contains("(closed_stay_encounter 2, open_stay_encounter 0, "
+                    + "unlinked_inpatient 0, emergency_carry_over 0)"));
+            assertThat(auditCount(stmt)).isZero();
+        }
+    }
+
+    @Test
+    void heldOrdersAreLeftAloneAndCountedByShape() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAdmission(stmt, 1, "DISCHARGED", ADMITTED, DISCHARGED);
+            // A linked stay encounter left open although its admission is discharged.
+            plantEncounter(stmt, 4, "INPATIENT", "IN_PROGRESS", id(1, "aaaa"), null);
+            plantPrescription(stmt, 30, 4, "SIGNED", false, "2026-10-24 04:30:00");
+            plantDispense(stmt, 30, "PENDING");
+            // A closed stay encounter, offered to a partner.
+            plantEncounter(stmt, 1, "INPATIENT", "COMPLETED", id(1, "aaaa"), null);
+            plantPrescription(stmt, 31, 1, "TRANSMITTED", false, "2026-10-24 04:31:00");
+            plantRouting(stmt, 31, "PENDING");
+            // An unlinked INPATIENT encounter.
+            plantEncounter(stmt, 2, "INPATIENT", "IN_PROGRESS", null, null);
+            plantPrescription(stmt, 32, 2, "SIGNED", false, "2026-10-24 04:32:00");
+            plantDispense(stmt, 32, "PENDING");
+            // The emergency visit carried over to the stay.
+            plantEncounter(stmt, 3, "EMERGENCY", "IN_PROGRESS", null, null);
+            plantPrescription(stmt, 33, 3, "SIGNED", false, "2026-10-24 02:00:00");
+            plantRouting(stmt, 33, "ACCEPTED");
+
+            List<String> notices = runV233(stmt);
+
+            for (int rx = 30; rx <= 33; rx++) {
+                assertThat(status(stmt, rx)).as("order %d", rx).isNotEqualTo("DISCONTINUED");
+            }
+            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued, 4 left")
+                && n.contains("(closed_stay_encounter 1, open_stay_encounter 1, "
+                    + "unlinked_inpatient 1, emergency_carry_over 1)"));
             assertThat(auditCount(stmt)).isZero();
         }
     }

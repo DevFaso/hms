@@ -72,6 +72,11 @@ class StockOutRoutingServiceImplTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 
@@ -355,6 +360,21 @@ class StockOutRoutingServiceImplTest {
         assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
                 .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review): any order the ended-stay guard refuses is not routed, printed or back-ordered")
+    void anyShapeTheGuardRefusesIsNotRoutable() {
+        prescription.setEncounter(null);
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        org.mockito.Mockito.doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+        String stayEnded = com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded");
+
+        assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
         verify(routingDecisionRepository, never()).save(any());
     }
 

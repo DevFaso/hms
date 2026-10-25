@@ -107,7 +107,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.pharmacy.PharmacistVerificationService
         pharmacistVerificationService =
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
-                null, null, null, java.time.Clock.systemUTC());
+                null, null, null, java.time.Clock.systemUTC(),
+                new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
 
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;

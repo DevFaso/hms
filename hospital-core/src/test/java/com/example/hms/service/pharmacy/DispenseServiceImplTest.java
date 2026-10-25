@@ -117,7 +117,7 @@ class DispenseServiceImplTest {
     /** QA D156: real, so the tests exercise the rule and not a stub of it. */
     @org.mockito.Spy
     private PharmacistVerificationService pharmacistVerificationService =
-        new PharmacistVerificationService(null, null, null, FIXED_CLOCK);
+        new PharmacistVerificationService(null, null, null, FIXED_CLOCK, new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
 
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
@@ -133,6 +133,11 @@ class DispenseServiceImplTest {
     @Mock private ControlledStockWitness controlledStockWitness;
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
 
     @InjectMocks
     private DispenseServiceImpl service;

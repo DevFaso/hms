@@ -123,6 +123,11 @@ class DispenseReadyForCollectionTest {
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -722,6 +727,19 @@ class DispenseReadyForCollectionTest {
             // A legacy row: still SIGNED on its closed stay encounter (V233
             // leaves an order with a prepared fill for the application).
             prescription.setEncounter(closedStayEncounter());
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review): a fill V233 held on any ended-stay shape is not handed over")
+        void heldOrderOfAnyEndedStayShapeIsNotHandedOver() {
+            prescription.setEncounter(null);
+            org.mockito.Mockito.doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
             stubLocked(preparedFill());
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))

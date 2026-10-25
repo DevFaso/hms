@@ -84,6 +84,8 @@ public class PrescriptionQueueClaimService {
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final Clock clock;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     /** {@code pharmacy.work-queue.claim.enabled}; initialised for pure-unit tests. */
     @Value("${pharmacy.work-queue.claim.enabled:true}")
@@ -250,9 +252,12 @@ public class PrescriptionQueueClaimService {
         if (!DispenseServiceImpl.WORK_QUEUE_STATUSES.contains(prescription.getStatus())) {
             throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
         }
-        // QA D792: the queue leaves out a ward order of an ended stay
-        // (PrescriptionRepository.findWorkQueue), so it is not claimable by id.
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+        // QA D792: a ward order of an ended stay is not work to pick up. The
+        // queue leaves out the closed-stay-encounter shape
+        // (PrescriptionRepository.findWorkQueue); the other shapes V233 held
+        // (a prepared fill, an open partner routing) stay listed so the fill
+        // can be cancelled, but none of them is claimable.
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
         }
         if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {

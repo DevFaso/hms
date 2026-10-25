@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.model.Admission;
@@ -68,6 +69,72 @@ public final class InpatientOrderEnd {
         return encounter != null && encounter.getAdmissionId() != null
             && (encounter.getStatus() == EncounterStatus.COMPLETED
                 || encounter.getStatus() == EncounterStatus.CANCELLED);
+    }
+
+    /**
+     * QA D792 (#953 review): the rule migration V233 ends an order by, for a
+     * caller that has the patient's stays at the order's hospital. Wider than
+     * {@link #endedWithItsStay}, which needs no other row but sees only a
+     * closed stay encounter: an order left live by a stay that ended before
+     * the discharge ended its orders (QA D757), or one V233 held for its
+     * prepared fill or open partner routing, can have any shape the discharge
+     * rule ({@link #orderOfStay}) ends, and none of them may be handed over,
+     * verified, claimed, routed or sent by SMS. Not take-home, and one of:
+     * <ol>
+     *   <li>filed on a stay's own encounter (V193) that is closed, or whose
+     *       admission is DISCHARGED or CANCELLED;</li>
+     *   <li>filed on no encounter, or on an INPATIENT encounter with no
+     *       admission link, and written at the order's hospital between the
+     *       admission and the discharge of a stay that has ended;</li>
+     *   <li>filed on an EMERGENCY encounter with no admission link that was
+     *       still open at the admission of a stay that has ended, written at
+     *       most 24 hours before that admission and before its discharge.</li>
+     * </ol>
+     */
+    public static boolean endedWithAnEndedStay(Prescription rx, List<Admission> stays) {
+        if (rx == null || rx.isTakeHome()) {
+            return false;
+        }
+        if (endedWithItsStay(rx)) {
+            return true;
+        }
+        if (stays == null || stays.isEmpty()) {
+            return false;
+        }
+        Encounter encounter = rx.getEncounter();
+        if (encounter != null && encounter.getAdmissionId() != null) {
+            for (Admission stay : stays) {
+                if (stay != null && encounter.getAdmissionId().equals(stay.getId())
+                    && sameHospital(rx, stay)
+                    && (stay.getStatus() == AdmissionStatus.DISCHARGED
+                        || stay.getStatus() == AdmissionStatus.CANCELLED)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        boolean emergency = encounter != null && encounter.getEncounterType() == EncounterType.EMERGENCY;
+        if (encounter != null && !emergency && encounter.getEncounterType() != EncounterType.INPATIENT) {
+            return false;
+        }
+        LocalDateTime written = rx.getCreatedAt();
+        if (written == null) {
+            return false;
+        }
+        for (Admission stay : stays) {
+            if (stay == null || !sameHospital(rx, stay)) continue;
+            LocalDateTime from = stay.getAdmissionDateTime();
+            LocalDateTime to = stay.getActualDischargeDateTime();
+            if (from == null || to == null || written.isAfter(to)) continue;
+            if (!emergency) {
+                if (!written.isBefore(from)) return true;
+                continue;
+            }
+            LocalDateTime checkout = encounter.getCheckoutTimestamp();
+            boolean openAtAdmission = checkout == null || !checkout.isBefore(from);
+            if (openAtAdmission && !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER))) return true;
+        }
+        return false;
     }
 
     /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */

@@ -71,6 +71,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
      * confirm) never touch it: they do not hold the prescription row lock.
      */
     private final PrescriptionQueueClaimService queueClaimService;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -690,7 +692,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // QA D792: a ward order of an ended stay is not sent to a partner,
         // printed for the patient or back-ordered: the patient has gone home
         // without it, and only a take-home order goes with them.
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
     }

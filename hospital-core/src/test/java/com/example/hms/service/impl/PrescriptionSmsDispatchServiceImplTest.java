@@ -86,6 +86,11 @@ class PrescriptionSmsDispatchServiceImplTest {
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
 
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
+
     @InjectMocks private PrescriptionSmsDispatchServiceImpl service;
 
     private UUID prescriptionId;
@@ -549,6 +554,22 @@ class PrescriptionSmsDispatchServiceImplTest {
         verify(smsService, never()).send(anyString(), anyString());
         verify(routingDecisionRepository, never()).save(any());
         assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review): any order the ended-stay guard refuses (an open stay encounter of a discharged admission...) is not dispatched")
+    void dispatch_rejectsAnyShapeTheGuardRefuses() {
+        rx.setEncounter(null);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        org.mockito.Mockito.doReturn(true).when(endedStayOrders).endedWithAStay(rx);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+        verify(smsService, never()).send(anyString(), anyString());
     }
 
     @Test

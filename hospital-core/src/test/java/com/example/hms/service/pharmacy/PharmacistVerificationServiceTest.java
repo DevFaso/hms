@@ -56,7 +56,7 @@ class PharmacistVerificationServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new PharmacistVerificationService(
-            prescriptionRepository, userRepository, roleValidator, clock);
+            prescriptionRepository, userRepository, roleValidator, clock, new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class)));
 
         hospitalId = UUID.randomUUID();
         pharmacistId = UUID.randomUUID();

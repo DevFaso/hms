@@ -125,6 +125,8 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
      * (TRANSMISSION_FAILED) keeps it, the order being the hospital's again.
      */
     private final PrescriptionQueueClaimService queueClaimService;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     /** The work-queue gate: these roles take a claim over by acting on it (G13). */
     private static final List<String> QUEUE_ROLES = List.of(
@@ -264,14 +266,14 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
         }
     }
 
-    private static void requireDispatchable(Prescription rx) {
+    private void requireDispatchable(Prescription rx) {
         if (!DISPATCHABLE_STATUSES.contains(rx.getStatus())) {
             throw new BusinessException(
                 "Only a signed prescription, or one a pharmacy has been offered, refused or placed on "
                     + "back order, can be dispatched by SMS; this one is " + rx.getStatus() + ".");
         }
         // QA D792: nor a ward order of an ended stay (the rule the counter applies).
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
+        if (endedStayOrders.endedWithAStay(rx)) {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
     }

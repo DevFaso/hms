@@ -1,8 +1,8 @@
 -- V233 (QA D792, residual of D757): ward orders of stays discharged before
 -- the D757 fix (a discharge now discontinues its stay's ward orders) are
 -- still live: SIGNED, PARTIALLY_FILLED or DRAFT on a stay that has ended,
--- among them morphine. The pharmacy queue and the counter already refuse
--- them on read; this ends them in the data too, as the discharge would have.
+-- among them morphine. The pharmacy refuses them on read and on every action;
+-- this ends them in the data too, as the discharge would have.
 --
 -- An order is ended when ALL hold:
 --   * it is live: DRAFT, PENDING_SIGNATURE, SIGNED, TRANSMITTED,
@@ -10,7 +10,8 @@
 --     PARTIALLY_FILLED (StayOrderDiscontinuation.LIVE_STATUSES);
 --   * it is NOT marked take_home (V231): a take-home order outlives its stay;
 --   * it belongs to a stay that has ended, by the rule the discharge applies
---     (InpatientOrderEnd.orderOfStay / endedWithItsStay):
+--     (InpatientOrderEnd.orderOfStay; InpatientOrderEnd.endedWithAnEndedStay
+--     is this same rule in Java):
 --       1. filed on a stay's own encounter (V193 admission_id) and that
 --          encounter is closed (COMPLETED / CANCELLED) or its admission is
 --          DISCHARGED / CANCELLED; or
@@ -20,12 +21,24 @@
 --       3. filed on an EMERGENCY encounter still open at that admission,
 --          written at most 24 hours before it and before the discharge (the
 --          department's orders carry on to the ward, QA D702/D712).
+--   Every order names an encounter: clinical.prescriptions.encounter_id is
+--   NOT NULL since V1, and an order written with no encounter is filed on the
+--   patient's open stay encounter, or an outpatient anchor, before it is saved
+--   (PrescriptionServiceImpl.resolveEncounterContext). So the inner join
+--   leaves no order out.
 --
--- Left alone, and counted in the NOTICE: an order with a prepared fill
--- waiting at the counter (a PENDING dispense holds stock and maybe a payment)
--- or an open partner routing decision (PENDING / ACCEPTED). Voiding those has
--- side effects (stock back on the shelf, payment void, the partner told) that
--- only the application performs; the read-side guards refuse them meanwhile.
+-- Left alone, and counted in the NOTICE by shape: an order with a prepared
+-- fill waiting at the counter (a PENDING dispense holds stock and maybe a
+-- payment) or an open partner routing decision (PENDING / ACCEPTED). Voiding
+-- those has side effects (stock back on the shelf, payment void, the partner
+-- told) that only the application performs. Meanwhile EndedStayOrderGuard,
+-- which applies the rule above to every shape, refuses each of them at the
+-- hand-over, dispense, verification, queue claim, routing and SMS dispatch;
+-- the prepared fill stays cancellable at the counter. The NOTICE shapes:
+--   closed_stay_encounter  rule 1, encounter closed;
+--   open_stay_encounter    rule 1, encounter open, admission ended;
+--   unlinked_inpatient     rule 2, INPATIENT encounter;
+--   emergency_carry_over   rule 3.
 --
 -- Each ended order: status DISCONTINUED, the reason the discharge writes
 -- (withdrawal_reason, plaintext is read as is by EncryptedStringConverter;
@@ -40,9 +53,20 @@ DO $$
 DECLARE
     ended_count INTEGER;
     held_count INTEGER;
+    held_closed INTEGER;
+    held_open INTEGER;
+    held_inpatient INTEGER;
+    held_emergency INTEGER;
 BEGIN
     WITH candidates AS (
-        SELECT p.id, p.status AS old_status
+        SELECT p.id, p.status AS old_status,
+               CASE
+                   WHEN e.admission_id IS NOT NULL
+                        AND e.status IN ('COMPLETED', 'CANCELLED') THEN 'closed_stay_encounter'
+                   WHEN e.admission_id IS NOT NULL THEN 'open_stay_encounter'
+                   WHEN e.encounter_type = 'INPATIENT' THEN 'unlinked_inpatient'
+                   ELSE 'emergency_carry_over'
+               END AS shape
           FROM clinical.prescriptions p
           JOIN clinical.encounters e ON e.id = p.encounter_id
          WHERE p.take_home = FALSE
@@ -78,7 +102,7 @@ BEGIN
                                      OR e.checkout_timestamp >= a.admission_date_time)))
            )
     ), held AS (
-        SELECT c.id
+        SELECT c.id, c.shape
           FROM candidates c
          WHERE EXISTS (SELECT 1
                          FROM clinical.dispenses d
@@ -113,10 +137,15 @@ BEGIN
           LEFT JOIN hospital.hospitals h ON h.id = x.hospital_id
         RETURNING 1
     )
-    SELECT (SELECT count(*) FROM audited), (SELECT count(*) FROM held)
-      INTO ended_count, held_count;
+    SELECT (SELECT count(*) FROM audited),
+           (SELECT count(*) FROM held),
+           (SELECT count(*) FROM held WHERE shape = 'closed_stay_encounter'),
+           (SELECT count(*) FROM held WHERE shape = 'open_stay_encounter'),
+           (SELECT count(*) FROM held WHERE shape = 'unlinked_inpatient'),
+           (SELECT count(*) FROM held WHERE shape = 'emergency_carry_over')
+      INTO ended_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
 
-    RAISE NOTICE 'V233: % ward order(s) of ended stays discontinued, % left for a prepared fill or an open partner routing',
-        ended_count, held_count;
+    RAISE NOTICE 'V233: % ward order(s) of ended stays discontinued, % left for a prepared fill or an open partner routing (closed_stay_encounter %, open_stay_encounter %, unlinked_inpatient %, emergency_carry_over %)',
+        ended_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
 END
 $$;
