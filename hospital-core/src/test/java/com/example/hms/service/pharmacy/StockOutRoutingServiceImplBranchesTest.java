@@ -77,6 +77,11 @@ class StockOutRoutingServiceImplBranchesTest {
     private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
         new com.example.hms.service.EndedStayOrderGuard(org.mockito.Mockito.mock(com.example.hms.repository.AdmissionRepository.class));
 
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
+
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 

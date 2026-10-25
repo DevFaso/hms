@@ -73,6 +73,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final PrescriptionQueueClaimService queueClaimService;
     /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
     private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its partner offer closes. */
+    private final com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -386,6 +388,11 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         Prescription prescription = decision.getPrescription();
+        // QA D792 (#953 review, round 2): a ward order of a stay that has
+        // ended is withdrawn now that its partner answers, accept or refuse;
+        // either answer would otherwise put it back in the work queue, where
+        // every action on it is refused. Then it closes as any withdrawn offer.
+        endOrderOfEndedStay(prescription, "Pharmacist-recorded partner " + (accepted ? "acceptance" : "refusal"));
         if (com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.isWithdrawn(prescription)) {
             // An offer left open from before the withdrawal: close it, move nothing.
             return routingMapper.toResponseDTO(withdrawnOrders.closeOffer(decision, prescription,
@@ -508,6 +515,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         // nothing a client types can be mistaken for the fact.
         decision.setPartnerNoShow(true);
         decision.setNoShowReason(words);
+        // QA D792 (#953 review, round 2): a no-show sends the order back to
+        // SIGNED in the queue; a ward order of a stay that has ended goes
+        // nowhere but DISCONTINUED (every queue action on it is refused).
+        endOrderOfEndedStay(prescription, "Partner no-show");
         if (com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.isWithdrawn(prescription)) {
             // Never back into the in-house queue: SIGNED is dispensable, and
             // the prescriber withdrew this order. The no-show stays recorded.
@@ -683,6 +694,16 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         BigDecimal dispensedToDate = dispenseRepository
                 .sumQuantityDispensedForPrescription(prescription.getId(), DispenseRepository.NOT_A_FILL);
         return FillAccounting.remaining(prescription, dispensedToDate);
+    }
+
+    /**
+     * QA D792 (#953 review, round 2): the partner offer was what kept a ward
+     * order of an ended stay live; once it closes the order is discontinued
+     * as the discharge would have (StayOrderDiscontinuation). A no-op for
+     * every other order.
+     */
+    private void endOrderOfEndedStay(Prescription prescription, String trigger) {
+        stayOrderDiscontinuation.discontinueIfStayEnded(prescription, roleValidator.getCurrentUserId(), trigger);
     }
 
     private void validateRoutableStatus(Prescription prescription) {

@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -47,6 +48,8 @@ import static org.mockito.Mockito.when;
 class PartnerExchangeServiceTest {
 
     private static final String PARTNER_PHONE = "+22670000000";
+
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
@@ -69,7 +72,7 @@ class PartnerExchangeServiceTest {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
                 channel, parser, auditEventLogService, prescriberNotifier,
-                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), "226");
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), stayOrderDiscontinuation, "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();
@@ -441,7 +444,7 @@ class PartnerExchangeServiceTest {
                 routingDecisionRepository, prescriptionRepository, channel, parser, auditEventLogService,
                 new PrescriberPharmacyNotifier(writer),
                 new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService,
-                        prescriberNotifier), "226");
+                        prescriberNotifier), stayOrderDiscontinuation, "226");
     }
 
     @Test
@@ -625,6 +628,47 @@ class PartnerExchangeServiceTest {
         assertThat(prescription.getPharmacyId()).isEqualTo(partner.getId());
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
         verify(prescriptionRepository, never()).save(any());
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    /** The order is a ward order of a stay that has ended: the discontinuation ends it. */
+    private void endsWithItsStay() {
+        when(stayOrderDiscontinuation.discontinueIfStayEnded(eq(prescription), isNull(), anyString()))
+                .thenAnswer(inv -> {
+                    prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+                    return true;
+                });
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review, round 2): a timed-out offer of a ward order of an ended stay ends the order, "
+            + "never PARTNER_REJECTED in the queue")
+    void timeoutOfAnEndedStayOrderEndsIt() {
+        prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        stubStaleDecision();
+        endsWithItsStay();
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.sweepTimeouts();
+
+        verify(stayOrderDiscontinuation).discontinueIfStayEnded(prescription, null, "Partner timeout");
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
+        verifyNoInteractions(prescriberNotifier);
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review, round 2): a partner SMS refusal of a ward order of an ended stay ends it")
+    void smsRefusalOfAnEndedStayOrderEndsIt() {
+        prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+        stubPrefixLookup(decision);
+        endsWithItsStay();
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.handleInboundReply(PARTNER_PHONE, "2 " + token);
+
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.CANCELLED);
         verifyNoInteractions(prescriberNotifier);
     }
 

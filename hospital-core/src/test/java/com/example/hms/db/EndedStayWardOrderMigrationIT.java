@@ -38,8 +38,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       stay, and an emergency-department order carried over to it, too;</li>
  *   <li>a take-home order, an order of a stay still in progress, an
  *       outpatient order, an already dispensed one and orders held by a
- *       prepared fill or an open partner routing are left alone, the held
+ *       prepared fill or an open partner offer are left alone, the held
  *       ones counted by shape in the NOTICE;</li>
+ *   <li>an open back order holds nothing: its order ends and it is
+ *       CANCELLED;</li>
  *   <li>a second run changes nothing.</li>
  * </ul>
  */
@@ -106,7 +108,7 @@ class EndedStayWardOrderMigrationIT {
                 assertThat(status(stmt, rx)).as("order %d", rx).isEqualTo("DISCONTINUED");
                 assertThat(withdrawalReason(stmt, rx)).isNotBlank();
             }
-            assertThat(notices).anyMatch(n -> n.contains("4 ward order(s) of ended stays discontinued, 0 left"));
+            assertThat(notices).anyMatch(n -> n.contains("4 ward order(s) of ended stays discontinued (0 open back order(s) cancelled), 0 left"));
 
             try (ResultSet rs = stmt.executeQuery("SELECT actor_type, user_id, event_type, status, "
                     + "target_entity_type, event_description, details FROM support.audit_event_logs "
@@ -189,7 +191,7 @@ class EndedStayWardOrderMigrationIT {
             assertThat(status(stmt, 15)).isEqualTo("SIGNED");
             assertThat(status(stmt, 16)).isEqualTo("SIGNED");
             assertThat(status(stmt, 17)).isEqualTo("SIGNED");
-            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued, 2 left")
+            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued (0 open back order(s) cancelled), 2 left")
                 && n.contains("(closed_stay_encounter 2, open_stay_encounter 0, "
                     + "unlinked_inpatient 0, emergency_carry_over 0)"));
             assertThat(auditCount(stmt)).isZero();
@@ -222,10 +224,44 @@ class EndedStayWardOrderMigrationIT {
             for (int rx = 30; rx <= 33; rx++) {
                 assertThat(status(stmt, rx)).as("order %d", rx).isNotEqualTo("DISCONTINUED");
             }
-            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued, 4 left")
+            assertThat(notices).anyMatch(n -> n.contains("0 ward order(s) of ended stays discontinued (0 open back order(s) cancelled), 4 left")
                 && n.contains("(closed_stay_encounter 1, open_stay_encounter 1, "
                     + "unlinked_inpatient 1, emergency_carry_over 1)"));
             assertThat(auditCount(stmt)).isZero();
+        }
+    }
+
+    /**
+     * #953 review, round 2: an open back order is no hold. Nobody outside is
+     * told of it and only a fill (which the guard refuses) would close it, so
+     * holding the order for it left it PENDING_STOCK in the work queue for
+     * good. The order ends and the back order is CANCELLED with it; a partner
+     * offer still holds.
+     */
+    @Test
+    void anOpenBackOrderIsNoHoldAndIsCancelledWithItsOrder() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            plantAdmission(stmt, 1, "DISCHARGED", ADMITTED, DISCHARGED);
+            // A linked stay encounter left open although its admission is discharged.
+            plantEncounter(stmt, 4, "INPATIENT", "IN_PROGRESS", id(1, "aaaa"), null);
+            plantPrescription(stmt, 40, 4, "PENDING_STOCK", false, "2026-10-24 04:30:00");
+            plantRouting(stmt, 40, "BACKORDER", "PENDING");
+            // The same shape, offered to a partner as well: the offer holds it.
+            plantPrescription(stmt, 41, 4, "PENDING_STOCK", false, "2026-10-24 04:31:00");
+            plantRouting(stmt, 41, "BACKORDER", "PENDING");
+            plantRouting(stmt, 41, "PARTNER", "PENDING");
+
+            List<String> notices = runV233(stmt);
+
+            assertThat(status(stmt, 40)).isEqualTo("DISCONTINUED");
+            assertThat(routingStatus(stmt, 40, "BACKORDER")).isEqualTo("CANCELLED");
+            assertThat(status(stmt, 41)).isEqualTo("PENDING_STOCK");
+            assertThat(routingStatus(stmt, 41, "BACKORDER")).isEqualTo("PENDING");
+            assertThat(routingStatus(stmt, 41, "PARTNER")).isEqualTo("PENDING");
+            assertThat(notices).anyMatch(n -> n.contains(
+                "1 ward order(s) of ended stays discontinued (1 open back order(s) cancelled), 1 left")
+                && n.contains("open_stay_encounter 1,"));
+            assertThat(auditCount(stmt)).isEqualTo(1);
         }
     }
 
@@ -304,9 +340,21 @@ class EndedStayWardOrderMigrationIT {
     }
 
     private static void plantRouting(Statement stmt, int rx, String status) throws SQLException {
+        plantRouting(stmt, rx, "PARTNER", status);
+    }
+
+    private static void plantRouting(Statement stmt, int rx, String type, String status) throws SQLException {
         replica(stmt, "INSERT INTO clinical.prescription_routing_decisions (prescription_id, routing_type, "
-            + "decided_by_user_id, decided_for_patient_id, status) VALUES ('" + rxId(rx) + "', 'PARTNER', '"
+            + "decided_by_user_id, decided_for_patient_id, status) VALUES ('" + rxId(rx) + "', '" + type + "', '"
             + STAFF + "', '" + PATIENT + "', '" + status + "')");
+    }
+
+    private static String routingStatus(Statement stmt, int rx, String type) throws SQLException {
+        try (ResultSet rs = stmt.executeQuery("SELECT status FROM clinical.prescription_routing_decisions "
+                + "WHERE prescription_id = '" + rxId(rx) + "' AND routing_type = '" + type + "'")) {
+            rs.next();
+            return rs.getString(1);
+        }
     }
 
     private static String status(Statement stmt, int rx) throws SQLException {

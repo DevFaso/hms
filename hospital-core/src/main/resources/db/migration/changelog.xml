@@ -3071,9 +3071,11 @@
 
     <!-- V233 (QA D792, residual of D757): live ward orders (not take-home) of
          stays that ended before discharge discontinued them are set
-         DISCONTINUED, with one SYSTEM audit row each; orders with a prepared
-         fill or an open partner routing are left to the application and
-         counted by shape. One DO block (splitStatements=false). Idempotent. -->
+         DISCONTINUED, with one SYSTEM audit row each (an open back order is
+         cancelled with its order); orders with a prepared fill or an open
+         partner offer are left to the application, which ends them when that
+         hold goes, and counted by shape. One DO block (splitStatements=false).
+         Idempotent. -->
     <changeSet id="V233-discontinue-ended-stay-ward-orders" author="hms-team" runOnChange="false">
         <sqlFile path="V233__discontinue_ended_stay_ward_orders.sql"
                  relativeToChangelogFile="true"

@@ -118,6 +118,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final PharmacistVerificationService pharmacistVerificationService;
     /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
     private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its prepared fill is cancelled. */
+    private final com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
     /**
      * Roadmap row 4 / T-68 — self-proxy used by {@link #createDispense} so the
@@ -570,7 +572,15 @@ public class DispenseServiceImpl implements DispenseService {
         if (locked.dispense().getStatus() != DispenseStatus.PENDING) {
             throw new ConflictException(MessageUtil.resolve(READY_NOT_PENDING));
         }
-        return dispenseMapper.toResponseDTO(preparedFillVoider.cancel(locked.dispense(), reason));
+        Dispense cancelled = preparedFillVoider.cancel(locked.dispense(), reason);
+        // QA D792 (#953 review, round 2): the prepared fill was what held a
+        // ward order of an ended stay live (migration V233 leaves such orders
+        // to the counter). With the fill gone nothing else would ever end it:
+        // it went back to SIGNED in the work queue with every action refused.
+        // It ends now, as the discharge would have ended it.
+        stayOrderDiscontinuation.discontinueIfStayEnded(locked.prescription(),
+                roleValidator.getCurrentUserId(), "prepared fill cancelled at the counter (" + reason.name() + ")");
+        return dispenseMapper.toResponseDTO(cancelled);
     }
 
     /**

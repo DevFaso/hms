@@ -29,18 +29,26 @@
 --
 -- Left alone, and counted in the NOTICE by shape: an order with a prepared
 -- fill waiting at the counter (a PENDING dispense holds stock and maybe a
--- payment) or an open partner routing decision (PENDING / ACCEPTED). Voiding
--- those has side effects (stock back on the shelf, payment void, the partner
--- told) that only the application performs. Meanwhile EndedStayOrderGuard,
--- which applies the rule above to every shape, refuses each of them at the
--- hand-over, dispense, verification, queue claim, routing and SMS dispatch;
--- the prepared fill stays cancellable at the counter. The NOTICE shapes:
+-- payment) or an open partner offer (a PARTNER routing decision PENDING /
+-- ACCEPTED). Voiding those has side effects (stock back on the shelf, payment
+-- void, the partner told) that only the application performs. Until then
+-- EndedStayOrderGuard, which applies the rule above to every shape, refuses
+-- each of them at the hand-over, dispense, verification, queue claim, routing
+-- and SMS dispatch. Each is ended by the application the moment its hold goes
+-- (StayOrderDiscontinuation.discontinueIfStayEnded): the pharmacist cancels the
+-- prepared fill at the counter (cancel-ready), or the partner offer is
+-- accepted, refused, timed out or recorded as a no-show. It then leaves the
+-- work queue DISCONTINUED, with the reason and audit row below.
+-- An open BACK ORDER is no hold (nobody outside is told, and only a fill,
+-- which the guard refuses, would close it): the order is ended and its open
+-- back-order decision CANCELLED with it. The NOTICE shapes:
 --   closed_stay_encounter  rule 1, encounter closed;
 --   open_stay_encounter    rule 1, encounter open, admission ended;
 --   unlinked_inpatient     rule 2, INPATIENT encounter;
 --   emergency_carry_over   rule 3.
 --
--- Each ended order: status DISCONTINUED, the reason the discharge writes
+-- Each ended order: status DISCONTINUED, its open back order CANCELLED (the
+-- decision's updated_at now), the reason the discharge writes
 -- (withdrawal_reason, plaintext is read as is by EncryptedStringConverter;
 -- a fixed sentence, no PHI), updated_at now. Audit trail: one
 -- support.audit_event_logs row per order, SYSTEM actor (V9), event
@@ -52,6 +60,7 @@
 DO $$
 DECLARE
     ended_count INTEGER;
+    back_order_count INTEGER;
     held_count INTEGER;
     held_closed INTEGER;
     held_open INTEGER;
@@ -111,6 +120,7 @@ BEGIN
             OR EXISTS (SELECT 1
                          FROM clinical.prescription_routing_decisions r
                         WHERE r.prescription_id = c.id
+                          AND r.routing_type = 'PARTNER'
                           AND r.status IN ('PENDING', 'ACCEPTED'))
     ), ended AS (
         UPDATE clinical.prescriptions p
@@ -121,6 +131,15 @@ BEGIN
          WHERE p.id = c.id
            AND NOT EXISTS (SELECT 1 FROM held h WHERE h.id = c.id)
         RETURNING p.id, p.hospital_id, c.old_status
+    ), back_orders_closed AS (
+        UPDATE clinical.prescription_routing_decisions r
+           SET status = 'CANCELLED',
+               updated_at = now()
+          FROM ended x
+         WHERE r.prescription_id = x.id
+           AND r.routing_type = 'BACKORDER'
+           AND r.status IN ('PENDING', 'ACCEPTED')
+        RETURNING 1
     ), audited AS (
         INSERT INTO support.audit_event_logs (
             id, created_at, updated_at, event_timestamp,
@@ -138,14 +157,15 @@ BEGIN
         RETURNING 1
     )
     SELECT (SELECT count(*) FROM audited),
+           (SELECT count(*) FROM back_orders_closed),
            (SELECT count(*) FROM held),
            (SELECT count(*) FROM held WHERE shape = 'closed_stay_encounter'),
            (SELECT count(*) FROM held WHERE shape = 'open_stay_encounter'),
            (SELECT count(*) FROM held WHERE shape = 'unlinked_inpatient'),
            (SELECT count(*) FROM held WHERE shape = 'emergency_carry_over')
-      INTO ended_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
+      INTO ended_count, back_order_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
 
-    RAISE NOTICE 'V233: % ward order(s) of ended stays discontinued, % left for a prepared fill or an open partner routing (closed_stay_encounter %, open_stay_encounter %, unlinked_inpatient %, emergency_carry_over %)',
-        ended_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
+    RAISE NOTICE 'V233: % ward order(s) of ended stays discontinued (% open back order(s) cancelled), % left for a prepared fill or an open partner offer (closed_stay_encounter %, open_stay_encounter %, unlinked_inpatient %, emergency_carry_over %)',
+        ended_count, back_order_count, held_count, held_closed, held_open, held_inpatient, held_emergency;
 END
 $$;

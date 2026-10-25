@@ -254,9 +254,13 @@ public class PrescriptionQueueClaimService {
         }
         // QA D792: a ward order of an ended stay is not work to pick up. The
         // queue leaves out the closed-stay-encounter shape
-        // (PrescriptionRepository.findWorkQueue); the other shapes V233 held
-        // (a prepared fill, an open partner routing) stay listed so the fill
-        // can be cancelled, but none of them is claimable.
+        // (PrescriptionRepository.findWorkQueue). An order of the other shapes
+        // is listed only while something holds it live (migration V233 leaves
+        // an order with a prepared fill or an open partner offer): the fill
+        // stays cancellable from the row, and cancelling it, or the partner
+        // offer closing, discontinues the order
+        // (StayOrderDiscontinuation.discontinueIfStayEnded), which takes it
+        // off the queue. Meanwhile none of them is claimable.
         if (endedStayOrders.endedWithAStay(prescription)) {
             throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
         }
