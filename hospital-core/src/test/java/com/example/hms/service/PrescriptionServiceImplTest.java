@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import static org.mockito.Mockito.mock;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PrescriptionMapper;
@@ -107,7 +108,8 @@ class PrescriptionServiceImplTest {
     private com.example.hms.service.pharmacy.PharmacistVerificationService
         pharmacistVerificationService =
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
-                null, null, null, java.time.Clock.systemUTC());
+                null, null, null, java.time.Clock.systemUTC(),
+                new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
 
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
@@ -1379,6 +1381,119 @@ class PrescriptionServiceImplTest {
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D793: ceftriaxone for a penicillin-allergic patient is created with a cross-reactivity WARNING, never blocked")
+    void createCeftriaxoneForPenicillinAllergyCarriesACrossReactivityWarning() {
+        // The QA call: MULTI_A prescribes Ceftriaxone 1 g IV for the QA patient, whose
+        // chart has a penicillin allergy. It was 201 with no advisory.
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Ceftriaxone injectable 1 g");
+        request.setRoute("IV");
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        Prescription mappedEntity = new Prescription();
+        PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
+
+        PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(result.getCdsAdvisories()).hasSize(1);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = result.getCdsAdvisories().get(0);
+        assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING);
+        assertThat(card.summary()).contains("cross-reactivity").contains("Ceftriaxone").contains("Pénicilline");
+        // An advisory, not an override: nothing is recorded on the order.
+        assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
+        assertThat(mappedEntity.getOverrideReason()).isNull();
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D793 path re-verified: amoxicillin for a penicillin allergy is still BLOCKED, with no extra advisory")
+    void amoxicillinForPenicillinAllergyIsStillBlocked() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Amoxicilline 1 g");
+        UUID currentUser = staff.getUser().getId();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+            .satisfies(e -> assertThat(((com.example.hms.cdshooks.CdsCriticalBlockException) e).getCards())
+                .extracting(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard::indicator).containsExactly(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D793: signing ceftriaxone for a penicillin-allergic patient returns the cross-reactivity WARNING")
+    void signCeftriaxoneForPenicillinAllergyCarriesTheWarning() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Ceftriaxone injectable 1 g");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(signed.getCdsAdvisories()).singleElement()
+            .satisfies(card -> assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING));
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D793 path re-verified: signing an order no allergy concerns carries no advisory")
+    void signWithoutCrossReactivityCarriesNoAdvisory() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Paracétamol 1 g");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(signed.getCdsAdvisories()).isNullOrEmpty();
     }
 
     @Test

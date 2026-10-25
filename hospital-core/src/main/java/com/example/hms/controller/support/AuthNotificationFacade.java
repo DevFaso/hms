@@ -1,6 +1,7 @@
 package com.example.hms.controller.support;
 
 import com.example.hms.service.EmailService;
+import com.example.hms.service.PasswordResetRequestDispatcher;
 import com.example.hms.service.PasswordResetService;
 import com.example.hms.service.UserRoleHospitalAssignmentService;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +18,8 @@ import org.springframework.stereotype.Component;
 public class AuthNotificationFacade {
 
     private final PasswordResetService passwordResetService;
+    /** QA D802: queues an anonymous reset request so its account work runs after the answer. */
+    private final PasswordResetRequestDispatcher passwordResetRequests;
     private final EmailService emailService;
     /**
      * QA D311/D418: re-sends an inactive account's assignment code (SMS and,
@@ -27,6 +30,10 @@ public class AuthNotificationFacade {
 
     public PasswordResetService passwordReset() {
         return passwordResetService;
+    }
+
+    public PasswordResetRequestDispatcher passwordResetRequests() {
+        return passwordResetRequests;
     }
 
     public EmailService email() {

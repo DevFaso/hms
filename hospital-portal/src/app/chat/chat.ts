@@ -16,7 +16,7 @@ import {
   ChatSendRequest,
   ChatAttachment,
 } from '../services/chat.service';
-import { UserService, UserSummary } from '../services/user.service';
+import { ChatRecipient, UserService } from '../services/user.service';
 import { MessageableClinician, PatientPortalService } from '../services/patient-portal.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -131,13 +131,13 @@ export interface ChatTarget {
   searchFields: (string | null | undefined)[];
 }
 
-function staffTarget(u: UserSummary): ChatTarget {
+function staffTarget(u: ChatRecipient): ChatTarget {
   return {
     id: u.id,
-    name: `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() || u.username,
+    name: `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
     roleName: u.roleName || undefined,
-    profileType: u.profileType,
-    searchFields: [u.firstName, u.lastName, u.username, u.email],
+    profileType: u.profileType ?? undefined,
+    searchFields: [u.firstName, u.lastName],
   };
 }
 
@@ -518,8 +518,9 @@ export class ChatComponent implements OnInit, OnDestroy {
       this.loadPatientRecipients();
       return;
     }
-    this.userService.list(0, 100).subscribe({
-      next: (page) => {
+    // QA D790: the colleague list, not the administrators' directory.
+    this.userService.chatRecipients().subscribe({
+      next: (recipients) => {
         // Filter out current user and already-conversing users
         const existingIds = new Set(this.conversations().map((c) => c.conversationUserId));
 
@@ -533,7 +534,7 @@ export class ChatComponent implements OnInit, OnDestroy {
           }
         }
 
-        const filtered = (page.content ?? []).filter((u) => {
+        const filtered = (recipients ?? []).filter((u) => {
           if (u.id === this.currentUserId || existingIds.has(u.id)) return false;
           // Normalise the user's roleName for comparison (may or may not have ROLE_ prefix)
           const userRole = u.roleName?.startsWith('ROLE_') ? u.roleName : 'ROLE_' + u.roleName;

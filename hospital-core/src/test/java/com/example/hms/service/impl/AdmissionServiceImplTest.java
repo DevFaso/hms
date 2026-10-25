@@ -343,6 +343,55 @@ class AdmissionServiceImplTest {
         assertThat(result).hasSize(1);
     }
 
+    /**
+     * QA D800: the re-test read "active adms" from GET /admissions?patientId=X,
+     * which ignored patientId and listed every patient's stays: another
+     * patient's ACTIVE stay in Pediatrics read as a second stay of X's.
+     */
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D800: GET /admissions?patientId= lists only that patient's stays at the acting hospital")
+    void getAllAdmissions_patientId_narrowsToThatPatientAtTheActingHospital() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        Admission discharged = new Admission();
+        discharged.setStatus(AdmissionStatus.DISCHARGED);
+        discharged.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 25, 8, 0));
+        Admission active = new Admission();
+        active.setStatus(AdmissionStatus.ACTIVE);
+        active.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 25, 9, 0));
+        AdmissionResponseDTO activeDto = new AdmissionResponseDTO();
+        when(admissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(patientId, java.util.Set.of(hospitalId)))
+            .thenReturn(List.of(active, discharged));
+        org.mockito.Mockito.lenient().when(admissionMapper.toResponseDTO(active)).thenReturn(activeDto);
+        org.mockito.Mockito.lenient().when(admissionMapper.toResponseDTO(discharged)).thenReturn(new AdmissionResponseDTO());
+
+        assertThat(service.getAllAdmissions(null, null, null, patientId)).hasSize(2);
+        assertThat(service.getAllAdmissions("active", null, null, patientId)).containsExactly(activeDto);
+        // The hospital-wide list (every patient) is never read for a patient query.
+        verify(admissionRepository, never()).findByHospitalIdOrderByAdmissionDateTimeDesc(any());
+        verify(admissionRepository, never()).findByPatientIdOrderByAdmissionDateTimeDesc(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D800 class: startDate/endDate narrow the list instead of being dropped")
+    void getAdmissionsByHospital_dateWindowIsApplied() {
+        Admission early = new Admission();
+        early.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 1, 1, 8, 0));
+        Admission inside = new Admission();
+        inside.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 1, 15, 8, 0));
+        Admission undated = new Admission();
+        AdmissionResponseDTO insideDto = new AdmissionResponseDTO();
+        when(admissionRepository.findByHospitalIdOrderByAdmissionDateTimeDesc(hospitalId))
+            .thenReturn(List.of(early, inside, undated));
+        when(admissionMapper.toResponseDTO(inside)).thenReturn(insideDto);
+
+        assertThat(service.getAdmissionsByHospital(hospitalId, null,
+            java.time.LocalDateTime.of(2026, 1, 10, 0, 0), java.time.LocalDateTime.of(2026, 1, 31, 23, 59)))
+            .containsExactly(insideDto);
+        assertThat(AdmissionServiceImpl.admittedWithin(inside, null, null)).isTrue();
+        assertThat(AdmissionServiceImpl.admittedWithin(undated, null, null)).isTrue();
+        assertThat(AdmissionServiceImpl.admittedWithin(inside, inside.getAdmissionDateTime(), inside.getAdmissionDateTime())).isTrue();
+    }
+
     @Test
     void getAdmissionsByHospital_withStatus_filtersCorrectly() {
         when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.ACTIVE))

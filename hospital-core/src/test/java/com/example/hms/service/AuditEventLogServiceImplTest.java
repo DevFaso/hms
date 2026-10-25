@@ -260,6 +260,48 @@ class AuditEventLogServiceImplTest {
         verify(userRepository).findById(unknownId);
     }
 
+    @Test
+    @DisplayName("D786: a SYSTEM row written for one hospital's data carries that hospital")
+    void d786_aSystemRowNamingItsHospitalCarriesIt() {
+        UUID hospitalA = UUID.randomUUID();
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userName("SYSTEM").hospitalId(hospitalA)
+            .eventType(AuditEventType.INVOICE_UPDATED).eventDescription("Zero-total invoice cancelled")
+            .status(AuditStatus.SUCCESS).entityType("BillingInvoice").resourceId(UUID.randomUUID().toString())
+            .build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getUser()).isNull();
+        assertThat(saved.getValue().getAssignment()).isNull();
+        assertThat(saved.getValue().getHospitalId()).isEqualTo(hospitalA);
+    }
+
+    @Test
+    @DisplayName("D786 path re-verified: a user's row never takes a hospital it merely names (D521/D533 anchor rule)")
+    void d786_aUserRowWithNoSeatThereDoesNotTakeTheNamedHospital() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        UUID hospitalB = UUID.randomUUID();
+        when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(actor.getId(), hospitalB))
+            .thenReturn(Optional.empty());
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(actor.getId()).hospitalId(hospitalB)
+            .eventType(AuditEventType.CONSENT_UPDATE).status(AuditStatus.SUCCESS).entityType("CONSENT").build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getAssignment()).isNull();
+        assertThat(saved.getValue().getHospitalId()).isNull();
+    }
+
     // ─── SYSTEM actor ─────────────────────────────────────────────────
 
     @Test
@@ -495,13 +537,13 @@ class AuditEventLogServiceImplTest {
         PageRequest pageable = PageRequest.of(0, 20);
         Page<AuditEventLog> empty = Page.empty();
 
-        when(auditRepository.findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable))
+        when(auditRepository.findAnchoredAtHospital(hospitalId, pageable))
             .thenReturn(empty);
 
         Page<AuditEventLogResponseDTO> result = auditService.getAuditLogsByHospital(hospitalId, pageable);
 
         assertThat(result).isNotNull();
-        verify(auditRepository).findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable);
+        verify(auditRepository).findAnchoredAtHospital(hospitalId, pageable);
     }
 
     @Test

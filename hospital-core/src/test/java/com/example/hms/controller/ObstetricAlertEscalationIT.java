@@ -433,6 +433,9 @@ class ObstetricAlertEscalationIT extends BaseIT {
     private UUID startEpisode() throws Exception {
         LaborEpisodeRequestDTO request = new LaborEpisodeRequestDTO();
         request.setLaborOnsetAt(LocalDateTime.now().minusHours(3).withNano(0));
+        // QA D796: no pregnancy is on record for this patient, so the
+        // clinician's estimated gestational age opens it with the episode.
+        request.setGestationalAgeWeeks(39);
         String body = mockMvc.perform(post(API + "/patients/{p}/labor/episodes", patient.getId())
                 .contextPath(API).param("hospitalId", hospital.getId().toString())
                 .contentType(MediaType.APPLICATION_JSON)

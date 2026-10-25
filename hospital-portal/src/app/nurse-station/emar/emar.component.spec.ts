@@ -86,6 +86,77 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(text).toContain(`${hh}:${mm}`);
   });
 
+  describe('QA D799: the beta-lactam cross-reactivity advisory reaches the nurse', () => {
+    const advisory = {
+      summary: 'Réaction croisée possible : Ceftriaxone et l’allergie documentée à Pénicilline',
+      detail: 'Ceftriaxone est une bêta-lactamine…',
+      indicator: 'warning' as const,
+      source: { label: 'HMS allergy check' },
+      uuid: 'card-1',
+    };
+    const cefTask: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-cef',
+      medication: 'Ceftriaxone',
+      dose: '1 g',
+      route: 'IV',
+      cdsAdvisories: [advisory],
+    };
+
+    it('marks the dose in the queue and shows the card before the scan steps', () => {
+      nurseSpy.getMedicationMAR.and.returnValue(of([cefTask, sampleTask]));
+      fixture.detectChanges();
+
+      expect(root().querySelector('[data-testid="emar-advisory-chip-task-cef"]')).not.toBeNull();
+      expect(
+        root().querySelector(`[data-testid="emar-advisory-chip-${sampleTask.id}"]`),
+      ).toBeNull();
+
+      component['selectTask'](cefTask);
+      fixture.detectChanges();
+      const banner = root().querySelector('[data-testid="emar-allergy-advisory"]');
+      expect(banner).not.toBeNull();
+      expect(banner?.textContent).toContain('Ceftriaxone');
+      expect(banner?.getAttribute('role')).toBe('alert');
+    });
+
+    it('shows no advisory for a dose without one (negative control)', () => {
+      nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+      fixture.detectChanges();
+      component['selectTask'](sampleTask);
+      fixture.detectChanges();
+      expect(root().querySelector('[data-testid="emar-allergy-advisory"]')).toBeNull();
+    });
+
+    it("repeats the verify answer's advisory next to the green toast, and Record Given stays available", () => {
+      nurseSpy.getMedicationMAR.and.returnValue(of([cefTask]));
+      nurseSpy.verifyMedication.and.returnValue(
+        of({
+          marId: cefTask.id,
+          outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+          failedChecks: [],
+          failureReasons: {},
+          allPassed: true,
+          verifiedAt: '2026-10-25T08:01:00',
+          cdsAdvisories: [advisory],
+        } as MarVerificationResponse),
+      );
+      fixture.detectChanges();
+      component['selectTask'](cefTask);
+      component['patientScan'].set('CHW7809');
+      component['medicationScan'].set('Ceftriaxone');
+      component['doseScan'].set('1 g');
+      component['routeScan'].set('IV');
+      component['verify']();
+      fixture.detectChanges();
+
+      expect(toastSpy.success).toHaveBeenCalled();
+      expect(toastSpy.info).toHaveBeenCalledOnceWith(advisory.summary);
+      expect(root().querySelector('[data-testid="emar-allergy-advisory"]')).not.toBeNull();
+      expect(component['needsOverride']()).toBeFalse();
+    });
+  });
+
   it('shows the error state when the MAR fetch fails', () => {
     nurseSpy.getMedicationMAR.and.returnValue(
       throwError(() => new Error('network')) as Observable<NurseMedicationTask[]>,

@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -108,7 +109,7 @@ class PasswordResetServiceImplTest {
         when(smsService.deliversRealSms()).thenReturn(true);
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
-        org.mockito.Mockito.doThrow(new IllegalStateException("IKODDI SMS send request failed with status 400"))
+        doThrow(new IllegalStateException("IKODDI SMS send request failed with status 400"))
             .when(smsService).send(any(), any());
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -119,7 +120,7 @@ class PasswordResetServiceImplTest {
     void qaD222_aMailFailureNeverReachesTheCaller() {
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
         when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        org.mockito.Mockito.doThrow(new IllegalStateException("smtp down"))
+        doThrow(new IllegalStateException("smtp down"))
             .when(emailService).sendPasswordResetEmail(any(), any());
 
         org.junit.jupiter.api.Assertions.assertDoesNotThrow(
@@ -145,6 +146,169 @@ class PasswordResetServiceImplTest {
         service.requestResetByPhone("70202020", Locale.FRENCH, null);
 
         verify(tokenRepository, never()).save(any());
+    }
+
+    // ---- QA D787: e-mail OR username OR phone, through the one identifier ----
+
+    private void phoneOnly() {
+        user.setEmail(null);
+        user.setPhoneNumber("+22670202020");
+    }
+
+    private void smsTransport(boolean real) {
+        when(smsService.deliversRealSms()).thenReturn(real);
+    }
+
+    private void smsBody() {
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageSource.getMessage(eq("sms.passwordReset.link"), any(), any(Locale.class))).thenReturn("link");
+    }
+
+    @Test
+    void qaD787_thePhoneOnlyPatientOnDevGetsNothingIssuedAndNoError() {
+        // PATIENT_A3 on dev: a phone, no e-mail, and no SMS transport configured.
+        phoneOnly();
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        smsTransport(false);
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+            () -> service.requestResetByIdentifier("70 20 20 20", Locale.FRENCH, "127.0.0.1"));
+
+        verify(tokenRepository, never()).save(any());
+        verify(smsService, never()).send(any(), any());
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+    }
+
+    @Test
+    void qaD787_aPhoneNumberGetsTheLinkBySmsWhenATransportIsConfigured() {
+        phoneOnly();
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        smsTransport(true);
+        smsBody();
+
+        service.requestResetByIdentifier("+226 70 20 20 20", Locale.FRENCH, null);
+
+        verify(smsService).send("+22670202020", "link");
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+    }
+
+    @Test
+    void qaD787_aUsernameReachesAPhoneOnlyAccountBySms() {
+        phoneOnly();
+        when(userRepository.findByUsernameIgnoreCase("patient_a3")).thenReturn(Optional.of(user));
+        smsTransport(true);
+        smsBody();
+
+        service.requestResetByIdentifier("patient_a3", Locale.FRENCH, null);
+
+        verify(smsService).send("+22670202020", "link");
+    }
+
+    @Test
+    void qaD787_aUsernameReachesAnAccountWithAnAddressByEmail() {
+        when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.requestResetByIdentifier("testuser", Locale.FRENCH, null);
+
+        verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    void qaD787_aTypedPhoneFallsBackToTheAddressWhenNoSmsTransport() {
+        user.setPhoneNumber("+22670202020");
+        when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(user));
+        smsTransport(false);
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.requestResetByIdentifier("70202020", Locale.FRENCH, null);
+
+        verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    void qaD787_anAddressStillWorks_andIsCaseInsensitiveThroughTheRepository() {
+        when(userRepository.findByEmail("Test@Test.com")).thenReturn(Optional.of(user));
+        when(tokenRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.requestResetByIdentifier("  Test@Test.com ", Locale.FRENCH, null);
+
+        verify(emailService).sendPasswordResetEmail(eq("test@test.com"), anyString());
+    }
+
+    @Test
+    void qaD787_anUnknownIdentifierADeletedAccountAndABlankOneAreSilent() {
+        when(userRepository.findByUsernameIgnoreCase("nobody")).thenReturn(Optional.empty());
+        service.requestResetByIdentifier("nobody", Locale.FRENCH, null);
+
+        user.setDeleted(true);
+        when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(user));
+        service.requestResetByIdentifier("test@test.com", Locale.FRENCH, null);
+
+        service.requestResetByIdentifier("   ", Locale.FRENCH, null);
+        service.requestResetByIdentifier(null, Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
+        verify(emailService, never()).sendPasswordResetEmail(any(), any());
+    }
+
+    @Test
+    void qaD787_anIdentifierMatchingTwoAccountsIsSilent() {
+        when(userRepository.findByUsernameIgnoreCase("Twin"))
+            .thenThrow(new org.springframework.dao.IncorrectResultSizeDataAccessException(1, 2));
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+            () -> service.requestResetByIdentifier("Twin", Locale.FRENCH, null));
+
+        verify(tokenRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD787_anAccountWithNoChannelIsSilent() {
+        user.setEmail(null);
+        user.setPhoneNumber(null);
+        when(userRepository.findByUsernameIgnoreCase("testuser")).thenReturn(Optional.of(user));
+
+        service.requestResetByIdentifier("testuser", Locale.FRENCH, null);
+
+        verify(tokenRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD787_aPhoneOnlyAccountCompletesItsReset_noConfirmationMailToANullAddress() {
+        phoneOnly();
+        smsTransport(true);
+        when(messageSource.getMessage(eq("sms.passwordReset.changed"), any(), any(Locale.class))).thenReturn("changed");
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user).tokenHash(rawToken.toLowerCase()).expiration(NOW.plusHours(1)).build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.confirmReset(rawToken, "newPassword"));
+
+        assertThat(user.getPasswordHash()).isEqualTo("encodedPwd");
+        assertThat(resetToken.getConsumedAt()).isNotNull();
+        verify(emailService, never()).sendPasswordResetConfirmationEmail(any(), any());
+        verify(smsService).send("+22670202020", "changed");
+    }
+
+    @Test
+    void qaD787_aFailedConfirmationMailNeverUndoesTheReset() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user).tokenHash(rawToken.toLowerCase()).expiration(NOW.plusHours(1)).build();
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+        doThrow(new IllegalArgumentException("bad address"))
+            .when(emailService).sendPasswordResetConfirmationEmail(any(), any());
+
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.confirmReset(rawToken, "newPassword"));
+
+        verify(userRepository).save(user);
+        assertThat(resetToken.getConsumedAt()).isNotNull();
     }
 
     @Test

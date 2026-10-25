@@ -42,6 +42,8 @@ class PartnerExchangeServiceBranchesTest {
 
     private static final String PARTNER_PHONE = "+22670000000";
 
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
     @Mock private PrescriptionRoutingDecisionRepository routingDecisionRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PartnerNotificationChannel channel;
@@ -63,7 +65,7 @@ class PartnerExchangeServiceBranchesTest {
         service = new PartnerExchangeService(
                 routingDecisionRepository, prescriptionRepository,
                 channel, parser, auditEventLogService, prescriberNotifier,
-                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), "226");
+                new WithdrawnOrderPartnerHandler(routingDecisionRepository, channel, auditEventLogService, prescriberNotifier), stayOrderDiscontinuation, "226");
 
         decisionId = UUID.randomUUID();
         token = decisionId.toString().substring(0, 8).toUpperCase();

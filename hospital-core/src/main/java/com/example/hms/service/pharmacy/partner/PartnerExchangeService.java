@@ -13,6 +13,7 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.StayOrderDiscontinuation;
 import com.example.hms.service.pharmacy.PrescriberPharmacyNotifier;
 import com.example.hms.utility.PhoneNumbers;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,8 @@ public class PartnerExchangeService {
     private final AuditEventLogService auditEventLogService;
     private final PrescriberPharmacyNotifier prescriberNotifier;
     private final WithdrawnOrderPartnerHandler withdrawnOrders;
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its partner offer closes. */
+    private final StayOrderDiscontinuation stayOrderDiscontinuation;
     /** The gateway's country code, so a locally stored number matches the international reply. */
     private final String countryNumberCode;
 
@@ -73,6 +76,7 @@ public class PartnerExchangeService {
                                   AuditEventLogService auditEventLogService,
                                   PrescriberPharmacyNotifier prescriberNotifier,
                                   WithdrawnOrderPartnerHandler withdrawnOrders,
+                                  StayOrderDiscontinuation stayOrderDiscontinuation,
                                   @Value("${app.ikoddi.country-number-code:226}") String countryNumberCode) {
         this.routingDecisionRepository = routingDecisionRepository;
         this.prescriptionRepository = prescriptionRepository;
@@ -81,6 +85,7 @@ public class PartnerExchangeService {
         this.auditEventLogService = auditEventLogService;
         this.prescriberNotifier = prescriberNotifier;
         this.withdrawnOrders = withdrawnOrders;
+        this.stayOrderDiscontinuation = stayOrderDiscontinuation;
         this.countryNumberCode = countryNumberCode;
     }
 
@@ -302,6 +307,14 @@ public class PartnerExchangeService {
             return null;
         }
         Prescription rx = decision.getPrescription();
+        if (action != PartnerSmsReplyParser.Action.CONFIRM_DISPENSE) {
+            // QA D792 (#953 review, round 2): a ward order of a stay that has
+            // ended is withdrawn when its partner answers; an accept or a
+            // refusal would put it back in the work queue, where every action
+            // on it is refused. A confirmed dispense is left to stand: the
+            // partner has already handed it over.
+            stayOrderDiscontinuation.discontinueIfStayEnded(rx, null, "Partner SMS " + action);
+        }
         if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
             // The prescriber took the order back while this offer was open:
             // the prescription is not moved and nobody is asked to re-route.
@@ -349,6 +362,10 @@ public class PartnerExchangeService {
 
     private void autoReject(PrescriptionRoutingDecision d) {
         Prescription rx = d.getPrescription();
+        // QA D792 (#953 review, round 2): as for a refusal, a timed-out offer
+        // of a ward order of an ended stay ends the order instead of sending
+        // it back to the queue.
+        stayOrderDiscontinuation.discontinueIfStayEnded(rx, null, "Partner timeout");
         if (WithdrawnOrderPartnerHandler.isWithdrawn(rx)) {
             // An offer opened before withdrawal closed it: close it now, leave
             // the order as the prescriber left it, and ask nobody to re-route.

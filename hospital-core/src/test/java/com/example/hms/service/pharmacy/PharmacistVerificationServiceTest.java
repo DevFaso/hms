@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.mock;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -56,7 +57,7 @@ class PharmacistVerificationServiceTest {
     void setUp() {
         Clock clock = Clock.fixed(NOW.toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
         service = new PharmacistVerificationService(
-            prescriptionRepository, userRepository, roleValidator, clock);
+            prescriptionRepository, userRepository, roleValidator, clock, new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
 
         hospitalId = UUID.randomUUID();
         pharmacistId = UUID.randomUUID();

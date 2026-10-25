@@ -200,10 +200,14 @@ export class StaffListComponent implements OnInit {
   ngOnInit(): void {
     this.loadStaff();
     this.loadAssignedHospitals();
-    this.userService.list(0, 500).subscribe({
-      // QA D122: a patient account is never offered as a new staff member.
-      next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
-    });
+    // QA D790: the account picker of the create form reads the administrators'
+    // directory; the staff page's readers (reception, lab managers) never open it.
+    if (this.canManageStaff) {
+      this.userService.list(0, 500).subscribe({
+        // QA D122: a patient account is never offered as a new staff member.
+        next: (page) => this.users.set((page.content ?? []).filter((u) => !isPatientOnlyUser(u))),
+      });
+    }
   }
 
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */

@@ -127,6 +127,8 @@ public class AppointmentServiceImpl implements AppointmentService {
      * patient's appointments there. A patient-only caller now reads their own.
      */
     private final PatientSubjectReadGuard subjectReadGuard;
+    /** QA D788: an appointment is COMPLETED by its visit's check-out, never ahead of it. */
+    private final com.example.hms.repository.EncounterRepository encounterRepository;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -196,6 +198,34 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!allowed.contains(requested)) {
             throw new BusinessException(
                 String.format("Cannot transition from %s to %s", current, requested));
+        }
+    }
+
+    /**
+     * QA D788: an appointment whose patient was checked in is COMPLETED by the
+     * check-out of that visit ({@code EncounterServiceImpl.checkOut}), never by
+     * hand ahead of it. The desk marked the appointment of a never-seen visit
+     * COMPLETED from CHECKED_IN, so the day's figures counted a consultation
+     * that did not happen. Refused while no visit linked to the appointment is
+     * COMPLETED; an appointment with no visit at all (never checked in) keeps
+     * the manual completion the state machine allows.
+     */
+    private void requireVisitCompletedBeforeAppointment(Appointment appointment, AppointmentStatus requested) {
+        if (requested != AppointmentStatus.COMPLETED
+                || appointment.getStatus() == AppointmentStatus.COMPLETED
+                || appointment.getId() == null) {
+            return;
+        }
+        List<com.example.hms.model.Encounter> visits =
+            encounterRepository.findByAppointmentIdIn(List.of(appointment.getId()));
+        if (visits.isEmpty()) {
+            return;
+        }
+        boolean seen = visits.stream()
+            .anyMatch(v -> v.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED);
+        if (!seen) {
+            com.example.hms.enums.EncounterStatus open = visits.get(0).getStatus();
+            throw new BusinessException("appointment.complete.visitNotCompleted", String.valueOf(open));
         }
     }
 
@@ -598,6 +628,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
             throw new BusinessException("appointment.timeRange.invalid");
         }
+        // QA D788: the edit form is the other road to COMPLETED; refused as the
+        // status action refuses it, before anything else is looked up.
+        requireVisitCompletedBeforeAppointment(existing, request.getStatus());
 
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
@@ -756,6 +789,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessException(
                 String.format("Cannot transition from %s to %s", currentStatus, newStatus));
         }
+        requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
         // ── Temporal guard: COMPLETED / NO_SHOW only after appointment start time ──
         if (REQUIRES_APPOINTMENT_STARTED.contains(newStatus)) {

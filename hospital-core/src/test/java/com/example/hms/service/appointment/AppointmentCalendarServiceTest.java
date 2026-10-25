@@ -55,7 +55,8 @@ class AppointmentCalendarServiceTest {
             null,                       // webhookPublisher (Tier 2 item 45)
             null,                       // appointmentLinks (AppointmentLinkProperties, PR #315)
             null,                       // patientLocaleResolver (recipient language of the appointment mails)
-            null                        // subjectReadGuard (the patient-only reads; the calendar never asks it)
+            null,                       // subjectReadGuard (the patient-only reads; the calendar never asks it)
+            null                        // encounterRepository (QA D788 completion guard; the calendar never completes)
         );
     }
 

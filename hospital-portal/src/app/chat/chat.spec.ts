@@ -242,63 +242,46 @@ describe('ChatComponent new-conversation picker', () => {
   });
 
   describe('as staff', () => {
-    it('lists the user directory and never the patient endpoints', () => {
+    it('QA D790: lists the colleague picker, never the admin directory or the patient endpoints', () => {
       setUp(['ROLE_DOCTOR']);
       openPicker();
       httpMock.expectNone((r) => r.url === CARE_TEAM || r.url === APPOINTMENTS);
+      httpMock.expectNone((r) => r.url === '/users');
       httpMock
-        .expectOne((r) => r.url === '/users')
-        .flush({
-          content: [
-            {
-              id: SELF,
-              username: 'me',
-              email: 'me@x',
-              firstName: 'Me',
-              lastName: 'Self',
-              roleName: 'ROLE_DOCTOR',
-            },
-            {
-              id: 'n1',
-              username: 'nurse1',
-              email: 'n1@x',
-              firstName: 'Nina',
-              lastName: 'Sawadogo',
-              roleName: 'NURSE',
-              profileType: 'STAFF',
-            },
-            {
-              id: 'a1',
-              username: 'acct',
-              email: 'a@x',
-              firstName: 'Ali',
-              lastName: 'Zongo',
-              roleName: 'ROLE_ACCOUNTANT',
-            },
-          ],
-        });
+        .expectOne((r) => r.url === '/users/chat-recipients')
+        .flush([
+          { id: SELF, firstName: 'Me', lastName: 'Self', roleName: 'ROLE_DOCTOR' },
+          {
+            id: 'n1',
+            firstName: 'Nina',
+            lastName: 'Sawadogo',
+            roleName: 'NURSE',
+            profileType: 'STAFF',
+          },
+          { id: 'a1', firstName: 'Ali', lastName: 'Zongo', roleName: 'ROLE_ACCOUNTANT' },
+        ]);
 
       expect(component.availableUsers().map((u) => u.id)).toEqual(['n1']);
       expect(component.availableUsers()[0].name).toBe('Nina Sawadogo');
-      component.userSearchTerm.set('nurse1');
+      component.userSearchTerm.set('sawadogo');
       expect(component.filteredUsers().map((u) => u.id)).toEqual(['n1']);
       expect(component.noRecipientsYet()).toBeFalse();
     });
 
-    it('a dual-role user acting as staff keeps the user directory', () => {
+    it('a dual-role user acting as staff keeps the colleague picker', () => {
       setUp(['ROLE_NURSE', 'ROLE_PATIENT'], 'ROLE_NURSE');
       openPicker();
       httpMock.expectNone((r) => r.url === CARE_TEAM || r.url === APPOINTMENTS);
-      httpMock.expectOne((r) => r.url === '/users').flush({ content: [] });
+      httpMock.expectOne((r) => r.url === '/users/chat-recipients').flush([]);
       expect(component.loadingUsers()).toBeFalse();
       expect(component.noRecipientsYet()).toBeFalse();
     });
 
-    it('still reports a directory failure as an error', () => {
+    it('still reports a colleague-list failure as an error', () => {
       setUp(['ROLE_DOCTOR']);
       openPicker();
       httpMock
-        .expectOne((r) => r.url === '/users')
+        .expectOne((r) => r.url === '/users/chat-recipients')
         .flush({}, { status: 500, statusText: 'Server Error' });
 
       expect(toast.error).toHaveBeenCalledOnceWith('CHAT.USERS_LOAD_FAILED');

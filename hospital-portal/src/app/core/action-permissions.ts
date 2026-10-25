@@ -198,6 +198,12 @@ export const SERVICE_RULE_ROLES = {
    * physician or a midwife, although `createReferral` admits ROLE_NURSE.
    */
   referralReferrer: ['ROLE_DOCTOR', 'ROLE_MIDWIFE'],
+  /**
+   * QA D788: `EncounterController#markReadyForDischarge` admits the desk too
+   * (from AWAITING_RESULTS), but from IN_PROGRESS `EncounterServiceImpl` admits
+   * only the clinicians of `EncounterClosureRules.callerIsClinician()`.
+   */
+  readyForDischargeFromInProgress: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
 } as const;
 
 export type ActionKey = keyof typeof ACTION_PERMISSIONS;

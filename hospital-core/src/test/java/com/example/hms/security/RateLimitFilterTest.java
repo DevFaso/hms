@@ -92,4 +92,16 @@ class RateLimitFilterTest {
             assertThat(filter.shouldNotFilter(request)).as(path).isFalse();
         }
     }
+
+    /** QA D787: every anonymous path that sends a reset message, the legacy one included. */
+    @Test
+    void rateLimitsEveryPasswordResetPath() {
+        for (String path : new String[] {"/api/auth/request-reset", "/api/auth/reset-password",
+                "/api/auth/password/request", "/api/auth/password/request-reset",
+                "/api/auth/password/confirm"}) {
+            MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+            request.setRequestURI(path);
+            assertThat(filter.shouldNotFilter(request)).as(path).isFalse();
+        }
+    }
 }

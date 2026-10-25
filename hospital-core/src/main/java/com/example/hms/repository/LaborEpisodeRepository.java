@@ -16,6 +16,12 @@ public interface LaborEpisodeRepository extends JpaRepository<LaborEpisode, UUID
 
     boolean existsByPatient_IdAndHospital_IdAndStatus(UUID patientId, UUID hospitalId, LaborStatus status);
 
+    /**
+     * QA D796: is this woman in labour anywhere (an antenatal calendar must not
+     * be planned for a pregnancy that is being delivered). Existence only.
+     */
+    boolean existsByPatient_IdAndStatus(UUID patientId, LaborStatus status);
+
     List<LaborEpisode> findByPatient_IdAndHospital_IdOrderByAdmittedAtDesc(
         UUID patientId, UUID hospitalId, Pageable pageable);
 

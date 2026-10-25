@@ -172,6 +172,25 @@ describe('AppointmentDetailComponent', () => {
     component.appointment.set(mockAppointment);
   });
 
+  it('QA D788: Complete is not offered on a CHECKED_IN appointment, whose open visit completes it', () => {
+    component.appointment.set({ ...mockAppointment, status: 'CHECKED_IN' });
+    fixture.detectChanges();
+    expect(component.canComplete).toBeFalse();
+    expect(fixture.nativeElement.querySelector('.btn-complete')).toBeNull();
+    // No-show stays: a patient checked in and left is recorded from here or the flow board.
+    expect(fixture.nativeElement.querySelector('.btn-noshow')).not.toBeNull();
+
+    for (const status of ['CONFIRMED', 'IN_PROGRESS'] as const) {
+      component.appointment.set({ ...mockAppointment, status });
+      fixture.detectChanges();
+      expect(component.canComplete).withContext(status).toBeTrue();
+      expect(fixture.nativeElement.querySelector('.btn-complete'))
+        .withContext(status)
+        .not.toBeNull();
+    }
+    component.appointment.set(mockAppointment);
+  });
+
   it('time fields should include seconds for slice pipe to trim', () => {
     const appt = component.appointment();
     expect(appt?.startTime).toBe('17:30:00');

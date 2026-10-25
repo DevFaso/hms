@@ -47,6 +47,10 @@ class StayOrderDiscontinuationTest {
     @Mock private PrescriptionQueueClaimService queueClaims;
     @Mock private WithdrawnOrderPartnerHandler withdrawnOrders;
     @Mock private MessageSource messageSource;
+    @Mock private EndedStayOrderGuard endedStayOrders;
+    @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisions;
+    @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
     @InjectMocks private StayOrderDiscontinuation service;
 
@@ -146,10 +150,141 @@ class StayOrderDiscontinuationTest {
         assertThat(oldEdOrder.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
     }
 
+    /**
+     * #953 review, round 3: a partner refused the order (PARTNER_REJECTED, its
+     * decision REJECTED): it is back in the in-house work queue with no offer
+     * left that could ever end it. The discharge skipped it, so it stayed
+     * there with every action refused. An order a partner still holds ends
+     * too, its offer withdrawn and the partner told, as a prescriber's
+     * withdrawal. A partner-dispensed one is finished and left alone.
+     */
+    @Test
+    void d792_partnerStatusOrdersOfTheStayAreDiscontinuedAtDischargeToo() {
+        Prescription refused = order("Morphine", stayEncounter, PrescriptionStatus.PARTNER_REJECTED, ADMITTED.plusHours(1));
+        Prescription offered = order("Ceftriaxone", stayEncounter, PrescriptionStatus.SENT_TO_PARTNER, ADMITTED.plusHours(1));
+        Prescription accepted = order("Paracétamol", stayEncounter, PrescriptionStatus.PARTNER_ACCEPTED, ADMITTED.plusHours(1));
+        Prescription partnerDispensed = order("Fer", stayEncounter, PrescriptionStatus.PARTNER_DISPENSED, ADMITTED.plusHours(1));
+        Prescription refusedTakeHome = order("Amoxicilline", stayEncounter, PrescriptionStatus.PARTNER_REJECTED, ADMITTED.plusHours(2));
+        refusedTakeHome.setTakeHome(true);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
+            .thenReturn(List.of(refused, offered, accepted, partnerDispensed, refusedTakeHome));
+        when(messageSource.getMessage(anyString(), isNull(), anyString(), any())).thenReturn("Arrêtée à la sortie");
+        // Refused by the partner, then back-ordered in house: nothing is owed on a stopped order.
+        com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                .status(com.example.hms.enums.RoutingDecisionStatus.PENDING).build();
+        when(routingDecisions.findByPrescriptionIdOrderByDecidedAtDesc(refused.getId())).thenReturn(List.of(backOrder));
+
+        List<Prescription> ended = service.discontinueStayOrders(stay, actor);
+
+        assertThat(ended).containsExactly(refused, offered, accepted);
+        assertThat(backOrder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+        verify(routingDecisions).save(backOrder);
+        assertThat(refused.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(refused.getWithdrawalReason()).isEqualTo("Arrêtée à la sortie");
+        assertThat(offered.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(accepted.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(partnerDispensed.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
+        assertThat(refusedTakeHome.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+        verify(withdrawnOrders).withdrawPartnerOffers(offered);
+        verify(withdrawnOrders).withdrawPartnerOffers(accepted);
+        verify(queueClaims).releaseOnExit(refused, QueueClaimReleaseReason.WITHDRAWN, actor, QueueClaimExitActor.OTHER);
+        verify(prescriptionRepository).saveAll(List.of(refused, offered, accepted));
+    }
+
     @Test
     void anIncompleteStayEndsNothing() {
         stay.setPatient(null);
         assertThat(service.discontinueStayOrders(stay, actor)).isEmpty();
         verify(prescriptionRepository, never()).findByPatient_IdAndHospital_Id(any(), any());
+    }
+
+    // ── QA D792 (#953 review, round 2): an ended-stay order ends once its hold goes ──
+
+    private Prescription heldOrder(PrescriptionStatus status) {
+        Prescription rx = order("Morphine", stayEncounter, status, ADMITTED.plusHours(1));
+        rx.setHospital(stay.getHospital());
+        rx.setPatient(stay.getPatient());
+        return rx;
+    }
+
+    @Test
+    void d792_anEndedStayOrderWithNoHoldLeftIsDiscontinuedWithItsBackOrderAndAnAuditRow() {
+        Prescription rx = heldOrder(PrescriptionStatus.PENDING_STOCK);
+        when(endedStayOrders.endedWithAStay(rx)).thenReturn(true);
+        when(messageSource.getMessage(eq("prescription.discontinuedAtDischarge"), isNull(), anyString(), any()))
+            .thenReturn("Arrêtée à la sortie");
+        com.example.hms.model.pharmacy.PrescriptionRoutingDecision backOrder =
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                .routingType(com.example.hms.enums.RoutingType.BACKORDER)
+                .status(com.example.hms.enums.RoutingDecisionStatus.PENDING).build();
+        com.example.hms.model.pharmacy.PrescriptionRoutingDecision printed =
+            com.example.hms.model.pharmacy.PrescriptionRoutingDecision.builder()
+                .routingType(com.example.hms.enums.RoutingType.PRINT)
+                .status(com.example.hms.enums.RoutingDecisionStatus.COMPLETED).build();
+        when(routingDecisions.findByPrescriptionIdOrderByDecidedAtDesc(rx.getId())).thenReturn(List.of(backOrder, printed));
+
+        assertThat(service.discontinueIfStayEnded(rx, actor, "prepared fill cancelled")).isTrue();
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+        assertThat(rx.getWithdrawalReason()).isEqualTo("Arrêtée à la sortie");
+        assertThat(backOrder.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.CANCELLED);
+        assertThat(printed.getStatus()).isEqualTo(com.example.hms.enums.RoutingDecisionStatus.COMPLETED);
+        verify(withdrawnOrders).withdrawPartnerOffers(rx);
+        verify(queueClaims).releaseOnExit(rx, QueueClaimReleaseReason.WITHDRAWN, actor, QueueClaimExitActor.OTHER);
+        verify(prescriptionRepository).save(rx);
+        // It never voids a fill itself: a fill still waiting is a hold.
+        verify(preparedFills, never()).voidPreparedFill(any(), any());
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_DISCONTINUED
+                && rx.getId().toString().equals(e.getResourceId())
+                && actor.equals(e.getUserId())
+                && String.valueOf(e.getDetails()).contains("PENDING_STOCK")
+                && !String.valueOf(e.getEventDescription()).contains("Morphine")
+                && !String.valueOf(e.getDetails()).contains("Morphine")));
+    }
+
+    @Test
+    void d792_anOrderRefusedByItsPartnerAfterTheStayEndedIsDiscontinuedToo() {
+        Prescription rx = heldOrder(PrescriptionStatus.SENT_TO_PARTNER);
+        when(endedStayOrders.endedWithAStay(rx)).thenReturn(true);
+        when(messageSource.getMessage(anyString(), isNull(), anyString(), any())).thenReturn("x");
+
+        assertThat(service.discontinueIfStayEnded(rx, null, "Partner timeout")).isTrue();
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+    }
+
+    @Test
+    void d792_aFillStillWaitingAtTheCounterKeepsTheOrderAsItIs() {
+        Prescription rx = heldOrder(PrescriptionStatus.SIGNED);
+        when(endedStayOrders.endedWithAStay(rx)).thenReturn(true);
+        when(dispenseRepository.existsByPrescription_IdAndStatus(rx.getId(), com.example.hms.enums.DispenseStatus.PENDING))
+            .thenReturn(true);
+
+        assertThat(service.discontinueIfStayEnded(rx, actor, "Partner no-show")).isFalse();
+
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(prescriptionRepository, never()).save(any());
+        verify(withdrawnOrders, never()).withdrawPartnerOffers(any());
+        verify(auditEventLogService, never()).logEvent(any());
+    }
+
+    @Test
+    void d792_pathsReverified_aLiveStayOrderOrAFinishedOneIsLeftAlone() {
+        Prescription live = heldOrder(PrescriptionStatus.SIGNED);
+        when(endedStayOrders.endedWithAStay(live)).thenReturn(false);
+        Prescription dispensed = heldOrder(PrescriptionStatus.DISPENSED);
+        Prescription partnerDispensed = heldOrder(PrescriptionStatus.PARTNER_DISPENSED);
+
+        assertThat(service.discontinueIfStayEnded(live, actor, "t")).isFalse();
+        assertThat(service.discontinueIfStayEnded(dispensed, actor, "t")).isFalse();
+        assertThat(service.discontinueIfStayEnded(partnerDispensed, actor, "t")).isFalse();
+        assertThat(service.discontinueIfStayEnded(null, actor, "t")).isFalse();
+
+        assertThat(live.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        assertThat(dispensed.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+        verify(endedStayOrders, never()).endedWithAStay(dispensed);
+        verify(prescriptionRepository, never()).save(any());
     }
 }

@@ -352,7 +352,7 @@ public class EncounterController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Mark encounter ready for discharge",
-        description = "Transitions AWAITING_RESULTS or IN_PROGRESS → READY_FOR_DISCHARGE."
+        description = "Transitions AWAITING_RESULTS → READY_FOR_DISCHARGE; from IN_PROGRESS for a doctor, nurse or midwife only."
     )
     public ResponseEntity<EncounterResponseDTO> markReadyForDischarge(
         @PathVariable UUID encounterId,
@@ -401,7 +401,9 @@ public class EncounterController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
-        description = "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
+        description = "Only once the clinician has completed the examination (AWAITING_RESULTS or "
+            + "READY_FOR_DISCHARGE, QA D788); a visit nobody saw is closed with /close-unseen. "
+            + "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
             + "records checkout timestamp, discharge diagnoses, follow-up instructions, "
             + "and returns a comprehensive After-Visit Summary."
     )
@@ -412,11 +414,40 @@ public class EncounterController {
         com.example.hms.security.ActingContext ctx
     ) {
         String username = auth.getName();
-        boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
+        boolean isSuperAdmin = isVisitCloserSuperAdmin(auth);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
         AfterVisitSummaryDTO avs =
             encounterService.checkOut(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(avs);
+    }
+
+    // ----------------------------------------------------------
+    // QA D788 — close a visit no clinician has seen (never a consultation)
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/close-unseen", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @Operation(
+        summary = "Close a visit no clinician has seen (left without being seen, or cancelled)",
+        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The encounter becomes "
+            + "CANCELLED with the outcome and the reason, its appointment is cancelled, and no After-Visit "
+            + "Summary is produced: it is never counted as a consultation. A seen visit is checked out instead."
+    )
+    public ResponseEntity<EncounterResponseDTO> closeUnseen(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO request,
+        Authentication auth,
+        com.example.hms.security.ActingContext ctx
+    ) {
+        String username = auth.getName();
+        boolean isSuperAdmin = isVisitCloserSuperAdmin(auth);
+        UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        return ResponseEntity.ok(
+            encounterService.closeUnseen(encounterId, request, username, isSuperAdmin, hospitalId));
+    }
+
+    /** The check-out and close-unseen read the super-admin flag the same way (one read, QA D788). */
+    private boolean isVisitCloserSuperAdmin(Authentication auth) {
+        return authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
     }
 
     // ----------------------------------------------------------

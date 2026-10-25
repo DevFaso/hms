@@ -95,6 +95,11 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
 
+    /** QA D788: where a visit closed without a consultation keeps its outcome and reason. */
+    static final String UNSEEN_OUTCOME_FIELD = "unseenOutcome";
+    static final String UNSEEN_REASON_FIELD = "unseenReason";
+    static final String UNSEEN_CLOSED_AT_FIELD = "unseenClosedAt";
+
     private static final String CHECKOUT_FOLLOW_UP_TYPE = "FOLLOW_UP";
     private static final String NOTE_HISTORY_CREATED = "NOTE_CREATED";
     private static final String NOTE_HISTORY_UPDATED = "NOTE_UPDATED";
@@ -299,6 +304,8 @@ public class EncounterServiceImpl implements EncounterService {
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+    /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -421,6 +428,10 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterStatus fallbackStatus = existing.getStatus() != null ? existing.getStatus() : EncounterStatus.ARRIVED;
         applyEncounterDefaults(merged, ctx.department(), fallbackDate, fallbackStatus);
         ensureEncounterCode(merged);
+
+        // QA D788: a status written here obeys the closing rules of the check-out.
+        EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
+            EncounterClosureRules.callerIsClinician());
 
         // If this update is the one transitioning the encounter into COMPLETED and the
         // dedicated /checkout endpoint was bypassed, ensure a checkout timestamp is set.
@@ -1698,7 +1709,10 @@ public class EncounterServiceImpl implements EncounterService {
 
         // SECURITY: Scope results to caller's active hospital
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<Encounter> encounters = encounterRepository.findByStaff_Id(staffId);
+        // QA D759: a prescription's anchor is not a visit.
+        List<Encounter> encounters = encounterRepository.findByStaff_Id(staffId).stream()
+            .filter(e -> !e.isPrescriptionAnchor())
+            .toList();
         if (activeHospitalId != null) {
             encounters = encounters.stream()
                 .filter(e -> e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()))
@@ -1706,7 +1720,6 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         return encounters.stream()
-            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -1865,16 +1878,16 @@ public class EncounterServiceImpl implements EncounterService {
         UUID requesterUserId = roleValidator.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId);
         boolean unlocked = breakGlassGate.isUnlocked(requesterUserId, patientId, activeHospitalId);
+        // QA D759: a prescription's anchor is not a visit, for staff either.
         List<Encounter> encounters = encounterRepository
             .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
+            .filter(e -> !e.isPrescriptionAnchor())
             .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), activeHospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
             .toList();
         reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(encounters.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList(), activeHospitalId),
             "Cross-hospital encounter read on the treatment relationship");
-        // QA D759: a prescription's anchor is not a visit, for staff either.
         return encounters.stream()
-            .filter(e -> !e.isPrescriptionAnchor())
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -2232,6 +2245,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
             throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
         }
+        // QA D788: and only once the clinician has completed the examination. A
+        // visit nobody saw is closed through closeUnseen, never as a consultation.
+        EncounterClosureRules.requireCheckoutable(current, EncounterClosureRules.callerIsClinician());
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -2276,6 +2292,7 @@ public class EncounterServiceImpl implements EncounterService {
         // (d) Build and return AVS
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
             checkOutMapper.toAfterVisitSummary(encounter, request, followUpAppointmentId);
+        showDischargingDepartment(encounter, avs);
         // QA D321: the AVS shows the follow-up date the recall was filed with
         // (the defaulted one too, when no date was given).
         if (recallDue != null) {
@@ -2289,6 +2306,49 @@ public class EncounterServiceImpl implements EncounterService {
             }
         });
         return avs;
+    }
+
+    @Override
+    @Transactional
+    public EncounterResponseDTO closeUnseen(UUID encounterId,
+                                            com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO request,
+                                            String actorUsername,
+                                            boolean isSuperAdmin,
+                                            UUID callerHospitalId) {
+        Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
+        EncounterStatus previous = encounter.getStatus();
+        if (!EncounterClosureRules.isNeverSeen(previous)) {
+            throw new BusinessException("encounter.closeUnseen.wrongStatus", String.valueOf(previous));
+        }
+        String previousValues = serializeEncounter(encounter);
+        LocalDateTime now = LocalDateTime.now();
+
+        encounter.setStatus(EncounterStatus.CANCELLED);
+        java.util.Map<String, Object> extra = encounter.getExtraFields() != null
+            ? new java.util.LinkedHashMap<>(encounter.getExtraFields())
+            : new java.util.LinkedHashMap<>();
+        extra.put(UNSEEN_OUTCOME_FIELD, request.getOutcome().name());
+        extra.put(UNSEEN_REASON_FIELD, request.getReason().trim());
+        extra.put(UNSEEN_CLOSED_AT_FIELD, now.toString());
+        encounter.setExtraFields(extra);
+        Encounter saved = encounterRepository.save(encounter);
+        trackerEventPublisher.publishStatusTransition(saved,
+            previous != null ? previous.name() : null, EncounterStatus.CANCELLED.name());
+
+        // The appointment was not honoured as a consultation either. QA D788: an
+        // appointment the desk had already marked COMPLETED by hand (before the
+        // appointment service refused that ahead of the check-out) is cancelled
+        // too: a never-seen visit cannot leave a completed consultation behind.
+        Appointment appointment = saved.getAppointment();
+        if (appointment != null
+                && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
+            appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
+            appointmentRepository.save(appointment);
+        }
+
+        recordHistory(saved, "CLOSED_UNSEEN", actorUsername, previousValues);
+        log.info("Encounter {} closed without a consultation ({})", saved.getId(), request.getOutcome());
+        return encounterMapper.toEncounterResponseDTO(saved);
     }
 
     /**
@@ -2698,6 +2758,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
             checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        showDischargingDepartment(encounter, avs);
         // QA D224: a later read used to lose the prescription summary and the
         // education text, which lived only on the checkout request.
         dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
@@ -2725,6 +2786,34 @@ public class EncounterServiceImpl implements EncounterService {
                 .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
         }
         return avs;
+    }
+
+    /**
+     * QA D795: a stay's encounter keeps the department it was opened in, while
+     * a transfer moves the admission to the new ward's department (QA D237).
+     * The after-visit summary of a stay names the department that discharged
+     * the patient, so it reads the admission's current department. A visit
+     * that is not a stay, an admission with no department, or a stay that
+     * never moved keeps the encounter's own department. The admission id is
+     * the encounter's own, read after the encounter's scope check.
+     */
+    private void showDischargingDepartment(Encounter encounter,
+                                           com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs) {
+        if (encounter.getAdmissionId() == null || admissionRepository == null) {
+            return;
+        }
+        admissionRepository.findById(encounter.getAdmissionId())
+            .filter(stay -> sameHospital(stay, encounter))
+            .map(com.example.hms.model.Admission::getDepartment)
+            .map(com.example.hms.model.Department::getName)
+            .filter(name -> !name.isBlank())
+            .ifPresent(avs::setDepartmentName);
+    }
+
+    /** The stay is the encounter's hospital's; never another tenant's department. */
+    private static boolean sameHospital(com.example.hms.model.Admission stay, Encounter encounter) {
+        return stay.getHospital() != null && encounter.getHospital() != null
+            && java.util.Objects.equals(stay.getHospital().getId(), encounter.getHospital().getId());
     }
 
     private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {
@@ -2921,7 +3010,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     // ------------------------------------------------------------------
-    // Ready-for-discharge: AWAITING_RESULTS → READY_FOR_DISCHARGE
+    // Ready-for-discharge: AWAITING_RESULTS (or, for the clinician, IN_PROGRESS) → READY_FOR_DISCHARGE
     // ------------------------------------------------------------------
 
     @Override
@@ -2937,6 +3026,13 @@ public class EncounterServiceImpl implements EncounterService {
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
             throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
+        }
+        // QA D788: from IN_PROGRESS this step ends the consultation, so it is the
+        // clinician's own (as the check-out of a visit IN_PROGRESS is). The desk
+        // reached READY_FOR_DISCHARGE here and then checked the visit out with an
+        // AVS, skipping the examination. The desk keeps AWAITING_RESULTS.
+        if (current == EncounterStatus.IN_PROGRESS && !EncounterClosureRules.callerIsClinician()) {
+            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", current.name());
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);

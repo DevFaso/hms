@@ -123,8 +123,8 @@
                   }
                   @if (
                     col.key === 'readyForDischarge' ||
-                    col.key === 'inProgress' ||
-                    col.key === 'awaitingResults'
+                    col.key === 'awaitingResults' ||
+                    (col.key === 'inProgress' && isClinician)
                   ) {
                     <button
                       class="btn-checkout"

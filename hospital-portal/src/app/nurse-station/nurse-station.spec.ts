@@ -662,6 +662,25 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(toastSpy.error).toHaveBeenCalledWith('Cette dose a déjà été enregistrée.');
     });
 
+    it("D799: Give from the medications table shows the dose's cross-reactivity advisory first", () => {
+      const card = {
+        summary: 'Possible cross-reactivity: Ceftriaxone and the documented allergy to Penicillin',
+        indicator: 'warning' as const,
+        source: { label: 'HMS allergy check' },
+      };
+      component.medications.set([
+        { id: 'rx-cef', medication: 'Ceftriaxone', cdsAdvisories: [card] } as any,
+        { id: 'rx-para', medication: 'Paracetamol', cdsAdvisories: [] } as any,
+      ]);
+      component.administerMedication('rx-cef');
+      expect(component.promptAdvisories()).toEqual([card]);
+      component.administerMedication('rx-para');
+      expect(component.promptAdvisories()).toEqual([]);
+      // A hold is not a dose given: no advisory in that prompt.
+      component.promptHoldRefuse('rx-cef', 'HELD');
+      expect(component.promptAdvisories()).toEqual([]);
+    });
+
     it('D130: Escape closes the nurse task modal', () => {
       component.taskCreateOpen.set(true);
       component.onEscapeKey();

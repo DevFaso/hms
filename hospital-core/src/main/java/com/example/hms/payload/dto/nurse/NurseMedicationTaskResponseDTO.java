@@ -33,4 +33,11 @@ public class NurseMedicationTaskResponseDTO {
 
     /** True once verified. False plus the flag above means administration is refused. */
     private boolean pharmacistVerified;
+
+    /**
+     * QA D799: non-blocking clinical advisories for this dose, today the
+     * beta-lactam cross-reactivity warning the prescriber saw. Empty when
+     * there is nothing to say; never a block.
+     */
+    private java.util.List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cdsAdvisories;
 }

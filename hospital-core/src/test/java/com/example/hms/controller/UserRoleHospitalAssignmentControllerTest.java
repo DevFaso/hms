@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -138,6 +139,19 @@ class UserRoleHospitalAssignmentControllerTest {
                 .jsonPath("$[0].channel").value("SMS"))
             .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                 .jsonPath("$[0].outcome").value("MOCKED"));
+    }
+
+    @Test
+    void resendNotificationAtAnArchivedHospitalIsAConflict_D789() throws Exception {
+        // QA D789 re-test: the same call returned 200 with EMAIL and SMS
+        // activations queued. The service now refuses it; the answer is a 409
+        // and no delivery report.
+        UUID assignmentId = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.ConflictException("assignment.hospital.closed"))
+            .when(assignmentService).resendNotifications(assignmentId);
+
+        mockMvc.perform(post("/assignments/{assignmentId}/resend-notification", assignmentId))
+            .andExpect(status().isConflict());
     }
 
     @Test

@@ -152,7 +152,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         applyCatalogPick(request, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
+        List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
+            runCdsRuleEngine(patient, hospitalId, request));
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
@@ -432,7 +433,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             computeSignatureDigest(canonicalSignaturePayload(prescription, signer, signedAt)));
 
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
-        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        // QA D793: the signature is the last look before the pharmacy and the
+        // ward act on the order, so the cross-reactivity advisory is repeated
+        // here (it never blocks the signature).
+        List<CdsCard> advisories = withCrossReactivityAdvisory(prescription.getPatient(),
+            prescription.getMedicationName(), List.of());
+        if (!advisories.isEmpty()) {
+            signed.setCdsAdvisories(advisories);
+        }
+        return signed;
     }
 
     /**
@@ -1003,7 +1013,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         applyCatalogPick(request, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
-        List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
+        List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
+            runCdsRuleEngine(patient, hospitalId, request));
 
         PrescriptionStatus statusBefore = existing.getStatus();
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
@@ -1632,6 +1643,33 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         handleAllergyConflict(patient, worst.get(), medicationName, request.getForceOverride(), reason);
         return reason;
+    }
+
+    /**
+     * QA D793: the allergy check above blocks only the drug and its own class
+     * (a penicillin allergy covers amoxicillin), so ceftriaxone for a
+     * penicillin-allergic patient was signed and given with no word. A
+     * beta-lactam that may cross-react with a documented beta-lactam allergy
+     * adds a WARNING card: shown to the prescriber, never a block, never an
+     * override to record. An allergy recorded at any hospital counts, as for
+     * the block. The card goes first: it is about the patient, the rule
+     * engine's cards are about the other orders.
+     */
+    private List<CdsCard> withCrossReactivityAdvisory(Patient patient, String medicationName, List<CdsCard> advisories) {
+        if (patient == null || patient.getId() == null || medicationName == null || medicationName.isBlank()) {
+            return advisories;
+        }
+        Optional<CdsCard> card = com.example.hms.service.allergy.CrossReactivityAdvisory.card(
+            medicationName, patientAllergyRepository.findByPatient_Id(patient.getId()));
+        if (card.isEmpty()) {
+            return advisories;
+        }
+        List<CdsCard> out = new java.util.ArrayList<>();
+        out.add(card.get());
+        if (advisories != null) {
+            out.addAll(advisories);
+        }
+        return out;
     }
 
     /** Higher is worse; an unknown severity ranks above a mild one, below a moderate one. */

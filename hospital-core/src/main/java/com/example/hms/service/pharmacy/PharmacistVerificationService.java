@@ -65,6 +65,8 @@ public class PharmacistVerificationService {
     private final UserRepository userRepository;
     private final RoleValidator roleValidator;
     private final Clock clock;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     /**
      * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
@@ -163,7 +165,7 @@ public class PharmacistVerificationService {
             throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
         }
         // QA D757: nor is a ward order of a stay that has ended.
-        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new BusinessException("pharmacy.prescription.stayEnded");
         }
 

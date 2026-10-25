@@ -50,6 +50,8 @@ import { AuthService } from '../auth/auth.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
+import { CdsCard } from '../shared/cds-card/cds-card.model';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -86,6 +88,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     EnumLabelPipe,
     PatientPickerComponent,
     ServerTimePipe,
+    CdsCardListComponent,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -454,6 +457,17 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   administerMedication(taskId: string): void {
     this.reasonPrompt.set({ taskId, action: 'GIVEN' });
     this.reasonText.set('');
+  }
+
+  /**
+   * QA D799: the advisories of the dose the prompt is about, so a nurse who
+   * records Give from this table (not the eMAR) still reads the
+   * cross-reactivity warning first.
+   */
+  promptAdvisories(): CdsCard[] {
+    const prompt = this.reasonPrompt();
+    if (prompt?.action !== 'GIVEN') return [];
+    return this.medications().find((m) => m.id === prompt.taskId)?.cdsAdvisories ?? [];
   }
 
   /** Translation key naming the action the reason prompt is for. */

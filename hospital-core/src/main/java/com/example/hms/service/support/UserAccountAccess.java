@@ -63,14 +63,15 @@ import java.util.stream.Collectors;
  *   <li><b>Discard an unclaimed patient account</b>: the compensation the
  *       patient-registration form sends when the patient row fails after the
  *       account was created (see {@link #canDelete}).</li>
- *   <li><b>Directory</b> (list / search): staff only, meaning a caller holding
- *       an active assignment in any role other than PATIENT, or a super-admin.
- *       Decided from the assignment table, not from token authorities: a
- *       Keycloak token also carries realm noise such as
- *       {@code ROLE_OFFLINE_ACCESS}, so "any role but PATIENT" read from the
- *       token would admit every patient. A super-admin sees every account;
- *       anyone else only the accounts assigned at a hospital where they hold
- *       that staff assignment (see {@link #requireDirectoryAccess}).</li>
+ *   <li><b>Directory</b> (list / search): administrators only (QA D790),
+ *       meaning a caller holding an active HOSPITAL_ADMIN or ADMIN
+ *       assignment, or a super-admin. Decided from the
+ *       assignment table, not from token authorities: a Keycloak token also
+ *       carries realm noise such as {@code ROLE_OFFLINE_ACCESS}. A super-admin
+ *       sees every account; an administrator only the accounts assigned at a
+ *       hospital they administer (see {@link #requireDirectoryAccess}). The
+ *       chat's colleague picker is the staff-wide, minimal variant
+ *       ({@link #requireColleagueDirectoryAccess}).</li>
  * </ul>
  *
  * <p>Role codes are compared after {@link RoleExpansion}, on the token's
@@ -101,6 +102,12 @@ public class UserAccountAccess {
     private static final String PATIENT = "PATIENT";
     /** The administrator of an external provider facility (provider plan §6.3). */
     private static final String PROVIDER_ADMIN = "PROVIDER_ADMIN";
+
+    /**
+     * QA D790: the hospital administrators who page the user directory. A provider
+     * facility's administrator manages its staff through the provider pages.
+     */
+    private static final Set<String> DIRECTORY_ADMIN_ROLES = Set.of(HOSPITAL_ADMIN, "ADMIN");
 
     /** Roles only a super-admin grants, and whose holders only a super-admin administers. Bare codes. */
     public static final Set<String> ADMIN_ROLES = Set.of(SUPER_ADMIN, HOSPITAL_ADMIN, "ADMIN", PROVIDER_ADMIN);
@@ -409,17 +416,20 @@ public class UserAccountAccess {
     }
 
     /**
-     * The user directory (list and search) is for staff, and a staff member's
-     * directory is their own hospitals. Throws {@link AccessDeniedException}
-     * for everyone else, patients included.
+     * The user directory (list and search) is the administrators' tool (QA
+     * D790): before it, any staff role (a lab technician, a pharmacist, a
+     * nurse, the reception) paged through every account of its hospital with
+     * names, roles and active/deleted flags. Throws {@link AccessDeniedException}
+     * for everyone else, other staff and patients included. Pickers that need
+     * names use their own scoped endpoints ({@link #requireColleagueDirectoryAccess}
+     * for the chat's colleagues).
      *
      * <ul>
      *   <li>A super-admin (the verified context flag) sees every account.</li>
-     *   <li>Anyone else holding an ACTIVE assignment in a role other than
-     *       PATIENT sees the accounts that hold an assignment, in any role and
-     *       active or not, at a hospital where the caller holds such an
-     *       assignment. The caller's own PATIENT assignments do not widen it:
-     *       a nurse at A who is a patient at B does not see B's staff.</li>
+     *   <li>A holder of an ACTIVE HOSPITAL_ADMIN or ADMIN assignment sees the accounts that hold an
+     *       assignment, in any role and active or not, at a hospital where the
+     *       caller administers. The caller's other assignments do not widen it:
+     *       a hospital admin at A who is a nurse at B does not see B's staff.</li>
      * </ul>
      *
      * <p>The target's assignment counts whether active or not because every
@@ -439,6 +449,30 @@ public class UserAccountAccess {
         if (caller.superAdmin()) {
             return DirectoryScope.ALL_ACCOUNTS;
         }
+        List<UserRoleHospitalAssignment> adminAssignments = caller.activeAssignments().stream()
+            .filter(a -> DIRECTORY_ADMIN_ROLES.contains(roleCode(a.getRole())))
+            .toList();
+        if (adminAssignments.isEmpty()) {
+            throw new AccessDeniedException("Access denied");
+        }
+        // QA D125: only a hospital administrator reads patients' contact details from the directory.
+        boolean administrator = adminAssignments.stream()
+            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
+        return new DirectoryScope(false, hospitalIdsOf(adminAssignments), administrator);
+    }
+
+    /**
+     * QA D790: the chat's new-conversation picker, which needs a colleague's id,
+     * name and role and nothing else. Any caller holding an ACTIVE assignment
+     * in a role other than PATIENT, scoped to the hospitals of those
+     * assignments; never patients' contact details. Patients have their own
+     * pickers (care team, appointment clinicians) and are refused here.
+     */
+    public DirectoryScope requireColleagueDirectoryAccess() {
+        Caller caller = caller();
+        if (caller.superAdmin()) {
+            return new DirectoryScope(true, Set.of(), false);
+        }
         List<UserRoleHospitalAssignment> staffAssignments = caller.activeAssignments().stream()
             .filter(a -> {
                 String code = roleCode(a.getRole());
@@ -448,14 +482,14 @@ public class UserAccountAccess {
         if (staffAssignments.isEmpty()) {
             throw new AccessDeniedException("Access denied");
         }
-        // QA D125: only a hospital administrator reads patients' contact details from the
-        // directory; other staff still see the account (chat needs the id and the name).
-        boolean administrator = staffAssignments.stream()
-            .anyMatch(a -> HOSPITAL_ADMIN.equals(roleCode(a.getRole())));
-        return new DirectoryScope(false, staffAssignments.stream()
+        return new DirectoryScope(false, hospitalIdsOf(staffAssignments), false);
+    }
+
+    private static Set<UUID> hospitalIdsOf(List<UserRoleHospitalAssignment> assignments) {
+        return assignments.stream()
             .map(UserAccountAccess::hospitalIdOf)
             .filter(Objects::nonNull)
-            .collect(Collectors.toUnmodifiableSet()), administrator);
+            .collect(Collectors.toUnmodifiableSet());
     }
 
     /**

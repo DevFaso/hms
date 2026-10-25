@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.StrictQueryParams;
 import com.example.hms.security.audit.WriteAudited;
 import com.example.hms.payload.dto.BreakGlassDeclareRequestDTO;
 import com.example.hms.payload.dto.BreakGlassReviewRequestDTO;
@@ -106,6 +107,7 @@ public class BreakGlassController {
     }
 
     @GetMapping("/audit")
+    @StrictQueryParams
     @Operation(summary = "Hospital-scoped break-glass review",
                description = "Returns all sessions (live, expired, and revoked) for a hospital, "
                            + "ordered most-recent first. Intended for admin compliance review screens.")

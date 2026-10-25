@@ -719,10 +719,11 @@
 "login_credentials_required" = "Username and password required.";
 "biometrics_generic" = "Biometrics";
 "reset_password_title" = "Reset Password";
-"forgot_password_instruction" = "Enter the email address associated with your account and we will send you a link to reset your password.";
+"forgot_password_instruction" = "Enter the e-mail address, username or phone number of your account. We will send a reset link to its e-mail address, or by SMS.";
 "email_address" = "Email Address";
 "send_reset_link" = "Send Reset Link";
-"reset_link_sent" = "If that email is registered, a password reset link has been sent. Please check your inbox.";
+"reset_identifier_label" = "E-mail, username or phone number";
+"reset_link_sent" = "If an account matches what you entered, a reset link has been sent to its e-mail address or by SMS. Nothing after a few minutes? Your account may have no e-mail address or phone number we can reach: ask your hospital's reception desk to reset your password.";
 "reset_have_code_title" = "Already have the e-mail?";
 "reset_have_code_desc" = "Paste the whole link from the e-mail, or just its code, then choose a new password.";
 "reset_code_placeholder" = "Link or code from the e-mail";

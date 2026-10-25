@@ -2264,6 +2264,52 @@ class UserServiceImplTest {
                 new org.springframework.data.domain.PageImpl<>(java.util.List.of());
 
         @Test
+        @DisplayName("QA D790: the chat picker lists active colleagues by id, name and role, scoped, with no contact")
+        void chatRecipientsAreMinimalAndScoped() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireColleagueDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals, false));
+            User live = new User();
+            live.setId(UUID.randomUUID());
+            live.setFirstName("Awa");
+            live.setLastName("Traore");
+            live.setEmail("awa@example.org");
+            live.setUsername("awa");
+            live.setActive(true);
+            User pending = new User();
+            pending.setId(UUID.randomUUID());
+            pending.setActive(false);
+            when(userRepository.findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any()))
+                    .thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(live, pending)));
+            when(userMapper.toSummaryDTO(live)).thenReturn(com.example.hms.payload.dto.UserSummaryDTO.builder()
+                    .id(live.getId()).roleName("ROLE_NURSE").profileType("STAFF").email("awa@example.org").build());
+
+            java.util.List<com.example.hms.payload.dto.ChatRecipientDTO> rows = userService.listChatRecipients(5000);
+
+            assertThat(rows).singleElement().satisfies(r -> {
+                assertThat(r.getId()).isEqualTo(live.getId());
+                assertThat(r.getFirstName()).isEqualTo("Awa");
+                assertThat(r.getRoleName()).isEqualTo("ROLE_NURSE");
+            });
+            org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                    org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+            verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), page.capture());
+            assertThat(page.getValue().getPageSize()).isEqualTo(500);
+            verify(accountAccess, never()).requireDirectoryAccess();
+        }
+
+        @Test
+        @DisplayName("QA D790: a caller the colleague directory refuses gets nothing queried")
+        void chatRecipientsRefusal() {
+            doThrow(new org.springframework.security.access.AccessDeniedException("Access denied"))
+                    .when(accountAccess).requireColleagueDirectoryAccess();
+
+            assertThatThrownBy(() -> userService.listChatRecipients(100))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            verifyNoInteractions(userRepository);
+        }
+
+        @Test
         @DisplayName("a scoped caller queries with its hospitals and scoped=true, never the deleted view")
         void scopedCallerPassesItsHospitals() {
             Set<UUID> hospitals = Set.of(UUID.randomUUID());
