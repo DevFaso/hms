@@ -208,9 +208,16 @@ public class LaborServiceImpl implements LaborService {
 
         Staff admittedBy = resolveStaffOrCaller(request.getAdmittedByStaffId(), hospital, recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
-        java.util.Optional<MaternalHistory> latest = maternalHistoryRepository.findCurrentByPatientId(patientId);
+        java.util.Optional<MaternalHistory> latest = latestReadablePregnancy(patientId, hospital.getId(), recorderUserId);
         MaternalHistory history = currentPregnancy(patientId, latest, request)
             .orElseGet(() -> openPregnancyForUnbookedLabour(patient, hospital, admittedBy, request, latest.orElse(null)));
+        // The previous record was read (linked, or carried into the new one):
+        // when another hospital owns it, that is a cross-hospital reach.
+        latest.ifPresent(source -> reachRecorder.recordReach(patientId, hospital.getId(), recorderUserId, null,
+            CrossHospitalReachRecorder.reachOf(
+                java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(source.getHospital())),
+                hospital.getId()),
+            "Cross-hospital maternal history read on the treatment relationship to open a labour episode"));
 
         LaborEpisode episode = LaborEpisode.builder()
             .patient(patient)
@@ -233,6 +240,24 @@ public class LaborServiceImpl implements LaborService {
 
         LaborEpisode saved = episodeRepository.save(episode);
         return laborMapper.toEpisodeResponse(saved, 0, false);
+    }
+
+    /**
+     * Review of #954: her latest pregnancy record among the hospitals the
+     * caller may read for her (the acting hospital, plus the treatment
+     * relationship's hospitals when cross-hospital reads are on), never every
+     * hospital. Its content is linked to the episode or carried into a new
+     * record owned by the acting hospital, so an unscoped read would copy
+     * another hospital's history past the record-access policy.
+     */
+    private java.util.Optional<MaternalHistory> latestReadablePregnancy(UUID patientId, UUID actingHospitalId,
+                                                                        UUID requesterUserId) {
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        if (readable == null || readable.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return maternalHistoryRepository
+            .findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(patientId, readable);
     }
 
     /**
@@ -264,7 +289,7 @@ public class LaborServiceImpl implements LaborService {
      * derived from the estimate), so the chart has one pregnancy, dated, and
      * the antenatal calendar refuses a pregnancy that is in labour.
      *
-     * <p>When she has an earlier history (a delivered pregnancy), the new
+     * <p>When she has an earlier history the caller may read (a delivered pregnancy), the new
      * record is its next version and becomes her current history, so it
      * carries her past history forward (previous caesarean sections, PPH,
      * allergies...) and only the pregnancy's own dating starts afresh.

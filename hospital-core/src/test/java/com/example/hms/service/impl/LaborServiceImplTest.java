@@ -136,10 +136,13 @@ class LaborServiceImplTest {
             .thenAnswer(inv -> inv.getArgument(0));
         // QA D796: a booked pregnancy (no dating) is on record unless a test
         // says otherwise; an unbooked labour needs an estimated gestational age.
-        lenient().when(maternalHistoryRepository.findCurrentByPatientId(any()))
+        lenient().when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(any(), any()))
             .thenReturn(Optional.of(new MaternalHistory()));
         lenient().when(maternalHistoryRepository.save(any(MaternalHistory.class)))
             .thenAnswer(inv -> inv.getArgument(0));
+        // Cross-hospital reads default OFF: the caller reads her acting hospital only.
+        lenient().when(recordAccessPolicy.readableHospitalIds(any(), any(), any()))
+            .thenAnswer(inv -> inv.getArgument(2) == null ? java.util.Set.of() : java.util.Set.of(inv.<UUID>getArgument(2)));
     }
 
     private PartographEntryRequestDTO entryRequest() {
@@ -217,7 +220,7 @@ class LaborServiceImplTest {
         history.setGravida(3);
         history.setPara(2);
         history.setEstimatedDueDate(LocalDate.now().plusWeeks(2)); // → 38 weeks
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
 
         LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
 
@@ -801,7 +804,7 @@ class LaborServiceImplTest {
             .thenReturn(false);
         MaternalHistory history = new MaternalHistory();
         history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(38));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
             LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
@@ -817,7 +820,7 @@ class LaborServiceImplTest {
             .thenReturn(false);
         MaternalHistory history = new MaternalHistory();
         history.setLastMenstrualPeriod(LocalDate.now().minusWeeks(93));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(history));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(history));
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
             LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build());
@@ -927,7 +930,7 @@ class LaborServiceImplTest {
     private void unbookedPatientAtTheHospital() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.empty());
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.empty());
     }
 
     /** The exact round-12 call: MIDWIFE_A posts an onset and an admission time for A3, who has no maternal history. */
@@ -986,7 +989,7 @@ class LaborServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         MaternalHistory booked = new MaternalHistory();
         booked.setEstimatedDueDate(LocalDate.now().plusWeeks(1));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(booked));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(booked));
 
         LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId,
             LaborEpisodeRequestDTO.builder().hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build());
@@ -1002,7 +1005,7 @@ class LaborServiceImplTest {
         MaternalHistory previous = new MaternalHistory();
         previous.setRecordedDate(LocalDateTime.now().minusYears(2));
         previous.setEstimatedDueDate(LocalDate.now().minusYears(2).plusMonths(5));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(previous));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(previous));
         when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(3);
         // The birth of that pregnancy: after its record, long before the D214 window.
         when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
@@ -1050,7 +1053,9 @@ class LaborServiceImplTest {
         previous.setChronicConditions("Sickle cell trait");
         previous.setPrenatalVitaminsStarted(Boolean.TRUE);
         previous.setClinicalNotes("Notes about the previous pregnancy");
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(previous));
+        // Her previous record is the acting hospital's own.
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
         when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(2);
         when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
             org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
@@ -1084,13 +1089,107 @@ class LaborServiceImplTest {
         assertThat(opened.getPara()).isNull();
     }
 
+    /**
+     * Review of #954 (round 2): her latest record belongs to another hospital
+     * that the caller may not read (cross-hospital reads off). The repository
+     * answers like the real query, by the hospital set it is given, so the
+     * record must not be reached: nothing is linked, nothing is carried into
+     * the acting hospital's new record, and no reach is recorded.
+     */
+    @Test
+    void aPreviousRecordOutsideTheReadableHospitalsIsNeverCarried_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        MaternalHistory elsewhere = new MaternalHistory();
+        elsewhere.setHospital(otherHospital);
+        elsewhere.setRecordedDate(LocalDateTime.now().minusMonths(2));
+        elsewhere.setEstimatedDueDate(LocalDate.now().plusWeeks(1));
+        elsewhere.setAllergies("Peanuts");
+        elsewhere.setPreviousCesareanSections(2);
+        elsewhere.setMentalHealthConditions("Postpartum depression");
+        elsewhere.setDomesticViolenceDetails("Disclosed at booking");
+        elsewhere.setPsychosocialNotes("Social worker referral");
+        historiesOnRecord(elsewhere);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+
+        // Not linked: her dated pregnancy elsewhere is invisible here, so an estimate is needed.
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+                .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        MaternalHistory opened = captor.getValue();
+        assertThat(opened.getHospital()).isSameAs(hospital);
+        assertThat(opened.getAllergies()).isNull();
+        assertThat(opened.getPreviousCesareanSections()).isNull();
+        assertThat(opened.getMentalHealthConditions()).isNull();
+        assertThat(opened.getDomesticViolenceDetails()).isNull();
+        assertThat(opened.getPsychosocialNotes()).isNull();
+        org.mockito.ArgumentCaptor<LaborEpisode> saved = org.mockito.ArgumentCaptor.forClass(LaborEpisode.class);
+        verify(episodeRepository).save(saved.capture());
+        assertThat(saved.getValue().getMaternalHistory()).isSameAs(opened);
+        verify(reachRecorder, never()).recordReach(any(), any(), any(), any(),
+            org.mockito.ArgumentMatchers.argThat(reach -> reach != null && !reach.isEmpty()), any());
+    }
+
+    /**
+     * Review of #954 (round 2): when the treatment relationship makes the other
+     * hospital readable, her history there is carried forward and the copy is
+     * accounted as a cross-hospital reach naming that hospital.
+     */
+    @Test
+    void aReadablePreviousRecordAtAnotherHospitalIsCarriedAndItsReachRecorded_D796() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        when(recordAccessPolicy.readableHospitalIds(recorderUserId, patientId, hospitalId))
+            .thenReturn(java.util.Set.of(hospitalId, otherHospital.getId()));
+        MaternalHistory elsewhere = new MaternalHistory();
+        elsewhere.setHospital(otherHospital);
+        elsewhere.setRecordedDate(LocalDateTime.now().minusYears(2));
+        elsewhere.setPreviousCesareanSections(1);
+        historiesOnRecord(elsewhere);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(37).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getPreviousCesareanSections()).isEqualTo(1);
+        verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(recorderUserId), isNull(),
+            eq(java.util.Map.of(otherHospital.getId().toString(), 1L)), anyString());
+    }
+
+    /** Answers the scoped lookup like the real query: the first record whose hospital is in the given set. */
+    private void historiesOnRecord(MaternalHistory... records) {
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+            eq(patientId), any()))
+            .thenAnswer(inv -> {
+                java.util.Collection<UUID> hospitals = inv.getArgument(1);
+                return java.util.Arrays.stream(records)
+                    .filter(r -> r.getHospital() != null && hospitals.contains(r.getHospital().getId()))
+                    .findFirst();
+            });
+    }
+
     @Test
     void aLabourThatContinuesARecentBirthKeepsItsPregnancy_D796() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         MaternalHistory twins = new MaternalHistory();
         twins.setRecordedDate(LocalDateTime.now().minusMonths(7));
-        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(twins));
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any())).thenReturn(Optional.of(twins));
         when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
             org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
 
