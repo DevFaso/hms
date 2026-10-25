@@ -59,13 +59,18 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        if (!(handler instanceof HandlerMethod method)) {
-            return true;
+        if (handler instanceof HandlerMethod method) {
+            rejectUnknown(request, method);
         }
+        // Continue unless something upstream already answered the request.
+        return !response.isCommitted();
+    }
+
+    private void rejectUnknown(HttpServletRequest request, HandlerMethod method) {
         Accepted accepted = acceptedByMethod.computeIfAbsent(method.getMethod(),
             m -> isStrict(method) ? accepted(method) : Accepted.ANYTHING);
         if (!accepted.enforced()) {
-            return true;
+            return;
         }
         Set<String> unknown = new TreeSet<>(request.getParameterMap().keySet());
         unknown.removeAll(accepted.names());
@@ -73,7 +78,6 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
             throw new BusinessException("error.request.unknownParameter",
                 echoed(unknown.iterator().next()), String.join(", ", accepted.names()));
         }
-        return true;
     }
 
     private static boolean isStrict(HandlerMethod method) {
@@ -85,30 +89,49 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
     static Accepted accepted(HandlerMethod method) {
         Set<String> names = new TreeSet<>();
         for (MethodParameter parameter : method.getMethodParameters()) {
-            Class<?> type = parameter.getParameterType();
-            RequestParam requestParam = parameter.getParameterAnnotation(RequestParam.class);
-            if (requestParam != null) {
-                String name = StringUtils.hasText(requestParam.name()) ? requestParam.name() : requestParam.value();
-                if (!StringUtils.hasText(name) && Map.class.isAssignableFrom(type)) {
-                    return Accepted.ANYTHING;
-                }
-                addName(names, StringUtils.hasText(name) ? name : parameterName(parameter));
-            } else if (Pageable.class.isAssignableFrom(type)) {
-                names.addAll(PAGEABLE_PARAMS);
-            } else if (Sort.class.isAssignableFrom(type)) {
-                names.add(SORT_PARAM);
-            } else if (parameter.hasParameterAnnotation(ModelAttribute.class)) {
-                for (PropertyDescriptor property : BeanUtils.getPropertyDescriptors(type)) {
-                    if (property.getWriteMethod() != null) {
-                        names.add(property.getName());
-                    }
-                }
-            } else if (parameter.getParameterAnnotations().length == 0 && BeanUtils.isSimpleProperty(type)) {
-                // An unannotated simple argument is bound from the query string by its name.
-                addName(names, parameterName(parameter));
+            if (!collectNames(parameter, names)) {
+                return Accepted.ANYTHING;
             }
         }
         return new Accepted(true, Collections.unmodifiableSet(names));
+    }
+
+    /**
+     * Adds the query names {@code parameter} binds; false when it binds a whole
+     * {@code @RequestParam Map}, so the handler accepts anything.
+     */
+    private static boolean collectNames(MethodParameter parameter, Set<String> names) {
+        Class<?> type = parameter.getParameterType();
+        RequestParam requestParam = parameter.getParameterAnnotation(RequestParam.class);
+        if (requestParam != null) {
+            String name = StringUtils.hasText(requestParam.name()) ? requestParam.name() : requestParam.value();
+            if (StringUtils.hasText(name)) {
+                names.add(name);
+                return true;
+            }
+            if (Map.class.isAssignableFrom(type)) {
+                return false;
+            }
+            addName(names, parameterName(parameter));
+        } else if (Pageable.class.isAssignableFrom(type)) {
+            names.addAll(PAGEABLE_PARAMS);
+        } else if (Sort.class.isAssignableFrom(type)) {
+            names.add(SORT_PARAM);
+        } else if (parameter.hasParameterAnnotation(ModelAttribute.class)) {
+            addWritableProperties(names, type);
+        } else if (parameter.getParameterAnnotations().length == 0 && BeanUtils.isSimpleProperty(type)) {
+            // An unannotated simple argument is bound from the query string by its name.
+            addName(names, parameterName(parameter));
+        }
+        return true;
+    }
+
+    private static void addWritableProperties(Set<String> names, Class<?> type) {
+        for (PropertyDescriptor property : BeanUtils.getPropertyDescriptors(type)) {
+            if (property.getWriteMethod() != null) {
+                names.add(property.getName());
+            }
+        }
     }
 
     /**

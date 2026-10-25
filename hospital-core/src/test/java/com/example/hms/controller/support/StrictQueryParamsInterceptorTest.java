@@ -28,13 +28,16 @@ class StrictQueryParamsInterceptorTest {
         public void search(@RequestParam(required = false) List<String> eventType,
                            @RequestParam(name = "q", required = false) String term,
                            Pageable pageable) {
+            // Signature only: the interceptor reads the parameters, never runs the body.
         }
 
         @StrictQueryParams
         public void anything(@RequestParam Map<String, String> all) {
+            // Signature only: the interceptor reads the parameters, never runs the body.
         }
 
         public void lax(@RequestParam(required = false) String eventType) {
+            // Signature only: the interceptor reads the parameters, never runs the body.
         }
     }
 
