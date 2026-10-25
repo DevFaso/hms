@@ -163,6 +163,8 @@ class NurseTaskServiceImplTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     @Mock
     private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock
+    private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
     @BeforeEach
     void setUp() {
@@ -174,7 +176,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository));
+            assignmentRepository, patientAllergyRepository));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -2915,6 +2917,112 @@ class NurseTaskServiceImplTest {
             .hasMessageContaining("Verification request body");
     }
 
+    /* ── QA D799: the eMAR carries the beta-lactam cross-reactivity advisory ── */
+
+    private static com.example.hms.model.PatientAllergy penicillinAllergy() {
+        com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        return allergy;
+    }
+
+    private Prescription signedOrder(UUID patientId, UUID hospitalId, String drug, String dose, String route,
+                                     LocalDateTime createdAt) {
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        Hospital hospital = mock(Hospital.class);
+        lenient().when(hospital.getId()).thenReturn(hospitalId);
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setPatient(patient);
+        rx.setHospital(hospital);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setMedicationName(drug);
+        rx.setDosage(dose);
+        rx.setRoute(route);
+        rx.setFrequency("Toutes les 24 heures");
+        rx.setCreatedAt(createdAt);
+        return rx;
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D799: the MAR row of ceftriaxone for a penicillin-allergic patient carries the cross-reactivity WARNING")
+    void marRowOfCeftriaxoneForPenicillinAllergyCarriesTheAdvisory() {
+        // The re-test call: NURSE_A GET /nurse/medications/mar; row e2337828
+        // (Ceftriaxone 1 g IV, CHW7809 allergic to penicillin) had no field.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Boureima Y", "Boureima", "Y")));
+        Prescription cef = signedOrder(patientId, hospitalId, "Ceftriaxone", "1 g", "IV", LocalDateTime.now().minusMinutes(5));
+        Prescription para = signedOrder(patientId, hospitalId, "Paracétamol", "1 g", "PO", LocalDateTime.now().minusMinutes(5));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(cef, para));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(penicillinAllergy()));
+
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
+
+        NurseMedicationTaskResponseDTO cefRow = tasks.stream().filter(t -> "Ceftriaxone".equals(t.getMedication())).findFirst().orElseThrow();
+        assertThat(cefRow.getCdsAdvisories()).hasSize(1);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = cefRow.getCdsAdvisories().get(0);
+        assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING);
+        assertThat(card.summary()).contains("Ceftriaxone").contains("Pénicilline");
+        // No false alarm on the paracetamol row, and one allergy read per patient.
+        NurseMedicationTaskResponseDTO paraRow = tasks.stream().filter(t -> "Paracétamol".equals(t.getMedication())).findFirst().orElseThrow();
+        assertThat(paraRow.getCdsAdvisories()).isEmpty();
+        verify(patientAllergyRepository, org.mockito.Mockito.times(1)).findByPatient_Id(patientId);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D799: the bedside verify of that dose passes the five rights AND returns the advisory")
+    void verifyOfCeftriaxoneForPenicillinAllergyReturnsTheAdvisoryWithoutFailingARight() {
+        // The re-test call: POST /nurse/medications/mar/{id}/verify with the right
+        // scans returned 200 allPassed=true and no warning.
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription cef = signedOrder(patientId, hospitalId, "Ceftriaxone", "1 g", "IV", LocalDateTime.now());
+        when(marRepository.findById(cef.getId())).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(cef.getId())).thenReturn(Optional.of(cef));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(penicillinAllergy()));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("Ceftriaxone");
+        req.setDoseScanValue("1 g");
+        req.setRouteScanValue("IV");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(cef.getId(), null, hospitalId, req);
+
+        assertThat(resp.isAllPassed()).isTrue();
+        assertThat(resp.getCdsAdvisories()).hasSize(1);
+        assertThat(resp.getCdsAdvisories().get(0).indicator())
+            .isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING);
+        assertThat(resp.getCdsAdvisories().get(0).summary()).contains("Ceftriaxone");
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D799: no allergy, no advisory on the verify (negative control, patient A2)")
+    void verifyWithoutAllergyCarriesNoAdvisory() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription cef = signedOrder(patientId, hospitalId, "Ceftriaxone", "1 g", "IV", LocalDateTime.now());
+        when(marRepository.findById(cef.getId())).thenReturn(Optional.empty());
+        when(prescriptionRepository.findByIdForUpdate(cef.getId())).thenReturn(Optional.of(cef));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MarVerificationRequestDTO req = new MarVerificationRequestDTO();
+        req.setPatientScanValue(patientId.toString());
+        req.setMedicationScanValue("Ceftriaxone");
+        req.setDoseScanValue("1 g");
+        req.setRouteScanValue("IV");
+
+        MarVerificationResponseDTO resp = service.verifyMedicationAdministration(cef.getId(), null, hospitalId, req);
+
+        assertThat(resp.isAllPassed()).isTrue();
+        assertThat(resp.getCdsAdvisories()).isEmpty();
+    }
+
     @Test
     void verifyMedicationMaterializesNewMarFromPrescriptionWhenIdResolvesToPrescription() {
         UUID rxId = UUID.randomUUID();
@@ -3154,7 +3262,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository);
+            assignmentRepository, patientAllergyRepository);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();

@@ -10680,6 +10680,8 @@
     "PHARMACIST_BLOCKED_BODY": "Esta dosis no puede registrarse como administrada hasta que un farmacéutico haya verificado la prescripción. Suspenda la dosis y contacte con la farmacia — Suspendida, Rechazada y Omitida siguen siendo registrables.",
     "PHARMACIST_BLOCKED_TITLE": "Pendiente de verificación farmacéutica",
     "PHARMACIST_PENDING_CHIP": "Espera farmacia",
+    "ALLERGY_ADVISORY_CHIP": "Alerta de alergia",
+    "ALLERGY_ADVISORY_TITLE": "Posible reacción cruzada con una alergia documentada",
     "PLACEHOLDER_SELECT_DOSE": "Seleccione una dosis pendiente para iniciar la verificación.",
     "RIGHT": {
       "DOSE": "Dosis correcta",

@@ -51,13 +51,17 @@ public class AdmissionController {
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
-    @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals")
+    @Operation(summary = "List admissions",
+        description = "The acting hospital's admissions (every hospital's for a super-admin with none in scope), "
+            + "optionally narrowed by status, admission-time window and patient")
     public ResponseEntity<List<AdmissionResponseDTO>> listAllAdmissions(
         @RequestParam(required = false) String status,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+        // QA D800: honoured, never silently dropped.
+        @RequestParam(required = false) UUID patientId
     ) {
-        return ResponseEntity.ok(admissionService.getAllAdmissions(status, startDate, endDate));
+        return ResponseEntity.ok(admissionService.getAllAdmissions(status, startDate, endDate, patientId));
     }
 
     @GetMapping("/{admissionId}")

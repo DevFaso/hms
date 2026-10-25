@@ -284,6 +284,14 @@
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
+                      @if (m.cdsAdvisories?.length) {
+                        <span
+                          class="status-badge status-advisory"
+                          [attr.data-testid]="'med-advisory-' + m.id"
+                          [title]="m.cdsAdvisories![0].summary"
+                          >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
+                        >
+                      }
                     </td>
                     <td>{{ m.dose }}</td>
                     <td>{{ m.route }}</td>
@@ -1024,6 +1032,11 @@
         {{ 'NURSE.MEDICATION' | translate }}
       </h3>
       @if (reasonPrompt()?.action === 'GIVEN') {
+        @if (promptAdvisories().length) {
+          <div role="alert" data-testid="give-prompt-advisory">
+            <app-cds-card-list [cards]="promptAdvisories()" />
+          </div>
+        }
         <p>{{ 'NURSE.OVERRIDE_EXPLAIN' | translate }}</p>
         <p>
           <a routerLink="/emar">{{ 'NURSE.OPEN_EMAR' | translate }}</a>

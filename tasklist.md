@@ -2205,15 +2205,29 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
-- **QA D793 (round 12): no allergy check at administration.** The
-  beta-lactam cross-reactivity advisory now shows at prescribing, on every
-  edit and at the signature (`fix/qa-r12-discharge-safety`), and the CDS
-  Hooks order-sign service flags a penicillin allergy against any penicillin.
-  Owed: the eMAR shows no allergy at all when the nurse scans and gives a
-  dose (no check exists there today, direct match or cross-reactivity), so
-  the nurse in the QA run gave the ceftriaxone with nothing on screen. An
-  administration-time allergy banner and acknowledgement is a new eMAR
-  feature (screen, API field, audit of the acknowledgement), not a bug fix.
+- **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
+  The beta-lactam cross-reactivity advisory now shows at prescribing, on
+  every edit, at the signature, on the eMAR row (queue chip, a card before
+  the scan steps), in the bedside verify answer (`cdsAdvisories`, allPassed
+  unchanged) and in the nurse station's Give prompt
+  (`fix/qa-r12-discharge-safety`). Owed: an order the prescriber signed over
+  a DIRECT allergy match (the block, overridden with a reason) still reaches
+  the eMAR with no banner, and no screen records that the nurse read an
+  advisory. A recorded acknowledgement (screen step, API field, audit event)
+  is a new eMAR feature, not a bug fix.
+
+- **QA D800 (round 12): the one-open-stay rule is a check, not a constraint.**
+  The re-test's "second ACTIVE admission" was another patient's stay:
+  `GET /admissions` ignored `patientId` (now honoured, with the
+  `startDate`/`endDate` window it also ignored), and every stay-opening path
+  checks `existsOpenAdmissionForPatient` (`AdmissionCreationGuardTest`).
+  Owed: the HL7 A01 auto-create runs in a REQUIRES_NEW transaction under the
+  demographic upsert, so it cannot take the patient row lock the in-app
+  admission takes (it would wait on its own outer transaction); an A01 and
+  an in-app admit for the same patient in the same instant can both pass.
+  The fix is a partial unique index on open stays (a migration, after
+  closing any existing duplicates) or a shared advisory lock, not a patch
+  of this round.
 
 - **QA D711 (round 10): one stored note row per daily progress entry.** The
   encounter note is one row per encounter (`uk_encounter_note_encounter`,

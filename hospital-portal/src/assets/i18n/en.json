@@ -10680,6 +10680,8 @@
     "PHARMACIST_BLOCKED_BODY": "This dose cannot be recorded as given until a pharmacist has verified the prescription. Hold the dose and contact the pharmacy — Hold, Refused and Missed can still be recorded.",
     "PHARMACIST_BLOCKED_TITLE": "Awaiting pharmacist verification",
     "PHARMACIST_PENDING_CHIP": "Pharmacy hold",
+    "ALLERGY_ADVISORY_CHIP": "Allergy advisory",
+    "ALLERGY_ADVISORY_TITLE": "Possible cross-reactivity with a documented allergy",
     "PLACEHOLDER_SELECT_DOSE": "Select a due dose to begin verification.",
     "RIGHT": {
       "DOSE": "Right Dose",

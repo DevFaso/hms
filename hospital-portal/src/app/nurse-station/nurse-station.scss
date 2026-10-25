@@ -288,6 +288,12 @@
     background: #fee2e2;
     color: #991b1b;
   }
+  /* QA D799: the dose carries an allergy advisory (never a block). */
+  &.status-advisory {
+    margin-left: 0.4rem;
+    background: #fef3c7;
+    color: #92400e;
+  }
 }
 
 .priority-badge {

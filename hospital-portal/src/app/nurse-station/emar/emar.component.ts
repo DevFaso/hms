@@ -24,6 +24,8 @@ import {
   NurseTaskService,
 } from '../../services/nurse-task.service';
 import { ToastService } from '../../core/toast.service';
+import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
+import { CdsCard } from '../../shared/cds-card/cds-card.model';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
@@ -60,7 +62,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
 @Component({
   selector: 'app-emar',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe],
+  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
   styleUrl: './emar.component.scss',
@@ -95,6 +97,18 @@ export class EmarComponent implements OnInit, OnDestroy {
       this.doseScan().trim().length > 0 &&
       this.routeScan().trim().length > 0
     );
+  });
+
+  /**
+   * QA D799: the cross-reactivity advisory the prescriber saw, before the
+   * dose is given. The bedside verify's answer is the fresher one (the
+   * allergy list may have changed since the queue loaded); until then the
+   * row's. Never a block: Record Given stays governed by the five rights.
+   */
+  protected readonly allergyAdvisories = computed<CdsCard[]>(() => {
+    const fromVerify = this.verification()?.cdsAdvisories;
+    if (fromVerify) return fromVerify;
+    return this.activeTask()?.cdsAdvisories ?? [];
   });
 
   protected readonly needsOverride = computed(() => {
@@ -245,6 +259,10 @@ export class EmarComponent implements OnInit, OnDestroy {
           this.verifyInFlight.set(false);
           if (resp.allPassed) {
             this.toast.success(this.translate.instant('EMAR.TOAST.ALL_RIGHTS_VERIFIED'));
+            // QA D799: five rights passed is not "nothing to read" — the
+            // cross-reactivity advisory is repeated next to the green toast.
+            const advisory = resp.cdsAdvisories?.[0];
+            if (advisory) this.toast.info(advisory.summary);
           } else {
             this.toast.error(
               this.translate.instant('EMAR.TOAST.RIGHTS_FAILED', {

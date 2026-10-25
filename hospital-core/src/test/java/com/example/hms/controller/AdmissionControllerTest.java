@@ -397,6 +397,21 @@ class AdmissionControllerTest {
         }
     }
 
+    @Test
+    @WithMockUser(authorities = "ROLE_DOCTOR")
+    @DisplayName("QA D800: GET /admissions?patientId= passes the patient to the service (it was silently dropped)")
+    void listAllAdmissions_passesPatientId() throws Exception {
+        UUID patientId = UUID.randomUUID();
+        when(admissionService.getAllAdmissions(isNull(), isNull(), isNull(), eq(patientId)))
+            .thenReturn(List.of(buildAdmissionResponse(UUID.randomUUID())));
+
+        mockMvc.perform(get(BASE).param("patientId", patientId.toString()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1));
+
+        verify(admissionService).getAllAdmissions(null, null, null, patientId);
+    }
+
     // ═══════════════════════ Hospital queries ═══════════════════════
 
     @Nested

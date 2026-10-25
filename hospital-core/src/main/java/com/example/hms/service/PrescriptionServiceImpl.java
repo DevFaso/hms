@@ -1659,20 +1659,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (patient == null || patient.getId() == null || medicationName == null || medicationName.isBlank()) {
             return advisories;
         }
-        Optional<String> allergen = com.example.hms.service.allergy.BetaLactamCrossReactivity.crossReactiveAllergen(
+        Optional<CdsCard> card = com.example.hms.service.allergy.CrossReactivityAdvisory.card(
             medicationName, patientAllergyRepository.findByPatient_Id(patient.getId()));
-        if (allergen.isEmpty()) {
+        if (card.isEmpty()) {
             return advisories;
         }
-        String summary = com.example.hms.utility.MessageUtil.resolveOrRaw(
-            "cds.allergy.crossReactivity.summary", medicationName, allergen.get());
-        String detail = com.example.hms.utility.MessageUtil.resolveOrRaw(
-            "cds.allergy.crossReactivity.detail", medicationName, allergen.get());
-        CdsCard card = new CdsCard(summary, detail, CdsCard.Indicator.WARNING,
-            new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS allergy check", null, null),
-            null, null, null, UUID.randomUUID().toString());
         List<CdsCard> out = new java.util.ArrayList<>();
-        out.add(card);
+        out.add(card.get());
         if (advisories != null) {
             out.addAll(advisories);
         }
