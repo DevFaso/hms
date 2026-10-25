@@ -105,6 +105,7 @@ class ReceptionServiceImplTest {
     @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.repository.PatientHospitalRegistrationRepository registrationRepo;
     @Mock private com.example.hms.service.BillingInvoiceService billingInvoiceService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<EncounterService> encounterServiceProvider;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -1228,11 +1229,11 @@ class ReceptionServiceImplTest {
     class UpdateEncounterStatus {
 
         @Test
-        @DisplayName("admin can update any encounter status")
+        @DisplayName("admin can move any encounter through the desk statuses")
         void adminUpdatesStatus() {
             UUID encounterId = UUID.randomUUID();
             Encounter encounter = mock(Encounter.class);
-            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.ARRIVED);
+            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.TRIAGE);
             when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId))
                     .thenReturn(Optional.of(encounter));
 
@@ -1245,10 +1246,85 @@ class ReceptionServiceImplTest {
             when(staffRepo.findByUsernameOrLicenseOrRoleCode("receptionist1"))
                     .thenReturn(Optional.of(adminStaff));
 
+            service.updateEncounterStatus(encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1");
+
+            verify(encounter).setStatus(EncounterStatus.ARRIVED);
+            verify(encounterRepo).save(encounter);
+        }
+
+        private void callerIsReceptionist(String username) {
+            Role receptionistRole = mock(Role.class);
+            when(receptionistRole.getCode()).thenReturn("ROLE_RECEPTIONIST");
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            when(assignment.getRole()).thenReturn(receptionistRole);
+            Staff adminStaff = mock(Staff.class);
+            when(adminStaff.getAssignment()).thenReturn(assignment);
+            when(staffRepo.findByUsernameOrLicenseOrRoleCode(username)).thenReturn(Optional.of(adminStaff));
+        }
+
+        private Encounter encounterIn(UUID encounterId, EncounterStatus status) {
+            Encounter encounter = mock(Encounter.class);
+            lenient().when(encounter.getStatus()).thenReturn(status);
+            when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)).thenReturn(Optional.of(encounter));
+            return encounter;
+        }
+
+        @Test
+        @DisplayName("QA D788: the desk dropping a never-seen ARRIVED card on 'completed' is refused, nothing written")
+        void deskCannotCompleteANeverSeenVisit() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(
+                    encounterId, EncounterStatus.COMPLETED, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(ex -> assertThat(((com.example.hms.exception.BusinessException) ex).getMessageKey())
+                    .isEqualTo("encounter.status.notCompletable"));
+            verify(encounter, never()).setStatus(any());
+            verify(encounterRepo, never()).save(any());
+            verify(encounterServiceProvider, never()).getObject();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE"})
+        @DisplayName("QA D788: the desk never sets a clinical status by hand (the bypass of the start and the examination)")
+        void deskCannotSetAClinicalStatus(EncounterStatus target) {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(encounterId, target, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(encounter, never()).setStatus(any());
+        }
+
+        @Test
+        @DisplayName("QA D788: the desk cannot cancel on the board either; close-unseen records the reason")
+        void deskCannotCancelOnTheBoard() {
+            UUID encounterId = UUID.randomUUID();
+            encounterIn(encounterId, EncounterStatus.ARRIVED);
+            callerIsReceptionist("receptionist1");
+
+            assertThatThrownBy(() -> service.updateEncounterStatus(
+                    encounterId, EncounterStatus.CANCELLED, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("QA D788: a READY_FOR_DISCHARGE card dropped on 'completed' is checked out, not just relabelled")
+        void completingAnExaminedVisitIsACheckout() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.READY_FOR_DISCHARGE);
+            callerIsReceptionist("receptionist1");
+            EncounterService encounterService = mock(EncounterService.class);
+            when(encounterServiceProvider.getObject()).thenReturn(encounterService);
+
             service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "receptionist1");
 
-            verify(encounter).setStatus(EncounterStatus.COMPLETED);
-            verify(encounterRepo).save(encounter);
+            verify(encounterService).checkOut(eq(encounterId), any(), eq("receptionist1"), eq(false), eq(hospitalId));
+            verify(encounter, never()).setStatus(any());
         }
 
         @Test

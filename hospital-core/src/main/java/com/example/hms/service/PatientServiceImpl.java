@@ -1869,7 +1869,9 @@ public class PatientServiceImpl implements PatientService {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_ENCOUNTER)) {
             return List.of();
         }
+        // QA D791: a prescription's anchor is not a visit on the timeline (the prescription itself is).
         return encounterRepository.findByPatient_Id(patientId).stream()
+            .filter(encounter -> !encounter.isPrescriptionAnchor())
             .filter(encounter -> isReadableHospital(readableHospitalIds, encounter.getHospital()))
             .filter(encounter -> withheld.admit(encounter.getHospital(), encounter.getDepartment(), actingHospitalId,
                 sensitivityClassifier.effectiveCategory(encounter), unlocked))

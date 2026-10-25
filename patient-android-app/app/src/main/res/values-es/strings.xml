@@ -817,9 +817,10 @@
     <string name="password_min_length">La contraseña debe tener al menos 8 caracteres.</string>
     <string name="passwords_mismatch">Las contraseñas no coinciden.</string>
     <string name="reset_title">Restablecer contraseña</string>
-    <string name="reset_instruction">Introduzca la dirección de correo electrónico asociada a su cuenta y le enviaremos un enlace para restablecer su contraseña.</string>
+    <string name="reset_instruction">Introduzca el correo electrónico, el nombre de usuario o el número de teléfono de su cuenta. Enviaremos un enlace de restablecimiento a su correo electrónico o por SMS.</string>
+    <string name="reset_identifier_label">Correo electrónico, nombre de usuario o número de teléfono</string>
     <string name="reset_send_link">Enviar enlace de restablecimiento</string>
-    <string name="reset_link_sent">Si ese correo está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada.</string>
+    <string name="reset_link_sent">Si una cuenta coincide con lo que ha introducido, se ha enviado un enlace de restablecimiento a su correo electrónico o por SMS. ¿No ha recibido nada en unos minutos? Puede que su cuenta no tenga un correo ni un teléfono al que podamos llegar: pida a la recepción de su hospital que restablezca su contraseña.</string>
     <string name="reset_code_title">Establecer una nueva contraseña</string>
     <string name="reset_code_instruction">Pegue el enlace del correo, o el código que aparece al final. El mismo enlace también abre la página de restablecimiento en su navegador.</string>
     <string name="reset_code_label">Enlace o código del correo</string>

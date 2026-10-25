@@ -48,6 +48,13 @@
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
                      before they walk to the bed. -->
+                @if (task.cdsAdvisories?.length) {
+                  <span
+                    class="emar__queue-chip emar__queue-chip--advisory"
+                    [attr.data-testid]="'emar-advisory-chip-' + task.id"
+                    >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
+                  >
+                }
                 @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
                   <span
                     class="emar__queue-chip emar__queue-chip--blocked"
@@ -86,6 +93,22 @@
                 </h3>
                 <p class="emar__blocked-body">{{ 'EMAR.PHARMACIST_BLOCKED_BODY' | translate }}</p>
               </div>
+            }
+
+            <!-- QA D799: the prescriber's cross-reactivity advisory, read
+                 before scanning and giving the dose. Advisory only. -->
+            @if (allergyAdvisories().length) {
+              <section
+                class="emar__advisory"
+                role="alert"
+                [attr.aria-label]="'EMAR.ALLERGY_ADVISORY_TITLE' | translate"
+                data-testid="emar-allergy-advisory"
+              >
+                <h3 class="emar__advisory-title">
+                  {{ 'EMAR.ALLERGY_ADVISORY_TITLE' | translate }}
+                </h3>
+                <app-cds-card-list [cards]="allergyAdvisories()" />
+              </section>
             }
 
             <section class="emar__scan">

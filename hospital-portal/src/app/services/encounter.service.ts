@@ -186,6 +186,14 @@ export interface FollowUpAppointmentRequest {
   notes?: string;
 }
 
+/** QA D788: how a visit no clinician saw ends. */
+export type UnseenVisitOutcome = 'LEFT_WITHOUT_BEING_SEEN' | 'CANCELLED';
+
+export interface CloseUnseenVisitRequest {
+  outcome: UnseenVisitOutcome;
+  reason: string;
+}
+
 export interface CheckOutRequest {
   followUpInstructions?: string;
   dischargeDiagnoses?: string[];
@@ -418,6 +426,14 @@ export class EncounterService {
 
   checkOut(encounterId: string, req: CheckOutRequest): Observable<AfterVisitSummary> {
     return this.http.post<AfterVisitSummary>(`${this.baseUrl}/${encounterId}/checkout`, req);
+  }
+
+  /**
+   * QA D788: a visit no clinician has seen is closed as "left without being
+   * seen" or cancelled, with a reason; it is never a consultation.
+   */
+  closeUnseen(encounterId: string, req: CloseUnseenVisitRequest): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/close-unseen`, req);
   }
 
   startEncounter(encounterId: string): Observable<EncounterResponse> {

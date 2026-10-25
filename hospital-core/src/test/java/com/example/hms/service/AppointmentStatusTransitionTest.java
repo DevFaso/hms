@@ -62,6 +62,7 @@ class AppointmentStatusTransitionTest {
     @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     @Mock private com.example.hms.config.AppointmentLinkProperties appointmentLinks;
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
+    @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
 
     @InjectMocks
     private AppointmentServiceImpl appointmentService;
@@ -351,6 +352,76 @@ class AppointmentStatusTransitionTest {
         verify(appointmentRepository).save(appointment);
         org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
             .isEqualTo(AppointmentStatus.COMPLETED);
+    }
+
+    /** A visit opened for the appointment at check-in, in the given status. */
+    private void givenVisit(com.example.hms.enums.EncounterStatus status) {
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        visit.setStatus(status);
+        visit.setAppointment(appointment);
+        when(encounterRepository.findByAppointmentIdIn(java.util.List.of(appointmentId)))
+            .thenReturn(java.util.List.of(visit));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.EncounterStatus.class,
+        names = {"ARRIVED", "TRIAGE", "WAITING_FOR_PHYSICIAN", "IN_PROGRESS", "AWAITING_RESULTS",
+            "READY_FOR_DISCHARGE", "CANCELLED"}, mode = org.junit.jupiter.params.provider.EnumSource.Mode.INCLUDE)
+    void qaD788_deskCannotCompleteTheAppointmentOfAVisitNotCheckedOut(com.example.hms.enums.EncounterStatus visit) {
+        // QA D788: PUT /appointments/{id}/status?action=complete on a CHECKED_IN
+        // appointment whose patient was never seen. The visit's check-out
+        // completes the appointment; by hand, ahead of it, it is refused.
+        givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+        givenVisit(visit);
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> {
+                BusinessException refused = (BusinessException) ex;
+                org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())
+                    .isEqualTo("appointment.complete.visitNotCompleted");
+                org.assertj.core.api.Assertions.assertThat(refused.getArgs()).containsExactly(visit.name());
+            });
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+    }
+
+    @Test
+    void qaD788_theEditFormCannotCompleteTheAppointmentOfAnOpenVisitEither() {
+        // PUT /appointments/{id} with status COMPLETED: the same refusal.
+        givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+        givenVisit(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        edit.setPatientId(UUID.randomUUID());
+        edit.setStaffId(UUID.randomUUID());
+        edit.setHospitalId(hospital.getId());
+        edit.setAppointmentDate(appointment.getAppointmentDate());
+        edit.setStartTime(appointment.getStartTime());
+        edit.setEndTime(appointment.getEndTime());
+        edit.setStatus(AppointmentStatus.COMPLETED);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.complete.visitNotCompleted"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+    }
+
+    @Test
+    void qaD788_aCheckedOutVisitLetsTheAppointmentComplete() {
+        givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+        givenVisit(com.example.hms.enums.EncounterStatus.COMPLETED);
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
     }
 
     @Test

@@ -1574,4 +1574,52 @@ class AuthControllerTest {
         verify(email).sendActivationEmail(eq("nurse9@example.com"), any());
         verify(notifier).resendPendingActivationCode(pendingId, AuthController.RESEND_COOLDOWN);
     }
+
+    /**
+     * QA D787: the legacy {@code POST /auth/request-reset} answered 400 to a
+     * phone number ({@code @Email} on the parameter). It names the account the
+     * way {@code /auth/password/request} does and is a 204.
+     */
+    @Test
+    void legacyRequestReset_phoneNumber_is204_routedByIdentifier_D787() throws Exception {
+        com.example.hms.service.PasswordResetService resets = mock(com.example.hms.service.PasswordResetService.class);
+        java.util.List<Runnable> queued = new java.util.ArrayList<>();
+        when(authNotificationFacade.passwordResetRequests()).thenReturn(
+                com.example.hms.service.PasswordResetRequestDispatcherTestSupport.onExecutor(resets, queued::add));
+
+        mockMvc.perform(post("/auth/request-reset").param("email", "+22670202020"))
+                .andExpect(status().isNoContent());
+
+        // QA D802: nothing touched the account on the request thread; the work is queued.
+        org.mockito.Mockito.verifyNoInteractions(resets);
+        queued.forEach(Runnable::run);
+        verify(resets).requestResetByIdentifier(eq("+22670202020"), any(), any());
+        verify(resets, never()).requestReset(any(), any(), any());
+    }
+
+    @Test
+    void legacyRequestReset_usernameInTheBody_is204_D787() throws Exception {
+        com.example.hms.service.PasswordResetRequestDispatcher resets =
+                mock(com.example.hms.service.PasswordResetRequestDispatcher.class);
+        when(authNotificationFacade.passwordResetRequests()).thenReturn(resets);
+
+        mockMvc.perform(post("/auth/request-reset")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"identifier\":\"recep.a\"}"))
+                .andExpect(status().isNoContent());
+
+        verify(resets).dispatch(eq("recep.a"), any(), any());
+    }
+
+    @Test
+    void legacyRequestReset_nothingNamed_is400_andSendsNothing_D787() throws Exception {
+        com.example.hms.service.PasswordResetRequestDispatcher resets =
+                mock(com.example.hms.service.PasswordResetRequestDispatcher.class);
+        when(authNotificationFacade.passwordResetRequests()).thenReturn(resets);
+
+        mockMvc.perform(post("/auth/request-reset"))
+                .andExpect(status().isBadRequest());
+
+        verify(resets, never()).dispatch(any(), any(), any());
+    }
 }

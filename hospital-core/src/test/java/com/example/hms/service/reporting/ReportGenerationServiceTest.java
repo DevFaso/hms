@@ -110,7 +110,7 @@ class ReportGenerationServiceTest {
         Encounter cancelled = new Encounter();
         cancelled.setEncounterDate(LocalDateTime.of(2026, 8, 21, 11, 0));
         cancelled.setStatus(EncounterStatus.CANCELLED);
-        when(encounterRepository.findByHospital_IdAndEncounterDateBetween(
+        when(encounterRepository.findVisitsByHospitalAndDateBetween(
             eq(hospital.getId()), any(), any(), any()))
             .thenReturn(new PageImpl<>(List.of(completed, cancelled)));
 

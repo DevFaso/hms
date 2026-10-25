@@ -35,7 +35,7 @@ import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/elig
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
-import { actionRoles } from '../core/action-permissions';
+import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 
@@ -719,8 +719,18 @@ export class EncountersComponent implements OnInit {
     return enc.status === 'IN_PROGRESS';
   }
 
+  /**
+   * QA D788: from IN_PROGRESS this ends the consultation, so the API admits it
+   * for the doctor, nurse or midwife only; the desk keeps AWAITING_RESULTS.
+   */
   canMarkReadyForDischarge(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS' || enc.status === 'AWAITING_RESULTS';
+    if (enc.status === 'AWAITING_RESULTS') {
+      return true;
+    }
+    return (
+      enc.status === 'IN_PROGRESS' &&
+      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress])
+    );
   }
 
   completeExamination(enc: EncounterResponse): void {

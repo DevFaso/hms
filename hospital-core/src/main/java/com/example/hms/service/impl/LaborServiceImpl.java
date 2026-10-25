@@ -126,6 +126,27 @@ public class LaborServiceImpl implements LaborService {
     }
 
     static final int VERY_PRETERM_WEEKS = 32;
+    /** QA D796: the gestational age an unbooked labour may be opened at (the delivery record's own bounds). */
+    static final int MIN_LABOUR_GESTATIONAL_WEEKS = 20;
+    static final int MAX_LABOUR_GESTATIONAL_WEEKS = 45;
+
+    /**
+     * QA D797: approximate median birth weight in grams for each completed
+     * week of gestation from {@value #FIRST_WEIGHT_WEEK} to 42 weeks (index 0 =
+     * {@value #FIRST_WEIGHT_WEEK} weeks), rounded, from the usual preterm and
+     * term growth curves. It only feeds a plausibility check with deliberately
+     * wide bounds ({@link #IMPLAUSIBLY_LIGHT_FACTOR} to
+     * {@link #IMPLAUSIBLY_HEAVY_FACTOR} times the median): a weight outside
+     * them is far more likely a charting error (the weight, or the dating) than
+     * a real baby, so the record is kept and a CAUTION asks to check it. It is
+     * not a growth classification (small or large for gestational age).
+     */
+    private static final int[] MEDIAN_BIRTH_WEIGHT_GRAMS = {
+        500, 580, 650, 760, 880, 1000, 1150, 1300, 1450, 1650, 1850,
+        2100, 2350, 2600, 2850, 3050, 3250, 3400, 3500, 3600, 3650};
+    static final int FIRST_WEIGHT_WEEK = 22;
+    static final double IMPLAUSIBLY_HEAVY_FACTOR = 1.6;
+    static final double IMPLAUSIBLY_LIGHT_FACTOR = 0.45;
     /**
      * QA D214: a new labour this soon after a recorded birth cannot be a new
      * pregnancy reaching labour (20 weeks is the floor of a birth). It is a
@@ -152,6 +173,7 @@ public class LaborServiceImpl implements LaborService {
     private final com.example.hms.service.DeliveryChargeService deliveryChargeService;
     /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
     private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
+    private final com.example.hms.mapper.MaternalHistoryMapper maternalHistoryMapper;
 
     /* ═══════════════════════ Episodes ═══════════════════════ */
 
@@ -186,7 +208,16 @@ public class LaborServiceImpl implements LaborService {
 
         Staff admittedBy = resolveStaffOrCaller(request.getAdmittedByStaffId(), hospital, recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
-        MaternalHistory history = maternalHistoryRepository.findCurrentByPatientId(patientId).orElse(null);
+        java.util.Optional<MaternalHistory> latest = latestReadablePregnancy(patientId, hospital.getId(), recorderUserId);
+        MaternalHistory history = currentPregnancy(patientId, latest, request)
+            .orElseGet(() -> openPregnancyForUnbookedLabour(patient, hospital, admittedBy, request, latest.orElse(null)));
+        // The previous record was read (linked, or carried into the new one):
+        // when another hospital owns it, that is a cross-hospital reach.
+        latest.ifPresent(source -> reachRecorder.recordReach(patientId, hospital.getId(), recorderUserId, null,
+            CrossHospitalReachRecorder.reachOf(
+                java.util.Collections.singletonList(CrossHospitalReachRecorder.hospitalIdOf(source.getHospital())),
+                hospital.getId()),
+            "Cross-hospital maternal history read on the treatment relationship to open a labour episode"));
 
         LaborEpisode episode = LaborEpisode.builder()
             .patient(patient)
@@ -209,6 +240,89 @@ public class LaborServiceImpl implements LaborService {
 
         LaborEpisode saved = episodeRepository.save(episode);
         return laborMapper.toEpisodeResponse(saved, 0, false);
+    }
+
+    /**
+     * Review of #954: her latest pregnancy record among the hospitals the
+     * caller may read for her (the acting hospital, plus the treatment
+     * relationship's hospitals when cross-hospital reads are on), never every
+     * hospital. Its content is linked to the episode or carried into a new
+     * record owned by the acting hospital, so an unscoped read would copy
+     * another hospital's history past the record-access policy.
+     */
+    private java.util.Optional<MaternalHistory> latestReadablePregnancy(UUID patientId, UUID actingHospitalId,
+                                                                        UUID requesterUserId) {
+        Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
+        if (readable == null || readable.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return maternalHistoryRepository
+            .findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(patientId, readable);
+    }
+
+    /**
+     * QA D796: the pregnancy this labour belongs to. The latest pregnancy
+     * record, unless a birth has been recorded since it was written (that
+     * pregnancy is over, and linking a new labour to it would date it from the
+     * old due date), except when the clinician states that this labour
+     * continues a recent birth (the D214 override, e.g. a retained twin).
+     */
+    private java.util.Optional<MaternalHistory> currentPregnancy(UUID patientId,
+                                                                 java.util.Optional<MaternalHistory> latest,
+                                                                 LaborEpisodeRequestDTO request) {
+        String override = request.getRecentDeliveryOverrideReason();
+        if (latest.isEmpty() || latest.get().getRecordedDate() == null || (override != null && !override.isBlank())) {
+            return latest;
+        }
+        boolean deliveredSince = deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            patientId, latest.get().getRecordedDate());
+        return deliveredSince ? java.util.Optional.empty() : latest;
+    }
+
+    /**
+     * QA D796: a labour episode opened for a woman with no pregnancy on record
+     * (gestational age null), and a 14-week antenatal calendar could then be
+     * planned next to it. A woman who arrives in labour with no antenatal
+     * booking must still be admitted, so the episode is not refused outright:
+     * it needs the clinician's estimated gestational age, and that estimate
+     * opens the pregnancy record the episode is linked to (its due date
+     * derived from the estimate), so the chart has one pregnancy, dated, and
+     * the antenatal calendar refuses a pregnancy that is in labour.
+     *
+     * <p>When she has an earlier history the caller may read (a delivered pregnancy), the new
+     * record is its next version and becomes her current history, so it
+     * carries her past history forward (previous caesarean sections, PPH,
+     * allergies...) and only the pregnancy's own dating starts afresh.
+     * Gravida and para are the clinician's figures for this admission: the
+     * birth since the previous record and this pregnancy changed both, so
+     * the previous record's counts are not carried as if they were current.
+     */
+    private MaternalHistory openPregnancyForUnbookedLabour(Patient patient, Hospital hospital, Staff admittedBy,
+                                                           LaborEpisodeRequestDTO request, MaternalHistory previous) {
+        Integer weeks = request.getGestationalAgeWeeks();
+        if (weeks == null) {
+            throw new BusinessException("maternity.labor.pregnancyRequired");
+        }
+        if (weeks < MIN_LABOUR_GESTATIONAL_WEEKS || weeks > MAX_LABOUR_GESTATIONAL_WEEKS) {
+            throw new BusinessException("maternity.labor.gestationalAgeRange",
+                MIN_LABOUR_GESTATIONAL_WEEKS, MAX_LABOUR_GESTATIONAL_WEEKS);
+        }
+        LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
+        MaternalHistory pregnancy = new MaternalHistory();
+        maternalHistoryMapper.carryForwardHistory(previous, pregnancy);
+        pregnancy.setPatient(patient);
+        pregnancy.setHospital(hospital);
+        pregnancy.setRecordedBy(admittedBy);
+        // A new pregnancy after a delivered one is the next version of her record.
+        Integer latestVersion = maternalHistoryRepository.findMaxVersionByPatientId(patient.getId());
+        pregnancy.setVersionNumber(latestVersion == null ? 1 : latestVersion + 1);
+        pregnancy.setRecordedDate(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        pregnancy.setEstimatedDueDate(today.plusWeeks((long) TERM_WEEKS - weeks));
+        pregnancy.setGravida(request.getGravida());
+        pregnancy.setPara(request.getPara());
+        pregnancy.setUpdateReason(messageSource.getMessage("maternity.labor.unbookedPregnancyNote",
+            new Object[]{weeks}, NotificationLocales.STAFF));
+        return maternalHistoryRepository.save(pregnancy);
     }
 
     /**
@@ -568,6 +682,7 @@ public class LaborServiceImpl implements LaborService {
                 alertText("labor-preterm", ga),
                 "gestationalAgeWeeksAtBirth", new Object[]{ga});
         }
+        evaluateBirthWeightPlausibility(record);
         Integer ebl = record.getEstimatedBloodLossMl();
         if (ebl != null && ebl >= PPH_BLOOD_LOSS_ML) {
             record.addAlert(LaborAlertType.HEMORRHAGE, LaborAlertSeverity.URGENT,
@@ -599,6 +714,31 @@ public class LaborServiceImpl implements LaborService {
                 alertText("labor-stillbirth"),
                 "liveBirth", new Object[]{});
         }
+    }
+
+    /**
+     * QA D797: 3,200 g at 24 weeks was recorded with only the preterm alert.
+     * A weight far outside what the gestational age allows is flagged
+     * (CAUTION, never a refusal: the clinician may know better, and a birth is
+     * always recorded); it names both values so either can be corrected.
+     */
+    private void evaluateBirthWeightPlausibility(DeliveryRecord delivery) {
+        Integer grams = delivery.getBirthWeightGrams();
+        Integer weeks = delivery.getGestationalAgeWeeksAtBirth();
+        if (grams == null || weeks == null || !isImplausibleBirthWeight(grams, weeks)) {
+            return;
+        }
+        delivery.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
+            "labor-weight-implausible",
+            alertText("labor-weight-implausible", grams, weeks),
+            "birthWeightGrams", new Object[]{grams, weeks});
+    }
+
+    /** True when {@code grams} is outside the wide plausible band for {@code weeks} (QA D797). */
+    static boolean isImplausibleBirthWeight(int grams, int weeks) {
+        int index = Math.clamp((long) weeks - FIRST_WEIGHT_WEEK, 0, MEDIAN_BIRTH_WEIGHT_GRAMS.length - 1);
+        int median = MEDIAN_BIRTH_WEIGHT_GRAMS[index];
+        return grams > median * IMPLAUSIBLY_HEAVY_FACTOR || grams < median * IMPLAUSIBLY_LIGHT_FACTOR;
     }
 
     private LaborOutcome deriveOutcome(DeliveryRecord record) {

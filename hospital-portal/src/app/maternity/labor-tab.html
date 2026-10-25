@@ -183,9 +183,12 @@
         </p>
         @for (alert of record.alerts; track $index) {
           <p>
-            <span class="risk-badge risk-high" [title]="alert.triggeredBy">{{
-              alert.message
-            }}</span>
+            <!-- QA D797: a CAUTION (an implausible weight to check) is not shown as urgent. -->
+            <span
+              class="risk-badge {{ alert.severity === 'URGENT' ? 'risk-high' : 'risk-moderate' }}"
+              [title]="alert.triggeredBy"
+              >{{ alert.message }}</span
+            >
           </p>
         }
       </div>

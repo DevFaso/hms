@@ -2,6 +2,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { CdsCard } from '../shared/cds-card/cds-card.model';
+
 export interface NurseVitalTask {
   id: string;
   patientId: string;
@@ -32,6 +34,12 @@ export interface NurseMedicationTask {
    */
   requiresPharmacistVerification?: boolean;
   pharmacistVerified?: boolean;
+  /**
+   * QA D799: non-blocking advisories for this dose (the beta-lactam
+   * cross-reactivity warning the prescriber saw), shown before the dose is
+   * given. Empty when there is nothing to say.
+   */
+  cdsAdvisories?: CdsCard[];
 }
 
 /** Bedside five-rights barcode-scan check (P1 #8). */
@@ -52,6 +60,8 @@ export interface MarVerificationResponse {
   failureReasons: Partial<Record<FiveRightsCheck, string>>;
   allPassed: boolean;
   verifiedAt: string;
+  /** QA D799: advisories that never fail a right (allPassed stays true). */
+  cdsAdvisories?: CdsCard[];
 }
 
 export interface NurseOrderTask {

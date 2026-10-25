@@ -168,6 +168,36 @@ class FacilityAssignmentGuardTest {
         assertThat(((BusinessException) thrown).getMessageKey()).isEqualTo(key);
     }
 
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D789: admin-register's hospital id is refused with a 409 once the hospital is archived")
+    void archivedHospitalByIdIsClosed() {
+        Hospital archived = facility(FacilityType.HOSPITAL);
+        archived.setLifecycleState(com.example.hms.enums.HospitalLifecycleState.ARCHIVED);
+        when(hospitalRepository.findById(archived.getId())).thenReturn(java.util.Optional.of(archived));
+
+        assertThat(catchThrowable(() -> guard.requireCompatible(java.util.List.of("ROLE_NURSE"), archived.getId())))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage(FacilityAssignmentGuard.MSG_HOSPITAL_CLOSED);
+    }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("QA D789: an active or suspended hospital, a global row and an unknown id pass")
+    void openStatesPass() {
+        Hospital suspended = facility(FacilityType.HOSPITAL);
+        suspended.setLifecycleState(com.example.hms.enums.HospitalLifecycleState.SUSPENDED);
+        when(hospitalRepository.findById(suspended.getId())).thenReturn(java.util.Optional.of(suspended));
+
+        assertThatCode(() -> guard.requireCompatible(java.util.List.of("ROLE_NURSE"), suspended.getId()))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> FacilityAssignmentGuard.requireOpenForAssignment(facility(FacilityType.PHARMACY)))
+            .doesNotThrowAnyException();
+        assertThatCode(() -> FacilityAssignmentGuard.requireOpenForAssignment((Hospital) null)).doesNotThrowAnyException();
+        assertThatCode(() -> guard.requireCompatible(java.util.List.of("ROLE_NURSE"), (UUID) null))
+            .doesNotThrowAnyException();
+        assertThat(FacilityAssignmentGuard.isClosed(com.example.hms.enums.HospitalLifecycleState.PURGED)).isTrue();
+        assertThat(FacilityAssignmentGuard.isClosed(com.example.hms.enums.HospitalLifecycleState.ACTIVE)).isFalse();
+    }
+
     private static Hospital facility(FacilityType type) {
         Hospital h = new Hospital();
         h.setId(UUID.randomUUID());

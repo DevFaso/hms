@@ -1,5 +1,7 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -71,6 +73,16 @@ class StockOutRoutingServiceImplTest {
 
     /** G13: the work-queue claim; exit-path releases are verified where they matter. */
     @Mock private com.example.hms.service.pharmacy.PrescriptionQueueClaimService queueClaimService;
+
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
+
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
+
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -330,6 +342,47 @@ class StockOutRoutingServiceImplTest {
         assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not in a routable state");
+    }
+
+    @Test
+    @DisplayName("QA D792: a SIGNED ward order of an ended stay is not routed, printed or back-ordered")
+    void wardOrderOfAnEndedStayIsNotRoutable() {
+        com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+        stay.setAdmissionId(UUID.randomUUID());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        prescription.setEncounter(stay);
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+        String stayEnded = com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded");
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D792 (#953 review): any order the ended-stay guard refuses is not routed, printed or back-ordered")
+    void anyShapeTheGuardRefusesIsNotRoutable() {
+        prescription.setEncounter(null);
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+        String stayEnded = com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded");
+
+        assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        verify(routingDecisionRepository, never()).save(any());
     }
 
     @Test
@@ -1214,6 +1267,46 @@ class StockOutRoutingServiceImplTest {
             assertThat(prescription.getStatus()).isEqualTo(withdrawn);
             verify(prescriptionRepository, never()).save(any());
             verify(partnerChannel, never()).notifyPatientDispensed(any(), any());
+            verifyNoInteractions(prescriberNotifier);
+        }
+
+        /** The order is a ward order of a stay that has ended: the discontinuation ends it. */
+        private void endsWithItsStay() {
+            when(stayOrderDiscontinuation.discontinueIfStayEnded(eq(prescription), any(), anyString()))
+                    .thenAnswer(inv -> {
+                        prescription.setStatus(PrescriptionStatus.DISCONTINUED);
+                        return true;
+                    });
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review, round 2): a no-show on a ward order of an ended stay ends it, "
+                + "never back to SIGNED in the queue")
+        void noShowOnAnEndedStayOrderEndsIt() {
+            prescription.setStatus(PrescriptionStatus.PARTNER_ACCEPTED);
+            PrescriptionRoutingDecision decision = partnerDecision(RoutingDecisionStatus.ACCEPTED);
+            endsWithItsStay();
+
+            service.partnerNoShow(decision.getId(), "never came");
+
+            verify(stayOrderDiscontinuation).discontinueIfStayEnded(eq(prescription), any(), eq("Partner no-show"));
+            verify(withdrawnOrders).closeOffer(eq(decision), eq(prescription), anyString());
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+            assertThat(decision.isPartnerNoShow()).isTrue();
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review, round 2): a partner refusal of a ward order of an ended stay ends it, "
+                + "never PARTNER_REJECTED in the queue")
+        void refusalOfAnEndedStayOrderEndsIt() {
+            prescription.setStatus(PrescriptionStatus.SENT_TO_PARTNER);
+            PrescriptionRoutingDecision decision = partnerDecision(RoutingDecisionStatus.PENDING);
+            endsWithItsStay();
+
+            service.partnerRespond(decision.getId(), false);
+
+            verify(withdrawnOrders).closeOffer(eq(decision), eq(prescription), anyString());
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
             verifyNoInteractions(prescriberNotifier);
         }
 

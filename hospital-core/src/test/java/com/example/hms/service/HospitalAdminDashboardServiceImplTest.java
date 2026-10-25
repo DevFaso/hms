@@ -171,7 +171,7 @@ class HospitalAdminDashboardServiceImplTest {
         when(billingInvoiceRepository.findOverdue(any(LocalDate.class), anyList())).thenReturn(List.of());
         when(billingInvoiceRepository.findByHospital_Id(eq(HOSPITAL_ID), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(auditEventLogRepository.findByAssignment_Hospital_IdOrderByEventTimestampDesc(eq(HOSPITAL_ID), any(Pageable.class)))
+        when(auditEventLogRepository.findAnchoredAtHospital(eq(HOSPITAL_ID), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(staffShiftRepository.findByHospital_IdAndShiftDate(eq(HOSPITAL_ID), any(LocalDate.class)))
             .thenReturn(List.of());
@@ -273,7 +273,7 @@ class HospitalAdminDashboardServiceImplTest {
     void getSummary_auditSnippets_returned() {
         stubMinimal();
         Page<AuditEventLog> page = new PageImpl<>(List.of(auditEvent(), auditEvent()));
-        when(auditEventLogRepository.findByAssignment_Hospital_IdOrderByEventTimestampDesc(eq(HOSPITAL_ID), any(Pageable.class)))
+        when(auditEventLogRepository.findAnchoredAtHospital(eq(HOSPITAL_ID), any(Pageable.class)))
             .thenReturn(page);
 
         HospitalAdminSummaryDTO result = service.getSummary(HOSPITAL_ID, TODAY, 5);

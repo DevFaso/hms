@@ -419,6 +419,20 @@ describe('EncountersComponent', () => {
     expect(component.canMarkReadyForDischarge(mockEncounter({ status: 'COMPLETED' }))).toBeFalse();
   });
 
+  it('QA D788: ready for discharge on a visit IN_PROGRESS is offered to the clinician only', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_RECEPTIONIST'));
+    expect(
+      component.canMarkReadyForDischarge(mockEncounter({ status: 'IN_PROGRESS' })),
+    ).toBeFalse();
+    expect(
+      component.canMarkReadyForDischarge(mockEncounter({ status: 'AWAITING_RESULTS' })),
+    ).toBeTrue();
+
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    expect(component.canMarkReadyForDischarge(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+  });
+
   it('completeExamination updates the selected encounter and reloads', () => {
     component.ngOnInit();
     const updated = mockEncounter({ status: 'READY_FOR_DISCHARGE' });

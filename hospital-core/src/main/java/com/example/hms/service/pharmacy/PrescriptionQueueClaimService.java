@@ -84,6 +84,8 @@ public class PrescriptionQueueClaimService {
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditEventLogService;
     private final Clock clock;
+    /** QA D792: whether an order ended with a stay, whatever its shape (the V233 rule). */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     /** {@code pharmacy.work-queue.claim.enabled}; initialised for pure-unit tests. */
     @Value("${pharmacy.work-queue.claim.enabled:true}")
@@ -248,6 +250,22 @@ public class PrescriptionQueueClaimService {
         Prescription prescription = lockInScope(prescriptionId);
         // Plan rule 7: the status, then the open preparation, then the claim.
         if (!DispenseServiceImpl.WORK_QUEUE_STATUSES.contains(prescription.getStatus())) {
+            throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
+        }
+        // QA D792: a ward order of an ended stay is not work to pick up. The
+        // queue leaves out the closed-stay-encounter shape
+        // (PrescriptionRepository.findWorkQueue). An order of the other shapes
+        // is listed only while something holds it live: a prepared fill at
+        // the counter or an open partner offer, as migration V233 leaves them
+        // (the discharge itself ends every live or partner-status order of
+        // the stay, PARTNER_REJECTED included, voiding its fill and
+        // withdrawing its offers). The fill stays cancellable from the row;
+        // cancelling it, or the partner offer closing, discontinues the order
+        // (StayOrderDiscontinuation.discontinueIfStayEnded), which takes it
+        // off the queue, as does cancelling a completed fill that would put
+        // the order back to SIGNED or PARTIALLY_FILLED. Meanwhile none of
+        // them is claimable.
+        if (endedStayOrders.endedWithAStay(prescription)) {
             throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
         }
         if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {

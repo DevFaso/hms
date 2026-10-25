@@ -1,5 +1,6 @@
 package com.example.hms.service.pharmacy;
 
+import static org.mockito.Mockito.doReturn;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.CdsAlertSeverity;
 import com.example.hms.enums.StockTransactionType;
@@ -122,6 +123,16 @@ class DispenseReadyForCollectionTest {
     @Mock private PharmacyPaymentVoider paymentVoider;
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    /** QA D792: real, over an empty stay history, so the guards apply the rule itself. */
+    @org.mockito.Spy
+    private com.example.hms.service.EndedStayOrderGuard endedStayOrders =
+        new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class));
+
+    /** QA D792 (#953 review, round 2): ends an ended-stay order once its hold goes. */
+
+    @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
+
 
     @InjectMocks
     private DispenseServiceImpl service;
@@ -717,6 +728,54 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("QA D792: a fill prepared for a ward order of a stay that has since ended is not handed over")
+        void wardOrderOfAnEndedStayIsNotHandedOver() {
+            // A legacy row: still SIGNED on its closed stay encounter (V233
+            // leaves an order with a prepared fill for the application).
+            prescription.setEncounter(closedStayEncounter());
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review): a fill V233 held on any ended-stay shape is not handed over")
+        void heldOrderOfAnyEndedStayShapeIsNotHandedOver() {
+            prescription.setEncounter(null);
+            doReturn(true).when(endedStayOrders).endedWithAStay(prescription);
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D792 path re-verified: a take-home order of the ended stay is still handed over")
+        void takeHomeOrderOfAnEndedStayIsHandedOver() {
+            prescription.setEncounter(closedStayEncounter());
+            prescription.setTakeHome(true);
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            DispenseResponseDTO result = service.handOver(dispenseId, null);
+
+            assertThat(result.getStatus()).isEqualTo("COMPLETED");
+        }
+
+        private com.example.hms.model.Encounter closedStayEncounter() {
+            com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+            stay.setAdmissionId(UUID.randomUUID());
+            stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            return stay;
+        }
+
+        @Test
         @DisplayName("AC-6: the controlled-substance guard is re-run: 400")
         void controlledAtHandOver() {
             prescription.setControlledSubstance(true);
@@ -880,6 +939,104 @@ class DispenseReadyForCollectionTest {
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, preparedFillVoider);
             order.verify(prescriptionRepository).findByIdAndHospitalIdForUpdate(eq(prescriptionId), any());
             order.verify(preparedFillVoider).cancel(d, ReadyCancelReason.STOCK_UNAVAILABLE);
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review, round 2): cancelling the fill V233 held on an open stay encounter "
+                + "discontinues the order and takes it off the queue")
+        void cancellingTheHeldFillOfAnEndedStayOrderDiscontinuesIt() {
+            // The open_stay_encounter shape V233 holds: filed on the stay's own
+            // encounter, left IN_PROGRESS, while the admission is DISCHARGED.
+            com.example.hms.repository.AdmissionRepository admissions =
+                    mock(com.example.hms.repository.AdmissionRepository.class);
+            com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+            stay.setId(UUID.randomUUID());
+            stay.setHospital(hospital);
+            stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+            stay.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 0));
+            stay.setActualDischargeDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 43));
+            when(admissions.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(java.util.List.of(stay));
+            com.example.hms.model.Encounter openStayEncounter = new com.example.hms.model.Encounter();
+            openStayEncounter.setAdmissionId(stay.getId());
+            openStayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+            openStayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+            prescription.setEncounter(openStayEncounter);
+            prescription.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 24, 4, 30));
+
+            com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler withdrawnOrders =
+                    mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class);
+            com.example.hms.service.AuditEventLogService audit = mock(com.example.hms.service.AuditEventLogService.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "stayOrderDiscontinuation",
+                    new com.example.hms.service.StayOrderDiscontinuation(prescriptionRepository, preparedFillVoider,
+                            queueClaimService, withdrawnOrders, TestMessageSources.bundles(),
+                            new com.example.hms.service.EndedStayOrderGuard(admissions),
+                            routingDecisionRepository, audit, dispenseRepository));
+
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED)).thenAnswer(inv -> {
+                d.setStatus(DispenseStatus.CANCELLED);
+                return d;
+            });
+
+            DispenseResponseDTO result = service.cancelReady(dispenseId,
+                    new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED));
+
+            assertThat(result.getStatus()).isEqualTo("CANCELLED");
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
+            assertThat(prescription.getWithdrawalReason()).isNotBlank();
+            // Off the work queue: every queue query filters on these statuses.
+            assertThat(prescription.getStatus()).isNotIn(DispenseServiceImpl.WORK_QUEUE_STATUSES);
+            verify(prescriptionRepository).save(prescription);
+            verify(withdrawnOrders).withdrawPartnerOffers(prescription);
+            verify(queueClaimService).releaseOnExit(prescription,
+                    com.example.hms.enums.QueueClaimReleaseReason.WITHDRAWN, userId,
+                    com.example.hms.enums.QueueClaimExitActor.OTHER);
+            verify(audit).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+                    e.getEventType() == AuditEventType.PRESCRIPTION_DISCONTINUED
+                            && prescriptionId.toString().equals(e.getResourceId())
+                            && !String.valueOf(e.getEventDescription()).contains("Amoxicillin")));
+            // The fill was voided once, by the pharmacist's cancel, never a second time.
+            verify(preparedFillVoider, never()).voidPreparedFill(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D792 path re-verified: cancelling a fill of an order of a stay still in progress leaves the order live")
+        void cancellingTheFillOfALiveStayOrderLeavesItSigned() {
+            com.example.hms.repository.AdmissionRepository admissions =
+                    mock(com.example.hms.repository.AdmissionRepository.class);
+            com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+            stay.setId(UUID.randomUUID());
+            stay.setHospital(hospital);
+            stay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+            stay.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 0));
+            when(admissions.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(java.util.List.of(stay));
+            com.example.hms.model.Encounter openStayEncounter = new com.example.hms.model.Encounter();
+            openStayEncounter.setAdmissionId(stay.getId());
+            openStayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+            openStayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+            prescription.setEncounter(openStayEncounter);
+
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "stayOrderDiscontinuation",
+                    new com.example.hms.service.StayOrderDiscontinuation(prescriptionRepository, preparedFillVoider,
+                            queueClaimService, mock(com.example.hms.service.pharmacy.partner.WithdrawnOrderPartnerHandler.class),
+                            TestMessageSources.bundles(), new com.example.hms.service.EndedStayOrderGuard(admissions),
+                            routingDecisionRepository, mock(com.example.hms.service.AuditEventLogService.class),
+                            dispenseRepository));
+
+            Dispense d = preparedFill();
+            stubLocked(d);
+            when(preparedFillVoider.cancel(d, ReadyCancelReason.NOT_COLLECTED)).thenAnswer(inv -> {
+                d.setStatus(DispenseStatus.CANCELLED);
+                return d;
+            });
+
+            service.cancelReady(dispenseId, new CancelReadyRequestDTO(ReadyCancelReason.NOT_COLLECTED));
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+            verify(prescriptionRepository, never()).save(any());
+            verify(queueClaimService, never()).releaseOnExit(any(), any(), any(), any());
         }
 
         @Test

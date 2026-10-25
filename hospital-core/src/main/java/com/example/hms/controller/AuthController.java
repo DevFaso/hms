@@ -15,6 +15,7 @@ import com.example.hms.payload.dto.JwtResponse;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.PasswordResetConfirmDTO;
+import com.example.hms.payload.dto.PasswordResetRequestDTO;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
@@ -566,8 +567,13 @@ public class AuthController {
         var assignments = assignmentRepository.findByUserId(user.getId());
         int activated = 0;
         for (var assignment : assignments) {
+            // QA D789: a patient row at a hospital archived since stays off; the
+            // account itself is still verified.
             if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
-                    && !Boolean.TRUE.equals(assignment.getActive())) {
+                    && !Boolean.TRUE.equals(assignment.getActive())
+                    && (assignment.getHospital() == null
+                        || !com.example.hms.security.provider.FacilityAssignmentGuard
+                            .isClosed(assignment.getHospital().getLifecycleState()))) {
                 assignment.setActive(true);
                 assignmentRepository.save(assignment);
                 activated++;
@@ -1378,17 +1384,35 @@ public class AuthController {
             @NotBlank String currentPassword,
             String newPassword) {}
 
+    /**
+     * The oldest reset request. QA D787: it answered 400 to a phone number or a
+     * username (the parameter was {@code @Email}); like
+     * {@code POST /auth/password/request} it now takes an e-mail address, a
+     * username or a phone number, as {@code identifier}, {@code email} or
+     * {@code phone}, in a JSON body or (older clients) the query string, and is
+     * always 204 for an account it cannot name or reach. Rate-limited per IP in
+     * {@code RateLimitFilter}.
+     */
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(
-            @RequestParam("email") @Email @NotBlank String email,
+            @RequestParam(value = "email", required = false) String email,
+            @RequestParam(value = "identifier", required = false) String identifier,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestBody(required = false) PasswordResetRequestDTO body,
             Locale locale,
             HttpServletRequest request) {
-        String ip = clientIp(request);
-        try {
-            authNotification.passwordReset().requestReset(email, locale, ip);
-        } catch (ResourceNotFoundException e) {
-            log.debug("Password reset requested for an unknown address");
+        String named = body == null ? null : body.effectiveIdentifier();
+        if (named == null) {
+            named = PasswordResetRequestDTO.builder()
+                    .email(email).identifier(identifier).phone(phone).build()
+                    .effectiveIdentifier();
         }
+        if (named == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        // QA D802: the account work runs off the request thread, so the answer
+        // takes the same time whether or not the identifier names an account.
+        authNotification.passwordResetRequests().dispatch(named, locale, clientIp(request));
         return ResponseEntity.noContent().build();
     }
 

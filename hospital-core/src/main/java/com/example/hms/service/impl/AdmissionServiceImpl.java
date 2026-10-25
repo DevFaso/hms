@@ -474,20 +474,61 @@ public class AdmissionServiceImpl implements AdmissionService {
             AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
             return admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, admissionStatus)
                 .stream()
+                .filter(a -> admittedWithin(a, startDate, endDate))
                 .map(admissionMapper::toResponseDTO)
                 .toList();
         }
         return admissionRepository.findByHospitalIdOrderByAdmissionDateTimeDesc(hospitalId)
             .stream()
+            .filter(a -> admittedWithin(a, startDate, endDate))
+            .map(admissionMapper::toResponseDTO)
+            .toList();
+    }
+
+    /**
+     * QA D800 class: the window the caller asked for. startDate and endDate
+     * were declared on both list endpoints and read by neither, so a filtered
+     * list came back whole. Inclusive at both ends; a stay with no admission
+     * time is outside any bounded window.
+     */
+    static boolean admittedWithin(Admission admission, LocalDateTime startDate, LocalDateTime endDate) {
+        LocalDateTime at = admission.getAdmissionDateTime();
+        if (startDate != null && (at == null || at.isBefore(startDate))) {
+            return false;
+        }
+        return endDate == null || (at != null && !at.isAfter(endDate));
+    }
+
+    /**
+     * QA D800: one patient's stays at the acting hospital (at every hospital
+     * for a super-admin with none in scope), narrowed like the list. The
+     * cross-hospital view stays {@code GET /admissions/patient/{id}}, with its
+     * own access policy; this list never widens past the acting hospital.
+     */
+    private List<AdmissionResponseDTO> admissionsOfPatient(UUID patientId, UUID activeHospitalId, String status,
+                                                           LocalDateTime startDate, LocalDateTime endDate) {
+        AdmissionStatus wanted = status != null && !status.isEmpty()
+            ? AdmissionStatus.valueOf(status.toUpperCase()) : null;
+        List<Admission> stays = activeHospitalId != null
+            ? admissionRepository.findByPatient_IdAndHospital_IdInOrderByAdmissionDateTimeDesc(
+                patientId, java.util.Set.of(activeHospitalId))
+            : admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId);
+        return stays.stream()
+            .filter(a -> wanted == null || a.getStatus() == wanted)
+            .filter(a -> admittedWithin(a, startDate, endDate))
             .map(admissionMapper::toResponseDTO)
             .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate) {
+    public List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate,
+                                                       UUID patientId) {
         // ── Tenant isolation: non-superadmin must be scoped ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (patientId != null) {
+            return admissionsOfPatient(patientId, activeHospitalId, status, startDate, endDate);
+        }
         if (activeHospitalId != null) {
             // Sonar S6809: route through the proxy so the inner
             // method's @Transactional(readOnly=true) is honored.
@@ -497,11 +538,13 @@ public class AdmissionServiceImpl implements AdmissionService {
             AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
             return admissionRepository.findByStatusOrderByAdmissionDateTimeDesc(admissionStatus)
                 .stream()
+                .filter(a -> admittedWithin(a, startDate, endDate))
                 .map(admissionMapper::toResponseDTO)
                 .toList();
         }
         return admissionRepository.findAll()
             .stream()
+            .filter(a -> admittedWithin(a, startDate, endDate))
             .sorted((a, b) -> {
                 if (b.getAdmissionDateTime() == null) return -1;
                 if (a.getAdmissionDateTime() == null) return 1;

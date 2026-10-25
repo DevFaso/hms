@@ -148,6 +148,47 @@ describe('FlowBoardComponent', () => {
       expect(toastSpy.info).not.toHaveBeenCalled();
     });
 
+    it('QA D788: a never-seen ARRIVED card dropped on completed asks to close without consultation', () => {
+      spyOn(component.statusChanged, 'emit');
+      spyOn(component.closeUnseenRequested, 'emit');
+      const prev = [makeItem({ status: 'ARRIVED' })];
+      const dest: ReceptionQueueItem[] = [];
+
+      component.drop(makeDropEvent(prev, dest), 'completed');
+
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        patientName: 'John',
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      // The card stays where it was until the visit is really closed.
+      expect(prev.length).toBe(1);
+      expect(dest.length).toBe(0);
+    });
+
+    it('QA D788: a never-seen walk-in dropped on no-show asks the same', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'WALK_IN' })], []), 'noShow');
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalled();
+    });
+
+    it('QA D788: a seen card dropped on no-show is refused on the spot (no such encounter status)', () => {
+      spyOn(component.statusChanged, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'IN_PROGRESS' })], []), 'noShow');
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+      expect(toastSpy.info).toHaveBeenCalled();
+    });
+
+    it('QA D788: a seen card dropped on completed still goes to the server (which checks it out)', () => {
+      spyOn(component.statusChanged, 'emit');
+      component.drop(makeDropEvent([makeItem({ status: 'IN_PROGRESS' })], []), 'completed');
+      expect(component.statusChanged.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        newStatus: 'COMPLETED',
+      });
+    });
+
     it('should do nothing when dropping within the same container', () => {
       spyOn(component.statusChanged, 'emit');
       const item = makeItem();

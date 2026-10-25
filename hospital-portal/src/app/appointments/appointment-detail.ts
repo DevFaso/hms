@@ -116,6 +116,17 @@ export class AppointmentDetailComponent implements OnInit {
     );
   }
 
+  /**
+   * QA D788: a CHECKED_IN appointment has an open visit (check-in opens it),
+   * and that visit's check-out completes the appointment. Completing it by
+   * hand is offered only where no visit was opened at check-in; the API
+   * refuses it too while a linked visit is not checked out.
+   */
+  get canComplete(): boolean {
+    const status = this.appointment()?.status;
+    return status === 'CONFIRMED' || status === 'IN_PROGRESS';
+  }
+
   /** True once the current date/time is at or past the appointment's start time. */
   get hasAppointmentStarted(): boolean {
     const appt = this.appointment();

@@ -39,4 +39,11 @@ public class MarVerificationResponseDTO {
 
     /** Server time when verification ran (also persisted on the MAR). */
     private LocalDateTime verifiedAt;
+
+    /**
+     * QA D799: non-blocking advisories shown before the dose is given (the
+     * beta-lactam cross-reactivity warning the prescriber saw). They never
+     * make {@code allPassed} false: the five rights are about the scan.
+     */
+    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> cdsAdvisories;
 }

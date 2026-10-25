@@ -169,12 +169,13 @@ fun ForgotPasswordScreen(onBack: () -> Unit, viewModel: ForgotPasswordViewModel 
             return@AccountFormScaffold
         }
         Text(stringResource(R.string.reset_instruction), style = MaterialTheme.typography.bodyMedium)
+        // QA D787: an e-mail address, a username or a phone number.
         OutlinedTextField(
             value = state.email,
             onValueChange = viewModel::onEmail,
-            label = { Text(stringResource(R.string.email_address)) },
+            label = { Text(stringResource(R.string.reset_identifier_label)) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             modifier = Modifier.fillMaxWidth()
         )
         BusyButton(stringResource(R.string.reset_send_link), busy = state.requesting, onClick = viewModel::requestLink)

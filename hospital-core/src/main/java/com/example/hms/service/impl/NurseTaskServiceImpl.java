@@ -26,6 +26,7 @@ import com.example.hms.model.NursingNote;
 import com.example.hms.model.NursingNoteTemplate;
 import com.example.hms.model.NursingTask;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.ProcedureOrder;
@@ -206,6 +207,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.service.support.DischargedPatientGuard dischargedPatientGuard;
     private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    /** QA D799: the eMAR row and the bedside verify carry the cross-reactivity advisory. */
+    private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
     /** QA D776: the roles a patient can be handed over to. */
     static final Set<String> HANDOFF_RECIPIENT_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
@@ -314,11 +317,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NurseMedicationTaskResponseDTO> result = new ArrayList<>();
         Admission stay = admitted.get(ctx.patientId());
+        // QA D799: read once per patient, and only when a dose is listed.
+        List<PatientAllergy> allergies = null;
         for (Prescription rx : prescriptions) {
             if (!onWardMar(rx, closedStays, stay)) continue;
 
             String marStatus = resolveMarStatus(rx, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
+                if (allergies == null) {
+                    allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
+                }
                 result.add(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
@@ -331,10 +339,46 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx))
                     .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
+                    .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
                     .build());
             }
         }
         return result;
+    }
+
+    /**
+     * QA D793/D799: the prescriber was warned that this beta-lactam may
+     * cross-react with the patient's documented allergy, but the nurse giving
+     * it saw nothing (no field on the MAR row, allPassed=true at the bedside).
+     * The same non-blocking card, built where the prescriber's is
+     * ({@link com.example.hms.service.allergy.CrossReactivityAdvisory}), on
+     * every eMAR surface. Empty when there is nothing to say.
+     */
+    private static List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAdvisories(
+        String medicationName, List<PatientAllergy> allergies
+    ) {
+        return com.example.hms.service.allergy.CrossReactivityAdvisory.card(medicationName, allergies)
+            .map(List::of)
+            .orElse(List.of());
+    }
+
+    /** The order's drug name (the MAR row's copy when the order is gone). */
+    private static String medicationNameOf(MedicationAdministrationRecord mar) {
+        Prescription rx = mar.getPrescription();
+        if (rx != null && rx.getMedicationName() != null && !rx.getMedicationName().isBlank()) {
+            return rx.getMedicationName();
+        }
+        return mar.getMedicationName();
+    }
+
+    /** The advisories for the patient a MAR row belongs to (allergies at any hospital count, as for the prescriber). */
+    private List<com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard> allergyAdvisoriesFor(
+        String medicationName, Patient patient
+    ) {
+        if (patient == null || patient.getId() == null) {
+            return List.of();
+        }
+        return allergyAdvisories(medicationName, patientAllergyRepository.findByPatient_Id(patient.getId()));
     }
 
     /**
@@ -499,6 +543,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .failureReasons(reasons)
             .allPassed(result.allPassed())
             .verifiedAt(verifiedAt)
+            // QA D799: the five rights can all pass and the dose still need a
+            // second look; the advisory never turns allPassed false.
+            .cdsAdvisories(allergyAdvisoriesFor(medicationNameOf(mar), mar.getPatient()))
             .build();
     }
 

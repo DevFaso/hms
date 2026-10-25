@@ -893,8 +893,15 @@ export class PrescriptionsComponent implements OnInit {
     this.actionError.set('');
     this.signingId.set(p.id);
     this.prescriptionService.sign(p.id).subscribe({
-      next: () => {
+      next: (signed) => {
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        // QA D793: the signature repeats the non-blocking advisories (a
+        // beta-lactam cross-reactivity), already in the reader's language.
+        for (const card of signed?.cdsAdvisories ?? []) {
+          if (card.indicator !== 'info') {
+            this.toast.warning(card.summary);
+          }
+        }
         this.signingId.set(null);
         this.load();
       },

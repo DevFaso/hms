@@ -68,7 +68,7 @@
         type="text"
         [placeholder]="'AUDIT.SEARCH' | translate"
         [(ngModel)]="searchTerm"
-        (input)="onEventTypeChange()"
+        (input)="onSearchInput()"
       />
     </div>
   </div>
@@ -78,14 +78,19 @@
       <p>{{ 'AUDIT.LOADING' | translate }}</p>
     </div>
   }
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && logs().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
-      <h3>{{ 'AUDIT.NO_LOGS' | translate }}</h3>
-      <p>{{ 'AUDIT.LOGS_WILL_APPEAR' | translate }}</p>
+      @if (searchTerm.trim() || selectedEventType) {
+        <h3>{{ 'AUDIT.NO_MATCHES' | translate }}</h3>
+        <p>{{ 'AUDIT.NO_MATCHES_HINT' | translate }}</p>
+      } @else {
+        <h3>{{ 'AUDIT.NO_LOGS' | translate }}</h3>
+        <p>{{ 'AUDIT.LOGS_WILL_APPEAR' | translate }}</p>
+      }
     </div>
   }
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && logs().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -100,7 +105,7 @@
           </tr>
         </thead>
         <tbody>
-          @for (l of filtered(); track l.eventTimestamp + l.userName) {
+          @for (l of logs(); track l.eventTimestamp + l.userName) {
             <tr class="data-row">
               <td class="time-cell">
                 {{ l.eventTimestamp ? (l.eventTimestamp | serverTime | date: 'medium') : '--' }}

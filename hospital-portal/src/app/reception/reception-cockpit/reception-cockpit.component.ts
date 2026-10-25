@@ -20,7 +20,12 @@ import { ToastService } from '../../core/toast.service';
 import { PatientSnapshotDrawerComponent } from '../patient-snapshot-drawer/patient-snapshot-drawer.component';
 import { InsuranceIssuesPanelComponent } from '../insurance-issues-panel/insurance-issues-panel.component';
 import { PaymentPendingPanelComponent } from '../payment-pending-panel/payment-pending-panel.component';
-import { FlowBoardComponent, FlowBoardStatusChange } from '../flow-board/flow-board.component';
+import {
+  FlowBoardCloseUnseen,
+  FlowBoardComponent,
+  FlowBoardStatusChange,
+} from '../flow-board/flow-board.component';
+import { CloseUnseenDialogComponent } from '../close-unseen-dialog/close-unseen-dialog.component';
 import { WalkInDialogComponent } from '../walkin-dialog/walkin-dialog.component';
 import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.component';
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
@@ -57,6 +62,7 @@ function todayIso(): string {
     WaitlistPanelComponent,
     RecallsPanelComponent,
     CheckinDialogComponent,
+    CloseUnseenDialogComponent,
   ],
   templateUrl: './reception-cockpit.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -86,6 +92,8 @@ export class ReceptionCockpitComponent implements OnInit {
   snapPatientId = signal<string | null>(null);
   showWalkIn = signal(false);
   checkinQueueItem = signal<ReceptionQueueItem | null>(null);
+  /** QA D788: the never-seen visit the desk is closing without a consultation. */
+  closeUnseenTarget = signal<FlowBoardCloseUnseen | null>(null);
 
   summary = signal<ReceptionDashboardSummary | null>(null);
   queueItems = signal<ReceptionQueueItem[]>([]);
@@ -187,11 +195,35 @@ export class ReceptionCockpitComponent implements OnInit {
     this.receptionService.updateEncounterStatus(change.encounterId, change.newStatus).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.STATUS_UPDATED'));
-        this.receptionService.getFlowBoard(this.selectedDate()).subscribe({
-          next: (board) => this.flowBoard.set(board),
-        });
+        this.reloadFlowBoard();
       },
-      error: () => this.toast.error(this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED')),
+      error: (err) => {
+        // QA D788: the server says why (a visit nobody saw, the clinician's
+        // steps), and the card goes back where it was.
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
+        );
+        this.reloadFlowBoard();
+      },
+    });
+  }
+
+  onCloseUnseenRequested(request: FlowBoardCloseUnseen): void {
+    this.closeUnseenTarget.set(request);
+  }
+
+  onCloseUnseenDismissed(): void {
+    this.closeUnseenTarget.set(null);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenTarget.set(null);
+    this.loadAll();
+  }
+
+  private reloadFlowBoard(): void {
+    this.receptionService.getFlowBoard(this.selectedDate()).subscribe({
+      next: (board) => this.flowBoard.set(board),
     });
   }
 

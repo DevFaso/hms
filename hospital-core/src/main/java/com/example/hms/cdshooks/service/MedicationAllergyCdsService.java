@@ -101,7 +101,8 @@ public class MedicationAllergyCdsService implements CdsHookService {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();
 
-        Set<String> allergyHaystack = collectAllergyTerms(allergyRepository.findByPatient_Id(patientId));
+        List<PatientAllergy> allergies = allergyRepository.findByPatient_Id(patientId);
+        Set<String> allergyHaystack = collectAllergyTerms(allergies);
         // The patient lookup is only needed when DDI evaluation has work to do.
         // We defer it to the first MedicationRequest draft so requests with no
         // medication entries (allergy-only check) keep their lightweight path.
@@ -119,9 +120,23 @@ public class MedicationAllergyCdsService implements CdsHookService {
             if (medText == null) continue;
 
             // 1. Allergy card — same critical-match semantics as before.
-            if (!allergyHaystack.isEmpty()) {
-                CdsCard allergy = allergyCard(medText, allergyHaystack);
-                if (allergy != null) cards.add(allergy);
+            CdsCard allergy = allergyHaystack.isEmpty() ? null : allergyCard(medText, allergyHaystack);
+            if (allergy == null) {
+                // QA D793 sibling: the class rule the prescribing check blocks
+                // on (a penicillin allergy covers amoxicillin), which a name
+                // match alone never saw.
+                final String med = medText;
+                allergy = com.example.hms.service.allergy.BetaLactamCrossReactivity
+                    .classMatchedAllergen(medText, allergies)
+                    .map(allergen -> buildAllergyCard(med, allergen))
+                    .orElse(null);
+            }
+            if (allergy != null) {
+                cards.add(allergy);
+            } else {
+                // 1b. QA D793: no direct match, but a beta-lactam that may
+                // cross-react with a documented beta-lactam allergy: a warning.
+                crossReactivityCard(medText, allergies).ifPresent(cards::add);
             }
 
             // 2. Drug-drug interaction cards — added in v1.0 row 3.
@@ -214,6 +229,20 @@ public class MedicationAllergyCdsService implements CdsHookService {
             new Source(SOURCE_LABEL, null, null),
             null, null, null, java.util.UUID.randomUUID().toString()
         );
+    }
+
+    private java.util.Optional<CdsCard> crossReactivityCard(String medication, List<PatientAllergy> allergies) {
+        return com.example.hms.service.allergy.BetaLactamCrossReactivity.crossReactiveAllergen(medication, allergies)
+            .map(allergen -> new CdsCard(
+                text.get("cds.allergy.crossReactivity.summary",
+                    "Possible cross-reactivity: {0} and the documented allergy to {1}", medication, allergen),
+                text.get("cds.allergy.crossReactivity.detail",
+                    "{0} is a beta-lactam that can cross-react with the patient's documented allergy to {1}. "
+                        + "Check what the reaction was before giving it. This is an advisory: the order is not blocked.",
+                    medication, allergen),
+                CdsCard.Indicator.WARNING,
+                new Source(SOURCE_LABEL, null, null),
+                null, null, null, java.util.UUID.randomUUID().toString()));
     }
 
     /* =====================================================================

@@ -47,6 +47,8 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private final NotificationService notificationService;
     private final ControllerAuthUtils authUtils;
     private final RoleValidator roleValidator;
+    /** QA D792 (#953 review, round 3): a ward order of an ended stay is not refillable. */
+    private final com.example.hms.service.EndedStayOrderGuard endedStayOrders;
 
     @Override
     @Transactional(readOnly = true)
@@ -192,6 +194,13 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // QA D719: a controlled substance is never refilled, whatever its status.
         if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
             throw new BusinessException("patient.refill.approveNotRefillable", String.valueOf(status));
+        }
+        // QA D792 (#953 review, round 3): a ward order that ended with its
+        // stay, released back to SIGNED, sat in the pharmacy work queue with
+        // every action refused (stayEnded) and nothing to end it. Medication
+        // for home is a new (take-home) prescription, not a refill of it.
+        if (endedStayOrders.endedWithAStay(prescription)) {
+            throw new BusinessException("patient.refill.approveEndedStayOrder");
         }
 
         Integer remaining = prescription.getRefillsRemaining();

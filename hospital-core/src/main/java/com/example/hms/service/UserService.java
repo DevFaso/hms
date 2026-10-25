@@ -36,6 +36,13 @@ public interface UserService {
     Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size,
                                      boolean includeDeleted, boolean onlyDeleted);
 
+    /**
+     * QA D790: the chat's colleague picker. Active, live staff accounts at the
+     * caller's hospitals (every one for a super-admin), id, name and role only.
+     * Refused (403) for a caller with no active non-patient assignment.
+     */
+    java.util.List<com.example.hms.payload.dto.ChatRecipientDTO> listChatRecipients(int size);
+
     boolean verifyEmail(String email, String token);
 
     // ✅ Admin/staff/hospital-specific registration

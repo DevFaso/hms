@@ -89,6 +89,33 @@ public class MaternalHistoryMapper {
         entity.setSpecialistReferralReason(request.getSpecialistReferralReason());
     }
 
+    /**
+     * QA D796 (review of #954): a new pregnancy's record is the next version of
+     * the woman's history, and the latest version is what every reader takes as
+     * her current one. It therefore starts from the previous version: her past
+     * obstetric history (previous caesarean sections included), complications
+     * (PPH, pre-eclampsia...), medical history and allergies, medications and
+     * immunisations, family, lifestyle and psychosocial history all carry over.
+     * What belongs to the previous pregnancy does not: its dating (LMP, due
+     * dates, ultrasound, cycle), its prenatal supplementation, and the
+     * assessment written about it (notes, review, risk score, referral).
+     */
+    public void carryForwardHistory(MaternalHistory previous, MaternalHistory next) {
+        if (previous == null || next == null) {
+            return;
+        }
+        updateObstetricHistoryFromDTO(next, mapObstetricHistoryToDTO(previous));
+        updateComplicationsHistoryFromDTO(next, mapComplicationsHistoryToDTO(previous));
+        updateMedicalHistoryFromDTO(next, mapMedicalHistoryToDTO(previous));
+        updateMedicationsImmunizationsFromDTO(next, mapMedicationsImmunizationsToDTO(previous));
+        updateFamilyHistoryFromDTO(next, mapFamilyHistoryToDTO(previous));
+        updateLifestyleFactorsFromDTO(next, mapLifestyleFactorsToDTO(previous));
+        updatePsychosocialFactorsFromDTO(next, mapPsychosocialFactorsToDTO(previous));
+        next.setPrenatalVitaminsStarted(Boolean.FALSE);
+        next.setPrenatalVitaminsStartDate(null);
+        next.setFolicAcidSupplementation(Boolean.FALSE);
+    }
+
     // ===== Private mapping methods for nested DTOs =====
 
     private MaternalHistoryRequestDTO.MenstrualHistoryDTO mapMenstrualHistoryToDTO(MaternalHistory entity) {

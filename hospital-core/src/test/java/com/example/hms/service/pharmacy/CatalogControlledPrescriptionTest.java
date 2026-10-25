@@ -46,7 +46,7 @@ class CatalogControlledPrescriptionTest {
         when(catalog.findByIdAndHospital_Id(MORPHINE_ITEM, OTHER_HOSPITAL)).thenReturn(Optional.empty());
         when(catalog.findByHospitalIdAndCode(any(), any())).thenReturn(Optional.empty());
         verification = new PharmacistVerificationService(mock(PrescriptionRepository.class),
-            mock(UserRepository.class), mock(RoleValidator.class), Clock.systemUTC());
+            mock(UserRepository.class), mock(RoleValidator.class), Clock.systemUTC(), new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
         verification.setControlledResolver(resolver);
     }
 

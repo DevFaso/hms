@@ -42,7 +42,8 @@ import java.util.UUID;
         @Index(name = "idx_audit_assignment", columnList = "assignment_id"),
         @Index(name = "idx_audit_type_time", columnList = "event_type, event_timestamp"),
         @Index(name = "idx_audit_entity", columnList = "target_entity_type, target_resource_id"),
-        @Index(name = "idx_audit_patient_time", columnList = "patient_id, event_timestamp")
+        @Index(name = "idx_audit_patient_time", columnList = "patient_id, event_timestamp"),
+        @Index(name = "idx_audit_hospital_time", columnList = "hospital_id, event_timestamp")
     }
 )
 @Getter
@@ -171,6 +172,21 @@ public class AuditEventLog extends BaseEntity {
     @Column(name = "patient_id")
     private UUID patientId;
 
+    /**
+     * The hospital this row belongs to (QA D786, V235). Stamped from the
+     * assignment's hospital when the row has one, and set by the server for a
+     * SYSTEM row that acted on one hospital's data (a migration, a scheduled
+     * job) and so has no assignment. A hospital-scoped audit reader sees a row
+     * whose assignment is at one of its hospitals OR whose {@code hospitalId}
+     * is; a row with neither (a platform-wide event) stays in the platform log.
+     * Never taken from a client.
+     *
+     * <p>A bare UUID, not a {@code @ManyToOne}, for the reason {@link #patientId}
+     * gives: an audit row outlives what it describes.
+     */
+    @Column(name = "hospital_id")
+    private UUID hospitalId;
+
     @PrePersist
     @PreUpdate
     private void validateAndSnapshot() {
@@ -188,6 +204,9 @@ public class AuditEventLog extends BaseEntity {
         }
         if (hospitalName == null) {
             hospitalName = assignment.getHospital().getName();
+        }
+        if (hospitalId == null) {
+            hospitalId = assignment.getHospital().getId();
         }
     }
 

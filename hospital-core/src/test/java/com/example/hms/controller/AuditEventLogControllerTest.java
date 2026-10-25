@@ -1,7 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
@@ -25,7 +24,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Set;
@@ -97,11 +95,48 @@ class AuditEventLogControllerTest {
                 .thenReturn(new PageImpl<>(List.of(entity)));
             when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+            ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
 
             assertThat(result.getBody().getContent()).containsExactly(responseDTO);
             verify(auditRepository, never()).findAll(any(Pageable.class));
             verify(auditService, never()).getAuditLogsByDateRange(any(), any(), any());
+        }
+
+        /**
+         * QA D794, the exact round-12 call: HOSPITAL_ADMIN_A searches
+         * "Multi91064". The term and the event type now reach the server
+         * (GET /audit-logs?search=...&eventType=...), which filters inside the
+         * caller's hospital scope rather than the 20 rows on screen.
+         */
+        @Test
+        @SuppressWarnings("unchecked")
+        void searchAndEventTypeAreAppliedByTheServerInsideTheScope_D794() throws Exception {
+            when(auditRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity), PageRequest.of(0, 20), 1));
+            when(auditMapper.toDto(entity)).thenReturn(responseDTO);
+            org.springframework.test.web.servlet.MockMvc mvc = org.springframework.test.web.servlet.setup.MockMvcBuilders
+                .standaloneSetup(controller)
+                .setCustomArgumentResolvers(new org.springframework.data.web.PageableHandlerMethodArgumentResolver())
+                .build();
+
+            mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/audit-logs")
+                    .param("search", "Multi91064").param("eventType", "USER_CREATE").param("page", "0").param("size", "20"))
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk());
+
+            org.mockito.ArgumentCaptor<Pageable> page = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+            verify(auditRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), page.capture());
+            assertThat(page.getValue().getPageNumber()).isZero();
+            assertThat(page.getValue().getSort().getOrderFor("eventTimestamp")).isNotNull();
+            verify(auditRepository, never()).findAll(any(Pageable.class));
+        }
+
+        @Test
+        void anUnknownEventTypeIsABadRequestNotEveryRow_D794() {
+            assertThatThrownBy(() -> controller.getAllAuditLogs(null, null, List.of("NOT_A_TYPE"), null, null, pageable))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                    .isEqualTo("audit.eventType.invalid"));
+            org.mockito.Mockito.verifyNoInteractions(auditRepository);
         }
 
         @Test
@@ -160,7 +195,7 @@ class AuditEventLogControllerTest {
         when(auditRepository.findAll(pageable)).thenReturn(page);
         when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isNotNull();
@@ -173,10 +208,35 @@ class AuditEventLogControllerTest {
         Page<AuditEventLog> page = Page.empty(pageable);
         when(auditRepository.findAll(pageable)).thenReturn(page);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, pageable);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(null, null, null, null, null, pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody().getContent()).isEmpty();
+    }
+
+    /** QA D794: the super-admin's audit page (global view) searches the whole platform log. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void aGlobalSearchFiltersThePlatformLogInTheDatabase_D794() {
+        when(auditRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(entity)));
+        when(auditMapper.toDto(entity)).thenReturn(responseDTO);
+
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result =
+            controller.getAllAuditLogs(null, null, null, null, "Multi91064", pageable);
+
+        assertThat(result.getBody().getContent()).containsExactly(responseDTO);
+        verify(auditRepository, never()).findAll(any(Pageable.class));
+        verify(auditService, never()).getAuditLogsByDateRange(any(), any(), any());
+    }
+
+    @Test
+    void aBlankSearchKeepsTheUnfilteredPlatformRead_D794() {
+        when(auditRepository.findAll(pageable)).thenReturn(Page.empty(pageable));
+
+        controller.getAllAuditLogs(null, null, List.of(" "), List.of(""), "  ", pageable);
+
+        verify(auditRepository).findAll(pageable);
     }
 
     // ─── getLogsByUser ───────────────────────────────────────────
@@ -221,82 +281,59 @@ class AuditEventLogControllerTest {
     @Nested
     class GetLogsByEventTypeAndStatus {
 
+        @SuppressWarnings("unchecked")
+        private org.springframework.data.jpa.domain.Specification<AuditEventLog> anySpec() {
+            return any(org.springframework.data.jpa.domain.Specification.class);
+        }
+
         @Test
         void withEventTypeOnly_statusNull() {
-            Page<AuditEventLog> page = new PageImpl<>(List.of(entity));
-            when(auditRepository.findByEventType(AuditEventType.LOGIN, pageable)).thenReturn(page);
+            when(auditRepository.findAll(anySpec(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(entity)));
             when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
             ResponseEntity<Page<AuditEventLogResponseDTO>> result =
-                    controller.getLogsByEventTypeAndStatus("LOGIN", null, pageable);
+                    controller.getLogsByEventTypeAndStatus(List.of("LOGIN"), null, null, pageable);
 
             assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
             assertThat(result.getBody().getContent()).hasSize(1);
-            verify(auditRepository).findByEventType(AuditEventType.LOGIN, pageable);
-            verify(auditRepository, never()).findByEventTypeAndStatus(any(), any(), any());
+            verify(auditRepository, never()).findAll(any(Pageable.class));
         }
 
         @Test
-        void withEventTypeOnly_statusBlank() {
-            Page<AuditEventLog> page = new PageImpl<>(List.of(entity));
-            when(auditRepository.findByEventType(AuditEventType.LOGOUT, pageable)).thenReturn(page);
+        void thePluralAloneFiltersToo_D801() {
+            when(auditRepository.findAll(anySpec(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(entity)));
             when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
             ResponseEntity<Page<AuditEventLogResponseDTO>> result =
-                    controller.getLogsByEventTypeAndStatus("logout", "  ", pageable);
+                    controller.getLogsByEventTypeAndStatus(null, List.of("logout"), "  ", pageable);
 
             assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-            verify(auditRepository).findByEventType(AuditEventType.LOGOUT, pageable);
         }
 
         @Test
-        void withEventTypeAndStatus() {
-            Page<AuditEventLog> page = new PageImpl<>(List.of(entity));
-            when(auditRepository.findByEventTypeAndStatus(AuditEventType.LOGIN, AuditStatus.SUCCESS, pageable))
-                    .thenReturn(page);
-            when(auditMapper.toDto(entity)).thenReturn(responseDTO);
-
-            ResponseEntity<Page<AuditEventLogResponseDTO>> result =
-                    controller.getLogsByEventTypeAndStatus("login", "success", pageable);
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-            assertThat(result.getBody().getContent()).hasSize(1);
-            verify(auditRepository).findByEventTypeAndStatus(AuditEventType.LOGIN, AuditStatus.SUCCESS, pageable);
+        void noEventTypeAtAllIsABadRequestNotEveryRow_D801() {
+            assertThatThrownBy(() -> controller.getLogsByEventTypeAndStatus(null, List.of(" "), null, pageable))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                        .isEqualTo("audit.eventType.required"));
+            org.mockito.Mockito.verifyNoInteractions(auditRepository);
         }
 
         @Test
-        void withEventTypeCaseInsensitive() {
-            Page<AuditEventLog> page = new PageImpl<>(List.of(entity));
-            when(auditRepository.findByEventTypeAndStatus(AuditEventType.LOGIN, AuditStatus.FAILURE, pageable))
-                    .thenReturn(page);
-            when(auditMapper.toDto(entity)).thenReturn(responseDTO);
-
-            ResponseEntity<Page<AuditEventLogResponseDTO>> result =
-                    controller.getLogsByEventTypeAndStatus("  Login  ", "  Failure  ", pageable);
-
-            assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-            verify(auditRepository).findByEventTypeAndStatus(AuditEventType.LOGIN, AuditStatus.FAILURE, pageable);
+        void invalidEventTypeIsATranslatedBadRequest() {
+            assertThatThrownBy(() -> controller.getLogsByEventTypeAndStatus(List.of("INVALID_TYPE"), null, null, pageable))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                        .isEqualTo("audit.eventType.invalid"));
         }
 
         @Test
-        void invalidEventTypeThrowsBadRequest() {
-            assertThatThrownBy(() -> controller.getLogsByEventTypeAndStatus("INVALID_TYPE", null, pageable))
-                    .isInstanceOf(ResponseStatusException.class)
-                    .satisfies(ex -> {
-                        ResponseStatusException rse = (ResponseStatusException) ex;
-                        assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                        assertThat(rse.getReason()).contains("Invalid");
-                    });
-        }
-
-        @Test
-        void invalidStatusThrowsBadRequest() {
-            assertThatThrownBy(() -> controller.getLogsByEventTypeAndStatus("LOGIN", "BAD_STATUS", pageable))
-                    .isInstanceOf(ResponseStatusException.class)
-                    .satisfies(ex -> {
-                        ResponseStatusException rse = (ResponseStatusException) ex;
-                        assertThat(rse.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-                    });
+        void invalidStatusIsATranslatedBadRequest() {
+            assertThatThrownBy(() -> controller.getLogsByEventTypeAndStatus(List.of("LOGIN"), null, "BAD_STATUS", pageable))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                        .isEqualTo("audit.status.invalid"));
+            org.mockito.Mockito.verifyNoInteractions(auditRepository);
         }
     }
 

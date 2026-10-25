@@ -98,7 +98,7 @@ class PrescriptionQueueClaimServiceTest {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         service = new PrescriptionQueueClaimService(claimRepository, prescriptionRepository, dispenseRepository,
-                userRepository, roleValidator, auditEventLogService, CLOCK);
+                userRepository, roleValidator, auditEventLogService, CLOCK, new com.example.hms.service.EndedStayOrderGuard(mock(com.example.hms.repository.AdmissionRepository.class)));
         prescription = new Prescription();
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
@@ -283,6 +283,67 @@ class PrescriptionQueueClaimServiceTest {
                     .isInstanceOf(ConflictException.class)
                     .hasMessage(MessageUtil.resolve("dispense.ready.openPreparation"));
             verify(claimRepository, never()).findByPrescription_Id(any());
+            verifyNoInteractions(auditEventLogService);
+        }
+
+        @Test
+        @DisplayName("QA D792: a SIGNED ward order of an ended stay is off the queue, so claim and take-over are 409 notInQueue")
+        void wardOrderOfAnEndedStayIsNotClaimable() {
+            com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+            stay.setAdmissionId(UUID.randomUUID());
+            stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            prescription.setEncounter(stay);
+            inScopeAsCaller();
+
+            assertThatThrownBy(() -> service.claim(prescriptionId))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(MessageUtil.resolve("workqueue.claim.notInQueue"));
+            assertThatThrownBy(() -> service.takeOver(prescriptionId))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(MessageUtil.resolve("workqueue.claim.notInQueue"));
+            verify(claimRepository, never()).save(any());
+            verifyNoInteractions(auditEventLogService);
+
+            // Path re-verified: the same order marked take-home is claimable.
+            prescription.setTakeHome(true);
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
+                    .thenReturn(false);
+            when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+            when(claimRepository.findByPrescription_Id(prescriptionId)).thenReturn(Optional.empty());
+            when(claimRepository.save(any(PrescriptionQueueClaim.class))).thenAnswer(inv -> inv.getArgument(0));
+            assertThat(service.claim(prescriptionId).isMine()).isTrue();
+        }
+
+        @Test
+        @DisplayName("QA D792 (#953 review): an order on a stay encounter left open after the discharge is not claimable")
+        void orderOnAnOpenEncounterOfADischargedStayIsNotClaimable() {
+            com.example.hms.model.Hospital hospital = com.example.hms.model.Hospital.builder().build();
+            hospital.setId(hospitalId);
+            prescription.setHospital(hospital);
+            com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+            stay.setId(UUID.randomUUID());
+            com.example.hms.model.Encounter open = new com.example.hms.model.Encounter();
+            open.setAdmissionId(stay.getId());
+            open.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+            open.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+            prescription.setEncounter(open);
+            stay.setHospital(hospital);
+            stay.setStatus(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+            stay.setAdmissionDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 0));
+            stay.setActualDischargeDateTime(java.time.LocalDateTime.of(2026, 10, 24, 4, 43));
+            com.example.hms.repository.AdmissionRepository admissions =
+                    mock(com.example.hms.repository.AdmissionRepository.class);
+            when(admissions.findByPatient_IdAndHospital_Id(prescription.getPatient().getId(), hospitalId))
+                    .thenReturn(java.util.List.of(stay));
+            service = new PrescriptionQueueClaimService(claimRepository, prescriptionRepository, dispenseRepository,
+                    userRepository, roleValidator, auditEventLogService, CLOCK,
+                    new com.example.hms.service.EndedStayOrderGuard(admissions));
+            inScopeAsCaller();
+
+            assertThatThrownBy(() -> service.claim(prescriptionId))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(MessageUtil.resolve("workqueue.claim.notInQueue"));
+            verify(claimRepository, never()).save(any());
             verifyNoInteractions(auditEventLogService);
         }
 

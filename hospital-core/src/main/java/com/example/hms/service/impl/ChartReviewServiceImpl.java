@@ -148,14 +148,17 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<EncounterEntryDTO> loadEncounters(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                                    int limit, Map<String, Long> reach, boolean unlocked) {
         Pageable page = PageRequest.of(0, limit);
+        // QA D791 (D759's sibling): a prescription's anchor is not a visit. It
+        // is left out in the query, so it neither shows as a consultation nor
+        // takes one of the page's rows from a real visit.
         List<Encounter> source = readable != null
             ? encounterRepository
-                .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable, page)
+                .findVisitsByPatientIdAndHospitalIdIn(patientId, readable, page)
                 .getContent().stream()
                 .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
                 .toList()
             : encounterRepository
-                .findByPatient_IdOrderByEncounterDateDesc(patientId, page)
+                .findVisitsByPatientId(patientId, page)
                 .getContent();
         account(reach, hospitalId, source.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());
         return source.stream()

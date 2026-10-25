@@ -509,21 +509,22 @@ export class Login implements OnInit, AfterViewInit {
     this.forgotPasswordSuccess = '';
     const identifier = this.forgotPasswordEmail.trim();
     if (!identifier) {
-      this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
+      this.error = this.translate.instant('LOGIN.ENTER_RESET_IDENTIFIER');
       return;
     }
     this.forgotPasswordLoading = true;
-    // QA D171: a phone-only account gets its reset link by SMS.
-    const body = identifier.includes('@') ? { email: identifier } : { phone: identifier };
-    this.http.post<void>('/auth/password/request', body).subscribe({
+    // QA D787 (D171): an e-mail address, a username or a phone number; the
+    // server finds the account and the channel that reaches it.
+    this.http.post<void>('/auth/password/request', { identifier }).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
-        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_REQUEST_ACK');
       },
       error: () => {
         this.forgotPasswordLoading = false;
-        // Always show neutral message to avoid email enumeration
-        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_LINK_SENT');
+        // One neutral answer: it never says whether the account exists or how
+        // it was reached, and it sends a holder nothing reached to reception.
+        this.forgotPasswordSuccess = this.translate.instant('LOGIN.RESET_REQUEST_ACK');
       },
     });
   }

@@ -103,6 +103,27 @@
   background: transparent;
 }
 
+.emar__queue-chip--advisory {
+  /* QA D799: amber, as the cross-reactivity card itself. */
+  border: 1px solid #92400e;
+  color: #92400e;
+  background: #fef3c7;
+}
+
+.emar__advisory {
+  border: 1px solid #92400e;
+  border-left-width: 4px;
+  border-radius: 0.375rem;
+  padding: 0.75rem 1rem;
+  background: transparent;
+}
+
+.emar__advisory-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #92400e;
+}
+
 .emar__blocked {
   border: 1px solid var(--color-warning, #b7791f);
   border-left-width: 4px;

@@ -64,9 +64,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  *
  * <p>Callers mapped before the rules were chosen:
  * <ul>
- *   <li>{@code GET /users}: chat's new-conversation picker (staff), staff-list's
- *       account picker; {@code GET /users/search}: user-list and the
- *       super-admin emergency MFA-reset picker;</li>
+ *   <li>{@code GET /users}: staff-list's account picker; {@code GET /users/search}:
+ *       user-list and the super-admin emergency MFA-reset picker. Both are the
+ *       administrators' (QA D790); chat's new-conversation picker reads
+ *       {@code GET /users/chat-recipients}, open to every staff member;</li>
  *   <li>{@code GET/PUT /users/{own id}}: the profile page, for every signed-in
  *       user including patients (names and phone; the username and email are
  *       sent back unchanged, and a changed email is refused: an administrator
@@ -199,6 +200,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
         for (String patient : new String[] {hms(patientA, "ROLE_PATIENT"), keycloakPatient()}) {
             assertThat(status(get("/users"), patient, null)).isEqualTo(403);
             assertThat(status(get("/users/search").param("name", "a"), patient, null)).isEqualTo(403);
+            assertThat(status(get("/users/chat-recipients"), patient, null)).isEqualTo(403);
         }
     }
 
@@ -361,11 +363,40 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("chat and staff-list: any staff member lists the directory (scoped: see directoryIsScopedToTheCallersHospitals)")
-    void staffListTheDirectory() throws Exception {
-        assertThat(status(get("/users").param("size", "100"), hms(doctorB, "ROLE_DOCTOR"), null)).isEqualTo(200);
-        assertThat(status(get("/users").param("size", "500"), hms(receptionistA, "ROLE_RECEPTIONIST"), null))
-            .isEqualTo(200);
+    @DisplayName("QA D790: staff are refused the directory, the hospital admin lists it, and staff pick chat recipients")
+    void staffAreRefusedTheDirectoryButPickChatRecipients() throws Exception {
+        User pharmacistA = account("pharA", "ROLE_PHARMACIST", hospitalA);
+        User labTechA = account("labA", "ROLE_LAB_TECHNICIAN", hospitalA);
+        Map<String, String> staff = Map.of(
+            "doctor", hms(doctorB, "ROLE_DOCTOR"),
+            "receptionist", hms(receptionistA, "ROLE_RECEPTIONIST"),
+            "nurse", hms(nurseA, "ROLE_NURSE"),
+            "pharmacist", hms(pharmacistA, "ROLE_PHARMACIST"),
+            "lab technician", hms(labTechA, "ROLE_LAB_TECHNICIAN"));
+        for (Map.Entry<String, String> caller : staff.entrySet()) {
+            assertThat(status(get("/users").param("size", "100"), caller.getValue(), null))
+                .as(caller.getKey() + " GET /users").isEqualTo(403);
+            assertThat(status(get("/users/search").param("name", "a"), caller.getValue(), null))
+                .as(caller.getKey() + " GET /users/search").isEqualTo(403);
+            assertThat(status(get("/users/chat-recipients"), caller.getValue(), null))
+                .as(caller.getKey() + " GET /users/chat-recipients").isEqualTo(200);
+        }
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        assertThat(status(get("/users").param("size", "500"), admin, null)).isEqualTo(200);
+        assertThat(status(get("/users/search").param("name", "a"), admin, null)).isEqualTo(200);
+
+        // The picker lists A's colleagues by id, name and role: never the patient,
+        // never B's doctor, never a contact detail.
+        MvcResult picker = perform(get("/users/chat-recipients"), hms(nurseA, "ROLE_NURSE"), null);
+        var rows = objectMapper.readTree(picker.getResponse().getContentAsString());
+        List<UUID> recipients = new ArrayList<>();
+        rows.forEach(row -> {
+            recipients.add(UUID.fromString(row.get("id").asText()));
+            assertThat(row.has("email") || row.has("username")).isFalse();
+        });
+        assertThat(recipients)
+            .contains(adminA.getId(), receptionistA.getId(), pharmacistA.getId(), labTechA.getId())
+            .doesNotContain(patientA.getId(), doctorB.getId());
     }
 
     @Test
@@ -529,7 +560,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     // ------------------------------------------------- the directory's scope
 
     @Test
-    @DisplayName("a staff member at A lists and searches only accounts assigned at A, with correct paging totals")
+    @DisplayName("A's administrator lists and searches only accounts assigned at A, with correct paging totals")
     void directoryIsScopedToTheCallersHospitals() throws Exception {
         // Assigned at A but not yet verified (inactive, as every admin-registered
         // account starts): staff-list's picker must still offer it.
@@ -541,49 +572,41 @@ class UserEndpointAuthorizationIT extends BaseIT {
         List<UUID> atA = List.of(adminA.getId(), receptionistA.getId(), nurseA.getId(), patientA.getId(),
             pendingA.getId(), dualAB.getId());
 
-        // QA D430: a nurse's directory lists colleagues only, never the patient account.
-        List<UUID> staffAtA = atA.stream().filter(id -> !id.equals(patientA.getId())).toList();
-
+        // QA D790: a nurse no longer reads the directory at all (D430 kept her to colleagues).
         String nurse = hms(nurseA, "ROLE_NURSE");
-        var all = page(get("/users").param("size", "100"), nurse);
-        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(staffAtA);
-        assertThat(total(all)).isEqualTo(staffAtA.size());
+        assertThat(status(get("/users").param("size", "100"), nurse, null)).isEqualTo(403);
+        assertThat(status(get("/users/search").param("email", "users-gate.test"), nurse, null)).isEqualTo(403);
+
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        var all = page(get("/users").param("size", "100"), admin);
+        assertThat(ids(all)).containsExactlyInAnyOrderElementsOf(atA);
+        assertThat(total(all)).isEqualTo(atA.size());
 
         // Paging: one row per page, the total still counts the whole scope.
-        var first = page(get("/users").param("size", "1").param("page", "0"), nurse);
+        var first = page(get("/users").param("size", "1").param("page", "0"), admin);
         assertThat(List.of((long) ids(first).size(), total(first)))
-            .containsExactly(1L, (long) staffAtA.size());
-        var last = page(get("/users").param("size", "4").param("page", "1"), nurse);
-        assertThat(ids(last)).hasSize(staffAtA.size() - 4);
-
-        // A's administrator still lists every account at A, the patient included.
-        var adminAll = page(get("/users").param("size", "100"), hms(adminA, "ROLE_HOSPITAL_ADMIN"));
-        assertThat(ids(adminAll)).containsExactlyInAnyOrderElementsOf(atA);
+            .containsExactly(1L, (long) atA.size());
+        var last = page(get("/users").param("size", "4").param("page", "1"), admin);
+        assertThat(ids(last)).hasSize(atA.size() - 4);
 
         // Search: B's doctor is not found by name, email or role; A's accounts are.
         assertThat(List.of(
-                total(page(get("/users/search").param("name", doctorB.getUsername()), nurse)),
-                total(page(get("/users/search").param("email", doctorB.getEmail()), nurse)),
-                total(page(get("/users/search").param("name", "sa"), nurse))))
+                total(page(get("/users/search").param("name", doctorB.getUsername()), admin)),
+                total(page(get("/users/search").param("email", doctorB.getEmail()), admin)),
+                total(page(get("/users/search").param("name", superAdmin.getUsername()), admin))))
             .containsOnly(0L);
-        var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), nurse);
+        var doctors = page(get("/users/search").param("role", "ROLE_DOCTOR").param("size", "1"), admin);
         assertThat(List.<Object>of(total(doctors), ids(doctors)))
             .containsExactly(1L, List.of(dualAB.getId()));
-        // QA D198: none of these accounts holds a staff profile, so a nurse sees their
-        // e-mails masked and cannot confirm one by searching; A's administrator can.
-        assertThat(List.of(
-                total(page(get("/users/search").param("email", "users-gate.test"), nurse)),
-                total(page(get("/users/search").param("name", patientA.getEmail()), nurse))))
-            .containsOnly(0L);
-        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"),
-            hms(adminA, "ROLE_HOSPITAL_ADMIN"));
+        var byDomain = page(get("/users/search").param("email", "users-gate.test").param("size", "2"), admin);
         assertThat(total(byDomain)).isEqualTo(atA.size());
         assertThat(ids(byDomain)).hasSize(2);
 
-        // And B's doctor sees B only: itself and the account assigned at both.
-        var fromB = page(get("/users").param("size", "100"), hms(doctorB, "ROLE_DOCTOR"));
-        assertThat(ids(fromB)).containsExactlyInAnyOrder(doctorB.getId(), dualAB.getId());
-        assertThat(total(fromB)).isEqualTo(2);
+        // And B's administrator sees B only: itself, B's doctor and the account assigned at both.
+        User adminB = account("hadmB", "ROLE_HOSPITAL_ADMIN", hospitalB);
+        var fromB = page(get("/users").param("size", "100"), hms(adminB, "ROLE_HOSPITAL_ADMIN"));
+        assertThat(ids(fromB)).containsExactlyInAnyOrder(adminB.getId(), doctorB.getId(), dualAB.getId());
+        assertThat(total(fromB)).isEqualTo(3);
     }
 
     @Test
@@ -633,14 +656,15 @@ class UserEndpointAuthorizationIT extends BaseIT {
         // X: a receptionist at A who is also HOSPITAL_ADMIN at B.
         User x = account("recAB", "ROLE_RECEPTIONIST", hospitalA);
         assignAlso(x, "ROLE_HOSPITAL_ADMIN", hospitalB);
-        String nurse = hms(nurseA, "ROLE_NURSE");
+        // QA D790: the directory is the administrators', so A's administrator asks.
+        String adminOfA = hms(adminA, "ROLE_HOSPITAL_ADMIN");
 
         for (String role : new String[] {"ROLE_HOSPITAL_ADMIN", "HOSPITAL_ADMIN"}) {
-            var admins = page(get("/users/search").param("role", role).param("size", "100"), nurse);
+            var admins = page(get("/users/search").param("role", role).param("size", "100"), adminOfA);
             assertThat(ids(admins)).as(role).containsExactly(adminA.getId());
             assertThat(total(admins)).as(role).isEqualTo(1);
         }
-        assertThat(ids(page(get("/users/search").param("role", "ROLE_RECEPTIONIST").param("size", "100"), nurse)))
+        assertThat(ids(page(get("/users/search").param("role", "ROLE_RECEPTIONIST").param("size", "100"), adminOfA)))
             .containsExactlyInAnyOrder(receptionistA.getId(), x.getId());
         // The super-admin, unscoped, sees X's admin role at B.
         assertThat(ids(page(get("/users/search").param("role", "ROLE_HOSPITAL_ADMIN").param("size", "500"),
@@ -652,16 +676,17 @@ class UserEndpointAuthorizationIT extends BaseIT {
     void scopedRoleSearchFindsAPendingAccount() throws Exception {
         User pendingNurse = account("pendN", "ROLE_NURSE", hospitalA);
         deactivateAssignments(pendingNurse);
-        String receptionist = hms(receptionistA, "ROLE_RECEPTIONIST");
+        // QA D790: the directory is the administrators', so A's administrator asks.
+        String adminOfA = hms(adminA, "ROLE_HOSPITAL_ADMIN");
 
-        assertThat(ids(page(get("/users").param("size", "100"), receptionist))).contains(pendingNurse.getId());
-        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), receptionist);
+        assertThat(ids(page(get("/users").param("size", "100"), adminOfA))).contains(pendingNurse.getId());
+        var nurses = page(get("/users/search").param("role", "ROLE_NURSE").param("size", "100"), adminOfA);
         assertThat(ids(nurses)).containsExactlyInAnyOrder(nurseA.getId(), pendingNurse.getId());
         assertThat(total(nurses)).isEqualTo(2);
         // A nurse assigned only at B, pending or not, stays out.
         User pendingAtB = account("pendB", "ROLE_NURSE", hospitalB);
         deactivateAssignments(pendingAtB);
-        assertThat(ids(page(get("/users/search").param("role", "NURSE").param("size", "100"), receptionist)))
+        assertThat(ids(page(get("/users/search").param("role", "NURSE").param("size", "100"), adminOfA)))
             .doesNotContain(pendingAtB.getId());
     }
 
