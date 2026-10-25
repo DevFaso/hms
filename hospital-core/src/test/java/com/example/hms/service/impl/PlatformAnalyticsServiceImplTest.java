@@ -95,7 +95,7 @@ class PlatformAnalyticsServiceImplTest {
         @DisplayName("returns correct aggregate counts from repositories")
         void returnsAggregateCounts() {
             when(patientRepository.count()).thenReturn(100L);
-            when(encounterRepository.count()).thenReturn(200L);
+            when(encounterRepository.countVisits()).thenReturn(200L);
             when(appointmentRepository.count()).thenReturn(300L);
             when(billingInvoiceRepository.count()).thenReturn(50L);
             when(labOrderRepository.count()).thenReturn(75L);
@@ -186,6 +186,28 @@ class PlatformAnalyticsServiceImplTest {
 
             assertThat(result.getEncountersByStatus()).containsEntry("IN_PROGRESS", 1L);
             assertThat(result.getEncountersByStatus()).containsEntry("UNKNOWN", 1L);
+        }
+
+        @Test
+        @DisplayName("QA D791: a prescription's anchor is not counted as a completed visit")
+        void anchorsAreNotCounted() {
+            stubCountsToZero();
+            Encounter visit = mock(Encounter.class);
+            when(visit.getStatus()).thenReturn(EncounterStatus.COMPLETED);
+            Encounter anchor = mock(Encounter.class);
+            when(anchor.isPrescriptionAnchor()).thenReturn(true);
+
+            when(appointmentRepository.findAll()).thenReturn(Collections.emptyList());
+            when(appointmentRepository.countByAppointmentDateBetween(any(), any())).thenReturn(0L);
+            when(encounterRepository.findAll()).thenReturn(List.of(visit, anchor));
+            when(billingInvoiceRepository.findAll()).thenReturn(Collections.emptyList());
+            when(departmentRepository.findAll()).thenReturn(Collections.emptyList());
+            when(hospitalRepository.findAllHospitals()).thenReturn(Collections.emptyList());
+            when(patientRepository.findAll()).thenReturn(Collections.emptyList());
+
+            PlatformAnalyticsDTO result = service.getAnalytics(1);
+
+            assertThat(result.getEncountersByStatus()).containsEntry("COMPLETED", 1L);
         }
 
         @Test
@@ -315,7 +337,7 @@ class PlatformAnalyticsServiceImplTest {
 
     private void stubCountsToZero() {
         when(patientRepository.count()).thenReturn(0L);
-        when(encounterRepository.count()).thenReturn(0L);
+        when(encounterRepository.countVisits()).thenReturn(0L);
         when(appointmentRepository.count()).thenReturn(0L);
         when(billingInvoiceRepository.count()).thenReturn(0L);
         when(labOrderRepository.count()).thenReturn(0L);

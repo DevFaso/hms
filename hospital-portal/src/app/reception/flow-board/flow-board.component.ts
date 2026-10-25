@@ -19,6 +19,16 @@ export interface FlowBoardStatusChange {
   newStatus: string;
 }
 
+/** QA D788: a card nobody has seen, dropped on "completed" or "no-show". */
+export interface FlowBoardCloseUnseen {
+  encounterId: string;
+  patientName: string | null;
+  outcome: 'LEFT_WITHOUT_BEING_SEEN' | 'CANCELLED';
+}
+
+/** Board statuses of a visit no clinician has seen yet (ARRIVED covers triage and waiting). */
+const NEVER_SEEN_STATUSES = new Set(['ARRIVED', 'WALK_IN', 'CHECKED_IN']);
+
 type ColKey = keyof FlowBoard;
 
 @Component({
@@ -33,6 +43,7 @@ export class FlowBoardComponent implements OnChanges {
   @Input() board: FlowBoard | null = null;
   @Output() patientClicked = new EventEmitter<string>();
   @Output() statusChanged = new EventEmitter<FlowBoardStatusChange>();
+  @Output() closeUnseenRequested = new EventEmitter<FlowBoardCloseUnseen>();
 
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -57,7 +68,6 @@ export class FlowBoardComponent implements OnChanges {
   private readonly colStatusMap: Partial<Record<ColKey, string>> = {
     arrived: 'ARRIVED',
     inProgress: 'IN_PROGRESS',
-    noShow: 'NO_SHOW',
     completed: 'COMPLETED',
   };
 
@@ -80,6 +90,26 @@ export class FlowBoardComponent implements OnChanges {
 
     const draggedItem = event.previousContainer.data[event.previousIndex];
     const newStatus = this.colStatusMap[targetKey];
+
+    // QA D788: a visit nobody has seen is never "completed": the desk closes it
+    // as left without being seen (or cancelled), with a reason, in a dialog.
+    if (
+      (targetKey === 'completed' || targetKey === 'noShow') &&
+      draggedItem?.encounterId &&
+      NEVER_SEEN_STATUSES.has(draggedItem.status)
+    ) {
+      this.closeUnseenRequested.emit({
+        encounterId: draggedItem.encounterId,
+        patientName: draggedItem.patientName ?? null,
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      return;
+    }
+    // A seen visit is not a no-show: there is no such encounter status.
+    if (targetKey === 'noShow') {
+      this.toast.info(this.translate.instant('RECEPTION.CANNOT_MOVE_CARD'));
+      return;
+    }
 
     if (!newStatus || !draggedItem?.encounterId) {
       this.toast.info(this.translate.instant('RECEPTION.CANNOT_MOVE_CARD'));

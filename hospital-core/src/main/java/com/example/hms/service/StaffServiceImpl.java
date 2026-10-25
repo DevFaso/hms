@@ -586,6 +586,8 @@ public class StaffServiceImpl implements StaffService {
         Role newRole = roleRepository.findByCode(newRoleCode)
             .orElseThrow(() -> new ResourceNotFoundException("staff.lab.role.notFound", newRoleCode));
 
+        // QA D789: no new role at an archived hospital.
+        com.example.hms.security.provider.FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
         // Update the assignment's role
         assignment.setRole(newRole);
         assignmentRepository.save(assignment);

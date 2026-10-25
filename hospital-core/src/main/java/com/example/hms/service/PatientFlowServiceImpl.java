@@ -72,6 +72,10 @@ public class PatientFlowServiceImpl implements PatientFlowService {
                 flow.put(column, new ArrayList<>());
             }
             for (Encounter enc : encounterRepository.findByStaff_IdAndStatus(staffId, es)) {
+                // QA D791: a prescription's anchor (COMPLETED) is not a visit on the board.
+                if (enc.isPrescriptionAnchor()) {
+                    continue;
+                }
                 PatientFlowItemDTO item = buildEncounterFlowItem(enc, column);
                 if (item != null) {
                     flow.get(column).add(item);

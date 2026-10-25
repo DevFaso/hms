@@ -262,6 +262,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             requireGrantAt(grant, hospital, roleCode);
         }
         facilityAssignmentGuard.requireCompatible(roleCode, hospital);
+        // QA D789: an archived hospital takes no new role (a 409 before anything is saved).
+        FacilityAssignmentGuard.requireOpenForAssignment(hospital);
         User user = resolveUser(dto, locale);
         facilityAssignmentGuard.requireSingleFacilityKind(user, roleCode, hospital, null);
         checkActiveDoctorConflict(dto, user, role, hospital, locale);
@@ -284,10 +286,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
 
-        log.info("✅ Assigned role '{}' to user '{}'{}",
+        log.info("✅ Assigned role '{}' to user {}{}",
             roleCode,
-            user.getEmail(),
-            hospital != null ? (" in hospital '" + hospital.getName() + "'") : " (global)");
+            user.getId(),
+            hospital != null ? (" in hospital " + hospital.getId()) : " (global)");
 
         syncLegacyRole(user, role);
         if (sendNotifications) {
@@ -409,6 +411,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         requireActivationThroughCode(dto, target);
         // Decided before the mapper overwrites the row's current role and hospital.
         boolean reinvite = !verifiedSuperAdmin && isNewGrant(target, newRole, newHospital);
+        // QA D789: a row that stays or comes on, or is re-invited, at an archived
+        // hospital is refused; switching one off there is still allowed.
+        boolean activeAfter = dto.getActive() != null ? dto.getActive() : Boolean.TRUE.equals(target.getActive());
+        if (activeAfter || reinvite) {
+            FacilityAssignmentGuard.requireOpenForAssignment(newHospital);
+        }
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
@@ -845,6 +853,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     /** A new assignment code and confirmation code for a row already found changeable. */
     private UserRoleHospitalAssignment reissueCode(UserRoleHospitalAssignment assignment, boolean resendNotifications) {
+        // QA D789: no fresh invitation into an archived hospital.
+        FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
         assignment.setAssignmentCode(generateAssignCode(assignment.getUser(), assignment.getHospital()));
         assignment.setConfirmationCode(generateConfirmationCode());
         assignment.setConfirmationSentAt(LocalDateTime.now());
@@ -1031,6 +1041,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 MSG_ACCOUNT_DISABLED_BY_ADMIN, null, DEFAULT_ACCOUNT_DISABLED_BY_ADMIN,
                 org.springframework.context.i18n.LocaleContextHolder.getLocale()));
         }
+        // QA D789: an invitation to a hospital archived since is not switched on.
+        FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
         // One kind of facility per user: two pending rows, one at a hospital
         // and one at a provider, cannot both come on.
         facilityAssignmentGuard.requireSingleFacilityKind(assignment.getUser(), getRoleCode(assignment.getRole()),

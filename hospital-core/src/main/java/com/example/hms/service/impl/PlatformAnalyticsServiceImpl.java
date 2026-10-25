@@ -32,7 +32,8 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
     @Override
     public PlatformAnalyticsDTO getAnalytics(int trendDays) {
         long totalPatients = patientRepository.count();
-        long totalEncounters = encounterRepository.count();
+        // QA D791: visits, not the encounters prescriptions anchor themselves on.
+        long totalEncounters = encounterRepository.countVisits();
         long totalAppointments = appointmentRepository.count();
         long totalInvoices = billingInvoiceRepository.count();
         long totalLabOrders = labOrderRepository.count();
@@ -94,7 +95,9 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
 
     private Map<String, Long> buildEncounterStatusBreakdown() {
         Map<String, Long> result = new LinkedHashMap<>();
+        // QA D791: a prescription's anchor (always COMPLETED) is not a completed visit.
         encounterRepository.findAll().stream()
+                .filter(e -> !e.isPrescriptionAnchor())
                 .collect(Collectors.groupingBy(
                         e -> e.getStatus() != null ? e.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))

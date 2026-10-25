@@ -121,10 +121,10 @@ class ChartReviewServiceImplTest {
 
         // Default empty results so individual tests only have to populate what they need.
         // All loaders now use paged DB queries, so default to empty Page returns.
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
-        when(encounterRepo.findByPatient_IdOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientId(
             any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
         when(noteRepo.findByEncounter_IdIn(any())).thenReturn(List.of());
@@ -187,7 +187,7 @@ class ChartReviewServiceImplTest {
         Encounter encOld = encounter(EncounterStatus.COMPLETED, now.minusDays(10));
         Encounter encNew = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(2));
         // Returned in DB-sorted order (DESC by encounterDate).
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(encNew, encOld)));
 
@@ -266,7 +266,7 @@ class ChartReviewServiceImplTest {
             manyEnc.add(encounter(EncounterStatus.COMPLETED, base.minusHours(i)));
         }
         // Simulate the DB returning the page-size we asked for (pageable filters in SQL).
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenAnswer(inv -> {
                 Pageable p = inv.getArgument(2);
@@ -295,7 +295,7 @@ class ChartReviewServiceImplTest {
     @Test
     void hospitalIdNullFallsBackToUnscopedQueries() {
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        when(encounterRepo.findByPatient_IdOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientId(
             any(UUID.class), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(enc)));
 
@@ -314,7 +314,7 @@ class ChartReviewServiceImplTest {
         Encounter anchor = encounter(EncounterStatus.COMPLETED, now);
         anchor.setNotes(Encounter.PRESCRIPTION_ANCHOR_NOTE);
         Encounter visit = encounter(EncounterStatus.IN_PROGRESS, now.minusHours(1));
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(anchor, visit)));
         EncounterNote visitNote = note(visit, now.minusHours(1));
@@ -330,7 +330,7 @@ class ChartReviewServiceImplTest {
     void notePreviewPicksAssessmentAndTruncatesLongBodies() {
         LocalDateTime now = LocalDateTime.now();
         Encounter enc = encounter(EncounterStatus.IN_PROGRESS, now);
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             any(UUID.class), any(), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(enc)));
 
@@ -543,7 +543,7 @@ class ChartReviewServiceImplTest {
         awaySensitive.setHospital(other);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID, otherHospitalId));
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             eq(PATIENT_ID), eq(Set.of(HOSPITAL_ID, otherHospitalId)), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(here, away, awaySensitive)));
         when(sensitivityClassifier.effectiveCategory(awaySensitive))
@@ -640,7 +640,7 @@ class ChartReviewServiceImplTest {
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID, otherHospitalId));
         when(breakGlassGate.isUnlocked(any(), eq(PATIENT_ID), eq(HOSPITAL_ID))).thenReturn(true);
-        when(encounterRepo.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(
+        when(encounterRepo.findVisitsByPatientIdAndHospitalIdIn(
             eq(PATIENT_ID), eq(Set.of(HOSPITAL_ID, otherHospitalId)), any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of(awaySensitive)));
         when(sensitivityClassifier.effectiveCategory(awaySensitive))

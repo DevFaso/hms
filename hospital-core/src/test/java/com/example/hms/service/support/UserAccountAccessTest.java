@@ -311,7 +311,7 @@ class UserAccountAccessTest {
     }
 
     @Nested
-    @DisplayName("the directory")
+    @DisplayName("the directory (administrators only, QA D790)")
     class Directory {
 
         @Test
@@ -323,12 +323,26 @@ class UserAccountAccessTest {
             assertThatThrownBy(access::requireDirectoryAccess).isInstanceOf(AccessDeniedException.class);
         }
 
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0} is refused")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "ROLE_LAB_TECHNICIAN", "ROLE_PHARMACIST", "ROLE_NURSE", "ROLE_RECEPTIONIST", "ROLE_DOCTOR",
+            "ROLE_PROVIDER_ADMIN"})
+        @DisplayName("QA D790: the staff roles the tester used (and the doctor) are refused")
+        void nonAdministratorStaffIsRefused(String role) {
+            signIn(false, role);
+            callerHolds(assignment(role, hospitalA, true));
+
+            assertThatThrownBy(access::requireDirectoryAccess).isInstanceOf(AccessDeniedException.class);
+        }
+
         @Test
-        @DisplayName("staff in any role other than PATIENT, and the super-admin, are admitted")
-        void staffIsAdmitted() {
-            signIn(false, "ROLE_PHARMACIST");
-            callerHolds(assignment("ROLE_PHARMACIST", hospitalA, true));
-            assertThatCode(access::requireDirectoryAccess).doesNotThrowAnyException();
+        @DisplayName("a hospital admin, an admin and the super-admin are admitted")
+        void administratorsAreAdmitted() {
+            for (String role : java.util.List.of("ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN")) {
+                signIn(false, role);
+                callerHolds(assignment(role, hospitalA, true));
+                assertThatCode(access::requireDirectoryAccess).as(role).doesNotThrowAnyException();
+            }
 
             signIn(true, "ROLE_SUPER_ADMIN");
             assertThatCode(access::requireDirectoryAccess).doesNotThrowAnyException();
@@ -345,41 +359,30 @@ class UserAccountAccessTest {
         }
 
         @Test
-        @DisplayName("an inflated ROLE_SUPER_ADMIN authority without the context flag is scoped like any staff member")
-        void inflatedSuperAdminAuthorityIsScoped() {
+        @DisplayName("an inflated ROLE_SUPER_ADMIN authority without the context flag is no administrator")
+        void inflatedSuperAdminAuthorityIsRefused() {
             signIn(false, "ROLE_SUPER_ADMIN", "ROLE_NURSE");
             callerHolds(assignment("ROLE_NURSE", hospitalA, true));
+
+            assertThatThrownBy(access::requireDirectoryAccess).isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("an administrator's directory is the hospitals they administer, not where they are other staff")
+        void scopeIsTheAdministeredHospitals() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN", "ROLE_NURSE");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true), assignment("ROLE_NURSE", hospitalB, true));
 
             UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
 
             assertThat(scope.everyone()).isFalse();
             assertThat(scope.hospitalIds()).containsExactly(hospitalA.getId());
+            assertThat(scope.seesPatientContacts()).isTrue();
         }
 
         @Test
-        @DisplayName("anyone else's directory is the hospitals where they actively hold a staff role")
-        void scopeIsTheCallersStaffHospitals() {
-            signIn(false, "ROLE_NURSE", "ROLE_DOCTOR");
-            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_DOCTOR", hospitalB, true));
-
-            UserAccountAccess.DirectoryScope scope = access.requireDirectoryAccess();
-
-            assertThat(scope.everyone()).isFalse();
-            assertThat(scope.hospitalIds()).containsExactlyInAnyOrder(hospitalA.getId(), hospitalB.getId());
-        }
-
-        @Test
-        @DisplayName("the caller's own PATIENT assignment elsewhere does not widen it")
-        void patientAssignmentDoesNotWiden() {
-            signIn(false, "ROLE_NURSE", "ROLE_PATIENT");
-            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
-
-            assertThat(access.requireDirectoryAccess().hospitalIds()).containsExactly(hospitalA.getId());
-        }
-
-        @Test
-        @DisplayName("a global staff assignment (no hospital) is admitted with an empty scope: nobody")
-        void globalStaffAssignmentSeesNobody() {
+        @DisplayName("a global admin assignment (no hospital) is admitted with an empty scope: nobody")
+        void globalAdminAssignmentSeesNobody() {
             signIn(false, "ROLE_ADMIN");
             callerHolds(assignment("ROLE_ADMIN", null, true));
 
@@ -390,12 +393,62 @@ class UserAccountAccessTest {
         }
 
         @Test
-        @DisplayName("a staff token whose only staff assignment is inactive is refused")
-        void inactiveStaffIsRefused() {
-            signIn(false, "ROLE_NURSE");
-            callerHolds(assignment("ROLE_NURSE", hospitalA, false));
+        @DisplayName("an administrator whose admin assignment is inactive is refused")
+        void inactiveAdministratorIsRefused() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, false));
 
             assertThatThrownBy(access::requireDirectoryAccess).isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("the chat's colleague directory (QA D790)")
+    class ColleagueDirectory {
+
+        @Test
+        @DisplayName("any active staff role is admitted, scoped to its hospitals, never with patient contacts")
+        void staffIsAdmittedScoped() {
+            signIn(false, "ROLE_NURSE", "ROLE_DOCTOR");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_DOCTOR", hospitalB, true));
+
+            UserAccountAccess.DirectoryScope scope = access.requireColleagueDirectoryAccess();
+
+            assertThat(scope.everyone()).isFalse();
+            assertThat(scope.hospitalIds()).containsExactlyInAnyOrder(hospitalA.getId(), hospitalB.getId());
+            assertThat(scope.seesPatientContacts()).isFalse();
+        }
+
+        @Test
+        @DisplayName("the caller's own PATIENT assignment elsewhere does not widen it")
+        void patientAssignmentDoesNotWiden() {
+            signIn(false, "ROLE_NURSE", "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, true), assignment("ROLE_PATIENT", hospitalB, true));
+
+            assertThat(access.requireColleagueDirectoryAccess().hospitalIds()).containsExactly(hospitalA.getId());
+        }
+
+        @Test
+        @DisplayName("a patient, and staff whose only assignment is inactive, are refused")
+        void patientsAndInactiveStaffAreRefused() {
+            signIn(false, "ROLE_PATIENT");
+            callerHolds(assignment("ROLE_PATIENT", hospitalA, true));
+            assertThatThrownBy(access::requireColleagueDirectoryAccess).isInstanceOf(AccessDeniedException.class);
+
+            signIn(false, "ROLE_NURSE");
+            callerHolds(assignment("ROLE_NURSE", hospitalA, false));
+            assertThatThrownBy(access::requireColleagueDirectoryAccess).isInstanceOf(AccessDeniedException.class);
+        }
+
+        @Test
+        @DisplayName("the super-admin sees every colleague, still without patient contacts")
+        void superAdmin() {
+            signIn(true, "ROLE_SUPER_ADMIN");
+
+            UserAccountAccess.DirectoryScope scope = access.requireColleagueDirectoryAccess();
+
+            assertThat(scope.everyone()).isTrue();
+            assertThat(scope.seesPatientContacts()).isFalse();
         }
     }
 

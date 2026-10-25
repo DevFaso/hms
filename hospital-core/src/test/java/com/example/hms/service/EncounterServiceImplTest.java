@@ -129,6 +129,23 @@ class EncounterServiceImplTest {
 
     private final Locale locale = Locale.ENGLISH;
 
+    /**
+     * QA D788: the check-out of a visit IN_PROGRESS is the clinician's own; the
+     * existing check-out tests are the doctor's, so they run as a doctor. The
+     * desk's refusals are in {@code EncounterCloseUnseenTest}.
+     */
+    @BeforeEach
+    void signInAsDoctor() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("doctor1", "n/a",
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSignIn() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     @BeforeEach
     void setUpCheckoutDefaults() {
         // The services ask the one PatientSubjectReadGuard; it is built here over
@@ -2755,5 +2772,181 @@ class EncounterServiceImplTest {
 
         verify(appointmentRepository, never()).save(any(Appointment.class));
         verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
+    }
+
+    /**
+     * QA D788: RECEPTIONIST_A booked and checked in PATIENT_AB (ARRIVED, no
+     * triage, no note) and {@code POST /encounters/{id}/checkout} answered 200:
+     * the encounter and the appointment became COMPLETED with an After-Visit
+     * Summary. A visit is checked out once the clinician has completed the
+     * examination; a visit nobody saw is closed without a consultation.
+     */
+    @org.junit.jupiter.api.Nested
+    class QaD788ClosingAVisit {
+
+        private Appointment appointment;
+
+        @BeforeEach
+        void signInAsReceptionist() {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("receptionist1", "n/a",
+                    org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_RECEPTIONIST")));
+        }
+
+        private Encounter visit(EncounterStatus status) {
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            Patient patient = new Patient();
+            patient.setId(UUID.randomUUID());
+            appointment = new Appointment();
+            appointment.setId(UUID.randomUUID());
+            appointment.setStatus(AppointmentStatus.CHECKED_IN);
+            Encounter encounter = new Encounter();
+            encounter.setId(UUID.randomUUID());
+            encounter.setStatus(status);
+            encounter.setHospital(hospital);
+            encounter.setPatient(patient);
+            encounter.setAppointment(appointment);
+            when(encounterRepository.findById(encounter.getId())).thenReturn(Optional.of(encounter));
+            return encounter;
+        }
+
+        private String keyOf(Throwable ex) {
+            return ((com.example.hms.exception.BusinessException) ex).getMessageKey();
+        }
+
+        @Test
+        @DisplayName("the QA call: the desk checks out a never-seen ARRIVED visit: refused, nothing changes, no AVS")
+        void deskCheckoutOfANeverSeenVisitIsRefused() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+                    "receptionist1", true, null))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            verify(encounterRepository, never()).save(any());
+            verify(dischargeSummaryRepository, never()).save(any());
+            verify(appointmentRepository, never()).save(any());
+            verify(checkOutMapper, never()).toAfterVisitSummary(any(), any(), any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"SCHEDULED", "ARRIVED", "TRIAGE", "WAITING_FOR_PHYSICIAN"})
+        @DisplayName("no clinician either checks out a visit nobody has seen")
+        void nobodyChecksOutANeverSeenVisit(EncounterStatus status) {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("doctor1", "n/a",
+                    org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
+            Encounter encounter = visit(status);
+
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+                    "doctor1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.notSeen"));
+        }
+
+        @Test
+        @DisplayName("the desk cannot check out a visit still IN_PROGRESS: the examination is not complete")
+        void deskCheckoutMidConsultationIsRefused() {
+            Encounter encounter = visit(EncounterStatus.IN_PROGRESS);
+
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.examinationNotCompleted"));
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"AWAITING_RESULTS", "READY_FOR_DISCHARGE"})
+        @DisplayName("the desk still checks out an examined visit (the encounters page and the tracker)")
+        void deskCheckoutOfAnExaminedVisit(EncounterStatus status) {
+            Encounter encounter = visit(status);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(checkOutMapper.toAfterVisitSummary(any(), any(), any()))
+                .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounter.getId()).build());
+            lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+            lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("x");
+
+            service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(), "receptionist1", true, null);
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
+        }
+
+        @Test
+        @DisplayName("close-unseen: a never-seen visit becomes CANCELLED with its outcome and reason, no AVS")
+        void closeUnseenCancelsWithAReason() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason("  Parti avant l'appel  ").build(),
+                "receptionist1", true, null);
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+            assertThat(encounter.getExtraFields())
+                .containsEntry("unseenOutcome", "LEFT_WITHOUT_BEING_SEEN")
+                .containsEntry("unseenReason", "Parti avant l'appel");
+            assertThat(encounter.getCheckoutTimestamp()).isNull();
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+            verify(dischargeSummaryRepository, never()).save(any());
+            verify(checkOutMapper, never()).toAfterVisitSummary(any(), any(), any());
+            verify(encounterHistoryRepository).save(any());
+            verify(trackerEventPublisher).publishStatusTransition(encounter, "ARRIVED", "CANCELLED");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED"})
+        @DisplayName("close-unseen refuses a visit a clinician has seen, or one already closed")
+        void closeUnseenRefusesASeenVisit(EncounterStatus status) {
+            Encounter encounter = visit(status);
+
+            assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),
+                    com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                        .outcome(com.example.hms.enums.UnseenVisitOutcome.CANCELLED).reason("x").build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.closeUnseen.wrongStatus"));
+            assertThat(encounter.getStatus()).isEqualTo(status);
+            verify(encounterRepository, never()).save(any());
+        }
+    }
+
+    @Test
+    @DisplayName("QA D788: the rules of a direct status write (PUT, the flow board)")
+    void qaD788_directTransitionRules() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.ARRIVED, EncounterStatus.COMPLETED, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.IN_PROGRESS, EncounterStatus.COMPLETED, false))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.TRIAGE, EncounterStatus.READY_FOR_DISCHARGE, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.ARRIVED, EncounterStatus.CANCELLED, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDeskTransition(
+                EncounterStatus.COMPLETED, EncounterStatus.ARRIVED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.CANCELLED, EncounterStatus.ARRIVED, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatCode(() -> {
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.COMPLETED, EncounterStatus.COMPLETED, false);
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.IN_PROGRESS, EncounterStatus.COMPLETED, true);
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.READY_FOR_DISCHARGE, EncounterStatus.COMPLETED, false);
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.ARRIVED, EncounterStatus.ARRIVED, false);
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.ARRIVED, null, false);
+            EncounterClosureRules.requireDirectTransition(EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, false);
+            EncounterClosureRules.requireDeskTransition(EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED);
+        }).doesNotThrowAnyException();
     }
 }

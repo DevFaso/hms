@@ -271,6 +271,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         try {
             List<Encounter> rows = encounterRepository
                     .findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, readable).stream()
+                        // QA D791: a prescription's anchor is not a visit in the snapshot.
+                        .filter(e -> !e.isPrescriptionAnchor())
                         .filter(e -> CrossHospitalRows.maySurface(e.getHospital(), hospitalId, sensitivityClassifier.effectiveCategory(e), unlocked))
                         .toList();
             account(reach, hospitalId, rows.stream().map(e -> CrossHospitalReachRecorder.hospitalIdOf(e.getHospital())).toList());

@@ -73,7 +73,8 @@ describe('PatientTrackerComponent', () => {
     ]);
     trackerWsSpy.getEvents.and.returnValue(of());
     trackerWsSpy.getConnectionState.and.returnValue(of(false));
-    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole']);
+    authSpy.hasAnyRole.and.returnValue(true);
     encounterSpy = jasmine.createSpyObj('EncounterService', [
       'getById',
       'checkOut',
@@ -297,6 +298,28 @@ describe('PatientTrackerComponent', () => {
     expect(checkoutBtns.length).toBeGreaterThan(0);
   });
 
+  it('QA D788: an in-progress card offers the check-out to its clinician only, not the desk', () => {
+    const board = () =>
+      of(
+        mockBoard({
+          inProgress: [mockItem({ encounterId: 'e2', currentStatus: 'IN_PROGRESS' })],
+          awaitingResults: [],
+          readyForDischarge: [],
+        }),
+      );
+    trackerSpy.getTrackerBoard.and.callFake(board);
+
+    authSpy.hasAnyRole.and.returnValue(false);
+    component.loadBoard();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.btn-checkout').length).toBe(0);
+
+    authSpy.hasAnyRole.and.returnValue(true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelectorAll('.btn-checkout').length).toBe(1);
+    expect(authSpy.hasAnyRole).toHaveBeenCalledWith(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
+  });
+
   /* ── Complete Triage ───────────────────────────── */
 
   it('should call completeTriage and reload board', () => {
@@ -429,7 +452,7 @@ describe('PatientTrackerComponent — the acuity badge is labelled (QA D528/D663
         provideHttpClientTesting(),
         { provide: PatientTrackerService, useValue: tracker },
         { provide: PatientTrackerWsService, useValue: ws },
-        { provide: AuthService, useValue: { getHospitalId: () => 'h1' } },
+        { provide: AuthService, useValue: { getHospitalId: () => 'h1', hasAnyRole: () => true } },
         { provide: EncounterService, useValue: {} },
       ],
     });

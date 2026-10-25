@@ -202,8 +202,9 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
         List<PatientResponse> result = new ArrayList<>();
         Set<UUID> seen = new LinkedHashSet<>();
         try {
+            // QA D791: patients seen in a visit; a prescription's anchor is not one.
             encounterRepository.findByStaff_Id(staff.getId()).stream()
-                    .filter(e -> e.getPatient() != null)
+                    .filter(e -> e.getPatient() != null && !e.isPrescriptionAnchor())
                     .sorted(Comparator.comparing(
                             e -> e.getEncounterDate() != null ? e.getEncounterDate() : LocalDateTime.MIN,
                             Comparator.reverseOrder()))

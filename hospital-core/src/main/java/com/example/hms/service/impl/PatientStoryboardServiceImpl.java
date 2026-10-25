@@ -242,11 +242,13 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
 
     /** QA D252: the latest COMPLETED visit at this hospital (any hospital in global view). */
     private ActiveEncounterDTO loadLastEncounter(UUID patientId, UUID hospitalId) {
+        // QA D791: the last visit, not the last prescription written outside one.
         java.util.stream.Stream<Encounter> completed = hospitalId == null
             ? encounterRepository.findByPatient_Id(patientId).stream()
-                .filter(e -> e.getStatus() == EncounterStatus.COMPLETED)
+                .filter(e -> e.getStatus() == EncounterStatus.COMPLETED && !e.isPrescriptionAnchor())
             : encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
-                java.util.EnumSet.complementOf(java.util.EnumSet.of(EncounterStatus.COMPLETED))).stream();
+                java.util.EnumSet.complementOf(java.util.EnumSet.of(EncounterStatus.COMPLETED))).stream()
+                .filter(e -> !e.isPrescriptionAnchor());
         return completed
             .max(Comparator.comparing(Encounter::getEncounterDate,
                 Comparator.nullsFirst(Comparator.naturalOrder())))

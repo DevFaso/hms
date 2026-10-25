@@ -107,6 +107,17 @@ public interface EncounterService {
                                   UUID callerHospitalId);
 
     /**
+     * QA D788: closes a visit no clinician has seen as "left without being
+     * seen" or cancelled, with a reason. The encounter becomes CANCELLED (never
+     * a consultation, no After-Visit Summary) and its appointment is cancelled.
+     */
+    EncounterResponseDTO closeUnseen(UUID encounterId,
+                                     com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO request,
+                                     String actorUsername,
+                                     boolean isSuperAdmin,
+                                     UUID callerHospitalId);
+
+    /**
      * MVP 6 — Retrieve the After-Visit Summary for a completed (checked-out) encounter.
      * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
      */

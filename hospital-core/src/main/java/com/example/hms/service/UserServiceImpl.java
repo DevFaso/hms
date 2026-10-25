@@ -76,6 +76,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+
+    /** QA D790: the chat picker's page, wide enough for a hospital's staff and bounded. */
+    private static final int MAX_CHAT_RECIPIENTS = 500;
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String USER_NOT_FOUND_KEY = "user.notFound";
 
@@ -364,6 +367,7 @@ public class UserServiceImpl implements UserService {
         // facility takes: a 400 before the account or any assignment exists.
         // The one-kind-of-facility rule needs the account, so it runs where
         // each assignment is created (UserRoleHospitalAssignmentServiceImpl).
+        // QA D789: it also refuses an archived hospital, a 409 before the account exists.
         facilityAssignmentGuard.requireCompatible(roleNames, staffContextHospitalId);
 
         // ---- 2) Resolve Roles ----
@@ -1373,6 +1377,32 @@ public class UserServiceImpl implements UserService {
             : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
         return users.map(u -> directoryRow(u, scope));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.ChatRecipientDTO> listChatRecipients(int size) {
+        DirectoryScope scope = accountAccess.requireColleagueDirectoryAccess();
+        if (!scope.everyone() && scope.hospitalIds().isEmpty()) {
+            return List.of();
+        }
+        int bounded = Math.min(Math.max(size, 1), MAX_CHAT_RECIPIENTS);
+        Pageable pageable = PageRequest.of(0, bounded, Sort.by("lastName", "firstName"));
+        return userRepository.findStaffDirectoryPaged(
+                !scope.everyone(), directoryHospitals(scope), false, false, pageable)
+            .stream()
+            .filter(User::isActive)
+            .map(u -> {
+                UserSummaryDTO row = userMapper.toSummaryDTO(u);
+                return com.example.hms.payload.dto.ChatRecipientDTO.builder()
+                    .id(u.getId())
+                    .firstName(u.getFirstName())
+                    .lastName(u.getLastName())
+                    .roleName(row != null ? row.getRoleName() : null)
+                    .profileType(row != null ? row.getProfileType() : null)
+                    .build();
+            })
+            .toList();
     }
 
     /**

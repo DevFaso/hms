@@ -817,9 +817,10 @@
     <string name="password_min_length">Le mot de passe doit contenir au moins 8 caractères.</string>
     <string name="passwords_mismatch">Les mots de passe ne correspondent pas.</string>
     <string name="reset_title">Réinitialiser le mot de passe</string>
-    <string name="reset_instruction">Saisissez l\'adresse e-mail associée à votre compte et nous vous enverrons un lien pour réinitialiser votre mot de passe.</string>
+    <string name="reset_instruction">Saisissez l\'adresse e-mail, le nom d\'utilisateur ou le numéro de téléphone de votre compte. Nous enverrons un lien de réinitialisation à son adresse e-mail, ou par SMS.</string>
+    <string name="reset_identifier_label">E-mail, nom d\'utilisateur ou numéro de téléphone</string>
     <string name="reset_send_link">Envoyer le lien de réinitialisation</string>
-    <string name="reset_link_sent">Si cette adresse e-mail est enregistrée, un lien de réinitialisation a été envoyé. Veuillez vérifier votre boîte de réception.</string>
+    <string name="reset_link_sent">Si un compte correspond à ce que vous avez saisi, un lien de réinitialisation a été envoyé à son adresse e-mail ou par SMS. Rien reçu après quelques minutes ? Votre compte n\'a peut-être ni adresse e-mail ni numéro joignable : demandez à l\'accueil de votre hôpital de réinitialiser votre mot de passe.</string>
     <string name="reset_code_title">Définir un nouveau mot de passe</string>
     <string name="reset_code_instruction">Collez le lien reçu par e-mail, ou le code à la fin de ce lien. Ce même lien ouvre aussi la page de réinitialisation dans votre navigateur.</string>
     <string name="reset_code_label">Lien ou code reçu par e-mail</string>

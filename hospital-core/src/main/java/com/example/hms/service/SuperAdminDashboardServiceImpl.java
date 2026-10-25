@@ -176,9 +176,10 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID chipScope = ctx.isSuperAdmin() ? ActingScopeResolver.pinnedHospitalIdOrNull() : null;
 
+        // QA D791: visits, not the encounters prescriptions anchor themselves on.
         long totalEncounters = (chipScope != null)
-            ? encounterRepository.countByHospital_Id(chipScope)
-            : encounterRepository.count();
+            ? encounterRepository.countVisitsByHospitalId(chipScope)
+            : encounterRepository.countVisits();
         long totalConsultations = (chipScope != null)
             ? consultationRepository.countByHospital_Id(chipScope)
             : consultationRepository.count();

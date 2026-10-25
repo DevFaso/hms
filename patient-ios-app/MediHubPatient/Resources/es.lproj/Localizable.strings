@@ -719,10 +719,11 @@
 "login_credentials_required" = "Se requieren nombre de usuario y contraseña.";
 "biometrics_generic" = "Biometría";
 "reset_password_title" = "Restablecer contraseña";
-"forgot_password_instruction" = "Introduzca la dirección de correo electrónico asociada a su cuenta y le enviaremos un enlace para restablecer su contraseña.";
+"forgot_password_instruction" = "Introduzca el correo electrónico, el nombre de usuario o el número de teléfono de su cuenta. Enviaremos un enlace de restablecimiento a su correo electrónico o por SMS.";
 "email_address" = "Dirección de correo electrónico";
 "send_reset_link" = "Enviar enlace de restablecimiento";
-"reset_link_sent" = "Si ese correo está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada.";
+"reset_identifier_label" = "Correo electrónico, nombre de usuario o número de teléfono";
+"reset_link_sent" = "Si una cuenta coincide con lo que ha introducido, se ha enviado un enlace de restablecimiento a su correo electrónico o por SMS. ¿No ha recibido nada en unos minutos? Puede que su cuenta no tenga un correo ni un teléfono al que podamos llegar: pida a la recepción de su hospital que restablezca su contraseña.";
 "reset_have_code_title" = "¿Ya recibió el correo?";
 "reset_have_code_desc" = "Pegue el enlace completo del correo, o solo su código, y elija una nueva contraseña.";
 "reset_code_placeholder" = "Enlace o código del correo";

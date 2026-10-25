@@ -3310,7 +3310,10 @@
     "SSO_OR_USERNAME": "o inicie sesión con nombre de usuario",
     "SSO_UNAVAILABLE": "El inicio de sesión único no está disponible temporalmente. Utilice su nombre de usuario y contraseña para continuar.",
     "RESET_PASSWORD_TITLE": "Restablecer contraseña",
-    "FP_INSTRUCTION": "Introduzca la dirección de correo electrónico o el número de teléfono de su cuenta y le enviaremos un enlace para restablecer su contraseña.",
+    "FP_INSTRUCTION": "Introduzca el correo electrónico, el nombre de usuario o el número de teléfono de su cuenta. Enviaremos un enlace de restablecimiento a su correo electrónico o por SMS.",
+    "FP_IDENTIFIER_LABEL": "Correo electrónico, nombre de usuario o número de teléfono",
+    "ENTER_RESET_IDENTIFIER": "Introduzca su correo electrónico, su nombre de usuario o su número de teléfono.",
+    "RESET_REQUEST_ACK": "Si una cuenta coincide con lo que ha introducido, se ha enviado un enlace de restablecimiento a su correo electrónico o por SMS. ¿No ha recibido nada en unos minutos? Puede que su cuenta no tenga un correo ni un teléfono al que podamos llegar: pida a la recepción de su hospital que restablezca su contraseña.",
     "EMAIL_ADDRESS": "Dirección de correo electrónico",
     "EMAIL_OR_PHONE": "Correo electrónico o número de teléfono",
     "ENTER_EMAIL_OR_PHONE": "Introduzca su dirección de correo electrónico o su número de teléfono.",
@@ -6638,6 +6641,18 @@
     "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS."
   },
   "RECEPTION": {
+    "CLOSE_UNSEEN_TITLE": "Cerrar sin consulta",
+    "CLOSE_UNSEEN_EXPLAIN": "Ningún clínico ha visto todavía a este paciente: la visita no puede cerrarse con el alta. Se cierra como «se fue sin ser atendido» o anulada, y no cuenta como consulta.",
+    "CLOSE_UNSEEN_OUTCOME": "¿Cómo termina la visita?",
+    "CLOSE_UNSEEN_REASON": "Motivo",
+    "CLOSE_UNSEEN_REASON_REQUIRED": "Indique por qué la visita termina sin consulta.",
+    "CLOSE_UNSEEN_CONFIRM": "Cerrar la visita",
+    "CLOSE_UNSEEN_DONE": "La visita se cerró sin consulta.",
+    "CLOSE_UNSEEN_FAILED": "No se pudo cerrar la visita. Inténtelo de nuevo.",
+    "UNSEEN_OUTCOME": {
+      "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+      "CANCELLED": "Anulada"
+    },
     "COCKPIT_DATE": "Día mostrado",
     "ACCEPT_OFFER": "Aceptar",
     "ACCEPT_OFFER_FAILED": "Error al aceptar la oferta",

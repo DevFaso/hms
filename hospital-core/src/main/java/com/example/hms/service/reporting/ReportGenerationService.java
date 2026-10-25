@@ -149,7 +149,8 @@ public class ReportGenerationService {
         int page = 0;
         Page<Encounter> current;
         do {
-            current = encounterRepository.findByHospital_IdAndEncounterDateBetween(
+            // QA D791: a prescription's anchor is not a visit of the day.
+            current = encounterRepository.findVisitsByHospitalAndDateBetween(
                 definition.getHospital().getId(),
                 range.start().atStartOfDay(),
                 range.end().plusDays(1).atStartOfDay(),

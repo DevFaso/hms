@@ -566,8 +566,13 @@ public class AuthController {
         var assignments = assignmentRepository.findByUserId(user.getId());
         int activated = 0;
         for (var assignment : assignments) {
+            // QA D789: a patient row at a hospital archived since stays off; the
+            // account itself is still verified.
             if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
-                    && !Boolean.TRUE.equals(assignment.getActive())) {
+                    && !Boolean.TRUE.equals(assignment.getActive())
+                    && (assignment.getHospital() == null
+                        || !com.example.hms.security.provider.FacilityAssignmentGuard
+                            .isClosed(assignment.getHospital().getLifecycleState()))) {
                 assignment.setActive(true);
                 assignmentRepository.save(assignment);
                 activated++;

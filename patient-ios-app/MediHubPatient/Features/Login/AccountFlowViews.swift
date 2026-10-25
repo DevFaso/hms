@@ -37,9 +37,11 @@ struct ForgotPasswordView: View {
                     Text("forgot_password_instruction".localized)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    TextField("email_address".localized, text: $email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
+                    // QA D787: an e-mail address, a username or a phone number;
+                    // the server finds the account and the channel that reaches it.
+                    TextField("reset_identifier_label".localized, text: $email)
+                        .textContentType(.username)
+                        .keyboardType(.default)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     Button {
@@ -47,7 +49,7 @@ struct ForgotPasswordView: View {
                     } label: {
                         if isSending { ProgressView() } else { Text("send_reset_link".localized) }
                     }
-                    .disabled(isSending || !AccountLinkParser.looksLikeEmail(email))
+                    .disabled(isSending || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     if requestSent {
                         // The same answer whether or not the address has an
                         // account: the endpoint never says, and neither do we.
