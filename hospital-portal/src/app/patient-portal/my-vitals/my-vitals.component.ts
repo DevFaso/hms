@@ -11,6 +11,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
 import { PatientPortalService, VitalSignSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { serverInstant } from '../../shared/date-utils';
 
 interface VitalGroup {
   id: string;
@@ -22,7 +24,7 @@ interface VitalGroup {
 @Component({
   selector: 'app-my-vitals',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
   templateUrl: './my-vitals.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-vitals.component.scss', '../patient-portal-pages.scss'],
@@ -71,7 +73,9 @@ export class MyVitalsComponent implements OnInit {
             (this.vitalTypeOrder[b.type] ?? Number.MAX_SAFE_INTEGER),
         ),
       }))
-      .sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+      .sort(
+        (a, b) => serverInstant(b.recordedAt).getTime() - serverInstant(a.recordedAt).getTime(),
+      );
   });
 
   ngOnInit() {

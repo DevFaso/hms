@@ -269,6 +269,12 @@
 
     <!-- ═══ Chart Tab (structured allergies / problems / updates / timeline) ═══ -->
     @if (activeTab() === 'chart' && canViewChart()) {
+      <!-- QA D504: every chart section is narrowed by the opt-out, not only allergies. -->
+      @if (patient()!.recordsWithheld) {
+        <p class="info-row" role="note" data-testid="chart-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <app-patient-chart
         [patientId]="patient()!.id"
         [refreshToken]="accessEpoch()"
@@ -447,7 +453,8 @@
                     <span class="until">
                       {{
                         'PATIENTS.ADDRESS_UNTIL'
-                          | translate: { date: (entry.replacedAt | date: 'mediumDate') }
+                          | translate
+                            : { date: (entry.replacedAt | serverTime | date: 'mediumDate') }
                       }}
                     </span>
                   </li>
@@ -476,7 +483,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
-              ><span class="value">{{ p.createdAt | date: 'mediumDate' }}</span>
+              ><span class="value">{{ p.createdAt | serverTime | date: 'mediumDate' }}</span>
             </div>
           </div>
         </div>
@@ -502,6 +509,9 @@
                 p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
               }}</span>
             </div>
+            @if (p.allergiesWithheld) {
+              <p class="info-row" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+            }
           </div>
         </div>
         <div class="info-card">
@@ -534,6 +544,11 @@
       </div>
     }
     @if (activeTab() === 'vitals' && canViewVitals() && vitalsScoped()) {
+      @if (vitalsWithheld()) {
+        <p class="info-row" role="note" data-testid="vitals-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
@@ -545,7 +560,7 @@
           @for (v of vitals(); track v.id) {
             <div class="vital-card">
               <div class="vital-header">
-                <span class="vital-date">{{ v.recordedAt | date: 'medium' }}</span>
+                <span class="vital-date">{{ v.recordedAt | serverTime | date: 'medium' }}</span>
                 <span class="vital-by"
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >
@@ -627,8 +642,8 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">glucose</span>
                     <div>
-                      <strong>{{ v.bloodGlucoseMgDl }}</strong
-                      ><small> mg/dL</small>
+                      <strong>{{ glucoseMmol(v.bloodGlucoseMgDl) }}</strong
+                      ><small> mmol/L ({{ v.bloodGlucoseMgDl }} mg/dL)</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.BLOOD_GLUCOSE' | translate }}</span>
                   </div>
@@ -687,6 +702,11 @@
 
     <!-- ═══ Encounters Tab ═══ -->
     @if (activeTab() === 'encounters' && canViewEncounters()) {
+      @if (encountersWithheld()) {
+        <p class="info-row" role="note" data-testid="encounters-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (encountersLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
@@ -709,7 +729,9 @@
             <tbody>
               @for (enc of encounters(); track enc.id) {
                 <tr>
-                  <td class="date-cell">{{ enc.encounterDate | date: 'mediumDate' }}</td>
+                  <td class="date-cell">
+                    {{ enc.encounterDate | serverTime | date: 'mediumDate' }}
+                  </td>
                   <td>
                     <span class="encounter-type">{{
                       enc.encounterType | enumLabel: 'encounterType'
@@ -761,7 +783,9 @@
             <tbody>
               @for (appt of appointments(); track appt.id) {
                 <tr>
-                  <td class="date-cell">{{ appt.appointmentDate | date: 'mediumDate' }}</td>
+                  <td class="date-cell">
+                    {{ appt.appointmentDate | serverTime | date: 'mediumDate' }}
+                  </td>
                   <td>{{ appt.startTime }} – {{ appt.endTime }}</td>
                   <td>{{ appt.staffName || '—' }}</td>
                   <td>{{ appt.reason || '—' }}</td>

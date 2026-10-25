@@ -195,7 +195,7 @@
           <tbody>
             @for (p of allPoints(); track $index) {
               <tr>
-                <td>{{ p.recordedAt | date: 'mediumDate' }}</td>
+                <td>{{ p.recordedAt | serverTime | date: 'mediumDate' }}</td>
                 <td>{{ formatAge(p.ageDays) }}</td>
                 <td>{{ formatMeasure(p.weightKg, 'kg') }}</td>
                 <td>{{ formatMeasure(p.heightCm, 'cm') }}</td>

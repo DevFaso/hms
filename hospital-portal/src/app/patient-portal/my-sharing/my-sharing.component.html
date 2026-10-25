@@ -39,7 +39,7 @@
       <p class="opt-out-status" data-testid="opt-out-status">
         @if (optedOut()) {
           {{ 'PORTAL.SHARING.OPT_OUT.STATUS_ON' | translate }}
-          {{ optOut()?.optedOutAt | date: 'mediumDate' }}
+          {{ optOut()?.optedOutAt | serverTime | date: 'mediumDate' }}
         } @else {
           {{ 'PORTAL.SHARING.OPT_OUT.STATUS_OFF' | translate }}
         }
@@ -202,7 +202,7 @@
                 · {{ entry.hospitalName }}
               }
             </span>
-            <span class="pli-meta">{{ entry.timestamp | date: 'medium' }}</span>
+            <span class="pli-meta">{{ entry.timestamp | serverTime | date: 'medium' }}</span>
           </div>
         </div>
       }

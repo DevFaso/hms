@@ -58,7 +58,7 @@
               <td>{{ 'ULTRASOUND.TYPE_' + o.scanType | translate }}</td>
               <td>{{ o.gestationalAgeAtOrder ?? '—' }}</td>
               <td>
-                {{ o.scheduledDate ? (o.scheduledDate | date: 'mediumDate') : '—' }}
+                {{ o.scheduledDate ? (o.scheduledDate | serverTime | date: 'mediumDate') : '—' }}
                 {{ o.scheduledTime || '' }}
               </td>
               <td>{{ o.priority || 'ROUTINE' }}</td>
@@ -123,7 +123,7 @@
         <tbody>
           @for (r of reports(); track r.id) {
             <tr class="data-row">
-              <td>{{ r.scanDate ? (r.scanDate | date: 'mediumDate') : '—' }}</td>
+              <td>{{ r.scanDate ? (r.scanDate | serverTime | date: 'mediumDate') : '—' }}</td>
               <td>{{ r.gestationalAgeAtScan ?? '—' }}</td>
               <td>
                 <span class="{{ findingClass(r.findingCategory) }}">
@@ -227,7 +227,7 @@
                 }}
               </span>
               @if (rep.scanDate) {
-                · {{ rep.scanDate | date: 'mediumDate' }}
+                · {{ rep.scanDate | serverTime | date: 'mediumDate' }}
               }
               @if (rep.fetalHeartRate) {
                 · FHR {{ rep.fetalHeartRate }}

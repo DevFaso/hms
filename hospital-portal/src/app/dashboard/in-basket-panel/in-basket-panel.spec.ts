@@ -13,6 +13,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { RoleContextService } from '../../core/role-context.service';
 
 import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 function mockItem(overrides: Partial<InBasketItem> = {}): InBasketItem {
   return {
     id: 'ib-1',
@@ -191,8 +192,27 @@ describe('InBasketPanelComponent', () => {
     expect(component.formatDate(null)).toBe('');
     const out = component.formatDate('2025-07-15T10:00:00');
     expect(out).toContain('juil.');
-    expect(out).toContain('10:00');
+    const local = new Date(Date.UTC(2025, 6, 15, 10, 0));
+    expect(out).toContain(`${local.getHours()}:${String(local.getMinutes()).padStart(2, '0')}`);
     expect(out).not.toContain('AM');
+  });
+
+  it("QA D662 (D647): the inbox shows the server's UTC time in the reader's zone", () => {
+    // The server sends a zone-less UTC wall time. Read raw, the browser took
+    // it for local time and New York saw 18:03 for a 14:03 event. Asserting
+    // that it is marked UTC keeps the test meaningful on a machine set to UTC.
+    const transform = spyOn(ServerTimePipe.prototype, 'transform').and.callThrough();
+    inBasketSpy.getItems.and.returnValue(
+      of(mockPage([mockItem({ createdAt: '2026-10-23T18:03:00' })])),
+    );
+    fixture.detectChanges();
+
+    expect(transform).toHaveBeenCalledWith('2026-10-23T18:03:00');
+    expect(transform.calls.mostRecent().returnValue).toBe('2026-10-23T18:03:00Z');
+    const shown =
+      (fixture.nativeElement as HTMLElement).querySelector('.meta-time')?.textContent ?? '';
+    const local = new Date(Date.UTC(2026, 9, 23, 18, 3));
+    expect(shown).toContain(`${local.getHours()}:${String(local.getMinutes()).padStart(2, '0')}`);
   });
 
   it('follows the stored language when the user chose English', () => {

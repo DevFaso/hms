@@ -10,11 +10,21 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { localDateString, toServerDateTime } from '../../shared/date-utils';
 
 @Component({
   selector: 'app-my-family-access',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    EnumLabelPipe,
+    TranslateModule,
+  ],
   templateUrl: './my-family-access.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-family-access.component.scss', '../patient-portal-pages.scss'],
@@ -46,7 +56,7 @@ export class MyFamilyAccessComponent implements OnInit {
    */
   expiresOn = '';
   /** Earliest selectable expiry — a grant that expires in the past is a revoke. */
-  readonly minExpiry = new Date().toISOString().slice(0, 10);
+  readonly minExpiry = localDateString();
 
   ngOnInit(): void {
     this.loadProxies();
@@ -88,7 +98,13 @@ export class MyFamilyAccessComponent implements OnInit {
       this.toast.error(this.translate.instant('PORTAL.FAMILY.REQUIRED_FIELDS'));
       return;
     }
-    this.form.expiresAt = this.expiresOn ? `${this.expiresOn}T23:59:59` : undefined;
+    // #948 review: the end of the reader's day, on the server's UTC clock
+    // that the expiry is checked against (and that the list reads back
+    // through serverTime). Sent as the wall clock, the grant lasted hours too
+    // long or too short and was listed under the next day east of UTC.
+    this.form.expiresAt = this.expiresOn
+      ? toServerDateTime(`${this.expiresOn}T23:59:59`)
+      : undefined;
     this.granting.set(true);
     this.portalService.grantProxy(this.form).subscribe({
       next: (proxy) => {

@@ -70,6 +70,12 @@ class SocialHistoryServiceImplTest {
         hospital.setId(hospitalId);
         staff = new Staff();
         staff.setId(staffId);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test

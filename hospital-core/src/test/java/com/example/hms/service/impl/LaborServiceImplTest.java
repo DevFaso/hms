@@ -40,7 +40,6 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.NotificationService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -73,10 +72,12 @@ class LaborServiceImplTest {
     @Mock private MaternalHistoryRepository maternalHistoryRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
+    @Mock private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.repository.PostpartumCarePlanRepository postpartumCarePlanRepository;
+    @Mock private com.example.hms.service.DeliveryChargeService deliveryChargeService;
 
     private LaborServiceImpl service;
 
@@ -96,7 +97,8 @@ class LaborServiceImplTest {
             patientRepository, patientRegistrationGuard, hospitalRepository, registrationRepository,
             maternalHistoryRepository, staffRepository, userRepository,
             notificationService, new LaborMapper(), recordAccessPolicy, reachRecorder,
-            TestMessageSources.bundles(), postpartumCarePlanRepository);
+            TestMessageSources.bundles(), postpartumCarePlanRepository, deliveryChargeService,
+            obstetricAlertEscalation);
 
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -221,6 +223,47 @@ class LaborServiceImplTest {
         assertThat(created.getStatus()).isEqualTo("ACTIVE");
     }
 
+    /** QA D629: the screen names nobody, so the recorder is the admitting clinician. */
+    @Test
+    void startEpisodeWithNoAdmittingStaffNamesTheRecorder() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(episodeRepository.existsByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, LaborStatus.ACTIVE))
+            .thenReturn(false);
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(java.time.LocalDateTime.now().minusHours(2)).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getAdmittedByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    /** QA D629: the delivery names the recorder when no delivering clinician is sent. */
+    @Test
+    void recordDeliveryWithNoDeliveringStaffNamesTheRecorder() {
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(recorderStaff()));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(response.getDeliveredByStaffName()).isEqualTo("Nina Kabore");
+    }
+
+    private com.example.hms.model.Staff recorderStaff() {
+        User named = new User();
+        named.setId(recorderUserId);
+        named.setUsername("midwife.nina");
+        named.setFirstName("Nina");
+        named.setLastName("Kabore");
+        com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(named);
+        staff.setHospital(hospital);
+        return staff;
+    }
+
     @Test
     void getEpisodesRequiresHospitalScope() {
         assertThatThrownBy(() -> service.getEpisodes(patientId, null, 10))
@@ -238,6 +281,53 @@ class LaborServiceImplTest {
         assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("active labor episode");
+    }
+
+    @Test
+    void qaD714AnEntryFiveHoursAheadIsRefusedBeforeAnyAlertOrSave() {
+        // Round 10: observationTime = now + 5 h answered 201, raised a CAUTION
+        // alert and was drawn on the chart.
+        episode.setActivePhaseStartAt(LocalDateTime.now().minusHours(4));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusHours(5));
+        request.setCervicalDilationCm(6);
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.futureTime");
+        verify(entryRepository, never()).save(any());
+        verify(episodeRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD745AnEntryBeforeLabourOnsetIsRefused() {
+        // Round 10 re-test: an entry dated 6 h ago on an episode whose onset
+        // was 3 h ago answered 201.
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(3));
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(6));
+
+        assertThatThrownBy(() -> service.addEntry(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.partograph.beforeOnset");
+        verify(entryRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD714ASmallClockSkewIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().plusMinutes(LaborServiceImpl.PARTOGRAPH_FUTURE_SKEW_MINUTES - 2));
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
+    }
+
+    @Test
+    void qaD714ALateEntryInThePastIsStillAccepted() {
+        PartographEntryRequestDTO request = entryRequest();
+        request.setObservationTime(LocalDateTime.now().minusHours(3));
+        request.setLateEntry(true);
+
+        assertThat(service.addEntry(patientId, episodeId, recorderUserId, request)).isNotNull();
     }
 
     @Test
@@ -275,7 +365,7 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-alert-line");
                 assertThat(alert.getSeverity()).isEqualTo("CAUTION");
             });
-        verify(notificationService, never()).createNotification(anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -292,7 +382,13 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-action-line");
                 assertThat(alert.getSeverity()).isEqualTo("URGENT");
             });
-        verify(notificationService).createNotification(contains("Alerte de travail"), eq("midwife.nina"));
+        verify(notificationService).created(contains("Alerte de travail"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: the on-call team is told too, not only the documenter.
+        verify(obstetricAlertEscalation, org.mockito.Mockito.atLeastOnce()).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && patientId.equals(a.patientId())
+                && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_PARTOGRAPH.equals(a.sourceType())
+                && recorderUserId.equals(a.documentedByUserId())
+                && a.notificationText().contains("Alerte de travail")));
     }
 
     @Test
@@ -306,7 +402,7 @@ class LaborServiceImplTest {
             .anySatisfy(alert -> assertThat(alert.getCode()).isEqualTo("labor-fetal-bradycardia"));
         // QA D172: a translated type label and French text, never the raw enum or English.
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(text.capture(), eq("midwife.nina"));
+        verify(notificationService).created(text.capture(), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
         assertThat(text.getValue())
             .contains("rythme cardiaque fœtal", "95 bpm", "souffrance fœtale")
             .doesNotContain("FETAL_HEART_RATE", "Fetal heart rate", "fetal distress");
@@ -359,7 +455,7 @@ class LaborServiceImplTest {
     void notificationFailureDoesNotFailTheEntrySave() {
         PartographEntryRequestDTO request = entryRequest();
         request.setFetalHeartRateBpm(90);
-        when(notificationService.createNotification(anyString(), anyString()))
+        when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any()))
             .thenThrow(new IllegalStateException("broker down"));
 
         PartographEntryResponseDTO response = service.addEntry(patientId, episodeId, recorderUserId, request);
@@ -385,6 +481,65 @@ class LaborServiceImplTest {
 
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
         assertThat(episode.getOutcome()).isEqualTo(LaborOutcome.CAESAREAN_SECTION);
+    }
+
+    /** QA D516: recording a birth posts its charge, filed by the recorder. */
+    @Test
+    void recordDeliveryPostsTheDeliveryCharge() {
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        verify(deliveryChargeService).chargeDelivery(
+            org.mockito.ArgumentMatchers.argThat(d -> d.getPatient() == patient), org.mockito.ArgumentMatchers.eq(recorderUserId));
+    }
+
+    /** QA D516: a charge that cannot be posted never undoes the clinical record. */
+    @Test
+    void recordDeliveryKeepsTheBirthWhenTheChargeFails() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new IllegalStateException("boom"));
+
+        service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    /**
+     * QA D516 (self-review of #921): inside a transaction the charge waits
+     * for the delivery to commit and then runs in its own transaction, so a
+     * charge whose invoice save throws leaves the committed birth intact.
+     */
+    @Test
+    void recordDeliveryPostsTheChargeOnlyAfterCommitAndSurvivesItsFailure() {
+        when(deliveryChargeService.chargeDelivery(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new org.springframework.dao.DataIntegrityViolationException("invoice save failed"));
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.recordDelivery(patientId, episodeId, recorderUserId, deliveryRequest());
+
+            org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
+            verify(deliveryRecordRepository).save(org.mockito.ArgumentMatchers.any());
+            org.assertj.core.api.Assertions.assertThatCode(() ->
+                org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit))
+                .doesNotThrowAnyException();
+            verify(deliveryChargeService).chargeDelivery(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(recorderUserId));
+            assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
+
+    /** QA D516: no second charge when the episode already has a delivery. */
+    @Test
+    void recordDeliverySecondAttemptPostsNoCharge() {
+        when(deliveryRecordRepository.existsByEpisode_Id(episodeId)).thenReturn(true);
+
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("already exists");
+        org.mockito.Mockito.verifyNoInteractions(deliveryChargeService);
     }
 
     @Test
@@ -461,7 +616,14 @@ class LaborServiceImplTest {
                 assertThat(alert.getCode()).isEqualTo("labor-pph");
                 assertThat(alert.getSeverity()).isEqualTo(LaborAlertSeverity.URGENT.name());
             });
-        verify(notificationService).createNotification(contains("hémorragie"), eq("midwife.nina"));
+        verify(notificationService).created(contains("hémorragie"), eq("midwife.nina"), org.mockito.ArgumentMatchers.any());
+        // QA D605: a PPH reaches the on-call team and escalates.
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY.equals(a.sourceType())
+                && a.alertMessage().toLowerCase().contains("hémorragie")
+                // QA D665: the sentence also travels as its key and its numbers.
+                && "labor.alert.msg.labor-pph".equals(a.alertMessageKey())
+                && a.alertMessageArgs() != null && a.alertMessageArgs().size() == 1));
     }
 
     @Test

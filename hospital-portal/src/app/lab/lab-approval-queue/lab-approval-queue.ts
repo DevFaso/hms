@@ -22,6 +22,7 @@ import { ToastService } from '../../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
+import { serverInstant, localDateString } from '../../shared/date-utils';
 
 interface QcPoint {
   x: number;
@@ -85,6 +86,32 @@ export class LabApprovalQueueComponent implements OnInit {
     'ROLE_LAB_MANAGER',
     'ROLE_SUPER_ADMIN',
   ]);
+
+  /** QA D534: the signed-in user's id, to keep the four-eyes steps off their own submission. */
+  private readonly currentUserId = this.auth.getUserId();
+
+  /** QA D534: the submitter is never offered the QA pass or the approval (the server refuses it). */
+  isOwnSubmission(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.submittedById && def.submittedById === this.currentUserId;
+  }
+
+  /** QA D722: the signed-in user did this definition's QA review. */
+  isOwnReview(def: LabTestDefinition): boolean {
+    return !!this.currentUserId && !!def.reviewedById && def.reviewedById === this.currentUserId;
+  }
+
+  /**
+   * QA D707 / D722, mirroring the server: the QA reviewer approves only when the server
+   * says so (the sole-director exception); otherwise any director who did not review may
+   * approve, the submitter included, because an independent reviewer stands between them.
+   * With no recorded reviewer, the submitter may not approve.
+   */
+  canApprove(def: LabTestDefinition): boolean {
+    if (this.isOwnReview(def)) {
+      return def.reviewerMayApprove === true;
+    }
+    return !!def.reviewedById || !this.isOwnSubmission(def);
+  }
 
   // Approval modal
   showApprovalModal = signal(false);
@@ -211,8 +238,11 @@ export class LabApprovalQueueComponent implements OnInit {
         this.processingApproval.set(false);
         this.loadQueue();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'));
+      error: (err: { error?: { message?: string } }) => {
+        // QA D534: the server's reason (four-eyes, missing range…) is shown, not a generic failure.
+        this.toast.error(
+          err?.error?.message || this.translate.instant('LAB_APPROVAL.TOAST.ACTION_FAILED'),
+        );
         this.processingApproval.set(false);
       },
     });
@@ -260,7 +290,7 @@ export class LabApprovalQueueComponent implements OnInit {
   emptyStudyForm(): LabTestValidationStudyRequest {
     return {
       studyType: 'PRECISION',
-      studyDate: new Date().toISOString().split('T')[0],
+      studyDate: localDateString(),
       passed: false,
     };
   }
@@ -331,7 +361,9 @@ export class LabApprovalQueueComponent implements OnInit {
     for (const level of levels) {
       const levelEvents = events
         .filter((e) => e.qcLevel === level)
-        .sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+        .sort(
+          (a, b) => serverInstant(a.recordedAt).getTime() - serverInstant(b.recordedAt).getTime(),
+        );
 
       if (levelEvents.length === 0) continue;
 
@@ -413,7 +445,7 @@ export class LabApprovalQueueComponent implements OnInit {
         const v = e.measuredValue;
         const dev = Math.abs(v - mean) / sd;
         const zone: 'ok' | 'warn' | 'fail' = dev > 2 ? 'fail' : dev > 1 ? 'warn' : 'ok';
-        const dateStr = new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        const dateStr = serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
@@ -437,7 +469,7 @@ export class LabApprovalQueueComponent implements OnInit {
 
       const xAxisLabels: { x: number; label: string }[] = [];
       const fmtDate = (e: LabQcEvent) =>
-        new Date(e.recordedAt).toLocaleDateString(currentLocale(), {
+        serverInstant(e.recordedAt).toLocaleDateString(currentLocale(), {
           month: 'short',
           day: 'numeric',
         });

@@ -8,7 +8,8 @@
     <div class="header-actions">
       @if (lastRefreshed()) {
         <span class="last-refreshed"
-          >{{ 'NURSE.UPDATED_PREFIX' | translate }} {{ lastRefreshed() | date: 'shortTime' }}</span
+          >{{ 'NURSE.UPDATED_PREFIX' | translate }}
+          {{ lastRefreshed() | serverTime | date: 'shortTime' }}</span
         >
       }
       <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
@@ -61,6 +62,41 @@
       </div>
     </div>
   </div>
+
+  <!-- QA D769: the triage queue is everyone's job, so it shows on every tab and
+       under every filter ("Mes patients" included): a patient just checked in
+       has no nurse yet, so no per-nurse list could ever hold them. -->
+  @if (!loading() && canTriage() && awaitingTriage().length > 0) {
+    <section class="awaiting-triage" data-testid="awaiting-triage">
+      <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
+      <div class="workboard-grid">
+        @for (e of awaitingTriage(); track e.id) {
+          <div class="workboard-card">
+            <div class="workboard-card-header">
+              <span class="patient-name">{{ e.patientName }}</span>
+            </div>
+            <div class="workboard-card-meta">
+              <span class="meta-item">
+                <span class="material-symbols-outlined">schedule</span>
+                {{ e.encounterDate | serverTime | date: 'shortTime' }}
+              </span>
+            </div>
+            <div class="workboard-card-actions">
+              <button
+                class="action-btn action-triage"
+                data-testid="awaiting-triage-open"
+                (click)="openTriageForEncounter(e)"
+                [title]="'TRIAGE.TITLE' | translate"
+              >
+                <span class="material-symbols-outlined">emergency</span>
+                {{ 'TRIAGE.TITLE' | translate }}
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
 
   <!-- ── Section Tabs ──────────────────────────────── -->
   <div class="section-tabs">
@@ -184,7 +220,7 @@
                       }
                     </td>
                     <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
-                    <td>{{ v.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ v.dueTime | serverTime | date: 'shortTime' }}</td>
                     <td>
                       @if (v.overdue) {
                         <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
@@ -195,7 +231,7 @@
                     <td>
                       <button
                         class="action-btn action-record"
-                        (click)="recordVitals(v.patientId)"
+                        (click)="recordVitals(v.patientId, v.patientName)"
                         [disabled]="!v.patientId"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
@@ -251,7 +287,7 @@
                     </td>
                     <td>{{ m.dose }}</td>
                     <td>{{ m.route }}</td>
-                    <td>{{ m.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ m.dueTime | serverTime | date: 'shortTime' }}</td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status | enumLabel: 'marTaskStatus'
@@ -340,7 +376,7 @@
                         o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
-                    <td>{{ o.dueTime | date: 'shortTime' }}</td>
+                    <td>{{ o.dueTime | serverTime | date: 'shortTime' }}</td>
                   </tr>
                 }
               </tbody>
@@ -437,7 +473,10 @@
                     @if (h.createdByName) {
                       {{ 'NURSE.HANDOFF_REPORTED_BY' | translate }} {{ h.createdByName }} ·
                     }
-                    {{ h.updatedAt | date: 'medium' }}
+                    @if (h.recipientName) {
+                      {{ 'NURSE.HANDOFF_TO' | translate }} {{ h.recipientName }} ·
+                    }
+                    {{ h.updatedAt | serverTime | date: 'medium' }}
                   </span>
                   @if (h.completedAt) {
                     <span
@@ -446,9 +485,11 @@
                     >
                       <span class="material-symbols-outlined">check_circle</span>
                       {{ 'NURSE.HANDOFF_COMPLETED_BY' | translate }}
-                      {{ h.completedByName || '—' }} · {{ h.completedAt | date: 'medium' }}
+                      {{ h.completedByName || '—' }} ·
+                      {{ h.completedAt | serverTime | date: 'medium' }}
                     </span>
-                  } @else {
+                  } @else if (canCompleteHandoff(h)) {
+                    <!-- QA D776: only the recipient completes (server rule) -->
                     <button
                       class="action-btn action-complete"
                       (click)="completeHandoff(h.id)"
@@ -468,37 +509,6 @@
 
       <!-- ═══════════ WORKBOARD TAB ═══════════ -->
       @if (!loading() && activeSection() === 'workboard') {
-        @if (canTriage() && awaitingTriage().length > 0) {
-          <section class="awaiting-triage" data-testid="awaiting-triage">
-            <h3>{{ 'NURSE.AWAITING_TRIAGE' | translate }} ({{ awaitingTriage().length }})</h3>
-            <div class="workboard-grid">
-              @for (e of awaitingTriage(); track e.id) {
-                <div class="workboard-card">
-                  <div class="workboard-card-header">
-                    <span class="patient-name">{{ e.patientName }}</span>
-                  </div>
-                  <div class="workboard-card-meta">
-                    <span class="meta-item">
-                      <span class="material-symbols-outlined">schedule</span>
-                      {{ e.encounterDate | date: 'shortTime' }}
-                    </span>
-                  </div>
-                  <div class="workboard-card-actions">
-                    <button
-                      class="action-btn action-triage"
-                      data-testid="awaiting-triage-open"
-                      (click)="openTriageForEncounter(e)"
-                      [title]="'TRIAGE.TITLE' | translate"
-                    >
-                      <span class="material-symbols-outlined">emergency</span>
-                      {{ 'TRIAGE.TITLE' | translate }}
-                    </button>
-                  </div>
-                </div>
-              }
-            </div>
-          </section>
-        }
         @if (workboard().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">grid_view</span>
@@ -555,7 +565,7 @@
                   } @else if (p.lastVitalsTime) {
                     <span class="indicator indicator-ok">
                       <span class="material-symbols-outlined">monitor_heart</span>
-                      {{ p.lastVitalsTime | date: 'shortTime' }}
+                      {{ p.lastVitalsTime | serverTime | date: 'shortTime' }}
                     </span>
                   }
                   @if (p.medsDue > 0) {
@@ -567,7 +577,8 @@
                   @if (p.admittedAt) {
                     <span class="indicator indicator-neutral">
                       <span class="material-symbols-outlined">login</span>
-                      {{ 'NURSE.ADMITTED' | translate }} {{ p.admittedAt | date: 'shortDate' }}
+                      {{ 'NURSE.ADMITTED' | translate }}
+                      {{ p.admittedAt | serverTime | date: 'shortDate' }}
                     </span>
                   }
                 </div>
@@ -824,7 +835,7 @@
                     <td>{{ a.roomBed || '—' }}</td>
                     <td>{{ a.departmentName || '—' }}</td>
                     <td>{{ a.admittingDoctor || '—' }}</td>
-                    <td>{{ a.admissionDateTime | date: 'short' }}</td>
+                    <td>{{ fromServerDateTime(a.admissionDateTime) | date: 'short' }}</td>
                     <td>
                       {{ a.admissionType ? (a.admissionType | enumLabel: 'admissionType') : '—' }}
                     </td>
@@ -878,7 +889,8 @@
                   }
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
-                      {{ 'NURSE.DUE_LABEL' | translate }} {{ task.dueAt | date: 'shortTime' }}
+                      {{ 'NURSE.DUE_LABEL' | translate }}
+                      {{ task.dueAt | serverTime | date: 'shortTime' }}
                       @if (task.overdue) {
                         <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }
@@ -905,7 +917,7 @@
                   } @else {
                     <span class="task-completed-info">
                       {{ 'NURSE.COMPLETED_PREFIX' | translate }}
-                      {{ task.completedAt | date: 'short' }}
+                      {{ task.completedAt | serverTime | date: 'short' }}
                       @if (task.completedByName) {
                         {{ 'NURSE.BY_PREFIX' | translate }} {{ task.completedByName }}
                       }
@@ -953,7 +965,7 @@
                 </div>
                 <div class="inbox-body">
                   <p class="inbox-message">{{ item.message }}</p>
-                  <span class="inbox-time">{{ item.createdAt | date: 'short' }}</span>
+                  <span class="inbox-time">{{ item.createdAt | serverTime | date: 'short' }}</span>
                 </div>
               </div>
             }
@@ -979,7 +991,7 @@
           <div class="announcement-card">
             <span class="announcement-category">{{ a.category }}</span>
             <p>{{ a.text }}</p>
-            <span class="announcement-time">{{ a.createdAt | date: 'short' }}</span>
+            <span class="announcement-time">{{ a.createdAt | serverTime | date: 'short' }}</span>
           </div>
         }
       </aside>
@@ -1141,15 +1153,16 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-glucose">{{ 'NURSE.BLOOD_GLUCOSE' | translate }} (mg/dL)</label>
+          <label for="vf-glucose">{{ 'NURSE.BLOOD_GLUCOSE' | translate }} (mmol/L)</label>
           <input
             id="vf-glucose"
             type="number"
-            min="10"
-            max="1000"
+            step="0.1"
+            min="0.5"
+            max="55"
             [placeholder]="'NURSE.VITALS_PLACEHOLDER.GLUCOSE' | translate"
-            [value]="vitalsForm().bloodGlucoseMgDl ?? ''"
-            (input)="updateVitalsField('bloodGlucoseMgDl', $any($event.target).value)"
+            [value]="glucoseMmol()"
+            (input)="updateGlucoseMmol($any($event.target).value)"
           />
         </div>
         <div class="vitals-field">
@@ -1402,6 +1415,22 @@
             [selected]="handoffPatient()"
             (selectedChange)="onHandoffPatientChange($event)"
           />
+        </div>
+        <div class="form-row">
+          <label for="ho-recipient">{{ 'NURSE.HANDOFF_RECIPIENT' | translate }} *</label>
+          <select
+            id="ho-recipient"
+            class="reason-input"
+            required
+            aria-required="true"
+            [value]="handoffForm().recipientUserId ?? ''"
+            (change)="updateHandoffField('recipientUserId', $any($event.target).value)"
+          >
+            <option value="">{{ 'NURSE.HANDOFF_RECIPIENT_PLACEHOLDER' | translate }}</option>
+            @for (r of handoffRecipients(); track r.userId) {
+              <option [value]="r.userId">{{ r.displayName }}</option>
+            }
+          </select>
         </div>
         <div class="form-row">
           <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>

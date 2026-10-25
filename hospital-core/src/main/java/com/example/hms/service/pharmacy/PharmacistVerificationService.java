@@ -67,6 +67,21 @@ public class PharmacistVerificationService {
     private final Clock clock;
 
     /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
+    /**
      * Whether this prescription may not be administered until a pharmacist
      * has verified it.
      *
@@ -77,7 +92,7 @@ public class PharmacistVerificationService {
      */
     public boolean requiresVerification(Prescription prescription) {
         return prescription != null
-            && (prescription.isControlledSubstance() || prescription.isRequiresCosign());
+            && (controlled(prescription) || prescription.isRequiresCosign());
     }
 
     /** Whether a pharmacist has verified the CURRENT version of this prescription. */
@@ -135,13 +150,21 @@ public class PharmacistVerificationService {
         // Verifying a draft would be verifying something the prescriber can
         // still freely rewrite, and the invalidation rule would clear it the
         // moment they did.
+        // QA D607: checked before the status. A fill attested at the counter
+        // (D512) stamps the verification and moves the order to DISPENSED, so
+        // the status check answered "only a signed prescription can be
+        // validated" and the order read as never verified.
+        if (isVerified(prescription)) {
+            throw new BusinessException("pharmacy.r7.alreadyVerified");
+        }
+
         PrescriptionStatus status = prescription.getStatus();
         if (status != PrescriptionStatus.SIGNED && status != PrescriptionStatus.TRANSMITTED) {
             throw new BusinessException("pharmacy.r7.onlySignedVerifiable");
         }
-
-        if (isVerified(prescription)) {
-            throw new BusinessException("pharmacy.r7.alreadyVerified");
+        // QA D757: nor is a ward order of a stay that has ended.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
         }
 
         UUID currentUserId = roleValidator.getCurrentUserId();
@@ -164,6 +187,28 @@ public class PharmacistVerificationService {
         prescription.setPharmacistVerifiedBy(verifier);
         prescription.setPharmacistVerificationNote(trimToNull(note));
         return prescriptionRepository.save(prescription);
+    }
+
+    /**
+     * QA D512: the verification a dispensing pharmacist attests at the
+     * counter, in the dispense request itself. Same server clock and the same
+     * self-verification refusal as {@link #verify}; the caller has already
+     * established that {@code verifier} is the session user and holds the
+     * prescription row lock, and persists it with the fill.
+     */
+    public void verifyAtCounter(Prescription prescription, User verifier) {
+        if (prescription == null || verifier == null || isVerified(prescription)) {
+            return;
+        }
+        if (prescription.getStaff() != null
+                && prescription.getStaff().getUser() != null
+                && verifier.getId() != null
+                && verifier.getId().equals(prescription.getStaff().getUser().getId())) {
+            throw new BusinessException("pharmacy.r7.selfVerification");
+        }
+        prescription.setPharmacistVerifiedAt(LocalDateTime.now(clock));
+        prescription.setPharmacistVerifiedBy(verifier);
+        prescription.setPharmacistVerificationNote(null);
     }
 
     private static String trimToNull(String value) {

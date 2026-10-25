@@ -34,6 +34,7 @@ class BedAssignmentServiceTest {
 
     @Mock private BedRepository bedRepository;
     @Mock private AdmissionRepository admissionRepository;
+    @Mock private com.example.hms.repository.TransferOrderRepository transferOrderRepository;
 
     @InjectMocks private BedAssignmentService service;
 
@@ -372,5 +373,63 @@ class BedAssignmentServiceTest {
         assertThatThrownBy(() -> service.assignBed(admission, cotId))
             .isInstanceOf(BusinessException.class);
         assertThat(cot.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+    }
+
+    /* ── QA D515: a discharge with a transfer still ordered ─────────────── */
+
+    private com.example.hms.model.TransferOrder pendingTransferTo(Bed destination) {
+        com.example.hms.model.TransferOrder order = new com.example.hms.model.TransferOrder();
+        order.setId(UUID.randomUUID());
+        order.setAdmission(admission);
+        order.setToBed(destination);
+        order.setStatus(com.example.hms.enums.TransferOrderStatus.REQUESTED);
+        return order;
+    }
+
+    @Test
+    void d515_dischargeCancelsThePendingTransferAndHandsItsBedBack() {
+        // QA D515: POST /admissions/{id}/discharge with a transfer REQUESTED
+        // left the order open and the destination bed RESERVED.
+        Bed current = bed("C1", BedStatus.OCCUPIED);
+        admission.setBed(current);
+        Bed destination = bed("C2", BedStatus.RESERVED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBed(admission);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(order.getCancelledAt()).isNotNull();
+        assertThat(order.getCancellationReason()).isNotBlank();
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        assertThat(current.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+        verify(transferOrderRepository).save(order);
+    }
+
+    @Test
+    void d515_theDischargeApprovalPathCancelsItToo() {
+        UUID patientId = UUID.randomUUID();
+        Bed destination = bed("C2", BedStatus.RESERVED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(any(), any(), any()))
+            .thenReturn(List.of(admission));
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBedsForPatient(patientId, hospitalId);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.AVAILABLE);
+    }
+
+    @Test
+    void d515_aDestinationSomebodyElseNowLiesInIsNotFreed() {
+        Bed destination = bed("C2", BedStatus.OCCUPIED);
+        com.example.hms.model.TransferOrder order = pendingTransferTo(destination);
+        when(transferOrderRepository.findPendingForAdmission(admission.getId())).thenReturn(Optional.of(order));
+
+        service.releaseBed(admission);
+
+        assertThat(order.getStatus()).isEqualTo(com.example.hms.enums.TransferOrderStatus.CANCELLED);
+        assertThat(destination.getStatus()).isEqualTo(BedStatus.OCCUPIED);
     }
 }

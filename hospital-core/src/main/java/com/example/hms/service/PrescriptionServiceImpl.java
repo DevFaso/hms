@@ -48,6 +48,7 @@ import java.util.UUID;
 import java.util.Locale;
 import java.util.Optional;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -60,8 +61,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): the
     // i18n key for "prescription not found" appears 5x in this file.
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
+    private static final String CROSS_HOSPITAL_READ = "Cross-hospital prescription read on the treatment relationship";
     private static final String NOT_ON_STAY_CARE_TEAM =
-        "The prescriber is not on the care team of this patient's stay.";
+        "The prescriber does not work at the hospital of this patient's stay.";
 
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
@@ -104,6 +106,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /** D414: an inpatient whose stay has no encounter yet gets it opened, never a phantom consultation. */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
+    /** D654: a catalog pick carries its code into the order. */
+    private final com.example.hms.repository.MedicationCatalogItemRepository medicationCatalogItemRepository;
 
     @Override
     @Transactional
@@ -118,7 +122,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId, null);
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -145,11 +149,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before prescribing
         String allergyOverride = checkAllergyConflicts(patient, request);
 
+        applyCatalogPick(request, hospitalId);
+
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
+        requirePrescribedQuantityForControlled(entity);
         recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
@@ -184,6 +191,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Staff access: the clinical copy, clarification exchange included.
             return prescriptionMapper.toResponseDTO(prescription);
         }
+        if (readableAcrossHospitals(prescription, hospitalId)) {
+            // QA D652: the by-id read answers as the by-patient list does (the
+            // rule D508 gave imaging): another hospital's prescription the list
+            // shows is readable here; one it never sent is not, in either.
+            return prescriptionMapper.toResponseDTO(prescription);
+        }
         if (prescription.getHospital() != null && subjectReadGuard.ownsAsItsPatient(prescription.getPatient())) {
             // Staff who are also patients: the fallback #754 gave the
             // encounter reads. A nurse at hospital A who was a patient at
@@ -211,6 +224,36 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return prescriptionMapper.toResponseDTO(prescription).withoutClarificationExchange();
         }
         throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+    }
+
+    /** Statuses of a prescription never sent: its writing hospital's work in progress (QA D101, D652). */
+    static final List<PrescriptionStatus> NEVER_SENT = NeverSentRule.NEVER_SENT_PRESCRIPTION;
+
+    static boolean wasSent(Prescription prescription) {
+        return NeverSentRule.sent(prescription.getStatus());
+    }
+
+    /**
+     * QA D652 - a foreign prescription is readable by id exactly when the
+     * by-patient list would show it: its hospital is in the readable set for
+     * this caller and patient, and it was sent ({@link NeverSentRule}).
+     * Accounted as a cross-hospital read, as the list accounts it.
+     */
+    private boolean readableAcrossHospitals(Prescription prescription, UUID hospitalId) {
+        UUID rowHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        if (rowHospitalId == null || patientId == null
+                || !NeverSentRule.readableHere(rowHospitalId, hospitalId, wasSent(prescription))) {
+            return false;
+        }
+        UUID requesterUserId = authService.getCurrentUserId();
+        if (!recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId).contains(rowHospitalId)) {
+            return false;
+        }
+        reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(rowHospitalId), hospitalId),
+            CROSS_HOSPITAL_READ);
+        return true;
     }
 
     private Prescription findPrescriptionOrNotFound(UUID id) {
@@ -612,10 +655,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectClientAssertedWorkflowStatus(PrescriptionRequestDTO request) {
         PrescriptionStatus status = request.getStatus();
         if (status != null && !CLIENT_ASSERTABLE_STATUSES.contains(status)) {
-            throw new BusinessException(
-                "The status " + status + " cannot be set directly. Signing has its own endpoint "
-                    + "(POST /prescriptions/{id}/sign); transmission and dispensing are recorded by "
-                    + "their own workflows.");
+            // QA D660: a key, so the refusal reaches the prescriber in her language.
+            throw new BusinessException("prescription.status.notAssertable");
         }
     }
 
@@ -642,10 +683,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void rejectStatusChangeOnUpdate(Prescription existing, PrescriptionRequestDTO request) {
         PrescriptionStatus requested = request.getStatus();
         if (requested == null) {
-            return;
-        }
-        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
-            rejectReopeningWithdrawn(requested);
             return;
         }
         if (existing.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
@@ -761,14 +798,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     private void rejectSafeguardWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
         if (existing.isControlledSubstance() && Boolean.FALSE.equals(request.getControlledSubstance())) {
-            throw new BusinessException(
-                "This prescription is flagged as a controlled substance; the flag cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.controlled.flagLocked");
         }
         if (existing.isRequiresCosign() && Boolean.FALSE.equals(request.getRequiresCosign())) {
-            throw new BusinessException(
-                "This prescription declares a co-signature requirement; the requirement cannot be "
-                    + "removed by editing. Cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.cosign.flagLocked");
         }
     }
 
@@ -827,12 +860,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID requesterUserId = authService.getCurrentUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        Page<Prescription> rows = filter.isEmpty()
-            ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
-            : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
+        Page<Prescription> rows;
+        if (readable.equals(Set.of(hospitalId))) {
+            rows = filter.isEmpty()
+                ? prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable, pageable)
+                : prescriptionRepository.findByPatient_IdAndHospital_IdInAndStatusIn(patientId, readable, filter, pageable);
+        } else {
+            // QA D652: another hospital's never-sent prescription is not listed
+            // here, as its by-id read answers 404 here (NeverSentRule).
+            rows = filter.isEmpty()
+                ? prescriptionRepository.findSentAcrossHospitals(patientId, readable, hospitalId, NEVER_SENT, pageable)
+                : prescriptionRepository.findSentAcrossHospitalsAndStatusIn(
+                    patientId, readable, hospitalId, NEVER_SENT, filter, pageable);
+        }
         reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(rows.getContent().stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-            "Cross-hospital prescription read on the treatment relationship");
+            CROSS_HOSPITAL_READ);
         return rows;
     }
 
@@ -872,6 +915,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
+    /**
+     * QA D706: a controlled substance states how much may be handed over,
+     * on every path that creates one (the form, order sets), because
+     * the pharmacy caps the dispense at it and refuses one without it.
+     */
+    private static void requirePrescribedQuantityForControlled(Prescription prescription) {
+        if (prescription.isControlledSubstance() && prescription.getQuantity() == null) {
+            throw new BusinessException("prescription.quantity.requiredControlled");
+        }
+    }
+
     @Override
     @Transactional
     public PrescriptionResponseDTO updatePrescription(UUID id, PrescriptionRequestDTO request, Locale locale) {
@@ -895,6 +949,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                 && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
             throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
         }
+        // QA D660: a signed order is no longer rewritten by edit.
+        if (existing.getStatus() == PrescriptionStatus.SIGNED) {
+            return withdrawSignedPrescription(existing, request);
+        }
+        // QA D660 (re-test 2): a withdrawn order is read-only, every field.
+        // It used to fall through to updateEntity below, so a signed order
+        // once withdrawn had its drug and dose rewritten under the signature.
+        if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
+            rejectAnyEditOfWithdrawn(request);
+        }
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 
@@ -903,7 +967,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Patient patient = resolvePatient(request, locale);
 
         Staff staff = resolveStaffContext(request, currentUserId, actingHospitalId);
-        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId);
+        Encounter encounter = resolveEncounterContext(request, patient, staff, actingHospitalId,
+            existing.getEncounter() == null ? null : existing.getEncounter().getId());
 
         ensureContextConsistency(patient, staff, encounter);
 
@@ -935,6 +1000,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before updating prescription
         String allergyOverride = checkAllergyConflicts(patient, request);
 
+        applyCatalogPick(request, hospitalId);
+
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = runCdsRuleEngine(patient, hospitalId, request);
 
@@ -942,6 +1009,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String overrideBefore = existing.isAllergiesReviewed() ? existing.getOverrideReason() : null;
         prescriptionMapper.updateEntity(existing, request, patient, staff, encounter);
         existing.setAssignment(prescriberAssignment);
+        // QA D706: no quantity check on an edit - a legacy controlled row must
+        // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
@@ -958,6 +1027,116 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * QA D660 (user decision): the only edit a SIGNED prescription accepts is
+     * its withdrawal, to CANCELLED or DISCONTINUED, with a reason. The signed
+     * drug, dose, route, patient, prescriber and encounter are what the
+     * signature digest covers; rewriting them under the same signature is
+     * what the edit form used to allow. The portal echoes the whole form, so
+     * a field that equals the stored value (or is absent) is not a change;
+     * any other value is refused before anything is written.
+     */
+    private PrescriptionResponseDTO withdrawSignedPrescription(Prescription existing,
+                                                               PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested == null || !requested.isWithdrawn() || changesSignedContent(existing, request)) {
+            throw new BusinessException("prescription.signed.onlyWithdrawal");
+        }
+        String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+        if (reason == null || reason.isEmpty()) {
+            throw new BusinessException("prescription.signed.withdrawalReason.required");
+        }
+        UUID currentUserId = authService.getCurrentUserId();
+        UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        PrescriptionStatus statusBefore = existing.getStatus();
+        existing.setStatus(requested);
+        existing.setWithdrawalReason(reason);
+        closePartnerOffersOnWithdrawal(existing, statusBefore);
+        voidPreparedFillOnEdit(existing, statusBefore);
+        releaseQueueClaimOnEdit(existing, currentUserId);
+        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+    }
+
+    /**
+     * QA D660 (re-test 2): a CANCELLED or DISCONTINUED order is final and
+     * read-only. Asking for a non-withdrawn status keeps the "cannot be
+     * reopened" answer; any other edit, its content or its status, is refused.
+     */
+    private static void rejectAnyEditOfWithdrawn(PrescriptionRequestDTO request) {
+        PrescriptionStatus requested = request.getStatus();
+        if (requested != null && !requested.isWithdrawn()) {
+            rejectReopeningWithdrawn(requested);
+        }
+        throw new BusinessException("prescription.withdrawn.readOnly");
+    }
+
+    /**
+     * QA D670 (coordinator decision): a signed order is withdrawn by the
+     * prescriber or another doctor of the same hospital. A nurse or a midwife
+     * may write a prescription but not withdraw a signed one; the refusal is
+     * a translated 403. Admins never reach PUT /prescriptions (E9 #67,
+     * HospitalAdminOffOrdersTest), so they have no arm here.
+     */
+    private void requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
+        if (hospitalId == null || callerId == null) {
+            throw new BusinessException("prescription.only.doctor.admin");
+        }
+        boolean isPrescriber = existing.getStaff() != null && existing.getStaff().getUser() != null
+            && callerId.equals(existing.getStaff().getUser().getId());
+        boolean allowed = isPrescriber
+            || roleValidator.isDoctor(callerId, hospitalId)
+            || roleValidator.isPhysician(callerId, hospitalId)
+            || roleValidator.isSurgeon(callerId, hospitalId);
+        if (!allowed) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));
+        }
+    }
+
+    /** True when the request asks for anything on a signed order other than its status. */
+    private static boolean changesSignedContent(Prescription existing, PrescriptionRequestDTO request) {
+        java.util.List<Boolean> changes = java.util.List.of(
+            differs(request.getPatientId(), existing.getPatient() == null ? null : existing.getPatient().getId()),
+            request.getPatientId() == null && !isBlank(request.getPatientIdentifier()),
+            differs(request.getStaffId(), existing.getStaff() == null ? null : existing.getStaff().getId()),
+            differs(request.getEncounterId(), existing.getEncounter() == null ? null : existing.getEncounter().getId()),
+            textDiffers(request.getMedicationName(), existing.getMedicationName()),
+            !isBlank(request.getMedicationCode()) && textDiffers(request.getMedicationCode(), existing.getMedicationCode()),
+            textDiffers(request.getDosage(), existing.getDosage()),
+            textDiffers(request.getFrequency(), existing.getFrequency()),
+            !isBlank(request.getRoute()) && !request.getRoute().trim().equalsIgnoreCase(String.valueOf(existing.getRoute())),
+            textDiffers(request.getDuration(), existing.getDuration()),
+            textDiffers(request.getNotes(), existing.getNotes()),
+            flagDiffers(request.getControlledSubstance(), existing.isControlledSubstance()),
+            flagDiffers(request.getRequiresCosign(), existing.isRequiresCosign()),
+            flagDiffers(request.getTakeHome(), existing.isTakeHome()),
+            Boolean.TRUE.equals(request.getForceOverride()));
+        return changes.contains(Boolean.TRUE);
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private static boolean flagDiffers(Boolean requested, boolean stored) {
+        return requested != null && requested != stored;
+    }
+
+    private static boolean differs(UUID requested, UUID stored) {
+        return requested != null && !requested.equals(stored);
+    }
+
+    /** Blank and absent are the same "nothing recorded" the form echoes. */
+    private static boolean textDiffers(String requested, String stored) {
+        if (requested == null) {
+            return false;
+        }
+        String r = requested.trim();
+        String st = stored == null ? "" : stored.trim();
+        return !r.equals(st);
     }
 
     @Override
@@ -986,10 +1165,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // E9 #59c — see list(): the same widening, unpaged.
             UUID requesterUserId = authService.getCurrentUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-            List<Prescription> rows = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            List<Prescription> rows = NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable), hospitalId);
             reachRecorder.recordReach(patientId, hospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(rows.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospitalId),
-                "Cross-hospital prescription read on the treatment relationship");
+                CROSS_HOSPITAL_READ);
             return rows.stream()
                 .map(prescriptionMapper::toResponseDTO)
                 .toList();
@@ -1170,10 +1351,27 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private Encounter resolveEncounterContext(PrescriptionRequestDTO request,
                                               Patient patient,
                                               Staff staff,
-                                              UUID actingHospitalId) {
+                                              UUID actingHospitalId,
+                                              UUID keptEncounterId) {
         if (request.getEncounterId() != null) {
-            return encounterRepository.findById(request.getEncounterId())
+            Encounter named = encounterRepository.findById(request.getEncounterId())
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
+            // QA D525 (D431): an order written into a hospital stay after the
+            // discharge closed it was accepted, and would surface as a due
+            // dose for a patient who has gone home.
+            if (isHospitalStay(named)
+                    && (named.getStatus() == EncounterStatus.COMPLETED
+                        || named.getStatus() == EncounterStatus.CANCELLED)) {
+                throw new BusinessException("prescription.encounter.stayClosed");
+            }
+            // QA D739 (r10 re-test 3): the same rule for every encounter type.
+            // A finished consultation or ED visit named explicitly took the new
+            // order, which then showed in that closed visit's chart. An edit
+            // that keeps the order's own encounter is not a new attachment.
+            if (isClosedEncounter(named) && !named.getId().equals(keptEncounterId)) {
+                throw new BusinessException("prescription.encounter.closed");
+            }
+            return named;
         }
 
         UUID hospitalId = actingHospitalId != null ? actingHospitalId : determineHospitalId(staff, patient);
@@ -1214,12 +1412,28 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Optional<Encounter> existing = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId);
-        if (existing.isPresent()) {
+        // QA D739: the prescriber's latest encounter may be a stay that has
+        // been discharged (an open one was taken above). An outpatient order
+        // filed there reads as a stay order: it is ended by the discharge and
+        // shows in the closed stay's chart. It gets an outpatient anchor.
+        // QA D739 (r10 re-test 2): nor is a finished outpatient visit reused:
+        // an order written after that consultation closed is not part of it,
+        // and would show in its chart and summary. Only a still-open visit of
+        // this prescriber anchors the order; otherwise it gets its own anchor.
+        if (existing.isPresent() && isReusableOutpatientAnchor(existing.get())) {
             return existing.get();
         }
-
+        // QA D739 (r10 self-review round 2): every order gets a fresh anchor.
+        // An earlier anchor is completed by design (QA D41) and may be of any
+        // age, so reusing it would file this order on an existing finished
+        // encounter, which is the defect QA reported.
         UserRoleHospitalAssignment assignment = resolveAssignmentForStaff(staff, hospitalId);
         return createEncounterSnapshot(patient, staff, assignment);
+    }
+
+    private static boolean isClosedEncounter(Encounter encounter) {
+        return encounter.getStatus() == EncounterStatus.COMPLETED
+            || encounter.getStatus() == EncounterStatus.CANCELLED;
     }
 
     /**
@@ -1265,6 +1479,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
     }
 
+    /**
+     * QA D703: the stay is the hospital's, not the admitting doctor's. Any
+     * prescriber of the stay's hospital who treats the patient (the doctor on
+     * call at night, a colleague covering the ward) may order on it; the
+     * prescribing role itself is enforced on the endpoint. Tenant scoping is
+     * kept: a prescriber of another hospital is refused.
+     */
     private static boolean isOnAdmissionCareTeam(com.example.hms.model.Admission admission, Staff staff) {
         UUID staffId = staff != null ? staff.getId() : null;
         if (staffId == null) {
@@ -1274,10 +1495,22 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             || sameStaff(admission.getAdmittingProvider(), staffId)) {
             return true;
         }
-        List<java.util.Map<String, String>> consultants = admission.getConsultingPhysicians();
-        String id = staffId.toString();
-        return consultants != null && consultants.stream()
-            .anyMatch(c -> c != null && id.equalsIgnoreCase(c.get("staffId")));
+        UUID stayHospital = admission.getHospital() != null ? admission.getHospital().getId() : null;
+        UUID staffHospital = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        return stayHospital != null && stayHospital.equals(staffHospital);
+    }
+
+    /** An open, non-stay encounter: the only kind an unanchored order may join. */
+    private static boolean isReusableOutpatientAnchor(Encounter encounter) {
+        EncounterStatus status = encounter.getStatus();
+        return !isHospitalStay(encounter)
+            && status != EncounterStatus.COMPLETED
+            && status != EncounterStatus.CANCELLED;
+    }
+
+    /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */
+    private static boolean isHospitalStay(Encounter encounter) {
+        return encounter.getAdmissionId() != null || encounter.getEncounterType() == EncounterType.INPATIENT;
     }
 
     private static boolean sameStaff(Staff member, UUID staffId) {
@@ -1559,4 +1792,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return advisories;
     }
 
+
+    /**
+     * D654: a prescription created from a catalog pick (medicationCatalogItemId
+     * without medicationCode) takes the item's code, so the response reads the
+     * catalog's controlled flag. The item must belong to the order's hospital.
+     */
+    private void applyCatalogPick(PrescriptionRequestDTO request, UUID hospitalId) {
+        UUID itemId = request.getMedicationCatalogItemId();
+        if (itemId == null || medicationCatalogItemRepository == null) {
+            return;
+        }
+        com.example.hms.model.medication.MedicationCatalogItem item = medicationCatalogItemRepository
+            .findByIdAndHospital_Id(itemId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+        if ((request.getMedicationCode() == null || request.getMedicationCode().isBlank())
+            && item.getCode() != null && !item.getCode().isBlank()) {
+            request.setMedicationCode(item.getCode());
+        }
+    }
 }

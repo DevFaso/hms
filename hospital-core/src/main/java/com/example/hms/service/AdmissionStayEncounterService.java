@@ -43,6 +43,8 @@ public class AdmissionStayEncounterService {
     /** D426: a discharged stay gets its discharge-summary record, as a checkout does. */
     private final com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     private final com.example.hms.repository.PrescriptionRepository prescriptionRepository;
+    /** QA D757: ends the stay's ward orders at discharge. */
+    private final StayOrderDiscontinuation stayOrders;
 
     /**
      * The attending physician runs the stay; the admitting provider stands in
@@ -140,24 +142,35 @@ public class AdmissionStayEncounterService {
         if (admission.getId() == null) {
             return;
         }
+        // QA D757: the ward orders end with the stay, before its summary is
+        // written, so only take-home orders reach the after-visit summary.
+        if (stayOrders != null) {
+            Staff by = admission.getDischargingProvider();
+            stayOrders.discontinueStayOrders(admission,
+                by != null && by.getUser() != null ? by.getUser().getId() : null);
+        }
         encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()).ifPresent(enc -> {
-            if (!isBlank(dischargeDiagnosis)) {
-                enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
-            }
-            if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
-                enc.setFollowUpInstructions(admission.getDischargeInstructions());
-            }
-            if (isBlank(enc.getNotes()) && !isBlank(admission.getDischargeSummary())) {
-                enc.setNotes(truncate(admission.getDischargeSummary(), 2048));
-            }
-            if (isBlank(enc.getDischargeDiagnoses()) && !isBlank(admission.getPrimaryDiagnosisDescription())) {
-                enc.setDischargeDiagnoses(toJsonArray(admission.getPrimaryDiagnosisDescription()));
-            }
+            fillStayEncounter(enc, admission, dischargeDiagnosis);
             encounterRepository.save(enc);
             recordStayDischargeSummary(admission, enc);
         });
         closePendingHandoffs(admission);
         closePendingNursingTasks(admission);
+    }
+
+    private void fillStayEncounter(Encounter enc, Admission admission, String dischargeDiagnosis) {
+        if (!isBlank(dischargeDiagnosis)) {
+            enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
+        }
+        if (isBlank(enc.getFollowUpInstructions()) && !isBlank(admission.getDischargeInstructions())) {
+            enc.setFollowUpInstructions(admission.getDischargeInstructions());
+        }
+        if (isBlank(enc.getNotes()) && !isBlank(admission.getDischargeSummary())) {
+            enc.setNotes(truncate(admission.getDischargeSummary(), 2048));
+        }
+        if (isBlank(enc.getDischargeDiagnoses()) && !isBlank(admission.getPrimaryDiagnosisDescription())) {
+            enc.setDischargeDiagnoses(toJsonArray(admission.getPrimaryDiagnosisDescription()));
+        }
     }
 
     /**
@@ -270,10 +283,9 @@ public class AdmissionStayEncounterService {
             .findByEncounter_Id(enc.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
             .getContent();
         for (com.example.hms.model.Prescription rx : prescriptions) {
-            // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
-            if (rx.getStatus() == com.example.hms.enums.PrescriptionStatus.DRAFT
-                || rx.getStatus() == com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
-                || (rx.getStatus() != null && rx.getStatus().isWithdrawn())) {
+            // QA D757: a ward order ends with the stay; only an order the
+            // prescriber marked for home goes home.
+            if (!goesHome(rx)) {
                 continue;
             }
             summary.addMedicationReconciliation(com.example.hms.model.discharge.MedicationReconciliationEntry.builder()
@@ -283,8 +295,20 @@ public class AdmissionStayEncounterService {
                 .frequency(rx.getFrequency())
                 .reconciliationAction(com.example.hms.enums.MedicationReconciliationAction.CONTINUED)
                 .continueAtDischarge(true)
+                .prescriptionId(rx.getId())
                 .build());
         }
+    }
+
+    private static boolean goesHome(com.example.hms.model.Prescription rx) {
+        if (!rx.isTakeHome()) {
+            return false;
+        }
+        // As at checkout (QA D152): an unsigned or withdrawn order does not go home.
+        var status = rx.getStatus();
+        return status != com.example.hms.enums.PrescriptionStatus.DRAFT
+            && status != com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE
+            && (status == null || !status.isWithdrawn());
     }
 
     private static void addStayFollowUps(com.example.hms.model.discharge.DischargeSummary summary, Admission admission) {

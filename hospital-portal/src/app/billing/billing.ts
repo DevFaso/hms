@@ -21,15 +21,23 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { currentLocale } from '../shared/i18n/app-locale';
+import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './billing.scss',
@@ -168,6 +176,21 @@ export class BillingComponent implements OnInit {
     return ['DRAFT', 'SENT', 'CANCELLED'];
   }
 
+  /** QA D614: an issued invoice keeps its patient; it is cancelled and re-issued instead. */
+  patientLocked(): boolean {
+    return this.editing() && this.editingStatus() !== 'DRAFT';
+  }
+
+  /** QA D656: an issued invoice keeps its dates, total and visit; only its status moves. */
+  issuedContentLocked(): boolean {
+    return this.patientLocked();
+  }
+
+  /** QA D632: an invoice is not dated in the future. */
+  maxInvoiceDate(): string {
+    return this.isoDay(new Date());
+  }
+
   statusLocked(): boolean {
     const current = this.editingStatus();
     return this.editing() && (current === 'PAID' || current === 'PARTIALLY_PAID');
@@ -244,8 +267,21 @@ export class BillingComponent implements OnInit {
         this.loadInvoices(this.page());
       },
       error: (err: HttpErrorResponse) => {
-        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
         this.saving.set(false);
+        // QA D529: the stay already has an invoice. Billed twice only on purpose.
+        if (!this.editing() && err.status === 409 && !this.form.supplementary) {
+          const why = err.error?.message ?? '';
+          if (
+            globalThis.confirm(`${why}
+
+${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
+          ) {
+            this.form = { ...this.form, supplementary: true };
+            this.submitForm();
+          }
+          return;
+        }
+        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
       },
     });
   }
@@ -436,9 +472,12 @@ export class BillingComponent implements OnInit {
     this.newItemUnitPrice.set(null);
   }
 
-  /** QA D147: a paid or cancelled invoice is closed; the server refuses line changes too. */
+  /**
+   * QA D147/D656: only a DRAFT takes line changes; an issued invoice is
+   * cancelled and re-issued instead (the server refuses them too).
+   */
   canEditLines(inv: BillingInvoiceResponse): boolean {
-    return this.canEdit && inv.status !== 'CANCELLED' && inv.status !== 'PAID';
+    return this.canEdit && inv.status === 'DRAFT';
   }
 
   canAddItem(): boolean {
@@ -668,15 +707,13 @@ export class BillingComponent implements OnInit {
           this.emailSending.set(false);
           this.toast.success(this.translate.instant('BILLING.EMAIL_SENT'));
           this.closeEmail();
-          // Sending flips the invoice to SENT server-side.
-          this.loadInvoices(this.page());
         },
         error: (err: HttpErrorResponse) => {
           this.emailSending.set(false);
           this.toast.error(
             err.status === 503
               ? this.translate.instant('BILLING.EMAIL_UNAVAILABLE')
-              : this.translate.instant('BILLING.EMAIL_FAILED'),
+              : (err.error?.message ?? this.translate.instant('BILLING.EMAIL_FAILED')),
           );
         },
       });
@@ -692,12 +729,33 @@ export class BillingComponent implements OnInit {
     );
   }
 
+  /** QA D634: what the patient declared on the open invoice and staff have not confirmed yet. */
+  paymentPending = signal(0);
+
   openPayment(inv: BillingInvoiceResponse): void {
     this.paymentInv.set(inv);
     this.paymentAmount.set(inv.balanceDue ?? null);
+    this.paymentPending.set(0);
     this.paymentMethod.set('CASH');
     this.paymentReference.set('');
     this.showPaymentModal.set(true);
+    // QA D634: the modal prefilled the whole balance and said nothing of a
+    // pending patient declaration, so the cashier took the money twice once
+    // the declaration was confirmed. The prefill leaves the declared part out.
+    this.billingService.listPayments(inv.id).subscribe({
+      next: (rows) => {
+        if (this.paymentInv()?.id !== inv.id) return;
+        const pending = (rows ?? [])
+          .filter((r) => r.status === 'PENDING')
+          .reduce((sum, r) => sum + (r.amount ?? 0), 0);
+        this.paymentPending.set(pending);
+        if (pending > 0 && this.paymentAmount() === (inv.balanceDue ?? null)) {
+          const rest = Math.max((inv.balanceDue ?? 0) - pending, 0);
+          this.paymentAmount.set(rest > 0 ? rest : null);
+        }
+      },
+      error: () => this.paymentPending.set(0),
+    });
   }
 
   closePayment(): void {
@@ -769,10 +827,7 @@ export class BillingComponent implements OnInit {
   }
 
   formatCurrency(amount: number): string {
-    return new Intl.NumberFormat(currentLocale(), {
-      style: 'currency',
-      currency: 'XOF',
-      maximumFractionDigits: 0,
-    }).format(amount ?? 0);
+    // QA D621: "4 000 F CFA" in every language, not XOF / F CFA4,000.
+    return formatCfa(amount);
   }
 }

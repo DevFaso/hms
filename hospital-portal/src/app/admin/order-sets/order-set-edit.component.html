@@ -33,7 +33,7 @@
         {{ 'ORDER_SETS.FIELD_ADMISSION_TYPE' | translate }}
         <select [(ngModel)]="form.admissionType" name="admissionType" required>
           @for (t of admissionTypes; track t) {
-            <option [value]="t">{{ t }}</option>
+            <option [value]="t">{{ t | enumLabel: 'admissionType' }}</option>
           }
         </select>
       </label>
@@ -191,7 +191,7 @@
       <ol>
         @for (v of versionHistory(); track v) {
           <li>
-            v{{ v.version }} — {{ v.updatedAt | date: 'short' }}
+            v{{ v.version }} — {{ v.updatedAt | serverTime | date: 'short' }}
             @if (!v.active) {
               <span class="badge">{{ 'ORDER_SETS.VERSION_RETIRED' | translate }}</span>
             }

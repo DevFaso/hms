@@ -13,6 +13,9 @@ import jakarta.persistence.EntityNotFoundException;
 import org.hibernate.Hibernate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.example.hms.model.medication.MedicationCatalogItem;
+import com.example.hms.repository.MedicationCatalogItemRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
@@ -23,6 +26,20 @@ public class PrescriptionMapper {
 
     /** Entity label carried into the {@code safeInit} lazy-load diagnostics. */
     private static final String ENTITY = "Prescription";
+
+    /**
+     * D654: the catalog's controlled flag is shown on the prescription even
+     * when the prescriber did not tick it. Display only: the prescriber
+     * two-factor signing block stays on the prescriber's own tick until a
+     * two-factor step exists (tasklist standing debt). Optional so a plain
+     * {@code new PrescriptionMapper()} in unit tests still works.
+     */
+    private MedicationCatalogItemRepository catalogRepository;
+
+    @Autowired(required = false)
+    public void setCatalogRepository(MedicationCatalogItemRepository catalogRepository) {
+        this.catalogRepository = catalogRepository;
+    }
 
     /**
      * Statuses the pharmacy writes (gap G7). While the row is in one of these
@@ -57,6 +74,11 @@ public class PrescriptionMapper {
         Staff     staff    = safeInit(p.getStaff(),     ENTITY, p.getId(), "staff");
         Encounter enc      = safeInit(p.getEncounter(), ENTITY, p.getId(), "encounter");
         Hospital  hospital = safeInit(p.getHospital(),  ENTITY, p.getId(), "hospital");
+        // D654/D678: tick OR the catalog item at the order's hospital (the rule
+        // PrescriptionControlledResolver applies for verification, chart and history).
+        boolean controlled = p.isControlledSubstance()
+            || catalogControlled(resolveHospitalId(hospital, enc),
+                p.getMedicationCatalogItemId(), p.getMedicationCode());
 
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
@@ -90,8 +112,9 @@ public class PrescriptionMapper {
             .refillsUsed(p.getRefillsUsed())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)
-            .controlledSubstance(p.isControlledSubstance())
+            .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
+            .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
             // Tier 2 item 33. requiresPharmacistVerification mirrors
@@ -99,7 +122,8 @@ public class PrescriptionMapper {
             // sync deliberately rather than injecting the service into a
             // mapper; the service test pins the rule and the mapper test
             // pins this projection.
-            .requiresPharmacistVerification(p.isControlledSubstance() || p.isRequiresCosign())
+            // QA D678: the same controlled answer as the service, catalog included.
+            .requiresPharmacistVerification(controlled || p.isRequiresCosign())
             .pharmacistVerifiedAt(p.getPharmacistVerifiedAt())
             .pharmacistVerifiedByUserId(
                 p.getPharmacistVerifiedBy() != null ? p.getPharmacistVerifiedBy().getId() : null)
@@ -124,6 +148,7 @@ public class PrescriptionMapper {
             .clarificationRequestedAt(p.getClarificationRequestedAt())
             .clarificationResponse(p.getClarificationResponse())
             .clarificationResolvedAt(p.getClarificationResolvedAt())
+            .withdrawalReason(p.getWithdrawalReason())
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())
@@ -165,6 +190,7 @@ public class PrescriptionMapper {
 
         e.setMedicationName(dto.getMedicationName());
         e.setMedicationCode(dto.getMedicationCode());
+        e.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
         e.setMedicationDisplayName(dto.getMedicationName());
 
         e.setDosage(dto.getDosage());
@@ -172,6 +198,9 @@ public class PrescriptionMapper {
         e.setRoute(normalizeRoute(dto.getRoute()));
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
+        // QA D706: the prescribed quantity the pharmacy caps dispenses at.
+        e.setQuantity(dto.getQuantity());
+        e.setQuantityUnit(dto.getQuantityUnit());
 
         if (dto.getStatus() != null) {
             e.setStatus(dto.getStatus());
@@ -185,6 +214,8 @@ public class PrescriptionMapper {
         if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
             e.setRequiresCosign(true);
         }
+        // QA D757: a take-home order is marked as such by its prescriber.
+        e.setTakeHome(Boolean.TRUE.equals(dto.getTakeHome()));
 
         return e;
     }
@@ -204,6 +235,8 @@ public class PrescriptionMapper {
         if (dto.getMedicationCode() != null) {
             target.setMedicationCode(dto.getMedicationCode());
         }
+        // D654: an edit names its catalog pick again, or falls back to the code.
+        target.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
         if (!notBlank(target.getMedicationDisplayName())) {
             target.setMedicationDisplayName(dto.getMedicationName());
         }
@@ -215,6 +248,13 @@ public class PrescriptionMapper {
         }
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
+        // QA D706: null leaves the prescribed quantity unchanged.
+        if (dto.getQuantity() != null) {
+            target.setQuantity(dto.getQuantity());
+        }
+        if (dto.getQuantityUnit() != null) {
+            target.setQuantityUnit(dto.getQuantityUnit());
+        }
 
         if (dto.getStatus() != null) {
             target.setStatus(dto.getStatus());
@@ -227,6 +267,9 @@ public class PrescriptionMapper {
         }
         if (Boolean.TRUE.equals(dto.getRequiresCosign())) {
             target.setRequiresCosign(true);
+        }
+        if (dto.getTakeHome() != null) {
+            target.setTakeHome(dto.getTakeHome());
         }
     }
 
@@ -274,6 +317,25 @@ public class PrescriptionMapper {
             return null;
         }
         return safeInit(enc.getHospital(), "Encounter", enc.getId(), "hospital");
+    }
+
+    private boolean catalogControlled(java.util.UUID hospitalId, java.util.UUID catalogItemId,
+                                      String medicationCode) {
+        if (catalogRepository == null || hospitalId == null) {
+            return false;
+        }
+        // D654: the picked item decides; a UI-created item has no code.
+        if (catalogItemId != null) {
+            return catalogRepository.findByIdAndHospital_Id(catalogItemId, hospitalId)
+                .map(MedicationCatalogItem::isControlled)
+                .orElse(false);
+        }
+        if (medicationCode == null || medicationCode.isBlank()) {
+            return false;
+        }
+        return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())
+            .map(MedicationCatalogItem::isControlled)
+            .orElse(false);
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

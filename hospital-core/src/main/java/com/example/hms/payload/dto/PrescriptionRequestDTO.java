@@ -45,6 +45,14 @@ public class PrescriptionRequestDTO {
     @Size(max = 64)
     private String medicationCode;
 
+    /**
+     * D654: the catalog item the prescriber picked. When present and no
+     * {@link #medicationCode} is sent, the code is taken from this item (in
+     * the prescription's hospital), so the response shows the catalog's
+     * controlled flag and the CDS engine sees the formulary code.
+     */
+    private UUID medicationCatalogItemId;
+
     @Size(max = 100)
     private String dosage;
 
@@ -64,6 +72,21 @@ public class PrescriptionRequestDTO {
 
     @Size(max = 1024)
     private String notes;
+
+    /**
+     * QA D706: the quantity to hand over per fill (ampoules, tablets...).
+     * The pharmacy caps the cumulative dispense at it. Required on a new
+     * prescription from the prescribing form and on any controlled
+     * substance; on update, null leaves the stored value unchanged.
+     */
+    @jakarta.validation.constraints.DecimalMin(value = "0", inclusive = false,
+        message = "{prescription.quantity.positive}")
+    @jakarta.validation.constraints.DecimalMax(value = "100000", message = "{prescription.quantity.tooLarge}")
+    @jakarta.validation.constraints.Digits(integer = 10, fraction = 2, message = "{prescription.quantity.positive}")
+    private java.math.BigDecimal quantity;
+
+    @Size(max = 60)
+    private String quantityUnit;
 
     private PrescriptionStatus status;
 
@@ -96,6 +119,19 @@ public class PrescriptionRequestDTO {
 
     /** Same contract as {@link #controlledSubstance}, for the co-sign gate. */
     private Boolean requiresCosign;
+
+    /**
+     * QA D757: the order is for the patient to take home, so it outlives the
+     * stay it is written on. Null leaves the stored value unchanged on update.
+     */
+    private Boolean takeHome;
+
+    /**
+     * QA D660: required when a SIGNED prescription is cancelled or
+     * discontinued, the only edit a signed order accepts.
+     */
+    @Size(max = 1000)
+    private String withdrawalReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

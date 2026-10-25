@@ -36,4 +36,8 @@ public class NurseHandoffCreateRequestDTO {
 
     @Size(max = 4000)
     private String recommendation;
+
+    /** QA D776: the colleague (nurse, midwife or doctor at this hospital) the patient is handed to. */
+    @NotNull(message = "{nurse.handoff.recipient.required}")
+    private UUID recipientUserId;
 }

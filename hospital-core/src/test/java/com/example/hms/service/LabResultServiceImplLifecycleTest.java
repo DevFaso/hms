@@ -402,6 +402,65 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, atLeastOnce()).save(any(LabResult.class));
     }
 
+    // ── QA D708: one result per single-test order ─────────────────────────
+
+    @Test
+    @DisplayName("D708 — a second plain result on an order that has one is refused, nothing saved")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aSecondResultOnTheSameOrderIsRefused() {
+        order.setStatus(LabOrderStatus.RESULTED);
+        stubEntryPath();
+        LabResult first = resultOn(order, false);
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(first));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("D708 — a released first result is corrected, not doubled")
+    @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+    void aSecondResultOverAReleasedOneIsRefusedWithoutACorrectionLink() {
+        order.setStatus(LabOrderStatus.COMPLETED);
+        stubEntryPath();
+        LabResult released = resultOn(order, true);
+        when(labResultRepository.findByLabOrder_Id(order.getId())).thenReturn(List.of(released));
+
+        LabResultRequestDTO request = entryRequest();
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
+    @DisplayName("D708 — a patient id that is not the order's patient is refused, not ignored")
+    void aMismatchedPatientIdIsRefused() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        LabResultRequestDTO request = entryRequest();
+        request.setPatientId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class);
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    // ── QA D709: the critical page goes out on release ────────────────────
+
+    @Test
+    @DisplayName("D709 — releasing a result runs the critical-value notification")
+    void releaseRunsTheCriticalNotification() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        assertThat(correction.isReleased()).isTrue();
+        verify(criticalValueNotificationService).notifyIfCritical(org.mockito.ArgumentMatchers.same(correction), any());
+    }
+
     // ── B2: results drive the order ────────────────────────────────────────
 
     @Test
@@ -750,6 +809,39 @@ class LabResultServiceImplLifecycleTest {
     }
 
     @Test
+    @DisplayName("QA D640 — a decimal comma typed on entry is saved with a decimal point")
+    void aDecimalCommaIsSavedAsAPointOnEntry() {
+        stubEntryPath();
+        when(labResultMapper.toEntity(any(), any(), any())).thenAnswer(inv -> {
+            LabResult entered = resultOn(inv.getArgument(1), false);
+            entered.setResultValue(((LabResultRequestDTO) inv.getArgument(0)).getResultValue());
+            return entered;
+        });
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("7,9");
+
+        ArgumentCaptor<LabResult> saved = ArgumentCaptor.forClass(LabResult.class);
+        service.createLabResult(request, Locale.ENGLISH);
+
+        verify(labResultRepository).save(saved.capture());
+        assertThat(saved.getValue().getResultValue()).isEqualTo("7.9");
+    }
+
+    @Test
+    @DisplayName("QA D640 — a decimal comma typed on amendment is saved with a decimal point")
+    void aDecimalCommaIsSavedAsAPointOnAmendment() {
+        stubEntryPath();
+        LabResult existing = resultOn(order, false);
+        when(labResultRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        LabResultRequestDTO request = entryRequest();
+        request.setResultValue("7,9");
+
+        service.updateLabResult(existing.getId(), request, Locale.ENGLISH);
+
+        assertThat(existing.getResultValue()).isEqualTo("7.9");
+    }
+
+    @Test
     @DisplayName("B5 — a normal result is NOT released on entry unless auto-verification is switched on")
     void normalResultStaysUnreleasedByDefault() {
         stubEntryPath();
@@ -779,7 +871,10 @@ class LabResultServiceImplLifecycleTest {
                 order.setStatus(inv.getArgument(2));
                 return 1;
             });
+        // QA D708: the first read (before the insert) finds no result yet;
+        // the completion check afterwards sees the auto-released one.
         when(labResultRepository.findByLabOrder_Id(order.getId()))
+            .thenReturn(List.of())
             .thenAnswer(inv -> List.of(resultOn(order, true)));
 
         service.createLabResult(entryRequest(), Locale.ENGLISH);

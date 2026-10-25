@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.ImagingOrder;
@@ -26,6 +27,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ImagingReportRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.service.ChartReviewService;
@@ -79,6 +81,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+    /** QA D520: grades each result the way the lab-results screen does. */
+    private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -206,9 +210,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // patient-only finder left. With an acting hospital a result is
         // readable where its order is handled (#751): ordered in the readable
         // set, or performed by this hospital's own laboratory.
-        List<LabResult> source = readable != null
+        // QA D741: a superseded result and a legacy duplicate are not current.
+        List<LabResult> source = ClinicalLabResultView.current(readable != null
             ? labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId, false, page)
-            : labResultRepository.findAllPatientResults(patientId, page);
+            : labResultRepository.findAllPatientResults(patientId, page));
         account(reach, hospitalId, source.stream()
             .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
             .map(ChartReviewServiceImpl::orderingHospitalIdOf)
@@ -230,10 +235,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<MedicationEntryDTO> loadMedications(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                                      int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
         List<Prescription> source = readable != null
-            ? prescriptionRepository
+            ? NeverSentRule.prescriptionsReadableHere(prescriptionRepository
                 .findByPatient_IdAndHospital_IdIn(patientId, readable, page)
-                .getContent()
+                .getContent(), hospitalId)
             : prescriptionRepository
                 .findByPatient_Id(patientId, page)
                 .getContent();
@@ -246,10 +252,11 @@ public class ChartReviewServiceImpl implements ChartReviewService {
     private List<ImagingEntryDTO> loadImaging(UUID patientId, UUID hospitalId, Set<UUID> readable,
                                               int limit, Map<String, Long> reach) {
         Pageable page = PageRequest.of(0, limit);
+        // QA D652: less another hospital's never-sent DRAFTs (NeverSentRule).
         List<ImagingOrder> orders = readable != null
-            ? imagingOrderRepository
+            ? NeverSentRule.imagingOrdersReadableHere(imagingOrderRepository
                 .findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable, page)
-                .getContent()
+                .getContent(), hospitalId)
             : imagingOrderRepository
                 .findByPatient_IdOrderByOrderedAtDesc(patientId, page)
                 .getContent();
@@ -432,6 +439,35 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .build();
     }
 
+    /**
+     * QA D520: the chart review read only the analyzer's stored flag, which a
+     * hand-entered result never carries, so a critical potassium showed no
+     * CRITIQUE pill here while the lab screen and the doctor's queue (QA D178)
+     * graded it from the reference range. Same grade, same three values.
+     */
+    private String gradedSeverity(LabResult r) {
+        String graded = labResultMapper.severityFlagOf(r);
+        if (com.example.hms.mapper.LabResultMapper.FLAG_CRITICAL.equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.CRITICAL.name();
+        }
+        if ("LOW".equals(graded) || "HIGH".equals(graded)
+                || com.example.hms.mapper.LabResultMapper.FLAG_ABNORMAL.equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.ABNORMAL.name();
+        }
+        if ("NORMAL".equals(graded)) {
+            return com.example.hms.enums.AbnormalFlag.NORMAL.name();
+        }
+        return r.getAbnormalFlag() != null ? r.getAbnormalFlag().severity().name() : null;
+    }
+
+    private com.example.hms.enums.AbnormalDirection gradedDirection(LabResult r) {
+        String graded = labResultMapper.severityFlagOf(r);
+        if ("LOW".equals(graded) || "HIGH".equals(graded)) {
+            return com.example.hms.enums.AbnormalDirection.valueOf(graded);
+        }
+        return r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null;
+    }
+
     private ResultEntryDTO toResultDto(LabResult r) {
         LabOrder order = r.getLabOrder();
         String testName = null;
@@ -441,26 +477,50 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             if (order.getLabTestDefinition() != null) {
                 testName = order.getLabTestDefinition().getName();
                 testCode = order.getLabTestDefinition().getTestCode();
+            } else {
+                // QA D648: the same "deleted test" label as every other lab screen.
+                testName = com.example.hms.utility.MessageUtil.resolveOrRaw(
+                    com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
             }
             Staff os = order.getOrderingStaff();
             if (os != null) {
                 orderingStaffName = os.getFullName();
             }
         }
+        // QA D740: an unreleased value is not a result yet. The row is listed
+        // as pending; its value, unit and flag never leave the laboratory, so
+        // the PDF built from this DTO cannot print them either.
+        boolean showsValue = ClinicalLabResultView.showsValue(r);
         return ResultEntryDTO.builder()
             .id(r.getId())
             .labOrderId(order != null ? order.getId() : null)
             .testName(testName)
             .testCode(testCode)
-            .resultValue(r.getResultValue())
-            .resultUnit(r.getResultUnit())
-            .abnormalFlag(r.getAbnormalFlag() != null ? r.getAbnormalFlag().severity().name() : null)
-            .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
+            .resultValue(showsValue ? r.getResultValue() : null)
+            .resultUnit(showsValue ? r.getResultUnit() : null)
+            .abnormalFlag(showsValue ? gradedSeverity(r) : null)
+            .abnormalDirection(showsValue ? gradedDirection(r) : null)
             .resultDate(r.getResultDate())
             .orderingStaffName(orderingStaffName)
             .acknowledged(r.isAcknowledged())
             .released(r.isReleased())
             .build();
+    }
+
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
     }
 
     private MedicationEntryDTO toMedicationDto(Prescription p) {
@@ -477,7 +537,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .createdAt(p.getCreatedAt())
             .prescriberName(prescriber != null ? prescriber.getFullName() : null)
-            .controlledSubstance(p.isControlledSubstance())
+            .controlledSubstance(controlled(p))
             .inpatientOrder(p.isInpatientOrder())
             .build();
     }

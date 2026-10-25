@@ -76,6 +76,10 @@ export const ENUM_WORDS = [
   'jobTitle',
   'roleName',
   'roleCode',
+  // QA D619: an audit row's `resourceName` is, for every write audit, the
+  // entity token (TRANSFER, PRESCRIPTION, BILLING_INVOICE). The dashboard
+  // passed it through a helper that echoed it, and no tail above names it.
+  'resourceName',
 ];
 
 /**
@@ -86,7 +90,7 @@ export const ENUM_WORDS = [
  * `*Label` naming convention would excuse any helper that merely echoes its
  * input. Add a name only after reading the method.
  */
-export const RESOLVING_HELPERS = ['specialtyLabel'];
+export const RESOLVING_HELPERS = ['specialtyLabel', 'entityLabel', 'auditResourceLabel'];
 
 const HELPER_CALL = new RegExp(String.raw`\b(?:${RESOLVING_HELPERS.join('|')})\s*\(`, 'g');
 
@@ -159,6 +163,12 @@ const TEXT_IF_INTERPOLATED = new Map([['value', new Set(['input'])]]);
  * seeing half the markup is the failure mode this file exists to prevent.
  */
 const ATTR = /([@*#([]?[\w.\-$]+[)\]]?)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+
+const OPTION_ECHO =
+  /<option\b[^>]*?\[(?:value|ngValue)\]\s*=\s*"\s*([A-Za-z_$][\w$]*)\s*"[^>]*>\s*\{\{\s*\1\s*\}\}\s*<\/option>/g;
+
+const IF_ALIAS =
+  /@if\s*\(([^;{}()]*(?:\([^;{}()]*\)[^;{}()]*)*);\s*as\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*\)/g;
 
 const COMMENT = /<!--[\s\S]*?-->/g;
 const INTERPOLATION = /\{\{([\s\S]*?)\}\}/g;
@@ -242,9 +252,30 @@ export function rawEnumRenders(html) {
     return blank(match);
   });
 
+  // QA D619: `@if (label(evt.resourceName); as resource) { {{ resource }} }`
+  // renders the expression under an alias, so the interpolation names only
+  // the alias. Read the aliased expression as the render.
+  // Only when the alias itself is printed bare — `@if (panel().result; as r)`
+  // followed by `{{ r.message }}` renders a field of it, not the expression.
+  for (const m of work.matchAll(IF_ALIAS)) {
+    const bare = new RegExp(String.raw`\{\{\s*${m[2].replaceAll('$', '\\$')}\s*\}\}`);
+    if (bare.test(work)) collectExpr(m[1], m.index + m[0].indexOf(m[1]));
+  }
+
   // What is left is element text content — the words on screen.
   for (const binding of work.matchAll(INTERPOLATION)) {
     collectExpr(binding[1], binding.index + 2);
+  }
+
+  // QA D620: `<option [value]="m">{{ m }}</option>` echoes the loop variable
+  // as its own label. The variable is a bare identifier, so FIELD (which needs
+  // a `.field`) never sees it, and a picker of XRAY/CT/ROUTINE/STAT shipped raw
+  // in every language. An option whose text IS its value is reported as
+  // `<option>name`; a list of free values (timezones, departments) is pinned.
+  const noComments = html.replace(COMMENT, blank);
+  for (const m of noComments.matchAll(OPTION_ECHO)) {
+    const at = m.index + m[0].lastIndexOf(m[1]);
+    hits.push({ expr: `<option>${m[1]}`, at, line: lineAt(at) });
   }
 
   return hits.sort((a, b) => a.at - b.at).map(({ expr, line }) => ({ expr, line }));

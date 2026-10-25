@@ -12,7 +12,6 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.IsolationPrecaution;
-import com.example.hms.model.Staff;
 import com.example.hms.model.TransferOrder;
 import com.example.hms.model.Ward;
 import com.example.hms.payload.dto.transfer.TransferCancellationRequestDTO;
@@ -107,6 +106,10 @@ public class TransferServiceImpl implements TransferService {
         if (origin != null && Objects.equals(origin.getId(), destination.getId())) {
             throw new BusinessException("transfer.r7.alreadyInBed");
         }
+        // QA D609: the same sex and age rule bed assignment applies, checked when
+        // the transfer is ORDERED. It was only checked on completion, so a
+        // 6-year-old's transfer reserved a maternity bed and then stuck at 400.
+        BedAssignmentService.requireWardFitsPatient(destination, admission.getPatient());
         transferOrderRepository.findPendingForDestinationBed(destination.getId())
             .ifPresent(existing -> {
                 throw new BusinessException("transfer.r7.destinationTaken",
@@ -116,6 +119,10 @@ public class TransferServiceImpl implements TransferService {
         List<IsolationPrecaution> precautions =
             precautionRepository.findActiveForPatient(admission.getPatient().getId());
         boolean override = evaluateIsolation(precautions, destination, request);
+        // QA D713: the requester is the caller (a claim is checked), never left
+        // blank; resolved before the bed is held so a refusal strands nothing.
+        com.example.hms.model.Staff requestedBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getRequestedByStaffId(), hospitalId);
 
         // Hold the bed. Everything above must pass first — a refused transfer
         // that had already reserved the bed would strand it.
@@ -134,7 +141,7 @@ public class TransferServiceImpl implements TransferService {
             .status(TransferOrderStatus.REQUESTED)
             .reason(request.getReason())
             .notes(request.getNotes())
-            .requestedBy(resolveStaff(request.getRequestedByStaffId(), hospitalId))
+            .requestedBy(requestedBy)
             .requestedAt(LocalDateTime.now(clock))
             .isolationOverride(override)
             .isolationOverrideReason(override ? request.getIsolationOverrideReason() : null)
@@ -159,6 +166,10 @@ public class TransferServiceImpl implements TransferService {
             throw new BusinessException("transfer.r7.notPending");
         }
         UUID hospitalId = order.getHospital().getId();
+        // QA D713: the completer is the caller (a claim is checked), never left
+        // blank; resolved before the bed changes so a refusal moves nobody.
+        com.example.hms.model.Staff completedBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getCompletedByStaffId(), hospitalId);
 
         // The destination has been RESERVED for this order since it was
         // raised, so completion claims it from that state. The bed change
@@ -169,7 +180,7 @@ public class TransferServiceImpl implements TransferService {
 
         order.setStatus(TransferOrderStatus.COMPLETED);
         order.setCompletedAt(LocalDateTime.now(clock));
-        order.setCompletedBy(resolveStaff(request.getCompletedByStaffId(), hospitalId));
+        order.setCompletedBy(completedBy);
         if (StringUtils.hasText(request.getNotes())) {
             order.setNotes(request.getNotes());
         }
@@ -190,6 +201,10 @@ public class TransferServiceImpl implements TransferService {
             throw new BusinessException("transfer.r7.notPending");
         }
 
+        // QA D503 class: the canceller is the caller, checked before anything changes.
+        com.example.hms.model.Staff cancelledBy = com.example.hms.security.CallerIdentity.resolveActor(
+            staffRepository, request.getCancelledByStaffId(), order.getHospital().getId());
+
         // Hand the bed back. releaseReservation only touches a RESERVED bed,
         // so if somebody has since been put in it this cannot evict them.
         bedAssignmentService.releaseReservation(order.getToBed());
@@ -197,8 +212,7 @@ public class TransferServiceImpl implements TransferService {
         order.setStatus(TransferOrderStatus.CANCELLED);
         order.setCancelledAt(LocalDateTime.now(clock));
         order.setCancellationReason(request.getCancellationReason());
-        order.setCancelledBy(
-            resolveStaff(request.getCancelledByStaffId(), order.getHospital().getId()));
+        order.setCancelledBy(cancelledBy);
 
         TransferOrder saved = transferOrderRepository.save(order);
         return mapper.toDto(saved, activePrecautions(saved));
@@ -307,14 +321,5 @@ public class TransferServiceImpl implements TransferService {
     private Hospital hospitalRef(UUID hospitalId) {
         return hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-    }
-
-    private Staff resolveStaff(UUID staffId, UUID hospitalId) {
-        if (staffId == null) {
-            return null;
-        }
-        return staffRepository.findById(staffId)
-            .filter(s -> s.getHospital() == null || Objects.equals(s.getHospital().getId(), hospitalId))
-            .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", staffId));
     }
 }

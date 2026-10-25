@@ -50,13 +50,16 @@ public class NotificationController {
         String username = principal.getName();
         Pageable pageable = PageRequest.of(page, size);
         Page<Notification> notifications = notificationService.getNotificationsForUser(username, read, search, pageable);
-        return ResponseEntity.ok(notifications);
+        // In the reader's language, from Accept-Language (QA D665).
+        java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(notifications.map(n -> notificationService.localize(n, locale)));
     }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
     public ResponseEntity<Notification> createNotification(@RequestParam String message, @RequestParam String recipientUsername) {
-        Notification notification = notificationService.createNotification(message, recipientUsername);
+        // Typed by the administrator: shown as written, in every language.
+        Notification notification = notificationService.createLiteralNotification(message, recipientUsername, null);
         return ResponseEntity.ok(notification);
     }
 

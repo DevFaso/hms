@@ -100,11 +100,13 @@
                 </span>
               </td>
               <td class="numeric">{{ row.attempts }}</td>
-              <td>{{ row.lastAttemptAt ? (row.lastAttemptAt | date: 'short') : '—' }}</td>
+              <td>
+                {{ row.lastAttemptAt ? (row.lastAttemptAt | serverTime | date: 'short') : '—' }}
+              </td>
               <td class="error-cell" [title]="row.lastError ?? ''">
                 {{ row.lastError ?? '—' }}
               </td>
-              <td>{{ row.createdAt | date: 'short' }}</td>
+              <td>{{ row.createdAt | serverTime | date: 'short' }}</td>
               <td class="actions-cell">
                 <button
                   class="btn-icon"
@@ -193,7 +195,7 @@
                   <span class="status-badge" [attr.data-status]="sibling.status">
                     {{ 'LAB_OUTBOX.STATUS_' + sibling.status | translate }}
                   </span>
-                  <span>{{ sibling.createdAt | date: 'short' }}</span>
+                  <span>{{ sibling.createdAt | serverTime | date: 'short' }}</span>
                 </li>
               }
             </ul>

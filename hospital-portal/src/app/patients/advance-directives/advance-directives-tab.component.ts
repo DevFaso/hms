@@ -18,6 +18,7 @@ import {
   AdvanceDirectiveType,
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * Advance-directives tab on the patient chart (P2 #13).
@@ -31,7 +32,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-advance-directives-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './advance-directives-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './advance-directives-tab.component.scss',

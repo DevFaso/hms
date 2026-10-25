@@ -61,4 +61,15 @@ public enum PrescriptionStatus {
             default -> true;
         };
     }
+
+    /**
+     * QA D780: the status as the caller reads it ("délivrée"), never the raw
+     * code, for messages that name the order's current state. Uses the
+     * {@code cds.enum.*} labels, which cover every value.
+     */
+    public String localizedLabel() {
+        String key = "cds.enum." + name();
+        String label = com.example.hms.utility.MessageUtil.resolve(key);
+        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+    }
 }

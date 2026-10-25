@@ -1,5 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -22,9 +29,11 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrderSetPickerComponent } from './order-set-picker/order-set-picker.component';
 import { AuthService } from '../auth/auth.service';
+import { ActionKey, actionRoles } from '../core/action-permissions';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 
 interface OrderSetPickerCtx {
@@ -33,6 +42,9 @@ interface OrderSetPickerCtx {
   encounterId: string;
   orderingStaffId: string;
 }
+
+/** QA D603: the stay statuses that may still be cancelled (mirrors AdmissionServiceImpl). */
+const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
 
 @Component({
   selector: 'app-admissions',
@@ -50,6 +62,8 @@ interface OrderSetPickerCtx {
   styleUrl: './admissions.scss',
 })
 export class AdmissionsComponent implements OnInit {
+  /** D622: admission times are UTC wall clock; show them in the user's zone. */
+  protected readonly fromServerDateTime = fromServerDateTime;
   private readonly admissionService = inject(AdmissionService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
@@ -66,6 +80,22 @@ export class AdmissionsComponent implements OnInit {
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
   protected readonly globalView = this.roleContext.globalView;
+  /**
+   * QA D427/D527: each admission action mirrors its endpoint (core/action-permissions):
+   * a nurse may update, apply order sets and move beds, but only a doctor admits,
+   * discharges or cancels; she was offered Delete and got a 403.
+   */
+  protected readonly canAdmit = computed(() => this.can('admissionCreate'));
+  protected readonly canEditAdmission = computed(() => this.can('admissionUpdate'));
+  protected readonly canApplyOrderSets = computed(() => this.can('admissionApplyOrderSets'));
+  protected readonly canAssignBed = computed(() => this.can('admissionAssignBed'));
+  protected readonly canUnassignBed = computed(() => this.can('admissionUnassignBed'));
+  protected readonly canDischarge = computed(() => this.can('admissionDischarge'));
+  protected readonly canCancelAdmission = computed(() => this.can('admissionCancel'));
+
+  private can(action: ActionKey): boolean {
+    return this.roleContext.hasAnyActiveRole(actionRoles(action));
+  }
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -88,6 +118,28 @@ export class AdmissionsComponent implements OnInit {
 
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<StaffResponse[]>([]);
+  /**
+   * QA D618 (D176/D527): the server records the caller as the discharging
+   * provider (only a super-admin in global view may name another), so the
+   * discharge form offers the caller alone. It listed every physician and a
+   * pick other than oneself was refused with a 403.
+   */
+  readonly dischargeProviders = computed<Pick<StaffResponse, 'id' | 'name' | 'email'>[]>(() => {
+    if (this.isSuperAdmin() && this.globalView()) {
+      return this.staffMembers();
+    }
+    const profile = this.auth.getUserProfile();
+    const myStaffId = profile?.staffId;
+    if (!myStaffId) {
+      return [];
+    }
+    const mine = this.staffMembers().find((s) => s.id === myStaffId);
+    if (mine) {
+      return [mine];
+    }
+    const name = `${profile?.firstName ?? ''} ${profile?.lastName ?? ''}`.trim();
+    return [{ id: myStaffId, name, email: profile?.email ?? '' }];
+  });
   private allStaff: StaffResponse[] = [];
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
@@ -401,7 +453,8 @@ export class AdmissionsComponent implements OnInit {
       roomBed: a.roomBed,
       admissionType: a.admissionType ?? 'ELECTIVE',
       acuityLevel: a.acuityLevel ?? 'MODERATE',
-      admissionDateTime: a.admissionDateTime?.substring(0, 10) ?? '',
+      // QA D622: the API's UTC wall clock, shown in the user's zone (a date alone left the input blank).
+      admissionDateTime: a.admissionDateTime ? toLocalInputValue(a.admissionDateTime) : '',
       chiefComplaint: a.chiefComplaint ?? '',
       admissionNotes: a.admissionNotes,
     };
@@ -423,9 +476,16 @@ export class AdmissionsComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    // QA D622: datetime-local is the user's wall clock; the API stores the UTC one.
+    const payload: AdmissionRequest = {
+      ...this.form,
+      admissionDateTime: this.form.admissionDateTime
+        ? toServerDateTime(this.form.admissionDateTime)
+        : this.form.admissionDateTime,
+    };
     const op = this.editing()
-      ? this.admissionService.update(this.editingId()!, this.form)
-      : this.admissionService.create(this.form);
+      ? this.admissionService.update(this.editingId()!, payload)
+      : this.admissionService.create(payload);
     op.subscribe({
       next: () => {
         this.toast.success(
@@ -442,6 +502,15 @@ export class AdmissionsComponent implements OnInit {
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * QA D603: only a stay still in progress can be cancelled. A discharged,
+   * transferred or deceased stay carries a finalized summary and an invoice;
+   * the server refuses the delete, so the row offers none.
+   */
+  isCancellable(a: AdmissionResponse): boolean {
+    return CANCELLABLE_STATUSES.has(a.status);
   }
 
   confirmDelete(a: AdmissionResponse): void {
@@ -476,7 +545,8 @@ export class AdmissionsComponent implements OnInit {
       dischargeSummary: '',
       dischargeDiagnosis: '',
       dischargeInstructions: '',
-      dischargingProviderId: '',
+      // QA D503 class: the server records the caller as the discharging provider.
+      dischargingProviderId: this.auth.getUserProfile()?.staffId ?? '',
     };
     this.showDischargeModal.set(true);
   }
@@ -520,7 +590,7 @@ export class AdmissionsComponent implements OnInit {
     this.selectedBedId.set('');
     this.availableBeds.set([]);
     this.bedsLoading.set(true);
-    this.bedService.getAvailableBeds().subscribe({
+    this.bedService.getAvailableBeds(adm.patientId).subscribe({
       next: (beds) => {
         this.availableBeds.set(beds);
         this.bedsLoading.set(false);

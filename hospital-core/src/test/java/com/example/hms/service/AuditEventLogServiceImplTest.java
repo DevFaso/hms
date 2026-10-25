@@ -5,6 +5,8 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
@@ -85,6 +87,116 @@ class AuditEventLogServiceImplTest {
                 .entityType("USER")
                 .status(AuditStatus.SUCCESS)
                 .build();
+    }
+
+    // ─── QA D521 / D533: anchoring on the actor's assignment at the named hospital ───
+
+    private UserRoleHospitalAssignment assignmentOf(User user, java.util.UUID hospitalId, String hospitalName) {
+        com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+        h.setId(hospitalId);
+        h.setName(hospitalName);
+        UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
+        a.setId(UUID.randomUUID());
+        a.setUser(user);
+        a.setHospital(h);
+        return a;
+    }
+
+    @Test
+    @DisplayName("D521: a ROLE_ASSIGNED row keyed on the assignee's assignment is re-anchored on the registrar's own")
+    void d521_roleAssignedAnchorsOnTheRegistrarsAssignment() {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        User assignee = new User();
+        assignee.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UserRoleHospitalAssignment assigneeRow = assignmentOf(assignee, hospitalA, "Hopital A");
+        UserRoleHospitalAssignment registrarRow = assignmentOf(registrar, hospitalA, "Hopital A");
+        when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+        when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(Optional.of(registrarRow));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(registrar.getId()).assignmentId(assigneeRow.getId()).hospitalId(hospitalA)
+            .eventType(AuditEventType.ROLE_ASSIGNED).status(AuditStatus.SUCCESS).entityType("ASSIGNMENT").build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getAssignment()).isSameAs(registrarRow);
+        assertThat(saved.getValue().getHospitalName()).isEqualTo("Hopital A");
+    }
+
+    @Test
+    @DisplayName("D773: a ROLE_ASSIGNED row with no roleName is filed under the registrar's role, not the granted one")
+    void d773_roleAssignedRowCarriesTheRegistrarsRole() {
+        User registrar = new User();
+        registrar.setId(UUID.randomUUID());
+        User assignee = new User();
+        assignee.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UserRoleHospitalAssignment assigneeRow = assignmentOf(assignee, hospitalA, "Hopital A");
+        com.example.hms.model.Role patient = new com.example.hms.model.Role();
+        patient.setCode("ROLE_PATIENT");
+        assigneeRow.setRole(patient);
+        UserRoleHospitalAssignment registrarRow = assignmentOf(registrar, hospitalA, "Hopital A");
+        com.example.hms.model.Role admin = new com.example.hms.model.Role();
+        admin.setCode("ROLE_HOSPITAL_ADMIN");
+        registrarRow.setRole(admin);
+        when(userRepository.findById(registrar.getId())).thenReturn(Optional.of(registrar));
+        when(assignmentRepository.findById(assigneeRow.getId())).thenReturn(Optional.of(assigneeRow));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(registrar.getId(), hospitalA))
+            .thenReturn(Optional.of(registrarRow));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(registrar.getId()).assignmentId(assigneeRow.getId()).hospitalId(hospitalA)
+            .eventType(AuditEventType.ROLE_ASSIGNED).status(AuditStatus.SUCCESS).entityType("ASSIGNMENT").build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getRoleName()).isEqualTo("HOSPITAL_ADMIN");
+    }
+
+    @Test
+    @DisplayName("D533: a CONSENT_UPDATE / PATIENT_EXPORT row naming only the hospital gets its anchor and name")
+    void d533_hospitalIdAloneAnchorsAndNamesTheRow() {
+        User receptionist = new User();
+        receptionist.setId(UUID.randomUUID());
+        UUID hospitalA = UUID.randomUUID();
+        UserRoleHospitalAssignment row = assignmentOf(receptionist, hospitalA, "Hopital A");
+        when(userRepository.findById(receptionist.getId())).thenReturn(Optional.of(receptionist));
+        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(receptionist.getId(), hospitalA))
+            .thenReturn(Optional.of(row));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(AuditEventRequestDTO.builder()
+            .userId(receptionist.getId()).hospitalId(hospitalA)
+            .eventType(AuditEventType.CONSENT_UPDATE).status(AuditStatus.SUCCESS)
+            .entityType("PATIENT_RECORD_SHARING_OPTOUT").build());
+
+        org.mockito.ArgumentCaptor<AuditEventLog> saved = org.mockito.ArgumentCaptor.forClass(AuditEventLog.class);
+        verify(auditRepository).save(saved.capture());
+        assertThat(saved.getValue().getAssignment()).isSameAs(row);
+        assertThat(saved.getValue().getHospitalName()).isEqualTo("Hopital A");
+    }
+
+    @Test
+    @DisplayName("D533 path re-verified: without a hospital the row is written unanchored, as before")
+    void d533_noHospitalStaysUnanchored() {
+        User actor = new User();
+        actor.setId(UUID.randomUUID());
+        when(userRepository.findById(actor.getId())).thenReturn(Optional.of(actor));
+        when(auditRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(auditMapper.toDto(any())).thenReturn(new AuditEventLogResponseDTO());
+
+        auditService.logEvent(buildNormalRequest(actor.getId()));
+
+        verify(assignmentRepository, never()).findFirstByUser_IdAndHospital_IdAndActiveTrue(any(), any());
     }
 
     // ─── Non-fatal behaviour ──────────────────────────────────────────

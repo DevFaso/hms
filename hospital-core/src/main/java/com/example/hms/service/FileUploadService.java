@@ -17,6 +17,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -30,6 +31,9 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class FileUploadService {
+    private static final String MSG_FILE_PATH_INVALID = "file.path.invalid";
+    private static final String MSG_FILE_EMPTY = "file.empty";
+    private static final String MSG_ATTACHMENT_KEY_INVALID = "file.attachment.keyInvalid";
     private static final String PROFILE_IMAGES_PATH = "profile-images";
 
 
@@ -107,10 +111,15 @@ public class FileUploadService {
     public static final long MAX_UPLOAD_BYTES = 10L * 1024 * 1024;
     /** Shown in refusals; must describe {@link #MAX_UPLOAD_BYTES}. */
     public static final String MAX_UPLOAD_LABEL = "10 MB";
+    private static final String EXT_JPEG = ".jpeg";
+    private static final String EXT_TIFF = ".tiff";
+    private static final String EXT_DOCX = ".docx";
+    private static final String MIME_PNG = "image/png";
+    private static final String MIME_JPEG = "image/jpeg";
     private static final long MAX_REFERRAL_ATTACHMENT_SIZE = MAX_UPLOAD_BYTES;
     private static final Set<String> ALLOWED_ATTACHMENT_EXTENSIONS = Set.of(
-        ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".txt", ".rtf", ".doc",
-        ".docx"
+        ".pdf", ".jpg", EXT_JPEG, ".png", ".gif", ".bmp", EXT_TIFF, ".txt", ".rtf", ".doc",
+        EXT_DOCX
     );
 
     /**
@@ -139,7 +148,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -191,7 +200,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
@@ -200,7 +209,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            file.getContentType(),
+            contentTypeFor(extension),
             file.getSize(),
             null
         );
@@ -218,7 +227,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         MessageDigest digest = createSha256Digest();
         try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
@@ -233,7 +242,7 @@ public class FileUploadService {
             relativePath,
             buildPublicUrl(relativePath),
             determineDisplayName(file, filename),
-            file.getContentType(),
+            contentTypeFor(extension),
             sizeBytes,
             checksum
         );
@@ -288,46 +297,103 @@ public class FileUploadService {
      */
     private void validateImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         // Check file size (max 5MB)
         long maxSize = 5L * 1024 * 1024; // 5MB
         if (file.getSize() > maxSize) {
-            throw new IllegalArgumentException("File size cannot exceed 5MB");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.tooLarge"));
         }
 
         // Check content type
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
-            throw new IllegalArgumentException("File must be an image");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.required"));
         }
 
         // Check allowed extensions
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null) {
-            throw new IllegalArgumentException("Filename cannot be null");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.name.required"));
         }
 
         String extension = getFileExtension(originalFilename).toLowerCase();
         if (!extension.matches("\\.(jpg|jpeg|png|gif|webp)$")) {
-            throw new IllegalArgumentException("Only JPG, PNG, GIF, and WebP images are allowed");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.image.unsupported"));
         }
     }
 
     private void validateAttachmentFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         if (file.getSize() > MAX_REFERRAL_ATTACHMENT_SIZE) {
-            throw new IllegalArgumentException("Attachment size cannot exceed " + MAX_UPLOAD_LABEL);
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.tooLarge", MAX_UPLOAD_LABEL));
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Unsupported attachment type");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.unsupported"));
         }
+        requireContentMatchesExtension(file, extension);
+    }
+
+    /**
+     * QA D540: the extension and the declared Content-Type are the client's
+     * claim. The first bytes must be what the extension says (a PDF starts with
+     * "%PDF-", a PNG with its signature...), and a text or RTF file must not be
+     * markup a browser would run. HTML declared as a PDF is refused.
+     */
+    static void requireContentMatchesExtension(MultipartFile file, String extension) {
+        byte[] head;
+        try (java.io.InputStream in = file.getInputStream()) {
+            head = in.readNBytes(512);
+        } catch (IOException ex) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.unreadable"), ex);
+        }
+        if (!contentMatches(head, extension)) {
+            throw new IllegalArgumentException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("file.contentMismatch", extension));
+        }
+    }
+
+    static boolean contentMatches(byte[] head, String extension) {
+        return switch (extension) {
+            case ".pdf" -> startsWith(head, "%PDF-".getBytes(StandardCharsets.US_ASCII));
+            case ".png" -> startsWith(head, new byte[] {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A});
+            case ".jpg", EXT_JPEG -> startsWith(head, new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
+            case ".gif" -> startsWith(head, "GIF87a".getBytes(StandardCharsets.US_ASCII))
+                || startsWith(head, "GIF89a".getBytes(StandardCharsets.US_ASCII));
+            case ".bmp" -> startsWith(head, "BM".getBytes(StandardCharsets.US_ASCII));
+            case EXT_TIFF -> startsWith(head, new byte[] {'I', 'I', 0x2A, 0x00})
+                || startsWith(head, new byte[] {'M', 'M', 0x00, 0x2A});
+            case ".doc" -> startsWith(head, new byte[] {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0,
+                (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1});
+            case EXT_DOCX -> startsWith(head, new byte[] {'P', 'K', 0x03, 0x04});
+            case ".rtf" -> startsWith(head, "{\\rtf".getBytes(StandardCharsets.US_ASCII));
+            case ".txt" -> !looksLikeMarkup(head);
+            default -> false;
+        };
+    }
+
+    private static boolean startsWith(byte[] head, byte[] magic) {
+        if (head.length < magic.length) {
+            return false;
+        }
+        for (int i = 0; i < magic.length; i++) {
+            if (head[i] != magic[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean looksLikeMarkup(byte[] head) {
+        String text = new String(head, StandardCharsets.UTF_8).toLowerCase(java.util.Locale.ROOT);
+        return text.contains("<html") || text.contains("<script") || text.contains("<!doctype")
+            || text.contains("<svg") || text.contains("<iframe") || text.contains("<body");
     }
 
     /**
@@ -424,7 +490,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
 
         MessageDigest digest = createSha256Digest();
@@ -440,7 +506,7 @@ public class FileUploadService {
                 relativePath,
                 buildPublicUrl(relativePath),
                 determineDisplayName(file, filename),
-                file.getContentType(),
+                contentTypeFor(extension),
                 sizeBytes,
                 checksum
         );
@@ -448,17 +514,35 @@ public class FileUploadService {
 
     private void validatePatientDocumentFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
 
         if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
-            throw new IllegalArgumentException("Document size cannot exceed " + MAX_UPLOAD_LABEL);
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.tooLarge", MAX_UPLOAD_LABEL));
         }
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Unsupported document type. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.document.unsupported"));
         }
+        requireContentMatchesExtension(file, extension);
+    }
+
+    /** QA D540: the stored type follows the checked extension, not the client's header. */
+    static String contentTypeFor(String extension) {
+        return switch (extension.toLowerCase(java.util.Locale.ROOT)) {
+            case ".pdf" -> "application/pdf";
+            case ".png" -> MIME_PNG;
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".gif" -> "image/gif";
+            case ".bmp" -> "image/bmp";
+            case EXT_TIFF -> "image/tiff";
+            case ".txt" -> "text/plain";
+            case ".rtf" -> "application/rtf";
+            case ".doc" -> "application/msword";
+            case EXT_DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            default -> "application/octet-stream";
+        };
     }
 
     public record StoredFileDescriptor(
@@ -481,10 +565,10 @@ public class FileUploadService {
     private static final long MAX_CHAT_AUDIO_SIZE = 5L * 1024 * 1024;  // 5 MB
     private static final String CHAT_ATTACHMENTS_PATH = "chat-attachments";
     private static final Set<String> ALLOWED_CHAT_PHOTO_EXTENSIONS = Set.of(
-        ".jpg", ".jpeg", ".png", ".webp"
+        ".jpg", EXT_JPEG, ".png", ".webp"
     );
     private static final Set<String> ALLOWED_CHAT_PHOTO_MIME = Set.of(
-        "image/jpeg", "image/png", "image/webp"
+        MIME_JPEG, MIME_PNG, "image/webp"
     );
     private static final Set<String> ALLOWED_CHAT_AUDIO_EXTENSIONS = Set.of(
         ".webm", ".ogg", ".oga", ".m4a", ".mp4", ".mp3", ".aac"
@@ -515,7 +599,7 @@ public class FileUploadService {
 
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
         }
         MessageDigest digest = createSha256Digest();
         try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
@@ -554,45 +638,45 @@ public class FileUploadService {
      */
     public StoredFileDescriptor resolveChatAttachment(String storageKey, ChatAttachmentKind declaredKind) throws IOException {
         if (storageKey == null || storageKey.isBlank()) {
-            throw new IllegalArgumentException("Attachment storageKey is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.keyRequired"));
         }
         if (declaredKind == null) {
-            throw new IllegalArgumentException("Attachment kind is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
         }
         if (!storageKey.startsWith(CHAT_ATTACHMENT_KEY_PREFIX)) {
-            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         String filename = storageKey.substring(CHAT_ATTACHMENT_KEY_PREFIX.length());
         if (filename.isBlank() || filename.contains("/") || filename.contains("\\") || filename.contains("..")) {
-            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         Path uploadPath = Paths.get(uploadDir, CHAT_ATTACHMENTS_PATH).toAbsolutePath().normalize();
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid chat attachment storageKey");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_ATTACHMENT_KEY_INVALID));
         }
         if (!Files.exists(filePath) || !Files.isRegularFile(filePath)) {
-            throw new IllegalArgumentException("Chat attachment not found");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.notFound"));
         }
 
         String extension = getFileExtension(filename).toLowerCase();
         ChatAttachmentKind derivedKind = deriveChatAttachmentKindFromExtension(extension);
         if (derivedKind == null) {
-            throw new IllegalArgumentException("Unsupported chat attachment extension");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.extensionUnsupported"));
         }
         if (derivedKind != declaredKind) {
-            throw new IllegalArgumentException("Declared kind does not match stored file");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindMismatch"));
         }
 
         long sizeBytes = Files.size(filePath);
         if (sizeBytes <= 0) {
-            throw new IllegalArgumentException("Chat attachment is empty");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.empty"));
         }
         if (declaredKind == ChatAttachmentKind.PHOTO && sizeBytes > MAX_CHAT_PHOTO_SIZE) {
-            throw new IllegalArgumentException("Photo cannot exceed 10MB");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.tooLarge"));
         }
         if (declaredKind == ChatAttachmentKind.AUDIO && sizeBytes > MAX_CHAT_AUDIO_SIZE) {
-            throw new IllegalArgumentException("Voice memo cannot exceed 5MB");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.voice.tooLarge"));
         }
 
         String contentType = resolveChatContentTypeFromExtension(extension);
@@ -617,8 +701,8 @@ public class FileUploadService {
 
     private String resolveChatContentTypeFromExtension(String extension) {
         return switch (extension) {
-            case ".jpg", ".jpeg" -> "image/jpeg";
-            case ".png" -> "image/png";
+            case ".jpg", EXT_JPEG -> MIME_JPEG;
+            case ".png" -> MIME_PNG;
             case ".webp" -> "image/webp";
             case ".webm" -> "audio/webm";
             case ".ogg", ".oga" -> "audio/ogg";
@@ -643,10 +727,10 @@ public class FileUploadService {
 
     private void validateChatAttachment(MultipartFile file, ChatAttachmentKind kind) {
         if (kind == null) {
-            throw new IllegalArgumentException("Attachment kind is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.attachment.kindRequired"));
         }
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
         }
         if (kind == ChatAttachmentKind.AUDIO) {
             validateChatAudio(file);
@@ -657,29 +741,29 @@ public class FileUploadService {
 
     private void validateChatPhoto(MultipartFile file) {
         if (file.getSize() > MAX_CHAT_PHOTO_SIZE) {
-            throw new IllegalArgumentException("Photo cannot exceed 10MB");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.tooLarge"));
         }
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (!ALLOWED_CHAT_PHOTO_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Unsupported photo format. Allowed: JPG, JPEG, PNG, WEBP");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.unsupported"));
         }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_CHAT_PHOTO_MIME.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Unsupported photo content-type");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.photo.contentTypeUnsupported"));
         }
     }
 
     private void validateChatAudio(MultipartFile file) {
         if (file.getSize() > MAX_CHAT_AUDIO_SIZE) {
-            throw new IllegalArgumentException("Voice memo cannot exceed 5MB");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.voice.tooLarge"));
         }
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (!ALLOWED_CHAT_AUDIO_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Unsupported audio format. Allowed: WEBM, OGG, M4A, MP4, MP3, AAC");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.audio.unsupported"));
         }
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_CHAT_AUDIO_MIME.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Unsupported audio content-type");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("file.audio.contentTypeUnsupported"));
         }
     }
 }

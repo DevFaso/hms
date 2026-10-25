@@ -35,11 +35,15 @@ import { EligibilityCheckDialogComponent } from './eligibility-check-dialog/elig
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
+import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -82,23 +86,14 @@ export class EncountersComponent implements OnInit {
    * roles; DELETE is the super-admin's.
    */
   protected readonly canCreateEncounter = computed(() =>
-    this.roleContext.hasAnyActiveRole([
-      'ROLE_SUPER_ADMIN',
-      'ROLE_RECEPTIONIST',
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ]),
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCreate')),
   );
   protected readonly canEditEncounter = computed(() =>
-    this.roleContext.hasAnyActiveRole([
-      'ROLE_SUPER_ADMIN',
-      'ROLE_DOCTOR',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ]),
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterUpdate')),
   );
-  protected readonly canDeleteEncounter = computed(() => this.roleContext.isSuperAdmin());
+  protected readonly canDeleteEncounter = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterDelete')),
+  );
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */
@@ -158,6 +153,12 @@ export class EncountersComponent implements OnInit {
   editing = signal(false);
   saving = signal(false);
   editingId = '';
+  /**
+   * The edited encounter's stored date and time, sent back unchanged when the
+   * day is not changed, so saving a note edit does not move the visit to
+   * midnight.
+   */
+  private editingOriginalDate = '';
   form: EncounterRequest = this.emptyForm();
   encounterTypes: EncounterType[] = [
     'OUTPATIENT',
@@ -209,6 +210,7 @@ export class EncountersComponent implements OnInit {
     // signal) because this branch existed before the cross-tenant
     // refactor and changing its source would alter the dropdown logic
     // below — kept as-is to avoid scope creep.
+    // rbac-inline-ok: a scope question (which hospitals to list), not a write button.
     const isSuperAdminUser = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
     const permitted = this.roleContext.permittedHospitalIds;
 
@@ -346,6 +348,7 @@ export class EncountersComponent implements OnInit {
     this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
     this.editing.set(false);
     this.editingId = '';
+    this.editingOriginalDate = '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.departments.set([]);
@@ -362,13 +365,15 @@ export class EncountersComponent implements OnInit {
   openEdit(enc: EncounterResponse): void {
     this.editing.set(true);
     this.editingId = enc.id;
+    this.editingOriginalDate = enc.encounterDate ?? '';
     this.form = {
       patientId: enc.patientId,
       staffId: enc.staffId,
       hospitalId: enc.hospitalId,
       departmentId: enc.departmentId || undefined,
       encounterType: enc.encounterType,
-      encounterDate: enc.encounterDate?.split('T')[0] || '',
+      // #948 review: the reader's day, not the UTC day of the stored time.
+      encounterDate: serverLocalDate(enc.encounterDate),
       notes: enc.notes || undefined,
     };
     // Pre-fill patient picker display with existing data
@@ -386,11 +391,34 @@ export class EncountersComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /**
+   * #948 review: the date picker gives the reader's calendar day, and the API
+   * stores encounter times on its UTC clock (the list reads them back through
+   * `serverTime`). Sent as `<day>T00:00:00`, a 24 October visit created in
+   * New York was stored as UTC midnight and listed as 23 October, 8:00 PM.
+   * Local midnight of the day is converted to UTC; an edit that keeps the day
+   * sends the stored time back as it was.
+   */
+  private encounterDatePayload(): string {
+    const day = this.form.encounterDate;
+    if (!day) {
+      return '';
+    }
+    if (
+      this.editing() &&
+      this.editingOriginalDate &&
+      serverLocalDate(this.editingOriginalDate) === day
+    ) {
+      return this.editingOriginalDate;
+    }
+    return toServerDateTime(`${day}T00:00`);
+  }
+
   submitForm(): void {
     this.saving.set(true);
     const payload = {
       ...this.form,
-      encounterDate: this.form.encounterDate ? this.form.encounterDate + 'T00:00:00' : '',
+      encounterDate: this.encounterDatePayload(),
     };
     const op = this.editing()
       ? this.encounterService.update(this.editingId, payload)
@@ -641,8 +669,7 @@ export class EncountersComponent implements OnInit {
   /** D96: a doctor picks up a patient who is waiting for one. */
   canStartEncounter(enc: EncounterResponse): boolean {
     return (
-      enc.status === 'WAITING_FOR_PHYSICIAN' &&
-      this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'])
+      enc.status === 'WAITING_FOR_PHYSICIAN' && this.auth.hasAnyRole(actionRoles('encounterStart'))
     );
   }
 

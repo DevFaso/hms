@@ -67,3 +67,43 @@ describe('StaffListComponent — specialization only for physicians (QA D195)', 
     });
   }
 });
+
+describe('StaffListComponent — one hospital-admin job title (QA D541)', () => {
+  let component: StaffListComponent;
+
+  beforeEach(() => {
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: StaffService, useValue: staffService },
+        { provide: HospitalService, useValue: {} },
+        { provide: UserService, useValue: {} },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: RoleContextService, useValue: {} },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new StaffListComponent());
+  });
+
+  it('offers "hospital admin" once', () => {
+    expect(component.jobTitles).toContain('HOSPITAL_ADMIN');
+    expect(component.jobTitles).not.toContain('HOSPITAL_ADMINISTRATOR');
+  });
+
+  it('still finds the legacy HOSPITAL_ADMINISTRATOR rows under that one filter', () => {
+    component.staff.set([
+      { id: '1', jobTitle: 'HOSPITAL_ADMINISTRATOR' },
+      { id: '2', jobTitle: 'HOSPITAL_ADMIN' },
+      { id: '3', jobTitle: 'NURSE' },
+    ] as StaffResponse[]);
+    component.jobTitleFilter = 'HOSPITAL_ADMIN';
+    component.applyFilter();
+    expect(component.filtered().map((s) => s.id)).toEqual(['1', '2']);
+  });
+});

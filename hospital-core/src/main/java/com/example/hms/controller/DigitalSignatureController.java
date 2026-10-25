@@ -50,6 +50,17 @@ public class DigitalSignatureController {
     }
 
     /**
+     * QA D627: the reports the caller can sign here, for the sign picker.
+     */
+    @GetMapping("/signable")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_SCIENTIST', 'PHARMACIST')")
+    @Operation(summary = "List the caller's unsigned signable reports",
+        description = "The caller's own reports in the acting hospital, of a signable type, not yet signed by them")
+    public ResponseEntity<List<com.example.hms.payload.dto.signature.SignableReportDTO>> listSignableReports() {
+        return ResponseEntity.ok(signatureService.listSignableReports());
+    }
+
+    /**
      * Verify a signature
      */
     @PostMapping("/verify")

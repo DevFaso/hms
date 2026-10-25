@@ -67,9 +67,13 @@
               <td>
                 <span class="type-chip">{{ typeLabelKey(doc.documentType) | translate }}</span>
               </td>
-              <td>{{ doc.collectionDate ? (doc.collectionDate | date: 'mediumDate') : '—' }}</td>
               <td>
-                {{ doc.createdAt | date: 'medium' }}
+                {{
+                  doc.collectionDate ? (doc.collectionDate | serverTime | date: 'mediumDate') : '—'
+                }}
+              </td>
+              <td>
+                {{ doc.createdAt | serverTime | date: 'medium' }}
                 @if (doc.uploadedByDisplayName) {
                   <span class="muted">
                     · {{ 'PATIENT_DOCUMENTS.BY' | translate }} {{ doc.uploadedByDisplayName }}

@@ -18,6 +18,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
@@ -251,6 +252,6 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   }
 
   todayIso(): string {
-    return new Date().toISOString().split('T')[0];
+    return localDateString();
   }
 }

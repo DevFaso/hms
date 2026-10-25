@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -102,6 +103,31 @@ class DischargeApprovalServiceImplTest {
         nurse.setId(nurseStaffId);
         nurse.setHospital(hospital);
         nurse.setAssignment(nurseAssignment);
+        // QA D503 class: the nurse who asks (and cancels) is the signed-in user.
+        actAsStaff(nurse);
+    }
+
+    private static void actAsStaff(Staff staff) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearSecurity() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void qaD503_anotherNurseCannotCancelInTheRequestingNursesName() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        actAsStaff(Staff.builder().build());
+        assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, "changed"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
     }
 
     private DischargeApprovalRequestDTO buildRequest() {
@@ -133,6 +159,7 @@ class DischargeApprovalServiceImplTest {
             .doctorStaffId(doctorStaffId)
             .doctorAssignmentId(doctorAssignmentId)
             .doctorNote("Approved for discharge")
+            .dischargeDiagnosis("Community-acquired pneumonia")
             .build();
     }
 
@@ -261,6 +288,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());
@@ -302,8 +330,41 @@ class DischargeApprovalServiceImplTest {
         assertThat(stay.getDischargingProvider()).isSameAs(doctor);
         org.mockito.InOrder order = org.mockito.Mockito.inOrder(bedAssignmentService, stayEncounters, encounterAutoCompletion);
         order.verify(bedAssignmentService).releaseBedsForPatient(patientId, hospitalId);
-        order.verify(stayEncounters).recordDischarge(stay);
+        order.verify(stayEncounters).recordDischarge(stay, "Community-acquired pneumonia");
         order.verify(encounterAutoCompletion).completeAdmissionEncounters(stay.getId());
+        // QA D760: the approval path closes the walk-in that led to the stay too.
+        order.verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(stay);
+    }
+
+    @Test
+    void approve_withoutDischargeDiagnosis_refusedAndNothingDischarged() {
+        // QA D766: the approval path discharges the stay, so like the direct
+        // discharge it refuses a blank diagnosis before touching anything.
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        Staff doctor = Staff.builder().build();
+        doctor.setId(doctorStaffId);
+        doctor.setHospital(hospital);
+        actAsStaff(doctor);
+        Role doctorRole = new Role();
+        doctorRole.setId(UUID.randomUUID());
+        doctorRole.setCode("DOCTOR");
+        UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+        doctorAssignment.setId(doctorAssignmentId);
+        doctorAssignment.setHospital(hospital);
+        doctorAssignment.setRole(doctorRole);
+        doctor.setAssignment(doctorAssignment);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        org.mockito.Mockito.lenient().when(staffRepository.findByIdAndActiveTrue(doctorStaffId)).thenReturn(Optional.of(doctor));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(doctorAssignmentId)).thenReturn(Optional.of(doctorAssignment));
+
+        var decision = buildDecision();
+        decision.setDischargeDiagnosis("   ");
+        assertThatThrownBy(() -> service.approve(approvalId, decision))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("admissionDischarge.dischargeDiagnosis.required");
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        org.mockito.Mockito.verifyNoInteractions(stayEncounters, encounterAutoCompletion, bedAssignmentService);
+        verify(registrationRepository, never()).save(any());
     }
 
     @Test
@@ -334,6 +395,7 @@ class DischargeApprovalServiceImplTest {
         Staff doctor = Staff.builder().build();
         doctor.setId(doctorStaffId);
         doctor.setHospital(hospital);
+        actAsStaff(doctor);
 
         Role doctorRole = new Role();
         doctorRole.setId(UUID.randomUUID());

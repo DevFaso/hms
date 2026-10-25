@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.model.LabOrder;
@@ -152,7 +154,12 @@ public class CriticalValueNotificationService {
         // warning (the #553 trap, and the same one the outbox enqueue had).
         // Failing loudly means the clinical write is retried, which is
         // recoverable; a critical result nobody was told about is not.
-        if (result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
+        // QA D709: a clinician is paged about a result they can read. Before
+        // release the result is the laboratory's draft (GET answers 404 to
+        // the ordering side), so the page waits for the release, which calls
+        // this again; the stamp is not written, so the sweep does not chase it.
+        if (!result.isReleased()
+            || result.getCriticalNotifiedAt() != null || !isCritical(result, severityFlag)) {
             return;
         }
         String username = resolveOrderingUsername(result);
@@ -163,8 +170,10 @@ public class CriticalValueNotificationService {
             log.warn("Critical lab result {} has no resolvable ordering user; skipping notification",
                 result.getId());
         } else {
-            String message = buildMessage(result, false);
-            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            NotificationText text = buildText(result, false);
+            notificationService.createNotification(text.key(), text.args(), username, NOTIFICATION_TYPE,
+                result.getId());
+            String message = text.render(messageSource, NotificationLocales.STAFF);
             // The gateway call waits for the commit: a hung gateway must
             // not hold the clinical transaction's row locks, and an SMS
             // for a result that then rolled back would be worse than a
@@ -277,10 +286,12 @@ public class CriticalValueNotificationService {
 
     private void escalateOne(LabResult result) {
         int round = result.getCriticalEscalationLevel() + 1;
-        String message = buildMessage(result, true);
+        NotificationText text = buildText(result, true);
+        String message = text.render(messageSource, NotificationLocales.STAFF);
 
         for (String recipient : escalationRecipients(result, round)) {
-            notificationService.createNotification(message, recipient, ESCALATION_TYPE);
+            notificationService.createNotification(text.key(), text.args(), recipient, ESCALATION_TYPE,
+                result.getId());
         }
         // SMS once per round, not once per recipient: the transport targets the
         // result's chart context, so fanning it out would send the same text
@@ -399,7 +410,11 @@ public class CriticalValueNotificationService {
         result.setAcknowledgedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         result.setAcknowledgedByUserId(byUserId);
         result.setAcknowledgedByDisplay(byDisplay);
-        return labResultRepository.save(result);
+        LabResult saved = labResultRepository.save(result);
+        // QA D726: the alert is answered, so its notifications (to the
+        // orderer and to every escalation recipient) no longer read as unread.
+        notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
+        return saved;
     }
 
     /**
@@ -505,21 +520,27 @@ public class CriticalValueNotificationService {
      * administrators) — never by the caller, and a sweep has no request
      * locale anyway — so the body is rendered in the staff locale.
      */
-    private String buildMessage(LabResult result, boolean escalation) {
+    private NotificationText buildText(LabResult result, boolean escalation) {
         java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
-        String testName = order != null && order.getLabTestDefinition() != null
-            ? order.getLabTestDefinition().getName()
-            : messageSource.getMessage("lab.test.fallback", null, locale);
-        String patientName = order != null && order.getPatient() != null
+        // QA D665: keyed so the reader's language is used; QA D648: an order
+        // whose definition was deleted names a deleted test.
+        Object testName;
+        if (order == null) {
+            testName = NotificationLocalizer.key("lab.test.fallback");
+        } else if (order.getLabTestDefinition() != null) {
+            testName = order.getLabTestDefinition().getName();
+        } else {
+            testName = NotificationLocalizer.key(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
+        }
+        Object patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
-            : messageSource.getMessage("patient.fallback.generic", null, locale);
+            : NotificationLocalizer.key("patient.fallback.generic");
         String value = localizedValue(result.getResultValue(), locale)
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
-        return messageSource.getMessage(
+        return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
-            new Object[]{testName, value, patientName},
-            locale);
+            testName, value, patientName);
     }
 
     /**

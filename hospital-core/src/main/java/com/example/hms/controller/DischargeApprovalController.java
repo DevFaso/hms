@@ -62,7 +62,8 @@ public class DischargeApprovalController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<DischargeApprovalResponseDTO> cancel(
         @PathVariable UUID id,
-        @RequestParam UUID staffId,
+        // QA D503 class: optional and only cross-checked; the caller is the session.
+        @RequestParam(required = false) UUID staffId,
         @RequestParam(required = false) String reason
     ) {
         return ResponseEntity.ok(service.cancel(id, staffId, reason));

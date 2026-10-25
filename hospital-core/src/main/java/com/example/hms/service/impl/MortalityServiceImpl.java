@@ -108,6 +108,7 @@ public class MortalityServiceImpl implements MortalityService {
     private final PatientChartAccess patientChartAccess;
     private final MortalityMapper mapper;
     private final RoleValidator roleValidator;
+    private final com.example.hms.service.BedAssignmentService bedAssignmentService;
 
     @Override
     public RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request) {
@@ -301,6 +302,10 @@ public class MortalityServiceImpl implements MortalityService {
             // written it — the MLLP visit projection only reads it as an
             // exclusion. This is its first writer.
             admission.setStatus(AdmissionStatus.DECEASED);
+            // QA D515 (#922 review): death closes the stay like any discharge —
+            // the bed is freed and a pending transfer is cancelled with its
+            // reserved destination bed handed back.
+            bedAssignmentService.releaseBed(admission);
             admissionRepository.save(admission);
             if (deathRecord.getAdmissionId() == null) {
                 deathRecord.setAdmissionId(admission.getId());

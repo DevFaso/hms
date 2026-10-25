@@ -13,6 +13,7 @@ import {
   CredentialHealth,
   SuperAdminGovernanceService,
 } from '../services/super-admin-governance.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * Credential health overview (SUPER_ADMIN). Read-only in v1 — the MFA and
@@ -21,7 +22,7 @@ import {
 @Component({
   selector: 'app-gov-credentials-tab',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './credentials-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

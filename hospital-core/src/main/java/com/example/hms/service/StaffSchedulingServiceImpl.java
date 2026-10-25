@@ -2,6 +2,9 @@ package com.example.hms.service;
 
 import com.example.hms.enums.StaffLeaveStatus;
 import com.example.hms.enums.StaffShiftStatus;
+import com.example.hms.enums.StaffShiftType;
+import com.example.hms.security.tenant.ActingScope;
+import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.StaffSchedulingMapper;
@@ -54,10 +57,15 @@ import java.util.UUID;
 @Slf4j
 public class StaffSchedulingServiceImpl implements StaffSchedulingService {
 
+    private static final String SHIFT_TIME_RANGE_INVALID_KEY = "schedule.shift.timeRange.invalid";
+
     private static final String DATE_RANGE_INVALID_KEY = "schedule.dateRange.invalid";
     private static final Set<StaffLeaveStatus> ACTIVE_LEAVE_STATUSES =
         EnumSet.of(StaffLeaveStatus.PENDING, StaffLeaveStatus.APPROVED);
 
+    /** QA D635: the shift types that may end on the next day. */
+    private static final Set<StaffShiftType> CROSS_MIDNIGHT_TYPES =
+        EnumSet.of(StaffShiftType.EVENING, StaffShiftType.NIGHT, StaffShiftType.ON_CALL, StaffShiftType.FLEX);
     private static final Set<StaffShiftStatus> MUTABLE_SHIFT_STATUSES =
         EnumSet.of(StaffShiftStatus.SCHEDULED);
 
@@ -112,8 +120,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
         }
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", effectiveLocale));
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, effectiveLocale));
         }
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), effectiveLocale);
 
         Staff staff = findStaff(dto.staffId(), effectiveLocale);
         Hospital hospital = findHospital(dto.hospitalId(), effectiveLocale);
@@ -212,6 +221,13 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     public StaffShiftResponseDTO updateShift(UUID shiftId, StaffShiftRequestDTO dto, Locale locale) {
         Locale effectiveLocale = safeLocale(locale);
         StaffShift existing = loadShift(shiftId, effectiveLocale);
+        // QA D602: the owner of the shift decides who may edit it, not the body.
+        // A hospital B admin naming B in the body moved a hospital A shift into B.
+        ensureSchedulerPermissions(existing.getStaff(), existing.getHospital().getId(),
+            existing.getDepartment(), effectiveLocale);
+        if (!Objects.equals(dto.hospitalId(), existing.getHospital().getId())) {
+            throw new BusinessRuleException(message("schedule.shift.hospital.immutable", effectiveLocale));
+        }
         ensureShiftMutable(existing, effectiveLocale);
 
         Staff staff = findStaff(dto.staffId(), effectiveLocale);
@@ -426,14 +442,30 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         return leaves.stream().map(mapper::toLeaveDto).toList();
     }
 
+    /**
+     * QA D602: a shift is loaded by id AND the acting hospital. A row of another
+     * hospital is a 404, exactly like a missing one, so its existence is not
+     * confirmed. Global view (verified super-admin) reaches every hospital.
+     */
     private StaffShift loadShift(UUID id, Locale locale) {
         return shiftRepository.findDetailedById(id)
+            .filter(shift -> hospitalInScope(shift.getHospital()))
             .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.shift.notFound"));
     }
 
     private StaffLeaveRequest loadLeave(UUID id, Locale locale) {
         return leaveRepository.findDetailedById(id)
+            .filter(leave -> hospitalInScope(leave.getHospital()))
             .orElseThrow(() -> ResourceNotFoundException.inLocale(locale, "schedule.leave.notFound"));
+    }
+
+    private static boolean hospitalInScope(Hospital owner) {
+        ActingScope scope = ActingScopeResolver.currentScope();
+        if (scope instanceof ActingScope.Global) {
+            return true;
+        }
+        return scope instanceof ActingScope.Pinned pinned
+            && owner != null && pinned.hospitalId().equals(owner.getId());
     }
 
     private void ensureShiftMutable(StaffShift shift, Locale locale) {
@@ -457,7 +489,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                 return;
             }
         }
-        throw new BusinessRuleException(message("schedule.staff.permissionDenied", locale));
+        // QA D541: a permission refusal is a 403, as on every other cross-hospital write,
+        // not a 400 that reads like a validation error.
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(message("schedule.staff.permissionDenied", locale));
     }
 
     private void ensureLeaveRequestPermissions(Staff staff,
@@ -492,8 +526,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         }
         // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
         if (dto.endTime().equals(dto.startTime())) {
-            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
         }
+        ensureCrossMidnightAllowed(dto.shiftType(), dto.startTime(), dto.endTime(), locale);
         // QA D282: two concurrent submits both passed the check below and both
         // saved. Serialise on the staff row first; the lock lasts to commit.
         staffRepository.findLockedById(staff.getId());
@@ -569,6 +604,16 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             if (overlaps) {
                 throw new BusinessRuleException(message("schedule.shift.leaveConflict", locale));
             }
+        }
+    }
+
+    /**
+     * QA D635: only shift types that can run past midnight may end before they
+     * start. A MORNING shift from 16:00 to 08:00 is a typo, not a night shift.
+     */
+    private void ensureCrossMidnightAllowed(StaffShiftType type, LocalTime start, LocalTime end, Locale locale) {
+        if (isCrossMidnight(start, end) && type != null && !CROSS_MIDNIGHT_TYPES.contains(type)) {
+            throw new BusinessRuleException(message(SHIFT_TIME_RANGE_INVALID_KEY, locale));
         }
     }
 

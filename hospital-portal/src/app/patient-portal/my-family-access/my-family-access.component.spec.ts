@@ -139,6 +139,32 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     expect(toast.success).toHaveBeenCalled();
   });
 
+  // #948 review: the expiry is checked against the server's UTC clock and
+  // listed back through serverTime, so the end of the picked day is sent as
+  // the reader's 23:59:59 on the UTC clock, not as the wall clock.
+  it('sends the expiry as the end of the reader day on the UTC clock', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(of(received));
+    component.form = {
+      proxyUsername: 'caregiver.sam',
+      relationship: 'CAREGIVER',
+      permissions: 'VIEW_APPOINTMENTS',
+    };
+    component.expiresOn = '2026-10-24';
+    component.grantAccess();
+
+    const endOfDay = new Date(2026, 9, 24, 23, 59, 59);
+    const sent = portal.grantProxy.calls.mostRecent().args[0];
+    expect(sent.expiresAt).toBe(endOfDay.toISOString().slice(0, 19));
+    expect(new Date(`${sent.expiresAt}Z`).getTime()).toBe(endOfDay.getTime());
+  });
+
+  it('offers today in the reader zone as the earliest expiry', () => {
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    expect(component.minExpiry).toBe(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
+  });
+
   it('links each received grant to its proxy data viewer', () => {
     fixture.detectChanges();
     component.switchToReceived();

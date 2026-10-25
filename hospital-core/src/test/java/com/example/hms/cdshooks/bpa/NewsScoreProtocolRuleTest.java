@@ -133,4 +133,42 @@ class NewsScoreProtocolRuleTest {
             List.of(deterioratingVitals(LocalDateTime.now().minusHours(1), "NURSE_STATION")))))
             .isEmpty();
     }
+
+    @Test
+    void d518_noAdultNews2CardForAFiveYearOld() {
+        // QA D518: the adult NEWS2 card fired "high risk" for a healthy
+        // 5-year-old (a normal child heart and breathing rate).
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS"))
+            .thenReturn(java.util.Optional.of(activeProtocol()));
+        Patient child = Patient.builder().dateOfBirth(java.time.LocalDate.now().minusYears(5)).build();
+        child.setId(UUID.randomUUID());
+        PatientVitalSign childVitals = PatientVitalSign.builder()
+            .respiratoryRateBpm(26).heartRateBpm(118).spo2Percent(98).onOxygen(false)
+            .temperatureCelsius(37.0).systolicBpMmHg(95)
+            .consciousnessLevel(ConsciousnessLevel.ALERT)
+            .recordedAt(LocalDateTime.now().minusMinutes(10)).source("NURSE_STATION").patient(child)
+            .build();
+
+        List<CdsCard> cards = rule.evaluate(
+            new BpaRuleContext(child, UUID.randomUUID(), List.of(childVitals), List.of(), List.of()));
+
+        assertThat(cards).isEmpty();
+    }
+
+    @Test
+    void d518_anAdultWithTheSameVitalsStillGetsTheCard() {
+        when(repo.findByProtocolCodeAndActiveTrue("NEWS2_EWS"))
+            .thenReturn(java.util.Optional.of(activeProtocol()));
+        Patient adult = Patient.builder().dateOfBirth(java.time.LocalDate.now().minusYears(40)).build();
+        adult.setId(UUID.randomUUID());
+        PatientVitalSign vitals = PatientVitalSign.builder()
+            .respiratoryRateBpm(26).heartRateBpm(118).spo2Percent(98).onOxygen(false)
+            .temperatureCelsius(37.0).systolicBpMmHg(95)
+            .consciousnessLevel(ConsciousnessLevel.ALERT)
+            .recordedAt(LocalDateTime.now().minusMinutes(10)).source("NURSE_STATION").patient(adult)
+            .build();
+
+        assertThat(rule.evaluate(
+            new BpaRuleContext(adult, UUID.randomUUID(), List.of(vitals), List.of(), List.of()))).hasSize(1);
+    }
 }

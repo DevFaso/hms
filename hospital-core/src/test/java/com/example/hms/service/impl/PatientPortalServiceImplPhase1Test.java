@@ -123,6 +123,8 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -416,8 +418,15 @@ class PatientPortalServiceImplPhase1Test {
 
             when(labResultService.getLabResultsForPatientPortal(eq(patientId), isNull(), eq(5)))
                     .thenReturn(List.of(new PatientLabResultResponseDTO()));
-            when(medicationService.getMedicationsForPatientPortal(eq(patientId), isNull(), eq(10)))
-                    .thenReturn(List.of(new PatientMedicationResponseDTO()));
+            PatientMedicationResponseDTO running = new PatientMedicationResponseDTO();
+            running.setStatus("ACTIVE");
+            PatientMedicationResponseDTO finished = new PatientMedicationResponseDTO();
+            finished.setStatus("COMPLETED");
+            PatientMedicationResponseDTO stopped = new PatientMedicationResponseDTO();
+            stopped.setStatus("DISCONTINUED");
+            // QA D720: "current medications" are the running courses only.
+            when(medicationService.getMedicationsForPatientPortal(eq(patientId), isNull(), eq(100)))
+                    .thenReturn(List.of(finished, running, stopped));
             when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5))
                     .thenReturn(List.of(new PatientVitalSignResponseDTO()));
             when(immunizationService.getImmunizationsByPatientId(patientId))
@@ -429,7 +438,7 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getProfile()).isNotNull();
             assertThat(result.getProfile().getId()).isEqualTo(patientId);
             assertThat(result.getRecentLabResults()).hasSize(1);
-            assertThat(result.getCurrentMedications()).hasSize(1);
+            assertThat(result.getCurrentMedications()).containsExactly(running);
             assertThat(result.getRecentVitals()).hasSize(1);
             assertThat(result.getImmunizations()).hasSize(1);
             assertThat(result.getAllergies()).containsExactly("Penicillin", "Aspirin");
@@ -610,6 +619,26 @@ class PatientPortalServiceImplPhase1Test {
 
             assertThat(result).isEqualTo(expected);
             verify(appointmentService).getAppointmentsByPatientId(patientId, Locale.ENGLISH, "patient.john");
+        }
+
+        @Test
+        @DisplayName("QA D642: returns the appointments soonest first, by date then start time")
+        void getMyAppointments_inDateOrder() {
+            stubPatientResolution();
+            when(auth.getName()).thenReturn("patient.john");
+            AppointmentResponseDTO oct30 = new AppointmentResponseDTO();
+            oct30.setAppointmentDate(java.time.LocalDate.of(2026, 10, 30));
+            oct30.setStartTime(java.time.LocalTime.of(9, 0));
+            AppointmentResponseDTO oct28Late = new AppointmentResponseDTO();
+            oct28Late.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28Late.setStartTime(java.time.LocalTime.of(14, 0));
+            AppointmentResponseDTO oct28 = new AppointmentResponseDTO();
+            oct28.setAppointmentDate(java.time.LocalDate.of(2026, 10, 28));
+            oct28.setStartTime(java.time.LocalTime.of(8, 30));
+            when(appointmentService.getAppointmentsByPatientId(patientId, Locale.FRENCH, "patient.john"))
+                    .thenReturn(List.of(oct30, oct28Late, oct28));
+
+            assertThat(service.getMyAppointments(auth, Locale.FRENCH)).containsExactly(oct28, oct28Late, oct30);
         }
     }
 

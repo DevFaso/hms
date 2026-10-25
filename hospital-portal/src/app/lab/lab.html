@@ -111,7 +111,6 @@
               </td>
               <td>
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
-                <div class="cell-secondary">{{ order.patientEmail || '' }}</div>
               </td>
               <td>
                 <div class="cell-primary">{{ order.labTestName || '—' }}</div>
@@ -134,7 +133,9 @@
                 }
               </td>
               <td class="date-cell">
-                {{ order.orderDatetime ? (order.orderDatetime | date: 'medium') : '—' }}
+                {{
+                  order.orderDatetime ? (order.orderDatetime | serverTime | date: 'medium') : '—'
+                }}
               </td>
               <td>
                 <span class="status-badge" [class]="getStatusClass(order.status)">{{
@@ -150,7 +151,7 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (!isIncomingExternal(order)) {
+                  @if (canEditOrder() && !isIncomingExternal(order)) {
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
@@ -168,7 +169,7 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
-                  @if (!isIncomingExternal(order)) {
+                  @if (canDeleteOrder() && !isIncomingExternal(order) && !hasResultsStage(order)) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
@@ -216,10 +217,6 @@
               ><span class="field-value">{{ o.patientFullName }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">{{ 'COMMON.EMAIL' | translate }}</span
-              ><span class="field-value">{{ o.patientEmail || '—' }}</span>
-            </div>
-            <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ actingHospitalName(o) }}</span>
             </div>
@@ -235,7 +232,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
-              ><span class="field-value">{{ o.orderDatetime | date: 'medium' }}</span>
+              ><span class="field-value">{{ o.orderDatetime | serverTime | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
@@ -624,8 +621,12 @@
                 @for (s of specimens(); track s.id) {
                   <tr>
                     <td>{{ s.accessionNumber || '—' }}</td>
-                    <td>{{ s.specimenType || '—' }}</td>
-                    <td>{{ s.collectedAt ? (s.collectedAt | date: 'short') : '—' }}</td>
+                    <td>
+                      {{ s.specimenType ? (s.specimenType | enumLabel: 'specimenType') : '—' }}
+                    </td>
+                    <td>
+                      {{ s.collectedAt ? (s.collectedAt | serverTime | date: 'short') : '—' }}
+                    </td>
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>
                       <span [class]="getSpecimenStatusClass(s.status)">{{

@@ -21,6 +21,7 @@ import {
   StockTransactionResponse,
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * P-06: stock-adjustment uses a single generic form across five transaction types,
@@ -52,7 +53,7 @@ const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-stock-adjustment',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './stock-adjustment.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './stock-adjustment.scss',
@@ -187,9 +188,9 @@ export class StockAdjustmentComponent implements OnInit {
     return this.inventoryItems().find((i) => i.id === this.form.inventoryItemId);
   }
 
-  /** QA D157: a manual movement of a controlled substance (anything but a receipt) is witnessed. */
+  /** QA D157/D655: every movement of a controlled substance, a receipt included, is witnessed. */
   needsWitness(): boolean {
-    return !!this.txType() && !this.isReceipt() && !!this.selectedItem()?.controlled;
+    return !!this.txType() && !!this.selectedItem()?.controlled;
   }
 
   /**
@@ -291,6 +292,7 @@ export class StockAdjustmentComponent implements OnInit {
           unitCost: this.receiptCostPerUnit ?? undefined,
           receivedDate: this.today(),
           notes: this.receiptPoReference.trim() || undefined,
+          witnessedBy: this.form.witnessedBy,
         })
       : this.svc.recordTransaction(this.form);
     request$.subscribe({
@@ -328,7 +330,7 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.isReceipt() && !this.receiptExpiryDate) {
       return 'PHARMACY.RECEIPT_EXPIRY_REQUIRED';
     }
-    if (this.isReceipt() && this.receiptExpiryDate < this.today()) {
+    if (this.isReceipt() && this.receiptExpiryDate <= this.today()) {
       return 'PHARMACY.RECEIPT_LOT_EXPIRED';
     }
     if (!this.isReceipt() && this.itemLots().length > 0 && !this.form.stockLotId) {

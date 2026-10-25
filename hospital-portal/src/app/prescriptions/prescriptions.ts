@@ -40,6 +40,9 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { AuthService } from '../auth/auth.service';
+import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -135,6 +138,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -171,8 +175,17 @@ export class PrescriptionsComponent implements OnInit {
    * DELETE is the super-admin's hard delete.
    */
   protected readonly canWrite = computed(() =>
-    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionUpdate')),
   );
+  /** QA D611/D677: POST /sign and /cosign admit the doctor only. */
+  protected readonly canSignRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionSign')),
+  );
+  protected readonly canCosignRole = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('prescriptionCosign')),
+  );
+  /** QA D677: a refused row action, shown translated inside the page. */
+  readonly actionError = signal('');
   protected readonly canHardDelete = computed(() => this.roleContext.isSuperAdmin());
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
@@ -347,13 +360,71 @@ export class PrescriptionsComponent implements OnInit {
    */
   editingWithdrawn = signal(false);
 
+  /**
+   * QA D660 (user decision): a signed prescription keeps its Edit action, but
+   * the only change it accepts is a withdrawal (Cancelled or Discontinued)
+   * with a reason. Every other field is read-only; the server refuses them.
+   */
+  editingSigned = signal(false);
+
+  /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
+  editingPrescriberName = signal('');
+
+  /**
+   * Roles that may withdraw a signed prescription someone else wrote (QA
+   * D670, coordinator decision): another doctor of the hospital. A nurse or
+   * a midwife may withdraw only an order they wrote themselves; admins never
+   * reach PUT /prescriptions (E9 #67).
+   */
+  private static readonly SIGNED_WITHDRAW_ROLES = ['ROLE_DOCTOR'];
+
+  /** QA D678: the statuses where the medication has left the pharmacy. */
+  private static readonly DISPENSED_STATUSES: readonly string[] = [
+    'DISPENSED',
+    'PARTNER_DISPENSED',
+  ];
+
+  /**
+   * QA D611/D677: the backend signs only for the prescription's own
+   * prescriber. When the caller's staff row is known and the row names
+   * another prescriber, the button would 403.
+   */
+  private isOtherPrescriber(p: PrescriptionResponse): boolean {
+    const own = this.ownPrescriberStaffId();
+    return !!own && !!p.staffId && p.staffId !== own;
+  }
+
+  /**
+   * QA D660/D670: the Edit action a row offers. A withdrawn order is
+   * read-only, every field; a signed one only to whoever may withdraw it.
+   */
+  canEditRow(p: PrescriptionResponse): boolean {
+    if (isWithdrawnStatus(p.status)) return false;
+    // QA D678: a dispensed order is history; every PUT there answers 400.
+    if (PrescriptionsComponent.DISPENSED_STATUSES.includes(p.status)) return false;
+    const own = this.ownPrescriberStaffId();
+    if (p.status !== 'SIGNED') {
+      // QA D611/D677: a DRAFT or PENDING_SIGNATURE order is rewritten only by
+      // its own prescriber. The server keeps the prescriber of record and
+      // refuses anyone else ("the prescriber must be you"), another doctor
+      // included, so a nurse or midwife offered Edit on a doctor's draft
+      // failed every save. An order with no prescriber on file stays open.
+      if (!this.canWrite()) return false;
+      return !p.staffId || (!!own && p.staffId === own);
+    }
+    if (own && p.staffId === own) return true;
+    return expandRoleEquivalents(this.roleContext.activeRoles).some((r) =>
+      PrescriptionsComponent.SIGNED_WITHDRAW_ROLES.includes(r),
+    );
+  }
+
   statusOptions(): { value: string; labelKey: string }[] {
     if (!this.editing()) {
       // A new order cannot be born withdrawn: offering Cancelled or
       // Discontinued at creation recorded an order nobody ever placed (D129).
       return this.prescriptionStatuses.filter((s) => !isWithdrawnStatus(s.value));
     }
-    if (!this.editingWithdrawn()) {
+    if (!this.editingWithdrawn() && !this.editingSigned()) {
       return this.prescriptionStatuses;
     }
     return this.prescriptionStatuses.filter((s) => isWithdrawnStatus(s.value));
@@ -370,6 +441,8 @@ export class PrescriptionsComponent implements OnInit {
       frequency: '',
       route: 'PO',
       duration: '',
+      quantity: null,
+      quantityUnit: '',
       notes: '',
       status: 'DRAFT',
     };
@@ -430,7 +503,12 @@ export class PrescriptionsComponent implements OnInit {
       next: (list) => {
         if (this.form.patientId !== patientId) return;
         this.patientEncounters.set(
-          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+          // QA D739 (r10 re-test 3): a completed or cancelled encounter
+          // cannot take a new order (the server refuses it), so it is not
+          // offered. An edit keeps its own encounter as "linked encounter".
+          list
+            .filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED')
+            .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },
       error: () => this.patientEncounters.set([]),
@@ -444,7 +522,7 @@ export class PrescriptionsComponent implements OnInit {
   /** QA D177: the date and department of an encounter, for the picker (the type is a pipe). */
   encounterLabel(e: EncounterResponse): string {
     const date = e.encounterDate
-      ? new Date(e.encounterDate).toLocaleDateString(currentLocale())
+      ? serverInstant(e.encounterDate).toLocaleDateString(currentLocale())
       : '';
     return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
@@ -468,12 +546,17 @@ export class PrescriptionsComponent implements OnInit {
     this.editing.set(false);
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
+    this.editingSigned.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
+    this.formError.set('');
     this.showModal.set(true);
   }
 
   openEdit(p: PrescriptionResponse): void {
+    // QA D660: a withdrawn order is read-only, every field; the server
+    // refuses any edit of it, so no form is opened on one.
+    if (isWithdrawnStatus(p.status)) return;
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -483,8 +566,11 @@ export class PrescriptionsComponent implements OnInit {
       frequency: p.frequency ?? '',
       route: p.route ?? '',
       duration: p.duration ?? '',
+      quantity: p.quantity ?? null,
+      quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
+      takeHome: !!p.takeHome,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -497,15 +583,48 @@ export class PrescriptionsComponent implements OnInit {
     this.editing.set(true);
     this.editingId.set(p.id);
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
+    const signed = p.status === 'SIGNED';
+    this.editingSigned.set(signed);
+    this.editingPrescriberName.set(p.staffFullName ?? '');
+    if (signed) {
+      // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
+      this.form.status = undefined;
+      this.form.withdrawalReason = '';
+    }
+    this.formError.set('');
     this.showModal.set(true);
+  }
+
+  /** QA D660: what the Save button waits for on a signed prescription. */
+  signedWithdrawalIncomplete(): boolean {
+    return (
+      this.editingSigned() &&
+      (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())
+    );
   }
 
   closeModal(): void {
     this.showModal.set(false);
+    this.formError.set('');
     this.resetCdsState();
   }
 
+  /**
+   * QA D660: the server's refusal of a save, shown inside the open modal in
+   * the caller's language (a 403 used to replace the page with /error/403
+   * and lose the form; a 400 showed only in a toast).
+   */
+  protected readonly formError = signal('');
+
   submitForm(): void {
+    this.formError.set('');
+    // QA D706: a new prescription states the quantity to hand over; the
+    // pharmacy caps the dispense at it (the server refuses it too).
+    const qty = this.form.quantity;
+    if (!this.editing() && (qty == null || !(Number(qty) > 0))) {
+      this.formError.set(this.translate.instant('PRESCRIPTIONS.PRESCRIBED_QUANTITY_REQUIRED'));
+      return;
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.prescriptionService.update(this.editingId()!, this.form)
@@ -543,11 +662,13 @@ export class PrescriptionsComponent implements OnInit {
           );
         } else {
           // The server's reason (e.g. "the prescriber must be you", QA D176)
-          // in the caller's language; the generic text only as a fallback.
-          this.toast.error(
+          // in the caller's language; a 403 says "not allowed", anything else
+          // the generic text, only as a fallback.
+          const reason =
             this.extractErrorMessage(err) ||
-              this.translate.instant('PRESCRIPTIONS.TOAST.SAVE_FAILED'),
-          );
+            this.refusalText(err, 'PRESCRIPTIONS.TOAST.SAVE_FAILED');
+          this.formError.set(reason);
+          this.toast.error(reason);
         }
         this.saving.set(false);
       },
@@ -637,6 +758,7 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
+    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 
@@ -667,6 +789,9 @@ export class PrescriptionsComponent implements OnInit {
    * doesn't carry enough to decide it here, so the refusal surfaces verbatim.
    */
   canCosign(p: PrescriptionResponse): boolean {
+    if (!this.canCosignRole()) return false;
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return false;
     return (
       !!p.requiresCosign &&
       !p.cosignedAt &&
@@ -675,6 +800,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   cosignPrescription(p: PrescriptionResponse): void {
+    this.actionError.set('');
     this.signingId.set(p.id);
     this.prescriptionService.cosign(p.id).subscribe({
       next: () => {
@@ -684,7 +810,9 @@ export class PrescriptionsComponent implements OnInit {
       },
       error: (err: unknown) => {
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED'));
+        const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.COSIGN_FAILED');
+        this.actionError.set(text);
+        this.toast.error(text);
         this.signingId.set(null);
       },
     });
@@ -762,6 +890,7 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   signPrescription(p: PrescriptionResponse): void {
+    this.actionError.set('');
     this.signingId.set(p.id);
     this.prescriptionService.sign(p.id).subscribe({
       next: () => {
@@ -775,7 +904,9 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
-        this.toast.error(msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED'));
+        const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.actionError.set(text);
+        this.toast.error(text);
         this.signingId.set(null);
       },
     });
@@ -1524,7 +1655,8 @@ export class PrescriptionsComponent implements OnInit {
 function eventTime(primary?: string | null, fallback?: string | null): number {
   const raw = primary ?? fallback;
   if (!raw) return 0;
-  const parsed = Date.parse(raw);
+  // #948 review: a zone-less UTC server time (daysWaiting counts from it).
+  const parsed = serverInstant(raw).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 

@@ -33,7 +33,9 @@ public class LabTestDefinitionMapper {
             .loincDisplay(dto.getLoincDisplay())
             .preparationInstructions(dto.getPreparationInstructions())
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
-            .active(dto.getActive() == null || dto.getActive())
+            // QA D535: a new definition is a DRAFT, and a DRAFT is not active;
+            // only the approval workflow's ACTIVATE step switches it on.
+            .active(false)
             .assignment(assignment)
             .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
             .build();
@@ -54,10 +56,14 @@ public class LabTestDefinitionMapper {
                 .sampleType(entity.getSampleType())
                 .preparationInstructions(entity.getPreparationInstructions())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
-                .active(entity.isActive())
+                // QA D535: "active" means orderable - a DRAFT (or any status
+                // short of ACTIVE) is never reported active, even for rows
+                // created before new definitions started inactive.
+                .active(entity.isOrderable())
                 .approvalStatus(entity.getApprovalStatus() != null ? entity.getApprovalStatus().name() : null)
                 .approvedById(entity.getApprovedById())
                 .approvedAt(entity.getApprovedAt())
+                .submittedById(entity.getSubmittedById())
                 .reviewedById(entity.getReviewedById())
                 .reviewedAt(entity.getReviewedAt())
                 .rejectionReason(entity.getRejectionReason())

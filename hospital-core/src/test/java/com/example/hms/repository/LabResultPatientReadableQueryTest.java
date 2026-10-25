@@ -256,15 +256,31 @@ class LabResultPatientReadableQueryTest {
         UUID sentinel = new UUID(0L, 0L);
 
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, true, sentinel,
-            Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            true, sentinel, Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactlyInAnyOrder(orderedAtB.getId(), otherPatientAtB.getId());
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), true, false,
-            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            patient.getId(), true, patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactly(orderedAtB.getId());
         // The laboratory still reads its unreleased rows, filtered by patient.
         assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, false,
-            patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            patient.getId(), true, patient.getId(), Pageable.unpaged()).getContent()).extracting(LabResult::getId)
             .containsExactlyInAnyOrder(orderedAtB.getId(), performedAtBForA.getId(), otherTestAtB.getId());
+    }
+
+    @Test
+    @DisplayName("QA D781: GET /lab-results?labOrderId= lists that order's results only, in both scopes")
+    void labOrderFilterNarrowsTheStaffList() {
+        UUID sentinel = new UUID(0L, 0L);
+        UUID orderId = orderedAtB.getLabOrder().getId();
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, true, sentinel,
+            false, orderId, Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactly(orderedAtB.getId());
+        assertThat(labResultRepository.findAllForReader(false, true, sentinel, false, orderId,
+            Pageable.unpaged()).getContent()).extracting(LabResult::getId)
+            .containsExactly(orderedAtB.getId());
+        // An unknown order lists nothing rather than the whole hospital.
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, true, sentinel,
+            false, UUID.randomUUID(), Pageable.unpaged()).getContent()).isEmpty();
     }
 
     @Test
@@ -279,6 +295,54 @@ class LabResultPatientReadableQueryTest {
         HospitalContextHolder.clear();
 
         assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(atA.getId(), floor)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("QA D601: a refused delete of an ACTIVE definition leaves its released critical result in the chart and the critical list")
+    void refusedDefinitionDeleteKeepsReleasedCriticalResult() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        hemoglobin.setHospital(hospitalB);
+        hemoglobin.setApprovalStatus(com.example.hms.enums.LabTestDefinitionApprovalStatus.ACTIVE);
+        labTestDefinitionRepository.save(hemoglobin);
+        orderedAtB.setReleased(true);
+        orderedAtB.setCriticalNotifiedAt(LocalDateTime.now());
+        labResultRepository.saveAndFlush(orderedAtB);
+        HospitalContextHolder.clear();
+
+        User manager = User.builder().username("labmgr").build();
+        manager.setId(UUID.randomUUID());
+        UserRepository users = org.mockito.Mockito.mock(UserRepository.class);
+        org.mockito.Mockito.when(users.findByUsername("labmgr")).thenReturn(java.util.Optional.of(manager));
+        UserRoleHospitalAssignmentRepository assignments =
+            org.mockito.Mockito.mock(UserRoleHospitalAssignmentRepository.class);
+        org.mockito.Mockito.when(assignments.existsActiveByUserAndHospitalAndAnyRoleCode(
+                org.mockito.ArgumentMatchers.eq(manager.getId()), org.mockito.ArgumentMatchers.eq(hospitalB.getId()),
+                org.mockito.ArgumentMatchers.any()))
+            .thenReturn(true);
+        com.example.hms.service.LabTestDefinitionServiceImpl service =
+            new com.example.hms.service.LabTestDefinitionServiceImpl(labTestDefinitionRepository,
+                org.mockito.Mockito.mock(com.example.hms.mapper.LabTestDefinitionMapper.class), assignments, users,
+                hospitalRepository, org.mockito.Mockito.mock(com.example.hms.security.tenant.ActingScopeResolver.class),
+                org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class), labOrderRepository);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("labmgr", "n/a",
+                List.of()));
+        UUID definitionId = hemoglobin.getId();
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(definitionId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        assertThat(labTestDefinitionRepository.findById(definitionId)).isPresent();
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalB.getId()), hospitalB.getId(), false, Pageable.unpaged()))
+            .extracting(LabResult::getId).contains(orderedAtB.getId());
+        assertThat(labResultRepository.findHandledByHospitals(List.of(hospitalB.getId())))
+            .extracting(LabResult::getId).contains(orderedAtB.getId());
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+            orderedAtB.getLabOrder().getOrderingStaff().getId(), LocalDateTime.now().minusDays(7))).isEqualTo(1);
     }
 
     @Test

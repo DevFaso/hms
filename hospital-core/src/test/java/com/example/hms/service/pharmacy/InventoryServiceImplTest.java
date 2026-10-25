@@ -25,7 +25,6 @@ import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.StockLotRepository;
 import com.example.hms.repository.pharmacy.StockTransactionRepository;
 import com.example.hms.service.AuditEventLogService;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -74,8 +73,13 @@ class InventoryServiceImplTest {
     @Mock private StockTransactionMapper stockTransactionMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    /** QA D655: the controlled-stock witness rule. */
+    @Mock private ControlledStockWitness controlledStockWitness;
+    /** The server's clock; real time unless a test pins it. */
+    @Mock private java.time.Clock clock;
 
     @InjectMocks
     private InventoryServiceImpl service;
@@ -95,6 +99,8 @@ class InventoryServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(clock.instant()).thenAnswer(i -> java.time.Instant.now());
+        org.mockito.Mockito.lenient().when(clock.getZone()).thenReturn(java.time.ZoneOffset.UTC);
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");
@@ -514,6 +520,65 @@ class InventoryServiceImplTest {
             return lot;
         }
 
+        private void makeItemControlled() {
+            com.example.hms.model.medication.MedicationCatalogItem morphine =
+                    new com.example.hms.model.medication.MedicationCatalogItem();
+            morphine.setId(UUID.randomUUID());
+            morphine.setControlled(true);
+            inventoryItem.setMedicationCatalogItem(morphine);
+        }
+
+        /**
+         * QA D655, the exact replay: POST /pharmacy/inventory/lots for
+         * morphine, 10 units, as PHARMACIST_A with no witness: 201 and
+         * witnessed_by NULL. Nothing is written now.
+         */
+        @Test
+        @DisplayName("D655: a controlled lot is not received without a witness")
+        void d655_controlledReceiptNeedsAWitness() {
+            makeItemControlled();
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("10"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(null, inventoryItem, user))
+                    .thenThrow(new BusinessException("stockTransaction.witness.required"));
+
+            assertThatThrownBy(() -> service.receiveStock(dto)).isInstanceOf(BusinessException.class);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+            verify(stockTransactionRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D655: a witnessed controlled receipt records its witness on the RECEIPT movement")
+        void d655_witnessedControlledReceiptIsRecorded() {
+            makeItemControlled();
+            UUID witnessId = UUID.randomUUID();
+            User witness = new User();
+            witness.setId(witnessId);
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setWitnessedBy(witnessId);
+            StockLot lot = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
+            when(stockLotMapper.toEntity(dto, inventoryItem, user)).thenReturn(lot);
+            when(stockLotRepository.save(lot)).thenReturn(lot);
+
+            service.receiveStock(dto);
+
+            org.mockito.ArgumentCaptor<StockTransaction> tx = org.mockito.ArgumentCaptor.forClass(StockTransaction.class);
+            verify(stockTransactionRepository).save(tx.capture());
+            assertThat(tx.getValue().getWitnessedByUser()).isSameAs(witness);
+        }
+
         @Test
         @DisplayName("saves lot, updates quantity on hand, records transaction, logs audit")
         void success() {
@@ -620,6 +685,54 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D733: a receipt of 1e9 units is refused")
+        void hugeReceiptIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("1000000000"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D733: the same lot received twice adds to the one row")
+        void sameLotTwiceAddsToTheRow() {
+            StockLotRequestDTO dto = buildLotRequest();
+            StockLot existing = buildStockLot();
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findSameLot(inventoryItemId, dto.getLotNumber().trim(), dto.getExpiryDate()))
+                    .thenReturn(List.of(existing));
+
+            service.receiveStock(dto);
+
+            verify(stockLotRepository, never()).save(any());
+            verify(stockLotRepository).addReceipt(eq(existing.getId()), eq(dto.getInitialQuantity()), any());
+            verify(inventoryItemRepository).lockById(inventoryItemId);
+            verify(inventoryItemRepository).incrementOnHand(eq(inventoryItemId), eq(dto.getInitialQuantity()), any());
+        }
+
+        @Test
+        @DisplayName("QA D710: a lot expiring today is refused at goods receipt")
+        void lotExpiringTodayIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setExpiryDate(LocalDate.now());
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D341: a negative received quantity is refused with a readable message")
         void negativeQuantityIsRefused() {
             StockLotRequestDTO dto = buildLotRequest();
@@ -643,6 +756,44 @@ class InventoryServiceImplTest {
 
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, the reader's today east of UTC (tomorrow on the server) passes the date check")
+        void readersTodayEastOfUtcPassesTheDateCheck() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            // 00:30 on the 25th in a UTC+1 hospital: the portal's default.
+            dto.setReceivedDate(LocalDate.of(2026, 10, 25));
+            // The next check fails on purpose, so reaching it proves the date passed.
+            dto.setRemainingQuantity(new BigDecimal("9999.00"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.aboveReceived"));
+        }
+
+        @Test
+        @DisplayName("#948 review: at 23:30Z, a day after the reader's today is still refused")
+        void dayAfterTheGraceIsRefused() {
+            com.example.hms.utility.MessageUtil.setMessageSource(
+                    com.example.hms.i18n.TestMessageSources.bundles());
+            when(clock.instant()).thenReturn(java.time.Instant.parse("2026-10-24T23:30:00Z"));
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setReceivedDate(LocalDate.of(2026, 10, 26));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolve("stockLot.receivedDate.future"));
             verify(stockLotRepository, never()).save(any());
         }
 
@@ -693,6 +844,66 @@ class InventoryServiceImplTest {
             assertThatThrownBy(() -> service.receiveStock(dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);
             verify(stockLotRepository, never()).save(any());
+        }
+
+        /** QA D779, the exact replay: POST /pharmacy/inventory/lots, qty 2.5 of a tablet item: 201 before. */
+        @Test
+        @DisplayName("D779: a tablet lot of 2.5 is refused, nothing written")
+        void d779_fractionalTabletsAreRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stock.quantity.wholeUnitsOnly".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+            verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("D779: a measured item (ml) may still be received by a fraction")
+        void d779_measuredItemKeepsFractions() {
+            inventoryItem.setUnit("ml");
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setInitialQuantity(new BigDecimal("2.5"));
+            dto.setRemainingQuantity(null);
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            // Gets past the whole-units rule and stops at the cost rule.
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+        }
+
+        /** QA D778, the exact replay: a lot with unitCost -10: 201 before. */
+        @Test
+        @DisplayName("D778: a negative unit cost is refused, nothing written")
+        void d778_negativeUnitCostIsRefused() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.receiveStock(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "stockTransaction.unitCost.min".equals(((BusinessException) e).getMessageKey()));
+            verify(stockLotRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("D778: the request DTO itself rejects a negative unit cost (bean validation, 400)")
+        void d778_dtoConstraint() {
+            StockLotRequestDTO dto = buildLotRequest();
+            dto.setUnitCost(new BigDecimal("-10"));
+            try (jakarta.validation.ValidatorFactory f = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+                org.assertj.core.api.Assertions.assertThat(f.getValidator().validate(dto))
+                        .anyMatch(v -> "unitCost".equals(v.getPropertyPath().toString()));
+            }
         }
     }
 
@@ -1011,7 +1222,7 @@ class InventoryServiceImplTest {
 
             service.triggerReorderAlerts();
 
-            verify(notificationService).createNotification(
+            verify(notificationService).created(
                     any(String.class), eq("pharmacist1"), eq("REORDER_ALERT"));
             verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
         }
@@ -1024,7 +1235,7 @@ class InventoryServiceImplTest {
             service.triggerReorderAlerts();
 
             verify(inventoryItemRepository, never()).findBelowReorderThresholdByHospital(any());
-            verify(notificationService, never()).createNotification(any(), any(), any());
+            verify(notificationService, never()).created(any(), any(), any());
         }
 
         @Test
@@ -1046,7 +1257,7 @@ class InventoryServiceImplTest {
             when(userRepository.findById(userId))
                     .thenReturn(Optional.of(user))
                     .thenReturn(Optional.of(user));
-            when(notificationService.createNotification(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
+            when(notificationService.created(any(), eq("pharmacist1"), eq("REORDER_ALERT")))
                     .thenThrow(new RuntimeException("Notification service down"))
                     .thenReturn(null);
 

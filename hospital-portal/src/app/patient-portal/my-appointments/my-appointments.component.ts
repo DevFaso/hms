@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -14,11 +21,18 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localDateString } from '../../shared/date-utils';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+/** Sort key of a visit: its wire date and 24 h start time (QA D642). */
+function visitKey(a: PortalAppointment): string {
+  return `${a.date ?? ''}T${a.rawStartTime ?? ''}`;
+}
 
 @Component({
   selector: 'app-my-appointments',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     DatePipe,
     EnumLabelPipe,
@@ -40,6 +54,14 @@ export class MyAppointmentsComponent implements OnInit {
 
   upcoming = signal<PortalAppointment[]>([]);
   past = signal<PortalAppointment[]>([]);
+  /** QA D542: cancelled visits whose date is still ahead - not "past". */
+  cancelled = signal<PortalAppointment[]>([]);
+  readonly closedGroups = computed(() =>
+    [
+      { titleKey: 'PORTAL.APPOINTMENTS.CANCELLED_SECTION', items: this.cancelled() },
+      { titleKey: 'PORTAL.APPOINTMENTS.PAST', items: this.past() },
+    ].filter((g) => g.items.length > 0),
+  );
 
   // ── Booking form state ───────────────────────────────────────────
   showBookingForm = signal(false);
@@ -125,10 +147,25 @@ export class MyAppointmentsComponent implements OnInit {
         const today = localDateString();
         const isClosed = (a: PortalAppointment) =>
           a.status === 'COMPLETED' || a.status === 'CANCELLED';
-        this.upcoming.set(appts.filter((a) => !isClosed(a) && a.date >= today));
-        // Cancelled appointments land in Past (whatever their date) so they
-        // stay visible after the patient cancels instead of vanishing.
-        this.past.set(appts.filter((a) => isClosed(a) || a.date < today));
+        // QA D642: "À venir" listed 30 Oct before 28 Oct — soonest first.
+        this.upcoming.set(
+          appts
+            .filter((a) => !isClosed(a) && a.date >= today)
+            .sort((a, b) => visitKey(a).localeCompare(visitKey(b))),
+        );
+        // QA D542: a cancelled visit still ahead is listed under "Cancelled",
+        // not "Past"; it stays visible after the patient cancels.
+        const cancelledAhead = (a: PortalAppointment) =>
+          a.status === 'CANCELLED' && a.date >= today;
+        this.cancelled.set(
+          appts.filter(cancelledAhead).sort((a, b) => visitKey(a).localeCompare(visitKey(b))),
+        );
+        // QA D642: "past" reads newest first.
+        this.past.set(
+          appts
+            .filter((a) => !cancelledAhead(a) && (isClosed(a) || a.date < today))
+            .sort((a, b) => visitKey(b).localeCompare(visitKey(a))),
+        );
         this.loading.set(false);
         this.applyDeepLink(appts);
       },

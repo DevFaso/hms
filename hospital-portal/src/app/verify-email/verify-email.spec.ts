@@ -85,7 +85,8 @@ describe('VerifyEmailComponent — the e-mail activation link lands somewhere', 
       (r) =>
         r.method === 'POST' &&
         r.url === '/auth/resend-verification' &&
-        r.params.get('email') === 'a@b.c',
+        r.body?.email === 'a@b.c' &&
+        r.urlWithParams === '/auth/resend-verification',
     );
     req.flush({}, { status: 500, statusText: 'Server Error' });
     fixture.detectChanges();

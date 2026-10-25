@@ -17,6 +17,8 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import {
   DigitalSignatureService,
+  SIGNABLE_TYPES,
+  SignableReport,
   SIGNATURE_TYPES,
   SignatureResponse,
   SignatureAuditEntry,
@@ -24,6 +26,8 @@ import {
 } from '../services/digital-signature.service';
 
 import { currentLocale } from '../shared/i18n/app-locale';
+import { serverInstant, toServerDateTime } from '../shared/date-utils';
+
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
@@ -80,6 +84,10 @@ export class DigitalSignaturesComponent implements OnInit {
   showSignModal = signal(false);
   signReportType = signal<SignatureType | ''>('');
   signReportId = signal('');
+  /** QA D627: the picker's rows; the key is `${type}:${id}`. */
+  signableReports = signal<SignableReport[]>([]);
+  signableLoading = signal(false);
+  signPick = signal('');
   signValue = signal('');
   signNotes = signal('');
   signExpiresAt = signal('');
@@ -110,6 +118,8 @@ export class DigitalSignaturesComponent implements OnInit {
   lookupSignatures = signal<SignatureResponse[]>([]);
 
   readonly reportTypes = SIGNATURE_TYPES;
+  /** QA D627: the sign modal offers only what the server can sign. */
+  readonly signableTypes = SIGNABLE_TYPES;
   readonly statuses = ['PENDING', 'SIGNED', 'REVOKED', 'EXPIRED', 'INVALID'];
 
   filteredSignatures = computed(() => {
@@ -192,10 +202,46 @@ export class DigitalSignaturesComponent implements OnInit {
   openSign(): void {
     this.signReportType.set('');
     this.signReportId.set('');
+    this.signPick.set('');
     this.signValue.set('');
     this.signNotes.set('');
     this.signExpiresAt.set('');
+    this.signableReports.set([]);
     this.showSignModal.set(true);
+    this.signableLoading.set(true);
+    this.service.listSignable().subscribe({
+      next: (rows) => {
+        this.signableReports.set(rows ?? []);
+        this.signableLoading.set(false);
+      },
+      error: () => {
+        this.signableLoading.set(false);
+        this.toast.error(this.translate.instant('SIGNATURES.SIGNABLE_LOAD_ERROR'));
+      },
+    });
+  }
+
+  signableKey(r: SignableReport): string {
+    return `${r.reportType}:${r.reportId}`;
+  }
+
+  /** The visible label: type, patient, date. Never the id. */
+  signableLabel(r: SignableReport): string {
+    const parts = [this.formatReportType(r.reportType)];
+    if (r.patientName) {
+      parts.push(r.patientName);
+    }
+    if (r.createdAt) {
+      parts.push(serverInstant(r.createdAt).toLocaleDateString(currentLocale()));
+    }
+    return parts.join(' · ');
+  }
+
+  pickSignable(key: string): void {
+    this.signPick.set(key);
+    const row = this.signableReports().find((r) => this.signableKey(r) === key);
+    this.signReportType.set(row ? row.reportType : '');
+    this.signReportId.set(row ? row.reportId : '');
   }
 
   closeSign(): void {
@@ -223,7 +269,8 @@ export class DigitalSignaturesComponent implements OnInit {
         hospitalId,
         signatureValue: this.signValue().trim(),
         signatureNotes: this.signNotes().trim() || undefined,
-        expiresAt: this.signExpiresAt() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        expiresAt: this.signExpiresAt() ? toServerDateTime(this.signExpiresAt()) : undefined,
       })
       .subscribe({
         next: (created) => {
@@ -371,7 +418,7 @@ export class DigitalSignaturesComponent implements OnInit {
 
   formatDate(dt: string | undefined): string {
     if (!dt) return '—';
-    return new Date(dt).toLocaleDateString(currentLocale(), {
+    return serverInstant(dt).toLocaleDateString(currentLocale(), {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

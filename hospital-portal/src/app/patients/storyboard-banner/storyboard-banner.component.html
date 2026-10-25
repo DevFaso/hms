@@ -21,6 +21,11 @@
         {{ 'STORYBOARD.EMPTY' | translate }}
       </p>
     } @else if (summary(); as s) {
+      @if (s.recordsWithheld) {
+        <p class="storyboard__empty" role="note" data-testid="storyboard-records-withheld">
+          {{ 'CHART.RECORDS_WITHHELD' | translate }}
+        </p>
+      }
       <div class="storyboard__sections">
         <!-- Allergies -->
         <div
@@ -62,6 +67,11 @@
             </ul>
           } @else {
             <p class="storyboard__empty">{{ 'STORYBOARD.NO_KNOWN_ALLERGIES' | translate }}</p>
+          }
+          @if (s.allergiesWithheld) {
+            <p class="storyboard__empty" role="note">
+              {{ 'CHART.ALLERGIES_WITHHELD' | translate }}
+            </p>
           }
         </div>
         <!-- Problems -->
@@ -161,7 +171,7 @@
                 'STORYBOARD.LAST_VISIT'
                   | translate
                     : {
-                        date: (last.encounterDate | date: 'dd/MM/yyyy') ?? '—',
+                        date: (last.encounterDate | serverTime | date: 'dd/MM/yyyy') ?? '—',
                         department: last.departmentName ?? '—',
                       }
               }}

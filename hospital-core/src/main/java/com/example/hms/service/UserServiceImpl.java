@@ -505,9 +505,15 @@ public class UserServiceImpl implements UserService {
             // synchronisation runs on this thread before the controller
             // closes ActivationDeliveryTracker, so the registrar still sees
             // the outcome.
+            // QA D522 (D311/D418): when the welcome mail carries the role codes
+            // it IS the e-mailed activation - the per-assignment mails are
+            // suppressed - so it is reported as one. Reported as WELCOME, the
+            // registration said only that the SMS had failed, and the
+            // e-mailed activation looked as if it had never been sent.
+            final String welcomePurpose = welcomeMailPurpose(welcomeRoles);
             TransactionCallbacks.afterCommit(() -> {
                 boolean sent = com.example.hms.utility.ActivationDeliveryTracker.sendEmailAndReport(
-                    com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME,
+                    welcomePurpose,
                     user.getEmail(),
                     () -> {
                         if (welcomeRoles.isEmpty()) {
@@ -1206,7 +1212,14 @@ public class UserServiceImpl implements UserService {
      * link, so the separate role-assignment mails are suppressed. An existing
      * user given another assignment, or a patient, keeps the role-assignment
      * mail.
+     * QA D522: a welcome mail that lists the role codes is the activation mail.
      */
+    static String welcomeMailPurpose(List<EmailService.WelcomeRole> welcomeRoles) {
+        return welcomeRoles == null || welcomeRoles.isEmpty()
+            ? com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_WELCOME
+            : com.example.hms.payload.dto.NotificationDeliveryStatusDTO.PURPOSE_ACTIVATION;
+    }
+
     static boolean welcomeMailCarriesCode(boolean newUserCreated, boolean isPatient, Set<Role> roles) {
         return newUserCreated && !isPatient && roles != null && !roles.isEmpty();
     }
@@ -1575,6 +1588,7 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
         }
         requireIdentifiersFree(user, dto);
+        requireRolesUnchanged(user, dto);
 
         // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
@@ -1691,6 +1705,39 @@ public class UserServiceImpl implements UserService {
         if (hasText(dto.getEmail()) && !dto.getEmail().equals(user.getEmail())) {
             throw new BusinessException(MessageUtil.resolve("user.update.self.email"));
         }
+    }
+
+    /**
+     * Roles are granted and retired per hospital through the role-assignment
+     * endpoints, which apply the grant rules (who may grant what, where).
+     * This endpoint never changed them, yet it accepted {@code roleNames} and
+     * answered 200, so the edit dialog reported a role change that never
+     * happened (QA D765). Sending the current role set back is not a change
+     * and is accepted; anything else is refused instead of silently dropped.
+     */
+    private void requireRolesUnchanged(User user, UpdateUserRequestDTO dto) {
+        if (dto.getRoleNames() == null || dto.getRoleNames().isEmpty()) {
+            return;
+        }
+        Set<String> requested = dto.getRoleNames().stream()
+                .filter(Objects::nonNull)
+                .map(UserServiceImpl::normalizeRoleCode)
+                .filter(code -> !code.isEmpty())
+                .collect(Collectors.toSet());
+        Set<String> current = assignmentRepository.findByUser(user).stream()
+                .filter(a -> a != null && Boolean.TRUE.equals(a.getActive()) && a.getRole() != null)
+                .map(a -> a.getRole().getCode() != null ? a.getRole().getCode() : a.getRole().getName())
+                .filter(Objects::nonNull)
+                .map(UserServiceImpl::normalizeRoleCode)
+                .collect(Collectors.toSet());
+        if (!requested.equals(current)) {
+            throw new BusinessException(MessageUtil.resolve("user.update.roles.unsupported"));
+        }
+    }
+
+    private static String normalizeRoleCode(String code) {
+        String upper = code.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper.substring(5) : upper;
     }
 
     /**

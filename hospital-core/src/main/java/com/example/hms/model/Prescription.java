@@ -105,6 +105,10 @@ public class Prescription extends BaseEntity {
     @Column(name = "medication_code", length = 64)
     private String medicationCode;
 
+    /** D654: the catalog item picked at order time (V221); the controlled flag is read from it. */
+    @Column(name = "medication_catalog_item_id")
+    private java.util.UUID medicationCatalogItemId;
+
     @Size(max = 255)
     @Column(name = "medication_display_name", length = 255)
     private String medicationDisplayName;
@@ -211,6 +215,15 @@ public class Prescription extends BaseEntity {
     @Column(name = "inpatient_order", nullable = false)
     private boolean inpatientOrder = false;
 
+    /**
+     * QA D757: the prescriber means the patient to take this order home. Only
+     * a take-home order outlives the stay it was written on; every other order
+     * of the stay is discontinued at discharge (V231).
+     */
+    @Builder.Default
+    @Column(name = "take_home", nullable = false)
+    private boolean takeHome = false;
+
     @Builder.Default
     @Column(name = "allergies_reviewed", nullable = false)
     private boolean allergiesReviewed = false;
@@ -291,6 +304,16 @@ public class Prescription extends BaseEntity {
     @Column(name = "clarification_reason", columnDefinition = "TEXT")
     @Convert(converter = EncryptedStringConverter.class)
     private String clarificationReason;
+
+    /**
+     * QA D660: why a signed order was cancelled or discontinued. Mandatory on
+     * that withdrawal, the only change a signed order still accepts. Clinical
+     * narrative, so encrypted like {@code clarificationReason}.
+     */
+    @Size(max = 1000)
+    @Column(name = "withdrawal_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String withdrawalReason;
 
     @Column(name = "clarification_requested_at")
     private LocalDateTime clarificationRequestedAt;
@@ -452,8 +475,26 @@ public class Prescription extends BaseEntity {
         if (!Objects.equals(encounter.getPatient().getId(), patient.getId())) {
             throw new IllegalStateException("Encounter.patient must match Prescription.patient");
         }
-        if (!Objects.equals(encounter.getStaff().getId(), staff.getId())) {
+        // QA D703/D736: a hospital stay is ordered on by any treating
+        // prescriber of its hospital (the service checks who), not only the
+        // doctor leading it. This invariant refused every one of them with a
+        // 500 after the service had already allowed the order.
+        if (encounter.getAdmissionId() == null
+            && !Objects.equals(encounter.getStaff().getId(), staff.getId())) {
             throw new IllegalStateException("Encounter.staff must match Prescription.staff");
         }
+    }
+
+    /**
+     * QA D719: whether this prescription may be refilled at all. The status
+     * gate alone answered yes for a completed IV morphine order. A controlled
+     * substance is never refilled: it needs a new, signed prescription.
+     * Single source for the patient's button, the request and the approval.
+     */
+    public boolean allowsRefill() {
+        if (controlledSubstance) {
+            return false;
+        }
+        return status == null || status.isRefillable();
     }
 }

@@ -132,15 +132,46 @@
               @for (lot of dispensableLots(); track lot.id) {
                 <option [value]="lot.id">
                   {{ lot.lotNumber }} · {{ 'PHARMACY.EXP_SHORT' | translate }}
-                  {{ lot.expiryDate | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
+                  {{ lot.expiryDate | serverTime | date: 'MMM yyyy' }} ({{ lot.remainingQuantity }})
                 </option>
               }
             </select>
           </div>
+          <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
+          @if (lotIsControlled()) {
+            <div class="field">
+              <label for="dispWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+              <select id="dispWitness" [(ngModel)]="form.witnessedBy" name="dispWitness" required>
+                <option [ngValue]="undefined">
+                  {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+                </option>
+                @for (w of witnessCandidates(); track w.userId) {
+                  <option [ngValue]="w.userId">{{ w.displayName }}</option>
+                }
+              </select>
+              @if (witnessCandidates().length === 0) {
+                <small class="field-hint">{{ 'PHARMACY.NO_WITNESS_HINT' | translate }}</small>
+              }
+            </div>
+          }
           <div class="field checkbox-field">
             <label>
               <input type="checkbox" [(ngModel)]="form.substitution" name="substitution" />
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
+            </label>
+          </div>
+          <!-- QA D512: every fill is verified by a pharmacist; the dispensing
+               pharmacist attests it here, recorded under their own name. -->
+          <div class="field checkbox-field">
+            <label>
+              <input
+                type="checkbox"
+                data-testid="verify-attest"
+                [ngModel]="verifyAttested()"
+                (ngModelChange)="verifyAttested.set($event)"
+                name="verifyAttested"
+              />
+              {{ 'PHARMACY.VERIFY_ATTEST' | translate }}
             </label>
           </div>
         </div>
@@ -224,7 +255,7 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0"
+            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -238,7 +269,7 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="saving() || form.quantityDispensed <= 0"
+              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}
@@ -369,7 +400,8 @@
             | translate
               : {
                   name: claimShownFor(action.rx)?.claimedByName ?? '',
-                  time: (claimShownFor(action.rx)?.claimedAt | date: 'shortTime') ?? '',
+                  time:
+                    (claimShownFor(action.rx)?.claimedAt | serverTime | date: 'shortTime') ?? '',
                 }
         }}
       </p>
@@ -479,7 +511,8 @@
                       >{{ 'PHARMACY.READY_FOR_COLLECTION' | translate }}</span
                     >
                     <span class="refill-note">{{
-                      'PHARMACY.READY_SINCE' | translate: { date: (ready.readyAt | date: 'short') }
+                      'PHARMACY.READY_SINCE'
+                        | translate: { date: (ready.readyAt | serverTime | date: 'short') }
                     }}</span>
                   }
                   <!-- G13: who is preparing this order (advisory) -->
@@ -501,7 +534,7 @@
                       ·
                       {{
                         'PHARMACY.QUEUE_CLAIM.SINCE'
-                          | translate: { time: (claim.claimedAt | date: 'shortTime') }
+                          | translate: { time: (claim.claimedAt | serverTime | date: 'shortTime') }
                       }}
                     </span>
                   }
@@ -689,6 +722,32 @@
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
 
+    <!-- QA D654: a controlled fill goes back on the shelf in front of a witness -->
+    @if (cancelWitnessFor()) {
+      <div class="form-row" data-testid="cancel-witness">
+        <div class="field">
+          <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+          <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
+            <option [ngValue]="undefined">
+              {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+            </option>
+            @for (w of witnessCandidates(); track w.userId) {
+              <option [ngValue]="w.userId">{{ w.displayName }}</option>
+            }
+          </select>
+          <small class="field-hint">{{ 'PHARMACY.CANCEL_DISPENSE_CONFIRM' | translate }}</small>
+        </div>
+        <div class="field">
+          <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="button" class="btn btn-primary" (click)="confirmWitnessedCancel()">
+            {{ 'COMMON.CONFIRM' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+
     @if (dispensesLoading()) {
       <div class="loading-bar"></div>
     } @else if (recentDispenses().length === 0) {
@@ -745,7 +804,7 @@
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>
-                <td>{{ d.dispensedAt ? (d.dispensedAt | date: 'short') : '—' }}</td>
+                <td>{{ d.dispensedAt ? (d.dispensedAt | serverTime | date: 'short') : '—' }}</td>
                 <td>
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->

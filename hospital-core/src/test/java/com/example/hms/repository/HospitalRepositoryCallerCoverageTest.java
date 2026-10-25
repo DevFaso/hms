@@ -113,6 +113,7 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MtmReviewServiceImpl.startReview#findById", PHARMACY_OWN),
         entry("LabTestDefinitionServiceImpl.create#findById", "the caller's own acting hospital (pinned scope),"
             + " not request-supplied; a LABORATORY facility authors its own catalog, so it is not findClinicalById"),
+        entry("PatientDocumentServiceImpl.requireRegisteredAt#findById", "the acting hospital's name for the break-the-glass disclosure row, after the policy permitted the read; grants, writes and lists nothing"),
         entry("PanelService.assign#getReferenceById", ACTING_SCOPE),
         entry("ProgramEnrollmentService.enroll#getReferenceById", ACTING_SCOPE),
         entry("RoiRequestService.persistRequest#getReferenceById", ACTING_SCOPE));

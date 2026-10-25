@@ -66,6 +66,7 @@ class AdmissionServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
     @Mock private com.example.hms.service.recordaccess.BreakGlassGate breakGlassGate;
+    @Mock private com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository;
 
     @InjectMocks
     private AdmissionServiceImpl service;
@@ -87,10 +88,16 @@ class AdmissionServiceImplTest {
         com.example.hms.model.User staffUser = new com.example.hms.model.User();
         staffUser.setId(UUID.randomUUID());
         staff.setUser(staffUser);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(staff, hospital);
         // The admitting provider is a doctor unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staffUser.getId(), hospitalId)).thenReturn(true);
         // QA D262: the patient is registered at the admitting hospital unless a test says otherwise.
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearCallerIdentity() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
     }
 
     @Test
@@ -153,6 +160,63 @@ class AdmissionServiceImplTest {
         assertThat(service.admitPatient(request)).isEqualTo(response);
         // QA D98/D135: every admission opens its own INPATIENT encounter.
         verify(stayEncounters).openStayEncounter(admission);
+        // QA D712: the visit that led to the stay is closed with the admission.
+        verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(admission);
+    }
+
+    /**
+     * QA D764: every registration said "Statut du séjour: Admis", outpatients
+     * included, because the registration was born ADMITTED and nothing moved
+     * it. A registration is now REGISTERED; the admission moves it to
+     * ADMITTED, a discharge to DISCHARGED, a cancellation back to REGISTERED.
+     */
+    @Test
+    void qaD764_newRegistrationIsNotAdmitted() {
+        assertThat(com.example.hms.model.PatientHospitalRegistration.builder().build().getStayStatus())
+            .isEqualTo(com.example.hms.enums.PatientStayStatus.REGISTERED);
+        assertThat(new com.example.hms.model.PatientHospitalRegistration(patient, hospital).getStayStatus())
+            .isEqualTo(com.example.hms.enums.PatientStayStatus.REGISTERED);
+    }
+
+    @Test
+    void qaD764_admittingMovesTheRegistrationToAdmitted() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            com.example.hms.model.PatientHospitalRegistration.builder().build();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(any(Admission.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(Optional.of(registration));
+
+        service.admitPatient(request);
+
+        assertThat(registration.getStayStatus()).isEqualTo(com.example.hms.enums.PatientStayStatus.ADMITTED);
+        verify(registrationRepository).save(registration);
+    }
+
+    @Test
+    void qaD764_cancellingTheStayReturnsTheRegistrationToRegistered() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            com.example.hms.model.PatientHospitalRegistration.builder()
+                .stayStatus(com.example.hms.enums.PatientStayStatus.ADMITTED).build();
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(Optional.of(registration));
+
+        service.cancelAdmission(admissionId);
+
+        assertThat(registration.getStayStatus()).isEqualTo(com.example.hms.enums.PatientStayStatus.REGISTERED);
     }
 
     @Test
@@ -225,6 +289,41 @@ class AdmissionServiceImplTest {
         service.cancelAdmission(admissionId);
 
         verify(admissionRepository).save(admission);
+    }
+
+    /** QA D603: DELETE /api/admissions/{id} on a discharged (closed) stay is refused and changes nothing. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = AdmissionStatus.class,
+        names = {"DISCHARGED", "AWAITING_DISCHARGE", "TRANSFERRED", "DECEASED", "CANCELLED"})
+    void d603_cancelAdmission_refusesAClosedStay(AdmissionStatus status) {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(status);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("admission.cancel.notInProgress");
+        assertThat(admission.getStatus()).isEqualTo(status);
+        verify(bedAssignmentService, never()).releaseBed(any());
+        verify(admissionRepository, never()).save(any());
+    }
+
+    /** QA D603: a stay with a live invoice on its encounter is not cancelled either. */
+    @Test
+    void d603_cancelAdmission_refusesABilledStay() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(billingInvoiceRepository.existsByEncounter_AdmissionIdAndStatusNot(admissionId,
+            com.example.hms.enums.InvoiceStatus.CANCELLED)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.cancelAdmission(admissionId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("admission.cancel.billed");
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
     }
 
     @Test
@@ -369,6 +468,62 @@ class AdmissionServiceImplTest {
         assertThat(service.dischargePatient(admissionId, request)).isEqualTo(response);
     }
 
+    /** QA D764: discharging the stay marks the registration DISCHARGED (it stays active). */
+    @Test
+    void qaD764_dischargingMovesTheRegistrationToDischarged() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(staffId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+        request.setDischargeSummary("Recovered");
+        request.setDischargeInstructions("Rest");
+        com.example.hms.model.PatientHospitalRegistration registration =
+            com.example.hms.model.PatientHospitalRegistration.builder()
+                .stayStatus(com.example.hms.enums.PatientStayStatus.ADMITTED).active(true).build();
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(Optional.of(registration));
+
+        service.dischargePatient(admissionId, request);
+
+        assertThat(registration.getStayStatus()).isEqualTo(com.example.hms.enums.PatientStayStatus.DISCHARGED);
+        assertThat(registration.isActive()).isTrue();
+    }
+
+    @Test
+    void dischargePatient_inAColleaguesName_isRefusedAndChangesNothing_D503() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setStatus(AdmissionStatus.ACTIVE);
+        admission.setPatient(patient);
+        admission.setHospital(hospital);
+        // QA r8 round 2: a doctor named another doctor as the discharging provider.
+        UUID colleagueId = UUID.randomUUID();
+        Staff colleague = new Staff(); colleague.setId(colleagueId); colleague.setHospital(hospital);
+        com.example.hms.model.User colleagueUser = new com.example.hms.model.User();
+        colleagueUser.setId(UUID.randomUUID());
+        colleague.setUser(colleagueUser);
+        when(roleValidator.isDoctor(colleagueUser.getId(), hospitalId)).thenReturn(true);
+        AdmissionDischargeRequestDTO request = new AdmissionDischargeRequestDTO();
+        request.setDischargingProviderId(colleagueId);
+        request.setDischargeDisposition(DischargeDisposition.HOME);
+
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(staffRepository.findById(colleagueId)).thenReturn(Optional.of(colleague));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.dischargePatient(admissionId, request))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(admission.getStatus()).isEqualTo(AdmissionStatus.ACTIVE);
+        verify(admissionRepository, never()).save(any());
+    }
+
     @Test
     void dischargePatient_delegatesEncounterCompletion() {
         Admission admission = new Admission();
@@ -393,6 +548,8 @@ class AdmissionServiceImplTest {
         // QA D134: the stay's own encounters, never the patient-wide sweep.
         verify(stayEncounters).recordDischarge(admission, null);
         verify(encounterAutoCompletion).completeAdmissionEncounters(admissionId);
+        // QA D760: the walk-in that led to the stay is closed at discharge too.
+        verify(encounterAutoCompletion).completeVisitsThatLedToAdmission(admission);
     }
 
     /* ── P0 #4: structured bed assignment ─────────────────────────────── */

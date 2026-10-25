@@ -30,8 +30,8 @@
           >
             <div class="avs-header-left">
               <div class="avs-date-badge">
-                <span class="avs-month">{{ s.encounterDate | date: 'MMM' }}</span>
-                <span class="avs-day">{{ s.encounterDate | date: 'd' }}</span>
+                <span class="avs-month">{{ s.encounterDate | serverTime | date: 'MMM' }}</span>
+                <span class="avs-day">{{ s.encounterDate | serverTime | date: 'd' }}</span>
               </div>
               <div class="avs-header-info">
                 <span class="avs-provider">{{ s.providerName }}</span>
@@ -176,7 +176,7 @@
                   <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP' | translate }}</h4>
                   <p>
                     {{ 'PORTAL.SUMMARIES.SCHEDULED_FOR' | translate }}
-                    {{ s.followUpDate | date: 'mediumDate' }}
+                    {{ s.followUpDate | serverTime | date: 'mediumDate' }}
                   </p>
                 </div>
               }

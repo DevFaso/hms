@@ -14,7 +14,7 @@ import { catchError, of } from 'rxjs';
 
 import { SubscriptionService } from '../../services/subscription.service';
 import { SubscriptionPlan, SubscriptionPlanRequest } from '../../services/subscription.model';
-import { currentLocale } from '../../shared/i18n/app-locale';
+import { currentLocale, formatCfa } from '../../shared/i18n/app-locale';
 
 const FRESH_REQUEST: SubscriptionPlanRequest = {
   name: '',
@@ -144,6 +144,8 @@ export class SubscriptionsComponent implements OnInit {
   }
 
   formatPrice(cents: number, currency: string): string {
+    // QA D621: francs CFA read "F CFA" in every language.
+    if ((currency || '').toUpperCase() === 'XOF') return formatCfa(cents / 100);
     try {
       return new Intl.NumberFormat(currentLocale(), { style: 'currency', currency }).format(
         cents / 100,

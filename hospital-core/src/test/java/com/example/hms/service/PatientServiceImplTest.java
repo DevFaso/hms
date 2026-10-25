@@ -215,6 +215,9 @@ class PatientServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D763: the one MRN generator, real, over the mocked repository.
+        org.springframework.test.util.ReflectionTestUtils.setField(patientService, "mrnGenerator",
+            new PatientMrnGenerator(registrationRepository));
         patientId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
 
@@ -280,8 +283,94 @@ class PatientServiceImplTest {
         PatientAllergy local = PatientAllergy.builder().allergenDisplay("Peanuts").active(true).build();
         when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(local));
 
-        assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getAllergies())
-            .isEqualTo("Peanuts");
+        PatientResponseDTO read = patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH);
+        assertThat(read.getAllergies()).isEqualTo("Peanuts");
+        // QA D504 (round 2): the narrowed column says it was narrowed.
+        assertThat(read.isAllergiesWithheld()).isTrue();
+        // QA D504 (round 3): and every other list on the chart is flagged too.
+        assertThat(read.isRecordsWithheld()).isTrue();
+    }
+
+    // QA D504: break-the-glass overrides the opt-out on the allergy reads too.
+    private com.example.hms.service.recordaccess.RecordAccessDecision breakGlassDecision(UUID actor) {
+        return com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patientId, hospitalId, actor,
+            new com.example.hms.service.recordaccess.TreatmentRelationship(
+                com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), hospitalId, patientId,
+                null, null, true),
+            com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED);
+    }
+
+    @Test
+    void d504BreakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientAllergy severeAtA = new PatientAllergy();
+            severeAtA.setId(UUID.randomUUID());
+            severeAtA.setHospital(other);
+            severeAtA.setAllergenDisplay("Penicillin");
+            severeAtA.setActive(true);
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(breakGlassDecision(doctorB));
+            when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(severeAtA));
+            when(patientAllergyMapper.toResponseDto(severeAtA)).thenReturn(PatientAllergyResponseDTO.builder()
+                .id(severeAtA.getId()).hospitalId(other.getId()).allergenDisplay("Penicillin").build());
+
+            assertThat(patientService.getPatientAllergies(patientId, hospitalId, doctorB))
+                .extracting(PatientAllergyResponseDTO::getAllergenDisplay).containsExactly("Penicillin");
+            assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isFalse();
+            verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void d504WithoutBreakGlassTheOptOutWithholdsAndSaysSo() {
+        UUID doctorB = UUID.randomUUID();
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(
+            com.example.hms.service.recordaccess.RecordAccessDecision.refused(patientId, hospitalId, doctorB,
+                com.example.hms.enums.RecordAccessDenialReason.PATIENT_OPTED_OUT,
+                com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+
+        assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isTrue();
+    }
+
+    @Test
+    void d504NoOptOutNothingIsWithheld() {
+        UUID doctorB = UUID.randomUUID();
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(false);
+
+        assertThat(patientService.foreignAllergiesWithheld(patientId, hospitalId, doctorB)).isFalse();
+        verify(recordAccessPolicy, never()).decide(any(), any(), any());
+    }
+
+    @Test
+    void d504BreakGlassKeepsTheWholeAllergySummaryDespiteTheOptOut() {
+        UUID doctorB = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).allergies("Peanuts, Penicillin").build();
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+            when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(responseDTO);
+            when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, hospitalId)).thenReturn(breakGlassDecision(doctorB));
+
+            assertThat(patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH).getAllergies())
+                .isEqualTo("Peanuts, Penicillin");
+            verify(patientAllergyRepository, never()).findByPatient_IdAndHospital_Id(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     // QA D69: an MRN lookup must not return a patient registered only at another hospital.
@@ -825,6 +914,7 @@ class PatientServiceImplTest {
 
         LabResult labResult = LabResult.builder()
             .labOrder(labOrder)
+            .released(true)
             // Not a person. This is what the chart rendered under
             // "who treated the patient" before this change.
             .releasedByDisplay("Autoverification")
@@ -933,6 +1023,11 @@ class PatientServiceImplTest {
         when(sensitivityClassifier.effectiveCategory(withheld))
             .thenReturn(com.example.hms.enums.SensitivityCategory.BEHAVIOURAL_HEALTH);
         when(auditEventLogService.logEvent(any())).thenReturn(null);
+        // QA D504 (round 2): an opt-out with no break-glass narrows the allergy
+        // entries, and the timeline says so instead of looking complete.
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        // QA D504 (round 3): the other categories are narrowed by the same opt-out.
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(patientId), eq(hospitalId))).thenReturn(true);
 
         PatientTimelineResponseDTO response = patientService.getDoctorTimeline(
             patientId, hospitalId, doctorId, assignment,
@@ -947,6 +1042,8 @@ class PatientServiceImplTest {
             assertThat(r.getDepartmentName()).isEqualTo("Psychiatrie");
             assertThat(r.getCount()).isEqualTo(1L);
         });
+        assertThat(response.isAllergiesWithheld()).isTrue();
+        assertThat(response.isRecordsWithheld()).isTrue();
     }
 
     @Test
@@ -1107,6 +1204,7 @@ class PatientServiceImplTest {
         order.setId(UUID.randomUUID());
         LabResult result = LabResult.builder()
             .labOrder(order)
+            .released(true)
             .resultValue(value)
             .resultUnit("mmol/L")
             .resultDate(LocalDateTime.now().minusDays(1))
@@ -1199,6 +1297,7 @@ class PatientServiceImplTest {
         labOrder.setId(UUID.randomUUID());
         LabResult labResult = LabResult.builder()
             .labOrder(labOrder)
+            .released(true)
             .resultValue("Reactive")
             .resultUnit("IgG")
             .resultDate(LocalDateTime.now().minusHours(1))

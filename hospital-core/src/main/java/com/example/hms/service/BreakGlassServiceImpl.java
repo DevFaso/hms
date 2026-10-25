@@ -74,6 +74,9 @@ public class BreakGlassServiceImpl implements BreakGlassService {
     /** Roles allowed to revoke any session at the hospital (declaring user can always revoke their own). */
     static final Set<String> ADMIN_REVOKE_ROLES = Set.of(HOSPITAL_ADMIN_CODE, SUPER_ADMIN_CODE);
 
+    /** One refusal for an unknown id and an out-of-scope one (D624). */
+    static final String PATIENT_OUT_OF_SCOPE_KEY = "breakGlass.patient.outOfScope";
+
     private final BreakGlassSessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final PatientRepository patientRepository;
@@ -110,8 +113,17 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         // unprivileged caller could tell an existing patient id (403) from an
         // unknown one (404) at any hospital.
         ensurePrivilegedAtHospital(caller, hospital.getId(), DECLARE_ROLES);
+        // D624 (user decision): break-the-glass reaches only a patient the
+        // caller's patient search already finds (same tenant scope). An id
+        // outside that scope and an unknown id get the SAME 403, same key, no
+        // id echoed, so the declaration reveals nothing search does not show.
+        // D409 is kept inside that scope: the declaring hospital need not hold
+        // the registration itself.
+        if (!patientRepository.isFindableByPatientSearch(request.getPatientId())) {
+            throw new UnauthorizedAccessException(PATIENT_OUT_OF_SCOPE_KEY);
+        }
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
+            .orElseThrow(() -> new UnauthorizedAccessException(PATIENT_OUT_OF_SCOPE_KEY));
 
         int ttl = validTtl(request.getTtlMinutes());
         LocalDateTime now = LocalDateTime.now(clock);
@@ -415,14 +427,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .hospitalId(s.getHospital() != null ? s.getHospital().getId() : null)
             .hospitalName(s.getHospital() != null ? s.getHospital().getName() : null)
             .reason(s.getReason())
-            .startedAt(s.getStartedAt())
-            .expiresAt(s.getExpiresAt())
-            .revokedAt(s.getRevokedAt())
+            .startedAt(withServerOffset(s.getStartedAt()))
+            .expiresAt(withServerOffset(s.getExpiresAt()))
+            .revokedAt(withServerOffset(s.getRevokedAt()))
             .revokedByUserId(s.getRevokedBy() != null ? s.getRevokedBy().getId() : null)
             .revokeReason(s.getRevokeReason())
             .auditCount(s.getAuditCount())
             .live(s.isLiveAt(LocalDateTime.now(clock)))
-            .reviewedAt(s.getReviewedAt())
+            .reviewedAt(withServerOffset(s.getReviewedAt()))
             .reviewedByUserId(s.getReviewedByUserId())
             .reviewedByUserName(s.getReviewedByUserId() == null ? null
                 : userRepository.findById(s.getReviewedByUserId()).map(User::getUsername).orElse(null))
@@ -430,5 +442,14 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             .reviewNote(s.getReviewNote())
             .reviewed(s.isReviewed())
             .build();
+    }
+
+    /**
+     * D532: the session stamps are wall-clock {@code LocalDateTime}s in the
+     * clock's zone. Sent zone-less, a browser in another zone parsed them as
+     * its own local time and the expiry countdown was off by the UTC offset.
+     */
+    private java.time.OffsetDateTime withServerOffset(LocalDateTime value) {
+        return value == null ? null : value.atZone(clock.getZone()).toOffsetDateTime();
     }
 }

@@ -141,9 +141,9 @@ public class BillingInvoiceController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         invoiceService.deleteInvoice(id, locale);
         String rawMessage = messageSource.getMessage("billinginvoice.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 
@@ -258,9 +258,8 @@ public class BillingInvoiceController {
         } catch (org.springframework.mail.MailException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Map.of(STATUS, "FAILED", "error", "Mail service unavailable"));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of(STATUS, "FAILED", "error", "Failed to send email"));
         }
+        // QA D755: a 404 (unknown or another hospital's invoice) or a refused
+        // draft goes to the global handler; it was turned into a 500 here.
     }
 }

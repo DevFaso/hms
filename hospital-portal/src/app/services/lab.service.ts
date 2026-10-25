@@ -7,7 +7,8 @@ export interface LabOrderResponse {
   labOrderCode: string;
   patientId: string;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent on lab orders (the worklist does not show it). */
+  patientEmail?: string | null;
   hospitalId?: string;
   hospitalName: string;
   /** Laboratory (hospital) performing the test; null when this hospital's own lab does (B1). */
@@ -15,6 +16,8 @@ export interface LabOrderResponse {
   performingHospitalName?: string | null;
   labTestName: string;
   labTestCode: string;
+  /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
+  labTestDefinitionMissing?: boolean;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
@@ -33,7 +36,8 @@ export interface LabResultResponse {
   labOrderCode: string;
   patientId: string | null;
   patientFullName: string;
-  patientEmail: string;
+  /** QA D527: no longer sent (always null); kept so older payloads still type. */
+  patientEmail?: string | null;
   hospitalName: string;
   /**
    * The laboratory that ran the order, when it was not this hospital's own
@@ -129,7 +133,11 @@ export interface LabTestDefinition {
     | 'RETIRED';
   approvedById: string | null;
   approvedAt: string | null;
+  /** QA D534: the submitter, never offered the QA pass or the approval. */
+  submittedById?: string | null;
   reviewedById: string | null;
+  /** QA D722: set for the QA reviewer only - whether the server accepts their approval too. */
+  reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
   unit: string | null;

@@ -54,8 +54,12 @@
                       {{ keyStatusKey(key.status) | translate }}
                     </span>
                   </td>
-                  <td>{{ key.expiresOn ? (key.expiresOn | date: 'mediumDate') : '—' }}</td>
-                  <td>{{ key.lastUsedAt ? (key.lastUsedAt | date: 'short') : '—' }}</td>
+                  <td>
+                    {{ key.expiresOn ? (key.expiresOn | serverTime | date: 'mediumDate') : '—' }}
+                  </td>
+                  <td>
+                    {{ key.lastUsedAt ? (key.lastUsedAt | serverTime | date: 'short') : '—' }}
+                  </td>
                   <td class="actions-cell">
                     @if (key.status === 'ACTIVE') {
                       <button
@@ -224,7 +228,9 @@
                                 </td>
                                 <td>{{ d.attempts }}</td>
                                 <td class="error-cell">{{ d.lastError || '—' }}</td>
-                                <td>{{ d.sentAt ? (d.sentAt | date: 'short') : '—' }}</td>
+                                <td>
+                                  {{ d.sentAt ? (d.sentAt | serverTime | date: 'short') : '—' }}
+                                </td>
                               </tr>
                             }
                           </tbody>

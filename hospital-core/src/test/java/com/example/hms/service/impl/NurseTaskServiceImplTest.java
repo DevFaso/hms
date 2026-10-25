@@ -137,6 +137,13 @@ class NurseTaskServiceImplTest {
         @Override public java.util.Iterator<UUID> iterator() { return java.util.Collections.emptyIterator(); }
         @Override public int size() { return 0; }
     };
+    /** The open stay every listed patient is in, for MAR tests not about D514/D702. */
+    private static final Admission EVERY_PATIENTS_STAY = new Admission();
+    private static final java.util.Map<UUID, Admission> EVERY_PATIENT_IN_A_STAY = new java.util.AbstractMap<>() {
+        @Override public Admission get(Object o) { return EVERY_PATIENTS_STAY; }
+        @Override public boolean containsKey(Object o) { return true; }
+        @Override public java.util.Set<java.util.Map.Entry<UUID, Admission>> entrySet() { return java.util.Set.of(); }
+    };
     @org.mockito.Mock
     private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final FiveRightsVerificationService fiveRightsService = new FiveRightsVerificationService();
@@ -153,6 +160,8 @@ class NurseTaskServiceImplTest {
             new com.example.hms.service.pharmacy.PharmacistVerificationService(
                 null, null, null, java.time.Clock.systemUTC());
     private final ObjectMapper objectMapper = new ObjectMapper();
+    @Mock
+    private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
 
     @BeforeEach
     void setUp() {
@@ -162,12 +171,15 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, objectMapper, news2EscalationService));
+            fiveRightsService, objectMapper, news2EscalationService,
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
+            assignmentRepository));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
         // patient as admitted. The D220 tests call the real method.
         lenient().doReturn(EVERY_PATIENT).when(service).activelyAdmittedPatientIds(any());
+        lenient().doReturn(EVERY_PATIENT_IN_A_STAY).when(service).activeStaysByPatient(any());
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -346,7 +358,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(first, second));
 
         // limit 0 clamps to 1 — nurseUserId null means no assignee scope
-        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, hospitalId, 0, null);
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(null, null, hospitalId, 0, null);
 
         assertThat(handoffs).hasSize(1);
         NurseHandoffSummaryDTO dto = handoffs.get(0);
@@ -356,6 +368,65 @@ class NurseTaskServiceImplTest {
         assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
         assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
         assertThat(dto.getStatus()).isEqualTo("PENDING");
+    }
+
+    /** QA D776: the recipient sees the handoff addressed to her even when the patient is not on her list. */
+    @Test
+    void getHandoffSummaries_includesAHandoffAddressedToMe_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        com.example.hms.payload.dto.PatientResponseDTO mine = new com.example.hms.payload.dto.PatientResponseDTO();
+        mine.setId(UUID.randomUUID());
+        when(nurseDashboardService.getPatientsForNurse(me, hospitalId, null)).thenReturn(List.of(mine));
+
+        Patient other = mock(Patient.class);
+        when(other.getId()).thenReturn(UUID.randomUUID());
+        NurseHandoff toMe = NurseHandoff.builder().patient(other).direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(me).build();
+        NurseHandoff notMine = NurseHandoff.builder().patient(other).direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(toMe, notMine));
+
+        List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(me, me, hospitalId, 20, null);
+
+        assertThat(handoffs).singleElement().satisfies(dto -> {
+            assertThat(dto.getRecipientUserId()).isEqualTo(me);
+            assertThat(dto.getCompletableByMe()).isTrue();
+        });
+    }
+
+    /**
+     * QA D785 re-test: NURSE_A, the recipient of PENDING handoff e32e65ef,
+     * got completableByMe=true with assignee=me but false from
+     * GET /api/nurse/handoffs?hospitalId=A (no assignee): the flag was
+     * computed for the list filter, which is null without assignee=me.
+     */
+    @Test
+    void getHandoffSummaries_completableByMeFollowsTheCallerNotTheFilter_D785() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        UUID author = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        NurseHandoff toMe = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(me).build();
+        NurseHandoff toSomeoneElse = NurseHandoff.builder().patient(patient).direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
+            eq(hospitalId), eq("PENDING"), any(Pageable.class)))
+            .thenReturn(List.of(toMe, toSomeoneElse));
+
+        // hospitalId only: no assignee filter, the caller is the recipient
+        List<NurseHandoffSummaryDTO> whole = service.getHandoffSummaries(null, me, hospitalId, 20, null);
+
+        assertThat(whole).extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(true, false);
+        // the author and a bystander still read false on the same list
+        assertThat(service.getHandoffSummaries(null, author, hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
+        assertThat(service.getHandoffSummaries(null, UUID.randomUUID(), hospitalId, 20, null))
+            .extracting(NurseHandoffSummaryDTO::getCompletableByMe).containsExactly(false, false);
     }
 
     @Test
@@ -380,7 +451,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(done));
 
         List<NurseHandoffSummaryDTO> handoffs =
-            service.getHandoffSummaries(null, hospitalId, 20, "COMPLETED");
+            service.getHandoffSummaries(null, null, hospitalId, 20, "COMPLETED");
 
         assertThat(handoffs).singleElement().satisfies(dto -> {
             assertThat(dto.getStatus()).isEqualTo("COMPLETED");
@@ -393,7 +464,7 @@ class NurseTaskServiceImplTest {
     @Test
     void getHandoffSummariesRefusesAnUnknownStatus() {
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                () -> service.getHandoffSummaries(null, UUID.randomUUID(), 20, "ARCHIVED"))
+                () -> service.getHandoffSummaries(null, null, UUID.randomUUID(), 20, "ARCHIVED"))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .hasMessageContaining("ARCHIVED");
     }
@@ -500,11 +571,14 @@ class NurseTaskServiceImplTest {
         when(nurseHandoffRepository.save(any(NurseHandoff.class)))
             .thenAnswer(inv -> inv.getArgument(0));
 
+        UUID recipientId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveWitness(eq(recipientId), eq(hospitalId), any())).thenReturn(true);
         NurseHandoffCreateRequestDTO request = NurseHandoffCreateRequestDTO.builder()
             .patientId(patientId)
             .direction("  shift_change  ")
             .situation(" Stable overnight. ")
             .background("")
+            .recipientUserId(recipientId)
             .build();
 
         NurseHandoffSummaryDTO created = service.createHandoff(nurseId, hospitalId, request);
@@ -518,6 +592,135 @@ class NurseTaskServiceImplTest {
         ArgumentCaptor<NurseHandoff> captor = ArgumentCaptor.forClass(NurseHandoff.class);
         verify(nurseHandoffRepository).save(captor.capture());
         assertThat(captor.getValue().getStatus()).isEqualTo("PENDING");
+        // QA D776: the handoff names its author and its recipient.
+        assertThat(captor.getValue().getCreatedByUserId()).isEqualTo(nurseId);
+        assertThat(captor.getValue().getRecipientUserId()).isEqualTo(recipientId);
+        assertThat(created.getRecipientUserId()).isEqualTo(recipientId);
+        assertThat(created.getCompletableByMe()).isFalse(); // the author cannot complete it
+    }
+
+    private NurseHandoffCreateRequestDTO validHandoff(UUID patientId, UUID recipientId) {
+        return NurseHandoffCreateRequestDTO.builder()
+            .patientId(patientId).direction("SHIFT_CHANGE").situation("Stable").recipientUserId(recipientId).build();
+    }
+
+    private UUID stubHandoffPatient(UUID hospitalId) {
+        UUID patientId = UUID.randomUUID();
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(mock(Hospital.class)));
+        Patient patientEntity = mock(Patient.class);
+        when(patientEntity.isRegisteredInHospital(hospitalId)).thenReturn(true);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patientEntity));
+        return patientId;
+    }
+
+    /** QA D776, the exact replay: POST /nurse/handoffs with no recipient was 201. */
+    @Test
+    void createHandoff_refusesNoRecipient_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, null);
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.required");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    @Test
+    void createHandoff_refusesSelfAsRecipient_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        UUID actor = UUID.randomUUID();
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, actor);
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.notSelf");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    @Test
+    void createHandoff_refusesARecipientNotOnStaffHere_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = stubHandoffPatient(hospitalId);
+        UUID stranger = UUID.randomUUID();
+        when(assignmentRepository.existsActiveWitness(eq(stranger), eq(hospitalId), any())).thenReturn(false);
+        NurseHandoffCreateRequestDTO request = validHandoff(patientId, stranger);
+        UUID actor = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createHandoff(actor, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.handoff.recipient.invalid");
+        verify(nurseHandoffRepository, never()).save(any());
+    }
+
+    /** QA D776, the exact replay: PUT /nurse/handoffs/{id}/complete by the author was 204. */
+    @Test
+    void completeHandoff_refusesTheAuthor_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID author = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(author).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        assertThatThrownBy(() -> service.completeHandoff(handoffId, author, hospitalId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(handoff.getStatus()).isEqualTo("PENDING");
+        verify(nurseHandoffRepository, never()).save(any(NurseHandoff.class));
+    }
+
+    @Test
+    void completeHandoff_refusesAThirdColleague_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(UUID.randomUUID()).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        UUID other = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeHandoff(handoffId, other, hospitalId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void completeHandoff_theRecipientCompletes_D776() {
+        UUID handoffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recipient = UUID.randomUUID();
+        NurseHandoff handoff = NurseHandoff.builder().direction("SHIFT_CHANGE")
+            .createdByUserId(UUID.randomUUID()).recipientUserId(recipient).build();
+        when(nurseHandoffRepository.findByIdAndHospital_Id(handoffId, hospitalId)).thenReturn(Optional.of(handoff));
+
+        service.completeHandoff(handoffId, recipient, hospitalId);
+
+        assertThat(handoff.getStatus()).isEqualTo("COMPLETED");
+    }
+
+    @Test
+    void getHandoffRecipients_listsClinicalColleaguesHereButNotTheCaller_D776() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID me = UUID.randomUUID();
+        com.example.hms.model.User self = new com.example.hms.model.User();
+        self.setId(me); self.setFirstName("Me"); self.setActive(true);
+        com.example.hms.model.User nurse = new com.example.hms.model.User();
+        nurse.setId(UUID.randomUUID()); nurse.setFirstName("Awa"); nurse.setLastName("Sanou"); nurse.setActive(true);
+        com.example.hms.model.User cashier = new com.example.hms.model.User();
+        cashier.setId(UUID.randomUUID()); cashier.setFirstName("Cash"); cashier.setActive(true);
+        when(assignmentRepository.findStaffRowsByHospitalId(hospitalId)).thenReturn(List.of(
+            assignment(self, "ROLE_NURSE"), assignment(nurse, "ROLE_NURSE"), assignment(cashier, "ROLE_CASHIER")));
+
+        assertThat(service.getHandoffRecipients(me, hospitalId))
+            .extracting(com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO::userId)
+            .containsExactly(nurse.getId());
+    }
+
+    private static com.example.hms.model.UserRoleHospitalAssignment assignment(com.example.hms.model.User u, String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        com.example.hms.model.UserRoleHospitalAssignment a = new com.example.hms.model.UserRoleHospitalAssignment();
+        a.setUser(u);
+        a.setRole(role);
+        a.setActive(true);
+        return a;
     }
 
     @Test
@@ -2948,7 +3151,9 @@ class NurseTaskServiceImplTest {
             admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, pharmacistVerificationService, notificationRepository, userRepository,
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            fiveRightsService, failingMapper, news2EscalationService);
+            fiveRightsService, failingMapper, news2EscalationService,
+            new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
+            assignmentRepository);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -3400,5 +3605,280 @@ class NurseTaskServiceImplTest {
 
         assertThat(mar.getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
         assertThat(mar.getFiveRightsStatus()).isEqualTo(FiveRightsStatus.VERIFIED);
+    }
+
+    /* ── QA round 10 (D702) ─────────────────────────────────────────── */
+
+    @Test
+    void d702_theEmarOfAnAdmittedPatientListsOnlyTheOrdersOfTheCurrentStay() {
+        // QA D702: PATIENT_A2's consultation orders (paracetamol SIGNED, an
+        // antimalarial already dispensed for home) were listed as due doses
+        // once he was admitted, next to the stay's own paracetamol.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(LocalDateTime.now().minusHours(3));
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Encounter stayEncounter = new Encounter();
+        stayEncounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        stayEncounter.setAdmissionId(stay.getId());
+
+        Prescription takeHome = scheduledRx(hospitalId, "q6h");
+        takeHome.setStatus(PrescriptionStatus.SIGNED);
+        takeHome.setMedicationName("Paracetamol 500 mg");
+        takeHome.setEncounter(consultation);
+        UUID patientId = takeHome.getPatient().getId();
+        Prescription dispensedForHome = scheduledRx(hospitalId, "q12h");
+        dispensedForHome.setPatient(takeHome.getPatient());
+        dispensedForHome.setStatus(PrescriptionStatus.TRANSMITTED);
+        dispensedForHome.setMedicationName("Artemether-Lumefantrine");
+        dispensedForHome.setEncounter(consultation);
+        Prescription stayOrder = scheduledRx(hospitalId, "q6h");
+        stayOrder.setPatient(takeHome.getPatient());
+        stayOrder.setStatus(PrescriptionStatus.SIGNED);
+        stayOrder.setMedicationName("Paracetamol 1 g");
+        stayOrder.setEncounter(stayEncounter);
+        Prescription unanchoredBeforeStay = scheduledRx(hospitalId, "q8h");
+        unanchoredBeforeStay.setPatient(takeHome.getPatient());
+        unanchoredBeforeStay.setStatus(PrescriptionStatus.SIGNED);
+        unanchoredBeforeStay.setMedicationName("Old order");
+        unanchoredBeforeStay.setCreatedAt(LocalDateTime.now().minusDays(2));
+
+        doReturn(java.util.Map.of(patientId, stay)).when(service).activeStaysByPatient(hospitalId);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(takeHome, dispensedForHome, stayOrder, unanchoredBeforeStay));
+
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, null))
+            .extracting(NurseMedicationTaskResponseDTO::getMedication)
+            .containsExactly("Paracetamol 1 g");
+    }
+
+    @Test
+    void d702_anOrderOfAnEarlierStayIsNotTheCurrentStays() {
+        Admission current = new Admission();
+        current.setId(UUID.randomUUID());
+        Encounter earlier = new Encounter();
+        earlier.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        earlier.setAdmissionId(UUID.randomUUID());
+        Prescription rx = new Prescription();
+        rx.setEncounter(earlier);
+        rx.setCreatedAt(LocalDateTime.now());
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(rx, current)).isFalse();
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(rx, null)).isFalse();
+        Prescription unanchored = new Prescription();
+        unanchored.setCreatedAt(LocalDateTime.now());
+        current.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(unanchored, current)).isTrue();
+    }
+
+    @Test
+    void d702_activeStaysByPatientMapsEachAdmittedPatientToTheirStay() {
+        UUID hospitalId = UUID.randomUUID();
+        doCallRealMethod().when(service).activeStaysByPatient(any());
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        com.example.hms.model.Patient p = new com.example.hms.model.Patient();
+        p.setId(UUID.randomUUID());
+        stay.setPatient(p);
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(stay));
+        assertThat(service.activeStaysByPatient(hospitalId)).containsEntry(p.getId(), stay);
+        assertThat(service.activeStaysByPatient(null)).isEmpty();
+    }
+
+    /* ── QA round 8 (D514, D525) ─────────────────────────────────────── */
+
+    @Test
+    void d514_theEmarDoesNotListAnOutpatientsTakeHomePrescription() {
+        // QA D514: GET /nurse/medications/mar listed the prescriptions of a
+        // patient nobody admitted (written at a consultation) as due doses.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(consultation);
+        UUID patientId = rx.getPatient().getId();
+        doReturn(java.util.Map.of()).when(service).activeStaysByPatient(hospitalId);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, null)).isEmpty();
+    }
+
+    @Test
+    void d514_theDueCountsExcludeAnOutpatientsTakeHomePrescription() {
+        // QA D514: the dashboard's due/overdue counts follow the eMAR list's
+        // rule, so a consultation's take-home order is not counted either.
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        Encounter consultation = new Encounter();
+        consultation.setEncounterType(com.example.hms.enums.EncounterType.CONSULTATION);
+        consultation.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(consultation);
+        UUID patientId = rx.getPatient().getId();
+        doReturn(java.util.Map.of()).when(service).activeStaysByPatient(hospitalId);
+        lenient().when(nurseDashboardService.getPatientsForNurse(eq(nurseId), eq(hospitalId), any()))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+
+        NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
+
+        assertThat(summary.getMedicationsDue()).isZero();
+        assertThat(summary.getMedicationsOverdue()).isZero();
+    }
+
+    @Test
+    void d702_aTakeHomeCourseOfAnEmergencyVisitClosedBeforeTheAdmissionIsNotAWardDose() {
+        // #940 review: an ED visit checked out at 09:00 with a course for home,
+        // then a same-day admission at 18:00 — the course must not be DUE.
+        LocalDateTime admittedAt = LocalDateTime.now().minusHours(1);
+        Admission stay = new Admission();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionDateTime(admittedAt);
+        Encounter closedEd = new Encounter();
+        closedEd.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        closedEd.setCheckoutTimestamp(admittedAt.minusHours(9));
+        Prescription takeHome = new Prescription();
+        takeHome.setEncounter(closedEd);
+        takeHome.setCreatedAt(admittedAt.minusHours(10));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(takeHome, stay)).isFalse();
+
+        Encounter openEd = new Encounter();
+        openEd.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        openEd.setCheckoutTimestamp(admittedAt);
+        Prescription edDose = new Prescription();
+        edDose.setEncounter(openEd);
+        edDose.setCreatedAt(admittedAt.minusHours(2));
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(edDose, stay)).isTrue();
+        openEd.setCheckoutTimestamp(null);
+        assertThat(NurseTaskServiceImpl.orderOfCurrentStay(edDose, stay)).isTrue();
+    }
+
+    @Test
+    void d514_anAdmittedPatientsDoseAndAnOpenEmergencyVisitsDoseAreStillListed() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Prescription inBed = scheduledRx(hospitalId, "q12h");
+        inBed.setStatus(PrescriptionStatus.SIGNED);
+        Prescription inEd = scheduledRx(hospitalId, "q12h");
+        inEd.setStatus(PrescriptionStatus.SIGNED);
+        inEd.setMedicationName("Paracetamol IV");
+        Encounter ed = new Encounter();
+        ed.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        ed.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        inEd.setEncounter(ed);
+        UUID admittedId = inBed.getPatient().getId();
+        UUID edId = inEd.getPatient().getId();
+        doReturn(java.util.Map.of(admittedId, new Admission())).when(service).activeStaysByPatient(hospitalId);
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(admittedId, "Awa Kabore", "Awa", "Kabore"),
+                patient(edId, "Issa Sawadogo", "Issa", "Sawadogo")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(admittedId, hospitalId)).thenReturn(List.of(inBed));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(edId, hospitalId)).thenReturn(List.of(inEd));
+
+        assertThat(service.getMedicationTasks(nurseId, hospitalId, null))
+            .extracting(NurseMedicationTaskResponseDTO::getMedication)
+            .containsExactlyInAnyOrder("Ceftriaxone", "Paracetamol IV");
+    }
+
+    @Test
+    void d525_vitalsAreRefusedWhenTheOnlyOpenVisitPredatesTheDischarge() {
+        // QA D525 (D431 did not hold): POST /nurse/patients/{id}/vitals after
+        // discharge was 200 because a visit left open from before the stay
+        // counted as an open visit.
+        UUID[] ids = registeredPatient();
+        com.example.hms.model.Admission closed = stay(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        closed.setActualDischargeDateTime(LocalDateTime.now().minusHours(1));
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of(closed));
+        Encounter stale = new Encounter();
+        stale.setEncounterDate(LocalDateTime.now().minusDays(3));
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of(stale));
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder().temperatureCelsius(37.0).build();
+        UUID nurseId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.captureVitals(ids[0], nurseId, ids[1], req))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.vitals.patientDischarged");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void d525_aVisitOpenedAfterTheDischargeStillAllowsVitals() {
+        UUID[] ids = registeredPatient();
+        com.example.hms.model.Admission closed = stay(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        closed.setActualDischargeDateTime(LocalDateTime.now().minusDays(2));
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of(closed));
+        Encounter today = new Encounter();
+        today.setEncounterDate(LocalDateTime.now().minusMinutes(20));
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of(today));
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder().temperatureCelsius(37.0).build();
+
+        service.captureVitals(ids[0], UUID.randomUUID(), ids[1], req);
+
+        verify(vitalSignRepository).save(any());
+    }
+
+    @Test
+    void d525_aTaskIsRefusedForADischargedPatient() {
+        // QA D525: POST /nurse/tasks for the discharged patient was 200.
+        UUID[] ids = registeredPatient();
+        com.example.hms.model.Admission closed = stay(com.example.hms.enums.AdmissionStatus.DISCHARGED);
+        closed.setActualDischargeDateTime(LocalDateTime.now().minusHours(1));
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of(closed));
+        when(encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(ids[0]), eq(ids[1]), any()))
+            .thenReturn(List.of());
+        NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
+        req.setPatientId(ids[0]);
+        req.setCategory("WOUND_CARE");
+        req.setDescription("QA R8 after discharge");
+        req.setPriority("ROUTINE");
+        req.setDueAt(LocalDateTime.now().plusHours(1));
+        UUID nurseId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> service.createNursingTask(nurseId, ids[1], req))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.task.patientDischarged");
+        verify(nursingTaskRepository, never()).save(any());
+    }
+
+    @Test
+    void d525_aDoseAfterDischargeGivesTheDischargeAsTheReason() {
+        // QA D525: PUT /nurse/medications/mar/{rx}/administer GIVEN after the
+        // discharge was refused with a timing reason (not yet due).
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q12h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        Admission closed = new Admission();
+        closed.setAdmissionDateTime(rx.getCreatedAt().minusHours(1));
+        closed.setActualDischargeDateTime(LocalDateTime.now().minusMinutes(5));
+        when(admissionRepository.findByPatient_IdAndHospital_Id(rx.getPatient().getId(), hospitalId))
+            .thenReturn(List.of(closed));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.patientDischarged");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
 }

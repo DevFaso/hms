@@ -55,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -71,6 +72,8 @@ class PatientDocumentServiceImplTest {
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
     @Mock private Authentication auth;
 
     @InjectMocks
@@ -431,6 +434,69 @@ class PatientDocumentServiceImplTest {
             assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
                     .isInstanceOf(ResourceNotFoundException.class);
             verify(documentRepository, never()).findByIdAndPatient_IdAndDeletedAtIsNull(any(), any());
+            verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        private void notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision decision) {
+            when(registrationRepository.findByPatientIdAndHospitalId(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+            when(recordAccessPolicy.decide(staffId, patientId, hospitalId)).thenReturn(decision);
+        }
+
+        @Test
+        @DisplayName("D504: a live break-the-glass session at B opens an opted-out patient's documents registered only at A, and records the disclosure")
+        void breakGlassOpensDocuments() {
+            UUID sessionId = UUID.randomUUID();
+            notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision.permitted(
+                    patientId, hospitalId, staffId,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                            com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, sessionId,
+                            hospitalId, patientId, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            Hospital b = new Hospital();
+            b.setId(hospitalId);
+            b.setName("Hospital B");
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(b));
+            Pageable pageable = PageRequest.of(0, 20);
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
+            when(documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(doc)));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            when(documentMapper.toDto(doc)).thenReturn(new PatientDocumentResponseDTO());
+
+            assertThat(service.listForPatient(hospitalId, patientId, null, pageable).getContent()).hasSize(1);
+            assertThat(service.getForPatient(hospitalId, patientId, docId)).isNotNull();
+
+            ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> rows =
+                    ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+            verify(auditEventLogService, times(2)).logEvent(rows.capture());
+            assertThat(rows.getAllValues()).allSatisfy(row -> {
+                assertThat(row.getEventDescription()).contains(sessionId.toString());
+                assertThat(row.getPatientId()).isEqualTo(patientId);
+                assertThat(row.getHospitalName()).isEqualTo("Hospital B");
+            });
+        }
+
+        @Test
+        @DisplayName("D504: an opt-out without a session stays a 404 that confirms nothing, and a restricted chart is the loud 403")
+        void refusalsAreExplicit() {
+            notRegisteredHere(com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                    patientId, hospitalId, staffId,
+                    com.example.hms.enums.RecordAccessDenialReason.PATIENT_OPTED_OUT,
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            Pageable pageable = PageRequest.of(0, 20);
+            assertThatThrownBy(() -> service.listForPatient(hospitalId, patientId, null, pageable))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            when(recordAccessPolicy.decide(staffId, patientId, hospitalId)).thenReturn(
+                    com.example.hms.service.recordaccess.RecordAccessDecision.refused(
+                            patientId, hospitalId, staffId,
+                            com.example.hms.enums.RecordAccessDenialReason.CHART_RESTRICTED,
+                            com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(com.example.hms.exception.ChartRestrictedException.class);
+            verify(documentRepository, never()).findByPatient_IdAndDeletedAtIsNull(any(), any());
             verify(auditEventLogService, never()).logEvent(any());
         }
 

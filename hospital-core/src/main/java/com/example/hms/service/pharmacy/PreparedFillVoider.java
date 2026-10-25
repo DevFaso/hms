@@ -125,6 +125,7 @@ public class PreparedFillVoider {
                 .inventoryItem(item)
                 .stockLot(lot)
                 .transactionType(StockTransactionType.RETURN)
+                .referenceId(dispense.getId())
                 .quantity(dispense.getQuantityDispensed())
                 .reason("Prepared fill cancelled — stock returned for prescription "
                         + (dispense.getPrescription() != null ? dispense.getPrescription().getId() : "unknown"))

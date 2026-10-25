@@ -19,6 +19,8 @@ import {
   IntegrationMessagePage,
   IntegrationMessageStatus,
 } from '../../services/integration-messages.model';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../../shared/date-utils';
 
 const DEFAULT_PAGE_SIZE = 25;
 const STATUS_OPTIONS: IntegrationMessageStatus[] = ['SENT', 'RECEIVED', 'FAILED', 'REPLAYED'];
@@ -37,7 +39,7 @@ interface ReplayState {
 @Component({
   selector: 'app-super-admin-integration-messages',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
   templateUrl: './integration-messages.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-messages.scss',
@@ -88,8 +90,9 @@ export class IntegrationMessagesComponent implements OnInit {
         integrationId: this.integrationId().trim() || undefined,
         organizationId: this.organizationId().trim() || undefined,
         status: this.status() || undefined,
-        fromDate: this.fromDate() || undefined,
-        toDate: this.toDate() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        fromDate: this.fromDate() ? toServerDateTime(this.fromDate()) : undefined,
+        toDate: this.toDate() ? toServerDateTime(this.toDate()) : undefined,
         page: this.pageNumber(),
         size: DEFAULT_PAGE_SIZE,
       })

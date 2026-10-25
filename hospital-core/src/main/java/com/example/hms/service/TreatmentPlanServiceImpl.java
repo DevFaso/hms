@@ -87,6 +87,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
+        // QA D503 class: the author is the caller, not a colleague named in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
@@ -110,6 +112,10 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
         validateHospitalContext(hospital, assignment, author, supervising, signOff);
+        // QA D503 class: an edit keeps the plan's author; naming a new one must name the caller.
+        if (plan.getAuthor() == null || !java.util.Objects.equals(plan.getAuthor().getId(), author.getId())) {
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(author);
+        }
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());

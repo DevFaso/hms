@@ -1,3 +1,4 @@
+import { glucoseMgDlToMmol } from '../shared/glucose-units';
 import {
   Component,
   computed,
@@ -44,6 +45,8 @@ import { StoryboardBannerComponent } from './storyboard-banner/storyboard-banner
 import { ChartReviewComponent } from './chart-review/chart-review.component';
 import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-banner.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverDateOrInstant } from '../shared/date-utils';
 
 type TabKey =
   | 'overview'
@@ -65,6 +68,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     RouterLink,
@@ -109,8 +113,12 @@ export class PatientDetailComponent implements OnInit {
   /* Sub-tab data */
   vitals = signal<VitalSignResponse[]>([]);
   vitalsLoading = signal(false);
+  /** QA D504 — other hospitals' vitals are held back by the patient's opt-out. */
+  vitalsWithheld = signal(false);
   encounters = signal<EncounterResponse[]>([]);
   encountersLoading = signal(false);
+  /** QA D504 — other hospitals' encounters are held back by the patient's opt-out. */
+  encountersWithheld = signal(false);
   appointments = signal<AppointmentResponse[]>([]);
   appointmentsLoading = signal(false);
 
@@ -441,7 +449,7 @@ export class PatientDetailComponent implements OnInit {
     if (!this.canViewGrowth()) return false;
     const dob = this.patient()?.dateOfBirth;
     if (!dob) return false;
-    const ageMs = Date.now() - new Date(dob).getTime();
+    const ageMs = Date.now() - serverDateOrInstant(dob).getTime();
     return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
   }
 
@@ -541,8 +549,9 @@ export class PatientDetailComponent implements OnInit {
   private loadVitals(): void {
     this.vitalsLoading.set(true);
     this.vitalService.getRecent(this.patientId).subscribe({
-      next: (v) => {
-        this.vitals.set(v);
+      next: (result) => {
+        this.vitals.set(result.items);
+        this.vitalsWithheld.set(result.withheld);
         this.vitalsLoading.set(false);
       },
       error: () => {
@@ -554,9 +563,10 @@ export class PatientDetailComponent implements OnInit {
 
   private loadEncounters(): void {
     this.encountersLoading.set(true);
-    this.encounterService.list({ patientId: this.patientId }).subscribe({
-      next: (e) => {
-        this.encounters.set(e);
+    this.encounterService.listForPatient(this.patientId).subscribe({
+      next: (result) => {
+        this.encounters.set(result.items);
+        this.encountersWithheld.set(result.withheld);
         this.encountersLoading.set(false);
       },
       error: () => {
@@ -588,7 +598,7 @@ export class PatientDetailComponent implements OnInit {
 
   getAge(dob?: string): string {
     if (!dob) return '—';
-    const birth = new Date(dob);
+    const birth = serverDateOrInstant(dob);
     const now = new Date();
     let age = now.getFullYear() - birth.getFullYear();
     if (
@@ -605,6 +615,16 @@ export class PatientDetailComponent implements OnInit {
   /** True for a real measurement, including 0 — but not null/undefined.
    *  (A missing JSON key parses to undefined, which `=== null` misses; that
    *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
+  /** QA D530: glucose shown in mmol/L, the unit the lab reports. */
+  glucoseMmol(mgDl: number | null | undefined): string {
+    return mgDl == null
+      ? ''
+      : glucoseMgDlToMmol(mgDl).toLocaleString(this.translate.currentLang || 'fr', {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        });
+  }
+
   hasValue(value: number | null | undefined): boolean {
     return value !== null && value !== undefined;
   }

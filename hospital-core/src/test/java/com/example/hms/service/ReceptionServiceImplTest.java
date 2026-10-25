@@ -977,8 +977,6 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             AppointmentWaitlist entry = waitingEntry(waitlistId);
             AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(7));
-            when(messageSource.getMessage(eq("sms.waitlist.offer"), any(), any(Locale.class)))
-                    .thenReturn("offer message");
 
             WaitlistEntryResponseDTO result =
                     service.offerWaitlistSlot(waitlistId, hospitalId, slot.getId(), 48);
@@ -987,7 +985,9 @@ class ReceptionServiceImplTest {
             verify(entry).setOfferedSlot(slot);
             verify(entry).setStatus("OFFERED");
             verify(entry).setOfferExpiresAt(any(LocalDateTime.class));
-            verify(outreachNotifier).notifyPatient(patient, "offer message");
+            verify(outreachNotifier).notifyPatient(eq(patient),
+                    org.mockito.ArgumentMatchers.argThat(text -> "sms.waitlist.offer".equals(text.key())),
+                    any(Locale.class));
             assertThat(result).isNotNull();
         }
 
@@ -1339,6 +1339,26 @@ class ReceptionServiceImplTest {
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
                 eq(new java.math.BigDecimal("2000")), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @Test
+        @DisplayName("QA D630: an appointment for tomorrow is not checked in today, and no encounter is opened")
+        void checkInTheDayBeforeIsRefused_D630() {
+            Appointment appointment = scheduledAppointment();
+            appointment.setAppointmentDate(java.time.LocalDate.now().plusDays(1));
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .chiefComplaint("toux")
+                    .identityConfirmed(true)
+                    .consentObtained(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .satisfies(e -> assertThat(((com.example.hms.exception.BusinessException) e).getMessageKey())
+                    .isEqualTo("reception.checkin.notToday"));
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+            verify(encounterRepo, never()).save(any(Encounter.class));
         }
 
         @Test

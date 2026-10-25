@@ -11,11 +11,12 @@ import {
   ImmunizationSummary,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-my-records',
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, RouterLink, EnumLabelPipe, TranslateModule],
   templateUrl: './my-records.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-records.component.scss', '../patient-portal-pages.scss'],

@@ -1,12 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { By } from '@angular/platform-browser';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import { of } from 'rxjs';
 
 import { UserListComponent } from './user-list';
 import { UserService, UserDetail } from '../services/user.service';
-import { RoleService } from '../services/role.service';
+import { RoleResponse, RoleService } from '../services/role.service';
 import { HospitalService } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -36,7 +38,12 @@ describe('UserListComponent registration', () => {
     users.list.and.returnValue(of(page) as never);
     users.search.and.returnValue(of(page) as never);
     users.adminRegister.and.returnValue(of({ id: 'u1' } as UserDetail));
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'warning']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'warning',
+      'info',
+    ]);
 
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
@@ -81,6 +88,42 @@ describe('UserListComponent registration', () => {
     component.openEdit({ id: 'u9', username: 'gone', deleted: true } as never);
     expect(component.editing()).toBeNull();
     expect(users.getById).not.toHaveBeenCalled();
+  });
+
+  it('D765: the edit dialog lists every role read-only and never sends roles', () => {
+    users.getById.and.returnValue(
+      of({
+        id: 'u5',
+        phoneNumber: '+22670202020',
+        roles: [{ code: 'ROLE_NURSE' }, { code: 'ROLE_MIDWIFE' }],
+      } as unknown as UserDetail),
+    );
+    users.update.and.returnValue(of({ id: 'u5' } as UserDetail));
+    component.openEdit({
+      id: 'u5',
+      username: 'awa',
+      email: 'awa@hopital.bf',
+      firstName: 'Awa',
+      lastName: 'Traoré',
+      roleName: 'ROLE_NURSE',
+      deleted: false,
+    } as never);
+    fixture.detectChanges();
+    expect(component.editRoles()).toEqual(['ROLE_NURSE', 'ROLE_MIDWIFE']);
+    const chips = fixture.debugElement.queryAll(By.css('[data-testid="edit-roles"] .role-chip'));
+    expect(chips.length).toBe(2);
+    expect(fixture.debugElement.query(By.css('.role-checkbox input'))).toBeNull();
+
+    component.submitCreate();
+    expect(users.update).toHaveBeenCalledTimes(1);
+    expect(users.update.calls.mostRecent().args[1].roleNames).toBeUndefined();
+  });
+
+  it('D765 path re-verified: create still offers role checkboxes and sends the roles', () => {
+    openCreateWith(['ROLE_DOCTOR']);
+    component.createForm.email = 'awa@hopital.bf';
+    component.submitCreate();
+    expect(users.adminRegister.calls.mostRecent().args[0].roleNames).toEqual(['ROLE_DOCTOR']);
   });
 
   it('asks for neither username nor password on create', () => {
@@ -130,6 +173,23 @@ describe('UserListComponent registration', () => {
     component.submitCreate();
     expect(users.adminRegister).not.toHaveBeenCalled();
     expect(component.fieldErrors()['phoneNumber']).toBeTruthy();
+  });
+
+  it('QA D522: a multi-role registration says the activation went out by e-mail', () => {
+    users.adminRegister.and.returnValue(
+      of({
+        id: 'u1',
+        activationDelivery: [
+          { channel: 'SMS', purpose: 'ACTIVATION', outcome: 'FAILED' },
+          { channel: 'EMAIL', purpose: 'ACTIVATION', outcome: 'QUEUED' },
+        ],
+      } as unknown as UserDetail),
+    );
+    openCreateWith(['ROLE_DOCTOR', 'ROLE_NURSE']);
+    component.createForm.email = 'awa@hopital.bf';
+    component.submitCreate();
+    expect(toast.warning).toHaveBeenCalledWith('DELIVERY.SMS_FAILED');
+    expect(toast.info).toHaveBeenCalledWith('DELIVERY.ACTIVATION_EMAIL_QUEUED');
   });
 
   it('shows undeliverable generated credentials once, then forgets them', () => {
@@ -206,6 +266,23 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
     ]);
   });
 
+  it('QA D626: never offers the patient role, however the row names it, even to a super-admin', () => {
+    const row = (code: string, name: string, authority = '') =>
+      ({ id: code + name, code, name, authority }) as unknown as RoleResponse;
+    component.availableRoles.set([
+      row('', 'ROLE_PATIENT'),
+      row('PATIENT', 'Patient'),
+      row('', 'Patient(e)', 'ROLE_PATIENT'),
+      row('ROLE_NURSE', 'ROLE_NURSE'),
+    ]);
+    expect(component.grantableRoles().map((r) => r.code)).toEqual(['ROLE_NURSE']);
+    (
+      TestBed.inject(RoleContextService) as unknown as { isSuperAdmin: () => boolean }
+    ).isSuperAdmin = () => true;
+    component.availableRoles.set([...component.availableRoles()]);
+    expect(component.grantableRoles().map((r) => r.code)).toEqual(['ROLE_NURSE']);
+  });
+
   it('asks a medical specialization for a doctor, not for a nurse', () => {
     component.openCreate();
     component.onRoleToggle('ROLE_NURSE', true);
@@ -268,5 +345,65 @@ describe('UserListComponent onboarding as a hospital admin (D201)', () => {
 
     expect(users.adminRegister).toHaveBeenCalled();
     expect(users.adminRegister.calls.mostRecent().args[0].hospitalId).toBe('h-a');
+  });
+});
+
+/** QA D528/D663 replay: HOSPITAL_ADMIN_A opens /users in FR, then ES; the Profil column read STAFF / PATIENT. */
+describe('UserListComponent — the Profil column is labelled (QA D528/D663)', () => {
+  function cellsIn(lang: 'fr' | 'es'): string[] {
+    const page = {
+      content: [
+        { id: 'u1', firstName: 'Awa', lastName: 'Traoré', profileType: 'STAFF', roles: [] },
+        { id: 'u2', firstName: 'Ali', lastName: 'Sow', profileType: 'PATIENT', roles: [] },
+      ],
+      number: 0,
+      totalPages: 1,
+      totalElements: 2,
+    };
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.setTranslation('es', es);
+    translate.use(lang);
+    const fixture = TestBed.createComponent(UserListComponent);
+    fixture.detectChanges();
+    return Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody td')).map(
+      (td) => td.textContent?.trim() ?? '',
+    );
+  }
+
+  it('shows Personnel and Patient(e) in French, never STAFF or PATIENT', () => {
+    const cells = cellsIn('fr');
+    expect(cells).toContain('Personnel');
+    expect(cells).toContain('Patient(e)');
+    expect(cells).not.toContain('STAFF');
+    expect(cells).not.toContain('PATIENT');
+  });
+
+  it('shows Personal and Paciente in Spanish', () => {
+    const cells = cellsIn('es');
+    expect(cells).toContain('Personal');
+    expect(cells).toContain('Paciente');
+    expect(cells).not.toContain('STAFF');
   });
 });

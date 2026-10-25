@@ -121,6 +121,8 @@ class DispenseReadyForCollectionTest {
     /** QA D404: the money follows a cancelled dispense. */
     @Mock private PharmacyPaymentVoider paymentVoider;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private DispenseServiceImpl service;
 
@@ -153,6 +155,8 @@ class DispenseReadyForCollectionTest {
         patient.setId(patientId);
 
         prescription = new Prescription();
+        // QA D512: a fill needs a pharmacist verification.
+        prescription.setPharmacistVerifiedAt(java.time.LocalDateTime.now());
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         prescription.setMedicationName("Amoxicillin");
@@ -399,6 +403,30 @@ class DispenseReadyForCollectionTest {
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("expired on");
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
+            assertNothingPrepared();
+        }
+
+        @Test
+        @DisplayName("QA D779: half a tablet is not prepared either; the shelf is left alone")
+        void aFractionOfATabletIsNotPrepared() {
+            inventoryItem.setUnit("comprimé");
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            DispenseRequestDTO dto = request();
+            dto.setStockLotId(stockLotId);
+            dto.setQuantityRequested(new BigDecimal("2.5"));
+            dto.setQuantityDispensed(new BigDecimal("2.5"));
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("whole units");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
             assertNothingPrepared();
         }
 
@@ -985,7 +1013,7 @@ class DispenseReadyForCollectionTest {
         private java.util.List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> queue(
                 java.util.List<Prescription> rows, java.util.List<Dispense> open) {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-            when(prescriptionRepository.findByHospital_IdAndStatusIn(any(), any(), any()))
+            when(prescriptionRepository.findWorkQueue(any(), any(), any()))
                     .thenReturn(new org.springframework.data.domain.PageImpl<>(rows));
             when(dispenseRepository.findByPrescription_IdInAndStatus(any(), eq(DispenseStatus.PENDING)))
                     .thenReturn(open);
@@ -996,6 +1024,7 @@ class DispenseReadyForCollectionTest {
             Prescription rx = new Prescription();
             rx.setId(UUID.randomUUID());
             rx.setStatus(PrescriptionStatus.SIGNED);
+            rx.setPharmacistVerifiedAt(java.time.LocalDateTime.now());
             rx.setMedicationName("Paracetamol");
             return rx;
         }

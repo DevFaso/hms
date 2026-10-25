@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.utility.ElapsedTime;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
@@ -784,14 +785,12 @@ public class ReceptionServiceImpl implements ReceptionService {
             // language we can render gets it.
             Locale locale = patientLocaleResolver.resolve(
                     entry.getPatient(), Locale.forLanguageTag(outreachLocale));
-            String message = messageSource.getMessage("sms.waitlist.offer",
-                    new Object[]{
-                        slot.getStartAt().toLocalDate().format(DATE_FMT),
-                        slot.getStartAt().toLocalTime().format(TIME_FMT),
-                        hospitalName,
-                        expiry.format(EXPIRY_FMT)
-                    }, locale);
-            outreachNotifier.notifyPatient(entry.getPatient(), message);
+            NotificationText text = NotificationText.of("sms.waitlist.offer",
+                    slot.getStartAt().toLocalDate().format(DATE_FMT),
+                    slot.getStartAt().toLocalTime().format(TIME_FMT),
+                    hospitalName,
+                    expiry.format(EXPIRY_FMT));
+            outreachNotifier.notifyPatient(entry.getPatient(), text, locale);
         } catch (RuntimeException ex) {
             // Outreach is best-effort: the desk can always phone the patient.
             log.warn("Waitlist offer notification failed for entry {}: {}",
@@ -907,6 +906,12 @@ public class ReceptionServiceImpl implements ReceptionService {
         AppointmentStatus currentStatus = appointment.getStatus();
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
             throw new BusinessException("reception.checkin.notEligible", String.valueOf(currentStatus));
+        }
+        // QA D630: a check-in is the patient at the desk TODAY. A 24 Oct
+        // appointment was checked in on 23 Oct and opened an encounter dated
+        // the 23rd. Another day's appointment is rescheduled, not checked in.
+        if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
+            throw new BusinessException("reception.checkin.notToday", String.valueOf(appointment.getAppointmentDate()));
         }
 
         // 2. Transition appointment to CHECKED_IN

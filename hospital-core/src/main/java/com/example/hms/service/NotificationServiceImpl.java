@@ -41,6 +41,7 @@ public class NotificationServiceImpl implements NotificationService {
     // Who may flip a broadcast's shared read flag is decided on the caller's
     // live context; an ObjectProvider, so no bean cycle forms through it.
     private final ObjectProvider<ProviderCallerResolver> callerResolverProvider;
+    private final com.example.hms.service.i18n.NotificationLocalizer localizer;
 
     @Override
         public List<Notification> getNotificationsForUser(String username) {
@@ -79,8 +80,52 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
-    public Notification createNotification(String message, String recipientUsername) {
-        return createNotification(message, recipientUsername, null);
+    public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type) {
+        return storeKeyed(messageKey, args, recipientUsername, type, null);
+    }
+
+    @Override
+    public Notification createNotification(String messageKey, Object[] args, String recipientUsername, String type,
+                                           UUID subjectId) {
+        return storeKeyed(messageKey, args, recipientUsername, type, subjectId);
+    }
+
+    private Notification storeKeyed(String messageKey, Object[] args, String recipientUsername, String type,
+                                    UUID subjectId) {
+        List<Object> stored = com.example.hms.service.i18n.NotificationLocalizer.storable(args);
+        String french = localizer.render(messageKey, stored,
+            com.example.hms.service.i18n.NotificationLocales.STAFF);
+        return store(capped(french), messageKey, stored, recipientUsername, type, subjectId);
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public int markReadForSubject(UUID subjectId, java.util.Collection<String> types) {
+        if (subjectId == null || types == null || types.isEmpty()) {
+            return 0;
+        }
+        return notificationRepository.markReadForSubject(subjectId, types);
+    }
+
+    /** {@code security.notifications.message} is VARCHAR(255); a longer body fails the INSERT. */
+    static final int MAX_MESSAGE_LENGTH = 255;
+
+    /** A body the column can hold: an overlong argument (a medication name) is cut, never a failed INSERT. */
+    static String capped(String message) {
+        if (message == null || message.length() <= MAX_MESSAGE_LENGTH) {
+            return message;
+        }
+        return message.substring(0, MAX_MESSAGE_LENGTH - 1) + "…";
+    }
+
+    @Override
+    public Notification createLiteralNotification(String message, String recipientUsername, String type) {
+        return store(message, null, null, recipientUsername, type, null);
+    }
+
+    @Override
+    public Notification localize(Notification notification, java.util.Locale locale) {
+        return localizer.localized(notification, locale);
     }
 
     /**
@@ -100,12 +145,15 @@ public class NotificationServiceImpl implements NotificationService {
      * the push inline, which is the old behaviour and right for a caller that
      * has nothing to wait for.
      */
-    @Override
-    public Notification createNotification(String message, String recipientUsername, String type) {
+    private Notification store(String message, String messageKey, List<Object> messageArgs,
+                               String recipientUsername, String type, UUID subjectId) {
         Notification notification = Notification.builder()
                 .message(message)
+                .messageKey(messageKey)
+                .messageArgs(messageArgs)
                 .recipientUsername(recipientUsername)
                 .type(type)
+                .subjectId(subjectId)
                 .createdAt(LocalDateTime.now())
                 .read(false)
                 .build();

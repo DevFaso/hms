@@ -11,7 +11,6 @@ import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
-import com.example.hms.payload.dto.assignment.UserRoleAssignmentBatchResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportRequestDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
@@ -61,6 +60,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -115,6 +115,9 @@ class AssignmentGrantScopeTest {
             registrationRepository, staffRepository, roleValidator);
         ReflectionTestUtils.setField(service, "roleValidator", roleValidator);
         ReflectionTestUtils.setField(service, "accountAccess", access);
+        // Refusals carry message keys; resolve them against the real bundles so the
+        // assertions on wording hold whatever test ran before in this JVM.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
 
         when(messageSource.getMessage(anyString(), any(), anyString(), any()))
             .thenAnswer(inv -> inv.getArgument(2));
@@ -444,8 +447,8 @@ class AssignmentGrantScopeTest {
         }
 
         @Test
-        @DisplayName("multi-scope: a hospital the admin does not administer is reported, the others still go through")
-        void multiScopeReportsTheRefusedScope() {
+        @DisplayName("multi-scope (QA D541): one hospital the admin does not administer refuses the whole request, audited, nothing saved")
+        void multiScopeRefusesTheWholeRequest() {
             signInAsHospitalAdminOfA();
             UserRoleAssignmentMultiRequestDTO request = new UserRoleAssignmentMultiRequestDTO();
             request.setUserId(assignee.getId());
@@ -453,14 +456,14 @@ class AssignmentGrantScopeTest {
             request.setHospitalIds(List.of(hospitalA.getId(), hospitalB.getId()));
             request.setSkipConflicts(true);
 
-            UserRoleAssignmentBatchResponseDTO result = service.assignRoleToMultipleScopes(request);
+            assertThatThrownBy(() -> service.assignRoleToMultipleScopes(request))
+                .isInstanceOf(AccessDeniedException.class);
 
-            assertThat(result.getCreatedAssignments()).isEqualTo(1);
-            assertThat(result.getFailures()).singleElement()
-                .satisfies(f -> assertThat(f.getHospitalId()).isEqualTo(hospitalB.getId()));
-            ArgumentCaptor<UserRoleHospitalAssignment> saved = ArgumentCaptor.forClass(UserRoleHospitalAssignment.class);
-            verify(assignmentRepository).save(saved.capture());
-            assertThat(saved.getValue().getHospital()).isSameAs(hospitalA);
+            assertNothingWritten();
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, atLeastOnce()).logEvent(audit.capture());
+            assertThat(audit.getValue().getStatus()).isEqualTo(AuditStatus.FAILURE);
+            assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
         }
 
         @Test

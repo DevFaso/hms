@@ -255,6 +255,64 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D752: a legacy prescription with no stored quantity stays dispensable until its derived cap (9) is reached")
+    void d752_legacyPartialDispenseKeepsTheRestOfTheDerivedCap() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        // A legacy row: no stored quantity, regimen 1 tablet three times a day for 3 days = 9.
+        transactionTemplate.executeWithoutResult(tx -> {
+            Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
+            rx.setQuantity(null);
+            rx.setDosage("1 tablet");
+            rx.setFrequency("TID");
+            rx.setDuration("3 days");
+        });
+
+        for (int[] step : new int[][] {{4, 0}, {4, 0}, {1, 1}}) {
+            mockMvc.perform(apiPost(DISPENSE)
+                            .with(pharmacist(pharmacistA, hospitalA))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(dispenseBody(rxId, dispensaryA, pharmacistA, step[0], null)))
+                    .andExpect(status().isCreated());
+            assertThat(statusOf(rxId)).isEqualTo(step[1] == 1
+                    ? PrescriptionStatus.DISPENSED : PrescriptionStatus.PARTIALLY_FILLED);
+        }
+
+        // Anything beyond the derived cap is refused.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 1, null)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("QA D512: POST /pharmacy/dispense with no pharmacist verification is refused, and it can still be done after")
+    void d512_aFillWithoutVerificationIsRefused() throws Exception {
+        UUID rxId = createAndSignPrescription();
+        tools.jackson.databind.node.ObjectNode unverified = (tools.jackson.databind.node.ObjectNode)
+                tools.jackson.databind.json.JsonMapper.builder().build()
+                        .readTree(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null));
+        unverified.remove("verifiedBy");
+
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(unverified.toString()))
+                .andExpect(status().isBadRequest());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.SIGNED);
+        assertThat(dispenseRepository.findByPrescriptionId(rxId, org.springframework.data.domain.Pageable.unpaged()))
+                .isEmpty();
+
+        // The refused fill left the order verifiable and fillable.
+        mockMvc.perform(apiPost(DISPENSE)
+                        .with(pharmacist(pharmacistA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(dispenseBody(rxId, dispensaryA, pharmacistA, 10, null)))
+                .andExpect(status().isCreated());
+        assertThat(statusOf(rxId)).isEqualTo(PrescriptionStatus.DISPENSED);
+    }
+
+    @Test
     @DisplayName("G12: an in-house dispense cannot be booked against a partner or community pharmacy row")
     void inHouseDispenseRefusesNonDispensary() throws Exception {
         UUID rxId = createAndSignPrescription();
@@ -639,7 +697,9 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
                                 "medicationName", MEDICATION,
                                 "dosage", "500",
                                 "frequency", "BID",
-                                "duration", "5 days"))))
+                                "duration", "5 days",
+                                "quantity", 10,
+                                "quantityUnit", "tablet"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("DRAFT"))
                 .andReturn().getResponse().getContentAsString();
@@ -661,7 +721,7 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
             }
         });
 
-        // The request DTO carries no quantity; the dispense arithmetic needs one.
+        // QA D706: the quantity now comes from the request; the rest is set here.
         transactionTemplate.executeWithoutResult(tx -> {
             Prescription rx = prescriptionRepository.findById(rxId).orElseThrow();
             rx.setQuantity(BigDecimal.TEN);
@@ -708,6 +768,8 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
         body.put("patientId", patient.getId());
         body.put("pharmacyId", pharmacy.getId());
         body.put("dispensedBy", dispensedBy.getId());
+        // QA D512: the dispensing pharmacist attests the verification.
+        body.put("verifiedBy", dispensedBy.getId());
         body.put("medicationName", MEDICATION);
         body.put("quantityRequested", quantity);
         body.put("quantityDispensed", quantity);

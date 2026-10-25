@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -21,15 +22,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
@@ -40,15 +38,13 @@ import com.example.hms.security.context.HospitalContextHolder;
 @Slf4j
 public class PatientMedicationServiceImpl implements PatientMedicationService {
 
-    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d{1,5})\\s?days?", Pattern.CASE_INSENSITIVE);
-    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d{1,5})\\s?weeks?", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_LIMIT = 50;
-    private static final String STATUS_ACTIVE = "ACTIVE";
-    private static final String STATUS_COMPLETED = "COMPLETED";
     /** The key PatientChartAccess throws: a refused staff read reads as "no such patient". */
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
 
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D719 re-test: the catalog decides "controlled" too, not the tick alone. */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final PatientChartAccess patientChartAccess;
     private final HospitalRepository hospitalRepository;
     private final RefillRequestRepository refillRequestRepository;
@@ -107,7 +103,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             // hospitals; every foreign row surfaced is accounted.
             UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
             Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patient.getId(), hospital.getId());
-            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable);
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            prescriptions = NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patient.getId(), readable), hospital.getId());
             reachRecorder.recordReach(patient.getId(), hospital.getId(), requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(prescriptions.stream().map(p -> CrossHospitalReachRecorder.hospitalIdOf(p.getHospital())).toList(), hospital.getId()),
                 "Cross-hospital medication read on the treatment relationship");
@@ -173,16 +171,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
 
     private PatientMedicationResponseDTO toResponse(Prescription prescription, RefillRequest latestRefill,
                                                     List<com.example.hms.model.Admission> closedStays) {
-        LocalDate startDate = Optional.ofNullable(prescription.getCreatedAt())
-            .map(LocalDateTime::toLocalDate)
-            .orElse(null);
-        LocalDate endDate = resolveEndDate(startDate, prescription.getDuration());
-
-        String status = resolveStatus(prescription.getStatus(), endDate);
-        if (STATUS_ACTIVE.equals(status)
-            && com.example.hms.service.InpatientOrderEnd.endedWithAStay(prescription, closedStays)) {
-            status = STATUS_COMPLETED;
-        }
+        LocalDate startDate = com.example.hms.service.MedicationCourseStatus.startDate(prescription);
+        LocalDate endDate = com.example.hms.service.MedicationCourseStatus.endDate(prescription);
+        String status = com.example.hms.service.MedicationCourseStatus.of(prescription, closedStays);
 
         return PatientMedicationResponseDTO.builder()
             .id(prescription.getId())
@@ -199,7 +190,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())
-            .refillable(prescription.getStatus() == null || prescription.getStatus().isRefillable())
+            .refillable(prescription.allowsRefill() && !controlledResolver.isControlled(prescription))
             .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
                 ? latestRefill.getStatus().name() : null)
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
@@ -238,52 +229,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         return prescription.getMedicationName();
     }
 
-    private LocalDate resolveEndDate(LocalDate startDate, String duration) {
-        if (startDate == null || duration == null || duration.isBlank()) {
-            return null;
-        }
-
-        Matcher daysMatcher = DAYS_PATTERN.matcher(duration);
-        if (daysMatcher.find()) {
-            int days = parseInt(daysMatcher.group(1));
-            if (days > 0) {
-                return startDate.plusDays(days);
-            }
-        }
-
-        Matcher weeksMatcher = WEEKS_PATTERN.matcher(duration);
-        if (weeksMatcher.find()) {
-            int weeks = parseInt(weeksMatcher.group(1));
-            if (weeks > 0) {
-                return startDate.plusWeeks(weeks);
-            }
-        }
-
-        return null;
-    }
-
-    private int parseInt(String raw) {
-        try {
-            return Integer.parseInt(raw);
-        } catch (NumberFormatException ex) {
-            return 0;
-        }
-    }
-
     /** Signed or beyond: an order the patient was actually given (D101/D152). */
     static boolean isIssued(PrescriptionStatus status) {
         return status != PrescriptionStatus.DRAFT && status != PrescriptionStatus.PENDING_SIGNATURE;
     }
 
-    private String resolveStatus(PrescriptionStatus status, LocalDate endDate) {
-        if (status == null) {
-            return endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
-        }
-
-        return switch (status) {
-            case DISCONTINUED, CANCELLED -> "DISCONTINUED";
-            case DRAFT, PENDING_SIGNATURE, TRANSMISSION_FAILED -> "ON_HOLD";
-            default -> endDate != null && endDate.isBefore(LocalDate.now()) ? STATUS_COMPLETED : STATUS_ACTIVE;
-        };
-    }
 }

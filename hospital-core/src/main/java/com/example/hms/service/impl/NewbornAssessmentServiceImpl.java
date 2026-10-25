@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.NewbornAlertSeverity;
 import com.example.hms.enums.NewbornAlertType;
 import com.example.hms.enums.NewbornFollowUpAction;
@@ -41,13 +42,14 @@ import java.util.Set;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.springframework.context.MessageSource;
 import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
+
+    private static final String ALERT_MSG_PREFIX = "newborn.alert.msg.";
 
     private static final String HOSPITAL_NOT_FOUND = "hospital.notFound";
 
@@ -76,6 +78,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    /** QA D605: URGENT alerts reach the on-call team and escalate until acknowledged. */
+    private final com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     private final NewbornAssessmentMapper mapper;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
@@ -116,6 +120,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         NewbornAssessment assessment =
             buildAssessment(patient, hospital, registration, staff, documentedBy, request);
         assessment.setDeliveryRecord(deliveryRecord);
+        requireNotBeforeBirth(assessment.getAssessmentTime(), deliveryRecord,
+            recordedOnNewbornChart ? patient : null);
         evaluateAssessment(assessment);
 
         NewbornAssessment saved = assessmentRepository.save(assessment);
@@ -169,6 +175,27 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         return assessments.stream()
             .map(mapper::toResponse)
             .toList();
+    }
+
+    /**
+     * QA D762: an assessment at birth -3 h was accepted and counted toward the
+     * immediate checks. A newborn is assessed after it is born: not before the
+     * delivery's birth time, nor, on the newborn's own chart, before its date
+     * of birth.
+     */
+    private static void requireNotBeforeBirth(LocalDateTime assessmentTime,
+                                              com.example.hms.model.labor.DeliveryRecord deliveryRecord,
+                                              Patient newborn) {
+        if (assessmentTime == null) {
+            return;
+        }
+        LocalDateTime birth = deliveryRecord != null ? deliveryRecord.getBirthDateTime() : null;
+        if (birth == null && newborn != null && newborn.getDateOfBirth() != null) {
+            birth = newborn.getDateOfBirth().atStartOfDay();
+        }
+        if (birth != null && assessmentTime.isBefore(birth)) {
+            throw new BusinessException("maternity.newborn.assessmentTime.beforeBirth");
+        }
     }
 
     private NewbornAssessment buildAssessment(Patient patient,
@@ -356,7 +383,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
      * stored and read by staff, so it is never composed in English in code.
      */
     private String alertText(String code) {
-        return messageSource.getMessage("newborn.alert.msg." + code, null, NotificationLocales.STAFF);
+        return messageSource.getMessage(ALERT_MSG_PREFIX + code, null, NotificationLocales.STAFF);
     }
 
     private NewbornAssessmentAlert buildAlert(NewbornAlertType type,
@@ -371,7 +398,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             .type(type)
             .severity(severity)
             .code(code)
-            .message(messageSource.getMessage("newborn.alert.msg." + code, null, message, NotificationLocales.STAFF))
+            .message(messageSource.getMessage(ALERT_MSG_PREFIX + code, null, message, NotificationLocales.STAFF))
             .triggeredBy(messageSource.getMessage("newborn.alert.trigger." + code, null, trigger,
                 NotificationLocales.STAFF))
             .build();
@@ -381,30 +408,55 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (assessment.getAlerts() == null || assessment.getAlerts().isEmpty()) {
             return;
         }
-        if (documentedBy == null || documentedBy.getUsername() == null) {
-            return;
-        }
-        // Read by the documenting clinician: staff locale, not the request locale.
-        Locale locale = NotificationLocales.STAFF;
-        String fallbackName = messageSource.getMessage("patient.fallback.generic", null, locale);
-        String patientName = assessment.getPatient() != null
+        // QA D605: the team is told even when the documenter is unknown.
+        boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
+        String fullName = assessment.getPatient() != null
             ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
-            : fallbackName;
+            : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
-            .forEach(alert -> {
-                // QA D216: the type is a translated label, never the raw enum.
-                String typeLabel = alert.getType() == null ? ""
-                    : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
-                String message = messageSource.getMessage("newborn.alert.notification",
-                    new Object[]{typeLabel, patientName.isBlank() ? fallbackName : patientName, alert.getMessage()},
-                    locale);
-                try {
-                    notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (RuntimeException ex) {
-                    log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
-                }
-            });
+            .forEach(alert -> publishUrgentAlert(alert, assessment, documentedBy, fullName, notifyDocumenter));
+    }
+
+    /** The documenting clinician's own notice, in her language (QA D665). Never throws. */
+    private void notifyDocumenter(NewbornAssessmentAlert alert, User documentedBy, String fullName, String messageKey) {
+        // Read by the documenting clinician, in her language (QA D665).
+        // QA D216: the type is a translated label, never the raw enum.
+        Object typeKey = alert.getType() == null ? ""
+            : NotificationLocalizer.key("newborn.alert.type." + alert.getType().name());
+        Object patientArg = fullName.isBlank() ? NotificationLocalizer.key("patient.fallback.generic") : fullName;
+        try {
+            notificationService.createNotification("newborn.alert.notification",
+                new Object[]{typeKey, patientArg,
+                    com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+        } catch (RuntimeException ex) {
+            log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
+        }
+    }
+
+    private void publishUrgentAlert(NewbornAssessmentAlert alert, NewbornAssessment assessment, User documentedBy,
+                                    String fullName, boolean notifyDocumenter) {
+        // QA D665: the alert sentence travels as its key, rendered per reader.
+        String messageKey = alert.getCode() == null ? null : ALERT_MSG_PREFIX + alert.getCode();
+        if (notifyDocumenter) {
+            notifyDocumenter(alert, documentedBy, fullName, messageKey);
+        }
+        if (obstetricAlertEscalation != null && assessment.getHospital() != null && assessment.getPatient() != null) {
+            // Stored on the escalation row: staff-locale text (the worker re-keys its notifications).
+            java.util.Locale locale = NotificationLocales.STAFF;
+            String patientName = fullName.isBlank()
+                ? messageSource.getMessage("patient.fallback.generic", null, locale) : fullName;
+            String typeLabel = alert.getType() == null ? ""
+                : messageSource.getMessage("newborn.alert.type." + alert.getType().name(), null, locale);
+            String message = messageSource.getMessage("newborn.alert.notification",
+                new Object[]{typeLabel, patientName, alert.getMessage()}, locale);
+            obstetricAlertEscalation.raiseAfterCommit(new com.example.hms.service.maternity.ObstetricAlertEscalationService.UrgentAlert(
+                assessment.getHospital().getId(), assessment.getPatient().getId(), patientName,
+                com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_NEWBORN, assessment.getId(),
+                alert.getType() == null ? null : alert.getType().name(), typeLabel, alert.getMessage(),
+                documentedBy == null ? null : documentedBy.getId(), message, messageKey, null));
+        }
     }
 
     /**
@@ -422,7 +474,21 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                                                                              Hospital hospital,
                                                                              Patient mother) {
         if (deliveryRecordId == null) {
-            return null;
+            if (mother == null) {
+                // A neonate's own chart: the baby may have been born elsewhere.
+                return null;
+            }
+            // QA D517: on the mother's chart the newborn comes from a birth
+            // on file - her latest delivery at this hospital - or there is
+            // no newborn to assess. Only a birth within the neonatal period
+            // counts: a delivery from years ago has no newborn left.
+            java.time.LocalDateTime neonatalSince = java.time.LocalDateTime.now(java.time.ZoneId.systemDefault())
+                .minusDays(NEONATAL_PERIOD_DAYS);
+            return (hospital == null ? java.util.Optional.<com.example.hms.model.labor.DeliveryRecord>empty()
+                : deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(
+                    mother.getId(), hospital.getId()))
+                .filter(d -> d.getBirthDateTime() != null && !d.getBirthDateTime().isBefore(neonatalSince))
+                .orElseThrow(() -> new BusinessException("maternity.newborn.noDelivery"));
         }
         com.example.hms.model.labor.DeliveryRecord delivery = deliveryRecordRepository.findById(deliveryRecordId)
             .orElseThrow(() -> new ResourceNotFoundException("deliveryRecord.notFound", deliveryRecordId));
@@ -498,6 +564,8 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                 && !hospital.getId().equals(staff.getHospital().getId())) {
                 throw new BusinessException("maternity.recorder.hospitalMismatch");
             }
+            // QA D503 class: the recorder is the caller, not a colleague named in the body.
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
             return staff;
         }
         if (recorderUserId == null) {

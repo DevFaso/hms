@@ -83,6 +83,12 @@ public class DispenseRequestDTO {
     private String idempotencyKey;
 
     /**
+     * QA D654: the second person who witnessed the stock leaving for a
+     * controlled substance (required then, ignored otherwise).
+     */
+    private UUID witnessedBy;
+
+    /**
      * Tier 2 item 34 — raw value scanned from the patient's wristband,
      * which encodes the bare patient UUID (#475's printed wristband is the
      * scan target).

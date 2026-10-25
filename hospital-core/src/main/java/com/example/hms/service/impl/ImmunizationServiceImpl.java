@@ -63,11 +63,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
-        Staff administeredBy = null;
-        if (requestDTO.getAdministeredByStaffId() != null) {
-            administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
-        }
+        // QA D503 class: the vaccinator is the caller, not a colleague named in the body.
+        Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
 
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
@@ -234,8 +231,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         if (requestDTO.getAdministeredByStaffId() != null && 
             (existingImmunization.getAdministeredBy() == null || 
              !existingImmunization.getAdministeredBy().getId().equals(requestDTO.getAdministeredByStaffId()))) {
-            Staff administeredBy = staffRepository.findById(requestDTO.getAdministeredByStaffId())
-                    .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", requestDTO.getAdministeredByStaffId()));
+            Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(),
+                    com.example.hms.security.CallerIdentity.hospitalIdOf(existingImmunization.getHospital()));
             existingImmunization.setAdministeredBy(administeredBy);
         }
 

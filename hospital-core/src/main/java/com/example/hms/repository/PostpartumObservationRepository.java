@@ -49,4 +49,8 @@ public interface PostpartumObservationRepository extends JpaRepository<Postpartu
         @Param("to") LocalDateTime to,
         Pageable pageable
     );
+
+    /** QA D658: the plan's observations after the one that raised an alert, newest first. */
+    List<PostpartumObservation> findByCarePlan_IdAndObservationTimeAfterOrderByObservationTimeDesc(
+        UUID carePlanId, java.time.LocalDateTime after);
 }

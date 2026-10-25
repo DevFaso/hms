@@ -13,10 +13,11 @@ import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
+import { grantableRoles } from '../core/grantable-roles';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
-import { deliveryWarningKeys } from '../shared/delivery-warnings';
+import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
@@ -36,19 +37,6 @@ const MEDICAL_ROLE_CODES = new Set([
   'ROLE_LAB_SCIENTIST',
   'ROLE_PHARMACIST',
 ]);
-
-/** Roles a non-super-admin is never offered in the create modal (QA D189). Bare codes. */
-const STAFF_MODAL_EXCLUDED_ROLES = new Set([
-  'SUPER_ADMIN',
-  'ADMIN',
-  'HOSPITAL_ADMIN',
-  'PROVIDER_ADMIN',
-  'PATIENT',
-]);
-
-function bareRoleCode(code: string | undefined | null): string {
-  return (code ?? '').toUpperCase().replace(/^ROLE_/, '');
-}
 
 /** Roles whose holders have a medical specialty (QA D195): not nurses, pharmacists or lab staff. */
 const SPECIALTY_ROLE_CODES = new Set([
@@ -73,7 +61,7 @@ const JOB_TITLES = [
   'QUALITY_MANAGER',
   'RECEPTIONIST',
   'SURGEON',
-  'HOSPITAL_ADMINISTRATOR',
+  // QA D541: HOSPITAL_ADMINISTRATOR (legacy) is offered once, as HOSPITAL_ADMIN.
   'LABORATORY_SCIENTIST',
   'RADIOLOGIST',
   'ANESTHESIOLOGIST',
@@ -175,11 +163,10 @@ export class UserListComponent implements OnInit, OnDestroy {
    * registered from the patient form, not here, so a hospital admin is
    * offered staff roles only.
    */
-  readonly grantableRoles = computed(() => {
-    const roles = this.availableRoles();
-    if (this.roleContext.isSuperAdmin()) return roles;
-    return roles.filter((r) => !STAFF_MODAL_EXCLUDED_ROLES.has(bareRoleCode(r.code)));
-  });
+  // QA D189/D626: the shared grant rule (no patient role, no admin role below super-admin).
+  readonly grantableRoles = computed(() =>
+    grantableRoles(this.availableRoles(), this.roleContext.isSuperAdmin()),
+  );
   availableHospitals = signal<{ id: string; name: string }[]>([]);
 
   // Form fields
@@ -378,6 +365,9 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.showCreate.set(true);
   }
 
+  /** Every role of the account being edited, shown read-only (QA D765). */
+  readonly editRoles = signal<string[]>([]);
+
   openEdit(user: UserSummary): void {
     // A deleted account is restored first; the server refuses the edit (D126).
     if (user.deleted) return;
@@ -393,6 +383,10 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: user.roleName ? [user.roleName] : [],
     };
     this.selectedRoles = user.roleName ? [user.roleName] : [];
+    // QA D765: the summary carries the primary role only. Show every role the
+    // account holds, read-only: roles are granted per hospital from the role
+    // assignments page, and PUT /users/{id} never changes them.
+    this.editRoles.set(user.roleName ? [user.roleName] : []);
     this.fieldErrors.set({});
     this.showCreate.set(true);
 
@@ -402,6 +396,11 @@ export class UserListComponent implements OnInit, OnDestroy {
       next: (detail) => {
         if (detail.phoneNumber) {
           this.createForm.phoneNumber = detail.phoneNumber;
+        }
+        const codes = roleCodesOf(detail.roles);
+        if (codes.length > 0) {
+          this.editRoles.set(codes);
+          this.selectedRoles = codes;
         }
       },
     });
@@ -448,7 +447,7 @@ export class UserListComponent implements OnInit, OnDestroy {
       this.toast.error(this.translate.instant('USERS.TOAST.REQUIRED_FIELDS'));
       return;
     }
-    if (this.selectedRoles.length === 0) {
+    if (!isEdit && this.selectedRoles.length === 0) {
       this.toast.error(this.translate.instant('USERS.TOAST.ROLE_REQUIRED'));
       return;
     }
@@ -481,6 +480,8 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!payload.password?.trim()) delete payload.password;
     if (!payload.phoneNumber?.trim()) delete payload.phoneNumber;
     if (!payload.email?.trim()) delete payload.email;
+    // QA D765: an edit never sends roles; the server refuses a role change here.
+    if (existing) delete payload.roleNames;
     if (!existing) {
       delete payload.username;
       delete payload.password;
@@ -501,6 +502,11 @@ export class UserListComponent implements OnInit, OnDestroy {
         if (!existing) {
           for (const key of deliveryWarningKeys(saved.activationDelivery)) {
             this.toast.warning(this.translate.instant(key));
+          }
+          // QA D522: say so when the activation went out by e-mail, so a failed
+          // SMS next to it does not read as "activation by SMS only".
+          if (hasActivationSent(saved.activationDelivery, 'EMAIL')) {
+            this.toast.info(this.translate.instant('DELIVERY.ACTIVATION_EMAIL_QUEUED'));
           }
           if (saved.temporaryUsername && saved.temporaryPassword) {
             this.issuedCredentials.set({
@@ -678,4 +684,21 @@ export class UserListComponent implements OnInit, OnDestroy {
       roleNames: [],
     };
   }
+}
+
+/**
+ * The role codes of a user detail. The API sends role summaries
+ * ({ code, name }); older callers typed them as plain strings.
+ */
+export function roleCodesOf(roles: unknown): string[] {
+  if (!Array.isArray(roles)) return [];
+  const codes: string[] = [];
+  for (const r of roles) {
+    const code =
+      typeof r === 'string'
+        ? r
+        : ((r as { code?: string; name?: string })?.code ?? (r as { name?: string })?.name);
+    if (code && !codes.includes(code)) codes.push(code);
+  }
+  return codes;
 }

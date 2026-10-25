@@ -71,7 +71,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
             .recordedByUserId(actorUserId)
             .build();
         row = optOutRepository.save(row);
-        audit(patientId, actorUserId, "Patient opted out of cross-hospital record sharing");
+        audit(patient, actorUserId, "Patient opted out of cross-hospital record sharing");
         log.info("[record-access] opt-out recorded for patient {}", patientId);
         return toDto(patientId, row);
     }
@@ -79,7 +79,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
     @Override
     @Transactional
     public RecordSharingOptOutDTO revoke(UUID patientId, UUID actorUserId, Locale locale) {
-        requirePatient(patientId, actorUserId);
+        Patient patient = requirePatient(patientId, actorUserId);
         PatientRecordSharingOptOut row = optOutRepository
             .findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId)
             .orElseThrow(() -> new ConflictException(messageSource.getMessage(
@@ -87,7 +87,7 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
         row.setRevokedAt(LocalDateTime.now());
         row.setRevokedByUserId(actorUserId);
         row = optOutRepository.save(row);
-        audit(patientId, actorUserId, "Patient's cross-hospital record sharing opt-out revoked");
+        audit(patient, actorUserId, "Patient's cross-hospital record sharing opt-out revoked");
         log.info("[record-access] opt-out revoked for patient {}", patientId);
         return toDto(patientId, row);
     }
@@ -123,13 +123,25 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
      * it happened; REQUIRES_NEW inside the audit service keeps a failed audit
      * from undoing the opt-out.
      */
-    private void audit(UUID patientId, UUID actorUserId, String description) {
+    private void audit(Patient patient, UUID actorUserId, String description) {
+        UUID patientId = patient.getId();
+        // QA D533: the hospital the desk acts at, captured now (the callback
+        // may run after the request context is gone); the audit service anchors
+        // the row on the actor's assignment there and names the hospital.
+        // QA D625: a PATIENT (patient-owned scope) has no pinned hospital and no
+        // staff assignment, so the row was written with hospital_name=''. The
+        // consent belongs to the patient's home hospital; name it here.
+        UUID pinned = com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull();
+        UUID actingHospitalId = pinned != null ? pinned : patient.getHospitalId();
+        String hospitalName = hospitalNameOf(patient, actingHospitalId);
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .eventType(AuditEventType.CONSENT_UPDATE)
                     .status(AuditStatus.SUCCESS)
                     .userId(actorUserId)
+                    .hospitalId(actingHospitalId)
+                    .hospitalName(hospitalName)
                     .patientId(patientId)
                     .entityType("PATIENT_RECORD_SHARING_OPTOUT")
                     .resourceId(patientId.toString())
@@ -140,6 +152,19 @@ public class RecordSharingOptOutServiceImpl implements RecordSharingOptOutServic
                 log.warn("[record-access] audit emission failed for patient {}: {}", patientId, ex.getMessage());
             }
         });
+    }
+
+    /** The name of the hospital among the patient's registrations, or null when none matches. */
+    private static String hospitalNameOf(Patient patient, UUID hospitalId) {
+        if (hospitalId == null || patient.getHospitalRegistrations() == null) {
+            return null;
+        }
+        return patient.getHospitalRegistrations().stream()
+            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+            .map(r -> r.getHospital().getName())
+            .filter(name -> name != null && !name.isBlank())
+            .findFirst()
+            .orElse(null);
     }
 
     private static RecordSharingOptOutDTO toDto(UUID patientId, PatientRecordSharingOptOut row) {

@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { SuperAdminAuditSearchComponent } from './audit-search';
@@ -61,6 +61,29 @@ describe('SuperAdminAuditSearchComponent — MVP-8c source toggles', () => {
     residency.listAvailableRegions.and.returnValue(of([]));
   });
 
+  it('applySaved shows the saved UTC bounds as local picker values, so a re-save round-trips (#948 review)', () => {
+    const component = setup();
+    const fromUtc = new Date(2026, 9, 24, 8, 30).toISOString().slice(0, 19);
+    component.applySaved({
+      id: 's1',
+      name: 'Morning',
+      filter: { fromDate: fromUtc },
+    } as never);
+    expect(component.fromDate()).toBe('2026-10-24T08:30');
+    const [sent] = auditSearch.search.calls.mostRecent().args;
+    expect(sent.fromDate).toBe(fromUtc);
+  });
+
+  it('reads an audit entity token in the reader language (D619)', () => {
+    const c = setup();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { AUDIT_ENTITY_TYPE: { BILLING_INVOICE: 'Facture' } } },
+    });
+    translate.use('fr');
+    expect(c.entityLabel('BILLING_INVOICE')).toBe('Facture');
+    expect(c.entityLabel('Unknown Resource')).toBeNull();
+  });
   it('toggleAggregatedSource adds and removes a source from the active set', () => {
     const cmp = setup();
     // MVP-c3 — PLATFORM_CONFIG joined the default-on set, so the

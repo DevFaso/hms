@@ -38,12 +38,19 @@ public interface NurseTaskService {
      *        handoffs were unreadable through any API until 2026-08-21 —
      *        completeHandoff stamped completedAt/completedByName and the only
      *        list query filtered them out.
+     * @param nurseUserId the list filter (assignee=me); null lists the whole hospital
+     * @param viewerUserId the authenticated caller, whatever the filter: who
+     *        {@code completableByMe} is computed for (QA D785)
      */
-    List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit, String status);
+    List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID viewerUserId, UUID hospitalId,
+                                                     int limit, String status);
 
     NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request);
 
     void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId);
+
+    /** QA D776: the colleagues at {@code hospitalId} a handoff can be addressed to (never the caller). */
+    List<com.example.hms.payload.dto.nurse.NurseHandoffRecipientDTO> getHandoffRecipients(UUID nurseUserId, UUID hospitalId);
 
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
 

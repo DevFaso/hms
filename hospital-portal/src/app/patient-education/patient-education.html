@@ -255,7 +255,9 @@
                     <span class="muted">—</span>
                   }
                 </td>
-                <td>{{ p.lastAccessedAt ? (p.lastAccessedAt | date: 'short') : '—' }}</td>
+                <td>
+                  {{ p.lastAccessedAt ? (p.lastAccessedAt | serverTime | date: 'short') : '—' }}
+                </td>
                 <td>{{ p.rating ? '★ ' + p.rating : '—' }}</td>
                 <td class="actions-cell">
                   <button

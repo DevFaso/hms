@@ -18,11 +18,11 @@
       <p>{{ 'PORTAL.MEDICATIONS.EMPTY_DESC' | translate }}</p>
     </div>
   } @else {
-    @if (medications().length > 0) {
+    @for (group of medicationGroups(); track group.titleKey) {
       <section class="portal-section">
-        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.ACTIVE' | translate }}</h2>
+        <h2 class="portal-section-title">{{ group.titleKey | translate }}</h2>
         <div class="portal-list">
-          @for (med of medications(); track med.id) {
+          @for (med of group.meds; track med.id) {
             <div
               class="portal-list-item clickable"
               (click)="toggleMed(med.id)"
@@ -48,7 +48,8 @@
                     ·
                     {{
                       'PORTAL.MEDICATIONS.READY_SINCE'
-                        | translate: { date: (med.readyForCollectionAt | date: 'short') }
+                        | translate
+                          : { date: (med.readyForCollectionAt | serverTime | date: 'short') }
                     }}
                   </span>
                 }
@@ -56,7 +57,7 @@
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
                   {{ 'PORTAL.MEDICATIONS.STARTED' | translate }}
-                  {{ med.startDate | date: 'mediumDate' }}</span
+                  {{ med.startDate | serverTime | date: 'mediumDate' }}</span
                 >
               </div>
               <span class="portal-status-chip" [attr.data-status]="med.status">{{
@@ -87,7 +88,7 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.START_DATE' | translate }}</span>
-                    <span class="dv">{{ med.startDate | date: 'mediumDate' }}</span>
+                    <span class="dv">{{ med.startDate | serverTime | date: 'mediumDate' }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
@@ -189,7 +190,8 @@
                     ·
                     {{
                       'PORTAL.MEDICATIONS.READY_SINCE'
-                        | translate: { date: (rx.readyForCollectionAt | date: 'short') }
+                        | translate
+                          : { date: (rx.readyForCollectionAt | serverTime | date: 'short') }
                     }}
                   </span>
                 }
@@ -226,7 +228,9 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_DATE' | translate }}</span>
-                    <span class="dv">{{ rx.prescribedDate | date: 'mediumDate' }}</span>
+                    <span class="dv">{{
+                      rx.prescribedDate | serverTime | date: 'mediumDate'
+                    }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
@@ -263,10 +267,10 @@
                 <span class="pli-title">{{ r.medicationName }}</span>
                 <span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.REQUESTED' | translate }}
-                  {{ r.requestedAt | date: 'mediumDate' }}
+                  {{ r.requestedAt | serverTime | date: 'mediumDate' }}
                   @if (r.updatedAt && r.status !== 'PENDING' && r.status !== 'REQUESTED') {
                     · {{ 'PORTAL.MEDICATIONS.COMPLETED' | translate }}
-                    {{ r.updatedAt | date: 'mediumDate' }}
+                    {{ r.updatedAt | serverTime | date: 'mediumDate' }}
                   }
                 </span>
               </div>

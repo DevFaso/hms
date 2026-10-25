@@ -3,11 +3,12 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-emergency-broadcast-banner',
   standalone: true,
-  imports: [CommonModule, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, TranslateModule, DatePipe],
   templateUrl: './emergency-broadcast-banner.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './emergency-broadcast-banner.scss',

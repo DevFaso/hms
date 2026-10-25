@@ -105,7 +105,7 @@
               @if (fetchedAskedAt()) {
                 <p class="clarify-stamp">
                   <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
-                  <span>{{ fetchedAskedAt() | date: 'short' }}</span>
+                  <span>{{ fetchedAskedAt() | serverTime | date: 'short' }}</span>
                 </p>
               }
               <h3>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWER_LABEL' | translate }}</h3>
@@ -119,7 +119,7 @@
               @if (fetchedAnsweredAt()) {
                 <p class="clarify-stamp">
                   <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ANSWERED_LABEL' | translate }}</span>
-                  <span>{{ fetchedAnsweredAt() | date: 'short' }}</span>
+                  <span>{{ fetchedAnsweredAt() | serverTime | date: 'short' }}</span>
                 </p>
               }
             </section>
@@ -140,7 +140,7 @@
             @if (askedAt()) {
               <p class="clarify-stamp">
                 <span>{{ 'PRESCRIPTIONS.CLARIFICATION.ASKED_LABEL' | translate }}</span>
-                <span>{{ askedAt() | date: 'short' }}</span>
+                <span>{{ askedAt() | serverTime | date: 'short' }}</span>
               </p>
             }
           </section>

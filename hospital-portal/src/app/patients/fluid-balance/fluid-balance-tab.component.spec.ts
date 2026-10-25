@@ -87,6 +87,11 @@ describe('FluidBalanceTabComponent', () => {
     expect(fluidServiceSpy.getSummary).toHaveBeenCalledTimes(2);
     const secondCall = fluidServiceSpy.getSummary.calls.mostRecent().args[1];
     expect(secondCall?.from).toBeTruthy();
+    // #948 review: the window start is on the server's UTC clock, as the
+    // observation times it is compared with are: read as UTC, it is 7 days
+    // ago in absolute time, whatever the workstation zone.
+    const ago = Date.now() - new Date(`${secondCall!.from}Z`).getTime();
+    expect(Math.abs(ago - 7 * 24 * 3600 * 1000)).toBeLessThan(60_000);
   });
 
   it('records an entry sending only the route — never a category', () => {

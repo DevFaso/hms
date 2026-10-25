@@ -43,6 +43,9 @@ class NurseDashboardServiceImplTest {
     @Mock
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
+    @Mock
+    private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+
     @InjectMocks
     private NurseDashboardServiceImpl nurseDashboardService;
 
@@ -107,6 +110,56 @@ class NurseDashboardServiceImplTest {
         assertFalse(dto.getFlags().isEmpty());
         assertTrue(dto.getFlags().contains("Ready for discharge"));
         assertTrue(dto.getFlags().contains("Allergies noted"));
+    }
+
+    @Test
+    void d504_withoutBreakGlassTheRowSaysItsAllergySummaryIsNarrowed() {
+        Patient patient = buildPatient("p@example.com", "555-3333", "Awa", "Sana", "awa");
+        Hospital hospital = buildHospital("General Hospital", "GH-100");
+        PatientHospitalRegistration registration = buildRegistration(patient, hospital);
+        registration.setReadyByStaffId(nurseUserId);
+        PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
+        when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
+        com.example.hms.model.PatientAllergy local = com.example.hms.model.PatientAllergy.builder()
+            .allergenDisplay("Peanuts").active(true).build();
+        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)).thenReturn(List.of(local));
+
+        List<PatientResponseDTO> result = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+
+        assertEquals("Peanuts", result.get(0).getAllergies());
+        assertTrue(result.get(0).isAllergiesWithheld());
+    }
+
+    @Test
+    void d504_breakGlassKeepsTheWholeAllergySummaryDespiteTheOptOut() {
+        UUID nurseB = UUID.randomUUID();
+        Patient patient = buildPatient("p@example.com", "555-3333", "Awa", "Sana", "awa");
+        Hospital hospital = buildHospital("General Hospital", "GH-100");
+        PatientHospitalRegistration registration = buildRegistration(patient, hospital);
+        registration.setReadyByStaffId(nurseUserId);
+        PatientResponseDTO baseDto = PatientResponseDTO.builder().allergies("Peanuts, Penicillin").build();
+        when(registrationRepository.findActiveForHospitalWithPatient(hospitalId)).thenReturn(List.of(registration));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(baseDto);
+        when(patientVitalSignService.getLatestSnapshot(patient.getId(), hospitalId)).thenReturn(Optional.empty());
+        when(patientAllergyRepository.hasActiveSharingOptOut(patient.getId())).thenReturn(true);
+        when(recordAccessPolicy.decide(nurseB, patient.getId(), hospitalId)).thenReturn(
+            com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patient.getId(), hospitalId, nurseB,
+                new com.example.hms.service.recordaccess.TreatmentRelationship(
+                    com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), hospitalId,
+                    patient.getId(), null, null, true),
+                com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(nurseB).build());
+        try {
+            List<PatientResponseDTO> result = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
+            assertEquals("Peanuts, Penicillin", result.get(0).getAllergies());
+            assertFalse(result.get(0).isAllergiesWithheld());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test

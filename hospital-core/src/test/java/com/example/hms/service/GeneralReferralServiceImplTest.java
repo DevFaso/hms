@@ -404,6 +404,78 @@ class GeneralReferralServiceImplTest {
         verify(referralRepository).save(any(GeneralReferral.class));
     }
 
+    /** QA D509: DOCTOR2_A sends POST /referrals/{id}/cancel on DOCTOR_A's referral. */
+    @Test
+    void d509_anotherDoctorAtTheSendingHospitalCannotCancel() {
+        GeneralReferral referral = buildReferral();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
+    }
+
+    /** QA D510: DOCTOR_B at the receiving hospital cancels hospital A's submitted referral. */
+    @Test
+    void d510_receivingHospitalCannotCancel() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral referral = buildReferral();
+        referral.setReceivingHospital(receiving);
+        referral.submit();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.cancelReferral(referralId, "QA"))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(referralRepository, never()).save(any(GeneralReferral.class));
+    }
+
+    /** D509/D510 path re-verified: the referrer at the sending hospital still cancels. */
+    @Test
+    void d510_referrerAtTheSendingHospitalCancels() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral referral = buildReferral();
+        referral.setReceivingHospital(receiving);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.cancelReferral(referralId, "QA");
+
+        assertThat(referral.getStatus()).isEqualTo(ReferralStatus.CANCELLED);
+    }
+
+    /** QA D509: a draft cancelled before it was sent never reaches the receiving hospital. */
+    @Test
+    void d509_cancelledDraftIsInvisibleToTheReceivingHospital() {
+        Hospital receiving = new Hospital();
+        receiving.setId(UUID.randomUUID());
+        GeneralReferral cancelledDraft = buildReferral();
+        cancelledDraft.setReceivingHospital(receiving);
+        cancelledDraft.cancel("QA");
+        GeneralReferral sentThenCancelled = buildReferral();
+        sentThenCancelled.setId(UUID.randomUUID());
+        sentThenCancelled.setReceivingHospital(receiving);
+        sentThenCancelled.submit();
+        sentThenCancelled.cancel("QA");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(receiving.getId())).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(receiving.getId()))
+            .thenReturn(List.of(cancelledDraft, sentThenCancelled));
+
+        assertThat(service.getAllReferrals(null))
+            .extracting(GeneralReferralResponseDTO::getId)
+            .containsExactly(sentThenCancelled.getId());
+
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(cancelledDraft));
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.getReferral(referralId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
     // ── list methods ────────────────────────────────────────────────────────
 
     @Test
@@ -427,6 +499,9 @@ class GeneralReferralServiceImplTest {
         GeneralReferral foreign = buildReferral();
         foreign.setId(UUID.randomUUID());
         foreign.setHospital(other);
+        // QA D623: a foreign row is listed once it was sent; its draft is not.
+        foreign.setStatus(ReferralStatus.SUBMITTED);
+        foreign.setSubmittedAt(java.time.LocalDateTime.now());
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));

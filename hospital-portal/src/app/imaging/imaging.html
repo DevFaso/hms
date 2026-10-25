@@ -5,7 +5,7 @@
       <p class="page-subtitle">{{ 'IMAGING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      @if (view() === 'orders') {
+      @if (view() === 'orders' && canCreateOrder()) {
         <button class="btn-primary" (click)="openCreate()">
           <span class="material-symbols-outlined">add</span> {{ 'IMAGING.NEW_ORDER' | translate }}
         </button>
@@ -143,7 +143,7 @@
                     o.priority | enumLabel: 'imagingOrderPriority'
                   }}</span>
                 </td>
-                <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
+                <td>{{ o.orderedAt ? (o.orderedAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getStatusClass(o.status) }}">{{
                     o.status | enumLabel: 'imagingOrderStatus'
@@ -177,20 +177,24 @@
                       </button>
                     }
                     @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
-                      <button
-                        class="action-link"
-                        (click)="openEdit(o)"
-                        [title]="'IMAGING.EDIT_ORDER' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      <button
-                        class="action-link delete"
-                        (click)="confirmCancel(o)"
-                        [title]="'IMAGING.CANCEL_ORDER' | translate"
-                      >
-                        <span class="material-symbols-outlined">cancel</span>
-                      </button>
+                      @if (canEditThisOrder(o)) {
+                        <button
+                          class="action-link"
+                          (click)="openEdit(o)"
+                          [title]="'IMAGING.EDIT_ORDER' | translate"
+                        >
+                          <span class="material-symbols-outlined">edit</span>
+                        </button>
+                      }
+                      @if (canCancelOrder()) {
+                        <button
+                          class="action-link delete"
+                          (click)="confirmCancel(o)"
+                          [title]="'IMAGING.CANCEL_ORDER' | translate"
+                        >
+                          <span class="material-symbols-outlined">cancel</span>
+                        </button>
+                      }
                     }
                   </div>
                 </td>
@@ -224,7 +228,7 @@
         >
           <option value="">{{ 'IMAGING.ALL_MODALITIES' | translate }}</option>
           @for (m of modalities; track m) {
-            <option [value]="m">{{ m }}</option>
+            <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
           }
         </select>
         <label class="critical-toggle">
@@ -275,7 +279,7 @@
                 </td>
                 <td>{{ r.bodyRegion || '—' }}</td>
                 <td>{{ r.interpretingProviderName || r.performedByName || '—' }}</td>
-                <td>{{ r.createdAt ? (r.createdAt | date: 'mediumDate') : '—' }}</td>
+                <td>{{ r.createdAt ? (r.createdAt | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   <span class="status-badge {{ getReportStatusClass(r.reportStatus) }}">{{
                     'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
@@ -372,7 +376,7 @@
                   @if (rep.criticalNotifiedAt) {
                     {{
                       'IMAGING.CRITICAL_NOTIFIED_AT'
-                        | translate: { time: rep.criticalNotifiedAt | date: 'short' }
+                        | translate: { time: rep.criticalNotifiedAt | serverTime | date: 'short' }
                     }}
                   } @else {
                     {{ 'IMAGING.CRITICAL_NOT_YET_NOTIFIED' | translate }}
@@ -400,7 +404,7 @@
           @if (rep.criticalResultAcknowledgedAt) {
             <p class="muted">
               {{ 'IMAGING.CRITICAL_ACKED_BY' | translate }} {{ rep.criticalResultAckByName }} —
-              {{ rep.criticalResultAcknowledgedAt | date: 'short' }}
+              {{ rep.criticalResultAcknowledgedAt | serverTime | date: 'short' }}
             </p>
           }
           <div class="detail-grid">
@@ -428,7 +432,9 @@
               <span class="field-label">{{ 'IMAGING.SIGNED_BY' | translate }}</span
               ><span class="field-value"
                 >{{ rep.signedByName || '—' }}
-                {{ rep.signedAt ? '(' + (rep.signedAt | date: 'short') + ')' : '' }}</span
+                {{
+                  rep.signedAt ? '(' + (rep.signedAt | serverTime | date: 'short') + ')' : ''
+                }}</span
               >
             </div>
             <div class="detail-field">
@@ -489,7 +495,7 @@
               <ul class="status-history">
                 @for (h of rep.statusHistory; track h.id) {
                   <li>
-                    {{ h.changedAt | date: 'short' }} —
+                    {{ h.changedAt | serverTime | date: 'short' }} —
                     {{ 'IMAGING.REPORT_STATUS_' + h.status | translate }}
                     {{ h.changedByName ? '(' + h.changedByName + ')' : '' }}
                     {{ h.statusReason ? '· ' + h.statusReason : '' }}
@@ -727,7 +733,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.orderedAt ? (ord.orderedAt | date: 'medium') : '—'
+                ord.orderedAt ? (ord.orderedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
@@ -739,7 +745,7 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
               ><span class="field-value">{{
-                ord.completedAt ? (ord.completedAt | date: 'medium') : '—'
+                ord.completedAt ? (ord.completedAt | serverTime | date: 'medium') : '—'
               }}</span>
             </div>
           </div>
@@ -853,7 +859,7 @@
               [title]="'IMAGING.MODALITY' | translate"
             >
               @for (m of modalities; track m) {
-                <option [value]="m">{{ m }}</option>
+                <option [value]="m">{{ m | enumLabel: 'imagingModality' }}</option>
               }
             </select>
           </div>
@@ -865,7 +871,7 @@
               [title]="'IMAGING.PRIORITY' | translate"
             >
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'imagingOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -915,6 +921,9 @@
           </div>
         </div>
       </div>
+      @if (formError()) {
+        <p class="modal-error" role="alert" data-testid="imaging-form-error">{{ formError() }}</p>
+      }
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}

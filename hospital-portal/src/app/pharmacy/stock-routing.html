@@ -302,7 +302,7 @@
                   —
                 }
               </td>
-              <td>{{ d.decidedAt | date: 'short' }}</td>
+              <td>{{ d.decidedAt | serverTime | date: 'short' }}</td>
               <td>
                 @if (d.status === 'PENDING' && d.routingType === 'PARTNER') {
                   <button

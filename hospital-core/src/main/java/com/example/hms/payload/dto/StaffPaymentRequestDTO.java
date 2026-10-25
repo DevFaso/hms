@@ -19,6 +19,8 @@ public class StaffPaymentRequestDTO {
     private String method;
     /** billing.payment_transactions.reference_number is VARCHAR(120). */
     @jakarta.validation.constraints.Size(max = 120)
+    // QA D768: a client sending "referenceNumber" (the stored column's name) had it dropped silently.
+    @com.fasterxml.jackson.annotation.JsonAlias({"referenceNumber", "transactionReference"})
     private String reference;
     /** billing.payment_transactions.notes is VARCHAR(1024). */
     @jakarta.validation.constraints.Size(max = 1024)

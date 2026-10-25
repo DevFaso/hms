@@ -79,6 +79,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment nurseAssignment = assignmentRepository.findById(request.getNurseAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, request.getNurseAssignmentId()));
         validateAssignment(nurseAssignment, nurse, registration.getHospital().getId());
+        requireCallerUnlessSuperAdmin(nurse);
 
         registration.markReadyForDischarge(nurse.getId(), request.getNurseSummary());
         registrationRepository.save(registration);
@@ -112,9 +113,16 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
+        // QA D766: the approval discharges the stay, so like the direct
+        // discharge it refuses to leave the after-visit summary with no diagnosis.
+        String dischargeDiagnosis = trim(decision.getDischargeDiagnosis());
+        if (dischargeDiagnosis == null || dischargeDiagnosis.isEmpty()) {
+            throw new BusinessException("admissionDischarge.dischargeDiagnosis.required");
+        }
         approval.setDoctorNote(trim(decision.getDoctorNote()));
         approval.setRejectionReason(null);
         approval.setStatus(DischargeStatus.APPROVED);
@@ -141,8 +149,10 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
             stay.discharge(stay.getDischargeDisposition(), stay.getDischargeSummary(),
                 stay.getDischargeInstructions(), doctor);
             admissionRepository.save(stay);
-            stayEncounters.recordDischarge(stay);
+            stayEncounters.recordDischarge(stay, dischargeDiagnosis);
             encounterAutoCompletion.completeAdmissionEncounters(stay.getId());
+            // QA D760: and the visit that led to the stay, as the direct discharge does.
+            encounterAutoCompletion.completeVisitsThatLedToAdmission(stay);
         }
 
         DischargeApproval saved = dischargeApprovalRepository.save(approval);
@@ -163,6 +173,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         UserRoleHospitalAssignment doctorAssignment = assignmentRepository.findById(decision.getDoctorAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_ASSIGNMENT_NOT_FOUND_KEY, decision.getDoctorAssignmentId()));
         validateAssignment(doctorAssignment, doctor, approval.getHospital().getId());
+        requireCallerUnlessSuperAdmin(doctor);
 
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
@@ -190,9 +201,12 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         if (approval.getNurse() == null) {
             throw new BusinessException("Cannot cancel discharge request: no nurse associated with this approval");
         }
-        if (!Objects.equals(approval.getNurse().getId(), cancelledByStaffId)) {
+        if (cancelledByStaffId != null && !Objects.equals(approval.getNurse().getId(), cancelledByStaffId)) {
             throw new BusinessException("Only the requesting nurse can cancel a discharge request");
         }
+        // QA D503 class: the staffId on the request is a claim; the caller
+        // must be the requesting nurse herself.
+        requireCallerUnlessSuperAdmin(approval.getNurse());
 
         approval.setStatus(DischargeStatus.CANCELLED);
         approval.setResolvedAt(LocalDateTime.now());
@@ -284,5 +298,14 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private String trim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    /**
+     * QA D503 class (D302/D406/D407): a staff id in the request names who acts.
+     * It must be the caller's own record; a verified super-admin may act for a
+     * staff member of the same hospital, as before.
+     */
+    private void requireCallerUnlessSuperAdmin(Staff staff) {
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(staff);
     }
 }

@@ -127,7 +127,6 @@
               </td>
               <td>
                 <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
-                <div class="cell-secondary">{{ r.patientEmail || '' }}</div>
               </td>
               <td>{{ r.labTestName || '—' }}</td>
               <td>
@@ -153,7 +152,7 @@
                 }
               </td>
               <td class="date-cell">
-                {{ r.resultDate ? (r.resultDate | date: 'medium') : '—' }}
+                {{ r.resultDate ? (r.resultDate | serverTime | date: 'medium') : '—' }}
               </td>
               <td>
                 @if (r.released) {
@@ -266,7 +265,7 @@
                   >
                     <span class="material-symbols-outlined">timeline</span>
                   </button>
-                  @if (!r.released) {
+                  @if (!r.released && canDeleteResult()) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
@@ -343,12 +342,14 @@
                   {{ 'LAB_RESULTS.NOT_GRADED_UNITS_DIFFER_HINT' | translate }}</span
                 >
               } @else {
-                <span class="field-value">{{ r.severityFlag || '—' }}</span>
+                <span class="field-value" data-testid="detail-severity">{{
+                  r.severityFlag ? (r.severityFlag | enumLabel: 'labSeverityFlag') : '—'
+                }}</span>
               }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
-              <span class="field-value">{{ r.resultDate | date: 'medium' }}</span>
+              <span class="field-value">{{ r.resultDate | serverTime | date: 'medium' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
@@ -364,7 +365,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | date: 'medium' }} — {{ getReleasedByDisplay(r) }}
+                  >{{ r.releasedAt | serverTime | date: 'medium' }} — {{ getReleasedByDisplay(r) }}
                   @if (r.selfReleased) {
                     ({{ 'LAB_RESULTS.SELF_RELEASED' | translate }})
                   }
@@ -375,7 +376,8 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.acknowledgedAt | date: 'medium' }} — {{ r.acknowledgedBy }}</span
+                  >{{ r.acknowledgedAt | serverTime | date: 'medium' }} —
+                  {{ r.acknowledgedBy }}</span
                 >
               </div>
             }
@@ -383,7 +385,8 @@
               <div class="detail-field" data-testid="read-back-evidence">
                 <span class="field-label">{{ 'LAB_RESULTS.READ_BACK_RECORDED' | translate }}</span>
                 <span class="field-value"
-                  >“{{ r.criticalReadBackValue }}” — {{ r.criticalReadBackAt | date: 'medium' }} —
+                  >“{{ r.criticalReadBackValue }}” —
+                  {{ r.criticalReadBackAt | serverTime | date: 'medium' }} —
                   {{ r.criticalReadBackBy || '—' }}</span
                 >
               </div>
@@ -404,7 +407,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.SIGNED' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.signedAt ? (r.signedAt | date: 'medium') : '—' }} —
+                  >{{ r.signedAt ? (r.signedAt | serverTime | date: 'medium') : '—' }} —
                   {{ r.signedBy || '—' }}</span
                 >
               </div>
@@ -448,7 +451,7 @@
                 </div>
                 @for (tp of sortedTrendHistory(r); track $index) {
                   <div class="trend-row">
-                    <span>{{ tp.resultDate | date: 'medium' }}</span>
+                    <span>{{ tp.resultDate | serverTime | date: 'medium' }}</span>
                     <span>{{ tp.resultValue }} {{ tp.resultUnit || '' }}</span>
                     <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
                   </div>
@@ -534,7 +537,9 @@
                           : {
                               patient: o.patientFullName || '—',
                               test: o.labTestName || o.labTestCode || '—',
-                              date: o.orderDatetime ? (o.orderDatetime | date: 'short') : '—',
+                              date: o.orderDatetime
+                                ? (o.orderDatetime | serverTime | date: 'short')
+                                : '—',
                               code: shortOrderCode(o.labOrderCode),
                             }
                     }}
@@ -775,7 +780,7 @@
             <h4>{{ 'LAB_RESULTS.CURRENT_RESULT' | translate }}</h4>
             @if (cmp.currentResult; as cur) {
               <p class="compare-value">{{ cur.resultValue }} {{ cur.resultUnit }}</p>
-              <p class="compare-date">{{ cur.resultDate | date: 'medium' }}</p>
+              <p class="compare-date">{{ cur.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>—</p>
             }
@@ -784,7 +789,7 @@
             <h4>{{ 'LAB_RESULTS.PREVIOUS_RESULT' | translate }}</h4>
             @if (cmp.previousResult; as prev) {
               <p class="compare-value">{{ prev.resultValue }} {{ prev.resultUnit }}</p>
-              <p class="compare-date">{{ prev.resultDate | date: 'medium' }}</p>
+              <p class="compare-date">{{ prev.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
             }
@@ -828,9 +833,11 @@
               <tbody>
                 @for (pt of cmp.trendHistory; track pt.labResultId) {
                   <tr>
-                    <td>{{ pt.resultDate | date: 'medium' }}</td>
+                    <td>{{ pt.resultDate | serverTime | date: 'medium' }}</td>
                     <td>{{ pt.resultValue }} {{ pt.resultUnit }}</td>
-                    <td>{{ pt.severityFlag || '—' }}</td>
+                    <td>
+                      {{ pt.severityFlag ? (pt.severityFlag | enumLabel: 'labSeverityFlag') : '—' }}
+                    </td>
                   </tr>
                 }
               </tbody>

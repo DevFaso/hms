@@ -25,9 +25,7 @@
         </div>
         <div class="bsc-body">
           <span class="bsc-label">{{ 'PORTAL.BILLING.TOTAL_BALANCE' | translate }}</span>
-          <span class="bsc-amount">{{
-            totalBalance() | currency: 'XOF' : 'symbol' : '1.0-0'
-          }}</span>
+          <span class="bsc-amount">{{ totalBalance() | cfa }}</span>
         </div>
       </div>
     }
@@ -52,21 +50,21 @@
               }}</span>
               <span class="pli-sub"
                 >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
-                {{ inv.date | date: 'mediumDate' }}</span
+                {{ inv.date | serverTime | date: 'mediumDate' }}</span
               >
               <span class="pli-meta"
-                >{{ 'PORTAL.BILLING.DUE' | translate }} {{ inv.dueDate | date: 'mediumDate' }}</span
+                >{{ 'PORTAL.BILLING.DUE' | translate }}
+                {{ inv.dueDate | serverTime | date: 'mediumDate' }}</span
               >
             </div>
             <div class="pli-end">
               <!-- QA D254: the invoice total, with what is left to pay when anything is -->
               <span class="pli-amount" [class.has-balance]="isPayable(inv)">{{
-                inv.amount | currency: 'XOF' : 'symbol' : '1.0-0'
+                inv.amount | cfa
               }}</span>
               @if (isPayable(inv)) {
                 <span class="pli-meta"
-                  >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}
-                  {{ inv.balance | currency: 'XOF' : 'symbol' : '1.0-0' }}</span
+                  >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
                 >
               }
               @if (inv.creditedTo) {
@@ -125,23 +123,17 @@
           </div>
           <div class="pay-invoice-info">
             <span class="pay-label">{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}</span>
-            <span class="pay-value pay-balance">{{
-              payingInvoice()!.balance | currency: 'XOF' : 'symbol' : '1.0-0'
-            }}</span>
+            <span class="pay-value pay-balance">{{ payingInvoice()!.balance | cfa }}</span>
           </div>
           <!-- QA D421: declarations awaiting confirmation are shown, and what is left to declare -->
           @if (pendingOf(payingInvoice()!) > 0) {
             <div class="pay-invoice-info pay-pending">
               <span class="pay-label">{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}</span>
-              <span class="pay-value">{{
-                pendingOf(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
-              }}</span>
+              <span class="pay-value">{{ pendingOf(payingInvoice()!) | cfa }}</span>
             </div>
             <div class="pay-invoice-info">
               <span class="pay-label">{{ 'PORTAL.BILLING.LEFT_TO_DECLARE' | translate }}</span>
-              <span class="pay-value">{{
-                declarable(payingInvoice()!) | currency: 'XOF' : 'symbol' : '1.0-0'
-              }}</span>
+              <span class="pay-value">{{ declarable(payingInvoice()!) | cfa }}</span>
             </div>
           }
 
@@ -210,7 +202,7 @@
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {
                   {{ 'PORTAL.BILLING.PAY' | translate }}
-                  {{ payAmount ? (payAmount | currency: 'XOF' : 'symbol' : '1.0-0') : '' }}
+                  {{ payAmount ? (payAmount | cfa) : '' }}
                 }
               </button>
             </div>

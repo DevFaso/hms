@@ -139,12 +139,12 @@
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.CREATED_AT' | translate }}</span>
-            <span class="field-value">{{ appt.createdAt | date: 'medium' }}</span>
+            <span class="field-value">{{ appt.createdAt | serverTime | date: 'medium' }}</span>
           </div>
           @if (appt.updatedAt !== appt.createdAt) {
             <div class="field-row">
               <span class="field-label">{{ 'APPOINTMENTS.LAST_UPDATED' | translate }}</span>
-              <span class="field-value">{{ appt.updatedAt | date: 'medium' }}</span>
+              <span class="field-value">{{ appt.updatedAt | serverTime | date: 'medium' }}</span>
             </div>
           }
         </div>

@@ -195,7 +195,8 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
       (r) =>
         r.method === 'POST' &&
         r.url === '/auth/resend-verification' &&
-        r.params.get('email') === 'a@b.c',
+        r.body?.email === 'a@b.c' &&
+        r.urlWithParams === '/auth/resend-verification',
     );
     req.flush({ message: 'If the email is registered, a new verification link has been sent.' });
     expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');
@@ -227,8 +228,10 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     const req = httpMock.expectOne(
       (r) =>
         r.url === '/auth/resend-verification' &&
-        r.params.get('phone') === '+226 70 00 00 00' &&
-        !r.params.has('email'),
+        // QA D542: the phone number is in the body, never in the URL.
+        r.body?.phone === '+226 70 00 00 00' &&
+        !r.body?.email &&
+        r.urlWithParams === '/auth/resend-verification',
     );
     req.flush({});
     expect(component.resendActivationSuccess).toBe('LOGIN.ACTIVATION_LINK_SENT');

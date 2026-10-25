@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PharmacyFillMapper;
 import com.example.hms.model.Hospital;
@@ -81,7 +82,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // the reach of the whole timeline accounted once below.
         UUID requesterUserId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, hospitalId);
-        List<Prescription> prescriptions = fetchPrescriptions(patientId, readable, startDate, endDate);
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        List<Prescription> prescriptions = NeverSentRule.prescriptionsReadableHere(
+            fetchPrescriptions(patientId, readable, startDate, endDate), hospitalId);
         List<PharmacyFill> pharmacyFills = fetchPharmacyFills(patientId, readable, startDate, endDate);
 
         log.debug("Found {} prescriptions and {} pharmacy fills", prescriptions.size(), pharmacyFills.size());
@@ -269,6 +272,22 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .toList();
     }
 
+
+    /**
+     * QA D678: prescriber tick OR hospital catalog item controlled. Optional so
+     * a hand-built instance in unit tests still works (then the tick alone).
+     */
+    private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
+    private boolean controlled(com.example.hms.model.Prescription p) {
+        return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
+    }
+
     private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx) {
         LocalDate startDate = rx.getCreatedAt() != null ? rx.getCreatedAt().toLocalDate() : null;
         LocalDate endDate = calculateEndDate(startDate, rx.getDuration());
@@ -293,7 +312,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .prescriberName(rx.getStaff() != null ? rx.getStaff().getFullName() : null)
             .pharmacyName(rx.getPharmacyName())
             .status(rx.getStatus() != null ? rx.getStatus().name() : null)
-            .controlledSubstance(rx.isControlledSubstance())
+            .controlledSubstance(controlled(rx))
             .hasOverlap(false)
             .overlappingWith(new ArrayList<>())
             .hasInteraction(false)

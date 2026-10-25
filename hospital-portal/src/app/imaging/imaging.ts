@@ -27,6 +27,8 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { actionRoles } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -64,7 +66,14 @@ interface ReportForm {
 @Component({
   selector: 'app-imaging',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './imaging.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './imaging.scss',
@@ -159,24 +168,51 @@ export class ImagingComponent implements OnInit {
   /** What the void modal may write. */
   readonly voidStatuses: VoidReportStatus[] = ['CANCELLED', 'ERROR'];
 
-  readonly canSeeResults = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canSeeResults = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportsByHospital'),
+  );
   /** Mirrors CREATE_RADIOLOGY_REPORTS / SIGN_IMAGING_REPORTS on the controller. */
-  readonly canAuthorReports = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
-  readonly canUpdateReportStatus = this.canAuthorReports;
+  readonly canAuthorReports = this.roleContext.hasAnyActiveRole(actionRoles('imagingReportCreate'));
+  readonly canUpdateReportStatus = this.roleContext.hasAnyActiveRole(
+    actionRoles('imagingReportStatus'),
+  );
+  /** QA D527: POST /imaging/orders — the ordering clinicians, not the radiologist. */
+  readonly canCreateOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderCreate')),
+  );
+  /** QA D527: PUT /imaging/orders/{id} — the ordering clinicians. */
+  readonly canEditOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderUpdate')),
+  );
+  /** The server's reason when a save is refused, shown in the open modal (QA D611). */
+  readonly formError = signal<string | null>(null);
+
+  /**
+   * QA D611 (regression of D527): the role alone is not enough. PUT
+   * /imaging/orders/{id} refuses a signed order (it is what the signer
+   * attested) and an unsigned order of another ordering clinician; the edit
+   * button was offered on a signed order and the save took the page to a 403.
+   */
+  canEditThisOrder(o: ImagingOrderResponse): boolean {
+    if (!this.canEditOrder() || o.providerSignedAt) {
+      return false;
+    }
+    if (this.roleContext.isSuperAdmin() && this.roleContext.globalView()) {
+      return true;
+    }
+    const me = this.auth.getUserProfile()?.id;
+    return !o.orderingProviderUserId || o.orderingProviderUserId === me;
+  }
+
+  /**
+   * QA D527: cancelling goes through PUT /imaging/orders/{id}/status, which a
+   * midwife or nurse is refused; she was offered the button and got a 403.
+   */
+  readonly canCancelOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
+  );
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
-  readonly canAckCritical = this.roleContext.hasAnyActiveRole([
-    'ROLE_DOCTOR',
-    'ROLE_RADIOLOGIST',
-    'ROLE_SUPER_ADMIN',
-  ]);
+  readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 
   modalities: ImagingModality[] = [
     'XRAY',
@@ -286,6 +322,7 @@ export class ImagingComponent implements OnInit {
       mrn: o.patientMrn,
     } as PatientResponse);
     this.editId = o.id;
+    this.formError.set(null);
     this.editing.set(true);
     this.showModal.set(true);
   }
@@ -296,6 +333,7 @@ export class ImagingComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    this.formError.set(null);
     const payload: ImagingOrderRequest = {
       ...this.form,
       laterality: this.form.laterality || undefined,
@@ -314,8 +352,11 @@ export class ImagingComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
+      error: (err: { error?: { message?: string } } | null) => {
+        // QA D611: the server's reason stays in the open modal; nothing typed is lost.
+        const reason = err?.error?.message ?? null;
+        this.formError.set(reason);
+        this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
         this.saving.set(false);
       },
     });

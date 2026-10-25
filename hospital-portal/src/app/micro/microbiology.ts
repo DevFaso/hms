@@ -26,6 +26,8 @@ import {
   MicroSusceptibilityMethod,
   SUSCEPTIBILITY_METHODS,
 } from '../services/micro.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
 
 /**
  * Microbiology workbench (P3 #19) — the lab-facing resulting surface:
@@ -37,7 +39,7 @@ import {
 @Component({
   selector: 'app-microbiology',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './microbiology.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './microbiology.scss',
@@ -236,7 +238,8 @@ export class MicrobiologyComponent implements OnInit {
       .create({
         labOrderId: this.formOrderId(),
         specimenSource: this.formSpecimenSource() || undefined,
-        collectedAt: this.formCollectedAt() || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        collectedAt: this.formCollectedAt() ? toServerDateTime(this.formCollectedAt()) : undefined,
         gramStain: this.formGramStain() || undefined,
         notes: this.formNotes() || undefined,
       })

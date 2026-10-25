@@ -232,7 +232,8 @@ class LabResultServiceImplNullScopeTest {
                 .isExactlyInstanceOf(BusinessException.class);
             verify(labResultRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
             verify(labResultRepository, never()).findAllForReader(
-                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
+                org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean(), any(),
+                org.mockito.ArgumentMatchers.anyBoolean(), any(), any());
             verify(labResultRepository, never()).findHandledByHospitals(any());
         }
     }
@@ -250,7 +251,10 @@ class LabResultServiceImplNullScopeTest {
         @Test
         void isStillServedAcrossTenants() {
             assertThat(service.getLabResultById(result.getId(), Locale.ENGLISH)).isSameAs(mapped);
+            // QA D709: a read-back is of a released result.
+            result.setReleased(true);
             assertThat(service.recordCriticalReadBack(result.getId(), readBack(), Locale.ENGLISH)).isSameAs(mapped);
+            result.setReleased(false);
 
             service.deleteLabResult(result.getId(), Locale.ENGLISH);
             verify(labResultRepository).deleteById(result.getId());
@@ -260,6 +264,7 @@ class LabResultServiceImplNullScopeTest {
         void stillPagesEveryTenant() {
             PageRequest page = PageRequest.of(0, 20);
             when(labResultRepository.findAllForReader(org.mockito.ArgumentMatchers.eq(false),
+                    org.mockito.ArgumentMatchers.eq(true), any(),
                     org.mockito.ArgumentMatchers.eq(true), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
@@ -271,7 +276,8 @@ class LabResultServiceImplNullScopeTest {
             // QA D211 (round 5): the global branch ignored both.
             PageRequest page = PageRequest.of(0, 20);
             UUID patientId = UUID.randomUUID();
-            when(labResultRepository.findAllForReader(true, false, patientId, page))
+            result.setReleased(true);
+            when(labResultRepository.findAllForReader(true, false, patientId, true, new UUID(0L, 0L), page))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(result)));
 
             assertThat(service.getLabResultsPage(page, Locale.ENGLISH, patientId, false).getContent())
@@ -289,7 +295,10 @@ class LabResultServiceImplNullScopeTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(performing.getId());
 
             assertThat(service.getLabResultById(result.getId(), Locale.ENGLISH)).isSameAs(mapped);
+            // QA D709: a read-back is of a released result.
+            result.setReleased(true);
             assertThat(service.recordCriticalReadBack(result.getId(), readBack(), Locale.ENGLISH)).isSameAs(mapped);
+            result.setReleased(false);
             service.deleteLabResult(result.getId(), Locale.ENGLISH);
 
             verify(labResultRepository).deleteById(result.getId());

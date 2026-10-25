@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationText;
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RefillStatus;
@@ -28,10 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.service.i18n.PatientLocaleResolver;
-import java.util.Locale;
 
 @Slf4j
 @Service
@@ -44,12 +42,11 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
 
     private final RefillRequestRepository refillRequestRepository;
     private final PrescriptionRepository prescriptionRepository;
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final StaffRepository staffRepository;
     private final NotificationService notificationService;
     private final ControllerAuthUtils authUtils;
     private final RoleValidator roleValidator;
-    private final MessageSource messageSource;
-    private final PatientLocaleResolver patientLocaleResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -126,7 +123,7 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         // A hold the patient can't interpret is worse than a denial, so the reason
         // is mandatory here even though approve/reject leave it optional.
         if (decision == null || decision.getProviderNotes() == null || decision.getProviderNotes().isBlank()) {
-            throw new BusinessException("A reason is required when putting a refill request on hold.");
+            throw new BusinessException("patient.refill.decision.reasonRequired");
         }
         return decide(auth, refillId, decision, RefillStatus.PAUSED);
     }
@@ -143,12 +140,12 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         Prescription prescription = refill.getPrescription();
         Staff prescriber = prescription != null ? prescription.getStaff() : null;
         if (prescriber == null || !staffId.equals(prescriber.getId())) {
-            throw new AccessDeniedException("You can only act on refill requests for your own prescriptions.");
+            throw new AccessDeniedException("patient.refill.decision.notOwnPrescription");
         }
 
         if (!isActionable(refill.getStatus(), newStatus)) {
-            throw new BusinessException(
-                "Only pending refill requests can be acted on. Current status: " + refill.getStatus());
+            throw new BusinessException("patient.refill.decision.notPending",
+                String.valueOf(refill.getStatus()));
         }
 
         // Release the fill BEFORE recording the decision. If the prescription
@@ -192,10 +189,9 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
      */
     private void releaseRefillToPharmacy(Prescription prescription) {
         PrescriptionStatus status = prescription.getStatus();
-        if (status != null && !status.isRefillable()) {
-            throw new BusinessException(
-                "This prescription can no longer be refilled (status: " + status
-                    + "). The patient needs a new prescription.");
+        // QA D719: a controlled substance is never refilled, whatever its status.
+        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.approveNotRefillable", String.valueOf(status));
         }
 
         Integer remaining = prescription.getRefillsRemaining();
@@ -226,10 +222,10 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
     private UUID resolveStaffId(Authentication auth) {
         authUtils.requireAuth(auth);
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication."));
+                .orElseThrow(() -> new BusinessException("patient.refill.decision.userUnresolved"));
         List<Staff> staffList = staffRepository.findByUserId(userId);
         if (staffList.isEmpty()) {
-            throw new BusinessException("No staff record linked to your account.");
+            throw new BusinessException("patient.refill.decision.noStaffRecord");
         }
         return staffList.get(0).getId();
     }
@@ -243,34 +239,31 @@ public class RefillApprovalServiceImpl implements RefillApprovalService {
         if (username == null || username.isBlank()) {
             return;
         }
-        // Read by the patient: their stated language, never the prescriber's
-        // request locale.
-        Locale locale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
-        String medicationName = refill.getPrescription() != null && refill.getPrescription().getMedicationName() != null
+        // Read by the patient, in the language they read it in — never the
+        // prescriber's request locale (QA D665).
+        Object medicationName = refill.getPrescription() != null && refill.getPrescription().getMedicationName() != null
                 ? refill.getPrescription().getMedicationName()
-                : messageSource.getMessage(MSG_MEDICATION_FALLBACK, null, locale);
-        String message = buildDecisionMessage(refill, medicationName, status, locale);
+                : NotificationLocalizer.key(MSG_MEDICATION_FALLBACK);
+        NotificationText message = buildDecisionMessage(refill, medicationName, status);
         try {
-            notificationService.createNotification(message, username, NOTIFICATION_TYPE);
+            notificationService.createNotification(message.key(), message.args(), username, NOTIFICATION_TYPE);
         } catch (Exception ex) {
             log.warn("Failed to deliver refill decision notification to {} for refill {}",
                     username, refill.getId(), ex);
         }
     }
 
-    private String buildDecisionMessage(RefillRequest refill, String medicationName, RefillStatus status,
-                                        Locale locale) {
+    private NotificationText buildDecisionMessage(RefillRequest refill, Object medicationName, RefillStatus status) {
         if (status == RefillStatus.PAUSED) {
             // The reason is mandatory for a hold, so it is always worth surfacing.
-            return messageSource.getMessage("refill.decision.paused",
-                    new Object[]{medicationName, refill.getProviderNotes()}, locale);
+            return NotificationText.of("refill.decision.paused", medicationName, refill.getProviderNotes());
         }
         if (status == RefillStatus.APPROVED) {
             // The fill is now in the pharmacy work queue, so tell the patient
             // what to actually do rather than just that a decision was made.
-            return messageSource.getMessage("refill.decision.approved", new Object[]{medicationName}, locale);
+            return NotificationText.of("refill.decision.approved", medicationName);
         }
-        return messageSource.getMessage("refill.decision.denied", new Object[]{medicationName}, locale);
+        return NotificationText.of("refill.decision.denied", medicationName);
     }
 
     private MedicationRefillResponseDTO toResponseDTO(RefillRequest r) {

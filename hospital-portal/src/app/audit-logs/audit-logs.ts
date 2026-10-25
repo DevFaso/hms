@@ -19,6 +19,8 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { toServerDateTime } from '../shared/date-utils';
+import { bareRole } from '../core/role-token';
 
 /** QA D330: the write audit's "METHOD /route" description, read as an action. */
 const WRITE_DESCRIPTION = /^(POST|PUT|PATCH|DELETE)\s+\/\S*$/;
@@ -28,6 +30,57 @@ const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
   PATCH: 'AUDIT.WRITE_PATCH',
   DELETE: 'AUDIT.WRITE_DELETE',
 };
+
+/**
+ * QA D774: audit descriptions are stored as the emitter wrote them, mostly in
+ * English with raw codes. The common ones are read in the reader's language;
+ * the parameters (a role code, a person, a test code) are kept.
+ */
+interface DescriptionPattern {
+  readonly re: RegExp;
+  readonly key: string;
+  readonly params?: (m: RegExpExecArray) => Record<string, string>;
+  /** Params that are codes to read in the reader's language; every other param is verbatim. */
+  readonly localise?: Readonly<
+    Record<string, 'role' | 'labDefinitionAction' | 'labApprovalStatus'>
+  >;
+}
+const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
+  { re: /^Patient record viewed$/, key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED' },
+  { re: /^User profile updated$/, key: 'AUDIT.DESC.USER_PROFILE_UPDATED' },
+  { re: /^New user account created$/, key: 'AUDIT.DESC.USER_CREATED' },
+  { re: /^User account soft-deleted$/, key: 'AUDIT.DESC.USER_DELETED' },
+  { re: /^User account restored$/, key: 'AUDIT.DESC.USER_RESTORED' },
+  { re: /^Doctor record view$/, key: 'AUDIT.DESC.DOCTOR_RECORD_VIEW' },
+  { re: /^Doctor timeline view$/, key: 'AUDIT.DESC.DOCTOR_TIMELINE_VIEW' },
+  { re: /^MFA challenge issued$/, key: 'AUDIT.DESC.MFA_CHALLENGE_ISSUED' },
+  { re: /^TOTP enrollment verified$/, key: 'AUDIT.DESC.TOTP_ENROLLMENT_VERIFIED' },
+  { re: /^First sign-in setup completed$/, key: 'AUDIT.DESC.FIRST_SIGN_IN_COMPLETED' },
+  {
+    re: /^Role assignment refused: the caller may not grant this role there$/,
+    key: 'AUDIT.DESC.ROLE_ASSIGNMENT_REFUSED',
+  },
+  {
+    re: /^Assigned role '([^']+)' to (.+)$/,
+    key: 'AUDIT.DESC.ROLE_ASSIGNED',
+    params: (m) => ({ role: m[1], name: m[2] }),
+    localise: { role: 'role' },
+  },
+  {
+    re: /^Confirmed assignment '([^']+)' for (.+)$/,
+    key: 'AUDIT.DESC.ASSIGNMENT_CONFIRMED',
+    params: (m) => ({ role: m[1], name: m[2] }),
+    localise: { role: 'role' },
+  },
+  {
+    re: /^Lab test definition (\S+): approval step (\S+), new status (.+?)\.$/,
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP',
+    params: (m) => ({ code: m[1], step: m[2], status: m[3] }),
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
+  },
+];
+/** A raw enum token in free text: ROLE_PATIENT, SUBMIT_FOR_QA, PENDING_QA_REVIEW. */
+const RAW_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 
 @Component({
   selector: 'app-audit-logs',
@@ -75,7 +128,47 @@ export class AuditLogsComponent implements OnInit {
         : this.translate.instant('AUDIT.WRITE_ENTITY_UNKNOWN');
       return this.translate.instant(WRITE_ACTION_KEYS[match[1]], { entity });
     }
-    return description || '--';
+    if (!description) return '--';
+    for (const p of DESCRIPTION_PATTERNS) {
+      const m = p.re.exec(description);
+      if (m) {
+        const params = p.params ? p.params(m) : {};
+        const localised: Record<string, string> = {};
+        for (const [k, v] of Object.entries(params)) {
+          const domain = p.localise?.[k];
+          if (domain === 'labApprovalStatus') localised[k] = this.approvalStatus(v);
+          else localised[k] = domain ? this.label(v, domain) : v;
+        }
+        return this.translate.instant(p.key, localised);
+      }
+    }
+    return description.replaceAll(RAW_TOKEN, (token) => this.label(token));
+  }
+
+  /** QA D774: a lab-definition status through LAB.APPROVAL_STATUS; an unknown code stays verbatim. */
+  private approvalStatus(value: string): string {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
+    const key = `LAB.APPROVAL_STATUS.${value}`;
+    const label: unknown = this.translate.instant(key);
+    return typeof label === 'string' && label !== key ? label : value;
+  }
+
+  /**
+   * QA D774: a role or enum token in the reader's language. Only a real label
+   * replaces it: when the lookup would merely prettify (GLU -> "Glu",
+   * HB_A1C -> "Hb A1c"), the token is an identifier and is kept verbatim.
+   */
+  private label(value: string, domain?: string): string {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(value)) return value;
+    const role = value.startsWith('ROLE_');
+    const code = (role ? bareRole(value) : value) ?? value;
+    const group = role ? 'role' : domain;
+    const label = this.enumLabels.transform(code, group);
+    const prettified = code
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+    return label && label !== prettified ? label : value;
   }
 
   logs = signal<AuditEventLog[]>([]);
@@ -118,8 +211,9 @@ export class AuditLogsComponent implements OnInit {
       .list({
         page: this.currentPage(),
         size: this.pageSize,
-        fromDate: this.fromDate || undefined,
-        toDate: this.toDate || undefined,
+        // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+        fromDate: this.fromDate ? toServerDateTime(this.fromDate) : undefined,
+        toDate: this.toDate ? toServerDateTime(this.toDate) : undefined,
       })
       .subscribe({
         next: (res) => {

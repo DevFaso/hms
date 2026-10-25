@@ -416,6 +416,63 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  it('QA D618: a refused discharge stays on the open form (no 403 page)', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/admissions/adm-1/discharge', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/admissions/adm-1/discharge')
+      .flush(
+        { message: 'Only the signed-in physician can discharge.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D611: a refused edit of a signed imaging order stays in the open modal (no 403 page)', () => {
+    let error: HttpErrorResponse | undefined;
+    http.put('/imaging/orders/o-1', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/imaging/orders/o-1')
+      .flush(
+        { message: 'A signed order cannot be edited.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D660: a refused edit of a signed prescription stays in the open modal (no 403 page)', () => {
+    let error: HttpErrorResponse | undefined;
+    http.put('/prescriptions/5dd1633b', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/prescriptions/5dd1633b')
+      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D661: a refused referral cancel is reported by the page, not a 403 page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/referrals/r-1/cancel', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/referrals/r-1/cancel')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('still redirects a 403 on reading an imaging order', () => {
+    http.get('/imaging/orders/o-1').subscribe({ error: () => undefined });
+    httpMock.expectOne('/imaging/orders/o-1').flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
   it('still redirects a 403 on an unrelated write', () => {
     http.post('/prescriptions', {}).subscribe({ error: () => undefined });
     httpMock.expectOne('/prescriptions').flush(null, { status: 403, statusText: 'Forbidden' });

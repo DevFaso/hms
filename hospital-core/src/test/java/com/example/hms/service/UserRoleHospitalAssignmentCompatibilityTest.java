@@ -293,11 +293,12 @@ class UserRoleHospitalAssignmentCompatibilityTest {
         }
 
         @Test
-        @DisplayName("a pharmacist can become a patient at a hospital: PATIENT rows are outside the rule")
+        @DisplayName("a pharmacist is not made a patient through /assignments: the patient form does that (QA D626/D664)")
         void pharmacistBecomesAPatient() {
             holdsActive(row(assignee, pharmacist, pharmacy, true));
 
-            assertThatCode(() -> service.assignRole(grant(patient, hospital))).doesNotThrowAnyException();
+            assertRefused(() -> service.assignRole(grant(patient, hospital)),
+                "assignments.roles.patientFromPatientForm");
         }
 
         @Test

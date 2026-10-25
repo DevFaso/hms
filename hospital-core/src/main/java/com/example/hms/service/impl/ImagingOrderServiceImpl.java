@@ -31,6 +31,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
 import java.util.Set;
 
@@ -101,8 +102,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     }
 
     @Override
-    public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request) {
+    public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        requireEditableBy(order, callerUserId);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -155,18 +157,42 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setWorkflowNotes(request.getWorkflowNotes());
         order.setRequiresAuthorization(request.getRequiresAuthorization());
         order.setAuthorizationNumber(request.getAuthorizationNumber());
+        // QA D503 class: who changed the status is the session, never the
+        // performedBy fields of the request (kept on the DTO for old clients).
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        com.example.hms.model.User actor = actorId == null ? null : userRepository.findById(actorId).orElse(null);
         order.setStatusUpdatedAt(LocalDateTime.now());
-        order.setStatusUpdatedBy(request.getPerformedByUserId());
+        order.setStatusUpdatedBy(actorId);
 
         if (request.getStatus() == ImagingOrderStatus.CANCELLED) {
             order.setCancellationReason(request.getCancellationReason());
             order.setCancelledAt(LocalDateTime.now());
-            order.setCancelledByUserId(request.getPerformedByUserId());
-            order.setCancelledByName(request.getPerformedByName());
+            order.setCancelledByUserId(actorId);
+            order.setCancelledByName(actor != null ? displayName(actor) : null);
         }
 
         ImagingOrder saved = imagingOrderRepository.save(order);
         return imagingOrderMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D501: a signed order is immutable: its content is what the signer
+     * attested, so an amendment is a cancellation and a new order. An unsigned
+     * order is edited only by its ordering provider (a verified super-admin
+     * excepted); an order with no recorded provider (written before D302)
+     * keeps the old rule, any in-scope editor.
+     */
+    private void requireEditableBy(ImagingOrder order, UUID callerUserId) {
+        if (order.getProviderSignedAt() != null) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.signedImmutable"));
+        }
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider != null && !orderingProvider.equals(callerUserId)
+                && !com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
+        }
     }
 
     /**
@@ -238,7 +264,47 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public ImagingOrderResponseDTO getOrder(UUID orderId) {
-        return imagingOrderMapper.toResponseDTO(getOrderInScope(orderId));
+        return imagingOrderMapper.toResponseDTO(getOrderReadableHere(orderId));
+    }
+
+    /**
+     * QA D508 — a READ by id answers exactly as the by-patient list does: the
+     * order is readable when its hospital is the acting one, or one the
+     * record-access policy opens for this patient (E9 #59b, the same
+     * {@code readableHospitalIds} the list filters on, so the opt-out,
+     * restriction and break-the-glass rules are the list's). The list showed
+     * hospital A's order to hospital B and the same id then answered 404.
+     * Anything outside that set is still answered exactly as a missing order,
+     * and every write keeps {@link #getOrderInScope}: reading across is not
+     * acting across.
+     */
+    private ImagingOrder getOrderReadableHere(UUID orderId) {
+        // QA D623: the scoped findById filtered the foreign row out before the
+        // readable-hospitals rule below ever ran, so D508 never held for real.
+        ImagingOrder order = imagingOrderRepository.findByIdUnscoped(orderId)
+            .orElseThrow(() -> new ResourceNotFoundException("imaging.order.notFound", orderId));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID orderHospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (activeHospitalId == null || orderHospitalId == null || activeHospitalId.equals(orderHospitalId)) {
+            return order;
+        }
+        UUID patientId = order.getPatient() != null ? order.getPatient().getId() : null;
+        UUID requesterUserId = roleValidator.getCurrentUserId();
+        // QA D652: another hospital's never-sent DRAFT is its work in progress (NeverSentRule).
+        if (patientId == null
+                || !NeverSentRule.readableHere(orderHospitalId, activeHospitalId, wasSent(order))
+                || !recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, activeHospitalId)
+                    .contains(orderHospitalId)) {
+            throw new ResourceNotFoundException("imaging.order.notFound", orderId);
+        }
+        reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
+            CrossHospitalReachRecorder.reachOf(List.of(orderHospitalId), activeHospitalId),
+            "Cross-hospital imaging order read on the treatment relationship");
+        return order;
+    }
+
+    private static boolean wasSent(ImagingOrder order) {
+        return NeverSentRule.sent(order.getStatus());
     }
 
     @Override
@@ -272,6 +338,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             orders = status != null
                 ? imagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc(patientId, readable, status)
                 : imagingOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc(patientId, readable);
+            // QA D652: less another hospital's never-sent DRAFTs, as the by-id read (NeverSentRule).
+            orders = NeverSentRule.imagingOrdersReadableHere(orders, activeHospitalId);
             reachRecorder.recordReach(patientId, activeHospitalId, requesterUserId, null,
                 CrossHospitalReachRecorder.reachOf(orders.stream().map(o -> CrossHospitalReachRecorder.hospitalIdOf(o.getHospital())).toList(), activeHospitalId),
                 "Cross-hospital imaging order read on the treatment relationship");

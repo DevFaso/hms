@@ -59,6 +59,8 @@ class PatientPortalServiceImplEducationTest {
     @Mock private EducationResourceRepository educationResourceRepository;
     @Mock private PatientEducationQuestionMapper educationQuestionMapper;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 

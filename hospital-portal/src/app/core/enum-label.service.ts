@@ -2,6 +2,9 @@ import { Injectable, OnDestroy, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { Subscription } from 'rxjs';
 
+/** A UUID anywhere in a string (QA D672). */
+const UUID_IN_TEXT = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 /**
  * The enum-label vocabulary and its three-tier lookup, with no Angular
  * template machinery attached.
@@ -599,6 +602,7 @@ export class EnumLabelService implements OnDestroy {
       PRESCRIPTION_CREATED: 'Prescription Created',
       LAB_ORDER_CREATED: 'Lab Order Created',
       LAB_ORDER_UPDATED: 'Lab Order Updated',
+      LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',
@@ -786,13 +790,19 @@ export class EnumLabelService implements OnDestroy {
     /* ── Notification types (Notification.type, a String column) ─── */
     notificationType: {
       APPOINTMENT_REMINDER: 'Appointment Reminder',
+      BREAK_GLASS_OPT_OUT_OVERRIDE: 'Emergency access to your record',
       CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
       CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
       CRITICAL_LAB_RESULT: 'Critical Lab Result',
       CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
       DISCHARGE_SUMMARY: 'Discharge Summary',
+      LAB_ORDER_RECEIVED: 'Lab Order Received',
       LICENSE_EXPIRY: 'License Expiry',
       MEDICATION_REFILL: 'Medication Refill',
+      NEWS2_ESCALATION: 'NEWS2 Escalation',
+      OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
+      OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
+      PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
@@ -929,7 +939,84 @@ export class EnumLabelService implements OnDestroy {
       LOCUM: 'Locum',
       INTERN: 'Intern',
     },
+    specimenType: {
+      BLOOD: 'Blood',
+      WHOLE_BLOOD: 'Whole blood',
+      SERUM: 'Serum',
+      URINE: 'Urine',
+      STOOL: 'Stool',
+      CSF: 'Cerebrospinal fluid',
+      SPUTUM: 'Sputum',
+      SWAB: 'Swab',
+      TISSUE: 'Tissue',
+      OTHER: 'Other',
+    },
+    platformServiceType: {
+      EHR: 'Electronic health record',
+      BILLING: 'Billing',
+      INVENTORY: 'Inventory',
+      LIMS: 'Laboratory information system',
+      ANALYTICS: 'Analytics',
+      CLINICAL_ANALYTICS: 'Clinical analytics',
+      REMOTE_MONITORING: 'Remote monitoring',
+      PEDIATRIC_MESSAGING: 'Paediatric messaging',
+      ORTHO_IMAGING: 'Orthopaedic imaging',
+      RESP_TELEMED: 'Respiratory telemedicine',
+    },
+    // QA D528/D663: tier-2 English for the domains #928 declared.
+    profileType: {
+      STAFF: 'Staff',
+      PATIENT: 'Patient',
+    },
+    medicationCategory: {
+      ANALGESIC: 'Analgesic',
+      ANTIBIOTIC: 'Antibiotic',
+      ANTIMALARIAL: 'Antimalarial',
+      ANTIPYRETIC: 'Antipyretic',
+      ANTI_INFLAMMATORY: 'Anti-inflammatory',
+      ANTIHYPERTENSIVE: 'Antihypertensive',
+      ANTIDIABETIC: 'Antidiabetic',
+      ANTIRETROVIRAL: 'Antiretroviral',
+      ANTIFUNGAL: 'Antifungal',
+      ANTIPARASITIC: 'Antiparasitic',
+      ANTIHISTAMINE: 'Antihistamine',
+      ANTICOAGULANT: 'Anticoagulant',
+      VITAMIN: 'Vitamin',
+      VACCINE: 'Vaccine',
+      OTHER: 'Other',
+    },
+    trackerAcuity: {
+      'ESI-1': 'ESI 1 - Resuscitation',
+      'ESI-2': 'ESI 2 - Emergent',
+      'ESI-3': 'ESI 3 - Urgent',
+      'ESI-4': 'ESI 4 - Less urgent',
+      'ESI-5': 'ESI 5 - Non-urgent',
+      EMERGENT: 'Emergent',
+      URGENT: 'Urgent',
+      ROUTINE: 'Routine',
+      LOW: 'Low',
+    },
   };
+
+  /**
+   * QA D528/D619: an audit row names its entity as a token — `BILLING_INVOICE`
+   * on a write audit, `BillingInvoice` from older emitters. Both become the
+   * keyed AUDIT_ENTITY_TYPE label. Anything that is not token-shaped (a
+   * resource someone named) is returned as it is; `'Unknown Resource'` and a
+   * blank are `null`, so a caller can hide the separator.
+   */
+  auditEntityLabel(raw: string | null | undefined): string | null {
+    const name = raw?.trim();
+    if (!name || name === 'Unknown Resource') return null;
+    // QA D672: several writers record the row's id as its resource name
+    // ("19ffd52b-…", "Patient 19ffd52b-…"); an id is not a label.
+    if (UUID_IN_TEXT.test(name)) return null;
+    const upperSnake = /^[A-Z][A-Z0-9_]*$/.test(name);
+    const pascal = /^(?:[A-Z][a-z0-9]+)+$/.test(name);
+    if (!upperSnake && !pascal) return name;
+    const code = name.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
+    return this.transform(code, 'auditEntityType');
+  }
 
   /** The locale-aware label for one raw enum value, or `''` for a blank one. */
   transform(value: string | null | undefined, domain?: string): string {

@@ -45,10 +45,10 @@
       <tbody>
         @for (c of filtered(); track c) {
           <tr>
-            <td>{{ c.createdAt | date: 'dd/MM/yyyy' }}</td>
+            <td>{{ c.createdAt | serverTime | date: 'dd/MM/yyyy' }}</td>
             <td class="muted">{{ c.patientId.substring(0, 8) }}…</td>
             <td>{{ c.coverageReference || '—' }}</td>
-            <td>{{ c.amount | currency: c.currency || 'XOF' : 'symbol' : '1.0-0' }}</td>
+            <td>{{ c.amount | cfa: c.currency }}</td>
             <td>
               <span class="badge" [attr.data-status]="c.claimStatus">
                 {{ statusLabel(c.claimStatus) }}

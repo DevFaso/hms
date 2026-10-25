@@ -92,6 +92,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final SensitivityClassifier sensitivityClassifier;
     private final BreakGlassGate breakGlassGate;
+    private final com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository;
+
+    /** QA D603: the stay statuses that may still be cancelled. */
+    private static final java.util.Set<com.example.hms.enums.AdmissionStatus> CANCELLABLE_STATUSES = java.util.EnumSet.of(
+        com.example.hms.enums.AdmissionStatus.PENDING, com.example.hms.enums.AdmissionStatus.ACTIVE,
+        com.example.hms.enums.AdmissionStatus.ON_LEAVE);
 
     /**
      * QA D84 (D28 family): the admitting and attending providers must hold a
@@ -178,9 +184,13 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
 
         admission = admissionRepository.save(admission);
+        // QA D764: the registration's stay status follows the stay.
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.ADMITTED);
         // QA D98/D135: the stay opens its own INPATIENT encounter, so notes,
         // the discharge summary and the after-visit summary have a home.
         stayEncounters.openStayEncounter(admission);
+        // QA D712: the emergency visit / same-day consultation ends with the admission.
+        encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -263,6 +273,8 @@ public class AdmissionServiceImpl implements AdmissionService {
         // physician at the admission's hospital - a nurse is not one.
         requirePhysician(dischargingProvider, admission.getHospital().getId(),
             "admission.dischargingProvider.physician.required");
+        // QA D503 class: the discharging provider is the caller, not a colleague named in the body.
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
 
         admission.discharge(
             request.getDischargeDisposition(),
@@ -284,6 +296,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         // Free the structured bed (the admission keeps bed/roomBed as history)
         bedAssignmentService.releaseBed(admission);
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.DISCHARGED);
 
         return admissionMapper.toResponseDTO(admission);
     }
@@ -298,6 +311,9 @@ public class AdmissionServiceImpl implements AdmissionService {
         // QA D134: the stay's own encounters only, never the patient's
         // unrelated outpatient visit at the same hospital.
         encounterAutoCompletion.completeAdmissionEncounters(admission.getId());
+        // QA D760: and the visit that led to the stay, if the admission
+        // missed it (a row from before D712, or one it could not see).
+        encounterAutoCompletion.completeVisitsThatLedToAdmission(admission);
     }
 
     @Override
@@ -305,10 +321,42 @@ public class AdmissionServiceImpl implements AdmissionService {
     public void cancelAdmission(UUID admissionId) {
         // QA D262: a write loads under the same tenant guard as the read.
         Admission admission = loadTenantScopedAdmission(admissionId);
+        // QA D603: a discharged, finalized and PAID stay was cancelled by a DELETE,
+        // leaving the summary and the invoice pointing at a cancelled stay. Only a
+        // stay still in progress, and never one already billed, may be cancelled.
+        if (!CANCELLABLE_STATUSES.contains(admission.getStatus())) {
+            throw new ConflictException("admission.cancel.notInProgress");
+        }
+        if (billingInvoiceRepository.existsByEncounter_AdmissionIdAndStatusNot(admission.getId(),
+                com.example.hms.enums.InvoiceStatus.CANCELLED)) {
+            throw new ConflictException("admission.cancel.billed");
+        }
         admission.cancel();
         // A cancelled admission must not keep its bed occupied
         bedAssignmentService.releaseBed(admission);
         admissionRepository.save(admission);
+        // QA D764: a cancelled stay never happened; the patient is registered only.
+        syncRegistrationStayStatus(admission, com.example.hms.enums.PatientStayStatus.REGISTERED);
+    }
+
+    /**
+     * QA D764: the registration's stay status said ADMITTED from the day the
+     * patient was registered, outpatients included, because nothing ever
+     * moved it. The admission is the stay, so it moves the status: ADMITTED
+     * on admit, DISCHARGED on discharge, REGISTERED when cancelled. The
+     * registration stays active (a discharged patient is still this
+     * hospital's patient).
+     */
+    private void syncRegistrationStayStatus(Admission admission, com.example.hms.enums.PatientStayStatus status) {
+        if (admission.getPatient() == null || admission.getHospital() == null) {
+            return;
+        }
+        registrationRepository.findByPatientIdAndHospitalId(
+                admission.getPatient().getId(), admission.getHospital().getId())
+            .ifPresent(registration -> {
+                registration.setStayStatus(status);
+                registrationRepository.save(registration);
+            });
     }
 
     @Override

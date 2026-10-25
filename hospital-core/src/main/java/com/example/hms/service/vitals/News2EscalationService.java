@@ -9,8 +9,6 @@ import com.example.hms.utility.NewsScoreCalculator;
 import com.example.hms.utility.NewsScoreCalculator.NewsScoreResult;
 import com.example.hms.utility.NewsScoreCalculator.RiskBand;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -45,7 +43,6 @@ public class News2EscalationService {
 
     private final AdmissionRepository admissionRepository;
     private final NotificationService notificationService;
-    private final MessageSource messageSource;
 
     /** The minimum interval to the next set of observations for this NEWS2 result. */
     public static Duration observationInterval(NewsScoreResult score, Duration routine) {
@@ -86,7 +83,9 @@ public class News2EscalationService {
     public NewsScoreResult escalateIfNeeded(PatientVitalSign vital, UUID patientId, UUID hospitalId,
                                             String recorderUsername, String visitPhysicianUsername) {
         NewsScoreResult score = NewsScoreCalculator.score(vital);
-        if (!needsEscalation(score) || patientId == null || hospitalId == null) {
+        // QA D518: an adult NEWS2 band never pages anyone about a child.
+        if (!NewsScoreCalculator.applies(vital)
+                || !needsEscalation(score) || patientId == null || hospitalId == null) {
             return score;
         }
         Set<String> recipients = new LinkedHashSet<>();
@@ -101,13 +100,13 @@ public class News2EscalationService {
             return score;
         }
         String patientName = vital.getPatient() != null ? vital.getPatient().getFullName() : null;
-        String message = messageSource.getMessage(
-            score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium",
-            new Object[]{score.total(), patientName != null ? patientName : "-",
-                observationInterval(score, Duration.ofHours(12)).toMinutes()},
-            LocaleContextHolder.getLocale());
+        // Read by each recipient in their own language (QA D665), never the
+        // recorder's request locale.
+        Object[] args = {score.total(), patientName != null ? patientName : "-",
+            observationInterval(score, Duration.ofHours(12)).toMinutes()};
+        String key = score.riskBand() == RiskBand.HIGH ? "news2.escalation.high" : "news2.escalation.medium";
         for (String recipient : recipients) {
-            notificationService.createNotification(message, recipient, NOTIFICATION_TYPE);
+            notificationService.createNotification(key, args, recipient, NOTIFICATION_TYPE);
         }
         return score;
     }

@@ -49,7 +49,7 @@
             @if (r.requestedAt) {
               <div>
                 <dt>{{ 'REFILLS.FIELD_REQUESTED_AT' | translate }}</dt>
-                <dd>{{ r.requestedAt | date: 'short' }}</dd>
+                <dd>{{ r.requestedAt | serverTime | date: 'short' }}</dd>
               </div>
             }
             @if (r.preferredPharmacy) {

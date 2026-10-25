@@ -162,6 +162,27 @@ class BillingInvoiceServiceImplTest {
         assertEquals(InvoiceStatus.DRAFT, persisted.getStatus());
     }
 
+    /** QA D537: the create response names who created the invoice. */
+    @Test
+    void createInvoice_responseNamesTheCreator_D537() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        UUID creatorId = UUID.randomUUID();
+        com.example.hms.model.User creator = new com.example.hms.model.User();
+        org.springframework.test.util.ReflectionTestUtils.setField(creator, "id", creatorId);
+        creator.setFirstName("Awa");
+        creator.setLastName("Biller");
+        com.example.hms.repository.UserRepository users = mock(com.example.hms.repository.UserRepository.class);
+        when(users.findById(creatorId)).thenReturn(Optional.of(creator));
+        billingInvoiceService.setUserRepository(users);
+        when(roleValidator.getCurrentUserId()).thenReturn(creatorId);
+
+        BillingInvoiceResponseDTO response = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("5000")).build(), Locale.ENGLISH);
+
+        assertEquals("Awa Biller", response.getCreatedByName());
+    }
+
     @Test
     void createInvoice_phoneOnlyPatientByIdKeepsTheTypedTotal_D72_D92() {
         pinnedHospital();
@@ -680,6 +701,7 @@ class BillingInvoiceServiceImplTest {
     @Test
     void deleteInvoice_withoutPaymentsStillDeletes() {
         BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setStatus(InvoiceStatus.DRAFT);
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
         when(paymentTransactionRepository.existsByInvoice_Id(invoice.getId())).thenReturn(false);
 
@@ -687,6 +709,257 @@ class BillingInvoiceServiceImplTest {
 
         verify(invoiceRepository).deleteById(invoice.getId());
     }
+    /** QA D613: HOSPITAL_ADMIN_A sent DELETE on SENT invoice RHA23EEA-2026-000016 and got 200. */
+    @Test
+    void deleteInvoice_anIssuedInvoiceIsRefusedSoItsNumberStays_D613() {
+        for (InvoiceStatus issued : List.of(InvoiceStatus.SENT, InvoiceStatus.CANCELLED,
+                InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID)) {
+            BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+            invoice.setStatus(issued);
+            when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+            UUID id = invoice.getId();
+
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.deleteInvoice(id, Locale.ENGLISH));
+
+            assertEquals("billing.invoice.deleteOnlyDraft", refused.getMessageKey(), issued.name());
+        }
+        verify(invoiceRepository, never()).deleteById(any());
+    }
+
+    /** #926 review: PUT {status:DRAFT} then DELETE hard-deleted an issued invoice. */
+    @Test
+    void sentInvoiceCannotGoBackToDraftThenBeDeleted() {
+        for (InvoiceStatus issued : List.of(InvoiceStatus.SENT)) {
+            BillingInvoice invoice = existingInvoice(issued, "0");
+            UUID invoiceId = invoice.getId();
+            BillingInvoiceRequestDTO toDraft = editOf().status(InvoiceStatus.DRAFT).build();
+
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.updateInvoice(invoiceId, toDraft, Locale.ENGLISH));
+            assertEquals("billing.invoice.noReturnToDraft", refused.getMessageKey(), issued.name());
+            assertEquals(issued, invoice.getStatus());
+
+            assertThrows(com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.deleteInvoice(invoiceId, Locale.ENGLISH));
+        }
+        verify(invoiceRepository, never()).deleteById(any());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    /** #926 review: PUT {status:DRAFT} then PUT {patientId:other} swapped an issued invoice's patient. */
+    @Test
+    void sentInvoiceCannotGoBackToDraftThenChangePatient() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        UUID original = invoice.getPatient().getId();
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID))
+            .thenReturn(true);
+        BillingInvoiceRequestDTO toDraft = editOf().status(InvoiceStatus.DRAFT).build();
+        BillingInvoiceRequestDTO swap = editOf().patientId(other.getId()).build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, toDraft, Locale.ENGLISH));
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, swap, Locale.ENGLISH));
+
+        assertEquals("billing.invoice.patientLockedIssued", refused.getMessageKey());
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+        assertEquals(original, invoice.getPatient().getId());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    /** QA D614: PUT on SENT invoice 22ae400f with patientId changed from A4 to A2 returned 200. */
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsPatient_D614() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID)).thenReturn(true);
+        UUID original = invoice.getPatient().getId();
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().patientId(other.getId()).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.ENGLISH));
+
+        assertEquals("billing.invoice.patientLockedIssued", refused.getMessageKey());
+        assertEquals(original, invoice.getPatient().getId());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_aDraftStillMovesToAnotherPatient_D614() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        when(patientRepository.findById(other.getId())).thenReturn(Optional.of(other));
+        when(registrationRepository.existsByPatientIdAndHospitalId(other.getId(), HOSPITAL_ID)).thenReturn(true);
+
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().patientId(other.getId()).build(),
+            Locale.ENGLISH);
+
+        assertEquals(other.getId(), invoice.getPatient().getId());
+    }
+
+    @Test
+    void updateInvoice_theSamePatientOnAnIssuedInvoiceIsAccepted_D614() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        Patient same = invoice.getPatient();
+        when(patientRepository.findById(same.getId())).thenReturn(Optional.of(same));
+        when(registrationRepository.existsByPatientIdAndHospitalId(same.getId(), HOSPITAL_ID)).thenReturn(true);
+
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().patientId(same.getId()).build(),
+            Locale.ENGLISH);
+
+        assertEquals(same.getId(), invoice.getPatient().getId());
+        verify(invoiceRepository).save(invoice);
+    }
+
+    /** QA D656 re-test (bill3.js): PUT notes 'changed' on a SENT invoice returned 200. */
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsNotes_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        invoice.setNotes("QA-R9RT2");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().notes("changed").status(InvoiceStatus.SENT).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.issuedLocked", refused.getMessageKey());
+        assertEquals("QA-R9RT2", invoice.getNotes());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    /** D656: the edit form echoes the stored notes; that is not an edit. */
+    @Test
+    void updateInvoice_anIssuedInvoiceAcceptsItsEchoedNotes_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        invoice.setNotes("QA-R9RT2");
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().notes("QA-R9RT2").status(InvoiceStatus.SENT).build(), Locale.ENGLISH);
+        assertEquals("QA-R9RT2", invoice.getNotes());
+    }
+
+    /** QA D656: PUT invoiceDate on SENT invoice ae8e18f2 returned 200 and moved the date. */
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsDate_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf().invoiceDate(LocalDate.of(2026, 9, 30))
+            .status(InvoiceStatus.SENT).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.issuedLocked", refused.getMessageKey());
+        assertEquals(LocalDate.of(2026, 10, 1), invoice.getInvoiceDate());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceKeepsItsDueDateAndTotal_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO later = editOf().dueDate(LocalDate.of(2026, 12, 31)).build();
+        BillingInvoiceRequestDTO retyped = editOf().totalAmount(new BigDecimal("2000")).build();
+
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, later, Locale.FRENCH));
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, retyped, Locale.FRENCH));
+        assertEquals(new BigDecimal("500"), invoice.getTotalAmount());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceIsStillCancelledWithItsEchoedValues_D656() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().totalAmount(new BigDecimal("500.00")).status(InvoiceStatus.CANCELLED).build(), Locale.FRENCH);
+
+        assertEquals(InvoiceStatus.CANCELLED, invoice.getStatus());
+    }
+
+    /** QA D612: invoiceDate 2026-10-23, dueDate 2026-10-01 gave a 500. */
+    @Test
+    void createInvoice_dueBeforeTheInvoiceDateIsRefused_D612() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        BillingInvoiceRequestDTO request = requestFor(patient)
+            .invoiceDate(LocalDate.now()).dueDate(LocalDate.now().minusDays(22)).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.dueBeforeInvoiceDate", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void updateInvoice_dueBeforeTheInvoiceDateIsRefused_D612() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        UUID id = invoice.getId();
+        BillingInvoiceRequestDTO request = editOf()
+            .invoiceDate(LocalDate.of(2026, 10, 1)).dueDate(LocalDate.of(2026, 9, 1)).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(id, request, Locale.ENGLISH));
+
+        assertEquals("billing.invoice.dueBeforeInvoiceDate", refused.getMessageKey());
+    }
+
+    /** QA D632: an invoice dated 2027-05-01 returned 201. */
+    @Test
+    void createInvoice_aFutureInvoiceDateIsRefused_D632() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        BillingInvoiceRequestDTO request = requestFor(patient)
+            .invoiceDate(LocalDate.now().plusMonths(6)).dueDate(LocalDate.now().plusMonths(7)).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+
+        assertEquals("billing.invoice.dateInFuture", refused.getMessageKey());
+    }
+
+    @Test
+    void createInvoice_todayAndADueDateTheSameDayAreAccepted_D612_D632() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+
+        billingInvoiceService.createInvoice(requestFor(patient)
+            .invoiceDate(LocalDate.now()).dueDate(LocalDate.now()).build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any());
+    }
+
+    @Test
+    void updateInvoice_aStoredDateIsNotReJudged_D632() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        LocalDate stored = LocalDate.now().plusDays(10);
+        invoice.setInvoiceDate(stored);
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().invoiceDate(stored).dueDate(stored.plusDays(30)).notes("kept").build(), Locale.ENGLISH);
+
+        assertEquals("kept", invoice.getNotes());
+    }
+
     @Test
     void recordStaffPayment_writesThePaymentRowWithTheStatedMethod() {
         UUID patientId = UUID.randomUUID();
@@ -710,6 +983,39 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void qaD724_staffPaymentCannotSettleInFullWhileADeclarationIsPending() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        BigDecimal total = invoice.getTotalAmount();
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("10.00"));
+
+        UUID invoiceId = invoice.getId();
+        com.example.hms.payload.dto.StaffPaymentRequestDTO full =
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(total, "cash", null, null);
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, full, null, Locale.ENGLISH));
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD724_staffPaymentBesideAPendingDeclarationIsTaken() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        BigDecimal rest = invoice.getTotalAmount().subtract(new BigDecimal("10.00"));
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("10.00"));
+
+        billingInvoiceService.recordStaffPayment(invoice.getId(),
+            new com.example.hms.payload.dto.StaffPaymentRequestDTO(rest, "cash", null, null), null, Locale.ENGLISH);
+
+        verify(paymentTransactionRepository).save(any());
+    }
+
+    @Test
     void recordStaffPayment_withNoMethodRecordsOther() {
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = payableInvoice(patientId);
@@ -725,6 +1031,81 @@ class BillingInvoiceServiceImplTest {
         verify(paymentTransactionRepository).save(row.capture());
         assertEquals(com.example.hms.enums.PaymentMethod.OTHER, row.getValue().getPaymentMethod());
     }
+
+    /** QA D767: an invoice created as SENT at 0 F CFA was outstanding forever. */
+    @Test
+    void qaD767_createdSentAtZeroIsRefused() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        BillingInvoiceRequestDTO request = requestFor(patient).status(InvoiceStatus.SENT).build();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        assertEquals("billing.invoice.zeroTotal", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    /** QA D767: a 0 F CFA draft may still be created while its lines are added. */
+    @Test
+    void qaD767_zeroDraftIsStillCreated() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        billingInvoiceService.createInvoice(requestFor(patient).build(), Locale.ENGLISH);
+        verify(invoiceRepository).saveAndFlush(any());
+    }
+
+    /** QA D767: issuing a 0 F CFA draft by PUT {status:SENT} is refused and it stays DRAFT. */
+    @Test
+    void qaD767_issuingAZeroDraftIsRefused() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        invoice.setTotalAmount(BigDecimal.ZERO);
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO issue = editOf().status(InvoiceStatus.SENT).build();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, issue, Locale.ENGLISH));
+        assertEquals("billing.invoice.zeroTotal", refused.getMessageKey());
+        assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
+    }
+
+    /** QA D768: a MOBILE_MONEY or INSURANCE payment with no reference was accepted. */
+    @Test
+    void qaD768_tracedMethodsNeedAReference() {
+        for (String method : List.of("MOBILE_MONEY", "INSURANCE", "BANK_TRANSFER")) {
+            BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+            when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+            UUID invoiceId = invoice.getId();
+            com.example.hms.payload.dto.StaffPaymentRequestDTO noRef =
+                new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10"), method, "  ", null);
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.recordStaffPayment(invoiceId, noRef, null, Locale.ENGLISH));
+            assertEquals("billing.payment.referenceRequired", refused.getMessageKey(), method);
+        }
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    /** QA D768: the QA's body named the field "referenceNumber"; it was dropped, so the reuse check never ran. */
+    @Test
+    void qaD768_referenceNumberInTheBodyIsTheReference_andAReuseIsRefused() throws Exception {
+        com.example.hms.payload.dto.StaffPaymentRequestDTO dto = tools.jackson.databind.json.JsonMapper.builder().build()
+            .readValue("{\"amount\":100,\"method\":\"INSURANCE\",\"referenceNumber\":\"CNAMU-R11-1\"}",
+                com.example.hms.payload.dto.StaffPaymentRequestDTO.class);
+        assertEquals("CNAMU-R11-1", dto.getReference());
+
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL_ID);
+        invoice.setHospital(hospital);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.existsLiveReference(any(), eq("cnamu-r11-1"), any())).thenReturn(true);
+        UUID invoiceId = invoice.getId();
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, dto, null, Locale.ENGLISH));
+        assertEquals("billing.payment.duplicateReference", refused.getMessageKey());
+    }
+
     // ---- QA D140 / D142 / D184: pending, confirmation, reversal, whole francs ----
 
     private com.example.hms.model.PaymentTransaction ledgerRow(BillingInvoice invoice, String amount,
@@ -1607,5 +1988,65 @@ class BillingInvoiceServiceImplTest {
             .patientEmail(" mrn-a5 ").build(), Locale.ENGLISH);
 
         assertEquals(patient.getId().toString(), response.getPatientId());
+    }
+
+    // ---- QA D529: a second invoice for a stay already invoiced ----
+
+    @Test
+    void createInvoice_aSecondInvoiceForAPaidStayIsRefusedWithTheExistingNumber_D529() {
+        // QA D529: BILLING_A POSTed /billing-invoices for the stay's encounter
+        // code when the stay's invoice was already PAID; a second invoice was
+        // created with no warning.
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter stay = visitOf(a2, "ENC-STAY-1");
+        BillingInvoice paid = new BillingInvoice();
+        paid.setId(UUID.randomUUID());
+        paid.setInvoiceNumber("RHA-2026-000012");
+        paid.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(stay.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(paid));
+        BillingInvoiceRequestDTO request = requestFor(a2).encounterReference("ENC-STAY-1")
+            .clientRequestId(UUID.randomUUID()).build();
+
+        com.example.hms.exception.ConflictException refused = assertThrows(
+            com.example.hms.exception.ConflictException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+        assertTrue(refused.getMessage().contains("RHA-2026-000012") || refused.getMessage().contains("encounterAlreadyInvoiced"));
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createInvoice_aConfirmedSupplementaryInvoiceIsCreated_D529() {
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter stay = visitOf(a2, "ENC-STAY-2");
+        BillingInvoice paid = new BillingInvoice();
+        paid.setInvoiceNumber("RHA-2026-000013");
+        paid.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        org.mockito.Mockito.lenient().when(invoiceRepository.findByEncounter_IdAndStatusNot(
+                stay.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(paid));
+
+        billingInvoiceService.createInvoice(requestFor(a2).encounterReference("ENC-STAY-2")
+            .supplementary(true).build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
+    }
+
+    @Test
+    void createInvoice_aFoldedCheckInCopayDoesNotBlockTheVisitInvoice_D529() {
+        pinnedHospital();
+        Patient a2 = registeredPatient();
+        com.example.hms.model.Encounter visit = visitOf(a2, "ENC-VISIT-3");
+        BillingInvoice copay = new BillingInvoice();
+        copay.setStatus(com.example.hms.enums.InvoiceStatus.PAID);
+        copay.setCheckInCopay(true);
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), com.example.hms.enums.InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(copay));
+
+        billingInvoiceService.createInvoice(requestFor(a2).encounterReference("ENC-VISIT-3").build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
     }
 }

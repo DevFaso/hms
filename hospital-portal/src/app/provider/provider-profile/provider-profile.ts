@@ -12,6 +12,7 @@ import { ProviderPortalService } from '../../services/provider-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { verificationBadgeClass } from '../../super-admin/providers/provider-status';
 import { followFacility } from '../follow-facility';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * The facility profile (provider plan P1-T13, AC-6): the operational contact,
@@ -28,7 +29,7 @@ import { followFacility } from '../follow-facility';
 @Component({
   selector: 'app-provider-profile',
   standalone: true,
-  imports: [DatePipe, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, DatePipe, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './provider-profile.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: '../provider-pages.scss',

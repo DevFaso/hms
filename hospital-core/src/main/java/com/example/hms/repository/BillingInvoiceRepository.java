@@ -177,6 +177,12 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            """)
     List<Object[]> summarize(@Param("hospitalId") UUID hospitalId, @Param("today") LocalDate today);
 
+    /** QA D529: the invoices of a visit or stay, copays included (filtered by the caller). */
+    List<BillingInvoice> findByEncounter_IdAndStatusNot(UUID encounterId, InvoiceStatus status);
+
+    /** QA D603: whether any live invoice was raised on an encounter of this stay. */
+    boolean existsByEncounter_AdmissionIdAndStatusNot(UUID admissionId, InvoiceStatus status);
+
     /** QA D210: the paid check-in copays of a visit, still standing on their own. */
     List<BillingInvoice> findByEncounter_IdAndCheckInCopayTrueAndStatus(UUID encounterId, InvoiceStatus status);
 

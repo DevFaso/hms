@@ -69,7 +69,6 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.QuestionnaireRepository;
 import com.example.hms.repository.QuestionnaireResponseRepository;
 import com.example.hms.service.AppointmentService;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.mapper.QuestionnaireMapper;
 import com.example.hms.model.Questionnaire;
 import com.example.hms.model.QuestionnaireResponse;
@@ -126,6 +125,10 @@ import com.example.hms.utility.RoleNames;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
+    private static final Set<AppointmentStatus> PATIENT_CHANGEABLE_STATUSES = java.util.EnumSet.of(
+            AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED,
+            AppointmentStatus.PENDING, AppointmentStatus.RESCHEDULED);
 
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
@@ -167,6 +170,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.PatientTreatmentConsentRepository treatmentConsentRepository;
     private final com.example.hms.service.TreatmentConsentService treatmentConsentService;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D719 re-test: catalog-controlled morphine (tick false) was refillable. */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
     private final RefillRequestRepository refillRequestRepository;
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
@@ -448,7 +453,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<AppointmentResponseDTO> getMyAppointments(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
         String username = auth.getName();
-        return appointmentService.getAppointmentsByPatientId(patientId, locale, username);
+        // QA D642: the patient reads these as a schedule — soonest first, by
+        // date then start time (the web portal and the apps both list them as sent).
+        List<AppointmentResponseDTO> appointments =
+            new java.util.ArrayList<>(appointmentService.getAppointmentsByPatientId(patientId, locale, username));
+        appointments.sort(java.util.Comparator
+            .comparing(AppointmentResponseDTO::getAppointmentDate,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+            .thenComparing(AppointmentResponseDTO::getStartTime,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        return appointments;
     }
 
     // ── Billing / invoices ───────────────────────────────────────────────
@@ -705,10 +719,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("Appointment is already cancelled");
+            throw new BusinessException("appointment.alreadyCancelled");
         }
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed appointment");
+            throw new BusinessException("appointment.cancel.completed");
+        }
+        // QA D717: once the patient has arrived (CHECKED_IN / IN_PROGRESS) or
+        // the visit is closed out (NO_SHOW, FAILED), the portal must not cancel:
+        // the encounter is already open at the desk. Only a not-yet-started
+        // booking is the patient's to cancel.
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
@@ -750,13 +771,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         requirePatientOwnership(appointment, patientId);
 
         if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("Cannot reschedule a completed appointment");
+            throw new BusinessException("appointment.reschedule.completed");
         }
         if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("Cannot reschedule a cancelled appointment");
+            throw new BusinessException("appointment.reschedule.cancelled");
+        }
+        // QA D717 sibling: an arrived patient cannot move the visit either.
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
         }
         if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
-            throw new BusinessException("End time must be after start time");
+            throw new BusinessException("appointment.timeRange.invalid");
         }
 
         appointment.setAppointmentDate(dto.getNewDate());
@@ -833,10 +858,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
         // approve it.
-        if (prescription.getStatus() != null && !prescription.getStatus().isRefillable()) {
-            throw new BusinessException(
-                    "This prescription can no longer be refilled. Please contact your care team "
-                            + "for a new prescription.");
+        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.notRefillable");
         }
 
         // One open request per prescription. There was no guard at all, so a
@@ -846,12 +869,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
                         prescription.getId(), patient.getId(), OPEN_REFILL_STATUSES)
                 .ifPresent(open -> {
+                    // QA D743: localised (the French portal showed English).
                     throw new BusinessException(
                             open.getStatus() == RefillStatus.PAUSED
-                                    ? "Your provider has put this refill request on hold. "
-                                            + "They will follow up with you."
-                                    : "You already have a refill request awaiting review for this "
-                                            + "medication.");
+                                    ? "patient.refill.onHold"
+                                    : "patient.refill.alreadyPending");
                 });
 
         RefillRequest refill = RefillRequest.builder()
@@ -1121,7 +1143,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 10);
+            // QA D720: the summary's "current medications" (health summary and
+            // the proxy view) are the courses still running, never a completed
+            // or discontinued one. Filtered before the cap so ten current ones
+            // are not crowded out by finished ones.
+            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
+                .filter(m -> "ACTIVE".equals(m.getStatus()))
+                .limit(10)
+                .toList();
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();
@@ -1191,9 +1220,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         String patientName = formatPatientName(patient, locale);
 
         Recipients recipients = collectRefillRecipients(prescription);
-        String message = messageSource.getMessage(
-            "refill.request.notification", new Object[]{patientName, medicationName}, locale);
-        dispatchRefillInAppNotifications(recipients.usernames(), message, refill);
+        // The bell renders it in each reader's language when read (QA D665).
+        dispatchRefillInAppNotifications(recipients.usernames(),
+            new Object[]{patientName, medicationName}, refill);
         dispatchRefillEmailNotifications(recipients.emails(), patientName, medicationName, refill, locale);
     }
 
@@ -1254,10 +1283,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    private void dispatchRefillInAppNotifications(Set<String> usernames, String message, RefillRequest refill) {
+    private void dispatchRefillInAppNotifications(Set<String> usernames, Object[] args, RefillRequest refill) {
         for (String username : usernames) {
             try {
-                notificationService.createNotification(message, username, MEDICATION_REFILL_NOTIFICATION_TYPE);
+                notificationService.createNotification("refill.request.notification", args, username,
+                    MEDICATION_REFILL_NOTIFICATION_TYPE);
             } catch (Exception e) {
                 log.warn("Failed to deliver refill notification to {} for refill {}", username, refill.getId());
             }

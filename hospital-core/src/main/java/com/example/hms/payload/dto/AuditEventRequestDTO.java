@@ -35,6 +35,16 @@ public class AuditEventRequestDTO {
     @Schema(description = "Assignment ID of the user in the hospital context. Null for SYSTEM/bootstrap flows.", example = "512a9d3b-051f-4139-bfbf-f61c1b8ad2e3")
     private UUID assignmentId;
 
+    /**
+     * QA D521/D533 — the hospital the action happened at, when the emitter
+     * knows it but not the actor's assignment there. The audit service anchors
+     * the row on the ACTOR's own active assignment at that hospital (never
+     * anyone else's), which is what a hospital admin's audit log filters on;
+     * a row with no anchor is invisible to them and shows no hospital name.
+     */
+    @Schema(description = "Hospital the action happened at; anchors the row on the actor's own assignment there.")
+    private UUID hospitalId;
+
     @NotNull
     @Schema(description = "Type of event being logged.", requiredMode = Schema.RequiredMode.REQUIRED, example = "RECORD_SHARE")
     private AuditEventType eventType;

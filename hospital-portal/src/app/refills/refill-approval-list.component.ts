@@ -11,6 +11,7 @@ import {
   RefillStatus,
 } from '../services/refill-approval.service';
 import { ToastService } from '../core/toast.service';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 const STATUS_FILTERS: { value: RefillStatus | 'ALL'; labelKey: string }[] = [
   { value: 'REQUESTED', labelKey: 'REFILLS.STATUS_REQUESTED' },
@@ -26,7 +27,7 @@ const OPEN_STATUSES: RefillStatus[] = ['REQUESTED', 'PAUSED'];
 @Component({
   selector: 'app-refill-approval-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './refill-approval-list.component.html',
   styleUrls: ['./refill-approval-list.component.scss'],

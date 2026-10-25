@@ -139,6 +139,8 @@ class PatientRecordPdfServiceTest {
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.PATIENT_EXPORT);
         assertThat(audit.getValue().getResourceId()).isEqualTo(patientId.toString());
+        // QA D533: anchored at the exporting hospital so the row names it.
+        assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalId);
         assertThat(audit.getValue().getEventDescription())
             .contains("Patient/" + patientId, "4 chart entries")
             .doesNotContain("Karim", "Porgo", "HBX4939");
@@ -329,6 +331,7 @@ class PatientRecordPdfServiceTest {
         r.setTestName("Haemoglobin");
         r.setTestCode("718-7");
         r.setResultValue("13.2");
+        r.setReleased(true);
         r.setResultUnit("g/dL");
         ChartReviewDTO.MedicationEntryDTO m = new ChartReviewDTO.MedicationEntryDTO();
         m.setCreatedAt(LocalDateTime.of(2026, 5, 9, 0, 13));
@@ -363,5 +366,36 @@ class PatientRecordPdfServiceTest {
             .thenAnswer(inv -> inv.getArgument(2));
         assertThat(PatientRecordPdfService.label(t, "WAITING_FOR_PHYSICIAN")).isEqualTo("waiting for physician");
         assertThat(PatientRecordPdfService.label(t, null)).isNull();
+    }
+
+    @Test
+    void d740_anUnreleasedResultPrintsAsPendingWithNoValueOrFlag() throws Exception {
+        // Re-test D740: record.pdf printed "Kaliémie (KAL-A) - 1.8 mmol/L - Critique" before release.
+        echoKeys();
+        ChartReviewDTO.ResultEntryDTO r = new ChartReviewDTO.ResultEntryDTO();
+        r.setTestName("Kaliemie");
+        r.setTestCode("KAL-A");
+        r.setResultValue("1.8");
+        r.setResultUnit("mmol/L");
+        r.setAbnormalFlag("CRITICAL");
+        r.setReleased(false);
+        ChartReviewDTO chart = ChartReviewDTO.builder().results(List.of(r)).build();
+        String text = textOf(PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
+            chart, null, PdfLabels.of(messageSource, Locale.FRENCH)));
+        assertThat(text).contains("Kaliemie").contains("pdf.record.result.pending")
+            .doesNotContain("1.8").doesNotContain("mmol/L").doesNotContain("CRITICAL");
+    }
+
+    @Test
+    void qaD678AControlledMedicationFromTheChartIsMarkedInThePdf() throws Exception {
+        // The chart review now marks catalog-controlled orders (ChartReviewServiceImplTest); the PDF prints that flag.
+        echoKeys();
+        ChartReviewDTO.MedicationEntryDTO m = new ChartReviewDTO.MedicationEntryDTO();
+        m.setMedicationName("Morphine");
+        m.setControlledSubstance(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().medications(List.of(m)).build();
+        byte[] pdf = PatientRecordPdfService.write(PatientStoryboardDTO.builder().allergies(List.of()).build(),
+            chart, null, PdfLabels.of(messageSource, Locale.FRENCH));
+        assertThat(textOf(pdf)).contains("pdf.record.medication.controlled");
     }
 }

@@ -57,6 +57,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -135,6 +136,24 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         // remain the second gate.
         HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
         assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D623: the by-id READ loader is not tenant-filtered, so the service's readable rule decides")
+    void byIdReadLoaderSeesTheForeignRowTheScopedFinderHides() {
+        // D508 did not hold on a real database: the scoped findById hid the row
+        // the by-patient list had just shown, and the service's own
+        // readable-hospitals check never ran. The read loader must see it.
+        HospitalContextHolder.setContext(contextFor(doctorA, hospitalA));
+        assertThat(imagingOrderRepository.findById(orderAtA2.getId())).isEmpty();
+        assertThat(imagingOrderRepository.findByIdUnscoped(orderAtA2.getId()))
+            .get().extracting(ImagingOrder::getId).isEqualTo(orderAtA2.getId());
+    }
+
+    @Test
+    @DisplayName("QA D623: GET by id of a sibling order with no treatment relationship still answers 404")
+    void readOfUnrelatedSiblingOrderAnswersLikeMissing() throws Exception {
+        assertSameAsMissing(id -> get(API + "/imaging/orders/{id}", id));
     }
 
     @Test
@@ -321,6 +340,78 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
                 .with(acting(doctorA, hospitalA, "ROLE_MIDWIFE")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id", is(orderAtA.getId().toString())));
+    }
+
+    @Test
+    @DisplayName("QA D501: a signed order cannot be rewritten by a nurse, a midwife, another doctor or its signer")
+    void signedOrderIsImmutable() throws Exception {
+        UUID orderId = createdBy(doctorA);
+        mockMvc.perform(post(API + "/imaging/orders/{id}/signature", orderId)
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(signatureRequest())))
+            .andExpect(status().isOk());
+        User colleague = doctorAt(hospitalA);
+        String edit = objectMapper.writeValueAsString(updateRequest(hospitalA.getId(), "CT Head"));
+        for (RequestPostProcessor who : List.of(
+                acting(colleague, hospitalA, "ROLE_NURSE"),
+                acting(colleague, hospitalA, "ROLE_MIDWIFE"),
+                acting(colleague, hospitalA, ROLE_DOCTOR),
+                acting(doctorA, hospitalA, ROLE_DOCTOR))) {
+            mockMvc.perform(put(API + "/imaging/orders/{id}", orderId).with(who)
+                    .contentType(MediaType.APPLICATION_JSON).content(edit))
+                .andExpect(status().isForbidden());
+        }
+        asUnscopedFixture();
+        ImagingOrder kept = imagingOrderRepository.findById(orderId).orElseThrow();
+        assertThat(kept.getStudyType()).isEqualTo("Abdomen US");
+        assertThat(kept.getOrderingProviderUserId()).isEqualTo(doctorA.getId());
+    }
+
+    @Test
+    @DisplayName("QA D501: only the ordering provider edits an unsigned order")
+    void onlyTheOrderingProviderEditsAnUnsignedOrder() throws Exception {
+        UUID orderId = createdBy(doctorA);
+        User colleague = doctorAt(hospitalA);
+        String edit = objectMapper.writeValueAsString(updateRequest(hospitalA.getId(), "CT Head"));
+        mockMvc.perform(put(API + "/imaging/orders/{id}", orderId)
+                .with(acting(colleague, hospitalA, "ROLE_NURSE"))
+                .contentType(MediaType.APPLICATION_JSON).content(edit))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(put(API + "/imaging/orders/{id}", orderId)
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON).content(edit))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.studyType", is("CT Head")));
+    }
+
+    @Test
+    @DisplayName("QA D503 class: the canceller of an order is the session, not performedByUserId")
+    void cancellationIsRecordedForTheSession() throws Exception {
+        User other = doctorAt(hospitalA);
+        ImagingOrderStatusUpdateRequestDTO cancel = new ImagingOrderStatusUpdateRequestDTO();
+        cancel.setStatus(ImagingOrderStatus.CANCELLED);
+        cancel.setCancellationReason("duplicate");
+        cancel.setPerformedByUserId(other.getId());
+        cancel.setPerformedByName("Someone Else");
+        mockMvc.perform(put(API + "/imaging/orders/{id}/status", orderAtA.getId())
+                .with(acting(doctorA, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(cancel)))
+            .andExpect(status().isOk());
+        ImagingOrder cancelled = reload(orderAtA);
+        assertThat(cancelled.getCancelledByUserId()).isEqualTo(doctorA.getId());
+        assertThat(cancelled.getCancelledByName()).isEqualTo(doctorA.getFirstName() + " " + doctorA.getLastName());
+    }
+
+    private UUID createdBy(User user) throws Exception {
+        MvcResult created = mockMvc.perform(post(API + "/imaging/orders")
+                .with(acting(user, hospitalA))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest(hospitalA.getId(), "Abdomen US"))))
+            .andExpect(status().isCreated())
+            .andReturn();
+        return UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsString()).get("id").asText());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────

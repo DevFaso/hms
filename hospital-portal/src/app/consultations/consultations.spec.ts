@@ -10,6 +10,7 @@ import {
   ConsultationService,
   ConsultationResponse,
   ConsultationStats,
+  ConsultationStatus,
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -81,6 +82,9 @@ describe('ConsultationsComponent', () => {
         { id: 'st2', name: 'Dr B', active: false, roleCode: 'ROLE_DOCTOR' } as StaffResponse,
         // QA D122: a receptionist is never offered as a consultant.
         { id: 'st3', name: 'Desk', active: true, roleCode: 'ROLE_RECEPTIONIST' } as StaffResponse,
+        // QA D715: nor is a nurse or a midwife: the consultant must be a doctor.
+        { id: 'st4', name: 'Nurse N', active: true, roleCode: 'ROLE_NURSE' } as StaffResponse,
+        { id: 'st5', name: 'Midwife M', active: true, roleCode: 'ROLE_MIDWIFE' } as StaffResponse,
       ]),
     );
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
@@ -272,7 +276,8 @@ describe('ConsultationsComponent', () => {
   it('openAssign loads only active staff for the consultation hospital', () => {
     component.openAssign(mockConsult());
     expect(staffSpy.list).toHaveBeenCalledWith('h1');
-    expect(component.assignStaff().length).toBe(1); // inactive filtered out
+    // Inactive, receptionist, nurse and midwife filtered out (QA D122, D715).
+    expect(component.assignStaff().map((s) => s.id)).toEqual(['st1']);
     expect(component.isReassign()).toBeFalse();
   });
 
@@ -301,6 +306,27 @@ describe('ConsultationsComponent', () => {
     expect(component.showAssignModal()).toBeFalse();
   });
 
+  it('offers Reassign while the consult is held, not only when ASSIGNED (D749)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    const statuses: ConsultationStatus[] = [
+      'ASSIGNED',
+      'ACKNOWLEDGED',
+      'SCHEDULED',
+      'IN_PROGRESS',
+      'COMPLETED',
+      'REQUESTED',
+    ];
+    fixture.componentInstance.filtered.set(
+      statuses.map((status, i) => mockConsult({ id: 'r' + i, status })),
+    );
+    fixture.detectChanges();
+    const rows: HTMLElement[] = Array.from(fixture.nativeElement.querySelectorAll('tr.data-row'));
+    expect(rows.length).toBe(statuses.length);
+    const offered = rows.map((r) => !!r.querySelector('.reassign-btn'));
+    expect(offered).toEqual([true, true, true, true, false, false]);
+  });
+
   it('reassign requires a reason before calling the service', () => {
     component.openAssign(mockConsult(), true);
     component.assignConsultantId.set('st1');
@@ -321,7 +347,12 @@ describe('ConsultationsComponent', () => {
     component.openSchedule(mockConsult());
     component.scheduleForm.scheduledAt = '2026-08-20T10:00';
     component.submitSchedule();
-    expect(consultSpy.schedule).toHaveBeenCalledWith('c1', '2026-08-20T10:00', undefined);
+    // QA D777/D784: the picked local wall time is sent as the UTC the server keeps.
+    expect(consultSpy.schedule).toHaveBeenCalledWith(
+      'c1',
+      new Date(2026, 7, 20, 10, 0).toISOString().slice(0, 19),
+      undefined,
+    );
     expect(component.showScheduleModal()).toBeFalse();
   });
 

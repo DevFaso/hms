@@ -1,3 +1,4 @@
+import type { PatientCreateRequest } from './patient.service';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
@@ -48,6 +49,8 @@ export interface UserDetail {
   temporaryPassword?: string;
   /** Registration responses only: true when this call created the account. */
   newAccount?: boolean;
+  /** Patient registrations only: the patient record created with the account (QA D626). */
+  patientId?: string;
 }
 
 export interface AdminRegisterRequest {
@@ -68,6 +71,10 @@ export interface AdminRegisterRequest {
   departmentId?: string;
   specialization?: string;
   forcePasswordChange?: boolean;
+  /** QA D626: true only from the patient form; staff onboarding never registers a patient. */
+  patientRegistration?: boolean;
+  /** QA D626: required with patientRegistration; written with the account in one transaction. */
+  patient?: PatientCreateRequest;
 }
 
 @Injectable({ providedIn: 'root' })

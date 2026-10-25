@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
   DestroyRef,
@@ -25,12 +26,14 @@ import {
   IsolationService,
 } from '../services/isolation.service';
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
+import { BedService } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { roleSatisfies } from '../core/role-equivalence';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
  * The ward board (Tier 2 items 30, 31 and 32).
@@ -50,7 +53,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './bed-board.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-board.scss',
@@ -59,6 +62,7 @@ export class BedBoardComponent implements OnInit {
   private readonly boardService = inject(BedBoardService);
   private readonly isolation = inject(IsolationService);
   private readonly transfers = inject(TransferService);
+  private readonly beds = inject(BedService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
@@ -132,6 +136,14 @@ export class BedBoardComponent implements OnInit {
     return tokenRoles.length === 0 || tokenRoles.some((r) => roleSatisfies(roles, r));
   }
 
+  /**
+   * QA D651: the beds this patient may take, from /beds/available?patientId=
+   * (the same rule the server applies when the order is placed). Empty while
+   * it loads, so a bed the server would refuse is never offered; null when the
+   * lookup failed, and the server's own refusal is then the backstop.
+   */
+  readonly eligibleBedIds = signal<Set<string> | null>(null);
+
   /** Transfer modal state. */
   showTransferModal = signal(false);
   transferTarget = signal<BedOccupant | null>(null);
@@ -157,10 +169,12 @@ export class BedBoardComponent implements OnInit {
         return [];
       }
       const spokenFor = new Set(this.pendingTransfers().map((t) => t.toBedId));
+      const eligible = this.eligibleBedIds();
       return current.wards.flatMap((w) =>
         w.rooms
           .flatMap((r) => r.beds)
           .filter((b) => b.status === 'AVAILABLE' && !spokenFor.has(b.bedId))
+          .filter((b) => eligible === null || eligible.has(b.bedId))
           .map((b) => ({
             bedId: b.bedId,
             label: `${w.wardName} — ${b.bedNumber}`,
@@ -332,8 +346,8 @@ export class BedBoardComponent implements OnInit {
           this.closePrecautions();
           this.loadBoard();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BED_BOARD.PRECAUTION_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(this.serverReason(err, 'BED_BOARD.PRECAUTION_ERROR'));
           this.savingPrecaution.set(false);
         },
       });
@@ -355,7 +369,8 @@ export class BedBoardComponent implements OnInit {
           }
           this.loadBoard();
         },
-        error: () => this.toast.error(this.translate.instant('BED_BOARD.DISCONTINUE_ERROR')),
+        error: (err: HttpErrorResponse) =>
+          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR')),
       });
   }
 
@@ -369,12 +384,29 @@ export class BedBoardComponent implements OnInit {
       isolationOverride: false,
       isolationOverrideReason: '',
     };
+    this.eligibleBedIds.set(new Set());
+    this.beds
+      .getAvailableBeds(occupant.patientId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (list) => {
+          if (this.transferTarget() === occupant) {
+            this.eligibleBedIds.set(new Set(list.map((b) => b.id)));
+          }
+        },
+        error: () => {
+          if (this.transferTarget() === occupant) {
+            this.eligibleBedIds.set(null);
+          }
+        },
+      });
     this.showTransferModal.set(true);
   }
 
   closeTransfer(): void {
     this.showTransferModal.set(false);
     this.transferTarget.set(null);
+    this.eligibleBedIds.set(null);
   }
 
   /** Blocked until the override is acknowledged with a reason. */
@@ -414,11 +446,23 @@ export class BedBoardComponent implements OnInit {
           this.closeTransfer();
           this.refreshAll();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_ERROR'));
+        error: (err: HttpErrorResponse) => {
+          this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_ERROR'));
           this.savingTransfer.set(false);
         },
       });
+  }
+
+  /**
+   * QA D631: a refused write (4xx) carries the server's reason, already in the
+   * reader's language ("a transfer is already pending"); a generic toast hid
+   * it. A 5xx or a network failure keeps the generic text.
+   */
+  private serverReason(err: HttpErrorResponse, fallbackKey: string): string {
+    const message = err?.status >= 400 && err.status < 500 ? err.error?.message : null;
+    return typeof message === 'string' && message.trim()
+      ? message
+      : this.translate.instant(fallbackKey);
   }
 
   completeTransfer(order: TransferOrderResponse): void {
@@ -427,7 +471,8 @@ export class BedBoardComponent implements OnInit {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_COMPLETED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_COMPLETE_ERROR')),
+      error: (err: HttpErrorResponse) =>
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_COMPLETE_ERROR')),
     });
   }
 
@@ -441,7 +486,8 @@ export class BedBoardComponent implements OnInit {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_CANCELLED'));
         this.refreshAll();
       },
-      error: () => this.toast.error(this.translate.instant('BED_BOARD.TRANSFER_CANCEL_ERROR')),
+      error: (err: HttpErrorResponse) =>
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR')),
     });
   }
 

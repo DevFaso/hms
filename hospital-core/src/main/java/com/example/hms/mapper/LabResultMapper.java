@@ -34,7 +34,6 @@ public class LabResultMapper {
 
     private static final OrderContext EMPTY_ORDER_CONTEXT = new OrderContext(
         "",
-        "",
         null,
         null,
         null,
@@ -65,12 +64,16 @@ public class LabResultMapper {
                 && result.getLabOrder().getPatient().getId() != null
                 ? result.getLabOrder().getPatient().getId().toString() : null)
             .patientFullName(context.patientFullName())
-            .patientEmail(context.patientEmail())
+            // QA D527: no staff or patient screen reads the patient's e-mail off a result; it is not sent.
+            .patientEmail(null)
             .hospitalId(context.hospitalId())
             .hospitalName(context.hospitalName())
             .performingHospitalId(context.performingHospitalId())
             .orderedByName(context.orderedByName())
-            .labTestName(context.labTestName())
+            .labTestName(context.labTestName() != null || !definitionMissing(result.getLabOrder())
+                ? context.labTestName()
+                : com.example.hms.utility.MessageUtil.resolveOrRaw(LabOrderMapper.DELETED_TEST_LABEL))
+            .labTestDefinitionMissing(definitionMissing(result.getLabOrder()))
             .resultValue(result.getResultValue())
             .resultUnit(result.getResultUnit())
             .resultDate(result.getResultDate())
@@ -186,6 +189,13 @@ public class LabResultMapper {
         // about a value that may since have been amended (79 -> 4.2), and
         // keying the label on it kept a corrected typo CRITICAL for good.
         if (result.getAbnormalFlag() == com.example.hms.enums.AbnormalFlag.CRITICAL) {
+            return FLAG_CRITICAL;
+        }
+        // QA D648: the definition this value was graded against was deleted
+        // (before D601), so no range can grade it any more. The page that went
+        // out when it could is the one stored record that it was critical; a
+        // released critical value must not drop off the critical list with it.
+        if (definitionMissing(result.getLabOrder()) && result.getCriticalNotifiedAt() != null) {
             return FLAG_CRITICAL;
         }
         // QA D313: a value outside a range that declares no critical limits
@@ -362,6 +372,14 @@ public class LabResultMapper {
                 .build();
     }
 
+    /**
+     * QA D648: the order points at a definition that no longer exists. Only an
+     * initialised order can say so; a lazy one is treated as unknown.
+     */
+    private static boolean definitionMissing(LabOrder order) {
+        return order != null && Hibernate.isInitialized(order) && order.getLabTestDefinition() == null;
+    }
+
     private OrderContext extractOrderContext(LabOrder order) {
         if (order == null || !Hibernate.isInitialized(order)) {
             return EMPTY_ORDER_CONTEXT;
@@ -377,7 +395,6 @@ public class LabResultMapper {
 
         return new OrderContext(
             patientInfo.fullName(),
-            patientInfo.email(),
             hospitalId,
             hospitalName,
             performingHospitalId,
@@ -392,7 +409,6 @@ public class LabResultMapper {
 
     private record OrderContext(
             String patientFullName,
-            String patientEmail,
             String hospitalId,
             String hospitalName,
             String performingHospitalId,
@@ -405,7 +421,7 @@ public class LabResultMapper {
             String testUnit
     ) {}
 
-    private record PatientInfo(String fullName, String email) {}
+    private record PatientInfo(String fullName) {}
 
     private record LabTestMetadata(String name, String testCode, List<LabTestReferenceRange> referenceRanges,
                                    String unit) {}
@@ -413,7 +429,7 @@ public class LabResultMapper {
     private PatientInfo resolvePatientInfo(LabOrder order) {
         Patient patient = order.getPatient();
         if (patient == null || !Hibernate.isInitialized(patient)) {
-            return new PatientInfo("", "");
+            return new PatientInfo("");
         }
         String fullName = Optional.ofNullable(patient.getFullName())
             .filter(Predicate.not(String::isBlank))
@@ -421,8 +437,7 @@ public class LabResultMapper {
         if (fullName == null) {
             fullName = (nullToEmpty(patient.getFirstName()) + " " + nullToEmpty(patient.getLastName())).trim();
         }
-        String email = Optional.ofNullable(patient.getEmail()).orElse("");
-        return new PatientInfo(fullName, email);
+        return new PatientInfo(fullName);
     }
 
     private String resolveHospitalId(LabOrder order) {

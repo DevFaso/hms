@@ -39,6 +39,10 @@
         </div>
       }
 
+      @if (pt.recordsWithheld) {
+        <p class="no-data" role="note">{{ 'CHART.RECORDS_WITHHELD' | translate }}</p>
+      }
+
       <!-- Allergies -->
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('allergies')">
@@ -59,6 +63,9 @@
                   <span class="allergy-tag">{{ a }}</span>
                 }
               </div>
+            }
+            @if (pt.allergiesWithheld) {
+              <p class="no-data" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
             }
           </div>
         }

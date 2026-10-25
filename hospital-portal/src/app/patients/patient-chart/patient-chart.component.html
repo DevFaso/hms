@@ -55,13 +55,16 @@
   <!-- ══ Allergies ══ -->
   @if (section() === 'allergies' && canViewAllergies()) {
     <div class="section-toolbar">
-      @if (canEditAllergies()) {
+      @if (canAddAllergy()) {
         <button type="button" class="btn-primary btn-sm" (click)="openAddAllergy()">
           <span class="material-symbols-outlined">add</span>
           {{ 'CHART.ADD_ALLERGY' | translate }}
         </button>
       }
     </div>
+    @if (allergiesWithheld()) {
+      <p class="labs-hint" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+    }
     @if (allergiesLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (allergies().length === 0) {
@@ -102,7 +105,7 @@
                   }}
                 </td>
                 <td>{{ a.reaction || '—' }}</td>
-                <td>{{ a.onsetDate ? (a.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>{{ a.onsetDate ? (a.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
                 </td>
@@ -110,23 +113,25 @@
                 @if (canEditAllergies()) {
                   <td>
                     <div class="action-group">
-                      <button
-                        type="button"
-                        class="action-link"
-                        (click)="openEditAllergy(a)"
-                        [title]="'COMMON.EDIT' | translate"
-                      >
-                        <span class="material-symbols-outlined">edit</span>
-                      </button>
-                      @if (a.active !== false) {
+                      @if (canChangeAllergy(a)) {
                         <button
                           type="button"
-                          class="action-link delete-link"
-                          (click)="openDeactivateAllergy(a)"
-                          [title]="'CHART.DEACTIVATE' | translate"
+                          class="action-link"
+                          (click)="openEditAllergy(a)"
+                          [title]="'COMMON.EDIT' | translate"
                         >
-                          <span class="material-symbols-outlined">block</span>
+                          <span class="material-symbols-outlined">edit</span>
                         </button>
+                        @if (a.active !== false) {
+                          <button
+                            type="button"
+                            class="action-link delete-link"
+                            (click)="openDeactivateAllergy(a)"
+                            [title]="'CHART.DEACTIVATE' | translate"
+                          >
+                            <span class="material-symbols-outlined">block</span>
+                          </button>
+                        }
                       }
                     </div>
                   </td>
@@ -153,6 +158,11 @@
         </button>
       }
     </div>
+    @if (problemsWithheld()) {
+      <p class="labs-hint" role="note" data-testid="problems-withheld">
+        {{ 'CHART.LIST_WITHHELD' | translate }}
+      </p>
+    }
     @if (problemsLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (problems().length === 0) {
@@ -194,7 +204,7 @@
                     p.severity ? ('CHART.SEVERITY_' + p.severity | translate) : '—'
                   }}</span>
                 </td>
-                <td>{{ p.onsetDate ? (p.onsetDate | date: 'mediumDate') : '—' }}</td>
+                <td>{{ p.onsetDate ? (p.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>{{ (p.chronic ? 'COMMON.YES' : 'COMMON.NO') | translate }}</td>
                 <td class="hospital-cell">{{ p.hospitalName || '—' }}</td>
                 @if (canEditProblems()) {
@@ -237,6 +247,11 @@
         </button>
       }
     </div>
+    @if (updatesWithheld()) {
+      <p class="labs-hint" role="note" data-testid="updates-withheld">
+        {{ 'CHART.LIST_WITHHELD' | translate }}
+      </p>
+    }
     @if (updatesLoading()) {
       <div class="loading-state"><div class="spinner"></div></div>
     } @else if (updates().length === 0) {
@@ -249,7 +264,7 @@
               <span class="update-version">v{{ u.versionNumber }}</span>
               <span class="update-reason">{{ u.updateReason }}</span>
               <span class="update-meta">
-                {{ u.recordedByName }} — {{ u.recordedAt | date: 'short' }}
+                {{ u.recordedByName }} — {{ u.recordedAt | serverTime | date: 'short' }}
                 @if (u.hospitalName) {
                   <span class="update-hospital">· {{ u.hospitalName }}</span>
                 }
@@ -416,7 +431,9 @@
                   <td>
                     <span class="status-badge">{{ o.status | enumLabel: 'labOrderStatus' }}</span>
                   </td>
-                  <td>{{ o.orderDatetime ? (o.orderDatetime | date: 'short') : '—' }}</td>
+                  <td>
+                    {{ o.orderDatetime ? (o.orderDatetime | serverTime | date: 'short') : '—' }}
+                  </td>
                   <td>{{ o.performingHospitalName || ('CHART.LAB_IN_HOUSE' | translate) }}</td>
                   <td class="hospital-cell">{{ o.hospitalName || '—' }}</td>
                 </tr>
@@ -448,6 +465,11 @@
         inferring one from release state or recency is wrong, so the section
         states what it is showing rather than guessing which row to hide.
       -->
+      @if (labResultsWithheld()) {
+        <p class="labs-hint" role="note" data-testid="labs-withheld">
+          {{ 'CHART.LIST_WITHHELD' | translate }}
+        </p>
+      }
       @if (labResultsLoading() && labResults().length === 0) {
         <div class="loading-state"><div class="spinner"></div></div>
       } @else if (labResultsError() && labResults().length === 0) {
@@ -523,7 +545,7 @@
                   <td>
                     <span [class]="labStatusClass(r)">{{ labStatusKey(r) | translate }}</span>
                   </td>
-                  <td>{{ r.resultedAt ? (r.resultedAt | date: 'short') : '—' }}</td>
+                  <td>{{ r.resultedAt ? (r.resultedAt | serverTime | date: 'short') : '—' }}</td>
                   <td>{{ r.orderedBy || '—' }}</td>
                   <td>{{ r.performedBy || '—' }}</td>
                   <td class="hospital-cell">{{ r.hospitalName || '—' }}</td>
@@ -560,7 +582,7 @@
               <div class="timeline-summary">{{ e.summary }}</div>
               <div class="timeline-date">
                 {{ e.category | enumLabel: 'timelineCategory' }} ·
-                {{ e.occurredAt | date: 'medium' }}
+                {{ e.occurredAt | serverTime | date: 'medium' }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never
@@ -590,6 +612,12 @@
           </li>
         }
       </ul>
+      @if (tl.allergiesWithheld) {
+        <p class="labs-hint" role="note">{{ 'CHART.ALLERGIES_WITHHELD' | translate }}</p>
+      }
+      @if (tl.recordsWithheld) {
+        <p class="labs-hint" role="note">{{ 'CHART.RECORDS_WITHHELD' | translate }}</p>
+      }
       <!-- E9 #64 — what D3 withheld from this read, never a silent gap. -->
       <app-restricted-rows
         [rows]="tl.restrictedRows ?? []"

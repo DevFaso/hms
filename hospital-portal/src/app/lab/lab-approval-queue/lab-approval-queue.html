@@ -96,7 +96,7 @@
                 }
               </td>
               <td>{{ def.category || '—' }}</td>
-              <td>{{ def.sampleType || '—' }}</td>
+              <td>{{ def.sampleType ? (def.sampleType | enumLabel: 'specimenType') : '—' }}</td>
               <td>
                 <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
                   {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
@@ -130,14 +130,20 @@
                     def.approvalStatus === 'PENDING_QA_REVIEW' &&
                     (isQualityManager || isLabDirector || isSuperAdmin)
                   ) {
-                    <button
-                      class="btn-action btn-review"
-                      [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
-                    </button>
+                    @if (!isOwnSubmission(def)) {
+                      <button
+                        class="btn-action btn-review"
+                        [title]="'LAB_APPROVAL.ACTION.QA_PASS_TITLE' | translate"
+                        (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
+                      >
+                        <span class="material-symbols-outlined">fact_check</span>
+                        {{ 'LAB_APPROVAL.ACTION.QA_PASS' | translate }}
+                      </button>
+                    } @else {
+                      <span class="own-submission-hint" role="note">{{
+                        'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_QA' | translate
+                      }}</span>
+                    }
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
@@ -148,19 +154,31 @@
                     </button>
                   }
 
-                  <!-- PENDING_DIRECTOR_APPROVAL → approve / reject (LAB_DIRECTOR only) -->
+                  <!-- PENDING_DIRECTOR_APPROVAL → approve (LAB_DIRECTOR) / reject (QA D723: the
+                       quality manager too, as the server allows) -->
                   @if (
                     def.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' &&
-                    (isLabDirector || isSuperAdmin)
+                    (isLabDirector || isQualityManager || isSuperAdmin)
                   ) {
-                    <button
-                      class="btn-action btn-approve"
-                      [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
-                      (click)="openApprovalModal(def, 'APPROVE')"
-                    >
-                      <span class="material-symbols-outlined">verified</span>
-                      {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
-                    </button>
+                    @if (isLabDirector || isSuperAdmin) {
+                      @if (canApprove(def)) {
+                        <button
+                          class="btn-action btn-approve"
+                          [title]="'LAB_APPROVAL.ACTION.APPROVE_TITLE' | translate"
+                          (click)="openApprovalModal(def, 'APPROVE')"
+                        >
+                          <span class="material-symbols-outlined">verified</span>
+                          {{ 'LAB_APPROVAL.ACTION.APPROVE' | translate }}
+                        </button>
+                      } @else {
+                        <span class="own-submission-hint" role="note">{{
+                          (isOwnReview(def)
+                            ? 'LAB_APPROVAL.ACTION.OWN_REVIEW_HINT_APPROVE'
+                            : 'LAB_APPROVAL.ACTION.OWN_SUBMISSION_HINT_APPROVE'
+                          ) | translate
+                        }}</span>
+                      }
+                    }
                     <button
                       class="btn-action btn-reject"
                       [title]="'LAB_APPROVAL.ACTION.REJECT_TITLE' | translate"
@@ -245,7 +263,9 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.SAMPLE_TYPE' | translate }}</span>
-            <span class="field-value">{{ def.sampleType || '—' }}</span>
+            <span class="field-value">{{
+              def.sampleType ? (def.sampleType | enumLabel: 'specimenType') : '—'
+            }}</span>
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>

@@ -189,6 +189,75 @@ describe('BillingComponent', () => {
     expect(billingSpy.recordPayment).not.toHaveBeenCalled();
   });
 
+  it('QA D634: the payment modal leaves a pending patient declaration out of the prefill and says so', () => {
+    billingSpy.listPayments.and.returnValue(
+      of([
+        {
+          id: 'p1',
+          amount: 1000,
+          paymentDate: '2026-10-23',
+          paymentMethod: 'CARD',
+          status: 'PENDING' as const,
+        },
+        {
+          id: 'p2',
+          amount: 500,
+          paymentDate: '2026-10-22',
+          paymentMethod: 'CASH',
+          status: 'REJECTED' as const,
+        },
+      ]),
+    );
+    component.openPayment(mockInvoice({ id: 'inv-6', status: 'SENT', balanceDue: 3000 }));
+    expect(billingSpy.listPayments).toHaveBeenCalledWith('inv-6');
+    expect(component.paymentPending()).toBe(1000);
+    expect(component.paymentAmount()).toBe(2000);
+  });
+
+  it('QA D634: with nothing pending the prefill is still the whole balance', () => {
+    billingSpy.listPayments.and.returnValue(of([]));
+    component.openPayment(mockInvoice({ id: 'inv-7', status: 'SENT', balanceDue: 3000 }));
+    expect(component.paymentPending()).toBe(0);
+    expect(component.paymentAmount()).toBe(3000);
+  });
+
+  it('QA D614 / D613: an issued invoice keeps its patient; only a draft is locked open', () => {
+    component.openEdit(mockInvoice({ status: 'SENT' }));
+    expect(component.patientLocked()).toBeTrue();
+    component.openEdit(mockInvoice({ status: 'DRAFT' }));
+    expect(component.patientLocked()).toBeFalse();
+    component.openCreate();
+    expect(component.patientLocked()).toBeFalse();
+  });
+
+  it('QA D656: an issued invoice offers no line form and locks its dates, total and visit', async () => {
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    component.viewInvoice(mockInvoice({ status: 'SENT' }));
+    fixture.detectChanges();
+    expect(el.querySelector('.line-form')).toBeNull();
+    component.closeDetail();
+    component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+    fixture.detectChanges();
+    expect(el.querySelector('.line-form')).not.toBeNull();
+    component.closeDetail();
+
+    component.openEdit(mockInvoice({ status: 'SENT' }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const date = el.querySelector<HTMLInputElement>('#bill-invoiceDate');
+    expect(date?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLInputElement>('#bill-dueDate')?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLInputElement>('#bill-encounter')?.disabled).toBeTrue();
+    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeFalse();
+  });
+
+  it('QA D621: amounts read "F CFA" whatever the language', () => {
+    expect(component.formatCurrency(4000)).toContain('F\u00a0CFA');
+    expect(component.formatCurrency(4000)).not.toContain('XOF');
+  });
+
   it('recordPayment rejects a missing or non-positive amount', () => {
     component.paymentInv.set(mockInvoice());
     component.paymentAmount.set(0);
@@ -238,7 +307,10 @@ describe('BillingComponent', () => {
 
   it('QA D147: a paid invoice takes no line changes', () => {
     expect(component.canEditLines(mockInvoice({ status: 'PAID' }))).toBeFalse();
-    expect(component.canEditLines(mockInvoice({ status: 'PARTIALLY_PAID' }))).toBeTrue();
+    // QA D656: an issued invoice, part-paid or not, takes no line changes.
+    expect(component.canEditLines(mockInvoice({ status: 'PARTIALLY_PAID' }))).toBeFalse();
+    expect(component.canEditLines(mockInvoice({ status: 'SENT' }))).toBeFalse();
+    expect(component.canEditLines(mockInvoice({ status: 'DRAFT' }))).toBeTrue();
   });
 
   it('QA D142: a reversal needs a reason and refreshes the invoice', () => {
@@ -284,7 +356,7 @@ describe('BillingComponent', () => {
     expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
   });
 
-  it('sendEmail splits recipients and reloads after success', () => {
+  it('sendEmail splits recipients after success', () => {
     fixture.detectChanges();
     billingSpy.emailInvoice.and.returnValue(of({}) as never);
     billingSpy.searchInvoices.calls.reset();
@@ -295,8 +367,65 @@ describe('BillingComponent', () => {
     const [, payload] = billingSpy.emailInvoice.calls.mostRecent().args;
     expect(payload.to).toEqual(['a@x.test', 'b@x.test']);
     expect(payload.attachPdf).toBeTrue();
-    // Email flips the invoice to SENT server-side → list is re-fetched.
-    expect(billingSpy.searchInvoices).toHaveBeenCalled();
+    // QA D758: emailing no longer changes the status, so nothing is re-fetched.
+    expect(billingSpy.searchInvoices).not.toHaveBeenCalled();
+  });
+
+  it('QA D758: a refused email shows the server reason', () => {
+    billingSpy.emailInvoice.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Brouillon: émettez-la d abord' },
+      })) as never,
+    );
+    component.emailInv.set(mockInvoice());
+    component.emailTo.set('a@x.test');
+    component.sendEmail();
+    expect(toastSpy.error).toHaveBeenCalledWith('Brouillon: émettez-la d abord');
+  });
+
+  it('QA D758: no email action on a DRAFT or CANCELLED invoice row', () => {
+    billingSpy.searchInvoices.and.returnValue(
+      of(
+        mockPage([
+          mockInvoice({ id: 'd', status: 'DRAFT' }),
+          mockInvoice({ id: 'c', status: 'CANCELLED' }),
+          mockInvoice({ id: 's', status: 'SENT' }),
+        ]),
+      ),
+    );
+    fixture.detectChanges();
+    const mailButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.material-symbols-outlined'),
+    ).filter((el) => el.textContent?.trim() === 'email');
+    expect(mailButtons.length).toBe(1);
+  });
+
+  it('QA D529: a stay already invoiced asks before a supplementary invoice', () => {
+    fixture.detectChanges();
+    billingSpy.createInvoice.and.returnValues(
+      throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
+      of(mockInvoice()),
+    );
+    const confirm = spyOn(globalThis, 'confirm').and.returnValue(true);
+    component.openCreate();
+    component.submitForm();
+    expect(confirm).toHaveBeenCalled();
+    expect(billingSpy.createInvoice).toHaveBeenCalledTimes(2);
+    expect(billingSpy.createInvoice.calls.mostRecent().args[0].supplementary).toBeTrue();
+    expect(billingSpy.createInvoice.calls.first().args[0].supplementary).toBeUndefined();
+  });
+
+  it('QA D529: declining the supplementary invoice creates nothing more', () => {
+    fixture.detectChanges();
+    billingSpy.createInvoice.and.returnValue(
+      throwError(() => ({ status: 409, error: { message: 'Already invoiced RHA-12' } })),
+    );
+    spyOn(globalThis, 'confirm').and.returnValue(false);
+    component.openCreate();
+    component.submitForm();
+    expect(billingSpy.createInvoice).toHaveBeenCalledTimes(1);
+    expect(component.saving()).toBeFalse();
   });
 
   it('submitForm creates a new invoice and closes the modal', () => {

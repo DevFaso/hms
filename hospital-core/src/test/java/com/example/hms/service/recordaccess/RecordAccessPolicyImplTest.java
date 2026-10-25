@@ -488,4 +488,48 @@ class RecordAccessPolicyImplTest {
         assertThat(d.reason()).isEqualTo(RecordAccessDenialReason.NOT_STAFF_AT_HOSPITAL);
         verify(patientRepository, never()).findByIdUnscoped(patient);
     }
+
+    private UUID registeredElsewhere() {
+        UUID hospitalA = UUID.randomUUID();
+        Hospital a = new Hospital();
+        a.setId(hospitalA);
+        a.setIsolationMode(TenantIsolationMode.ROW_LEVEL);
+        a.setRecordAccessPosture(RecordAccessPosture.TREATMENT_PRESUMED);
+        PatientHospitalRegistration atA = new PatientHospitalRegistration();
+        atA.setId(UUID.randomUUID());
+        atA.setHospital(a);
+        when(registrationRepository.findByPatientIdAndHospitalId(patient, hospitalId)).thenReturn(Optional.empty());
+        when(registrationRepository.findByPatientId(patient)).thenReturn(java.util.List.of(atA));
+        when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patient)).thenReturn(true);
+        return hospitalA;
+    }
+
+    @Test
+    @DisplayName("D504: opt-out + a live session at B → the readable set holds A and B, so every non-allergy read sees A's rows")
+    void optOutBreakGlassReadsTheOtherHospital() {
+        UUID hospitalA = registeredElsewhere();
+        BreakGlassSession session = new BreakGlassSession();
+        session.setId(UUID.randomUUID());
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.of(session));
+
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactlyInAnyOrder(hospitalId, hospitalA);
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isFalse();
+    }
+
+    @Test
+    @DisplayName("D504: opt-out without a session → exactly {B}, and the withheld signal is raised")
+    void optOutWithoutSessionReadsOnlyHere() {
+        registeredElsewhere();
+        when(breakGlassGate.liveSession(actor, patient, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(policy.readableHospitalIds(actor, patient, hospitalId)).containsExactly(hospitalId);
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isTrue();
+    }
+
+    @Test
+    @DisplayName("D504: no opt-out → nothing is withheld by it, whatever the decision")
+    void noOptOutWithholdsNothing() {
+        assertThat(policy.foreignRowsWithheld(actor, patient, hospitalId)).isFalse();
+        assertThat(policy.foreignRowsWithheld(actor, null, hospitalId)).isFalse();
+    }
 }

@@ -146,7 +146,7 @@ class CheckOutMapperTest {
         }
 
         @Test
-        void checkoutTextWinsAndPatientInstructionsBeatThePlan() {
+        void checkoutTextWinsAndTheNoteAddsInstructionsAndPlan() {
             Encounter encounter = buildEncounter();
             com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
             note.setChiefComplaint("From the note");
@@ -163,7 +163,38 @@ class CheckOutMapperTest {
 
             assertThat(avs.getChiefComplaint()).isEqualTo("Headache and fatigue");
             assertThat(avs.getDischargeDiagnoses()).containsExactly("Typed at checkout");
-            assertThat(avs.getFollowUpInstructions()).isEqualTo("Take with food");
+            // QA D730: the plan is no longer dropped when instructions exist.
+            assertThat(avs.getFollowUpInstructions()).isEqualTo("Take with food\n\nNote plan");
+        }
+
+        @Test
+        void qaD730SignedInstructionsAndPlanSurviveCheckoutFollowUpText() {
+            // The exact round-10 note: both sections written, then signed; the
+            // checkout form carried its own follow-up line.
+            Encounter encounter = buildEncounter();
+            com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+            note.setAssessment("Céphalée de tension");
+            note.setPlan("Paracétamol, repos");
+            note.setPatientInstructions("Boire beaucoup, revenir si fièvre");
+            note.setSignedAt(java.time.LocalDateTime.of(2026, 10, 24, 9, 0));
+            encounter.setEncounterNote(note);
+            CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+                .followUpInstructions("Revoir dans 7 jours")
+                .build();
+
+            AfterVisitSummaryDTO checkout = mapper.toAfterVisitSummary(encounter, request, null);
+            assertThat(checkout.getFollowUpInstructions()).isEqualTo(
+                "Revoir dans 7 jours\n\nBoire beaucoup, revenir si fièvre\n\nParacétamol, repos");
+
+            // The later GET /encounters/{id}/avs reads the encounter column, not the request.
+            encounter.setFollowUpInstructions("Revoir dans 7 jours");
+            AfterVisitSummaryDTO reread = mapper.toAfterVisitSummary(encounter, null, null);
+            assertThat(reread.getFollowUpInstructions()).isEqualTo(checkout.getFollowUpInstructions());
+
+            // Nothing is repeated when the checkout text already holds the instructions.
+            encounter.setFollowUpInstructions("Boire beaucoup, revenir si fièvre");
+            assertThat(mapper.toAfterVisitSummary(encounter, null, null).getFollowUpInstructions())
+                .isEqualTo("Boire beaucoup, revenir si fièvre\n\nParacétamol, repos");
         }
 
         @Test

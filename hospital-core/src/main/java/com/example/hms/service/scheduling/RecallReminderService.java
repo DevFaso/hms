@@ -1,12 +1,12 @@
 package com.example.hms.service.scheduling;
 
+import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.scheduling.PatientRecall;
 import com.example.hms.repository.scheduling.PatientRecallRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +31,6 @@ public class RecallReminderService {
 
     private final PatientRecallRepository recallRepository;
     private final PatientOutreachNotifier outreachNotifier;
-    private final MessageSource messageSource;
     private final PatientLocaleResolver patientLocaleResolver;
     /**
      * The recall clock: the notice window ({@code dueDate <= today + leadDays})
@@ -50,12 +49,10 @@ public class RecallReminderService {
 
     public RecallReminderService(PatientRecallRepository recallRepository,
                                  PatientOutreachNotifier outreachNotifier,
-                                 MessageSource messageSource,
                                  PatientLocaleResolver patientLocaleResolver,
                                  Clock clock) {
         this.recallRepository = recallRepository;
         this.outreachNotifier = outreachNotifier;
-        this.messageSource = messageSource;
         this.patientLocaleResolver = patientLocaleResolver;
         this.clock = clock;
     }
@@ -92,8 +89,7 @@ public class RecallReminderService {
         // wins when we have a bundle for it.
         Locale locale = patientLocaleResolver.resolve(
             recall.getPatient(), Locale.forLanguageTag(outreachLocale));
-        String message = messageSource.getMessage("sms.recall.due",
-            new Object[]{hospitalName}, locale);
-        return outreachNotifier.notifyPatient(recall.getPatient(), message);
+        return outreachNotifier.notifyPatient(recall.getPatient(),
+            NotificationText.of("sms.recall.due", hospitalName), locale);
     }
 }

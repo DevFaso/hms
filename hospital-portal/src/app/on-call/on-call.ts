@@ -23,6 +23,8 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { nowLocalDatetime } from '../shared/date-utils';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
@@ -73,7 +75,7 @@ export function isRosterable(staff: StaffResponse): boolean {
 @Component({
   selector: 'app-on-call',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './on-call.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './on-call.scss',
@@ -262,9 +264,7 @@ export class OnCallComponent implements OnInit {
 
   /** ISO (with offset) → the local "YYYY-MM-DDTHH:mm" a datetime-local input needs. */
   private toLocalInput(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return nowLocalDatetime(new Date(iso));
   }
 
   private emptyForm(): OnCallFormModel {

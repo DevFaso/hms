@@ -24,7 +24,6 @@ import com.example.hms.repository.PostpartumCarePlanRepository;
 import com.example.hms.repository.PostpartumObservationRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -79,8 +78,10 @@ class PostpartumCareServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private UserRepository userRepository;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS)
+    private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock
-    private NotificationService notificationService;
+    private com.example.hms.service.maternity.ObstetricAlertEscalationService obstetricAlertEscalation;
     @Mock
     private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock
@@ -108,6 +109,7 @@ class PostpartumCareServiceImplTest {
             staffRepository,
             userRepository,
             notificationService,
+            obstetricAlertEscalation,
             new PostpartumObservationMapper(),
             proResponseService,
             recordAccessPolicy,
@@ -148,13 +150,34 @@ class PostpartumCareServiceImplTest {
         lenient().when(userRepository.findById(recorderId)).thenReturn(Optional.of(recorder));
         lenient().when(staffRepository.findByUserIdAndHospitalId(recorderId, hospitalId)).thenReturn(Optional.empty());
         lenient().when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)).thenReturn(Optional.empty());
-        lenient().when(notificationService.createNotification(anyString(), anyString())).thenReturn(null);
+        lenient().when(notificationService.created(anyString(), anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(null);
         lenient().when(observationRepository.save(any(PostpartumObservation.class))).thenAnswer(invocation -> {
             PostpartumObservation obs = invocation.getArgument(0);
             obs.setId(UUID.randomUUID());
             return obs;
         });
         lenient().when(carePlanRepository.save(any(PostpartumCarePlan.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        // QA D517: postpartum care needs a recorded birth; the tests below have one.
+        lenient().when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(true);
+    }
+
+    /** QA D517: a postpartum observation for a woman with no recorded delivery is refused. */
+    @Test
+    void recordObservationWithNoRecordedDeliveryIsRefused() {
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class))).thenReturn(false);
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(LocalDateTime.now().minusMinutes(5))
+            .build();
+
+        com.example.hms.exception.BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> service.recordObservation(patientId, request, recorderId));
+        assertEquals("maternity.postpartum.noDelivery", ex.getMessageKey());
+        verify(observationRepository, never()).save(any());
+        verify(carePlanRepository, never()).save(any());
     }
 
     @Test
@@ -182,7 +205,11 @@ class PostpartumCareServiceImplTest {
         assertTrue(response.getAlerts().get(0).getMessage().startsWith("Risque d"));
         assertTrue(response.getAlerts().get(0).getMessage().toLowerCase().contains("hémorragie"));
 
-    verify(notificationService, times(1)).createNotification(anyString(), anyString());
+    verify(notificationService, times(1)).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
+        // QA D605: the URGENT postpartum alert reaches the on-call team too.
+        verify(obstetricAlertEscalation).raiseAfterCommit(org.mockito.ArgumentMatchers.argThat(a ->
+            hospitalId.equals(a.hospitalId()) && com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_POSTPARTUM.equals(a.sourceType())
+                && "postpartum.alert.msg.postpartum-hemorrhage".equals(a.alertMessageKey())));
 
         ArgumentCaptor<PostpartumObservation> observationCaptor = ArgumentCaptor.forClass(PostpartumObservation.class);
         verify(observationRepository).save(observationCaptor.capture());
@@ -224,7 +251,7 @@ class PostpartumCareServiceImplTest {
         assertNotNull(existingPlan.getNextDueAt(), "Next due check should be scheduled");
         assertEquals(existingPlan.getNextDueAt(), response.getSchedule().getNextDueAt());
         assertEquals(observationTime.plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES), existingPlan.getNextDueAt());
-    verify(notificationService, never()).createNotification(anyString(), anyString());
+    verify(notificationService, never()).created(anyString(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -267,7 +294,7 @@ class PostpartumCareServiceImplTest {
     assertTrue(plan.isPainFollowupOutstanding(), "Pain follow-up should be tracked");
 
         assertTrue(response.getAlerts().stream().anyMatch(alert -> alert.getType() == PostpartumAlertType.INFECTION));
-        verify(notificationService, times(1)).createNotification(any(), anyString());
+        verify(notificationService, times(1)).created(any(), anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -463,6 +490,34 @@ class PostpartumCareServiceImplTest {
         assertFalse(response.getSchedule().isOverdue(), "a check due in the future is not overdue");
     }
 
+    /** QA D762, the exact replay: a postpartum check at birth -3 h returned 201 and counted. */
+    @Test
+    void anObservationBeforeTheBirthIsRefusedAndNothingCounts_D762() {
+        LocalDateTime birth = LocalDateTime.now().minusHours(2);
+        PostpartumCarePlan plan = PostpartumCarePlan.builder()
+            .patient(patient).hospital(hospital).deliveryOccurredAt(birth).build();
+        plan.setId(UUID.randomUUID());
+        plan.setActive(true);
+        plan.setImmediateObservationTarget(4);
+        plan.setImmediateObservationsCompleted(0);
+        plan.markActivePhase(PostpartumSchedulePhase.IMMEDIATE_RECOVERY);
+        when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(plan));
+
+        PostpartumObservationRequestDTO request = PostpartumObservationRequestDTO.builder()
+            .hospitalId(hospitalId)
+            .observationTime(birth.minusHours(3))
+            .fundusTone(PostpartumFundusTone.FIRM)
+            .lochiaAmount(PostpartumLochiaAmount.MODERATE)
+            .build();
+
+        BusinessException ex = org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+            () -> service.recordObservation(patientId, request, recorderId));
+        assertEquals("maternity.postpartum.observationTime.beforeBirth", ex.getMessageKey());
+        assertEquals(0, plan.getImmediateObservationsCompleted());
+        verify(observationRepository, never()).save(any());
+    }
+
     @Test
     void urgentPostpartumNotificationsAreFrenchWithATranslatedType() {
         when(carePlanRepository.findFirstByPatient_IdAndHospital_IdAndActiveTrueOrderByCreatedAtDesc(patientId, hospitalId))
@@ -476,7 +531,7 @@ class PostpartumCareServiceImplTest {
         PostpartumObservationResponseDTO response = service.recordObservation(patientId, request, recorderId);
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
-        verify(notificationService).createNotification(message.capture(), anyString());
+        verify(notificationService).created(message.capture(), anyString(), org.mockito.ArgumentMatchers.any());
         assertTrue(message.getValue().startsWith("Alerte post-partum (hémorragie)"), message.getValue());
         assertFalse(message.getValue().contains("HEMORRHAGE"), message.getValue());
         assertEquals("Évaluation des saignements", response.getAlerts().get(0).getTriggeredBy());

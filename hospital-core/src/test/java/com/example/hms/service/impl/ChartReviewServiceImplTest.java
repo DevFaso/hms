@@ -99,7 +99,8 @@ class ChartReviewServiceImplTest {
         service = new ChartReviewServiceImpl(
             patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
             imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo,
-            recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate);
+            recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate,
+            new com.example.hms.mapper.LabResultMapper());
         // E9 #60 — the readable set is the acting hospital alone unless a test widens it.
         when(recordAccessPolicy.readableHospitalIds(any(), eq(PATIENT_ID), eq(HOSPITAL_ID)))
             .thenReturn(Set.of(HOSPITAL_ID));
@@ -452,6 +453,7 @@ class ChartReviewServiceImplTest {
             .resultUnit("g/dL")
             .resultDate(when)
             .abnormalFlag(flag)
+            .released(true)
             .build();
         r.setId(UUID.randomUUID());
         return r;
@@ -647,5 +649,131 @@ class ChartReviewServiceImplTest {
         ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
 
         assertThat(dto.getEncounters()).hasSize(1);
+    }
+
+    /* ---- QA D520 ----------------------------------------------------- */
+
+    private LabResult handEnteredPotassium(String value) {
+        // A value typed by the lab tech: no analyzer flag on the row, a
+        // configured range with critical limits on the test definition.
+        LabResult r = labResult(LocalDateTime.now().minusHours(1), null, "Potassium", "2823-3");
+        LabTestDefinition def = r.getLabOrder().getLabTestDefinition();
+        def.setUnit("mmol/L");
+        com.example.hms.model.LabTestReferenceRange range = new com.example.hms.model.LabTestReferenceRange();
+        range.setMinValue(3.5);
+        range.setMaxValue(5.1);
+        range.setCriticalLow(2.5);
+        range.setCriticalHigh(6.5);
+        range.setUnit("mmol/L");
+        def.setReferenceRanges(new java.util.ArrayList<>(List.of(range)));
+        r.setResultValue(value);
+        r.setResultUnit("mmol/L");
+        return r;
+    }
+
+    @Test
+    void d520_aHandEnteredCriticalValueIsFlaggedCriticalOnTheTabAndTheTimeline() {
+        // QA D520: GET /patients/{id}/chart-review showed no CRITIQUE pill for
+        // a critical potassium the lab screen flagged, because only the
+        // analyzer flag (absent on a typed value) was read.
+        LabResult r = handEnteredPotassium("7.9");
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).singleElement()
+            .satisfies(e -> assertThat(e.getAbnormalFlag()).isEqualTo("CRITICAL"));
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> assertThat(e.getStatus()).isEqualTo("CRITICAL"));
+    }
+
+    @Test
+    void d740_anUnreleasedCriticalValueIsListedPendingWithNoValueUnitOrFlag() {
+        // Re-test D740: LAB_TECH_A enters KAL 1.8 (critical) and does not
+        // release it; the chart DTO the record.pdf is built from carried 1.8.
+        LabResult r = handEnteredPotassium("1.8");
+        r.setReleased(false);
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).singleElement().satisfies(e -> {
+            assertThat(e.isReleased()).isFalse();
+            assertThat(e.getResultValue()).isNull();
+            assertThat(e.getResultUnit()).isNull();
+            assertThat(e.getAbnormalFlag()).isNull();
+        });
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == Section.RESULT)
+            .singleElement()
+            .satisfies(e -> {
+                assertThat(e.getTitle()).doesNotContain("1.8");
+                assertThat(e.getStatus()).isNull();
+            });
+    }
+
+    @Test
+    void d741_aReleasedCorrectionReplacesTheResultItCorrects() {
+        // Re-test D741: KAL 4.1 released, then a correction 4.0 naming it,
+        // released. Both showed as current.
+        LabResult original = handEnteredPotassium("4.1");
+        LabResult correction = handEnteredPotassium("4.0");
+        correction.setLabOrder(original.getLabOrder());
+        correction.setSupersedesResultId(original.getId());
+        correction.setResultDate(original.getResultDate().plusMinutes(5));
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(correction, original));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).extracting(ChartReviewDTO.ResultEntryDTO::getResultValue)
+            .containsExactly("4.0");
+    }
+
+    @Test
+    void d520_aHandEnteredHighValueIsAbnormalHighAndANormalOneIsNormal() {
+        LabResult high = handEnteredPotassium("5.8");
+        LabResult normal = handEnteredPotassium("4.2");
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(high, normal));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getResults()).extracting(r -> r.getAbnormalFlag())
+            .containsExactlyInAnyOrder("ABNORMAL", "NORMAL");
+        assertThat(dto.getResults()).filteredOn(r -> "ABNORMAL".equals(r.getAbnormalFlag()))
+            .singleElement()
+            .satisfies(r -> assertThat(r.getAbnormalDirection()).isEqualTo(com.example.hms.enums.AbnormalDirection.HIGH));
+    }
+
+    @Test
+    void qaD678CatalogControlledMorphineWithoutTheTickShowsAsControlled() {
+        com.example.hms.repository.MedicationCatalogItemRepository catalog =
+            mock(com.example.hms.repository.MedicationCatalogItemRepository.class);
+        UUID item = UUID.randomUUID();
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(catalog.findByIdAndHospital_Id(item, HOSPITAL_ID)).thenReturn(Optional.of(morphine));
+        service.setControlledResolver(new com.example.hms.service.pharmacy.PrescriptionControlledResolver(catalog));
+        Prescription rx = prescription("Morphine", null, LocalDateTime.now().minusDays(1));
+        rx.setHospital(hospital);
+        rx.setMedicationCatalogItemId(item);
+        when(prescriptionRepo.findByPatient_IdAndHospital_IdIn(any(UUID.class), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(rx)));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(rx.isControlledSubstance()).isFalse();
+        assertThat(dto.getMedications()).singleElement()
+            .extracting(ChartReviewDTO.MedicationEntryDTO::isControlledSubstance).isEqualTo(true);
     }
 }

@@ -20,8 +20,8 @@ import { RoleContextService } from '../core/role-context.service';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
 import { RegistrationService } from '../services/registration.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { switchMap, catchError, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
-import { EMPTY, of } from 'rxjs';
+import { switchMap, catchError, debounceTime, distinctUntilChanged, map, Subject } from 'rxjs';
+import { of } from 'rxjs';
 
 @Component({
   selector: 'app-patient-form',
@@ -59,6 +59,8 @@ export class PatientFormComponent implements OnInit {
   /** Staff confirmed "not the same person" — allows a fresh registration. */
   matchDismissed = false;
   linking = false;
+  /** QA D756: the link failure stays on the card, not only in a toast. */
+  linkError: string | null = null;
   private matchCheckSubject = new Subject<{ email: string; phone: string }>();
 
   // ── SMS phone verification (IKODDI OTP; hidden when not configured) ─────
@@ -271,6 +273,7 @@ export class PatientFormComponent implements OnInit {
       return;
     }
     this.linking = true;
+    this.linkError = null;
     this.registrationService
       .create({ patientId: match.patientId, hospitalId: this.form.hospitalId })
       .subscribe({
@@ -280,10 +283,14 @@ export class PatientFormComponent implements OnInit {
         },
         error: (err) => {
           this.linking = false;
-          const msg =
+          const serverMessage: unknown = err?.error?.message;
+          const fallback =
             err?.status === 409
               ? this.translate.instant('PATIENTS.ALREADY_REGISTERED_HERE')
               : this.translate.instant('PATIENTS.LINK_ERROR');
+          const msg =
+            typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : fallback;
+          this.linkError = msg;
           this.toast.error(msg);
         },
       });
@@ -338,17 +345,21 @@ export class PatientFormComponent implements OnInit {
   private submitRegistration(): void {
     this.saving = true;
 
-    // Step 1: Create a User account with ROLE_PATIENT via admin-register
-    // Step 2: Use the returned userId to create the Patient entity
-    // If Step 2 fails, delete the orphaned user to avoid dangling accounts.
+    // QA D626: ONE call registers the account and the patient record, in one
+    // server transaction, so a failure leaves neither behind (no client-side
+    // compensation delete, which a closed tab or a dropped connection skipped).
     const username = this.generateUsername(this.form.firstName, this.form.lastName);
     // Blank email stays OFF the wire (phone-first); a confirmed OTP challenge
     // rides along so the backend can stamp phoneVerifiedAt.
     const email = this.form.email?.trim() || undefined;
-    let createdUserId: string | null = null;
-    let createdNewAccount = false;
     let deliveryWarnings: string[] = [];
     let deliveryReport: NotificationDeliveryStatus[] = [];
+    const patient: PatientCreateRequest = {
+      ...this.form,
+      email,
+      phoneVerificationId:
+        this.phoneVerified && this.otpChallengeId ? this.otpChallengeId : undefined,
+    };
     this.userService
       .adminRegister({
         username,
@@ -359,35 +370,15 @@ export class PatientFormComponent implements OnInit {
         roleNames: ['PATIENT'],
         hospitalId: this.form.hospitalId,
         forcePasswordChange: true,
+        patientRegistration: true,
+        patient,
       })
       .pipe(
-        switchMap((user) => {
-          createdUserId = user.id;
-          createdNewAccount = user.newAccount === true;
+        map((user) => {
           this.form.userId = user.id;
           deliveryReport = user.activationDelivery ?? [];
           deliveryWarnings = deliveryWarningKeys(deliveryReport);
-          const payload: PatientCreateRequest = {
-            ...this.form,
-            email,
-            phoneVerificationId:
-              this.phoneVerified && this.otpChallengeId ? this.otpChallengeId : undefined,
-          };
-          return this.patientService.create(payload).pipe(
-            catchError((patientErr) => {
-              // Compensate: remove the orphaned user account - but only one
-              // THIS registration created. A linked existing account (a
-              // returning patient) is never deleted by a failed second step.
-              if (createdUserId && createdNewAccount) {
-                this.userService.delete(createdUserId).subscribe();
-              }
-              this.toast.error(
-                patientErr?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
-              );
-              this.saving = false;
-              return EMPTY;
-            }),
-          );
+          return { id: user.patientId };
         }),
       )
       .subscribe({
@@ -413,7 +404,31 @@ export class PatientFormComponent implements OnInit {
             err?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
           );
           this.saving = false;
+          // QA D725: the server refuses an e-mail/phone that already belongs to
+          // a patient (the debounced check may not have answered before the
+          // click). Fetch the match now so the card offers the existing record.
+          if (err?.status === 409) {
+            this.refreshMatchesNow();
+          }
         },
+      });
+  }
+
+  private refreshMatchesNow(): void {
+    const email = (this.form.email ?? '').trim();
+    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    this.patientService
+      .registrationMatch({
+        email: email.includes('@') ? email : undefined,
+        phone: phone.length >= 6 ? phone : undefined,
+        hospitalId: this.form.hospitalId || undefined,
+      })
+      .pipe(catchError(() => of(null)))
+      .subscribe((matches) => {
+        if (matches && matches.length > 0) {
+          this.registrationMatches = matches;
+          this.matchDismissed = false;
+        }
       });
   }
 

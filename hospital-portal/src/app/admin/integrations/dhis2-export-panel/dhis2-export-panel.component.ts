@@ -22,6 +22,7 @@ import {
 } from '../../../services/integrations/dhis2.model';
 import { RoleContextService } from '../../../core/role-context.service';
 import { ToastService } from '../../../core/toast.service';
+import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
 /**
  * Manual-trigger panel + last-N runs table.
@@ -34,7 +35,7 @@ import { ToastService } from '../../../core/toast.service';
 @Component({
   selector: 'app-dhis2-export-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-export" data-testid="dhis2-export-panel">
@@ -115,7 +116,7 @@ import { ToastService } from '../../../core/toast.service';
           <tbody>
             @for (r of runs(); track trackById($index, r)) {
               <tr [attr.data-run-id]="r.id">
-                <td>{{ r.startedAt | date: 'short' }}</td>
+                <td>{{ r.startedAt | serverTime | date: 'short' }}</td>
                 <td>{{ r.datasetUid }}</td>
                 <td>{{ r.periodIso }}</td>
                 <td>

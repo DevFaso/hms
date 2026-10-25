@@ -117,7 +117,7 @@ import static org.mockito.Mockito.when;
 @ActiveProfiles("test")
 @Import({DispenseServiceImpl.class, PreparedFillVoider.class, PharmacyPaymentVoider.class, PrescriptionQueueClaimService.class,
         DispenseVerificationService.class,
-        ControlledSubstanceGuard.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
+        ControlledSubstanceGuard.class, PrescriptionControlledResolver.class, ControlledStockWitness.class, StockOutRoutingServiceImpl.class, DispenseMapper.class,
         StockTransactionServiceImpl.class, com.example.hms.mapper.pharmacy.StockTransactionMapper.class,
         PrescriptionRoutingMapper.class, com.example.hms.mapper.pharmacy.StockLotMapper.class, EncryptionKeyHolder.class,
         PreparedFillConcurrencyPostgresIT.Config.class})
@@ -192,6 +192,10 @@ class PreparedFillConcurrencyPostgresIT {
         MessageUtil.setMessageSource(TestMessageSources.bundles());
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> seed());
+        // QA D512: every fill needs a pharmacist verification; these races are
+        // about the claim and the preparation, so the order counts as verified.
+        org.mockito.Mockito.lenient().when(pharmacistVerificationService.isVerified(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(true);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospital.getId());
         when(roleValidator.getCurrentUserId()).thenReturn(pharmacist.getId());
         when(support.resolveCurrentUser()).thenReturn(pharmacist);

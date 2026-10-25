@@ -28,6 +28,9 @@ public class LabOrderResponseDTO {
     private String performingHospitalId;
     private String performingHospitalName;
     private String labTestName;
+
+    /** QA D648: the order's test definition no longer exists; labTestName is the "deleted test" label. */
+    private boolean labTestDefinitionMissing;
     private String labTestCode;
     private LocalDateTime orderDatetime;
     private String status;
@@ -35,6 +38,9 @@ public class LabOrderResponseDTO {
     private String clinicalIndication;
     private String medicalNecessityNote;
     private String notes;
+
+    /** QA D673: why the order was cancelled (null unless CANCELLED). */
+    private String cancellationReason;
     private String primaryDiagnosisCode;
     @Builder.Default
     private List<String> additionalDiagnosisCodes = new ArrayList<>();

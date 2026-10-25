@@ -123,6 +123,12 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.notFound", request.getDischargingProviderId()));
+        // QA D503 class: the discharging provider is the one who will sign. A
+        // doctor names themself; only a verified super-admin may file it for a
+        // provider of the same hospital.
+        com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(
+            dischargingProvider.getHospital(), "staff.notFound", request.getDischargingProviderId());
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(dischargingProvider);
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
             .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", request.getAssignmentId()));
@@ -271,9 +277,13 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
-        // Verify provider is authorized
-        if (!dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
-            throw new BusinessException("Only the discharging provider can finalize the summary");
+        // QA D503: the signer is the signed-in user, never the providerId on the
+        // request. Only the discharging provider finalizes, in their own name;
+        // a providerId naming anyone else is refused rather than ignored.
+        com.example.hms.security.CallerIdentity.requireCaller(dischargeSummary.getDischargingProvider());
+        if (providerId != null && !dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
         }
 
         // Check if already finalized
@@ -554,7 +564,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 // Build diagnosis text from JSON array stored on encounter
                 String diagText = buildDiagnosisTextFromEncounter(enc);
                 summary.setDischargeDiagnosis(diagText);
-                summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+                summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                        enc.getFollowUpInstructions(), enc.getEncounterNote()));
 
                 // Encounter notes → hospitalCourse (visit summary)
                 if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
@@ -618,6 +629,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                     summary.setHospitalCourse(enc.getNotes());
                     changed = true;
                 }
+            }
+
+            // QA D744: a summary written before the checkout path carried the
+            // signed note (encounter 81b42d8d in the round-10 re-test) gains
+            // the note's instructions and plan; the join adds only what is missing.
+            String followUp = com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
+                    summary.getFollowUpInstructions(), enc.getEncounterNote());
+            if (followUp != null && !followUp.equals(summary.getFollowUpInstructions())) {
+                summary.setFollowUpInstructions(followUp);
+                changed = true;
             }
 
             // Enrich medications from prescriptions if missing

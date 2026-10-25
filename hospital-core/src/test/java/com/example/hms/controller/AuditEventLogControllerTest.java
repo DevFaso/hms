@@ -5,7 +5,6 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.security.context.HospitalContext;
@@ -151,20 +150,6 @@ class AuditEventLogControllerTest {
             assertThat(controller.getEventTypesSummary().getBody()).isEmpty();
             verify(auditRepository, never()).countByEventType();
         }
-    }
-
-    // ─── logEvent ────────────────────────────────────────────────
-
-    @Test
-    void logEventReturnsOk() {
-        AuditEventRequestDTO requestDTO = new AuditEventRequestDTO();
-        when(auditService.logEvent(requestDTO)).thenReturn(responseDTO);
-
-        ResponseEntity<AuditEventLogResponseDTO> result = controller.logEvent(requestDTO);
-
-        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(result.getBody()).isEqualTo(responseDTO);
-        verify(auditService).logEvent(requestDTO);
     }
 
     // ─── getAllAuditLogs ─────────────────────────────────────────

@@ -151,7 +151,7 @@
               <td>
                 <span class="role-chip">{{ (user.roleName | roleLabel) || '—' }}</span>
               </td>
-              <td>{{ user.profileType || '—' }}</td>
+              <td>{{ user.profileType ? (user.profileType | enumLabel: 'profileType') : '—' }}</td>
               <td>
                 <span
                   class="status-badge"
@@ -402,25 +402,37 @@
               </div>
             </div>
 
-            <!-- Roles (multi-select checkboxes) -->
-            <fieldset class="field">
-              <legend>{{ 'USERS.ROLES' | translate }} *</legend>
-              <div class="role-checkbox-group">
-                @for (role of grantableRoles(); track role.id) {
-                  <label class="role-checkbox">
-                    <input
-                      type="checkbox"
-                      [checked]="selectedRoles.includes(role.code)"
-                      (change)="onRoleToggle(role.code, $any($event.target).checked)"
-                    />
-                    <span class="role-label">{{ role.name || role.code | roleLabel }}</span>
-                  </label>
-                }
-                @if (availableRoles().length === 0) {
-                  <span class="hint-text">{{ 'USERS.LOADING_ROLES' | translate }}</span>
-                }
+            <!-- Roles: read-only on edit (QA D765), checkboxes on create -->
+            @if (editing()) {
+              <div class="field">
+                <span class="field-label">{{ 'USERS.ROLES' | translate }}</span>
+                <div class="role-chips" data-testid="edit-roles">
+                  @for (code of editRoles(); track code) {
+                    <span class="role-chip">{{ code | roleLabel }}</span>
+                  }
+                </div>
+                <span class="hint-text">{{ 'USERS.ROLES_EDIT_HINT' | translate }}</span>
               </div>
-            </fieldset>
+            } @else {
+              <fieldset class="field">
+                <legend>{{ 'USERS.ROLES' | translate }} *</legend>
+                <div class="role-checkbox-group">
+                  @for (role of grantableRoles(); track role.id) {
+                    <label class="role-checkbox">
+                      <input
+                        type="checkbox"
+                        [checked]="selectedRoles.includes(role.code)"
+                        (change)="onRoleToggle(role.code, $any($event.target).checked)"
+                      />
+                      <span class="role-label">{{ role.name || role.code | roleLabel }}</span>
+                    </label>
+                  }
+                  @if (availableRoles().length === 0) {
+                    <span class="hint-text">{{ 'USERS.LOADING_ROLES' | translate }}</span>
+                  }
+                </div>
+              </fieldset>
+            }
 
             <!-- License Number (conditional) -->
             @if (licenseApplicable) {

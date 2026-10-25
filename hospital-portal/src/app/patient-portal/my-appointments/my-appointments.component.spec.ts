@@ -211,7 +211,30 @@ describe('MyAppointmentsComponent', () => {
       component.ngOnInit();
 
       expect(component.upcoming().map((a) => a.id)).toEqual(['today']);
-      expect(component.past().map((a) => a.id)).toEqual(['old', 'done']);
+      // Newest first (QA D642).
+      expect(component.past().map((a) => a.id)).toEqual(['done', 'old']);
+    });
+
+    it('QA D642: lists upcoming visits soonest first, whatever order the server sent', () => {
+      const at = (id: string, date: string, time: string): PortalAppointment =>
+        ({
+          id,
+          date,
+          rawStartTime: time,
+          rawEndTime: time,
+          status: 'SCHEDULED',
+        }) as PortalAppointment;
+      portalService.getMyAppointments.and.returnValue(
+        of([
+          at('oct30', '2099-10-30', '09:00'),
+          at('oct28-late', '2099-10-28', '14:00'),
+          at('oct28', '2099-10-28', '08:30'),
+        ]),
+      );
+
+      component.ngOnInit();
+
+      expect(component.upcoming().map((a) => a.id)).toEqual(['oct28', 'oct28-late', 'oct30']);
     });
   });
 
@@ -334,14 +357,18 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     component = fixture.componentInstance;
   });
 
-  it('buckets a cancelled future appointment into Past so it stays visible', () => {
+  it('QA D542: a cancelled future appointment is listed as cancelled, not past', () => {
     portal.getMyAppointments.and.returnValue(
       of([appt({ id: 'up-1', status: 'SCHEDULED' }), appt({ id: 'gone-1', status: 'CANCELLED' })]),
     );
     fixture.detectChanges();
 
     expect(component.upcoming().map((a) => a.id)).toEqual(['up-1']);
-    expect(component.past().map((a) => a.id)).toEqual(['gone-1']);
+    expect(component.cancelled().map((a) => a.id)).toEqual(['gone-1']);
+    expect(component.past()).toEqual([]);
+    expect(component.closedGroups().map((g) => g.titleKey)).toEqual([
+      'PORTAL.APPOINTMENTS.CANCELLED_SECTION',
+    ]);
   });
 
   it('offers cancel/reschedule only on actionable statuses', () => {
@@ -383,6 +410,28 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
 
     expect(component.cancelTarget()).not.toBeNull();
     expect(component.cancelError()).toBe('Appointment is already cancelled');
+  });
+
+  it('QA D718: the reschedule dialog fits a 375px phone without horizontal scroll', () => {
+    component.openReschedule(appt({ rawStartTime: '09:30', rawEndTime: '10:30' }));
+    fixture.detectChanges();
+    const card = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+      '[data-testid="reschedule-overlay"] .booking-form-card',
+    )!;
+    // 375px viewport minus the 16px gutters: the width the round-10 phone gave it.
+    card.style.width = '343px';
+    card.style.maxWidth = '343px';
+    // CI's Linux fonts render wider than a dev laptop's; widen every glyph so the
+    // check does not depend on which font the headless browser picked.
+    card.style.letterSpacing = '2px';
+    expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth);
+    const right = card.getBoundingClientRect().right;
+    for (const id of ['reschedDate', 'reschedStart', 'reschedEnd', 'reschedReason']) {
+      const field = card.querySelector<HTMLElement>(`#${id}`)!;
+      expect(field.getBoundingClientRect().right)
+        .withContext(id)
+        .toBeLessThanOrEqual(right + 0.5);
+    }
   });
 
   it('openReschedule prefills the form from the raw HH:mm times', () => {

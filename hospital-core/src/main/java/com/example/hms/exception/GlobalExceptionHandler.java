@@ -295,13 +295,36 @@ public class GlobalExceptionHandler {
             ? localized("error.request.malformed",
                 "The request could not be read. Check the values entered and try again.")
             : localized("error.request.invalidField",
-                "The value entered for \"{0}\" is not valid.", field);
+                "The value entered for \"{0}\" is not valid.", fieldLabel(field));
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
             body.put(FIELD_FIELD, field);
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * QA D754: the caller-facing sentence named the raw JSON property
+     * ("leaveType") in French and Spanish. The label comes from
+     * {@code field.label.<last property>} in the request locale; a field with
+     * no label keeps its path. The {@code field} entry of the body stays the
+     * raw path so clients can still map it to an input.
+     */
+    private String fieldLabel(String path) {
+        if (path == null || messageSource == null) {
+            return path;
+        }
+        String leaf = path.replaceAll("\\[\\d+]", "");
+        int dot = leaf.lastIndexOf('.');
+        if (dot >= 0) {
+            leaf = leaf.substring(dot + 1);
+        }
+        if (leaf.isEmpty()) {
+            return path;
+        }
+        String label = messageSource.getMessage("field.label." + leaf, null, null, LocaleContextHolder.getLocale());
+        return label == null || label.isBlank() ? path : label;
     }
 
     /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
@@ -391,7 +414,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleMissingParameter(
             org.springframework.web.bind.MissingServletRequestParameterException ex, WebRequest request) {
         String message = localized("error.request.missingParameter",
-            "A required value is missing: \"{0}\".", ex.getParameterName());
+            "A required value is missing: \"{0}\".", fieldLabel(ex.getParameterName()));
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         body.put(FIELD_FIELD, ex.getParameterName());

@@ -37,10 +37,13 @@ import { AuthService } from '../../auth/auth.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { CHART_ROLES } from './chart-access';
+import { actionRoles } from '../../core/action-permissions';
+import { RegistrationService } from '../../services/registration.service';
 import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -57,7 +60,14 @@ const UNSCOPED_KEY = 'UNSCOPED';
 @Component({
   selector: 'app-patient-chart',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RestrictedRowsComponent,
+  ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-chart.component.scss',
@@ -82,6 +92,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly registrations = inject(RegistrationService);
 
   section = signal<ChartSection>('allergies');
 
@@ -97,7 +108,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewAllergies]),
   );
   readonly canEditAllergies = computed(() =>
-    this.roleContext.hasAnyActiveRole([...CHART_ROLES.editAllergies]),
+    this.roleContext.hasAnyActiveRole(actionRoles('allergyCreate')),
+  );
+  /**
+   * QA D527: an allergy is written in the acting hospital, and the API refuses
+   * it when the patient is not registered there (a doctor of hospital B reading
+   * a hospital-A patient was offered "Add" and got a refusal). Null while
+   * unknown, or for a role that cannot read registrations (the pharmacist):
+   * the role gate alone then decides, as before.
+   */
+  readonly registeredHere = signal<boolean | null>(null);
+  readonly canAddAllergy = computed(
+    () => this.canEditAllergies() && this.registeredHere() !== false,
   );
   readonly canViewProblems = computed(() =>
     this.roleContext.hasAnyActiveRole([...CHART_ROLES.viewProblems]),
@@ -128,6 +150,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Allergies ── */
   allergies = signal<PatientAllergy[]>([]);
   allergiesLoading = signal(false);
+  /** QA D504 — other hospitals' allergies are held back by the patient's opt-out. */
+  allergiesWithheld = signal(false);
   showAllergyModal = signal(false);
   editingAllergyId = signal<string | null>(null);
   allergySaving = signal(false);
@@ -154,6 +178,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Problems ── */
   problems = signal<PatientProblem[]>([]);
   problemsLoading = signal(false);
+  /** QA D504 — other hospitals' problems are held back by the patient's opt-out. */
+  problemsWithheld = signal(false);
   includeHistorical = signal(false);
   showProblemModal = signal(false);
   editingProblemId = signal<string | null>(null);
@@ -175,6 +201,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   /* ── Chart updates ── */
   updates = signal<ChartUpdate[]>([]);
   updatesLoading = signal(false);
+  /** QA D504 — other hospitals' chart updates are held back by the patient's opt-out. */
+  updatesWithheld = signal(false);
   expandedUpdateId = signal<string | null>(null);
   showUpdateModal = signal(false);
   updateSaving = signal(false);
@@ -205,6 +233,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
   labResults = signal<PatientLabResult[]>([]);
   labResultsLoading = signal(false);
   labResultsError = signal(false);
+  /** QA D504 — other hospitals' lab results are held back by the patient's opt-out. */
+  labResultsWithheld = signal(false);
   labOrders = signal<LabOrderResponse[]>([]);
   labOrdersLoading = signal(false);
   labOrdersError = signal(false);
@@ -313,6 +343,59 @@ export class PatientChartComponent implements OnInit, OnChanges {
   ngOnInit(): void {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
+    this.loadRegistrationHere();
+  }
+
+  /**
+   * Whether the patient is registered in the hospital the allergy write acts
+   * in (`hospitalId()`). Asked for that ONE hospital, not read off the first
+   * page of every registration, and re-asked on every access refresh: a stale
+   * answer offered Add the API refuses, or hid it from someone now entitled.
+   * A reply that lands after a newer question is dropped.
+   */
+  private loadRegistrationHere(): void {
+    const seq = ++this.registrationSeq;
+    this.registeredHere.set(null);
+    const scope = this.hospitalId();
+    if (!scope || !this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere])) {
+      return;
+    }
+    this.registrations
+      .list({ patientId: this.patientId, hospitalId: scope, active: true })
+      .subscribe({
+        next: (rows) => {
+          if (seq !== this.registrationSeq) return;
+          this.registeredHere.set((rows ?? []).some((r) => r.hospitalId === scope && r.active));
+        },
+        error: () => {
+          if (seq === this.registrationSeq) this.registeredHere.set(null);
+        },
+      });
+  }
+
+  private registrationSeq = 0;
+
+  /**
+   * The acting hospital (and the role reading it) can move with no navigation
+   * — a scope or role switch — and nothing else re-asks the question then.
+   * Skips its first run: ngOnInit has just asked.
+   */
+  private readonly registrationScopeWatcher = effect(() => {
+    const key =
+      this.hospitalId() +
+      '|' +
+      this.roleContext.hasAnyActiveRole([...CHART_ROLES.checkRegistrationHere]);
+    const previous = this.watchedRegistrationKey;
+    this.watchedRegistrationKey = key;
+    if (previous === undefined || previous === key) return;
+    untracked(() => this.loadRegistrationHere());
+  });
+
+  private watchedRegistrationKey: string | undefined = undefined;
+
+  /** QA D527: an allergy recorded at another hospital is edited there, not here. */
+  canChangeAllergy(row: { hospitalId?: string }): boolean {
+    return this.canEditAllergies() && !this.isForeignRow(row);
   }
 
   /**
@@ -484,8 +567,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
   loadAllergies(): void {
     this.allergiesLoading.set(true);
     this.patientService.listAllergies(this.patientId, this.hospitalId() || undefined).subscribe({
-      next: (list) => {
-        this.allergies.set(list ?? []);
+      next: (result) => {
+        this.allergies.set(result?.items ?? []);
+        this.allergiesWithheld.set(result?.withheld ?? false);
         this.allergiesLoading.set(false);
       },
       error: () => {
@@ -604,8 +688,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         includeHistorical: this.includeHistorical(),
       })
       .subscribe({
-        next: (list) => {
-          this.problems.set(list ?? []);
+        next: (result) => {
+          this.problems.set(result?.items ?? []);
+          this.problemsWithheld.set(result?.withheld ?? false);
           this.problemsLoading.set(false);
         },
         error: () => {
@@ -727,8 +812,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.patientService
       .listChartUpdates(this.patientId, { hospitalId: this.hospitalId() || undefined, size: 20 })
       .subscribe({
-        next: (page) => {
-          this.updates.set(page?.content ?? []);
+        next: (result) => {
+          this.updates.set(result?.items?.content ?? []);
+          this.updatesWithheld.set(result?.withheld ?? false);
           this.updatesLoading.set(false);
         },
         error: () => {
@@ -856,9 +942,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
         limit: LAB_PAGE_SIZE,
       })
       .subscribe({
-        next: (list) => {
+        next: (result) => {
           if (!isCurrent()) return;
-          this.labResults.set(list ?? []);
+          this.labResults.set(result?.items ?? []);
+          this.labResultsWithheld.set(result?.withheld ?? false);
           this.labResultsLoading.set(false);
         },
         error: () => {
@@ -1010,6 +1097,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.labsLoadedFor.set(null);
     this.labResultsError.set(false);
     this.labOrdersError.set(false);
+    this.loadRegistrationHere();
     if (this.section() !== 'timeline') this.loadCurrentSection();
   }
 

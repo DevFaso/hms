@@ -67,7 +67,14 @@ class ServiceWriteTenantLoadCoverageTest {
         "\\.equals\\([^;]*getHospital", "Objects\\.equals\\([^;]*[Hh]ospital")));
 
     private static final Pattern SIGNATURE = Pattern.compile("^\\s*(public|private|protected)[^=;(]*\\s(\\w+)\\s*\\([^;]*$");
-    private static final Pattern BY_ID_CALL = Pattern.compile("\\b(\\w+)\\.(findById|findByIdUnscoped|existsById|deleteById)\\(");
+    /**
+     * QA D602: a named by-id loader ({@code findDetailedById}, ...) is a by-id load
+     * too; the shift PUT loaded through one and nothing saw it. Excluded are the
+     * re-reads of a row already loaded under a check (a lock, a status re-read)
+     * and {@code findAllById} of actors.
+     */
+    private static final Pattern BY_ID_CALL = Pattern.compile("\\b(\\w+)\\.(findById|findByIdUnscoped|existsById|deleteById"
+        + "|find(?!Locked|WithLock|Status|All)\\w*ById)\\(");
     private static final Pattern REPOSITORY_FIELD = Pattern.compile("private\\s+(?:final\\s+)?(\\w+Repository)\\s+(\\w+)\\s*;");
     private static final Pattern REPOSITORY_ENTITY = Pattern.compile("extends\\s+\\w*Repository<\\s*(\\w+)\\s*,");
     private static final Pattern HOSPITAL_FIELD = Pattern.compile("private (Hospital hospital|UUID hospitalId);");
@@ -104,7 +111,6 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ConsultationServiceImpl.getConsultationEntity#findById", CALLER_CHECKS + " (getConsultationInScope)"),
         entry("ConsultationServiceImpl.resolveStaff#findById", ACTOR),
         entry("DepartmentServiceImpl.findDepartmentOrThrow#findById", CALLER_CHECKS + " (enforceHospitalScopeOnEntity)"),
-        entry("DigitalSignatureServiceImpl.verifySignature#findById", "verifies a signature value; it writes nothing"),
         entry("DispenseServiceImpl.resolveCatalogItem#findById", SHARED),
         entry("EncounterServiceImpl.resolveAuthorStaff#findById", ACTOR),
         entry("HighRiskPregnancyCarePlanServiceImpl.findPlanOrThrow#findById", CALLER_CHECKS + " (findPlanInActingHospital, or ownership for a patient)"),
@@ -118,6 +124,11 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("MllpAllowedSenderServiceImpl.deactivate#findById", SUPER_ADMIN),
         entry("MllpAllowedSenderServiceImpl.update#findById", SUPER_ADMIN),
         entry("MllpInboundAdtServiceImpl.processAdt#findByIdUnscoped", "HL7 inbound: bound to the sender's receiving hospital, not a user scope"),
+        entry("ObstetricAlertCurrency.newbornResolved#findById", SYSTEM + " (re-reads the clinical record that raised the escalation row, by the id the row stored; read-only, inside the sweep)"),
+        entry("ObstetricAlertCurrency.partographResolved#findById", SYSTEM + " (re-reads the clinical record that raised the escalation row, by the id the row stored; read-only, inside the sweep)"),
+        entry("ObstetricAlertCurrency.postpartumResolved#findById", SYSTEM + " (re-reads the clinical record that raised the escalation row, by the id the row stored; read-only, inside the sweep)"),
+        entry("ObstetricAlertEscalationWorker.escalateOne#findByIdUnscoped", SYSTEM + " (QA D659: the patient the escalation row was raised for, to name her in the reminder; the reminder goes only to that row's hospital staff)"),
+        entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
         entry("PatientEducationServiceImpl.incrementResourceViewCount#findById", SHARED),
         entry("PatientEducationServiceImpl.submitQuestion#findById", UNSWEPT),
@@ -198,6 +209,28 @@ class ServiceWriteTenantLoadCoverageTest {
         assertThat(scanSource("AdmissionServiceImpl", checked, fields, repos)).isEmpty();
         assertThat(scanSource("AdmissionServiceImpl", unchecked.replace("dischargePatient", "getAdmission"), fields, repos))
             .as("a public read is out of scope").isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D602: the scanner sees a named by-id loader (the shift PUT shape) and accepts the scoped one")
+    void scannerSeesTheD602Shape() {
+        Set<String> repos = Set.of("StaffShiftRepository");
+        Map<String, String> fields = Map.of("shiftRepository", "StaffShiftRepository");
+        String unchecked = """
+                private StaffShift loadShift(UUID id, Locale locale) {
+                    return shiftRepository.findDetailedById(id).orElseThrow();
+                }
+            """;
+        String checked = """
+                private StaffShift loadShift(UUID id, Locale locale) {
+                    return shiftRepository.findDetailedById(id)
+                        .filter(shift -> hospitalInScope(shift.getHospital()))
+                        .orElseThrow();
+                }
+            """;
+        assertThat(scanSource("StaffSchedulingServiceImpl", unchecked, fields, repos))
+            .containsExactly("StaffSchedulingServiceImpl.loadShift#findDetailedById");
+        assertThat(scanSource("StaffSchedulingServiceImpl", checked, fields, repos)).isEmpty();
     }
 
     private static Set<String> scan() throws IOException {

@@ -33,4 +33,8 @@ public class DischargeApprovalDecisionDTO {
 
     @Size(max = 4000)
     private String rejectionReason;
+
+    /** QA D766: an approval discharges the stay, so it states the diagnosis as the direct discharge does. */
+    @Size(max = 2000)
+    private String dischargeDiagnosis;
 }

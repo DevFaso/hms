@@ -180,7 +180,8 @@ public class DispenseVerificationService {
             return;
         }
         LocalDate today = LocalDate.now(clock);
-        if (expiry.isBefore(today)) {
+        // QA D710: expired ON the expiry date (the expiry report says so too).
+        if (!expiry.isAfter(today)) {
             b.fail(DispenseCheck.EXPIRY,
                 com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotExpired", lot.getLotNumber(),
                     expiry.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)

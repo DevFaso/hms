@@ -2205,6 +2205,26 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D711 (round 10): one stored note row per daily progress entry.** The
+  encounter note is one row per encounter (`uk_encounter_note_encounter`,
+  `@OneToOne`), and signing, co-signing and addenda are keyed by encounter.
+  Fixed in `fix/qa-r10-inpatient-meds`: on a stay, each `POST /notes` is a new
+  entry (no section of yesterday's entry carries over, the history row is
+  `NOTE_CREATED`, every earlier entry kept whole in the note history). Owed:
+  a progress-note model with one row per entry, listed and signed per entry,
+  which is a schema change and a new notes screen, not a bug fix. Until then
+  a signed entry still closes the stay's note (next entries go in addenda).
+
+- **Claude PR review script (#924), round-5 findings, capped by the user 2026-10-23.**
+  None is a logic or security bug in the product; all are about the CI
+  helper itself: (1) a failure note can push most of a previous review past
+  the comment size limit; (2) truncation can cut off the "not reviewed"
+  notes; (3) `fit()` can still return a selection over the token budget when
+  counting is approximate (the API then 400s and a failure note is posted);
+  (4) the head SHA is read live instead of from the event payload, so a
+  push during a run can be labelled with the newer head; (5) a PR with only
+  generated files still calls the model; (6) tests for those cases.
+
 ### Execution plan (2026-09-26)
 
 The roadmap above is done except #46 (deferred by the user). What remains is
@@ -5074,7 +5094,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   or in the future. The general fix (send instants with an offset, or one portal-wide
   conversion) touches every date the portal renders, so it is its own PR. The QA
   rounds' D182 and D236 (zone-less `datetime-local` inputs) are this item; deferred
-  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Open.
+  with it, not fixed piecemeal (fix/qa-r4-clinical-safety). Round 9's D622 (the
+  admission form) is converted like the lab result form, through the shared
+  `toServerDateTime` / `toLocalInputValue` in `shared/date-utils.ts`
+  (fix/qa-r9-tenancy-admissions), and its two displays (admissions list, nurse
+  station pending admissions) read it as UTC through `fromServerDateTime`; the
+  general fix is still open. Open.
+- **Break-the-glass reach = the caller's patient search scope (QA D624, user decision).**
+  `BreakGlassServiceImpl.declare` answers 403 `breakGlass.patient.outOfScope` (same body
+  for an unknown id and an out-of-scope one) unless
+  `PatientRepository.isFindableByPatientSearch` holds, which uses the same tenant clause as
+  `searchPatientsExtended`. D409 is kept inside that scope. Closed.
 - **A one-person laboratory cannot activate its own test definitions.** Since D48 only
   an ACTIVE definition is orderable, and `ACTIVATE` needs LAB_DIRECTOR, LAB_MANAGER or
   SUPER_ADMIN at the definition's hospital (`APPROVE` needs LAB_DIRECTOR). V191 recorded
@@ -5172,8 +5202,17 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **De-identified "beds spoken for" feed for the admin bed board (QA D318 / D290 / D229).** Decision D5 is kept: `GET /transfers/pending` refuses HOSPITAL_ADMIN because the worklist names patients and the reason for each move (`HospitalAdminOffChartTest`). An admin view of which beds a pending transfer holds needs a new endpoint without patient data.
 - **Multi-role welcome mail content not verifiable on dev (QA D311).** The code path renders one block per role with its code AND its confirmation link (`EmailServiceImpl.welcomeRoleBlock`, covered by `OnboardingEmailRenderingTest`); dev has no mail transport and the outbox is encrypted, so the reporter could not read the mail and saw only the SMS. Owed: a QA read of a delivered multi-role mail once a transport is configured on dev.
 
-- **A delivery creates no charge (QA D420, round 7; D355 / D225 / D163 / D105).** The same gap as "A stay or visit does not charge itself" (D148) above: nothing posts a priced line for a clinical act because no charge-capture rule and no priced-service catalog exist, so there is no price for a delivery to post. Deferred as that feature, not built per order type. Newborn registration as its own patient (D163) stays deferred as before. `fix/qa-r7-clinical-inpatient` fixed the clinical bugs of the round (note authorship, triage path, eMAR scanner, obstetric age, inpatient prescriptions, break-glass, discharge summary, bed fit, vitals after discharge, task re-completion, allergy severity, lab ordering message).
+- **Newborn registration as its own patient (QA D516 / D420 / D163, rounds 1-8).** `fix/qa-r8-maternity-lab-admin` now posts a delivery charge: recording a birth opens a DRAFT invoice for the mother with one SERVICE line priced from the hospital's own priced service for the delivery mode (vaginal or caesarean, when exactly one active catalog service names it), or at zero for the billing clerk to price. What stays deferred is registering the newborn as a patient of its own (a new flow: identity, MRN, mother link, consent); until then newborn assessments sit on the mother's chart and now require her recorded delivery (D517). A birth outside the facility (home birth) also cannot be recorded yet, so postpartum care for such a mother is refused until a delivery record exists; recording an out-of-facility birth is part of the same feature. Round 9 (D608, `fix/qa-r9-maternity-clinical`): the delivery charge was in fact posted on dev (a DRAFT at 0 for a hospital with no priced delivery service) but carried no notes, so billing could not tell it was the birth; the draft now names the delivery and its date. Newborn registration stays deferred for the reason above (a whole new registration flow).
 - **Payment reference in the native patient apps (QA D433, `fix/qa-r7-tenancy-security`).** The API now refuses a card, transfer or mobile-money declaration with no transaction reference (localized 400 on `referenceGivenForNonCashPayment`), and the web portal checks it before sending. The Android and iOS apps still let the field be empty and only show the server's refusal; a client-side check there needs a store release, so it waits for the next app release train.
+
+- **Note signing at outpatient checkout (QA D513, round 8, `fix/qa-r8-clinical-inpatient`).** The checkout no longer lets the visit note be rewritten (400 refusal `encounter.note.closedLocked`, corrections go through an attributed addendum) and the edit response now carries the flushed `updatedAt`. Requiring the note to be signed before checkout, or signing it as part of checkout, changes the outpatient flow for every clinician and is a product decision (who signs a nurse-documented visit, what happens to a visit closed by the discharge path); an unsigned closed note is still shown as unsigned. Owed: decide and build the checkout-time signature step.
+- **Patient returns tied to a dispense in the stock form (QA D604/D653/D654, round 9, `fix/qa-r9-pharmacy-billing`).** A RETURN that names its dispense (`referenceId`) is capped at what that fill delivered minus earlier returns, under the dispense row lock, and a cancel puts back only the part not yet returned. A RETURN with no reference on a lot with fills still out is now booked against the most recent fill that can take all of it (so that fill's cancel puts nothing back twice), and a return larger than every open fill is refused (`stockTransaction.return.referenceRequired`). Remaining: the attribution picks the newest fill, not necessarily the one the patient brought back (a dispense picker in the return form would let the pharmacist name it), and a lot's transferred-out stock coming back while a fill is still out is booked against that fill. Controlled stock is now witnessed on dispense, prepare-ready, dispense cancel and lot receipt; a `cancel-ready` of a prepared controlled fill (and the system voids on a prescription edit) still returns stock unwitnessed. The prescription response now shows the catalog's controlled flag (D654, decided); enforcing it in the signing gate waits on the prescriber two-factor step (next bullet).
+
+- **Prescriber two-factor step for controlled substances (D654, #926).** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog.
+
+- **Report picker in the sign modal (QA D627 / D123, round 9, `fix/qa-r9-i18n-admin-portal`).** The modal now offers only the types the server can sign (`SIGNABLE_TYPES` = `SignableReportLocator.SIGNABLE`, mirrored by `SignableTypesMirrorTest`), the server refuses an unsignable type with a translated 400, and a non-UUID id is refused before the call. Choosing the record by name instead of pasting its UUID needs a per-type search (discharge summaries, lab results, imaging reports, consultations, notes, prescriptions, procedures) in the acting hospital — a new picker feature, not a fix. Signing from each record's own page already passes the id.
+- **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them.
+- **QA D660 follow-up (#929): only SIGNED** prescriptions are locked to withdraw-with-reason on edit (`PrescriptionServiceImpl.withdrawSignedPrescription`). Other post-signature states (TRANSMITTED, TRANSMISSION_FAILED, PENDING_STOCK, PARTNER_*, PENDING_CLARIFICATION) still go through the general edit path and can rewrite the signed drug/dose under the original signature digest; PENDING_CLARIFICATION needs its G5 "doctor edits first" path kept, so widening the lock needs a design decision. The withdrawal reason is stored (V223, encrypted) and returned on the response DTO but not yet shown on the prescription detail/list.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -5514,3 +5553,4 @@ ships*, not for building — and check the shipped surface before trusting a
   server-side 403 names no required role, so the page can only suggest
   ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
   roles in the session bootstrap, and a required-role hint in 403 bodies.
+- **QA D601 follow-up (r9-lab-integrity):** lab test definitions and orders with results can no longer be hard-deleted, but dev already holds rows orphaned before the fix (definition 570c6b4d gone, its orders and released results left behind). They need a one-off data repair (restore the definition row as RETIRED from a backup, or re-point the orders) that the user must run; it is data, not code, so it is not in the PR. A DB-level FK `lab_orders.lab_test_definition_id` (the entity declares `fk_laborder_testdef`, the dev schema evidently lacks it) should be added in a migration once the orphans are repaired, since the migration would fail on them today.

@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -97,6 +98,70 @@ class RecordSharingOptOutServiceImplTest {
         // The reason is the patient's own words and may be PHI-adjacent: it
         // belongs on the row, never in the audit description.
         assertThat(audit.getValue().getEventDescription()).doesNotContain("my choice");
+    }
+
+    @Test
+    @DisplayName("D533: the receptionist's opt-out at hospital A names hospital A on its CONSENT_UPDATE row")
+    void d533_optOutAuditCarriesTheActingHospital() {
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorUserId)
+                .activeHospitalId(hospitalA)
+                .permittedHospitalIds(java.util.Set.of(hospitalA))
+                .build());
+        try {
+            when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(false);
+
+            service.optOut(patientId, "QA", actorUserId, Locale.ENGLISH);
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getHospitalId()).isEqualTo(hospitalA);
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("D625: the PATIENT's own opt-out and opt-in name the patient's hospital on both CONSENT_UPDATE rows")
+    void d625_patientOwnOptOutAndRevokeNameTheHospital() {
+        UUID hospitalA = UUID.randomUUID();
+        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalA);
+        hospital.setName("Hopital A");
+        Patient own = new Patient();
+        own.setId(patientId);
+        own.setHospitalId(hospitalA);
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        own.getHospitalRegistrations().add(registration);
+        // The patient acts on their own record: patient-owned scope, no pinned hospital.
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .principalUserId(actorUserId)
+                .patientOwned(true)
+                .build());
+        when(patientRepository.findByUserId(actorUserId)).thenReturn(Optional.of(own));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(own));
+        try {
+            when(optOutRepository.existsByPatient_IdAndRevokedAtIsNull(patientId)).thenReturn(false);
+            service.optOut(patientId, null, actorUserId, Locale.ENGLISH);
+            when(optOutRepository.findFirstByPatient_IdAndRevokedAtIsNullOrderByOptedOutAtDesc(patientId))
+                .thenReturn(Optional.of(com.example.hms.model.PatientRecordSharingOptOut.builder()
+                    .patient(own).optedOutAt(java.time.LocalDateTime.now()).build()));
+            service.revoke(patientId, actorUserId, Locale.ENGLISH);
+
+            ArgumentCaptor<AuditEventRequestDTO> audit = ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService, times(2)).logEvent(audit.capture());
+            assertThat(audit.getAllValues()).allSatisfy(row -> {
+                assertThat(row.getHospitalId()).isEqualTo(hospitalA);
+                assertThat(row.getHospitalName()).isEqualTo("Hopital A");
+            });
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 
     @Test

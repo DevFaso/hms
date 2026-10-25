@@ -9,6 +9,7 @@ import {
 } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
@@ -33,7 +34,7 @@ const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
 @Component({
   selector: 'app-my-documents',
   standalone: true,
-  imports: [CommonModule, DatePipe, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, TranslateModule],
   templateUrl: './my-documents.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-documents.component.scss', '../patient-portal-pages.scss'],

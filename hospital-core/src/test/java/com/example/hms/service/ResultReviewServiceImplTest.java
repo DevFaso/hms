@@ -396,7 +396,8 @@ class ResultReviewServiceImplTest {
         List<DoctorResultQueueItemDTO> result = service.getResultReviewQueue(userId, ACTING_HOSPITAL_ID);
 
         assertEquals("NORMAL", result.get(0).getAbnormalFlag());
-        assertEquals("Lab test", result.get(0).getTestName()); // fallback when testDef is null
+        // QA D648: the doctor dashboard tile names a deleted test as every lab screen does.
+        assertEquals("Deleted test", result.get(0).getTestName());
     }
 
     @Test

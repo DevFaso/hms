@@ -63,7 +63,12 @@ public class TriageSubmissionRequestDTO {
     @Size(max = 2048)
     private String chiefComplaint;
 
-    /** Emergency Severity Index: 1 (most urgent) to 5 (least urgent). */
+    /**
+     * Emergency Severity Index: 1 (most urgent) to 5 (least urgent).
+     * QA D511: mandatory — a triage with no acuity sent the patient to the
+     * doctor's queue unranked.
+     */
+    @jakarta.validation.constraints.NotNull(message = "{triage.esi.required}")
     @Min(1) @Max(5)
     private Integer esiScore;
 

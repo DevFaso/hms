@@ -65,10 +65,23 @@ import com.example.hms.model.Hospital;
 @SuppressWarnings("java:S100")
 class PatientSnapshotServiceImplTest {
 
+    /** QA D628: the vitals summary is rendered from the real bundles, in English here. */
+    @org.junit.jupiter.api.BeforeEach
+    void englishBundles() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock private com.example.hms.service.support.PatientChartAccess patientChartAccess;
     @Mock private PatientAllergyRepository patientAllergyRepository;
     @Mock private PatientVitalSignRepository patientVitalSignRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabResultRepository labResultRepository;
     @Mock private EncounterRepository encounterRepository;
@@ -180,6 +193,71 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
+    void d504_withoutBreakGlassTheSnapshotSaysItsAllergyListIsNarrowed() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        PatientAllergy allergy = mock(PatientAllergy.class);
+        when(allergy.getAllergenDisplay()).thenReturn("Peanuts");
+        when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+        when(patientAllergyRepository.findVisibleAt(patientId, HOSPITAL_ID)).thenReturn(List.of(allergy));
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        when(recordAccessPolicy.foreignRowsWithheld(any(), eq(patientId), eq(HOSPITAL_ID))).thenReturn(true);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertTrue(result.getAllergies().contains("Peanuts"));
+        assertTrue(result.isAllergiesWithheld());
+        // QA D504 (round 3): diagnoses, medications, vitals and labs are narrowed too.
+        assertTrue(result.isRecordsWithheld());
+    }
+
+    @Test
+    void d504_breakGlassShowsTheOtherHospitalsAllergyDespiteTheOptOut() {
+        UUID patientId = UUID.randomUUID();
+        UUID doctorB = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(doctorB).build());
+        try {
+            PatientAllergy allergy = mock(PatientAllergy.class);
+            when(allergy.getAllergenDisplay()).thenReturn("Penicillin");
+            when(patientAllergyRepository.hasActiveSharingOptOut(patientId)).thenReturn(true);
+            when(recordAccessPolicy.decide(doctorB, patientId, HOSPITAL_ID)).thenReturn(
+                com.example.hms.service.recordaccess.RecordAccessDecision.permitted(patientId, HOSPITAL_ID, doctorB,
+                    new com.example.hms.service.recordaccess.TreatmentRelationship(
+                        com.example.hms.enums.TreatmentRelationshipKind.BREAK_GLASS, UUID.randomUUID(), HOSPITAL_ID,
+                        patientId, null, null, true),
+                    com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
+            when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+            when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(Collections.emptyList());
+            when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                    .thenReturn(new PageImpl<>(Collections.emptyList()));
+            when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+            when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+            when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+            PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+            assertTrue(result.getAllergies().contains("Penicillin"));
+            assertFalse(result.isAllergiesWithheld());
+            assertFalse(result.isRecordsWithheld());
+            verify(patientAllergyRepository, never()).findVisibleAt(any(), any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
     void getSnapshot_withBothStores_readsOnlyTheStructuredRows() {
         // E9 #56 — the free-text column is a derived summary of the rows; reading
         // both would list every allergy twice.
@@ -269,6 +347,57 @@ class PatientSnapshotServiceImplTest {
         assertEquals("BID", med.getFrequency());
     }
 
+    private static Prescription rx(String name, com.example.hms.enums.PrescriptionStatus status,
+                                   com.example.hms.model.Encounter encounter) {
+        Prescription p = new Prescription();
+        p.setId(UUID.randomUUID());
+        p.setMedicationName(name);
+        p.setStatus(status);
+        p.setEncounter(encounter);
+        p.setDuration("5 days");
+        p.setCreatedAt(java.time.LocalDateTime.now().minusHours(2));
+        return p;
+    }
+
+    private static com.example.hms.model.Encounter stay(com.example.hms.enums.EncounterStatus status) {
+        com.example.hms.model.Encounter e = new com.example.hms.model.Encounter();
+        e.setId(UUID.randomUUID());
+        e.setAdmissionId(UUID.randomUUID());
+        e.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        e.setStatus(status);
+        return e;
+    }
+
+    @Test
+    void d737_activeMedicationsAreTheRunningCoursesOnly() {
+        // QA D720/D737 (r10 re-test s8.js): the snapshot listed the discharged
+        // stay's completed courses and drafts as active medications.
+        UUID patientId = UUID.randomUUID();
+        givenPatient(patientId, stubPatient(patientId));
+        com.example.hms.model.Encounter discharged = stay(com.example.hms.enums.EncounterStatus.COMPLETED);
+        com.example.hms.model.Encounter current = stay(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Prescription morphineOfTheOldStay = rx("Morphine", com.example.hms.enums.PrescriptionStatus.SIGNED, discharged);
+        Prescription draft = rx("Draft course", com.example.hms.enums.PrescriptionStatus.DRAFT, null);
+        Prescription withdrawn = rx("Withdrawn", com.example.hms.enums.PrescriptionStatus.DISCONTINUED, null);
+        Prescription amoxicillin = rx("Amoxicilline 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+        Prescription paracetamol = rx("Paracetamol 1 g", com.example.hms.enums.PrescriptionStatus.SIGNED, current);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdAndHospital_IdInOrderByRecordedAtDesc(eq(patientId), eq(READABLE), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(READABLE), any()))
+                .thenReturn(new PageImpl<>(List.of(morphineOfTheOldStay, draft, withdrawn, amoxicillin, paracetamol)));
+        when(admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)).thenReturn(List.of());
+        when(labOrderRepository.findByPatient_IdAndHospital_IdIn(patientId, READABLE)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findPatientResultsReadableAt(eq(patientId), eq(READABLE), eq(HOSPITAL_ID), eq(false), any())).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_IdAndHospital_IdInOrderByEncounterDateDesc(patientId, READABLE)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
+
+        assertEquals(List.of("Amoxicilline 1 g", "Paracetamol 1 g"),
+                result.getActiveMedications().stream().map(PatientSnapshotDTO.MedicationItem::getName).toList());
+    }
+
     @Test
     void getSnapshot_withVitals_shouldFormatSummary() {
         UUID patientId = UUID.randomUUID();
@@ -299,10 +428,11 @@ class PatientSnapshotServiceImplTest {
         // The sibling of the LAB token: a revert to the word "Vitals"
         // passed the whole suite until this line existed.
         assertEquals("VITALS", v.getType());
-        assertTrue(v.getValue().contains("T:37.0°C"));
-        assertTrue(v.getValue().contains("HR:80"));
-        assertTrue(v.getValue().contains("BP:120/80"));
-        assertTrue(v.getValue().contains("SpO2:98%"));
+        // QA D628: the shared, localized summary (request locale = English here).
+        assertTrue(v.getValue().contains("Temp 37 °C"), v.getValue());
+        assertTrue(v.getValue().contains("HR 80"));
+        assertTrue(v.getValue().contains("BP 120/80"));
+        assertTrue(v.getValue().contains("SpO2 98%"));
     }
 
     @Test
@@ -318,6 +448,7 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(testDef);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("6.5%");
         when(labResult.isAcknowledged()).thenReturn(true);
@@ -352,6 +483,7 @@ class PatientSnapshotServiceImplTest {
         LabOrder order = mock(LabOrder.class);
         when(order.getLabTestDefinition()).thenReturn(testDef);
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.9");
         when(labResult.getAbnormalFlag()).thenReturn(com.example.hms.enums.AbnormalFlag.ABNORMAL_HIGH);
@@ -637,15 +769,16 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getRecentVitals().size());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
-        assertTrue(v.getValue().contains("HR:72"));
-        assertTrue(v.getValue().contains("SpO2:97%"));
-        assertFalse(v.getValue().contains("T:"));
-        assertFalse(v.getValue().contains("BP:"));
+        assertTrue(v.getValue().contains("HR 72"));
+        assertTrue(v.getValue().contains("SpO2 97%"));
+        assertFalse(v.getValue().contains("Temp"));
+        assertFalse(v.getValue().contains("BP "));
         assertEquals("", v.getTimestamp());
     }
 
     @Test
-    void getSnapshot_labResultWithNullTestDef_shouldSendNullNotAWord() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_labResultWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -654,6 +787,7 @@ class PatientSnapshotServiceImplTest {
         when(order.getLabTestDefinition()).thenReturn(null);
 
         LabResult labResult = mock(LabResult.class);
+        when(labResult.isReleased()).thenReturn(true);
         when(labResult.getLabOrder()).thenReturn(order);
         when(labResult.getResultValue()).thenReturn("5.0");
         when(labResult.isAcknowledged()).thenReturn(false);
@@ -671,8 +805,8 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getLatestLabs().size());
-        // Not the English "Lab Test": the drawer owns the translated fallback.
-        assertNull(result.getLatestLabs().get(0).getTest());
+        // QA D648: the same deleted-test label as every lab screen.
+        assertEquals("Deleted test", result.getLatestLabs().get(0).getTest());
         assertEquals("REVIEW", result.getLatestLabs().get(0).getFlag());
         assertEquals("", result.getLatestLabs().get(0).getDate());
     }
@@ -708,7 +842,8 @@ class PatientSnapshotServiceImplTest {
     }
 
     @Test
-    void getSnapshot_pendingOrderWithNullTestDef_shouldSendNullNotAWord() {
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void getSnapshot_pendingOrderWithNullTestDef_isTheDeletedTestLabel() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
         givenPatient(patientId, patient);
@@ -730,7 +865,8 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId, HOSPITAL_ID);
 
         assertEquals(1, result.getPendingOrders().size());
-        assertNull(result.getPendingOrders().get(0).getDescription());
+        // QA D648: a pending order whose definition was deleted names a deleted test.
+        assertEquals("Deleted test", result.getPendingOrders().get(0).getDescription());
     }
 
     @Test
@@ -1009,6 +1145,7 @@ class PatientSnapshotServiceImplTest {
         Prescription rx = new Prescription();
         rx.setMedicationName("Metformin");
         rx.setHospital(other);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         when(recordAccessPolicy.readableHospitalIds(any(), eq(patientId), eq(hospitalId)))
                 .thenReturn(Set.of(hospitalId, otherHospitalId));
         when(prescriptionRepository.findByPatient_IdAndHospital_IdIn(eq(patientId), eq(Set.of(hospitalId, otherHospitalId)), any()))
@@ -1188,6 +1325,7 @@ class PatientSnapshotServiceImplTest {
         order.setPerformingHospital(here);
         LabResult performedHere = new LabResult();
         performedHere.setLabOrder(order);
+        performedHere.setReleased(true);
         performedHere.setResultValue("7.1");
         org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
                 org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);

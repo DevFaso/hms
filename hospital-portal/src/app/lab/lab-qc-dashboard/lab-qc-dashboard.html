@@ -111,7 +111,9 @@
                 }}%
               </span>
             </td>
-            <td>{{ row.lastEventDate ? (row.lastEventDate | date: 'mediumDate') : '—' }}</td>
+            <td>
+              {{ row.lastEventDate ? (row.lastEventDate | serverTime | date: 'mediumDate') : '—' }}
+            </td>
           </tr>
 
           <!-- ── Levey-Jennings chart drill-down ── -->
@@ -383,7 +385,9 @@
                 {{ row.passRate | number: '1.1-1' }}%
               </span>
             </td>
-            <td>{{ row.lastStudyDate ? (row.lastStudyDate | date: 'mediumDate') : '—' }}</td>
+            <td>
+              {{ row.lastStudyDate ? (row.lastStudyDate | serverTime | date: 'mediumDate') : '—' }}
+            </td>
           </tr>
         }
       </tbody>

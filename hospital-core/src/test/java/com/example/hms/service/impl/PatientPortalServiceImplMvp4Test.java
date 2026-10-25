@@ -114,6 +114,8 @@ class PatientPortalServiceImplMvp4Test {
     @Mock private com.example.hms.repository.PatientTreatmentConsentRepository treatmentConsentRepository;
     @Mock private com.example.hms.service.TreatmentConsentService treatmentConsentService;
 
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+
     @InjectMocks private PatientPortalServiceImpl service;
     @Mock private Authentication auth;
 

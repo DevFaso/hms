@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientDiagnosis;
@@ -8,6 +9,7 @@ import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.repository.PatientDiagnosisRepository;
@@ -98,6 +100,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientVitalSignRepository patientVitalSignRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** Prescriptions read to find the running ones; a chart never holds this many live courses. */
+    private static final int ACTIVE_MEDICATION_SCAN = 200;
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
     private final EncounterRepository encounterRepository;
@@ -227,6 +232,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .mrn(patient.getId().toString())
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
+                // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
+                .allergiesWithheld(com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                        patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId))
+                // QA D504: the diagnoses, medications, vitals and labs below are narrowed the same way.
+                .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId))
                 .activeDiagnoses(buildActiveDiagnoses(patientId, patient, hospitalId, readable, reach, unlocked))
                 .activeMedications(buildActiveMedications(patientId, hospitalId, readable, reach))
                 .recentVitals(buildRecentVitals(patientId, hospitalId, readable, reach))
@@ -282,9 +292,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         boolean hasStructuredRows = false;
         try {
             // QA D110: an opted-out patient's other-hospital rows stay there.
-            List<PatientAllergy> rows = hospitalId == null
-                ? patientAllergyRepository.findByPatient_Id(patientId)
-                : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+            // QA D504: unless a break-the-glass session overrides the opt-out.
+            List<PatientAllergy> rows = com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+                patientAllergyRepository, recordAccessPolicy,
+                com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId(),
+                patientId, hospitalId);
             rows.forEach(a -> allergies.add(a.getAllergenDisplay()));
             hasStructuredRows = !rows.isEmpty()
                 || (hospitalId != null && !patientAllergyRepository.findByPatient_Id(patientId).isEmpty());
@@ -388,9 +400,23 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                                                           Set<UUID> readable, Map<String, Long> reach) {
         List<PatientSnapshotDTO.MedicationItem> medications = new ArrayList<>();
         try {
-            List<com.example.hms.model.Prescription> rows = prescriptionRepository
-                    .findByPatient_IdAndHospital_IdIn(patientId, readable, PageRequest.of(0, 10))
-                    .getContent();
+            // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+            // QA D720/D737: "active" means a running course, by the rule the
+            // patient's own list uses (MedicationCourseStatus): no draft, no
+            // withdrawn or finished course, no order that ended with a
+            // discharged stay. Filtered before the cap, newest first, so the
+            // current stay's orders are not pushed off by finished ones.
+            List<com.example.hms.model.Admission> closedStays = admissionRepository
+                    .findByPatientIdOrderByAdmissionDateTimeDesc(patientId).stream()
+                    .filter(a -> a.getActualDischargeDateTime() != null)
+                    .toList();
+            List<com.example.hms.model.Prescription> rows = NeverSentRule.prescriptionsReadableHere(
+                    prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readable,
+                            PageRequest.of(0, ACTIVE_MEDICATION_SCAN, Sort.by(Sort.Direction.DESC, "createdAt")))
+                    .getContent(), hospitalId).stream()
+                    .filter(rx -> com.example.hms.service.MedicationCourseStatus.isActive(rx, closedStays))
+                    .limit(10)
+                    .toList();
             account(reach, hospitalId, rows.stream().map(rx -> CrossHospitalReachRecorder.hospitalIdOf(rx.getHospital())).toList());
             rows.forEach(rx -> medications.add(PatientSnapshotDTO.MedicationItem.builder()
                             .name(rx.getMedicationName())
@@ -422,14 +448,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     }
 
     private String summarizeVitals(PatientVitalSign v) {
-        StringBuilder s = new StringBuilder();
-        if (v.getTemperatureCelsius() != null) s.append("T:").append(v.getTemperatureCelsius()).append("°C ");
-        if (v.getHeartRateBpm() != null) s.append("HR:").append(v.getHeartRateBpm()).append(" ");
-        if (v.getSystolicBpMmHg() != null && v.getDiastolicBpMmHg() != null) {
-            s.append("BP:").append(v.getSystolicBpMmHg()).append("/").append(v.getDiastolicBpMmHg()).append(" ");
-        }
-        if (v.getSpo2Percent() != null) s.append("SpO2:").append(v.getSpo2Percent()).append("% ");
-        return s.toString().trim();
+        // QA D628: one summary, in the request locale, for every screen.
+        String text = com.example.hms.utility.VitalsSummaryText.of(v);
+        return text == null ? "" : text;
     }
 
     private List<PatientSnapshotDTO.LabItem> buildLatestLabs(UUID patientId, UUID hospitalId,
@@ -443,8 +464,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             // guaranteed). Readable where its order is handled (#751): ordered
             // in the readable set, or performed by this hospital's laboratory,
             // as on the other staff lab views.
-            List<LabResult> rows = labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
-                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id")));
+            // QA D740/D741: released, current results only — a snapshot shows
+            // values, and an unreleased or superseded one is not a result.
+            List<LabResult> rows = ClinicalLabResultView.releasedAndCurrent(
+                    labResultRepository.findPatientResultsReadableAt(patientId, readable, hospitalId,
+                    false, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "resultDate", "id"))));
             account(reach, hospitalId, rows.stream()
                     .filter(r -> !CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
@@ -453,13 +477,13 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .filter(r -> CrossHospitalReachRecorder.isPerformedHere(r, hospitalId))
                     .map(PatientSnapshotServiceImpl::orderingHospitalIdOf)
                     .toList());
-            // No test definition (deleted, or never linked) sends null rather
-            // than an English word: the drawer renders its own translated
-            // fallback, as it already does for the pending order below.
+            // QA D648: a result's order without a definition lost it to a delete,
+            // so the row names a deleted test in the caller's language, as the
+            // chart and the lab screens do.
             rows.forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null
                                     ? r.getLabOrder().getLabTestDefinition().getName()
-                                    : null)
+                                    : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .value(r.getResultValue())
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
@@ -497,7 +521,9 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .limit(10)
                     .forEach(o -> pendingOrders.add(PatientSnapshotDTO.OrderItem.builder()
                             .type("LAB")
-                            .description(o.getLabTestDefinition() != null ? o.getLabTestDefinition().getName() : null)
+                            .description(o.getLabTestDefinition() != null
+                                    ? o.getLabTestDefinition().getName()
+                                    : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .orderedAt(o.getOrderDatetime() != null ? o.getOrderDatetime().format(DATE_FMT) : "")
                             .build()));
         } catch (Exception e) {

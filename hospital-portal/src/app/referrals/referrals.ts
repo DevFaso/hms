@@ -30,11 +30,20 @@ import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './referrals.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './referrals.scss',
@@ -59,9 +68,41 @@ export class ReferralsComponent implements OnInit {
    * /referrals refuses a nurse as referrer, QA D319), so nobody else is
    * offered the button the API would refuse.
    */
-  protected readonly canWriteReferral = computed(() =>
-    this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_MIDWIFE']),
+  protected readonly canWriteReferral = computed(
+    () =>
+      this.roleContext.hasAnyActiveRole(actionRoles('referralCreate')) &&
+      this.roleContext.hasAnyActiveRole([...SERVICE_RULE_ROLES.referralReferrer]),
   );
+
+  /**
+   * QA D661: acknowledge, schedule, start, complete, reject and cancel are
+   * physician-only at the API, so a nurse or a midwife is never offered a
+   * button that ends in a 403.
+   */
+  protected readonly canAct = computed(() => {
+    const allowed = (action: ActionKey) => this.roleContext.hasAnyActiveRole(actionRoles(action));
+    return {
+      acknowledge: allowed('referralAcknowledge'),
+      schedule: allowed('referralSchedule'),
+      start: allowed('referralStart'),
+      complete: allowed('referralComplete'),
+      reject: allowed('referralReject'),
+      cancel: allowed('referralCancel'),
+    };
+  });
+
+  /**
+   * QA D775 (D611 sibling): acknowledge, reject, schedule, start and complete
+   * belong to the hospital the referral is addressed to (the receiving
+   * hospital, or the sending one for an internal referral) —
+   * GeneralReferralServiceImpl.requireReceivingSide. The role map alone
+   * offered the sender "Prendre en compte" and "Refuser", which ended in 403.
+   */
+  isReceivingSide(r: ReferralResponse): boolean {
+    const active = this.roleContext.effectiveHospitalIdForRequest();
+    const target = r.receivingHospitalId || r.hospitalId;
+    return !!active && !!target && active === target;
+  }
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
   isMyDraft(r: ReferralResponse): boolean {
@@ -378,14 +419,50 @@ export class ReferralsComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });
   }
 
+  /** QA D611: the refusal of a cancel, shown inside the confirmation dialog. */
+  readonly cancelError = signal('');
+
+  /**
+   * QA D611 (D509): only the clinician who wrote a referral may cancel it,
+   * so nobody else is offered the button the server would refuse.
+   */
+  canCancel(r: ReferralResponse): boolean {
+    const staffId = this.auth.getUserProfile()?.staffId;
+    return (
+      this.canAct().cancel &&
+      !['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status) &&
+      !!staffId &&
+      r.referringProviderId === staffId
+    );
+  }
+
+  /**
+   * The server's own sentence for a refused action, in the caller's
+   * language; the opaque access-denied default and transport text are
+   * replaced by translated text (a 403 says "not allowed").
+   */
+  private refusal(err: unknown, failedKey: string): string {
+    const e = (err ?? {}) as {
+      status?: number;
+      error?: { message?: unknown; code?: unknown } | null;
+    };
+    const msg =
+      e.error?.code !== 'ACCESS_DENIED' && typeof e.error?.message === 'string'
+        ? e.error.message.trim()
+        : '';
+    if (msg && msg !== 'Access denied') return msg;
+    return this.translate.instant(e.status === 403 ? 'REFERRALS.ACTION_FORBIDDEN' : failedKey);
+  }
+
   confirmCancel(r: ReferralResponse): void {
+    this.cancelError.set('');
     this.deletingRef.set(r);
     this.showDeleteConfirm.set(true);
   }
@@ -402,8 +479,11 @@ export class ReferralsComponent implements OnInit {
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.CANCEL_FAILED'));
+      error: (err: unknown) => {
+        // QA D611: the server's reason, in the open dialog, not a bare toast.
+        const reason = this.refusal(err, 'REFERRALS.CANCEL_FAILED');
+        this.cancelError.set(reason);
+        this.toast.error(reason);
         this.deleting.set(false);
       },
     });
@@ -419,8 +499,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.SUBMIT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.SUBMIT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -449,8 +529,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.ACKNOWLEDGE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.ACKNOWLEDGE_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -472,7 +552,15 @@ export class ReferralsComponent implements OnInit {
     if (!ref || !this.scheduleAppointmentTime) return;
     this.actionLoading.set(true);
     this.referralService
-      .schedule(ref.id, this.scheduleAppointmentTime, this.scheduleLocation || undefined)
+      .schedule(
+        ref.id,
+        // #948 review: kept as the hospital's wall clock, NOT converted to UTC.
+        // The server copies it into the booked Appointment's date and start
+        // time, which are wall-clock fields (calendar, check-in, reminders,
+        // patient emails), so 10:00 must arrive as 10:00.
+        this.scheduleAppointmentTime,
+        this.scheduleLocation || undefined,
+      )
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('REFERRALS.SCHEDULE_SUCCESS'));
@@ -481,8 +569,8 @@ export class ReferralsComponent implements OnInit {
           this.load();
           this.closeDetail();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('REFERRALS.SCHEDULE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(this.refusal(err, 'REFERRALS.SCHEDULE_FAILED'));
           this.actionLoading.set(false);
         },
       });
@@ -498,8 +586,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.START_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.START_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -527,8 +615,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.REJECT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.REJECT_FAILED'));
         this.actionLoading.set(false);
       },
     });
@@ -557,8 +645,8 @@ export class ReferralsComponent implements OnInit {
         this.load();
         this.closeDetail();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('REFERRALS.COMPLETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(this.refusal(err, 'REFERRALS.COMPLETE_FAILED'));
         this.actionLoading.set(false);
       },
     });

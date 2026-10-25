@@ -18,6 +18,7 @@ export interface DischargeApprovalDecision {
   doctorAssignmentId: string;
   doctorNote?: string;
   rejectionReason?: string;
+  dischargeDiagnosis?: string;
 }
 
 export interface DischargeApproval {

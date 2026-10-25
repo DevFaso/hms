@@ -25,12 +25,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,12 +43,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
     private final PatientHospitalRegistrationMapper mapper;
     private final RoleValidator roleValidator;
     private final AuditEventLogService auditService;
-
-    private static final String MRN_PREFIX = "mrn-";
-    private static final String ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    private static final SecureRandom RANDOM = new SecureRandom();
-    private static final int MRN_CODE_LENGTH = 7;
-    private static final int MAX_MRN_GENERATION_ATTEMPTS = 10;
+    private final PatientMrnGenerator mrnGenerator;
 
     // -------------------- CREATE --------------------
     @Override
@@ -64,7 +57,13 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             patient = patientRepository.findByUsernameOrEmail(identifier)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", identifier));
         } else {
-            patient = patientRepository.findById(dto.getPatientId())
+            // QA D756: "Link to this hospital" sends the id of a patient who is
+            // registered ELSEWHERE - the tenant-scoped findById cannot see them
+            // by definition, so the link always answered 404. The lookup is
+            // unscoped, like the username path above; the write is authorised
+            // below: the caller may only register at their own acting hospital,
+            // and the link is audited.
+            patient = patientRepository.findByIdUnscoped(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
@@ -88,9 +87,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         // Prevent duplicate registration for same hospital
         if (registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId())) {
+            // QA D771: in the request's language, and without the two UUIDs.
             throw new PatientAlreadyRegisteredException(
-                String.format("Patient '%s' is already registered to Hospital '%s'.", patient.getId(), hospital.getId())
-            );
+                com.example.hms.utility.MessageUtil.resolveOrRaw("registration.alreadyRegistered"));
         }
 
         // Minor guard
@@ -102,8 +101,9 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             throw new IllegalArgumentException("Minor patients must have a guardian's contact information.");
         }
 
-        // Generate mrn server-side (immutable)
-        String mrn = generateUniquemrn(hospital.getId());
+        // Generate mrn server-side (immutable) - QA D763: the same hospital
+        // format (CNK0123) as a registration opened by patient creation.
+        String mrn = mrnGenerator.generate(hospital);
 
         PatientHospitalRegistration registration = mapper.toEntity(dto, patient, hospital);
         registration.setMrn(mrn);
@@ -112,7 +112,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
 
         PatientHospitalRegistration saved = registrationRepository.save(registration);
 
-        log.info("✅ Registered Patient '{}' to Hospital '{}' with mrn '{}'", patient.getId(), hospital.getId(), mrn);
+        log.info("Registered patient {} at hospital {}", patient.getId(), hospital.getId());
 
         emitRegistrationAudit(saved, patient, hospital);
 
@@ -130,7 +130,7 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
                 .userName(HospitalContextHolder.getContextOrEmpty().getPrincipalUsername())
                 .hospitalName(hospital.getName())
                 .resourceName(patient.getId() != null ? patient.getId().toString() : null)
-                .eventDescription("Patient linked to hospital '" + hospital.getName() + "' (mrn " + saved.getMrn() + ")")
+                .eventDescription("Patient linked to hospital '" + hospital.getName() + "'")
                 .build());
         } catch (RuntimeException ex) {
             // Audit failure must never break the registration flow
@@ -205,6 +205,18 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         int fromIndex = Math.min(page * size, registrations.size());
         int toIndex = Math.min(fromIndex + size, registrations.size());
         return registrations.subList(fromIndex, toIndex).stream()
+            .map(mapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatientAndHospital(
+        UUID patientId, UUID hospitalId, Boolean active
+    ) {
+        return scopeToActiveHospital(registrationRepository.findByPatientId(patientId)).stream()
+            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+            .filter(r -> active == null || r.isActive() == active)
             .map(mapper::toResponseDTO)
             .toList();
     }
@@ -332,24 +344,6 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
         boolean hasHospitalRef = !isBlank(dto.getHospitalName()) || dto.getHospitalId() != null;
         if (!hasUserRef) throw new IllegalArgumentException("Patient username or patientId is required.");
         if (!hasHospitalRef) throw new IllegalArgumentException("Hospital name or hospitalId is required.");
-    }
-
-    /**
-     * Generates a unique mrn for the given hospital. Enforces uniqueness with repository checks.
-     */
-    private String generateUniquemrn(UUID hospitalId) {
-        for (int attempt = 1; attempt <= MAX_MRN_GENERATION_ATTEMPTS; attempt++) {
-            String generatedmrn = MRN_PREFIX + RANDOM.ints(MRN_CODE_LENGTH, 0, ALPHANUMERIC.length())
-                .mapToObj(ALPHANUMERIC::charAt)
-                .map(Object::toString)
-                .collect(Collectors.joining());
-
-            if (!registrationRepository.existsByMrnAndHospitalId(generatedmrn, hospitalId)) {
-                log.debug("Generated unique mrn '{}' (attempt {})", generatedmrn, attempt);
-                return generatedmrn;
-            }
-        }
-    throw new IllegalStateException("Failed to generate a unique mrn after " + MAX_MRN_GENERATION_ATTEMPTS + " attempts.");
     }
 
     private boolean isBlank(String s) {

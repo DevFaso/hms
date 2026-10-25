@@ -12,9 +12,11 @@ import com.example.hms.payload.dto.bed.BedResponseDTO;
 import com.example.hms.payload.dto.bed.BedStatusUpdateRequestDTO;
 import com.example.hms.payload.dto.bed.WardRequestDTO;
 import com.example.hms.payload.dto.bed.WardResponseDTO;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
 import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.TransferOrderRepository;
 import com.example.hms.repository.WardRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +49,10 @@ public class BedManagementServiceImpl implements BedManagementService {
     private final BedRepository bedRepository;
     private final DepartmentRepository departmentRepository;
     private final HospitalRepository hospitalRepository;
+    private final AdmissionRepository admissionRepository;
+    private final TransferOrderRepository transferOrderRepository;
     private final RoleValidator roleValidator;
+    private final com.example.hms.repository.PatientRepository patientRepository;
 
     /* ═══════════════════════ Wards ═══════════════════════ */
 
@@ -125,6 +130,11 @@ public class BedManagementServiceImpl implements BedManagementService {
         if (!bedRepository.findByWard_Id(wardId).isEmpty()) {
             throw new BusinessException("ward.delete.hasBeds", ward.getCode());
         }
+        // QA D601: a transfer from or to this ward keeps it in the patient's
+        // movement history; deactivate the ward instead.
+        if (transferOrderRepository.existsByFromWard_IdOrToWard_Id(wardId, wardId)) {
+            throw new BusinessException("ward.delete.inUse", ward.getCode());
+        }
         wardRepository.delete(ward);
     }
 
@@ -139,16 +149,42 @@ public class BedManagementServiceImpl implements BedManagementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<BedResponseDTO> getAvailableBeds() {
+        return availableBeds(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BedResponseDTO> getAvailableBeds(UUID patientId) {
+        return availableBeds(patientId);
+    }
+
+    /** Shared body of both overloads, so neither calls a transactional method through 'this'. */
+    private List<BedResponseDTO> availableBeds(UUID patientId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             throw new BusinessException("bed.hospitalContextRequired");
         }
+        // The tenant-scoped finder: a patient this hospital does not know
+        // narrows nothing (and the assignment itself refuses them).
+        com.example.hms.model.Patient patient = patientId == null ? null
+            : patientRepository.findById(patientId).orElse(null);
         return bedRepository
             .findByWard_Hospital_IdAndStatusAndActiveTrueOrderByBedNumberAsc(hospitalId, BedStatus.AVAILABLE)
             .stream()
+            .filter(bed -> patient == null || fitsPatient(bed, patient))
             .map(this::toBedDto)
             .toList();
+    }
+
+    private static boolean fitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+        try {
+            BedAssignmentService.requireWardFitsPatient(bed, patient);
+            return true;
+        } catch (BusinessException refused) {
+            return false;
+        }
     }
 
     @Override
@@ -231,6 +267,12 @@ public class BedManagementServiceImpl implements BedManagementService {
             .orElseThrow(() -> new ResourceNotFoundException(BED_NOT_FOUND_KEY, bedId));
         if (bed.getStatus() == BedStatus.OCCUPIED) {
             throw new BusinessException("bed.occupied.cannotDelete");
+        }
+        // QA D601: a bed any admission or transfer ever used is part of the
+        // chart (bed history), even once it is free again.
+        if (admissionRepository.existsByBed_Id(bedId)
+            || transferOrderRepository.existsByFromBed_IdOrToBed_Id(bedId, bedId)) {
+            throw new BusinessException("bed.delete.inUse", bed.getBedNumber());
         }
         bedRepository.delete(bed);
     }

@@ -6,6 +6,7 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Prescription;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -23,12 +24,14 @@ public final class InpatientOrderEnd {
     }
 
     public static boolean endedWithAStay(Prescription rx, List<Admission> stays) {
-        Encounter encounter = rx.getEncounter();
-        if (encounter != null && encounter.getAdmissionId() != null
-            && (encounter.getStatus() == EncounterStatus.COMPLETED
-                || encounter.getStatus() == EncounterStatus.CANCELLED)) {
+        // QA D757: an order marked for home outlives the stay it was written on.
+        if (rx.isTakeHome()) {
+            return false;
+        }
+        if (endedWithItsStay(rx)) {
             return true;
         }
+        Encounter encounter = rx.getEncounter();
         // QA D316: an order written on an outpatient visit is the visit's,
         // not a stay's, even when a stay at the same hospital happened to
         // span that moment (a same-day admission and discharge ended every
@@ -49,6 +52,62 @@ public final class InpatientOrderEnd {
             if (sameHospital(rx, stay)) return true;
         }
         return false;
+    }
+
+    /**
+     * QA D757: the order is filed on a stay's own encounter (V193), that stay
+     * has ended, and the order is not marked for home. Such an order is not
+     * dispensed, verified or queued any more: the patient has left the ward.
+     * Needs no other row, so the pharmacy can apply it on the order alone.
+     */
+    public static boolean endedWithItsStay(Prescription rx) {
+        if (rx == null || rx.isTakeHome()) {
+            return false;
+        }
+        Encounter encounter = rx.getEncounter();
+        return encounter != null && encounter.getAdmissionId() != null
+            && (encounter.getStatus() == EncounterStatus.COMPLETED
+                || encounter.getStatus() == EncounterStatus.CANCELLED);
+    }
+
+    /** How long before the admission an emergency-department order still belongs to the stay (QA D702/D712). */
+    private static final Duration ED_TO_WARD_CARRY_OVER = Duration.ofHours(24);
+
+    /**
+     * QA D702: D514 only asked whether the patient is in a bed, so once a
+     * patient was admitted every live prescription he had, including the
+     * take-home orders of an earlier consultation, became a due dose. A dose
+     * is due on the ward only for an order of the current stay: filed on the
+     * stay's own encounter, or (no admission link) on an INPATIENT encounter
+     * or on no encounter at all, written since the admission. An order of an
+     * outpatient visit is the visit's, never a nursing dose.
+     */
+    public static boolean orderOfStay(Prescription rx, Admission stay) {
+        if (stay == null) return false;
+        Encounter encounter = rx.getEncounter();
+        if (encounter != null && encounter.getAdmissionId() != null) {
+            return encounter.getAdmissionId().equals(stay.getId());
+        }
+        LocalDateTime written = rx.getCreatedAt();
+        LocalDateTime from = stay.getAdmissionDateTime();
+        if (encounter != null && encounter.getEncounterType() == EncounterType.EMERGENCY) {
+            // The department's orders carry on to the ward: the emergency
+            // visit ends with the admission (QA D712), its treatment does not.
+            // Only the visit still open at admission carries over: a visit
+            // checked out before it (the patient went home with a course and
+            // came back later) keeps its take-home orders off the ward MAR.
+            LocalDateTime checkout = encounter.getCheckoutTimestamp();
+            boolean openAtAdmission = checkout == null || from == null || !checkout.isBefore(from);
+            return openAtAdmission && written != null
+                && (from == null || !written.isBefore(from.minus(ED_TO_WARD_CARRY_OVER)));
+        }
+        if (encounter != null && encounter.getEncounterType() != EncounterType.INPATIENT) {
+            return false;
+        }
+        // An order with no write time (never, for an order written here) is
+        // kept: it names no outpatient visit, and dropping a ward dose is not
+        // the safe direction.
+        return written == null || from == null || !written.isBefore(from);
     }
 
     private static boolean sameHospital(Prescription rx, Admission stay) {

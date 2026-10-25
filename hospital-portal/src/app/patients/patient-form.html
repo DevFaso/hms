@@ -357,6 +357,9 @@
             }
           </div>
         }
+        @if (linkError) {
+          <p class="link-error" role="alert">{{ linkError }}</p>
+        }
         <button type="button" class="btn-link dismiss-match" (click)="dismissMatch()">
           {{ 'PATIENTS.NOT_SAME_PERSON' | translate }}
         </button>

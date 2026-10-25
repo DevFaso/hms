@@ -39,6 +39,8 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 
 type ActiveTab = 'support' | 'aggregated';
 
+import { EnumLabelService } from '../../core/enum-label.service';
+import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 @Component({
   selector: 'app-super-admin-audit-search',
   standalone: true,
@@ -58,6 +60,12 @@ type ActiveTab = 'support' | 'aggregated';
 })
 export class SuperAdminAuditSearchComponent implements OnInit {
   private readonly service = inject(AuditSearchService);
+  private readonly enumLabels = inject(EnumLabelService);
+  /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
+  entityLabel(raw: string | null | undefined): string | null {
+    return this.enumLabels.auditEntityLabel(raw);
+  }
+
   private readonly residencyService = inject(DataResidencyService);
   private readonly savedSearchService = inject(AuditSavedSearchService);
 
@@ -266,7 +274,8 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   private toIsoDateTime(value: string): string | undefined {
     const v = this.trimOrUndefined(value);
     if (!v) return undefined;
-    return v.length === 16 ? `${v}:00` : v;
+    // QA D777/D784: the picker gives local wall time; the server keeps UTC.
+    return toServerDateTime(v);
   }
 
   exportCsv(): void {
@@ -358,7 +367,9 @@ export class SuperAdminAuditSearchComponent implements OnInit {
 
   private fromIsoForInput(value: string | undefined): string {
     if (!value) return '';
-    return value.length === 19 && value.endsWith(':00') ? value.substring(0, 16) : value;
+    // #948 review: a saved filter keeps the UTC bounds the search was sent;
+    // shown raw, every apply-and-save moved the window by the reader's offset.
+    return toLocalInputValue(value);
   }
 
   private triggerBrowserDownload(blob: Blob, filename: string): void {

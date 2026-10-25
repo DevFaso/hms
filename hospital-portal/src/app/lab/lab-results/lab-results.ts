@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { actionRoles } from '../../core/action-permissions';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -20,6 +28,13 @@ import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hos
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import {
+  nowLocalDatetime,
+  toLocalInputValue,
+  toServerDateTime,
+  serverInstant,
+} from '../../shared/date-utils';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -27,32 +42,20 @@ import { shortOrderCode } from '../../shared/lab/order-code';
  */
 export { shortOrderCode };
 
-/**
- * D49: a `datetime-local` value is the user's wall clock with no zone, and the
- * API stores result times on the server's UTC clock (the clock order times are
- * stamped with). Sending the wall clock as is recorded a result entered from a
- * workstation behind UTC hours BEFORE the order it answers.
- */
-export function toServerDateTime(localValue: string): string {
-  const instant = new Date(localValue);
-  return Number.isNaN(instant.getTime()) ? localValue : instant.toISOString().slice(0, 19);
-}
-
-/** The reverse: a server (UTC, zone-less) time as a `datetime-local` value in the user's zone. */
-export function toLocalInputValue(serverValue: string): string {
-  const zoned = /(Z|[+-]\d{2}:\d{2})$/.test(serverValue) ? serverValue : serverValue + 'Z';
-  const instant = new Date(zoned);
-  if (Number.isNaN(instant.getTime())) {
-    return serverValue.slice(0, 16);
-  }
-  const pad = (n: number): string => n.toString().padStart(2, '0');
-  return `${instant.getFullYear()}-${pad(instant.getMonth() + 1)}-${pad(instant.getDate())}T${pad(instant.getHours())}:${pad(instant.getMinutes())}`;
-}
+/** D49 (moved to shared/date-utils for the admission form, QA D622). */
+export { toServerDateTime, toLocalInputValue };
 
 @Component({
   selector: 'app-lab-results',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, HospitalScopeChipComponent, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-results.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-results.scss',
@@ -113,6 +116,10 @@ export class LabResultsComponent implements OnInit {
       ...LabResultsComponent.POINT_OF_CARE_ROLES,
     ]);
   }
+  /** QA D616: the delete icon only for the roles DELETE /lab-results/{id} admits. */
+  readonly canDeleteResult = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(actionRoles('labResultDelete')),
+  );
   protected readonly globalView = this.roleContext.globalView;
 
   loading = signal(true);
@@ -270,7 +277,15 @@ export class LabResultsComponent implements OnInit {
     this.scopeUrl.applyUrlScopeSync(this.route);
 
     this.loadResults();
-    this.labService.listOrders({ size: 500 }).subscribe((list) => this.orders.set(list));
+    // QA D645: an order whose test definition no longer resolves has nothing a
+    // result can be entered against; it is not offered ("— — —" in the picker).
+    this.labService.listOrders({ size: 500 }).subscribe((list) =>
+      // QA D645/D648: an order whose test definition was deleted carries a
+      // "deleted test" label but cannot take a result; it stays out of the picker.
+      this.orders.set(
+        list.filter((o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode)),
+      ),
+    );
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);
@@ -284,12 +299,6 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
   }
 
-  /** Format a Date as YYYY-MM-DDTHH:mm in the user's local timezone (for datetime-local inputs). */
-  private toLocalDatetime(d: Date): string {
-    const pad = (n: number): string => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
   emptyForm(): LabResultRequest {
     return {
       labOrderId: '',
@@ -297,7 +306,7 @@ export class LabResultsComponent implements OnInit {
       patientId: '',
       resultValue: '',
       resultUnit: '',
-      resultDate: this.toLocalDatetime(new Date()),
+      resultDate: nowLocalDatetime(),
       notes: '',
     };
   }
@@ -343,7 +352,7 @@ export class LabResultsComponent implements OnInit {
       patientId: r.patientId ?? '',
       resultValue: r.resultValue ?? '',
       resultUnit: r.resultUnit ?? '',
-      resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : this.toLocalDatetime(new Date()),
+      resultDate: r.resultDate ? toLocalInputValue(r.resultDate) : nowLocalDatetime(),
       notes: r.notes ?? '',
     };
     this.editing.set(true);
@@ -599,7 +608,7 @@ export class LabResultsComponent implements OnInit {
   sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
     const history = r.trendHistory ?? [];
     return [...history].sort(
-      (a, b) => new Date(b.resultDate).getTime() - new Date(a.resultDate).getTime(),
+      (a, b) => serverInstant(b.resultDate).getTime() - serverInstant(a.resultDate).getTime(),
     );
   }
 

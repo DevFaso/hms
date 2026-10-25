@@ -42,7 +42,17 @@ public class LabTestDefinitionResponseDTO {
     private String approvalStatus;
     private UUID approvedById;
     private LocalDateTime approvedAt;
+    /** QA D534: who submitted it, so the queue does not offer the QA pass to them. */
+    private UUID submittedById;
+
     private UUID reviewedById;
+
+    /**
+     * QA D722: set only for the caller who did the QA review of a definition
+     * pending approval - true when the server will accept their approval too
+     * (the sole-director exception). Null otherwise.
+     */
+    private Boolean reviewerMayApprove;
     private LocalDateTime reviewedAt;
     private String rejectionReason;
 

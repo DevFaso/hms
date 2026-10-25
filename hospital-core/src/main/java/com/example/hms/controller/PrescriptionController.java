@@ -62,6 +62,13 @@ public class PrescriptionController {
     public ResponseEntity<PrescriptionResponseDTO> create(
         @Valid @RequestBody PrescriptionRequestDTO request,
         Locale locale) {
+        // QA D706: a new prescription from the prescribing form states the
+        // quantity to hand over; the dispense is capped at it. (Order sets
+        // and legacy rows without one are handled in the service and the
+        // dispense: a controlled substance is refused without it.)
+        if (request.getQuantity() == null) {
+            throw new com.example.hms.exception.BusinessException("prescription.quantity.required");
+        }
         PrescriptionResponseDTO created = prescriptionService.createPrescription(request, locale);
         return new ResponseEntity<>(created, HttpStatus.CREATED);
     }
@@ -270,9 +277,9 @@ public class PrescriptionController {
         Locale locale) {
         prescriptionService.deletePrescription(id, locale);
         String rawMessage = messageSource.getMessage("prescription.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 

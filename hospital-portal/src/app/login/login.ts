@@ -568,6 +568,7 @@ export class Login implements OnInit, AfterViewInit {
       this.error = this.translate.instant('LOGIN.ENTER_EMAIL_OR_PHONE');
       return;
     }
+    // QA D542: the contact goes in the body, never the URL (logs, history).
     // QA D311/D418: a phone-only account has no address to type; the server
     // re-sends its activation code by SMS when given the number instead.
     const params: Record<string, string> = contact.includes('@')
@@ -581,7 +582,7 @@ export class Login implements OnInit, AfterViewInit {
       this.resendActivationSuccess = this.translate.instant('LOGIN.ACTIVATION_LINK_SENT');
     };
     this.http
-      .post<void>('/auth/resend-verification', null, { params })
+      .post<void>('/auth/resend-verification', params)
       .subscribe({ next: done, error: done });
   }
 }

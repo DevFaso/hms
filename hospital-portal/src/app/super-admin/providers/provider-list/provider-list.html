@@ -104,7 +104,7 @@
                   {{ provider.lifecycleState | enumLabel: 'hospitalLifecycleState' }}
                 }
               </td>
-              <td>{{ provider.submittedAt | date: 'mediumDate' }}</td>
+              <td>{{ provider.submittedAt | serverTime | date: 'mediumDate' }}</td>
             </tr>
           }
         </tbody>

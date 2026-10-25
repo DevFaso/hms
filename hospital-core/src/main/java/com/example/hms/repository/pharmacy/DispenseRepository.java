@@ -48,6 +48,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
 
+    /** QA D653: the fills taken from one lot in the given states, newest first. */
+    List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+                                                                    Collection<DispenseStatus> statuses);
+
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler
      * to find patients whose supply is running out.
@@ -85,6 +89,14 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     BigDecimal sumQuantityDispensedForPrescription(
             @Param("prescriptionId") UUID prescriptionId,
             @Param("excludedStatuses") Collection<DispenseStatus> excludedStatuses);
+
+    /**
+     * QA D706: what a new fill is capped against - every fill not cancelled,
+     * a prepared one still waiting for collection included.
+     */
+    default BigDecimal sumQuantityCommittedForPrescription(UUID prescriptionId) {
+        return sumQuantityDispensedForPrescription(prescriptionId, List.of(DispenseStatus.CANCELLED));
+    }
 
     /* ── Ready for collection (G15) ─────────────────────────────────────── */
 

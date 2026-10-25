@@ -15,7 +15,6 @@ import com.example.hms.payload.dto.portal.RefillDecisionRequestDTO;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
-import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -59,12 +58,14 @@ class RefillApprovalServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private StaffRepository staffRepository;
-    @Mock private NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private RoleValidator roleValidator;
     @Mock private Authentication auth;
     @Mock private PatientLocaleResolver patientLocaleResolver;
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
     @InjectMocks private RefillApprovalServiceImpl service;
 
@@ -145,7 +146,7 @@ class RefillApprovalServiceImplTest {
 
         assertThat(result.getStatus()).isEqualTo("APPROVED");
         assertThat(result.getProviderNotes()).isEqualTo("Approved — pick up by Friday");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
     }
 
     @Test
@@ -160,7 +161,7 @@ class RefillApprovalServiceImplTest {
                 RefillDecisionRequestDTO.builder().providerNotes("Discontinued — see clinic").build());
 
         assertThat(result.getStatus()).isEqualTo("DENIED");
-        verify(notificationService).createNotification(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+        verify(notificationService).created(anyString(), eq("alice.patient"), eq("MEDICATION_REFILL"));
     }
 
     @Test
@@ -173,8 +174,8 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("APPROVED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+                .hasMessageContaining("patient.refill.decision.notPending");
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -255,9 +256,9 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
         assertThat(message.getValue())
-                .contains("on hold")
+                .contains("en attente")
                 .contains("Need an A1c before renewing");
     }
 
@@ -267,7 +268,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("   ").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
         verify(refillRequestRepository, never()).findById(any());
     }
 
@@ -276,7 +277,7 @@ class RefillApprovalServiceImplTest {
     void pause_requiresBody() {
         assertThatThrownBy(() -> service.pause(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason is required");
+                .hasMessageContaining("patient.refill.decision.reasonRequired");
     }
 
     @Test
@@ -304,6 +305,45 @@ class RefillApprovalServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D753: approving a CANCELLED refill answers a translated key, not English prose")
+    void d753_approveNonPendingUsesTranslatedKey() {
+        stubStaffResolution();
+        RefillRequest cancelled = pendingRefill();
+        cancelled.setStatus(RefillStatus.CANCELLED);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(cancelled));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOfSatisfying(BusinessException.class, ex -> {
+                    assertThat(ex.getMessageKey()).isEqualTo("patient.refill.decision.notPending");
+                    assertThat(ex.getArgs()).containsExactly("CANCELLED");
+                });
+    }
+
+    @Test
+    @DisplayName("QA D753 guard: every refusal in RefillApprovalServiceImpl is a bundle key present in EN/FR/ES")
+    void d753_guard_noProseRefusals() throws Exception {
+        String src = java.nio.file.Files.readString(java.nio.file.Path.of(
+                "src/main/java/com/example/hms/service/impl/RefillApprovalServiceImpl.java"));
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("(?:BusinessException|AccessDeniedException|ResourceNotFoundException)\\(\\s*\"([^\"]*)\"")
+                .matcher(src);
+        java.util.List<String> keys = new java.util.ArrayList<>();
+        while (m.find()) {
+            keys.add(m.group(1));
+        }
+        assertThat(keys).isNotEmpty().allSatisfy(k -> assertThat(k).doesNotContain(" "));
+        for (String locale : new String[] {"en", "fr", "es"}) {
+            java.util.Properties props = new java.util.Properties();
+            try (java.io.Reader r = java.nio.file.Files.newBufferedReader(java.nio.file.Path.of(
+                    "src/main/resources/i18n/messages-patient_" + locale + ".properties"))) {
+                props.load(r);
+            }
+            keys.stream().filter(k -> k.startsWith("patient.refill."))
+                    .forEach(k -> assertThat(props.getProperty(k)).as(locale + " " + k).isNotBlank());
+        }
+    }
+
+    @Test
     @DisplayName("pause — refuses to re-pause, which would only re-notify the patient")
     void pause_rejectsAlreadyPaused() {
         stubStaffResolution();
@@ -314,8 +354,8 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("still waiting").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PAUSED");
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+                .hasMessageContaining("patient.refill.decision.notPending");
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -329,7 +369,7 @@ class RefillApprovalServiceImplTest {
         assertThatThrownBy(() -> service.pause(auth, refillId,
                 RefillDecisionRequestDTO.builder().providerNotes("reconsidering").build()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("DENIED");
+                .hasMessageContaining("patient.refill.decision.notPending");
     }
 
     @Test
@@ -390,13 +430,13 @@ class RefillApprovalServiceImplTest {
 
         ArgumentCaptor<String> message = ArgumentCaptor.forClass(String.class);
         verify(notificationService)
-                .createNotification(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
+                .created(message.capture(), eq("alice.patient"), eq("MEDICATION_REFILL"));
         // Approval puts the fill back in the pharmacy's queue (SIGNED): nothing
         // has been prepared yet, so "ready to collect" was a false promise that
         // sent patients to a counter with nothing waiting for them.
         assertThat(message.getValue())
-                .contains("sent to the pharmacy to prepare")
-                .doesNotContainIgnoringCase("ready");
+                .contains("transmise à la pharmacie pour préparation")
+                .doesNotContainIgnoringCase("prête");
     }
 
     @Test
@@ -426,12 +466,12 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("no longer be refilled");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
         // The whole point: never leave a request APPROVED with nothing behind it.
         assertThat(pending.getStatus()).isEqualTo(RefillStatus.REQUESTED);
         verify(refillRequestRepository, never()).save(any(RefillRequest.class));
-        verify(notificationService, never()).createNotification(anyString(), anyString(), anyString());
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -443,7 +483,34 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.approve(auth, refillId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("new prescription");
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
+
+    @Test
+    @DisplayName("QA D719: approve — refuses a refill of a completed controlled substance")
+    void approve_refusesControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+    }
+
+    @Test
+    @DisplayName("QA D719 re-test: approve — refuses catalog-controlled morphine whose tick is false")
+    void approve_refusesCatalogControlledSubstance() {
+        stubStaffResolution();
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        prescription.setControlledSubstance(false);
+        when(controlledResolver.isControlled(prescription)).thenReturn(true);
+        when(refillRequestRepository.findById(refillId)).thenReturn(Optional.of(pendingRefill()));
+
+        assertThatThrownBy(() -> service.approve(auth, refillId, null))
+                .isInstanceOf(BusinessException.class)
+                .matches(e -> "patient.refill.approveNotRefillable".equals(((BusinessException) e).getMessageKey()));
     }
 
     @Test
@@ -532,6 +599,6 @@ class RefillApprovalServiceImplTest {
 
         assertThatThrownBy(() -> service.countPendingForProvider(auth))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("staff record");
+                .hasMessageContaining("patient.refill.decision.noStaffRecord");
     }
 }

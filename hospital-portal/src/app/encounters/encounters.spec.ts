@@ -310,15 +310,49 @@ describe('EncountersComponent', () => {
     expect(payload.departmentId).not.toBe('');
   });
 
-  it('submitForm appends a midnight time to the encounter date', () => {
+  // #948 review: the list reads encounterDate through serverTime (UTC), so
+  // the picked day must be sent as the reader's local midnight on the UTC
+  // clock. Sent as '2026-10-24T00:00:00', a 24 October visit created in New
+  // York was listed as 'Oct 23, 8:00 PM'. Expectations are built from local
+  // Date constructors, so the specs hold in any workstation zone.
+  it('submitForm sends local midnight of the picked day on the UTC clock', () => {
     component.ngOnInit();
     encounterSpy.create.and.returnValue(of(mockEncounter()));
     component.openCreate();
-    component.form.encounterDate = '2026-08-18';
+    component.form.encounterDate = '2026-10-24';
     component.submitForm();
     const payload = encounterSpy.create.calls.mostRecent().args[0];
-    expect(payload.encounterDate).toBe('2026-08-18T00:00:00');
+    const localMidnight = new Date(2026, 9, 24);
+    expect(payload.encounterDate).toBe(localMidnight.toISOString().slice(0, 19));
+    expect(new Date(`${payload.encounterDate}Z`).getTime()).toBe(localMidnight.getTime());
     expect(component.showModal()).toBeFalse();
+  });
+
+  it('openEdit pre-fills the reader day of the stored time, not its UTC day', () => {
+    // 21:00 on 24 October in the reader's zone, as the API stores it (UTC).
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    expect(component.form.encounterDate).toBe('2026-10-24');
+  });
+
+  it('an edit that keeps the day sends the stored time back unchanged', () => {
+    encounterSpy.update.and.returnValue(of(mockEncounter()));
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    component.form.notes = 'edited';
+    component.submitForm();
+    expect(encounterSpy.update.calls.mostRecent().args[1].encounterDate).toBe(stored);
+  });
+
+  it('an edit that changes the day sends local midnight of the new day', () => {
+    encounterSpy.update.and.returnValue(of(mockEncounter()));
+    const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
+    component.openEdit(mockEncounter({ encounterDate: stored }));
+    component.form.encounterDate = '2026-10-26';
+    component.submitForm();
+    expect(encounterSpy.update.calls.mostRecent().args[1].encounterDate).toBe(
+      new Date(2026, 9, 26).toISOString().slice(0, 19),
+    );
   });
 
   it('openCreate pre-fills and locks the hospital, and loads its departments', () => {

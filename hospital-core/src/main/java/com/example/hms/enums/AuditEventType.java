@@ -63,6 +63,8 @@ public enum AuditEventType {
     LAB_ORDER_CREATED,
     /** QA D429: a lab order edited or moved through its lifecycle. */
     LAB_ORDER_UPDATED,
+    /** QA D673: a lab order cancelled, with its stated reason on the order. */
+    LAB_ORDER_CANCELLED,
     /** QA D429: a specimen collected or received. */
     LAB_SPECIMEN_UPDATED,
     /** QA D429: a lab result entered. */
@@ -71,6 +73,8 @@ public enum AuditEventType {
     LAB_RESULT_ACKNOWLEDGED,
     LAB_RESULT_UPDATED,
     LAB_RESULT_RELEASED,
+    /** QA D638: a result released by the person who entered it, without a second reviewer. */
+    LAB_RESULT_SELF_RELEASED,
     IMAGING_ORDER_CREATED,
     IMAGING_RESULT_UPDATED,
     // Disease-programme registries (Tier 2 item 35). Care-management

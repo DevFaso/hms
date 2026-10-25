@@ -83,7 +83,7 @@
               <tbody>
                 @for (a of appointments(); track a.id) {
                   <tr>
-                    <td>{{ a.date | date: 'mediumDate' }}</td>
+                    <td>{{ a.date | serverTime | date: 'mediumDate' }}</td>
                     <td>{{ a.startTime }}</td>
                     <td>{{ a.providerName || '—' }}</td>
                     <td>{{ a.department || '—' }}</td>
@@ -170,7 +170,7 @@
                       }
                     </td>
                     <td>{{ l.referenceRange || '—' }}</td>
-                    <td>{{ l.collectedDate | date: 'mediumDate' }}</td>
+                    <td>{{ l.collectedDate | serverTime | date: 'mediumDate' }}</td>
                   </tr>
                 }
               </tbody>
@@ -202,7 +202,7 @@
                 @for (inv of invoices(); track inv.id) {
                   <tr>
                     <td>{{ inv.invoiceNumber }}</td>
-                    <td>{{ inv.date | date: 'mediumDate' }}</td>
+                    <td>{{ inv.date | serverTime | date: 'mediumDate' }}</td>
                     <td>{{ inv.amount | number: '1.0-2' }}</td>
                     <td>{{ inv.balance | number: '1.0-2' }}</td>
                     <td>

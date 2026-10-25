@@ -77,6 +77,84 @@ class PatientHospitalRegistrationServiceImplTest {
         registration.setHospital(hospital);
 
         responseDTO = new PatientHospitalRegistrationResponseDTO();
+        // QA D763: the one MRN generator, real, over the mocked repository.
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "mrnGenerator",
+            new PatientMrnGenerator(registrationRepository));
+    }
+
+    /**
+     * QA D756 + D763 replay: RECEPTIONIST_B clicks "Lier à cet hôpital" on the
+     * 409 match card, which POSTs /registrations {patientId, hospitalId: B}
+     * for a patient registered only at A. The tenant-scoped findById cannot
+     * see that patient from B, so the link answered 404. It must find them
+     * unscoped, register them at B with B's MRN format, and audit the link.
+     */
+    @Test
+    void qaD756_receptionistLinksAPatientRegisteredOnlyElsewhereById() {
+        hospital.setCode("CNK");
+        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId).build();
+        // The scoped lookup would miss the patient (registered at A only).
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
+        when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        assertThat(service.registerPatient(dto)).isEqualTo(responseDTO);
+
+        verify(patientRepository, never()).findById(patientId);
+        assertThat(registration.getMrn()).matches("CNK[0-9]{4}");
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PATIENT_UPDATE);
+        assertThat(audit.getValue().getEntityType()).isEqualTo("PatientHospitalRegistration");
+        assertThat(audit.getValue().getEventDescription()).doesNotContain(registration.getMrn());
+    }
+
+    /** QA D763: the username path uses the same hospital MRN format, never "mrn-". */
+    @Test
+    void qaD763_usernamePathMrnUsesTheHospitalFormat() {
+        PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
+            .patientUsername("john.doe").hospitalName("General Hospital").build();
+        when(patientRepository.findByUsernameOrEmail("john.doe")).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalByName("General Hospital")).thenReturn(Optional.of(hospital));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
+        when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
+        when(registrationRepository.save(registration)).thenReturn(registration);
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        service.registerPatient(dto);
+
+        assertThat(registration.getMrn()).matches("GEN[0-9]{4}").doesNotStartWith("mrn-");
+    }
+
+    /** QA D771: the 409 speaks the request's language and names no UUID. */
+    @Test
+    void qaD771_alreadyRegisteredMessageIsLocalisedAndHasNoUuids() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId).build();
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.registerPatient(dto))
+                .isInstanceOf(PatientAlreadyRegisteredException.class)
+                .hasMessage("Ce patient est déjà enregistré dans cet établissement.")
+                .hasMessageNotContaining(patientId.toString())
+                .hasMessageNotContaining(hospitalId.toString());
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
     }
 
     // ---- registerPatient ----
@@ -86,7 +164,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
@@ -121,7 +199,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
 
@@ -136,7 +214,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         // Caller is pinned to a DIFFERENT hospital than the write target
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
@@ -151,7 +229,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
@@ -196,7 +274,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -207,7 +285,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.registerPatient(dto))
@@ -243,7 +321,7 @@ class PatientHospitalRegistrationServiceImplTest {
         PatientHospitalRegistrationRequestDTO dto = PatientHospitalRegistrationRequestDTO.builder()
             .patientId(patientId).hospitalId(hospitalId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
@@ -287,6 +365,22 @@ class PatientHospitalRegistrationServiceImplTest {
 
         List<PatientHospitalRegistrationResponseDTO> result = service.getRegistrationsByPatient(patientId, 0, 10, true);
         assertThat(result).hasSize(1);
+    }
+
+    /** QA D527: the chart's "registered here?" read is narrowed to the one hospital asked for. */
+    @Test
+    void getRegistrationsByPatientAndHospital_keepsOnlyThatHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        PatientHospitalRegistration elsewhere = PatientHospitalRegistration.builder().active(true).build();
+        elsewhere.setHospital(other);
+        registration.setActive(true);
+        when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(elsewhere, registration));
+        when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
+
+        assertThat(service.getRegistrationsByPatientAndHospital(patientId, hospitalId, true))
+            .containsExactly(responseDTO);
+        assertThat(service.getRegistrationsByPatientAndHospital(patientId, other.getId(), false)).isEmpty();
     }
 
     // ---- getRegistrationsByHospital ----
@@ -386,7 +480,7 @@ class PatientHospitalRegistrationServiceImplTest {
         when(registrationRepository.findByMrnAndHospitalName("mrn-TEST123", "General Hospital"))
             .thenReturn(Optional.of(registration));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.empty());
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         PatientHospitalRegistrationRequestDTO reactivate = PatientHospitalRegistrationRequestDTO.builder()
             .hospitalName("General Hospital").active(true).build();
 

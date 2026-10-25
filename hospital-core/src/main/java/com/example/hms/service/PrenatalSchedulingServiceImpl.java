@@ -51,8 +51,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import com.example.hms.service.i18n.PatientLocaleResolver;
 import com.example.hms.utility.GestationalDating;
 import com.example.hms.utility.ObstetricEligibility;
 
@@ -76,7 +74,6 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
     private final NotificationService notificationService;
     private final Clock clock;
     private final MessageSource messageSource;
-    private final PatientLocaleResolver patientLocaleResolver;
     private final DeliveryRecordRepository deliveryRecordRepository;
 
     @Override
@@ -110,6 +107,9 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
 
         List<Appointment> futureAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId()).stream()
             .filter(appt -> !appt.getAppointmentDate().isBefore(today.minusWeeks(1)))
+            // QA D519: a cancelled (or missed) appointment and a visit with
+            // another service (a GP consultation) are not antenatal visits.
+            .filter(PrenatalSchedulingServiceImpl::countsAsPrenatalVisit)
             .sorted(Comparator.comparing(Appointment::getAppointmentDate).thenComparing(Appointment::getStartTime))
             .toList();
 
@@ -195,16 +195,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         }
 
         // The default body is read by the PATIENT, so it is rendered in the
-        // patient's stated language — the `locale` parameter is the
+        // language they read it in (QA D665) — the `locale` parameter is the
         // scheduler's request locale and only governs what the caller sees.
         // A custom message is the scheduler's own words and is stored as given.
-        String message = Optional.ofNullable(request.getCustomMessage())
-            .filter(msg -> !msg.isBlank())
-            .orElseGet(() -> buildDefaultReminderMessage(
-                appointment, request.getDaysBefore(),
-                patientLocaleResolver.resolve(appointment.getPatient(), NotificationLocales.PATIENT_FALLBACK)));
-
-        notificationService.createNotification(message, patientUsername);
+        String custom = request.getCustomMessage();
+        if (custom != null && !custom.isBlank()) {
+            notificationService.createLiteralNotification(custom, patientUsername, null);
+        } else {
+            notificationService.createNotification("prenatal.reminder.default",
+                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, null);
+        }
     }
 
     private void validateHospitalScope(UUID hospitalId, String username) {
@@ -248,6 +248,46 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             return request.getEstimatedDueDate();
         }
         return lmp.plusWeeks(40);
+    }
+
+    /** Statuses of an appointment that will not, or did not, take place (QA D519). */
+    private static final Set<AppointmentStatus> NOT_HELD =
+        java.util.EnumSet.of(AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW, AppointmentStatus.FAILED);
+
+    /** Words naming antenatal care, a maternity service or its staff (EN/FR/ES), accents stripped. */
+    private static final java.util.regex.Pattern PRENATAL_WORDS = java.util.regex.Pattern.compile(
+        "prenat|antenat|\\bcpn\\b|\\banc\\b|grossesse|pregnan|embaraz|obstet|gyn|matern|sage.femme|midwi|partera|matrona");
+
+    /**
+     * QA D519: the schedule counted a GP visit and a CANCELLED appointment as
+     * antenatal visits. An appointment counts when it is still to be held (or
+     * was held) and is with maternity care: a midwife, an obstetric or
+     * gynaecology practitioner or department, or a reason that says so.
+     */
+    static boolean countsAsPrenatalVisit(Appointment appointment) {
+        if (appointment.getAppointmentDate() == null
+                || (appointment.getStatus() != null && NOT_HELD.contains(appointment.getStatus()))) {
+            return false;
+        }
+        com.example.hms.model.Staff staff = appointment.getStaff();
+        if (staff != null && (staff.getJobTitle() == com.example.hms.enums.JobTitle.MIDWIFE
+                || mentionsPrenatal(staff.getSpecialization())
+                || (staff.getDepartment() != null && (mentionsPrenatal(staff.getDepartment().getName())
+                    || mentionsPrenatal(staff.getDepartment().getCode()))))) {
+            return true;
+        }
+        com.example.hms.model.Department department = appointment.getDepartment();
+        return (department != null && (mentionsPrenatal(department.getName()) || mentionsPrenatal(department.getCode())))
+            || mentionsPrenatal(appointment.getReason());
+    }
+
+    private static boolean mentionsPrenatal(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String folded = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+        return PRENATAL_WORDS.matcher(folded).find();
     }
 
     private List<PrenatalVisitRecommendationDTO> buildRecommendations(
@@ -530,14 +570,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         return appointment.getStaff() != null ? appointment.getStaff().getId() : null;
     }
 
-    private String buildDefaultReminderMessage(Appointment appointment, int daysBefore, Locale patientLocale) {
-        return messageSource.getMessage(
-            "prenatal.reminder.default",
-            new Object[]{
-                String.valueOf(appointment.getAppointmentDate()),
-                String.valueOf(appointment.getStartTime()),
-                String.valueOf(daysBefore)
-            },
-            patientLocale);
+    private static Object[] defaultReminderArgs(Appointment appointment, int daysBefore) {
+        return new Object[]{
+            String.valueOf(appointment.getAppointmentDate()),
+            String.valueOf(appointment.getStartTime()),
+            String.valueOf(daysBefore)
+        };
     }
 }

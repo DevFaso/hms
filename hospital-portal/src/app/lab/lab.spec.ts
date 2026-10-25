@@ -353,7 +353,7 @@ describe('LabComponent — performing laboratory', () => {
       .not.toBeNull();
   });
 
-  it('keeps Edit and Delete for the hospital that placed the order', async () => {
+  it('keeps Edit for the clinician of the hospital that placed the order', async () => {
     const outgoing = order({
       performingHospitalId: LAB_B,
       performingHospitalName: 'Central Laboratory B',
@@ -361,7 +361,80 @@ describe('LabComponent — performing laboratory', () => {
     await setup(['ROLE_DOCTOR'], [outgoing]);
 
     expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    // QA D527: DELETE /lab-orders/{id} admits ADMIN and SUPER_ADMIN only.
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('keeps Delete for the super-admin, whom DELETE /lab-orders/{id} admits', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({})]);
+
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D616: the lab technician sees no trash icon on an ORDERED or a COMPLETED order', async () => {
+    await setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      [order({ id: 'o-ordered', status: 'ORDERED' }), order({ id: 'o-done', status: 'COMPLETED' })],
+    );
+
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
+      .withContext('both orders are rendered')
+      .toBeGreaterThanOrEqual(2);
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+  });
+
+  it('QA D601/D616: the super-admin is offered delete on an ORDERED order but never on a COMPLETED one', async () => {
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-done', status: 'COMPLETED' })]);
+    expect(fixture.nativeElement.querySelector('.delete-link'))
+      .withContext('an order with results is part of the chart')
+      .toBeNull();
+
+    TestBed.resetTestingModule();
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D616: a lab technician who also holds ROLE_ADMIN, with no role picked, gets the trash (the reported case)', async () => {
+    // No role equivalence maps LAB_TECHNICIAN to ADMIN (only physician roles
+    // expand, to DOCTOR). The /lab icon reaches a technician only through a
+    // second, admin role held alongside, or a build from before #920 gated it.
+    await setup(
+      ['ROLE_LAB_TECHNICIAN', 'ROLE_ADMIN'],
+      [order({ id: 'o-ordered', status: 'ORDERED' })],
+    );
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D527: a lab technician is offered no Edit or Delete on her own hospital order', async () => {
+    await setup(['ROLE_LAB_TECHNICIAN'], [order({})]);
+
+    expect(fixture.nativeElement.querySelector('.edit-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.specimen-link'))
+      .withContext('the bench keeps its specimen action')
+      .not.toBeNull();
+  });
+
+  it('QA D645: an order whose test was deleted shows the API label, not a dash', async () => {
+    await setup(
+      ['ROLE_LAB_TECHNICIAN'],
+      [order({ labTestName: 'Examen supprimé', labTestCode: '', labTestDefinitionMissing: true })],
+    );
+
+    expect((fixture.nativeElement as HTMLElement).querySelector('tbody')?.textContent).toContain(
+      'Examen supprimé',
+    );
+  });
+
+  it('QA D527: the worklist and the detail panel never show the patient e-mail', async () => {
+    const o = order({});
+    await setup(['ROLE_LAB_TECHNICIAN'], [o]);
+    component.viewOrder(o);
+    fixture.detectChanges();
+
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(
+      'aminata@example.test',
+    );
   });
 
   it('labels the worklist by the hospital the chip is pinned to, not the primary one', async () => {
@@ -432,6 +505,19 @@ describe('LabComponent worklist tabs', () => {
     'COMPLETED',
     'CANCELLED',
   ];
+
+  it('QA D601/D616: never offers delete on an order that carries results', () => {
+    for (const st of ['RESULTED', 'VERIFIED', 'COMPLETED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeTrue();
+    }
+    for (const st of ['ORDERED', 'PENDING', 'COLLECTED', 'CANCELLED']) {
+      expect(component.hasResultsStage(order(st)))
+        .withContext(st)
+        .toBeFalse();
+    }
+  });
 
   it('keeps an order on the Pending tab while its specimen is collected and received', () => {
     component.orders.set(lifecycle.map(order));

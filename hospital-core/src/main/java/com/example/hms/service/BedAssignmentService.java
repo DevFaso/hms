@@ -8,6 +8,9 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Bed;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.BedRepository;
+import com.example.hms.repository.TransferOrderRepository;
+import com.example.hms.enums.TransferOrderStatus;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,7 @@ public class BedAssignmentService {
 
     private final BedRepository bedRepository;
     private final AdmissionRepository admissionRepository;
+    private final TransferOrderRepository transferOrderRepository;
 
     /**
      * Assign a bed to an admission: the bed must be active, AVAILABLE, and
@@ -112,7 +116,7 @@ public class BedAssignmentService {
      * whose record says they are outside it; a missing sex or birth date is let
      * through (an incomplete record must not block an admission).
      */
-    static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
+    public static void requireWardFitsPatient(Bed bed, com.example.hms.model.Patient patient) {
         if (bed.getWard() == null || bed.getWard().getWardType() == null || patient == null) {
             return;
         }
@@ -157,12 +161,34 @@ public class BedAssignmentService {
      */
     @Transactional
     public void releaseBed(Admission admission) {
+        cancelPendingTransfer(admission);
         Bed bed = admission.getBed();
         if (bed == null) {
             return;
         }
         markAvailable(bed);
         log.info("Bed {} released by admission {}", bedLabel(bed), admission.getId());
+    }
+
+    /**
+     * QA D515: a stay closed with a transfer still ordered left the order
+     * REQUESTED and its destination bed RESERVED for a patient who had gone
+     * home — the bed was lost to the ward until someone found and cancelled
+     * it by hand. Every discharge/cancel path releases the bed through here,
+     * so the open order is cancelled and its reservation handed back with it.
+     */
+    private void cancelPendingTransfer(Admission admission) {
+        if (admission == null || admission.getId() == null) {
+            return;
+        }
+        transferOrderRepository.findPendingForAdmission(admission.getId()).ifPresent(order -> {
+            unreserve(order.getToBed());
+            order.setStatus(TransferOrderStatus.CANCELLED);
+            order.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+            order.setCancellationReason(MessageUtil.resolve("transfer.cancelledByDischarge"));
+            transferOrderRepository.save(order);
+            log.info("Pending transfer {} cancelled: admission {} closed", order.getId(), admission.getId());
+        });
     }
 
     /**
@@ -209,6 +235,10 @@ public class BedAssignmentService {
      */
     @Transactional
     public void releaseReservation(Bed bed) {
+        unreserve(bed);
+    }
+
+    private void unreserve(Bed bed) {
         if (bed == null || bed.getStatus() != BedStatus.RESERVED) {
             return;
         }

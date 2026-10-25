@@ -192,7 +192,9 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.results"));
         pages.rows(chart.getResults(), r -> join(SEPARATOR, t.fmt(r.getResultDate()),
             safe(r.getTestName()) + code(r.getTestCode()),
-            join(" ", r.getResultValue(), r.getResultUnit()), label(t, r.getAbnormalFlag()), r.getOrderingStaffName()));
+            // QA D740: an unreleased row prints as pending, never with a value.
+            r.isReleased() ? join(" ", r.getResultValue(), r.getResultUnit()) : t.get("pdf.record.result.pending"),
+            r.isReleased() ? label(t, r.getAbnormalFlag()) : null, r.getOrderingStaffName()));
 
         pages.heading(t.get("pdf.record.section.medications"));
         pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),
@@ -223,6 +225,7 @@ public class PatientRecordPdfService {
                 .eventType(AuditEventType.PATIENT_EXPORT)
                 .status(AuditStatus.SUCCESS)
                 .entityType(AUDIT_ENTITY_TYPE)
+                .hospitalId(hospitalId) // QA D533: anchored at the exporting hospital
                 .userId(actor != null ? actor.getId() : null)
                 .userName(actor != null ? actor.getUsername() : username)
                 .resourceId(patient.getId().toString())

@@ -171,6 +171,25 @@ class PharmacistVerificationServiceTest {
     }
 
     @Test
+    void d757_aWardOrderOfAnEndedStayCannotBeVerified() {
+        // The QA call: POST /prescriptions/{id}/pharmacist-verify on a SIGNED
+        // ward order after its stay was discharged answered 200.
+        com.example.hms.model.Encounter stayEncounter = new com.example.hms.model.Encounter();
+        stayEncounter.setAdmissionId(UUID.randomUUID());
+        stayEncounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(stayEncounter);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        UUID id = rx.getId();
+
+        assertThatThrownBy(() -> service.verify(id, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
     void anUnsignedPrescriptionCannotBeVerified() {
         // It would be verifying something the prescriber can still freely
         // rewrite — and the invalidation rule would clear it the moment
@@ -183,6 +202,28 @@ class PharmacistVerificationServiceTest {
         assertThatThrownBy(() -> service.verify(id, null))
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.onlySignedVerifiable"));
+    }
+
+    /**
+     * QA D607: prescription f5843c2b was filled with the pharmacist's own
+     * attestation (verifiedBy = themselves, D512), which stamps the
+     * verification and moves the order to DISPENSED. The later
+     * pharmacist-verify answered "only a signed prescription can be
+     * validated", so the order read as filled unverified. It is verified:
+     * the answer says so.
+     */
+    @Test
+    void aFillVerifiedAtTheCounterAnswersAlreadyVerifiedNotUnsigned() {
+        rx.setStatus(PrescriptionStatus.DISPENSED);
+        rx.setPharmacistVerifiedAt(NOW.minusMinutes(5));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        UUID id = rx.getId();
+
+        assertThatThrownBy(() -> service.verify(id, null))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.r7.alreadyVerified"));
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

@@ -195,6 +195,22 @@ describe('PostpartumTabComponent — screening', () => {
     expect(component.screeningAvailable()).toBeTrue();
   });
 
+  it('QA D539: the disabled screening button looks disabled', () => {
+    postpartumSpy.schedule.and.returnValue(of(schedule({ instrumentAvailable: false })));
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    fixture.componentInstance.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const button = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+        '.screening-card button.btn-primary',
+      ),
+    )[0];
+    expect(button).toBeDefined();
+    expect(button.disabled).toBeTrue();
+    expect(getComputedStyle(button).opacity).toBe('0.5');
+    expect(getComputedStyle(button).cursor).toBe('not-allowed');
+  });
+
   it('QA D323: with no plan and no EPDS text on the server, the button is off', () => {
     screeningSpy.instruments.and.returnValue(of([]));
     const fresh = TestBed.createComponent(PostpartumTabComponent).componentInstance;
@@ -304,6 +320,18 @@ describe('PostpartumTabComponent — screening', () => {
     expect(component.showScreeningModal()).toBeFalse();
     expect(postpartumSpy.schedule).toHaveBeenCalledWith('p1');
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('sends the screening time as the UTC the history reads back (#948 review)', () => {
+    screeningSpy.record.and.returnValue(of(response('r4')));
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openScreening();
+    component.screeningAnswers.set({ 1: 0, 2: 0 });
+    component.screeningAdministeredAt = '2026-09-01T10:00';
+    component.submitScreening();
+
+    const [, sent] = screeningSpy.record.calls.mostRecent().args;
+    expect(sent.administeredAt).toBe(new Date(2026, 8, 1, 10, 0).toISOString().slice(0, 19));
   });
 
   it('grades the saved toast by severity: safety item beats screen positive', () => {

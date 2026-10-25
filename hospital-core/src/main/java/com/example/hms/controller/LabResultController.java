@@ -107,12 +107,13 @@ public class LabResultController {
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
             @RequestParam(name = "patientId", required = false) UUID patientId,
+            @RequestParam(name = "labOrderId", required = false) UUID labOrderId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale,
             org.springframework.security.core.Authentication auth) {
         // QA D211: the patientId filter was ignored, and a non-laboratory
         // reader saw unreleased values here (D160 only fixed the per-patient read).
         return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(
-            pageable, locale, patientId, PatientLabResultController.isLaboratoryStaff(auth))));
+            pageable, locale, patientId, labOrderId, PatientLabResultController.isLaboratoryStaff(auth))));
     }
 
     @GetMapping("/pending-release")
@@ -214,9 +215,9 @@ public class LabResultController {
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         labResultService.deleteLabResult(id, locale);
         String rawMessage = messageSource.getMessage("labresult.deleted", new Object[]{id}, locale);
-        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage, "UTF-8"); // QA D646: accents stay letters, not entities
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_PLAIN)
+                .contentType(MediaType.parseMediaType(MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"))
                 .body(safeMessage);
     }
 

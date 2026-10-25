@@ -46,6 +46,7 @@ import java.util.UUID;
 public class ConsultationController {
 
     private final ConsultationService consultationService;
+    private final com.example.hms.controller.support.RecordsWithheldHeaders recordsWithheld;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
@@ -71,9 +72,12 @@ public class ConsultationController {
     @GetMapping("/patient/{patientId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','PATIENT')")
     @Operation(summary = "List all consultations for a patient")
-    public ResponseEntity<List<ConsultationResponseDTO>> getConsultationsForPatient(@PathVariable UUID patientId) {
+    public ResponseEntity<List<ConsultationResponseDTO>> getConsultationsForPatient(@PathVariable UUID patientId,
+                                                                                    org.springframework.security.core.Authentication auth) {
         List<ConsultationResponseDTO> consultations = consultationService.getConsultationsForPatient(patientId);
-        return ResponseEntity.ok(consultations);
+        // QA D610 (D504): a list narrowed by the patient's opt-out says so.
+        return org.springframework.http.ResponseEntity.ok().headers(recordsWithheld.forRead(auth, patientId,
+            com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())).body(consultations);
     }
 
     @GetMapping
@@ -253,7 +257,9 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/assign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    // QA D749: the roles that may CREATE a consult, so a midwife or nurse who
+    // requested it can address it; the service's actor rule is the real gate.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Assign consultation to consultant",
                description = "Assign a REQUESTED consultation to a specific consultant; status changes to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> assignConsultation(
@@ -268,7 +274,9 @@ public class ConsultationController {
     }
 
     @PostMapping("/{consultationId}/reassign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    // QA D749: the roles that may CREATE a consult, so a midwife or nurse who
+    // requested it can address it; the service's actor rule is the real gate.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "Reassign consultation to a different consultant",
                description = "Reassign a consultation to a different consultant with a required reason; status reverts to ASSIGNED")
     public ResponseEntity<ConsultationResponseDTO> reassignConsultation(

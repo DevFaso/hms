@@ -26,11 +26,21 @@ import {
   ReadyCancelReason,
   QueueClaimFilter,
   WorkQueueClaim,
+  StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { serverInstant } from '../shared/date-utils';
+
+/** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
+function localIsoDate(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
 
 /**
  * Why a work-queue row is not a plain fill, keyed by the backend's
@@ -97,7 +107,8 @@ function storeClaimFilter(filter: QueueClaimFilter): void {
 function eventTime(primary?: string | null, fallback?: string | null): number {
   const raw = primary ?? fallback;
   if (!raw) return 0;
-  const parsed = Date.parse(raw);
+  // #948 review: a zone-less UTC server time (daysWaiting counts from it).
+  const parsed = serverInstant(raw).getTime();
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
@@ -117,6 +128,7 @@ export const UNRECOGNISED_ATTENTION = {
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    ServerTimePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -164,6 +176,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   stockLots = signal<StockLotResponse[]>([]);
   readonly selectedLotId = signal('');
 
+  /** QA D654: colleagues who may witness a controlled substance leaving or coming back. */
+  witnessCandidates = signal<StockWitnessCandidate[]>([]);
+  /** QA D654: the controlled fill whose cancel waits for its witness. */
+  readonly cancelWitnessFor = signal<string | null>(null);
+  cancelWitnessId: string | undefined = undefined;
+
   // Dispensing form
   showForm = signal(false);
   saving = signal(false);
@@ -204,6 +222,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** The row whose Dispense claim request is in flight; a second click on it is ignored. */
   readonly claimPendingRowId = signal<string | null>(null);
   /** The row whose claim the dispense form made (renewed:false); released when the form is left. */
+  /** QA D512: the pharmacist attests the prescription was verified. */
+  readonly verifyAttested = signal(false);
   readonly formClaimedRowId = signal<string | null>(null);
   /** No background reload while the pharmacist is in a form or a dialog. */
   readonly pollPaused = computed(
@@ -216,6 +236,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadPharmacies();
+    this.svc.listWitnessCandidates().subscribe({
+      next: (res) => this.witnessCandidates.set(res?.data ?? []),
+      error: () => this.witnessCandidates.set([]),
+    });
     this.loadDispenseSettings();
     this.startQueuePolling();
 
@@ -566,15 +590,33 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
-    // Date-only comparison: a lot is good through the end of its expiry day,
-    // which is what "use before end of" on the pack means.
-    return lot.expiryDate < new Date().toISOString().slice(0, 10);
+    // QA D710: date-only comparison, and a lot is expired ON its expiry date,
+    // the same rule as the server's receipt, pick, check and expiry report.
+    return lot.expiryDate <= localIsoDate(new Date());
   }
 
   /** The lot currently chosen in the form, if any. */
   readonly selectedLot = computed(() =>
     this.stockLots().find((lot) => lot.id === this.selectedLotId()),
   );
+
+  /** QA D654: the chosen lot is of a controlled substance, so the fill is witnessed. */
+  readonly lotIsControlled = computed(() => {
+    const lot = this.selectedLot();
+    return (
+      !!lot && this.inventoryItems().some((i) => i.id === lot.inventoryItemId && !!i.controlled)
+    );
+  });
+
+  /** QA D654: a fill of a controlled substance from a lot, whose cancel is witnessed. */
+  isControlledFill(d: DispenseResponse): boolean {
+    return (
+      !!d.stockLotId &&
+      this.inventoryItems().some(
+        (i) => !!i.controlled && i.medicationCatalogItemId === d.medicationCatalogItemId,
+      )
+    );
+  }
 
   onLotChange(): void {
     this.selectedLotId.set(this.form.stockLotId ?? '');
@@ -737,13 +779,41 @@ export class DispensingComponent implements OnInit, OnDestroy {
     // Dispense disabled until the pharmacist retyped the quantity).
     this.form.quantityDispensed = rx.quantity ?? 0;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
+    this.verifyAttested.set(false);
     this.showForm.set(true);
     this.loadStockLots();
   }
 
+  /**
+   * QA D512: the pharmacist's own verification of the prescription, sent as
+   * `verifiedBy` (the server checks it is the session user). Without it the
+   * server refuses the fill.
+   */
+  private attestedForm(): DispenseRequest {
+    const body: DispenseRequest = { ...this.form };
+    delete body.verifiedBy;
+    if (!this.lotIsControlled()) {
+      delete body.witnessedBy;
+    }
+    if (this.verifyAttested()) {
+      body.verifiedBy = this.form.dispensedBy;
+    }
+    return body;
+  }
+
+  /** QA D654: refuses a controlled fill with no witness before the server does. */
+  private missingWitness(): boolean {
+    if (this.lotIsControlled() && !this.form.witnessedBy) {
+      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+      return true;
+    }
+    return false;
+  }
+
   submitDispense(): void {
+    if (this.missingWitness()) return;
     this.saving.set(true);
-    this.svc.createDispense(this.form).subscribe({
+    this.svc.createDispense(this.attestedForm()).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_SUCCESS'));
         this.formClaimedRowId.set(null);
@@ -765,8 +835,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
    * form as a dispense; the wristband is checked at hand-over, not here.
    */
   submitReady(): void {
+    if (this.missingWitness()) return;
     this.saving.set(true);
-    this.svc.markReady({ ...this.form, patientScanValue: '' }).subscribe({
+    this.svc.markReady({ ...this.attestedForm(), patientScanValue: '' }).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.READY_SUCCESS'));
         this.formClaimedRowId.set(null);
@@ -848,9 +919,32 @@ export class DispensingComponent implements OnInit, OnDestroy {
   }
 
   cancelDispense(id: string): void {
+    const fill = this.recentDispenses().find((d) => d.id === id);
+    if (fill && this.isControlledFill(fill)) {
+      // QA D654: the stock goes back in front of a witness, chosen first.
+      this.cancelWitnessId = undefined;
+      this.cancelWitnessFor.set(id);
+      return;
+    }
     if (!confirm(this.translate.instant('PHARMACY.CANCEL_DISPENSE_CONFIRM'))) return;
-    this.svc.cancelDispense(id).subscribe({
+    this.sendCancel(id);
+  }
+
+  /** QA D654: the witnessed cancel of a controlled fill. */
+  confirmWitnessedCancel(): void {
+    const id = this.cancelWitnessFor();
+    if (!id) return;
+    if (!this.cancelWitnessId) {
+      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+      return;
+    }
+    this.sendCancel(id, this.cancelWitnessId);
+  }
+
+  private sendCancel(id: string, witnessedBy?: string): void {
+    this.svc.cancelDispense(id, witnessedBy).subscribe({
       next: () => {
+        this.cancelWitnessFor.set(null);
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));
         this.loadRecentDispenses();
         this.loadWorkQueue();

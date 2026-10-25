@@ -43,7 +43,10 @@ public class EncounterMapper {
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());
-        dto.setNotes(nullSafe(e.getNotes()));
+        // QA D759: the anchor's bookkeeping note is shown in the reader's language.
+        dto.setNotes(e.isPrescriptionAnchor()
+            ? com.example.hms.utility.MessageUtil.resolveOrRaw("encounter.prescriptionAnchor.note")
+            : nullSafe(e.getNotes()));
         dto.setArrivalTimestamp(e.getArrivalTimestamp());
         dto.setChiefComplaint(nullSafe(e.getChiefComplaint()));
         dto.setEsiScore(e.getEsiScore());

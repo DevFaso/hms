@@ -195,6 +195,51 @@ describe('PatientPortalService lab results', () => {
  * primaryCareHistory }. The portal declared `{ members }` for it and swallowed
  * every error as an empty team.
  */
+describe('PatientPortalService appointments (QA D642)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('returns my appointments in date and time order', () => {
+    let ids: string[] = [];
+    service.getMyAppointments().subscribe((a) => (ids = a.map((x) => x.id)));
+    httpMock
+      .expectOne((req) => req.url === '/me/patient/appointments')
+      .flush({
+        data: [
+          {
+            id: 'oct30',
+            appointmentDate: '2026-10-30',
+            startTime: '09:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28b',
+            appointmentDate: '2026-10-28',
+            startTime: '14:00:00',
+            status: 'SCHEDULED',
+          },
+          {
+            id: 'oct28a',
+            appointmentDate: '2026-10-28',
+            startTime: '08:30:00',
+            status: 'SCHEDULED',
+          },
+        ],
+      });
+    expect(ids).toEqual(['oct28a', 'oct28b', 'oct30']);
+  });
+});
+
 describe('PatientPortalService care team', () => {
   let service: PatientPortalService;
   let httpMock: HttpTestingController;
@@ -409,5 +454,67 @@ describe('formatTime (QA D255)', () => {
   it('passes through what it cannot parse', () => {
     expect(formatTime('', 'fr-FR')).toBe('');
     expect(formatTime('later', 'fr-FR')).toBe('later');
+  });
+});
+
+/**
+ * QA D526 (D321/D426): the follow-up asked at checkout is written on the
+ * visit's discharge summary as a FollowUpAppointmentDTO (appointmentDate).
+ * The portal read a `scheduledDate` the API never sends, so the date the
+ * doctor gave never reached the patient.
+ */
+describe('PatientPortalService after-visit summaries (QA D526)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  function summaries(rows: unknown[]): { followUpDate: string | null }[] {
+    let received: { followUpDate: string | null }[] = [];
+    service.getAfterVisitSummaries().subscribe((r) => (received = r));
+    httpMock.expectOne((req) => req.url.endsWith('/after-visit-summaries')).flush({ data: rows });
+    return received;
+  }
+
+  it('shows the follow-up date the checkout filed', () => {
+    const [s] = summaries([
+      {
+        id: 's1',
+        followUpAppointments: [
+          {
+            appointmentType: 'FOLLOW_UP',
+            appointmentDate: '2026-10-27',
+            purpose: 'Contrôle paludisme',
+          },
+        ],
+      },
+    ]);
+    expect(s.followUpDate).toBe('2026-10-27');
+  });
+
+  it('takes the earliest dated follow-up, and a time-only one by its day', () => {
+    const [s] = summaries([
+      {
+        id: 's2',
+        followUpAppointments: [
+          { appointmentType: 'LAB_RECHECK', appointmentDate: '2026-11-10' },
+          { appointmentType: 'WOUND_CHECK', appointmentTime: '2026-11-02T09:30:00' },
+        ],
+      },
+    ]);
+    expect(s.followUpDate).toBe('2026-11-02');
+  });
+
+  it('is null when there is no follow-up', () => {
+    const [s] = summaries([{ id: 's3', followUpAppointments: [] }]);
+    expect(s.followUpDate).toBeNull();
   });
 });

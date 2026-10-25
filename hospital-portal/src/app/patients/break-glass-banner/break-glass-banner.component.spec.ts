@@ -149,6 +149,29 @@ describe('BreakGlassBannerComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('BREAK_GLASS.NEED_HOSPITAL');
   });
 
+  it('QA D532: a zone-less expiry is read as UTC, so the countdown ignores the browser offset', () => {
+    init();
+    // 90 minutes ahead in UTC, written the way the API used to send it: no zone.
+    const naive = new Date(Date.now() + 90 * 60 * 1000).toISOString().slice(0, 19);
+    bgSpy.findMyLiveSession.and.returnValue(of({ ...liveSession, expiresAt: naive }));
+    setInputs('p1');
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/1h (29|30)m/);
+  });
+
+  it('QA D532: an expiry with an offset counts down to that instant', () => {
+    init();
+    const at = new Date(Date.now() + 45 * 60 * 1000);
+    const lagos = new Date(at.getTime() + 60 * 60 * 1000).toISOString().slice(0, 19) + '+01:00';
+    bgSpy.findMyLiveSession.and.returnValue(of({ ...liveSession, expiresAt: lagos }));
+    setInputs('p1');
+
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toMatch(/(44|45)m/);
+    expect(text).not.toMatch(/\dh \d+m/);
+  });
+
   it('does not call the API when patientId is missing', () => {
     init(['ROLE_DOCTOR']);
     bgSpy.findMyLiveSession.and.returnValue(of(null));

@@ -22,9 +22,12 @@ public class LaborEpisodeRequestDTO {
 
     /** QA D295: the partograph and the labour durations are measured from it. */
     @jakarta.validation.constraints.NotNull(message = "{maternity.labor.onset.required}")
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime laborOnsetAt;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime admittedAt;
     private MembraneStatus membraneStatus;
+    @com.example.hms.validation.NotInClinicalFuture
     private LocalDateTime membraneRuptureAt;
 
     /**

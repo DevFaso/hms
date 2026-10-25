@@ -87,6 +87,7 @@ class LabOrderServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.lab.LabOrderRoutingNotifier routingNotifier;
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     @InjectMocks
     private LabOrderServiceImpl labOrderService;
@@ -1039,5 +1040,32 @@ class LabOrderServiceImplTest {
         assertThat(result).extracting(LabOrderResponseDTO::getId).containsExactly(local.getId().toString(), foreign.getId().toString());
         verify(reachRecorder).recordReach(eq(patientId), eq(hospitalId), eq(orderingUserId), isNull(),
             eq(Map.of(otherHospitalId.toString(), 1L)), anyString());
+    }
+
+    /** QA D601 class: an order with results is chart data; deleting it would orphan them. */
+    @Test
+    void deleteLabOrder_withResults_isRefused() {
+        UUID orderId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(orderId);
+        when(labOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(labResultRepository.existsByLabOrder_Id(orderId)).thenReturn(true);
+
+        assertThatThrownBy(() -> labOrderService.deleteLabOrder(orderId, java.util.Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(labOrderRepository, never()).deleteById(orderId);
+    }
+
+    /** Path kept: an order without results can still be deleted by its hospital. */
+    @Test
+    void deleteLabOrder_withoutResults_isDeleted() {
+        UUID orderId = UUID.randomUUID();
+        LabOrder order = new LabOrder();
+        order.setId(orderId);
+        when(labOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(labResultRepository.existsByLabOrder_Id(orderId)).thenReturn(false);
+
+        labOrderService.deleteLabOrder(orderId, java.util.Locale.ENGLISH);
+        verify(labOrderRepository).deleteById(orderId);
     }
 }

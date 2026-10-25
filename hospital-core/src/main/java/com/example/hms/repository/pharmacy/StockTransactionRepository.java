@@ -33,6 +33,24 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     BigDecimal sumQuantityForItem(@Param("itemId") UUID itemId,
                                   @Param("types") Collection<StockTransactionType> types);
 
+    /** QA D668: what unreferenced movements of the given types moved for one lot. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.stockLot.id = :lotId AND t.referenceId IS NULL AND t.transactionType IN :types")
+    BigDecimal sumUnreferencedQuantityForLot(@Param("lotId") UUID lotId,
+                                             @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D668: what unreferenced movements of the given types moved for one item. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.inventoryItem.id = :itemId AND t.referenceId IS NULL AND t.transactionType IN :types")
+    BigDecimal sumUnreferencedQuantityForItem(@Param("itemId") UUID itemId,
+                                              @Param("types") Collection<StockTransactionType> types);
+
+    /** QA D604: the total moved against one reference (a dispense) by the given types. */
+    @Query("SELECT COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.referenceId = :referenceId AND t.transactionType IN :types")
+    BigDecimal sumQuantityForReference(@Param("referenceId") UUID referenceId,
+                                       @Param("types") Collection<StockTransactionType> types);
+
     Page<StockTransaction> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
 
     @Query("SELECT t FROM StockTransaction t WHERE t.inventoryItem.pharmacy.id = :pharmacyId " +

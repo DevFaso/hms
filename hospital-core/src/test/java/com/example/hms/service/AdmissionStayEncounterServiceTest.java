@@ -45,6 +45,7 @@ class AdmissionStayEncounterServiceTest {
     @Mock private org.springframework.context.MessageSource messageSource;
     @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
+    @Mock private StayOrderDiscontinuation stayOrders;
 
     @InjectMocks private AdmissionStayEncounterService service;
 
@@ -317,6 +318,12 @@ class AdmissionStayEncounterServiceTest {
         amox.setDosage("1 g");
         amox.setFrequency("3x/j");
         amox.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        // QA D757: only an order marked for home goes on the summary.
+        amox.setTakeHome(true);
+        amox.setId(UUID.randomUUID());
+        com.example.hms.model.Prescription ward = new com.example.hms.model.Prescription();
+        ward.setMedicationName("Paracétamol");
+        ward.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
         com.example.hms.model.Prescription draft = new com.example.hms.model.Prescription();
         draft.setMedicationName("Brouillon");
         draft.setStatus(com.example.hms.enums.PrescriptionStatus.DRAFT);
@@ -324,7 +331,7 @@ class AdmissionStayEncounterServiceTest {
             .thenReturn(Optional.of(stay));
         when(dischargeSummaryRepository.existsByEncounter_Id(stay.getId())).thenReturn(false);
         when(prescriptionRepository.findByEncounter_Id(eq(stay.getId()), any()))
-            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(amox, draft)));
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(amox, ward, draft)));
 
         service.recordDischarge(admission, "Pneumopathie");
 
@@ -338,6 +345,11 @@ class AdmissionStayEncounterServiceTest {
         assertThat(summary.getMedicationReconciliation())
             .extracting(com.example.hms.model.discharge.MedicationReconciliationEntry::getMedicationName)
             .containsExactly("Amoxicilline");
+        assertThat(summary.getMedicationReconciliation().get(0).getPrescriptionId()).isEqualTo(amox.getId());
+        // QA D757: the ward orders were ended before the summary was written.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(stayOrders, dischargeSummaryRepository);
+        order.verify(stayOrders).discontinueStayOrders(admission, null);
+        order.verify(dischargeSummaryRepository).save(any());
         assertThat(summary.getFollowUpAppointments())
             .extracting(com.example.hms.model.discharge.FollowUpAppointmentEntry::getAppointmentDate)
             .containsExactly(java.time.LocalDate.of(2026, 11, 3));

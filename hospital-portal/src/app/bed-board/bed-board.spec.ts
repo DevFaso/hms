@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -15,6 +15,7 @@ import {
 } from '../services/bed-board.service';
 import { IsolationPrecautionResponse, IsolationService } from '../services/isolation.service';
 import { TransferOrderResponse, TransferService } from '../services/transfer.service';
+import { BedResponse, BedService } from '../services/bed.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -128,6 +129,7 @@ describe('BedBoardComponent', () => {
   let toastSpy: jasmine.SpyObj<ToastService>;
   let roleCtx: RoleContextStub;
   let authSpy: jasmine.SpyObj<AuthService>;
+  let bedSpy: jasmine.SpyObj<BedService>;
 
   beforeEach(async () => {
     boardSpy = jasmine.createSpyObj('BedBoardService', ['getBoard']);
@@ -150,6 +152,11 @@ describe('BedBoardComponent', () => {
     ]);
     transferSpy.getPending.and.returnValue(of([]));
 
+    // Default: the eligibility lookup fails, so the picker is unfiltered
+    // (the server's refusal is the backstop) and older specs keep their beds.
+    bedSpy = jasmine.createSpyObj('BedService', ['getAvailableBeds']);
+    bedSpy.getAvailableBeds.and.returnValue(throwError(() => new Error('offline')));
+
     toastSpy = jasmine.createSpyObj('ToastService', ['success', 'error']);
     authSpy = jasmine.createSpyObj('AuthService', ['getRoles']);
     authSpy.getRoles.and.returnValue(['ROLE_NURSE', 'ROLE_DOCTOR']);
@@ -168,6 +175,7 @@ describe('BedBoardComponent', () => {
         { provide: BedBoardService, useValue: boardSpy },
         { provide: IsolationService, useValue: isolationSpy },
         { provide: TransferService, useValue: transferSpy },
+        { provide: BedService, useValue: bedSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: RoleContextService, useValue: roleCtx },
         { provide: AuthService, useValue: authSpy },
@@ -431,6 +439,43 @@ describe('BedBoardComponent', () => {
     expect(component.destinationOptions().map((o) => o.bedId)).toEqual(['free']);
   });
 
+  it('offers only the beds /beds/available?patientId= allows for that patient (D651)', () => {
+    // QA D651: NURSE_A clicked 'Transférer' for a man and was offered the
+    // maternity beds MATA M1–M3, which the server then refused.
+    boardSpy.getBoard.and.returnValue(
+      of(
+        board({
+          wards: [
+            ward({
+              wardName: 'Maternité A',
+              rooms: [{ roomNumber: '1', beds: [bed({ bedId: 'm1', bedNumber: 'M1' })] }],
+            }),
+            ward({
+              wardId: 'w2',
+              wardName: 'Médecine',
+              wardType: 'GENERAL',
+              rooms: [{ roomNumber: '2', beds: [bed({ bedId: 'g1', bedNumber: 'G1' })] }],
+            }),
+          ],
+        }),
+      ),
+    );
+    bedSpy.getAvailableBeds.and.returnValue(of([{ id: 'g1' } as BedResponse]));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openTransfer(occupant({ patientId: 'man-1' }));
+    fixture.detectChanges();
+
+    expect(bedSpy.getAvailableBeds).toHaveBeenCalledWith('man-1');
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '#transfer-destination',
+    ) as HTMLSelectElement;
+    const offered = Array.from(select.options)
+      .map((o) => o.value)
+      .filter((v) => v !== '');
+    expect(offered).toEqual(['g1']);
+  });
+
   it('excludes a bed another transfer is already on its way to', () => {
     // The backend refuses it, so offering it would be an error waiting.
     boardSpy.getBoard.and.returnValue(
@@ -543,6 +588,28 @@ describe('BedBoardComponent', () => {
     const [sent] = transferSpy.requestTransfer.calls.mostRecent().args;
     expect(sent.isolationOverride).toBeUndefined();
     expect(sent.isolationOverrideReason).toBeUndefined();
+  });
+
+  it('QA D631: a refused transfer shows the server reason, a crash keeps the generic text', () => {
+    const reason = 'Un transfert est déjà en attente pour cette admission.';
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 400, error: { message: reason } })),
+    );
+    component.ngOnInit();
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith(reason);
+
+    transferSpy.requestTransfer.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 500, error: { message: 'NPE at x' } })),
+    );
+    component.openTransfer(occupant());
+    component.transferForm.toBedId = 'b2';
+    component.transferForm.reason = 'Closer observation';
+    component.submitTransfer();
+    expect(toastSpy.error).toHaveBeenCalledWith('BED_BOARD.TRANSFER_ERROR');
   });
 
   it('reloads both the board and the worklist after a transfer is ordered', () => {

@@ -132,7 +132,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private StaffAvailabilityService staffAvailabilityService;
     @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
     @Mock private com.example.hms.repository.UserRepository userRepository;
-    @Mock private com.example.hms.service.NotificationService notificationService;
+    @Mock(answer = org.mockito.Answers.CALLS_REAL_METHODS) private com.example.hms.service.RenderingNotificationService notificationService;
     @Mock private com.example.hms.service.EmailService emailService;
     @Mock private com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
     @Mock private com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
@@ -142,6 +142,8 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -333,7 +335,49 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.alreadyCancelled");
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717: an arrived or closed-out appointment cannot be cancelled from the portal")
+        void arrivedAppointment_cannotBeCancelled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            CancelAppointmentRequestDTO dto = CancelAppointmentRequestDTO.builder()
+                    .appointmentId(apptId).reason("Changement").build();
+
+            assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.EnumSource(value = AppointmentStatus.class,
+                names = {"CHECKED_IN", "IN_PROGRESS", "NO_SHOW", "FAILED"})
+        @DisplayName("QA D717 sibling: an arrived appointment cannot be rescheduled from the portal")
+        void arrivedAppointment_cannotBeRescheduled(AppointmentStatus status) {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, status);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build();
+
+            assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.FRENCH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.patient.notChangeable");
+            assertThat(appointment.getStatus()).isEqualTo(status);
+            verify(appointmentRepository, never()).save(any());
         }
 
         @Test
@@ -350,7 +394,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot cancel a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.cancel.completed");
         }
 
         @Test
@@ -508,7 +552,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a completed");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.completed");
         }
 
         @Test
@@ -529,7 +573,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Cannot reschedule a cancelled");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.reschedule.cancelled");
         }
 
         @Test
@@ -550,7 +594,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("End time must be after start time");
+                    .hasFieldOrPropertyWithValue("messageKey", "appointment.timeRange.invalid");
 
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
         }
@@ -716,7 +760,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already have a refill request");
+                    .matches(e -> "patient.refill.alreadyPending".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
 
             // There was no guard at all before: a double tap fired a second
             // care-team email and a second row in every prescriber's inbox.
@@ -740,7 +784,7 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("on hold");
+                    .matches(e -> "patient.refill.onHold".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
         }
 
         @Test
@@ -758,8 +802,61 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.requestMedicationRefill(auth,
                     MedicationRefillRequestDTO.builder().prescriptionId(rxId).build()))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("no longer be refilled");
+                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719: requestMedicationRefill — refuses a completed controlled substance")
+        void requestRefill_refusesControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(true);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D719 re-test: requestMedicationRefill — refuses catalog-controlled morphine whose tick is false")
+        void requestRefill_refusesCatalogControlledSubstance() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(false);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.notRefillable".equals(((BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D743: a duplicate refill request is refused with a localised key")
+        void requestRefill_duplicateIsLocalised() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            RefillRequest open = RefillRequest.builder().status(RefillStatus.REQUESTED).build();
+            when(refillRequestRepository.findFirstByPrescription_IdAndPatient_IdAndStatusInOrderByCreatedAtDesc(
+                    any(), any(), any())).thenReturn(Optional.of(open));
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.alreadyPending".equals(((BusinessException) e).getMessageKey()));
         }
 
         @Test
@@ -846,8 +943,8 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
 
             assertThat(result).isNotNull();
-            verify(notificationService).createNotification(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
-            verify(notificationService).createNotification(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).created(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
             verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
         }
@@ -884,7 +981,7 @@ class PatientPortalServiceImplPhase2Test {
             when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospital.getId(), department.getId()))
                     .thenReturn(List.of(doctor));
             doThrow(new RuntimeException("notification down"))
-                    .when(notificationService).createNotification(any(), any(), eq("MEDICATION_REFILL"));
+                    .when(notificationService).created(any(), any(), eq("MEDICATION_REFILL"));
             doThrow(new RuntimeException("smtp down"))
                     .when(emailService).sendHtml(any(), any(), any(), eq("Demande de renouvellement d'ordonnance en attente de revue"), any());
             when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {

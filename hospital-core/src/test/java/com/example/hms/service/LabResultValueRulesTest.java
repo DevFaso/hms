@@ -22,6 +22,21 @@ class LabResultValueRulesTest {
         return definition;
     }
 
+    /** QA D640: "7,9" (K, critical) is a number; it is stored with a point so grading reads it. */
+    @Test
+    void aDecimalCommaIsNormalisedAndAccepted() {
+        LabTestDefinition potassium = potassium();
+        String stored = LabResultValueRules.normalizeDecimalComma("7,9");
+        assertThat(stored).isEqualTo("7.9");
+        assertThatCode(() -> LabResultValueRules.requireValidValue(stored, potassium)).doesNotThrowAnyException();
+        assertThat(LabResultValueRules.normalizeDecimalComma("<0,5")).isEqualTo("<0.5");
+        assertThat(LabResultValueRules.normalizeDecimalComma(" 5,5 ")).isEqualTo("5.5");
+        // Not a decimal: left alone (a thousands list or free text keeps its meaning).
+        assertThat(LabResultValueRules.normalizeDecimalComma("1,2,3")).isEqualTo("1,2,3");
+        assertThat(LabResultValueRules.normalizeDecimalComma("Positif")).isEqualTo("Positif");
+        assertThat(LabResultValueRules.normalizeDecimalComma(null)).isNull();
+    }
+
     /** QA D288: "abc" and -1 were stored on a numeric test. */
     @Test
     void aNumericTestRefusesTextAndANegativeValue() {

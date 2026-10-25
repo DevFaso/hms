@@ -44,7 +44,8 @@
             {{ 'POSTPARTUM.MINUTES' | translate }}
           }
           @if (s.nextDueAt) {
-            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}: {{ s.nextDueAt | date: 'short' }}
+            · {{ 'POSTPARTUM.NEXT_DUE' | translate }}:
+            {{ s.nextDueAt | serverTime | date: 'short' }}
           }
           @if (s.overdue) {
             <span class="risk-badge risk-high">{{ 'POSTPARTUM.OVERDUE' | translate }}</span>
@@ -88,7 +89,8 @@
         }
         @if (sc.lastAdministeredAt) {
           <p>
-            {{ 'PRO.LAST_SCREEN' | translate }}: {{ sc.lastAdministeredAt | date: 'short' }} ·
+            {{ 'PRO.LAST_SCREEN' | translate }}:
+            {{ sc.lastAdministeredAt | serverTime | date: 'short' }} ·
             <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
             @if (sc.lastCriticalItemPositive) {
               <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
@@ -134,7 +136,7 @@
             <tbody>
               @for (r of screenings(); track r.id) {
                 <tr class="data-row" [class.screening-critical]="needsAcknowledgement(r)">
-                  <td>{{ r.administeredAt | date: 'short' }}</td>
+                  <td>{{ r.administeredAt | serverTime | date: 'short' }}</td>
                   <td>{{ 'PRO.SOURCE_' + r.source | translate }}</td>
                   <td>
                     {{ r.totalScore }} / {{ r.maxScore }}
@@ -174,7 +176,7 @@
                       }
                     } @else if (r.acknowledgedAt) {
                       {{ r.acknowledgedByDisplay || '—' }} ·
-                      {{ r.acknowledgedAt | date: 'short' }}
+                      {{ r.acknowledgedAt | serverTime | date: 'short' }}
                       @if (r.acknowledgementNote) {
                         <span class="muted" [title]="r.acknowledgementNote">
                           · {{ r.acknowledgementNote }}
@@ -234,7 +236,9 @@
           <tbody>
             @for (o of observations(); track o.id) {
               <tr class="data-row">
-                <td>{{ o.observationTime ? (o.observationTime | date: 'short') : '—' }}</td>
+                <td>
+                  {{ o.observationTime ? (o.observationTime | serverTime | date: 'short') : '—' }}
+                </td>
                 <td>
                   {{ o.temperatureCelsius ?? '—' }}°C · {{ o.systolicBpMmHg ?? '—' }}/{{
                     o.diastolicBpMmHg ?? '—'
@@ -306,7 +310,7 @@
             @for (a of assessments(); track a.id) {
               <tr class="data-row">
                 <td>
-                  {{ a.assessmentTime ? (a.assessmentTime | date: 'short') : '—' }}
+                  {{ a.assessmentTime ? (a.assessmentTime | serverTime | date: 'short') : '—' }}
                   @if (a.deliveryRecordId) {
                     <!-- The linkage was invisible even when set via API: no
                          template anywhere rendered deliveryRecordId. -->

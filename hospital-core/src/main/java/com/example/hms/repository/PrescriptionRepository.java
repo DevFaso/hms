@@ -56,6 +56,36 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
     Page<Prescription> findByPatient_IdAndHospital_IdIn(UUID patientId, Collection<UUID> hospitalIds, Pageable pageable);
 
+    /**
+     * QA D652 - the paged list across the readable hospitals, less the rows
+     * another hospital never sent ({@code NeverSentRule}): a foreign row in
+     * {@code unsent} is that hospital's work in progress, and its by-id read
+     * answers 404 here. Rows of the acting hospital are kept whatever their status.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent)")
+    Page<Prescription> findSentAcrossHospitals(@Param("patientId") UUID patientId,
+                                               @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                               @Param("actingHospitalId") UUID actingHospitalId,
+                                               @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                               Pageable pageable);
+
+    /** {@link #findSentAcrossHospitals} restricted to a set of statuses (Gap G12). */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital", "hospital"})
+    @Query(value = "SELECT p FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses",
+        countQuery = "SELECT COUNT(p) FROM Prescription p WHERE p.patient.id = :patientId AND p.hospital.id IN :hospitalIds"
+        + " AND (p.hospital.id = :actingHospitalId OR p.status NOT IN :unsent) AND p.status IN :statuses")
+    Page<Prescription> findSentAcrossHospitalsAndStatusIn(@Param("patientId") UUID patientId,
+                                                          @Param("hospitalIds") Collection<UUID> hospitalIds,
+                                                          @Param("actingHospitalId") UUID actingHospitalId,
+                                                          @Param("unsent") Collection<PrescriptionStatus> unsent,
+                                                          @Param("statuses") Collection<PrescriptionStatus> statuses,
+                                                          Pageable pageable);
+
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     Page<Prescription> findByStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId, Pageable pageable);
 
@@ -112,6 +142,25 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
 
     /**
+     * Pharmacist work queue, filter ALL: the rows of
+     * {@link #findByHospital_IdAndStatusIn} less the ward orders of a stay
+     * that has ended (QA D757): an order filed on a stay's own encounter once
+     * that encounter is closed, unless it is marked take-home. Same rule as
+     * {@code InpatientOrderEnd.endedWithItsStay}; the MINE and UNCLAIMED
+     * queries carry it too.
+     */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) ",
+        countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) ")
+    Page<Prescription> findWorkQueue(@Param("hospitalId") UUID hospitalId,
+                                     @Param("statuses") List<PrescriptionStatus> statuses,
+                                     Pageable pageable);
+
+    /**
      * G13 work queue, filter MINE: the rows of {@link #findByHospital_IdAndStatusIn}
      * with an active claim by {@code userId}. Active means stamped after
      * {@code activeAfter} (now minus the TTL, from the service clock), so a
@@ -119,9 +168,13 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
             + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)",
         countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
             + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)")
     Page<Prescription> findWorkQueueClaimedBy(@Param("hospitalId") UUID hospitalId,
@@ -138,11 +191,15 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
      */
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
             + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedAt > :activeAfter) "
             + "and not exists (select d.id from Dispense d where d.prescription = p "
             + "and d.status = com.example.hms.enums.DispenseStatus.PENDING)",
         countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
+            + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
             + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedAt > :activeAfter) "
             + "and not exists (select d.id from Dispense d where d.prescription = p "

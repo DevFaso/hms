@@ -613,7 +613,13 @@ interface DischargeSummaryApiResponse {
   warningSigns: string;
   patientEducationProvided: string;
   medicationReconciliation: { medicationName: string; dosage: string; frequency: string }[];
-  followUpAppointments: { department: string; scheduledDate: string }[];
+  // QA D526: the backend sends FollowUpAppointmentDTO (appointmentDate /
+  // appointmentTime); "scheduledDate" never existed, so the date was always null.
+  followUpAppointments: {
+    appointmentType?: string;
+    appointmentDate?: string | null;
+    appointmentTime?: string | null;
+  }[];
   isFinalized: boolean;
   additionalNotes: string;
 }
@@ -1049,7 +1055,17 @@ export class PatientPortalService {
 
   getMyAppointments(): Observable<PortalAppointment[]> {
     return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
-      map((r) => (r.data ?? []).map(mapAppointment)),
+      // QA D642: chronological, on the raw wire date and 24 h time, before the
+      // time is formatted for display. Every list built from this keeps it.
+      map((r) =>
+        [...(r.data ?? [])]
+          .sort((a, b) =>
+            `${a.appointmentDate ?? ''}T${a.startTime ?? ''}`.localeCompare(
+              `${b.appointmentDate ?? ''}T${b.startTime ?? ''}`,
+            ),
+          )
+          .map(mapAppointment),
+      ),
       catchError(() => of([])),
     );
   }
@@ -1226,6 +1242,17 @@ export class PatientPortalService {
 
   // ── After-Visit Summaries ──────────────────────────────────────────
 
+  /** QA D526: the earliest dated follow-up of a summary, as yyyy-MM-dd. */
+  private firstFollowUpDate(
+    entries: DischargeSummaryApiResponse['followUpAppointments'] | null | undefined,
+  ): string | null {
+    const dates = (entries ?? [])
+      .map((f) => f.appointmentDate ?? f.appointmentTime?.slice(0, 10) ?? null)
+      .filter((d): d is string => !!d)
+      .sort((a, b) => a.localeCompare(b));
+    return dates[0] ?? null;
+  }
+
   getAfterVisitSummaries(): Observable<AfterVisitSummary[]> {
     return this.http
       .get<ApiMaybeWrapped<DischargeSummaryApiResponse[]>>(`${this.base}/after-visit-summaries`)
@@ -1254,7 +1281,7 @@ export class PatientPortalService {
             warningSigns: d.warningSigns ?? '',
             patientEducation: d.patientEducationProvided ?? '',
             additionalNotes: d.additionalNotes ?? '',
-            followUpDate: d.followUpAppointments?.[0]?.scheduledDate ?? null,
+            followUpDate: this.firstFollowUpDate(d.followUpAppointments),
             medications: (d.medicationReconciliation ?? []).map((m) => ({
               name: m.medicationName ?? '',
               dosage: m.dosage ?? '',

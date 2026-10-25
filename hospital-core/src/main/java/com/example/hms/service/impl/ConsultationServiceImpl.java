@@ -1,8 +1,11 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.service.i18n.NotificationLocalizer;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ClientSafeAccessDeniedException;
+import com.example.hms.utility.MessageUtil;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Encounter;
@@ -34,8 +37,6 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Pageable;
 import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
@@ -56,9 +57,6 @@ import java.util.Set;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.SensitivityClassifier;
 import com.example.hms.service.recordaccess.BreakGlassGate;
-import org.springframework.context.MessageSource;
-import com.example.hms.service.i18n.NotificationLocales;
-import java.util.Locale;
 
 @Slf4j
 @Service
@@ -93,9 +91,9 @@ public class ConsultationServiceImpl implements ConsultationService {
      */
     private final Clock clock;
     private final NotificationService notificationService;
-    private final MessageSource messageSource;
     private final PatientSubjectReadGuard subjectReadGuard;
     private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final com.example.hms.security.tenant.ActingScopeResolver scopeResolver;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -131,7 +129,13 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         Staff consultant = null;
         if (request.getPreferredConsultantId() != null) {
-            consultant = resolveConsultant(request.getPreferredConsultantId(), hospital.getId());
+            // QA D715: resolved AT this hospital only (the old lookup fell back to
+            // the person's first staff row anywhere, so a doctor of another
+            // hospital was accepted and the consult could never be answered), and
+            // refused rather than silently dropped when it is not a doctor here.
+            consultant = resolveStaffAt(request.getPreferredConsultantId(), hospital.getId())
+                .orElseThrow(() -> new BusinessException("consultation.consultant.notAtHospital"));
+            requireConsultantAtHospital(consultant, hospital.getId());
         }
 
         LocalDateTime slaDueBy = calculateSlaDueBy(request.getUrgency());
@@ -360,7 +364,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         if (consultation.getStatus() != ConsultationStatus.ASSIGNED &&
             consultation.getStatus() != ConsultationStatus.REQUESTED) {
-            throw new BusinessException("Consultation must be in ASSIGNED or REQUESTED status to acknowledge (current: " + consultation.getStatus() + ")");
+            throw new BusinessException("consultation.acknowledge.badStatus", consultation.getStatus());
         }
 
         // The caller here is the AUTHENTICATED principal, so what arrives is a
@@ -369,9 +373,14 @@ public class ConsultationServiceImpl implements ConsultationService {
         // "Consultant not found" for every real caller: the Acknowledge button
         // in the portal has been dead. resolveStaff already handles both id
         // shapes and is what the create path uses.
-        Staff consultant = resolveStaff(consultantId, consultation.getHospital() != null
+        // Resolved at the consultation's hospital only, and the caller must be a
+        // doctor there (QA D715). A consult already addressed to someone else is
+        // theirs to acknowledge; taking it over is a reassignment (QA D704).
+        Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null
                 ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
+        requireConsultantAtHospital(consultant, consultation);
+        requireAcknowledger(consultation);
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
@@ -387,8 +396,21 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO updateConsultation(UUID consultationId, ConsultationUpdateDTO updateDTO) {
         Consultation consultation = getConsultationInScope(consultationId);
 
-        if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
-            Staff consultant = staffRepository.findById(updateDTO.getConsultantId())
+        // QA D735: changing the consultant here is a reassignment (coordinator
+        // only); the schedule is the consultant's or the coordinator's; the
+        // clinical answer is the assigned consultant's alone.
+        boolean changesConsultant = updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null);
+        boolean changesClinical = updateDTO.getConsultantNote() != null || updateDTO.getRecommendations() != null
+            || updateDTO.getFollowUpRequired() != null || updateDTO.getFollowUpInstructions() != null;
+        requireUpdater(consultation, changesConsultant, changesClinical, updateDTO.getScheduledAt() != null);
+        if (consultation.getStatus() == ConsultationStatus.COMPLETED
+                || consultation.getStatus() == ConsultationStatus.CANCELLED
+                || consultation.getStatus() == ConsultationStatus.DECLINED) {
+            throw new BusinessException("consultation.schedule.badStatus", consultation.getStatus());
+        }
+
+        if (changesConsultant) {
+            Staff consultant = resolveStaffAt(updateDTO.getConsultantId(), consultation.getHospital() != null ? consultation.getHospital().getId() : null)
                 .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, updateDTO.getConsultantId()));
             requireConsultantAtHospital(consultant, consultation);
             consultation.setConsultant(consultant);
@@ -403,24 +425,25 @@ public class ConsultationServiceImpl implements ConsultationService {
             }
         }
 
-        if (updateDTO.getConsultantNote() != null) {
-            consultation.setConsultantNote(updateDTO.getConsultantNote());
-        }
-
-        if (updateDTO.getRecommendations() != null) {
-            consultation.setRecommendations(updateDTO.getRecommendations());
-        }
-
-        if (updateDTO.getFollowUpRequired() != null) {
-            consultation.setFollowUpRequired(updateDTO.getFollowUpRequired());
-        }
-
-        if (updateDTO.getFollowUpInstructions() != null) {
-            consultation.setFollowUpInstructions(updateDTO.getFollowUpInstructions());
-        }
+        applyClinicalAnswer(consultation, updateDTO);
 
         Consultation saved = consultationRepository.save(consultation);
         return toResponseDTO(saved);
+    }
+
+    private static void applyClinicalAnswer(Consultation consultation, ConsultationUpdateDTO updateDTO) {
+        if (updateDTO.getConsultantNote() != null) {
+            consultation.setConsultantNote(updateDTO.getConsultantNote());
+        }
+        if (updateDTO.getRecommendations() != null) {
+            consultation.setRecommendations(updateDTO.getRecommendations());
+        }
+        if (updateDTO.getFollowUpRequired() != null) {
+            consultation.setFollowUpRequired(updateDTO.getFollowUpRequired());
+        }
+        if (updateDTO.getFollowUpInstructions() != null) {
+            consultation.setFollowUpInstructions(updateDTO.getFollowUpInstructions());
+        }
     }
 
     @Override
@@ -428,10 +451,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("Consultation is already completed");
+            throw new BusinessException("consultation.complete.alreadyCompleted");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("Cannot complete a cancelled consultation");
+            throw new BusinessException("consultation.complete.cancelled");
+        }
+        // QA D704: only the assigned consultant, and only once they took it on.
+        requireAssignedConsultant(consultation);
+        if (consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED
+                && consultation.getStatus() != ConsultationStatus.IN_PROGRESS) {
+            throw new BusinessException("consultation.complete.badStatus", consultation.getStatus());
         }
 
         consultation.setRecommendations(request.getRecommendations());
@@ -455,18 +484,16 @@ public class ConsultationServiceImpl implements ConsultationService {
         try {
             if (consultation.getRequestingProvider() != null) {
                 String requesterUsername = consultation.getRequestingProvider().getUser().getUsername();
-                // Stored for the requesting provider, not the caller: staff locale.
-                Locale locale = NotificationLocales.STAFF;
-                String consultantName = consultation.getConsultant() != null
+                // Read by the requesting provider, in their language (QA D665).
+                Object consultantName = consultation.getConsultant() != null
                     ? consultation.getConsultant().getFullName()
-                    : messageSource.getMessage("consultation.completed.consultantFallback", null, locale);
-                String patientName = consultation.getPatient() != null
+                    : NotificationLocalizer.key("consultation.completed.consultantFallback");
+                Object patientName = consultation.getPatient() != null
                     ? consultation.getPatient().getFullName()
-                    : messageSource.getMessage("patient.fallback.yours", null, locale);
-                notificationService.createNotification(
-                    messageSource.getMessage("consultation.completed.notification",
-                        new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName}, locale),
-                    requesterUsername);
+                    : NotificationLocalizer.key("patient.fallback.yours");
+                notificationService.createNotification("consultation.completed.notification",
+                    new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName},
+                    requesterUsername, null);
             }
         } catch (Exception e) {
             log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
@@ -480,12 +507,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed consultation");
+            throw new BusinessException("consultation.cancel.completed");
         }
 
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("Consultation is already cancelled");
+            throw new BusinessException("consultation.cancel.alreadyCancelled");
         }
+        requireRequesterOrSuperAdmin(consultation);
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
         consultation.setCancelledAt(LocalDateTime.now(clock));
@@ -504,8 +532,9 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
             consultation.getStatus() == ConsultationStatus.CANCELLED ||
             consultation.getStatus() == ConsultationStatus.DECLINED) {
-            throw new BusinessException("Cannot schedule a " + consultation.getStatus() + " consultation");
+            throw new BusinessException("consultation.schedule.badStatus", consultation.getStatus());
         }
+        requireAssignedConsultantOrCoordinator(consultation);
 
         consultation.setScheduledAt(scheduledAt);
         consultation.setStatus(ConsultationStatus.SCHEDULED);
@@ -526,8 +555,9 @@ public class ConsultationServiceImpl implements ConsultationService {
         if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
             consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
             consultation.getStatus() != ConsultationStatus.ASSIGNED) {
-            throw new BusinessException("Consultation must be ASSIGNED, ACKNOWLEDGED or SCHEDULED to start (current: " + consultation.getStatus() + ")");
+            throw new BusinessException("consultation.start.badStatus", consultation.getStatus());
         }
+        requireAssignedConsultant(consultation);
 
         consultation.setStatus(ConsultationStatus.IN_PROGRESS);
         consultation.setStartedAt(LocalDateTime.now(clock));
@@ -543,14 +573,15 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("Cannot decline a completed consultation");
+            throw new BusinessException("consultation.decline.completed");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("Cannot decline a cancelled consultation");
+            throw new BusinessException("consultation.decline.cancelled");
         }
         if (consultation.getStatus() == ConsultationStatus.DECLINED) {
-            throw new BusinessException("Consultation is already declined");
+            throw new BusinessException("consultation.decline.alreadyDeclined");
         }
+        requireAssignedConsultant(consultation);
 
         consultation.setStatus(ConsultationStatus.DECLINED);
         consultation.setDeclinedAt(LocalDateTime.now(clock));
@@ -567,10 +598,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
-            throw new BusinessException("Only REQUESTED consultations can be assigned (current status: " + consultation.getStatus() + ")");
+            throw new BusinessException("consultation.assign.badStatus", consultation.getStatus());
         }
+        // QA D704/D735: assigning is the coordinator's call, never a self-claim
+        // of someone else's consult by any doctor.
+        requireCoordinator(consultation);
 
-        Staff consultant = staffRepository.findById(consultantId)
+        Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
         requireConsultantAtHospital(consultant, consultation);
 
@@ -588,15 +622,13 @@ public class ConsultationServiceImpl implements ConsultationService {
         // Notify the assigned consultant
         try {
             String consultantUsername = consultant.getUser().getUsername();
-            // Stored for the consultant, not the caller: staff locale.
-            Locale locale = NotificationLocales.STAFF;
-            String patientName = consultation.getPatient() != null
+            // Read by the consultant, in their language (QA D665).
+            Object patientName = consultation.getPatient() != null
                 ? consultation.getPatient().getFullName()
-                : messageSource.getMessage("patient.fallback.indefinite", null, locale);
-            notificationService.createNotification(
-                messageSource.getMessage("consultation.assigned.notification",
-                    new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()}, locale),
-                consultantUsername);
+                : NotificationLocalizer.key("patient.fallback.indefinite");
+            notificationService.createNotification("consultation.assigned.notification",
+                new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()},
+                consultantUsername, null);
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
         }
@@ -609,14 +641,14 @@ public class ConsultationServiceImpl implements ConsultationService {
         Consultation consultation = getConsultationInScope(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
-            throw new BusinessException("Cannot reassign a completed consultation");
+            throw new BusinessException("consultation.reassign.completed");
         }
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
-            throw new BusinessException("Cannot reassign a cancelled consultation");
+            throw new BusinessException("consultation.reassign.cancelled");
         }
-
-        Staff consultant = staffRepository.findById(consultantId)
+        Staff consultant = resolveStaffAt(consultantId, consultation.getHospital() != null ? consultation.getHospital().getId() : null)
             .orElseThrow(() -> new ResourceNotFoundException(CONSULTATION_CONSULTANT_NOT_FOUND_KEY, consultantId));
+        requireReassigner(consultation, consultant, reassignmentReason);
         requireConsultantAtHospital(consultant, consultation);
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
@@ -787,13 +819,152 @@ public class ConsultationServiceImpl implements ConsultationService {
      * pick from that hospital's staff list, so nothing is disclosed.
      */
     private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
-        UUID hospitalId = consultation.getHospital() != null ? consultation.getHospital().getId() : null;
+        requireConsultantAtHospital(consultant, consultation.getHospital() != null ? consultation.getHospital().getId() : null);
+    }
+
+    private void requireConsultantAtHospital(Staff consultant, UUID hospitalId) {
         UUID userId = consultant.getUser() != null ? consultant.getUser().getId() : null;
         if (hospitalId == null || userId == null
                 || assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(userId, hospitalId).isEmpty()) {
-            throw new BusinessException(messageSource.getMessage("consultation.consultant.notAtHospital", null,
-                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            throw new BusinessException("consultation.consultant.notAtHospital");
         }
+        // QA D715: an assignment of ANY role used to pass, so a consult could be
+        // addressed to a nurse, who never sees it in a consultant worklist. The
+        // consultant answers a medical question: a doctor at that hospital.
+        if (!isPhysicianAt(userId, hospitalId)) {
+            throw new BusinessException("consultation.consultant.notPhysician");
+        }
+    }
+
+    private boolean isPhysicianAt(UUID userId, UUID hospitalId) {
+        return roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId);
+    }
+
+    /**
+     * QA D704: the consultant's own steps (acknowledge a consult addressed to
+     * someone, start, complete, decline) belong to the consultant the
+     * consultation is addressed to. Any doctor used to be able to complete
+     * someone else's consult straight from REQUESTED, which then locked the
+     * real consultant out. Handing it to someone else is the assign/reassign
+     * endpoints' job. The consultation was already resolved in the caller's
+     * scope, and the message names only what the caller would have to be.
+     */
+    private void requireAssignedConsultant(Consultation consultation) {
+        UUID caller = roleValidator.getCurrentUserId();
+        Staff consultant = consultation.getConsultant();
+        UUID consultantUserId = consultant != null && consultant.getUser() != null ? consultant.getUser().getId() : null;
+        if (caller == null || !caller.equals(consultantUserId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.notAssignedConsultant"));
+        }
+    }
+
+    /**
+     * QA D704/D735/D749: who may decide who answers a consult — the requester
+     * (whatever clinical role created it) or a verified super-admin. Any other doctor could assign it to himself and
+     * then acknowledge, start and complete it.
+     */
+    private void requireCoordinator(Consultation consultation) {
+        if (!isCoordinator(consultation)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.assign.notCoordinator"));
+        }
+    }
+
+    private boolean isCoordinator(Consultation consultation) {
+        if (scopeResolver.isVerifiedSuperAdmin()) {
+            return true;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller == null) {
+            return false;
+        }
+        Staff requester = consultation.getRequestingProvider();
+        // QA D749: a hospital admin is deliberately not a coordinator (decision
+        // D5: HOSPITAL_ADMIN stays off the chart, the endpoints never admit the
+        // role), so the refusal message no longer promises one can assign.
+        return requester != null && requester.getUser() != null && caller.equals(requester.getUser().getId());
+    }
+
+    /**
+     * QA D735: acknowledging a consult already addressed to a doctor is that
+     * doctor's step; acknowledging an unaddressed one makes the caller its
+     * consultant, which is an assignment and therefore the coordinator's call.
+     * Otherwise any doctor could take over a REQUESTED consult via /acknowledge.
+     */
+    private void requireAcknowledger(Consultation consultation) {
+        if (consultation.getConsultant() != null) {
+            requireAssignedConsultant(consultation);
+        } else {
+            requireCoordinator(consultation);
+        }
+    }
+
+    /**
+     * QA D735/D749: who may reassign — a coordinator (the requester or a
+     * verified super-admin), or the CURRENT consultant handing the consult over
+     * to a different doctor with a reason. Handing it to himself is not a
+     * handover, and nobody else may take it.
+     */
+    private void requireReassigner(Consultation consultation, Staff newConsultant, String reason) {
+        if (isCoordinator(consultation)) {
+            return;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        Staff current = consultation.getConsultant();
+        UUID currentUserId = current != null && current.getUser() != null ? current.getUser().getId() : null;
+        UUID newUserId = newConsultant.getUser() != null ? newConsultant.getUser().getId() : null;
+        boolean handover = caller != null && caller.equals(currentUserId)
+            && newUserId != null && !caller.equals(newUserId)
+            && reason != null && !reason.isBlank();
+        if (!handover) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.reassign.notAllowed"));
+        }
+    }
+
+    /** The actor check of updateConsultation, one rule per kind of field it writes. */
+    private void requireUpdater(Consultation consultation, boolean changesConsultant, boolean changesClinical, boolean changesSchedule) {
+        if (changesConsultant) {
+            requireCoordinator(consultation);
+        }
+        if (changesClinical) {
+            requireAssignedConsultant(consultation);
+        } else if (changesSchedule) {
+            requireAssignedConsultantOrCoordinator(consultation);
+        }
+    }
+
+    private void requireAssignedConsultantOrCoordinator(Consultation consultation) {
+        if (!isCoordinator(consultation)) {
+            requireAssignedConsultant(consultation);
+        }
+    }
+
+    /**
+     * QA D716: cancelling withdraws the request, so it is the requester's call
+     * (or a verified super-admin's). A nurse could cancel a midwife's consult.
+     * A consultant who will not do it declines instead.
+     */
+    private void requireRequesterOrSuperAdmin(Consultation consultation) {
+        if (scopeResolver.isVerifiedSuperAdmin()) {
+            return;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        Staff requester = consultation.getRequestingProvider();
+        UUID requesterUserId = requester != null && requester.getUser() != null ? requester.getUser().getId() : null;
+        if (caller == null || !caller.equals(requesterUserId)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw("consultation.cancel.notRequester"));
+        }
+    }
+
+    /** The staff row of {@code identifier} (a staff id or a user id) AT {@code hospitalId}, never elsewhere. */
+    private Optional<Staff> resolveStaffAt(UUID identifier, UUID hospitalId) {
+        if (identifier == null || hospitalId == null) {
+            return Optional.empty();
+        }
+        Optional<Staff> byStaffId = staffRepository.findById(identifier)
+            .filter(st -> st.getHospital() != null && hospitalId.equals(st.getHospital().getId()));
+        return byStaffId.isPresent() ? byStaffId : staffRepository.findByUserIdAndHospitalId(identifier, hospitalId);
     }
 
     private LocalDateTime calculateSlaDueBy(ConsultationUrgency urgency) {
@@ -808,10 +979,6 @@ public class ConsultationServiceImpl implements ConsultationService {
     private Staff resolveRequestingProvider(UUID identifier, UUID hospitalId) {
         return resolveStaff(identifier, hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("consultation.requestingProvider.notFound", identifier));
-    }
-
-    private Staff resolveConsultant(UUID identifier, UUID hospitalId) {
-        return resolveStaff(identifier, hospitalId).orElse(null);
     }
 
     /**
@@ -846,7 +1013,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         UUID scope = roleValidator.requireActiveHospitalId();
         if (scope == null) {
             if (requestedHospitalId == null) {
-                throw new BusinessException("Hospital ID is required to list consultations.");
+                throw new BusinessException("consultation.hospitalRequired");
             }
             return requestedHospitalId;
         }

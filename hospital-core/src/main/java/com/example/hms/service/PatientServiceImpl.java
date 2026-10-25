@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.service.recordaccess.NeverSentRule;
 import com.example.hms.service.recordaccess.CrossHospitalRows;
 import com.example.hms.service.recordaccess.WithheldRows;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
@@ -70,6 +71,7 @@ import com.example.hms.repository.AdvanceDirectiveRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.service.lab.ClinicalLabResultView;
 import com.example.hms.repository.NursingNoteRepository;
 import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.service.allergy.LegacyAllergyTextImporter;
@@ -117,7 +119,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.security.SecureRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -160,8 +161,6 @@ public class PatientServiceImpl implements PatientService {
 
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String DEFAULT_UNKNOWN = "Unknown";
-    private static final String DEFAULT_PREFIX = "MRX";
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int DEFAULT_TIMELINE_LIMIT = 50;
     private static final int MAX_TIMELINE_LIMIT = 200;
     private static final String CATEGORY_ENCOUNTER = "ENCOUNTER";
@@ -233,6 +232,7 @@ public class PatientServiceImpl implements PatientService {
     private final StaffRepository staffRepository;
     private final PatientProxyRepository patientProxyRepository;
     private final ObjectMapper objectMapper;
+    private final PatientMrnGenerator mrnGenerator;
     private final RoleValidator roleValidator;
 
     @Override
@@ -645,7 +645,7 @@ public class PatientServiceImpl implements PatientService {
         PatientHospitalRegistration registration = registrationRepository
             .findByPatientIdAndHospitalIdAndActiveTrue(patient.getId(), hospital.getId())
             .orElseGet(() -> {
-                String generatedMrn = generateMrn(hospital);
+                String generatedMrn = mrnGenerator.generate(hospital);
                 PatientHospitalRegistration reg = new PatientHospitalRegistration();
                 reg.setPatient(patient);
                 reg.setHospital(hospital);
@@ -901,6 +901,12 @@ public class PatientServiceImpl implements PatientService {
             .entries(entries)
             .sensitiveCategories(sensitiveCategories)
             .containsSensitiveData(!sensitiveCategories.isEmpty())
+            // QA D504 (round 2): the allergy entries above omit other hospitals' rows; say so.
+            .allergiesWithheld(shouldIncludeCategory(categoryFilters, CATEGORY_ALLERGY)
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId))
+            // QA D504: every other category is narrowed the same way; say so too.
+            .recordsWithheld(recordAccessPolicy.foreignRowsWithheld(currentPrincipalUserId(), patientId, hospitalId))
             .totalEntries(entries.size())
             .restrictedRows(withheld.summaries())
             .generatedAt(LocalDateTime.now())
@@ -1891,7 +1897,10 @@ public class PatientServiceImpl implements PatientService {
         if (!shouldIncludeCategory(categoryFilters, CATEGORY_PRESCRIPTION)) {
             return List.of();
         }
-        return prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds).stream()
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        return NeverSentRule.prescriptionsReadableHere(
+                prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), actingHospitalId)
+            .stream()
             // A prescription carries no tag of its own; its category comes
             // from the encounter that wrote it (E8 #51).
             .filter(prescription -> withheld.admit(prescription.getHospital(), departmentOf(prescription.getEncounter()),
@@ -1929,8 +1938,9 @@ public class PatientServiceImpl implements PatientService {
         // own laboratory for another hospital. A performed-here row is still
         // the ordering hospital's record, so it carries that provenance and
         // passes the same D3 filter as any other foreign row.
-        List<LabResult> admitted = labResultRepository.findPatientResultsReadableAt(patientId,
-                readableHospitalIds, actingHospitalId, false, Pageable.unpaged()).stream()
+        // QA D741: superseded results and legacy duplicates are not current.
+        List<LabResult> admitted = ClinicalLabResultView.current(labResultRepository.findPatientResultsReadableAt(patientId,
+                readableHospitalIds, actingHospitalId, false, Pageable.unpaged())).stream()
             // Same as prescriptions: the category rides on the lab order's encounter.
             .filter(result -> withheld.admit(result.getLabOrder().getHospital(),
                 departmentOf(result.getLabOrder().getEncounter()), actingHospitalId,
@@ -1980,9 +1990,26 @@ public class PatientServiceImpl implements PatientService {
 
     /** QA D110 — allergy rows a reader at this hospital may see; every row for a global (null) scope. */
     private List<PatientAllergy> allergiesVisibleAt(UUID patientId, UUID hospitalId) {
-        return hospitalId == null
-            ? patientAllergyRepository.findByPatient_Id(patientId)
-            : patientAllergyRepository.findVisibleAt(patientId, hospitalId);
+        // QA D504: the opt-out and its break-the-glass override are one decision.
+        return com.example.hms.service.allergy.AllergySharingVisibility.rowsVisibleAt(
+            patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patientId, hospitalId);
+    }
+
+    private static UUID currentPrincipalUserId() {
+        return com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignRecordsWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return recordAccessPolicy.foreignRowsWithheld(requesterUserId, patientId, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean foreignAllergiesWithheld(UUID patientId, UUID hospitalId, UUID requesterUserId) {
+        return com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+            patientAllergyRepository, recordAccessPolicy, requesterUserId, patientId, hospitalId);
     }
 
     private List<PatientTimelineEntryDTO> collectAllergyEntries(UUID patientId, UUID hospitalId, Set<String> categoryFilters) {
@@ -2165,7 +2192,9 @@ public class PatientServiceImpl implements PatientService {
         // asked for: decision D3, and it opens through break-the-glass in E9
         // #62. It does not flag the section either, which would reveal that it
         // exists. A local one keeps the includeSensitive behaviour.
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds);
+        // QA D652: less another hospital's never-sent prescriptions (NeverSentRule).
+        List<Prescription> prescriptions = NeverSentRule.prescriptionsReadableHere(
+            prescriptionRepository.findByPatient_IdAndHospital_IdIn(patientId, readableHospitalIds), hospitalId);
         Comparator<Prescription> comparator = Comparator
             .comparing((Prescription p) -> coalesce(p.getUpdatedAt(), p.getCreatedAt()),
                 Comparator.nullsLast(Comparator.reverseOrder()));
@@ -2197,8 +2226,9 @@ public class PatientServiceImpl implements PatientService {
         // hospital. This section has always been acting-hospital only, unlike
         // the medications and imaging beside it, which read the readable set;
         // the treatment relationship still does not widen it.
-        List<LabResult> results = labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId),
-                hospitalId, false, Pageable.unpaged()).stream()
+        // QA D740/D741: the record carries values, so released, current results only.
+        List<LabResult> results = ClinicalLabResultView.releasedAndCurrent(labResultRepository.findPatientResultsReadableAt(
+                patientId, Set.of(hospitalId), hospitalId, false, Pageable.unpaged())).stream()
             .sorted(Comparator.comparing(LabResult::getResultDate, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
         boolean sectionSensitive = results.stream().anyMatch(this::isSensitiveLabResult);
@@ -2505,6 +2535,12 @@ public class PatientServiceImpl implements PatientService {
             .filter(s -> s != null && !s.isBlank())
             .orElse("Lab Result");
         StringBuilder summary = new StringBuilder(testName);
+        // QA D740: an unreleased value stays in the laboratory.
+        if (!ClinicalLabResultView.showsValue(result)) {
+            return summary.append(": ")
+                .append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"))
+                .toString();
+        }
         summary.append(": ").append(result.getResultValue());
         if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
             summary.append(" ").append(result.getResultUnit());
@@ -2743,8 +2779,16 @@ public class PatientServiceImpl implements PatientService {
 
         // QA D110: the allergy summary column covers every hospital's rows. For a patient
         // who opted out of record sharing, a reader elsewhere sees only this hospital's.
-        if (hospitalId != null && dto.getAllergies() != null
-                && patientAllergyRepository.hasActiveSharingOptOut(patient.getId())) {
+        // QA D504: unless a break-the-glass session overrides the opt-out.
+        // QA D504 (round 2): and the row says so, so the column never looks complete.
+        if (hospitalId != null
+                && com.example.hms.service.allergy.AllergySharingVisibility.foreignRowsWithheld(
+                    patientAllergyRepository, recordAccessPolicy, currentPrincipalUserId(), patient.getId(), hospitalId)) {
+            dto.setAllergiesWithheld(true);
+            // Same condition (opt-out, not overridden): every other list is narrowed too.
+            dto.setRecordsWithheld(true);
+        }
+        if (dto.isAllergiesWithheld() && dto.getAllergies() != null) {
             dto.setAllergies(com.example.hms.service.allergy.PatientAllergySummarySync.summarize(
                 patientAllergyRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)));
         }
@@ -2764,56 +2808,6 @@ public class PatientServiceImpl implements PatientService {
             });
 
         return dto;
-    }
-
-    private String generateMrn(Hospital hospital) {
-        if (hospital == null || hospital.getId() == null) {
-            throw new IllegalArgumentException("patient.r7.mrnNeedsHospital");
-        }
-
-        String prefix = deriveHospitalPrefix(hospital);
-        UUID hospitalId = hospital.getId();
-
-        for (int attempt = 0; attempt < 10; attempt++) {
-            String candidate = prefix + String.format("%04d", SECURE_RANDOM.nextInt(0, 10_000));
-            if (!registrationRepository.existsByMrnAndHospitalId(candidate, hospitalId)) {
-                return candidate;
-            }
-        }
-
-        throw new BusinessException("patient.r7.mrnExhausted");
-    }
-
-    private String deriveHospitalPrefix(Hospital hospital) {
-        if (hospital == null) {
-            return DEFAULT_PREFIX;
-        }
-        String prefix = sanitizePrefix(hospital.getCode());
-        if (prefix != null) {
-            return prefix;
-        }
-        prefix = sanitizePrefix(hospital.getName());
-        if (prefix != null) {
-            return prefix;
-        }
-        return DEFAULT_PREFIX;
-    }
-
-    private String sanitizePrefix(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String cleaned = value.replaceAll("[^A-Za-z0-9]", "").toUpperCase(Locale.ROOT);
-        if (cleaned.isBlank()) {
-            return null;
-        }
-
-        if (cleaned.length() >= 3) {
-            return cleaned.substring(0, 3);
-        }
-
-        return (cleaned + DEFAULT_PREFIX).substring(0, 3);
     }
 
     private boolean applyNullable(String value, Consumer<String> setter) {

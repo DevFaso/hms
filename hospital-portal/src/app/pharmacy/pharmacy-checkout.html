@@ -35,7 +35,7 @@
           @for (d of dispenses(); track d.id) {
             <option [value]="d.id">
               {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
-              {{ d.dispensedAt | date: 'dd/MM/yyyy HH:mm' }}
+              {{ d.dispensedAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
             </option>
           }
         </select>
@@ -119,7 +119,7 @@
         <h1>Reçu de pharmacie</h1>
         <p class="receipt-meta">
           Nº {{ receiptNumber(r.id) }}<br />
-          Émis le : {{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}
+          Émis le : {{ r.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
         </p>
       </header>
       <div class="receipt-body">
@@ -141,9 +141,7 @@
         </dl>
         <div class="total-row">
           <span>Total payé</span>
-          <span class="amount">{{
-            r.amount | currency: r.currency || 'XOF' : 'symbol' : '1.0-0'
-          }}</span>
+          <span class="amount">{{ r.amount | cfa: r.currency }}</span>
         </div>
         @if (r.notes) {
           <p class="notes">{{ r.notes }}</p>

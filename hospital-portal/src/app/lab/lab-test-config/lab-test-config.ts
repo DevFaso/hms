@@ -13,11 +13,12 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',
@@ -62,6 +63,12 @@ export class LabTestConfigComponent implements OnInit {
   showDefModal = signal(false);
   editingDefCrud = signal(false);
   editingDefId = signal<string | null>(null);
+  /**
+   * QA D705/D721: the code, unit, sample type and LOINC of a submitted, approved or live
+   * definition move only through a new approval (the API refuses the edit), so the form
+   * shows them read-only.
+   */
+  clinicalFieldsLocked = signal(false);
   savingDef = signal(false);
   defForm: LabTestDefinitionRequest = this.emptyDefForm();
 
@@ -249,6 +256,7 @@ export class LabTestConfigComponent implements OnInit {
     this.defForm = this.emptyDefForm();
     this.defForm.assignmentId = this.activeAssignmentId || undefined;
     this.editingDefCrud.set(false);
+    this.clinicalFieldsLocked.set(false);
     this.editingDefId.set(null);
     this.showDefModal.set(true);
   }
@@ -271,6 +279,7 @@ export class LabTestConfigComponent implements OnInit {
     };
     this.editingDefCrud.set(true);
     this.editingDefId.set(def.id);
+    this.clinicalFieldsLocked.set(!this.isEditableDraft(def));
     this.showDefModal.set(true);
   }
 
@@ -329,6 +338,22 @@ export class LabTestConfigComponent implements OnInit {
         this.deletingDefInProgress.set(false);
       },
     });
+  }
+
+  /**
+   * QA D617/D601: reference ranges are frozen once a definition is submitted,
+   * and a definition is deleted only while it is a draft or rejected; an
+   * active one is retired through the approval workflow instead. Mirrors
+   * LabTestDefinitionServiceImpl (RANGES_LOCKED and delete).
+   */
+  /** QA D650: a retired definition is read-only (the API answers 409 to an edit). */
+  isRetired(def: { approvalStatus?: string | null }): boolean {
+    return def.approvalStatus === 'RETIRED';
+  }
+
+  isEditableDraft(def: { approvalStatus?: string | null }): boolean {
+    const status = def.approvalStatus ?? 'DRAFT';
+    return status === 'DRAFT' || status === 'REJECTED';
   }
 
   statusClass(status: string): string {
