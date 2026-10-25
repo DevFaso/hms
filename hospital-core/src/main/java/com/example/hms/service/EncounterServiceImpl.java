@@ -299,6 +299,8 @@ public class EncounterServiceImpl implements EncounterService {
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+    /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
+    private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -2276,6 +2278,7 @@ public class EncounterServiceImpl implements EncounterService {
         // (d) Build and return AVS
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
             checkOutMapper.toAfterVisitSummary(encounter, request, followUpAppointmentId);
+        showDischargingDepartment(encounter, avs);
         // QA D321: the AVS shows the follow-up date the recall was filed with
         // (the defaulted one too, when no date was given).
         if (recallDue != null) {
@@ -2698,6 +2701,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs =
             checkOutMapper.toAfterVisitSummary(encounter, null, null);
+        showDischargingDepartment(encounter, avs);
         // QA D224: a later read used to lose the prescription summary and the
         // education text, which lived only on the checkout request.
         dischargeSummaryRepository.findByEncounter_Id(encounter.getId()).ifPresent(summary -> {
@@ -2725,6 +2729,34 @@ public class EncounterServiceImpl implements EncounterService {
                 .ifPresent(r -> avs.setFollowUpAppointmentDate(r.getDueDate().toString()));
         }
         return avs;
+    }
+
+    /**
+     * QA D795: a stay's encounter keeps the department it was opened in, while
+     * a transfer moves the admission to the new ward's department (QA D237).
+     * The after-visit summary of a stay names the department that discharged
+     * the patient, so it reads the admission's current department. A visit
+     * that is not a stay, an admission with no department, or a stay that
+     * never moved keeps the encounter's own department. The admission id is
+     * the encounter's own, read after the encounter's scope check.
+     */
+    private void showDischargingDepartment(Encounter encounter,
+                                           com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO avs) {
+        if (encounter.getAdmissionId() == null || admissionRepository == null) {
+            return;
+        }
+        admissionRepository.findById(encounter.getAdmissionId())
+            .filter(stay -> sameHospital(stay, encounter))
+            .map(com.example.hms.model.Admission::getDepartment)
+            .map(com.example.hms.model.Department::getName)
+            .filter(name -> !name.isBlank())
+            .ifPresent(avs::setDepartmentName);
+    }
+
+    /** The stay is the encounter's hospital's; never another tenant's department. */
+    private static boolean sameHospital(com.example.hms.model.Admission stay, Encounter encounter) {
+        return stay.getHospital() != null && encounter.getHospital() != null
+            && java.util.Objects.equals(stay.getHospital().getId(), encounter.getHospital().getId());
     }
 
     private static void keepIfGiven(String value, int max, java.util.function.Consumer<String> setter) {

@@ -87,6 +87,7 @@ class EncounterServiceImplReadAccessControlTest {
     @Mock private com.example.hms.repository.DischargeSummaryRepository dischargeSummaryRepository;
     @Mock private com.example.hms.repository.EncounterNoteHistoryRepository encounterNoteHistoryRepository;
     @Mock private com.example.hms.repository.PrescriptionRepository prescriptionRepository;
+    @Mock private com.example.hms.repository.AdmissionRepository admissionRepository;
 
     /**
      * Real, not mocked: identity resolution IS what an ownership guard gets
@@ -372,6 +373,76 @@ class EncounterServiceImplReadAccessControlTest {
             AfterVisitSummaryDTO avs = service.getAfterVisitSummary(mine.getId());
 
             assertThat(avs.getPrescriptionSummary()).isEqualTo("Amoxicilline 1 g\nParacétamol 500 mg");
+        }
+
+        @Test
+        @DisplayName("QA D795: after a transfer, a stay's AVS names the discharging department, not the admitting one")
+        void transferredStayAvsNamesTheDischargingDepartment() {
+            // The QA call: DOCTOR_A, GET /encounters/{stay}/avs after an admission
+            // to Medecine generale, a completed transfer to Cardiologie, and the
+            // discharge. The stay encounter still carries the admitting department.
+            authenticateAs("ROLE_DOCTOR");
+            Encounter stay = stayEncounterAdmittedTo("Médecine générale");
+            com.example.hms.model.Admission admission = admissionAt(hospital, stay.getAdmissionId(), "Cardiologie");
+            lenient().when(admissionRepository.findById(admission.getId())).thenReturn(Optional.of(admission));
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(stay.getId());
+
+            assertThat(avs.getDepartmentName()).isEqualTo("Cardiologie");
+        }
+
+        @Test
+        @DisplayName("QA D795 path re-verified: an outpatient visit's AVS keeps its own department and reads no admission")
+        void outpatientAvsKeepsItsDepartment() {
+            authenticateAs("ROLE_DOCTOR");
+            Encounter visit = encounterAt(hospital, strangerPatient, true);
+            AfterVisitSummaryDTO mapped = new AfterVisitSummaryDTO();
+            mapped.setDepartmentName("Médecine générale");
+            lenient().when(checkOutMapper.toAfterVisitSummary(org.mockito.ArgumentMatchers.same(visit), any(), any()))
+                .thenReturn(mapped);
+
+            AfterVisitSummaryDTO avs = service.getAfterVisitSummary(visit.getId());
+
+            assertThat(avs.getDepartmentName()).isEqualTo("Médecine générale");
+            org.mockito.Mockito.verifyNoInteractions(admissionRepository);
+        }
+
+        @Test
+        @DisplayName("QA D795 path re-verified: a stay with no department on its admission, or another hospital's row, keeps the encounter's")
+        void stayWithoutAdmissionDepartmentKeepsTheEncounters() {
+            authenticateAs("ROLE_DOCTOR");
+            Encounter noDept = stayEncounterAdmittedTo("Médecine générale");
+            com.example.hms.model.Admission bare = admissionAt(hospital, noDept.getAdmissionId(), null);
+            lenient().when(admissionRepository.findById(bare.getId())).thenReturn(Optional.of(bare));
+            Encounter foreign = stayEncounterAdmittedTo("Médecine générale");
+            com.example.hms.model.Admission elsewhere = admissionAt(otherHospital, foreign.getAdmissionId(), "Cardiologie");
+            lenient().when(admissionRepository.findById(elsewhere.getId())).thenReturn(Optional.of(elsewhere));
+
+            assertThat(service.getAfterVisitSummary(noDept.getId()).getDepartmentName()).isEqualTo("Médecine générale");
+            assertThat(service.getAfterVisitSummary(foreign.getId()).getDepartmentName()).isEqualTo("Médecine générale");
+        }
+
+        /** A discharged stay's encounter, opened in {@code department}; the AVS mapper reads that department. */
+        private Encounter stayEncounterAdmittedTo(String department) {
+            Encounter stay = encounterAt(hospital, strangerPatient, true);
+            stay.setAdmissionId(UUID.randomUUID());
+            AfterVisitSummaryDTO mapped = new AfterVisitSummaryDTO();
+            mapped.setDepartmentName(department);
+            lenient().when(checkOutMapper.toAfterVisitSummary(org.mockito.ArgumentMatchers.same(stay), any(), any()))
+                .thenReturn(mapped);
+            return stay;
+        }
+
+        private com.example.hms.model.Admission admissionAt(Hospital where, UUID id, String departmentName) {
+            com.example.hms.model.Admission admission = new com.example.hms.model.Admission();
+            admission.setId(id);
+            admission.setHospital(where);
+            if (departmentName != null) {
+                com.example.hms.model.Department department = new com.example.hms.model.Department();
+                department.setName(departmentName);
+                admission.setDepartment(department);
+            }
+            return admission;
         }
 
         @Test

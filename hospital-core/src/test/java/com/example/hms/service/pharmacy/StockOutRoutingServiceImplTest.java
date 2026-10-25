@@ -333,6 +333,32 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D792: a SIGNED ward order of an ended stay is not routed, printed or back-ordered")
+    void wardOrderOfAnEndedStayIsNotRoutable() {
+        com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+        stay.setAdmissionId(UUID.randomUUID());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        prescription.setEncounter(stay);
+        prescription.setStatus(PrescriptionStatus.SIGNED);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+        String stayEnded = com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded");
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThatThrownBy(() -> service.printForPatient(prescriptionId))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThatThrownBy(() -> service.backOrder(prescriptionId, null))
+                .isInstanceOf(BusinessException.class).hasMessage(stayEnded);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+        verify(routingDecisionRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("an order whose SMS dispatch failed reached no pharmacy and can be printed for the patient")
     void transmissionFailedIsRoutable() {
         prescription.setStatus(PrescriptionStatus.TRANSMISSION_FAILED);

@@ -287,6 +287,47 @@ class MedicationAllergyCdsServiceTest {
 
     /* helpers */
 
+    private CdsHookResponse signFor(String allergen, String medText) {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = patient(patientId, UUID.randomUUID());
+        PatientAllergy a = new PatientAllergy();
+        a.setPatient(patient);
+        a.setAllergenDisplay(allergen);
+        a.setSeverity(AllergySeverity.SEVERE);
+        a.setActive(true);
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(mock(CdsRuleContext.class));
+        when(ddiRule.evaluate(any())).thenReturn(List.of());
+        return service.evaluate(signRequest(patientId, medText));
+    }
+
+    @Test
+    @DisplayName("QA D793: order-sign for ceftriaxone with a penicillin allergy returns a cross-reactivity WARNING")
+    void qaD793CeftriaxoneForPenicillinAllergy() {
+        CdsHookResponse response = signFor("P\u00e9nicilline", "Ceftriaxone injectable 1 g");
+
+        assertThat(response.cards()).singleElement().satisfies(card -> {
+            assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.WARNING);
+            assertThat(card.summary()).contains("Ceftriaxone injectable 1 g").contains("P\u00e9nicilline");
+        });
+    }
+
+    @Test
+    @DisplayName("QA D793 sibling: a penicillin allergy flags amoxicillin as CRITICAL here too, as the prescribing check blocks it")
+    void penicillinAllergyFlagsAmoxicillinAsCritical() {
+        CdsHookResponse response = signFor("Penicillin", "Amoxicillin 500 mg");
+
+        assertThat(response.cards()).singleElement()
+            .satisfies(card -> assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL));
+    }
+
+    @Test
+    @DisplayName("QA D793 path re-verified: a drug no beta-lactam allergy concerns gets no allergy card")
+    void unrelatedDrugGetsNoAllergyCard() {
+        assertThat(signFor("Penicillin", "Paracetamol 1 g").cards()).isEmpty();
+    }
+
     private static Patient patient(UUID id, UUID hospitalId) {
         Patient p = Patient.builder().build();
         p.setId(id);

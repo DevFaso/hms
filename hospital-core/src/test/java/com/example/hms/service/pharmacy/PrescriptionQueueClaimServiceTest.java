@@ -287,6 +287,34 @@ class PrescriptionQueueClaimServiceTest {
         }
 
         @Test
+        @DisplayName("QA D792: a SIGNED ward order of an ended stay is off the queue, so claim and take-over are 409 notInQueue")
+        void wardOrderOfAnEndedStayIsNotClaimable() {
+            com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+            stay.setAdmissionId(UUID.randomUUID());
+            stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            prescription.setEncounter(stay);
+            inScopeAsCaller();
+
+            assertThatThrownBy(() -> service.claim(prescriptionId))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(MessageUtil.resolve("workqueue.claim.notInQueue"));
+            assertThatThrownBy(() -> service.takeOver(prescriptionId))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage(MessageUtil.resolve("workqueue.claim.notInQueue"));
+            verify(claimRepository, never()).save(any());
+            verifyNoInteractions(auditEventLogService);
+
+            // Path re-verified: the same order marked take-home is claimable.
+            prescription.setTakeHome(true);
+            when(dispenseRepository.existsByPrescription_IdAndStatus(prescriptionId, DispenseStatus.PENDING))
+                    .thenReturn(false);
+            when(userRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+            when(claimRepository.findByPrescription_Id(prescriptionId)).thenReturn(Optional.empty());
+            when(claimRepository.save(any(PrescriptionQueueClaim.class))).thenAnswer(inv -> inv.getArgument(0));
+            assertThat(service.claim(prescriptionId).isMine()).isTrue();
+        }
+
+        @Test
         @DisplayName("AC-11: a status outside the queue (withdrawn, dispensed, clarification) is 409 notInQueue")
         void notInQueueIsRefused() {
             for (PrescriptionStatus status : List.of(PrescriptionStatus.CANCELLED, PrescriptionStatus.DISCONTINUED,

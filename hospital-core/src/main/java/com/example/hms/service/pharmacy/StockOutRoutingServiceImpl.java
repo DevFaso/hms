@@ -687,6 +687,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (!ROUTABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("stock.routing.notRoutable", prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
+        // QA D792: a ward order of an ended stay is not sent to a partner,
+        // printed for the patient or back-ordered: the patient has gone home
+        // without it, and only a take-home order goes with them.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
     }
 
     private MedicationCatalogItem resolveCatalogItem(Prescription prescription, UUID hospitalId) {

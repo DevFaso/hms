@@ -717,6 +717,41 @@ class DispenseReadyForCollectionTest {
         }
 
         @Test
+        @DisplayName("QA D792: a fill prepared for a ward order of a stay that has since ended is not handed over")
+        void wardOrderOfAnEndedStayIsNotHandedOver() {
+            // A legacy row: still SIGNED on its closed stay encounter (V233
+            // leaves an order with a prepared fill for the application).
+            prescription.setEncounter(closedStayEncounter());
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D792 path re-verified: a take-home order of the ended stay is still handed over")
+        void takeHomeOrderOfAnEndedStayIsHandedOver() {
+            prescription.setEncounter(closedStayEncounter());
+            prescription.setTakeHome(true);
+            Dispense d = preparedFill();
+            stubLocked(d);
+            stubHandOverWrites(d);
+
+            DispenseResponseDTO result = service.handOver(dispenseId, null);
+
+            assertThat(result.getStatus()).isEqualTo("COMPLETED");
+        }
+
+        private com.example.hms.model.Encounter closedStayEncounter() {
+            com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+            stay.setAdmissionId(UUID.randomUUID());
+            stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+            return stay;
+        }
+
+        @Test
         @DisplayName("AC-6: the controlled-substance guard is re-run: 400")
         void controlledAtHandOver() {
             prescription.setControlledSubstance(true);

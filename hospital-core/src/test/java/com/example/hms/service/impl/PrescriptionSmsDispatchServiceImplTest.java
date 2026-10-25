@@ -531,6 +531,27 @@ class PrescriptionSmsDispatchServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D792: a SIGNED ward order of an ended stay is not dispatched by SMS")
+    void dispatch_rejectsWardOrderOfAnEndedStay() {
+        com.example.hms.model.Encounter stay = new com.example.hms.model.Encounter();
+        stay.setAdmissionId(java.util.UUID.randomUUID());
+        stay.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        rx.setEncounter(stay);
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(rx));
+        when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+        PrescriptionSmsDispatchRequestDTO req = requestForCurrentPharmacy();
+
+        assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.prescription.stayEnded"));
+
+        verify(smsService, never()).send(anyString(), anyString());
+        verify(routingDecisionRepository, never()).save(any());
+        assertThat(rx.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
+    }
+
+    @Test
     @DisplayName("hospital-dispensary pharmacies are rejected (must dispense in-house)")
     void dispatch_rejectsHospitalDispensary() {
         pharmacy.setPharmacyType(PharmacyType.HOSPITAL_DISPENSARY);

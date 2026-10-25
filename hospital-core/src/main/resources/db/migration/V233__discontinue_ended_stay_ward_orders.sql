@@ -1,0 +1,122 @@
+-- V233 (QA D792, residual of D757): ward orders of stays discharged before
+-- the D757 fix (a discharge now discontinues its stay's ward orders) are
+-- still live: SIGNED, PARTIALLY_FILLED or DRAFT on a stay that has ended,
+-- among them morphine. The pharmacy queue and the counter already refuse
+-- them on read; this ends them in the data too, as the discharge would have.
+--
+-- An order is ended when ALL hold:
+--   * it is live: DRAFT, PENDING_SIGNATURE, SIGNED, TRANSMITTED,
+--     TRANSMISSION_FAILED, PENDING_CLARIFICATION, PENDING_STOCK or
+--     PARTIALLY_FILLED (StayOrderDiscontinuation.LIVE_STATUSES);
+--   * it is NOT marked take_home (V231): a take-home order outlives its stay;
+--   * it belongs to a stay that has ended, by the rule the discharge applies
+--     (InpatientOrderEnd.orderOfStay / endedWithItsStay):
+--       1. filed on a stay's own encounter (V193 admission_id) and that
+--          encounter is closed (COMPLETED / CANCELLED) or its admission is
+--          DISCHARGED / CANCELLED; or
+--       2. filed on an INPATIENT encounter with no admission link (V193 did
+--          not backfill admission_id), written at the same hospital between
+--          the admission and the discharge of an ended stay of the patient; or
+--       3. filed on an EMERGENCY encounter still open at that admission,
+--          written at most 24 hours before it and before the discharge (the
+--          department's orders carry on to the ward, QA D702/D712).
+--
+-- Left alone, and counted in the NOTICE: an order with a prepared fill
+-- waiting at the counter (a PENDING dispense holds stock and maybe a payment)
+-- or an open partner routing decision (PENDING / ACCEPTED). Voiding those has
+-- side effects (stock back on the shelf, payment void, the partner told) that
+-- only the application performs; the read-side guards refuse them meanwhile.
+--
+-- Each ended order: status DISCONTINUED, the reason the discharge writes
+-- (withdrawal_reason, plaintext is read as is by EncryptedStringConverter;
+-- a fixed sentence, no PHI), updated_at now. Audit trail: one
+-- support.audit_event_logs row per order, SYSTEM actor (V9), event
+-- PRESCRIPTION_DISCONTINUED, target Prescription + id, the previous status in
+-- details. Ids and statuses only: no patient, no drug name.
+--
+-- Idempotent: a second run finds no live order of an ended stay and writes no
+-- row. Counts only in the NOTICE. One DO block, splitStatements="false".
+DO $$
+DECLARE
+    ended_count INTEGER;
+    held_count INTEGER;
+BEGIN
+    WITH candidates AS (
+        SELECT p.id, p.status AS old_status
+          FROM clinical.prescriptions p
+          JOIN clinical.encounters e ON e.id = p.encounter_id
+         WHERE p.take_home = FALSE
+           AND p.status IN ('DRAFT', 'PENDING_SIGNATURE', 'SIGNED', 'TRANSMITTED',
+                            'TRANSMISSION_FAILED', 'PENDING_CLARIFICATION',
+                            'PENDING_STOCK', 'PARTIALLY_FILLED')
+           AND (
+                (e.admission_id IS NOT NULL
+                 AND (e.status IN ('COMPLETED', 'CANCELLED')
+                      OR EXISTS (SELECT 1
+                                   FROM public.admissions a
+                                  WHERE a.id = e.admission_id
+                                    AND a.status IN ('DISCHARGED', 'CANCELLED'))))
+             OR (e.admission_id IS NULL
+                 AND e.encounter_type = 'INPATIENT'
+                 AND EXISTS (SELECT 1
+                               FROM public.admissions a
+                              WHERE a.patient_id = p.patient_id
+                                AND a.hospital_id = p.hospital_id
+                                AND a.actual_discharge_date_time IS NOT NULL
+                                AND p.created_at >= a.admission_date_time
+                                AND p.created_at <= a.actual_discharge_date_time))
+             OR (e.admission_id IS NULL
+                 AND e.encounter_type = 'EMERGENCY'
+                 AND EXISTS (SELECT 1
+                               FROM public.admissions a
+                              WHERE a.patient_id = p.patient_id
+                                AND a.hospital_id = p.hospital_id
+                                AND a.actual_discharge_date_time IS NOT NULL
+                                AND p.created_at >= a.admission_date_time - INTERVAL '24 hours'
+                                AND p.created_at <= a.actual_discharge_date_time
+                                AND (e.checkout_timestamp IS NULL
+                                     OR e.checkout_timestamp >= a.admission_date_time)))
+           )
+    ), held AS (
+        SELECT c.id
+          FROM candidates c
+         WHERE EXISTS (SELECT 1
+                         FROM clinical.dispenses d
+                        WHERE d.prescription_id = c.id
+                          AND d.status = 'PENDING')
+            OR EXISTS (SELECT 1
+                         FROM clinical.prescription_routing_decisions r
+                        WHERE r.prescription_id = c.id
+                          AND r.status IN ('PENDING', 'ACCEPTED'))
+    ), ended AS (
+        UPDATE clinical.prescriptions p
+           SET status = 'DISCONTINUED',
+               withdrawal_reason = 'Arrêtée à la sortie : prescription du séjour terminé',
+               updated_at = now()
+          FROM candidates c
+         WHERE p.id = c.id
+           AND NOT EXISTS (SELECT 1 FROM held h WHERE h.id = c.id)
+        RETURNING p.id, p.hospital_id, c.old_status
+    ), audited AS (
+        INSERT INTO support.audit_event_logs (
+            id, created_at, updated_at, event_timestamp,
+            user_id, actor_type, actor_label,
+            event_type, status, event_description, details,
+            target_entity_type, target_resource_id, hospital_name)
+        SELECT gen_random_uuid(), now(), now(), now(),
+               NULL, 'SYSTEM', 'Migration V233',
+               'PRESCRIPTION_DISCONTINUED', 'SUCCESS',
+               'Ward order of an ended stay discontinued by migration V233 (QA D792): discharged before ward orders ended with the stay',
+               'status ' || x.old_status || ' -> DISCONTINUED; not take-home',
+               'Prescription', x.id::text, h.name
+          FROM ended x
+          LEFT JOIN hospital.hospitals h ON h.id = x.hospital_id
+        RETURNING 1
+    )
+    SELECT (SELECT count(*) FROM audited), (SELECT count(*) FROM held)
+      INTO ended_count, held_count;
+
+    RAISE NOTICE 'V233: % ward order(s) of ended stays discontinued, % left for a prepared fill or an open partner routing',
+        ended_count, held_count;
+END
+$$;

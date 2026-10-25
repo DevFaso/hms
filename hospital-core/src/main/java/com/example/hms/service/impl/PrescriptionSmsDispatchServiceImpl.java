@@ -270,6 +270,10 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
                 "Only a signed prescription, or one a pharmacy has been offered, refused or placed on "
                     + "back order, can be dispatched by SMS; this one is " + rx.getStatus() + ".");
         }
+        // QA D792: nor a ward order of an ended stay (the rule the counter applies).
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(rx)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
     }
 
     /**

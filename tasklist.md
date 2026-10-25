@@ -2205,6 +2205,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D793 (round 12): no allergy check at administration.** The
+  beta-lactam cross-reactivity advisory now shows at prescribing, on every
+  edit and at the signature (`fix/qa-r12-discharge-safety`), and the CDS
+  Hooks order-sign service flags a penicillin allergy against any penicillin.
+  Owed: the eMAR shows no allergy at all when the nurse scans and gives a
+  dose (no check exists there today, direct match or cross-reactivity), so
+  the nurse in the QA run gave the ceftriaxone with nothing on screen. An
+  administration-time allergy banner and acknowledgement is a new eMAR
+  feature (screen, API field, audit of the acknowledgement), not a bug fix.
+
 - **QA D711 (round 10): one stored note row per daily progress entry.** The
   encounter note is one row per encounter (`uk_encounter_note_encounter`,
   `@OneToOne`), and signing, co-signing and addenda are keyed by encounter.

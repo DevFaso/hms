@@ -250,6 +250,11 @@ public class PrescriptionQueueClaimService {
         if (!DispenseServiceImpl.WORK_QUEUE_STATUSES.contains(prescription.getStatus())) {
             throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
         }
+        // QA D792: the queue leaves out a ward order of an ended stay
+        // (PrescriptionRepository.findWorkQueue), so it is not claimable by id.
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new ConflictException(MessageUtil.resolve(NOT_IN_QUEUE));
+        }
         if (dispenseRepository.existsByPrescription_IdAndStatus(prescription.getId(), DispenseStatus.PENDING)) {
             throw new ConflictException(MessageUtil.resolve(OPEN_PREPARATION));
         }

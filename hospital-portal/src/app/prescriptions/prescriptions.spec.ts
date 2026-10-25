@@ -299,7 +299,12 @@ describe('PrescriptionsComponent — signing', () => {
       'applyUrlScopeSync',
     ]);
 
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [PrescriptionsComponent, TranslateModule.forRoot()],
@@ -571,6 +576,28 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.signingId()).toBeNull();
   });
 
+  it('QA D793: a cross-reactivity advisory returned by the signature is shown as a warning', () => {
+    const summary =
+      "Réaction croisée possible : Ceftriaxone et l'allergie documentée à Pénicilline";
+    prescriptionService.sign.and.returnValue(
+      of({
+        ...rx('rx-1', 'SIGNED'),
+        cdsAdvisories: [{ summary, indicator: 'warning', source: { label: 'HMS allergy check' } }],
+      }),
+    );
+
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.warning).toHaveBeenCalledWith(summary);
+  });
+
+  it('QA D793 path re-verified: a signature with no advisory shows no warning', () => {
+    component.signPrescription(rx('rx-1', 'DRAFT'));
+
+    expect(toast.warning).not.toHaveBeenCalled();
+  });
+
   it('signs through the ceremony endpoint and reloads', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
@@ -696,7 +723,12 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
       'applyUrlScopeSync',
     ]);
 
-    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', [
+      'success',
+      'error',
+      'info',
+      'warning',
+    ]);
 
     await TestBed.configureTestingModule({
       imports: [PrescriptionsComponent, TranslateModule.forRoot()],

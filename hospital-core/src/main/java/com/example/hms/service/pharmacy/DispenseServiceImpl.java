@@ -511,6 +511,12 @@ public class DispenseServiceImpl implements DispenseService {
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
             throw new ConflictException(MessageUtil.resolve("dispense.ready.prescriptionNotDispensable"));
         }
+        // QA D792: a fill prepared before the stay ended is not handed over
+        // either, whatever the order's status still says (a row older than
+        // the D757 discharge rule, or one V233 left for its prepared fill).
+        if (com.example.hms.service.InpatientOrderEnd.endedWithItsStay(prescription)) {
+            throw new BusinessException("pharmacy.prescription.stayEnded");
+        }
         controlledSubstanceGuard.requireDispensable(prescription);
 
         String patientScan = trimToNull(request != null ? request.getPatientScanValue() : null);
