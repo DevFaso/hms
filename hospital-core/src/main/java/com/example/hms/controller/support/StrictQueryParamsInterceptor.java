@@ -46,19 +46,25 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
     private static final int MAX_ECHOED_NAME = 64;
     private static final ParameterNameDiscoverer NAMES = new DefaultParameterNameDiscoverer();
 
-    /** What one handler accepts: {@code anything} when it binds a whole {@code @RequestParam Map}. */
-    record Accepted(boolean anything, Set<String> names) {
+    /**
+     * What one handler accepts. Not {@code enforced} when the handler is not
+     * marked, or binds a whole {@code @RequestParam Map}. Cached per method,
+     * so an unmarked handler costs one map lookup per request.
+     */
+    record Accepted(boolean enforced, Set<String> names) {
+        static final Accepted ANYTHING = new Accepted(false, Set.of());
     }
 
     private final Map<Method, Accepted> acceptedByMethod = new ConcurrentHashMap<>();
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        if (!(handler instanceof HandlerMethod method) || !isStrict(method)) {
+        if (!(handler instanceof HandlerMethod method)) {
             return true;
         }
-        Accepted accepted = acceptedByMethod.computeIfAbsent(method.getMethod(), m -> accepted(method));
-        if (accepted.anything()) {
+        Accepted accepted = acceptedByMethod.computeIfAbsent(method.getMethod(),
+            m -> isStrict(method) ? accepted(method) : Accepted.ANYTHING);
+        if (!accepted.enforced()) {
             return true;
         }
         Set<String> unknown = new TreeSet<>(request.getParameterMap().keySet());
@@ -84,7 +90,7 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
             if (requestParam != null) {
                 String name = StringUtils.hasText(requestParam.name()) ? requestParam.name() : requestParam.value();
                 if (!StringUtils.hasText(name) && Map.class.isAssignableFrom(type)) {
-                    return new Accepted(true, Set.of());
+                    return Accepted.ANYTHING;
                 }
                 addName(names, StringUtils.hasText(name) ? name : parameterName(parameter));
             } else if (Pageable.class.isAssignableFrom(type)) {
@@ -102,7 +108,7 @@ public class StrictQueryParamsInterceptor implements HandlerInterceptor {
                 addName(names, parameterName(parameter));
             }
         }
-        return new Accepted(false, Collections.unmodifiableSet(names));
+        return new Accepted(true, Collections.unmodifiableSet(names));
     }
 
     /**
