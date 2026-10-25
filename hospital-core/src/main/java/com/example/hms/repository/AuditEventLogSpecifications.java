@@ -22,6 +22,8 @@ import java.util.UUID;
  */
 public final class AuditEventLogSpecifications {
 
+    private static final String EVENT_TYPE = "eventType";
+
     private static final String EVENT_TIMESTAMP = "eventTimestamp";
     private static final char LIKE_ESCAPE = '\\';
 
@@ -85,7 +87,7 @@ public final class AuditEventLogSpecifications {
 
     /** {@code eventType} alone; a null type matches everything. */
     public static Specification<AuditEventLog> ofType(AuditEventType type) {
-        return (root, query, cb) -> type == null ? cb.conjunction() : cb.equal(root.get("eventType"), type);
+        return (root, query, cb) -> type == null ? cb.conjunction() : cb.equal(root.get(EVENT_TYPE), type);
     }
 
     private static String escapeLike(String term) {
@@ -113,8 +115,8 @@ public final class AuditEventLogSpecifications {
 
     public static Specification<AuditEventLog> byEventType(AuditEventType type, AuditStatus status) {
         return (root, query, cb) -> status == null
-            ? cb.equal(root.get("eventType"), type)
-            : cb.and(cb.equal(root.get("eventType"), type), cb.equal(root.get("status"), status));
+            ? cb.equal(root.get(EVENT_TYPE), type)
+            : cb.and(cb.equal(root.get(EVENT_TYPE), type), cb.equal(root.get("status"), status));
     }
 
     public static Specification<AuditEventLog> byTarget(String entityType, String resourceId) {

@@ -151,7 +151,7 @@ class AuditEventLogHospitalAnchorIT {
 
         assertThat(ids(page)).containsExactlyInAnyOrder(v229RowA.getId(), userRowA.getId());
         assertThat(page.getTotalElements()).isEqualTo(2);
-        // countDailyByHospital (the dashboard's 7-day chart) shares this WHERE;
+        // countDailyByHospital (the dashboard's 7-day chart) shares this WHERE clause,
         // it uses Postgres' date() and cannot run on H2.
     }
 

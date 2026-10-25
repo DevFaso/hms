@@ -307,7 +307,7 @@ public class LaborServiceImpl implements LaborService {
             throw new BusinessException("maternity.labor.gestationalAgeRange",
                 MIN_LABOUR_GESTATIONAL_WEEKS, MAX_LABOUR_GESTATIONAL_WEEKS);
         }
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
         MaternalHistory pregnancy = new MaternalHistory();
         maternalHistoryMapper.carryForwardHistory(previous, pregnancy);
         pregnancy.setPatient(patient);
@@ -316,7 +316,7 @@ public class LaborServiceImpl implements LaborService {
         // A new pregnancy after a delivered one is the next version of her record.
         Integer latestVersion = maternalHistoryRepository.findMaxVersionByPatientId(patient.getId());
         pregnancy.setVersionNumber(latestVersion == null ? 1 : latestVersion + 1);
-        pregnancy.setRecordedDate(LocalDateTime.now());
+        pregnancy.setRecordedDate(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         pregnancy.setEstimatedDueDate(today.plusWeeks((long) TERM_WEEKS - weeks));
         pregnancy.setGravida(request.getGravida());
         pregnancy.setPara(request.getPara());
@@ -722,13 +722,13 @@ public class LaborServiceImpl implements LaborService {
      * (CAUTION, never a refusal: the clinician may know better, and a birth is
      * always recorded); it names both values so either can be corrected.
      */
-    private void evaluateBirthWeightPlausibility(DeliveryRecord record) {
-        Integer grams = record.getBirthWeightGrams();
-        Integer weeks = record.getGestationalAgeWeeksAtBirth();
+    private void evaluateBirthWeightPlausibility(DeliveryRecord delivery) {
+        Integer grams = delivery.getBirthWeightGrams();
+        Integer weeks = delivery.getGestationalAgeWeeksAtBirth();
         if (grams == null || weeks == null || !isImplausibleBirthWeight(grams, weeks)) {
             return;
         }
-        record.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
+        delivery.addAlert(LaborAlertType.GENERAL, LaborAlertSeverity.CAUTION,
             "labor-weight-implausible",
             alertText("labor-weight-implausible", grams, weeks),
             "birthWeightGrams", new Object[]{grams, weeks});

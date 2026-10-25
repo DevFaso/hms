@@ -1012,8 +1012,9 @@ class LaborServiceImplTest {
             org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
             .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
 
-        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
-                .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build()))
+        LaborEpisodeRequestDTO withoutEstimate = LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, withoutEstimate))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
 
@@ -1128,8 +1129,9 @@ class LaborServiceImplTest {
         when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
 
         // Not linked: her dated pregnancy elsewhere is invisible here, so an estimate is needed.
-        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder()
-                .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build()))
+        LaborEpisodeRequestDTO withoutEstimate = LaborEpisodeRequestDTO.builder()
+            .hospitalId(hospitalId).laborOnsetAt(LocalDateTime.now().minusHours(1)).build();
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, withoutEstimate))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("maternity.labor.pregnancyRequired");
 
