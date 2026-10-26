@@ -739,38 +739,46 @@
           </div>
         }
 
-        <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
-        <div class="form-row">
-          <div class="field">
-            <label for="specimen-type">{{ 'LAB.SPECIMEN_TYPE' | translate }} *</label>
-            <input
-              id="specimen-type"
-              type="text"
-              [placeholder]="'LAB.SPECIMEN_TYPE_PLACEHOLDER' | translate"
-              [(ngModel)]="specimenForm.specimenType"
-            />
+        @if (specimensOrderAcceptsSpecimens()) {
+          <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
+          <div class="form-row">
+            <div class="field">
+              <label for="specimen-type">{{ 'LAB.SPECIMEN_TYPE' | translate }} *</label>
+              <input
+                id="specimen-type"
+                type="text"
+                [placeholder]="'LAB.SPECIMEN_TYPE_PLACEHOLDER' | translate"
+                [(ngModel)]="specimenForm.specimenType"
+              />
+            </div>
+            <div class="field">
+              <label for="specimen-location">{{ 'LAB.LOCATION' | translate }}</label>
+              <input
+                id="specimen-location"
+                type="text"
+                [(ngModel)]="specimenForm.currentLocation"
+              />
+            </div>
           </div>
           <div class="field">
-            <label for="specimen-location">{{ 'LAB.LOCATION' | translate }}</label>
-            <input id="specimen-location" type="text" [(ngModel)]="specimenForm.currentLocation" />
+            <label for="specimen-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="specimen-notes" rows="2" [(ngModel)]="specimenForm.notes"></textarea>
           </div>
-        </div>
-        <div class="field">
-          <label for="specimen-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="specimen-notes" rows="2" [(ngModel)]="specimenForm.notes"></textarea>
-        </div>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeSpecimens()">
           {{ 'COMMON.CLOSE' | translate }}
         </button>
-        <button
-          class="btn-primary"
-          (click)="collectSpecimen()"
-          [disabled]="specimenSaving() || !specimenForm.specimenType.trim()"
-        >
-          {{ 'LAB.COLLECT' | translate }}
-        </button>
+        @if (specimensOrderAcceptsSpecimens()) {
+          <button
+            class="btn-primary"
+            (click)="collectSpecimen()"
+            [disabled]="specimenSaving() || !specimenForm.specimenType.trim()"
+          >
+            {{ 'LAB.COLLECT' | translate }}
+          </button>
+        }
       </div>
     </div>
   </div>

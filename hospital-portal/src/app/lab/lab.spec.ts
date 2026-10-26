@@ -10,6 +10,7 @@ import { LabComponent } from './lab';
 import {
   LabService,
   LabOrderResponse,
+  LabSpecimen,
   LabTestDefinition,
   PerformingLab,
 } from '../services/lab.service';
@@ -198,6 +199,49 @@ describe('LabComponent — performing laboratory', () => {
     component.openSpecimens(order({ labTestCode: 'CBC' }));
 
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+  });
+
+  it('QA D820: a voided order offers neither Receive nor Collect in its specimens modal', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    const collected = {
+      id: 'sp-1',
+      labOrderId: 'o-void',
+      accessionNumber: 'ACC-1',
+      barcodeValue: 'LAB-ACC-1',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'COLLECTED',
+      notes: null,
+    } as LabSpecimen;
+    labService.listSpecimens.and.returnValue(of([collected]));
+    const receiveLabel = (): HTMLElement | undefined =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.modal-body button'),
+      ).find((b) => b.textContent?.includes('LAB.RECEIVE'));
+
+    component.openSpecimens(order({ id: 'o-void', status: 'ENTERED_IN_ERROR' }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(component.canReceive(collected)).toBeFalse();
+    expect(receiveLabel())
+      .withContext('receive answers 400 and would queue an OML')
+      .toBeUndefined();
+    expect(host.querySelector('#specimen-type')).withContext('no collect form').toBeNull();
+    expect(host.querySelector('.modal-actions .btn-primary')).withContext('no Collect').toBeNull();
+    component.specimenForm.specimenType = 'BLOOD';
+    component.collectSpecimen();
+    expect(labService.createSpecimen).not.toHaveBeenCalled();
+
+    // The same specimen on an open order is still received, and the form shown.
+    component.closeSpecimens();
+    component.openSpecimens(order({ id: 'o-open', status: 'COLLECTED' }));
+    fixture.detectChanges();
+    expect(component.canReceive(collected)).toBeTrue();
+    expect(receiveLabel()).toBeDefined();
+    expect(host.querySelector('#specimen-type')).not.toBeNull();
   });
 
   it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {

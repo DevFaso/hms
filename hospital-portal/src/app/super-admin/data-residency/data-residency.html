@@ -71,7 +71,9 @@
               @for (row of visibleRows(); track row.organizationId) {
                 <tr>
                   <td>
-                    <div class="cell-primary">{{ row.organizationName }}</div>
+                    <div class="cell-primary">
+                      {{ row.organizationName | orgText: row.organizationCode }}
+                    </div>
                   </td>
                   <td>
                     <code class="org-code">{{ row.organizationCode }}</code>

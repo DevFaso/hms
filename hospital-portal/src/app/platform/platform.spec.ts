@@ -18,6 +18,7 @@ import {
   OrganizationService,
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
+import fr from '../../assets/i18n/fr.json';
 
 function org(
   id: string,
@@ -249,6 +250,28 @@ describe('PlatformComponent', () => {
       fixture.detectChanges();
       expect(submit().disabled).toBeFalse();
     });
+  });
+
+  /* ── QA D822: the default organisation in the provisioning picker ── */
+
+  it('names the default organisation in French in the provisioning picker (QA D822)', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    c.switchView('catalog');
+    c.openCatalogDetail(catalogItem());
+    // after entering the tab, which loads the organisations itself
+    c.organizations.set([
+      { ...org('o-default', 'Default Healthcare Organization'), code: 'DEFAULT_ORG' },
+    ]);
+    fixture.detectChanges();
+
+    const picker = fixture.nativeElement.querySelector(
+      '[data-test="provision-org"]',
+    ) as HTMLSelectElement;
+    const text = picker.textContent ?? '';
+    expect(text).toContain(fr.ORGANIZATIONS.DEFAULT_ORG_NAME);
+    expect(text).not.toContain('Default Healthcare Organization');
   });
 
   /* ── D13: disabled catalog entries ── */

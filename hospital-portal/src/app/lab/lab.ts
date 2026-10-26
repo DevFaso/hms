@@ -741,7 +741,8 @@ export class LabComponent implements OnInit {
 
   collectSpecimen(): void {
     const order = this.specimensOrder();
-    if (!order || !this.specimenForm.specimenType.trim()) return;
+    if (!order || !this.specimensOrderAcceptsSpecimens() || !this.specimenForm.specimenType.trim())
+      return;
     this.specimenSaving.set(true);
     this.labService
       .createSpecimen(order.id, {
@@ -796,8 +797,20 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D820: an order voided as entered in error takes no further specimen,
+   * and a specimen already collected on it is not received (the server
+   * refuses both, and a receipt would queue an analyzer work order).
+   */
+  specimensOrderAcceptsSpecimens(): boolean {
+    return this.specimensOrder()?.status !== 'ENTERED_IN_ERROR';
+  }
+
   canReceive(specimen: LabSpecimen): boolean {
-    return specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT';
+    return (
+      this.specimensOrderAcceptsSpecimens() &&
+      (specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT')
+    );
   }
 
   getSpecimenStatusClass(status: string): string {

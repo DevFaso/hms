@@ -130,6 +130,12 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
         }
+        // QA D820: a specimen collected before its order was voided is not
+        // received either - the receipt would queue an analyzer work order
+        // (OML^O21) for an order that no longer exists clinically.
+        if (specimen.getLabOrder().getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
 
         if (specimen.getStatus() != LabSpecimenStatus.COLLECTED
                 && specimen.getStatus() != LabSpecimenStatus.IN_TRANSIT) {
@@ -166,6 +172,12 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // this specimen event should have put it, and nothing revisits it.
         labOrderRepository.findWithLockById(labOrder.getId());
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        // QA D820: the void takes this same lock, so a void that committed
+        // after the caller's status check is seen here. Refusing rolls back
+        // the specimen write, and the receipt's outbox row is never queued.
+        if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
         LabOrderStatus moveTo = LabOrderLifecycle.statusAfterForwardStep(committedStatus, target);
         if (moveTo == null) {
             return;
