@@ -219,6 +219,12 @@ export class MaternityComponent implements OnInit {
    * server refuses.
    */
   existingHistory = signal<MaternalHistoryResponse | null>(null);
+  /**
+   * QA D826 (#958 review): the patient's history is held by another facility.
+   * The update only writes over a record of the acting hospital, so this form
+   * cannot record a new version: it says so and keeps Save disabled.
+   */
+  historyHeldElsewhere = signal(false);
   reviewBusyId = signal<string | null>(null);
 
   /* ── Referrals ── */
@@ -475,6 +481,7 @@ export class MaternityComponent implements OnInit {
     this.editingHistoryId.set(null);
     this.selectedPatient.set(null);
     this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
     this.showHistoryModal.set(true);
   }
 
@@ -501,6 +508,7 @@ export class MaternityComponent implements OnInit {
     };
     this.editingHistoryId.set(history.id);
     this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
     this.selectedPatient.set({
       id: history.patientId,
       firstName: this.patientName(history.patientId),
@@ -518,24 +526,51 @@ export class MaternityComponent implements OnInit {
     this.selectedPatient.set(p);
     this.historyForm.patientId = p?.id ?? '';
     this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
     if (p && !this.editingHistoryId()) {
       this.lookUpExistingHistory(p.id);
     }
   }
 
-  /** QA D826: finds the picked patient's current history; none (404) leaves the create open. */
-  private lookUpExistingHistory(patientId: string): void {
+  /**
+   * QA D826: finds the picked patient's current history; none (404) leaves the
+   * create open. Only a record of this hospital can be updated here (the server
+   * refuses an update of another facility's record), so a current history held
+   * elsewhere gets the "held by another facility" notice instead of an edit
+   * that would fail. After a 409 the server has proved a history exists, so a
+   * lookup that finds nothing readable (404) means it is held elsewhere too.
+   */
+  private lookUpExistingHistory(patientId: string, afterConflict = false): void {
     this.maternityService.currentForPatient(patientId).subscribe({
       next: (current) => {
         // A late answer for a patient no longer picked is dropped.
-        if (current && this.historyForm.patientId === patientId && !this.editingHistoryId()) {
+        if (this.historyForm.patientId !== patientId || this.editingHistoryId()) return;
+        if (current && current.hospitalId === this.hospitalId) {
           this.existingHistory.set(current);
+          if (afterConflict) {
+            this.toast.error(this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS'));
+          }
+        } else if (current || afterConflict) {
+          this.markHistoryHeldElsewhere(afterConflict);
         }
       },
-      error: () => {
-        /* no current history: the create stays available */
+      error: (err: unknown) => {
+        if (this.historyForm.patientId !== patientId || this.editingHistoryId()) return;
+        if (afterConflict && (err as { status?: number } | null)?.status === 404) {
+          this.markHistoryHeldElsewhere(true);
+        } else if (afterConflict) {
+          this.toast.error(this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'));
+        }
+        /* before any save, no current history: the create stays available */
       },
     });
+  }
+
+  private markHistoryHeldElsewhere(announce: boolean): void {
+    this.historyHeldElsewhere.set(true);
+    if (announce) {
+      this.toast.error(this.translate.instant('MATERNITY.HISTORY_HELD_ELSEWHERE'));
+    }
   }
 
   /** QA D826: from the "already has a history" notice, edit that record instead. */
@@ -548,6 +583,8 @@ export class MaternityComponent implements OnInit {
 
   submitHistory(): void {
     if (!this.hospitalId) return;
+    // QA D826: a history held by another facility cannot be written here.
+    if (!this.editingHistoryId() && this.historyHeldElsewhere()) return;
     const form = this.historyForm;
     if (!form.patientId || !form.recordedDate) {
       this.toast.error(this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS'));
@@ -580,9 +617,9 @@ export class MaternityComponent implements OnInit {
         this.historySaving.set(false);
         if (!editingId && (err as { status?: number } | null)?.status === 409) {
           // QA D826: she already has a history (picked before the lookup
-          // answered, or written meanwhile): offer to open it.
-          this.toast.error(this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS'));
-          this.lookUpExistingHistory(form.patientId);
+          // answered, written meanwhile, or held by another facility): the
+          // lookup decides between "open it" and "held elsewhere", and says so.
+          this.lookUpExistingHistory(form.patientId, true);
           return;
         }
         this.toast.error(

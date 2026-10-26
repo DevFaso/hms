@@ -9188,6 +9188,7 @@
     "HISTORY_SAVE_ERROR": "Échec de l'enregistrement des antécédents",
     "HISTORY_ALREADY_EXISTS": "Cette patiente a déjà un historique maternel. Ouvrez-le et mettez-le à jour pour enregistrer une nouvelle version.",
     "OPEN_EXISTING_HISTORY": "Ouvrir et mettre à jour l'historique",
+    "HISTORY_HELD_ELSEWHERE": "L'historique maternel de cette patiente est détenu par un autre établissement. Il ne peut pas être mis à jour ici.",
     "SUM_SUBMITTED": "Soumises",
     "SUM_ACKNOWLEDGED": "Accusées",
     "SUM_IN_PROGRESS": "En cours",

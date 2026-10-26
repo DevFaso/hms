@@ -606,6 +606,11 @@
               </button>
             </div>
           }
+          @if (historyHeldElsewhere()) {
+            <div class="history-exists" role="status" data-testid="history-held-elsewhere">
+              <p>{{ 'MATERNITY.HISTORY_HELD_ELSEWHERE' | translate }}</p>
+            </div>
+          }
         }
         <div class="form-row">
           <div class="field">
@@ -910,7 +915,7 @@
           [disabled]="
             historySaving() ||
             !historyForm.patientId ||
-            (!editingHistoryId() && !!existingHistory())
+            (!editingHistoryId() && (!!existingHistory() || historyHeldElsewhere()))
           "
           (click)="submitHistory()"
         >

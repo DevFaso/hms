@@ -9188,6 +9188,7 @@
     "HISTORY_SAVE_ERROR": "Failed to save maternal history",
     "HISTORY_ALREADY_EXISTS": "This patient already has a maternal history. Open it and update it to record a new version.",
     "OPEN_EXISTING_HISTORY": "Open and update the history",
+    "HISTORY_HELD_ELSEWHERE": "This patient's maternal history is held by another facility. It cannot be updated here.",
     "SUM_SUBMITTED": "Submitted",
     "SUM_ACKNOWLEDGED": "Acknowledged",
     "SUM_IN_PROGRESS": "In progress",

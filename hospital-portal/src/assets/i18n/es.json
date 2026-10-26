@@ -9188,6 +9188,7 @@
     "HISTORY_SAVE_ERROR": "Error al guardar los antecedentes",
     "HISTORY_ALREADY_EXISTS": "Esta paciente ya tiene un historial materno. Ábralo y actualícelo para registrar una nueva versión.",
     "OPEN_EXISTING_HISTORY": "Abrir y actualizar el historial",
+    "HISTORY_HELD_ELSEWHERE": "El historial materno de esta paciente lo gestiona otro establecimiento. No se puede actualizar aquí.",
     "SUM_SUBMITTED": "Enviadas",
     "SUM_ACKNOWLEDGED": "Confirmadas",
     "SUM_IN_PROGRESS": "En curso",

@@ -150,6 +150,8 @@ describe('MaternityComponent — new history for a patient who already has one (
   } as unknown as MaternalHistoryResponse;
   const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
   const notice = (): HTMLElement | null => host().querySelector('[data-testid="history-exists"]');
+  const heldElsewhere = (): HTMLElement | null =>
+    host().querySelector('[data-testid="history-held-elsewhere"]');
   const saveButton = (): HTMLButtonElement =>
     host().querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
 
@@ -261,6 +263,72 @@ describe('MaternityComponent — new history for a patient who already has one (
     );
     expect(toast.error).not.toHaveBeenCalledWith(jasmine.stringContaining('already exists'));
     expect(notice()).not.toBeNull();
+  });
+
+  it('a current history held by another facility is never offered for edit: notice, Save disabled', () => {
+    maternity.currentForPatient.and.returnValue(of({ ...existing, hospitalId: 'h-2' }));
+
+    fixture.componentInstance.onHistoryPatientPicked({ id: 'p-fatimata' } as never);
+    fixture.detectChanges();
+
+    expect(notice()).toBeNull();
+    expect(heldElsewhere()?.textContent).toContain('détenu par un autre établissement');
+    expect(heldElsewhere()?.querySelector('button')).toBeNull();
+    expect(saveButton().disabled).toBeTrue();
+
+    fixture.componentInstance.submitHistory();
+    expect(maternity.create).not.toHaveBeenCalled();
+  });
+
+  it('a 409 whose lookup finds nothing readable (404) says the history is held elsewhere, and holds Save', () => {
+    maternity.currentForPatient.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404 })),
+    );
+    maternity.create.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { message: 'Maternal history already exists for patient.', field: 'patientId' },
+          }),
+      ),
+    );
+    fixture.componentInstance.onHistoryPatientPicked({ id: 'p-fatimata' } as never);
+    fixture.detectChanges();
+    expect(saveButton().disabled).toBeFalse();
+
+    fixture.componentInstance.submitHistory();
+    fixture.detectChanges();
+
+    expect(toast.error).toHaveBeenCalledWith(
+      jasmine.stringContaining('détenu par un autre établissement'),
+    );
+    expect(toast.error).not.toHaveBeenCalledWith(jasmine.stringContaining('Ouvrez-le'));
+    expect(notice()).toBeNull();
+    expect(heldElsewhere()).not.toBeNull();
+    expect(saveButton().disabled).toBeTrue();
+
+    fixture.componentInstance.submitHistory();
+    expect(maternity.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('a 409 whose lookup finds a record of another facility says it is held elsewhere, not "open it"', () => {
+    maternity.currentForPatient.and.returnValues(
+      throwError(() => new HttpErrorResponse({ status: 404 })),
+      of({ ...existing, hospitalId: 'h-2' }),
+    );
+    maternity.create.and.returnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
+    fixture.componentInstance.onHistoryPatientPicked({ id: 'p-fatimata' } as never);
+
+    fixture.componentInstance.submitHistory();
+    fixture.detectChanges();
+
+    expect(toast.error).toHaveBeenCalledWith(
+      jasmine.stringContaining('détenu par un autre établissement'),
+    );
+    expect(notice()).toBeNull();
+    expect(heldElsewhere()).not.toBeNull();
+    expect(saveButton().disabled).toBeTrue();
   });
 });
 
