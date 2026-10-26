@@ -240,7 +240,14 @@
     "TIME": "Hora",
     "URINE_ML": "Orina (ml)",
     "UTEROTONIC_GIVEN": "Uterotónico administrado (MATEP)",
-    "PICK_PATIENT_HINT": "Elija una paciente para ver su registro de parto."
+    "PICK_PATIENT_HINT": "Elija una paciente para ver su registro de parto.",
+    "SYSTOLIC": "Sistólica (mmHg)",
+    "DIASTOLIC": "Diastólica (mmHg)",
+    "TEMPERATURE": "Temperatura (°C)",
+    "APGAR_ONE": "APGAR al minuto 1",
+    "APGAR_FIVE": "APGAR al minuto 5",
+    "BIRTH_BEFORE_LAST_ENTRY": "Hora de nacimiento: no puede ser anterior a una observación ya registrada en el partograma.",
+    "PLACENTA_BEFORE_BIRTH": "Alumbramiento de la placenta: no puede ser anterior al nacimiento."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
@@ -9249,7 +9256,10 @@
     "POSTPARTUM_TAB": "Posparto",
     "URGENCY_ATTACHMENT_REQUIRED": "Las derivaciones prioritarias y urgentes requieren al menos un adjunto de respaldo, que este formulario aún no admite. Cree la derivación como Rutinaria por ahora.",
     "VERSIONS_LOAD_ERROR": "Error al cargar el historial de versiones",
-    "NO_VERSIONS": "Sin versiones anteriores"
+    "NO_VERSIONS": "Sin versiones anteriores",
+    "PARA_ABOVE_GRAVIDA": "La paridad (P) no puede ser mayor que la gravidez (G): cada parto contado en P es también un embarazo contado en G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "La paridad (P) más los abortos (A) no pueden ser mayores que la gravidez (G): cada embarazo termina como máximo en uno de ellos.",
+    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Todas las órdenes",
@@ -9415,7 +9425,10 @@
     "VISIT_INITIAL_INTAKE": "Consulta inicial",
     "VISIT_ROUTINE_CHECK": "Control de rutina",
     "VISIT_ULTRASOUND": "Ecografía",
-    "VISIT_LATE_PREGNANCY": "Embarazo tardío"
+    "VISIT_LATE_PREGNANCY": "Embarazo tardío",
+    "BOOK": "Programar",
+    "BOOK_REASON": "Control prenatal (semana {{week}})",
+    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración)."
   },
   "PRO": {
     "HEADING": "Cribado de salud mental ({{instrument}})",
@@ -9594,7 +9607,13 @@
     "DELIVERY_LINK_NONE": "Sin vincular (nacido en otro lugar)",
     "DELIVERY_LINKED": "vinculado al parto",
     "PICK_PATIENT_HINT": "Elija una paciente para ver su seguimiento posparto.",
-    "PHASE_UNKNOWN": "Fase aún no definida"
+    "PHASE_UNKNOWN": "Fase aún no definida",
+    "APGAR_ONE": "APGAR al minuto 1",
+    "APGAR_FIVE": "APGAR al minuto 5",
+    "APGAR_TEN": "APGAR al minuto 10",
+    "TEMPERATURE": "Temperatura (°C)",
+    "SYSTOLIC": "Sistólica (mmHg)",
+    "DIASTOLIC": "Diastólica (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",
@@ -11175,5 +11194,10 @@
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",
+    "MIN": "{{field}}: el valor debe ser como mínimo {{min}}.",
+    "FIELD_REASON": "{{field}}: {{reason}}"
   }
 }

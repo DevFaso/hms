@@ -635,4 +635,84 @@ class MaternalHistoryServiceImplTest {
         verify(maternalHistoryRepository).save(captor.capture());
         assertThat(captor.getValue().getEstimatedDueDate()).isEqualTo(lmp.plusDays(280));
     }
+
+    /* ── QA D809: "G1 P3" was saved; the counts must describe one possible history ── */
+
+    private void realMapping() {
+        com.example.hms.mapper.MaternalHistoryMapper real = new com.example.hms.mapper.MaternalHistoryMapper();
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            real.updateEntityFromRequest(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(maternalHistoryMapper).updateEntityFromRequest(any(MaternalHistory.class), any());
+    }
+
+    private void writable() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(userId, hospitalId)).thenReturn(Optional.of(staff));
+        realMapping();
+    }
+
+    private MaternalHistoryRequestDTO withCounts(Integer gravida, Integer para, Integer abortions) {
+        requestDTO.setObstetricHistory(MaternalHistoryRequestDTO.ObstetricHistoryDTO.builder()
+            .gravida(gravida).para(para).abortions(abortions).build());
+        return requestDTO;
+    }
+
+    @Test
+    void qaD809ANewHistoryG1P3IsRefusedOnTheParaField() {
+        writable();
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+        MaternalHistoryRequestDTO request = withCounts(1, 3, null);
+
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(request, username))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "obstetricHistory.para")
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.paraAboveGravida");
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD809ANewVersionG1P3IsRefusedToo() {
+        UUID existingId = UUID.randomUUID();
+        MaternalHistory existing = MaternalHistory.builder().patient(patient).hospital(hospital).versionNumber(1).build();
+        existing.setId(existingId);
+        when(maternalHistoryRepository.findById(existingId)).thenReturn(Optional.of(existing));
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        writable();
+        MaternalHistoryRequestDTO request = withCounts(1, 3, null);
+
+        assertThatThrownBy(() -> maternalHistoryService.updateMaternalHistory(existingId, request, username))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "obstetricHistory.para");
+        verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD809BirthsPlusAbortionsAboveGravidityAreRefusedOnTheAbortionsField() {
+        writable();
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+        MaternalHistoryRequestDTO request = withCounts(3, 1, 3);
+
+        assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(request, username))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "obstetricHistory.abortions")
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.outcomesAboveGravida");
+    }
+
+    @Test
+    void qaD809ConsistentCountsAreSaved() {
+        writable();
+        when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(false);
+        when(maternalHistoryRepository.save(any(MaternalHistory.class))).thenAnswer(inv -> inv.getArgument(0));
+        MaternalHistoryRequestDTO request = withCounts(3, 2, 1);
+
+        maternalHistoryService.createMaternalHistory(request, username);
+
+        ArgumentCaptor<MaternalHistory> captor = ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getGravida()).isEqualTo(3);
+        assertThat(captor.getValue().getPara()).isEqualTo(2);
+    }
 }

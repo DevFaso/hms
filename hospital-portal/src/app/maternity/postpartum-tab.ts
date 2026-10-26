@@ -40,7 +40,9 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { refusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   ProInstrumentFormComponent,
@@ -56,6 +58,36 @@ import {
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+/** QA D808: the bounds NewbornAssessmentRequestDTO puts on each number (APGAR 15 was sent). */
+export const NEWBORN_LIMITS: readonly FieldLimit[] = [
+  { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
+  { field: 'apgarFiveMinute', labelKey: 'POSTPARTUM.APGAR_FIVE', min: 0, max: 10 },
+  { field: 'apgarTenMinute', labelKey: 'POSTPARTUM.APGAR_TEN', min: 0, max: 10 },
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+];
+
+/**
+ * QA D808 (sibling): the bounds PostpartumObservationRequestDTO puts on each
+ * number. The pain score's refusal was the same bare "≤ 10".
+ */
+export const OBSERVATION_LIMITS: readonly FieldLimit[] = [
+  { field: 'temperatureCelsius', labelKey: 'POSTPARTUM.TEMPERATURE', min: 25, max: 44 },
+  { field: 'systolicBpMmHg', labelKey: 'POSTPARTUM.SYSTOLIC', min: 40, max: 300 },
+  { field: 'diastolicBpMmHg', labelKey: 'POSTPARTUM.DIASTOLIC', min: 20, max: 200 },
+  { field: 'pulseBpm', labelKey: 'POSTPARTUM.PULSE', min: 20, max: 300 },
+  { field: 'respirationsPerMin', labelKey: 'POSTPARTUM.RESP', min: 4, max: 80 },
+  { field: 'painScore', labelKey: 'POSTPARTUM.PAIN', min: 0, max: 10 },
+];
+
+const NEWBORN_LABELS: Record<string, string> = {
+  ...labelKeysOf(NEWBORN_LIMITS),
+  assessmentTime: 'POSTPARTUM.TIME',
+};
+const OBSERVATION_LABELS: Record<string, string> = {
+  ...labelKeysOf(OBSERVATION_LIMITS),
+  observationTime: 'POSTPARTUM.TIME',
+};
+
 /** The instrument the postpartum module screens with when the plan does not say. */
 const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
 
@@ -64,6 +96,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
   standalone: true,
   imports: [
     ServerTimePipe,
+    MeasurePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -384,12 +417,16 @@ export class PostpartumTabComponent {
     });
   }
 
-  /** "12 Aug 2026, vaginal" — enough to tell twins' episodes apart. */
+  /**
+   * "12 Aug 2026 — Spontaneous vaginal" — enough to tell twins' episodes
+   * apart. QA D807: the mode is its translated label, never the raw code.
+   */
   deliveryLabel(d: DeliveryRecordResponse): string {
     const when = d.birthDateTime
       ? serverInstant(d.birthDateTime).toLocaleDateString(currentLocale())
       : '';
-    return `${when} — ${d.deliveryMode ?? ''}`.trim();
+    const mode = d.deliveryMode ? this.translate.instant('LABOR.MODE_' + d.deliveryMode) : '';
+    return [when, mode].filter((part) => part !== '').join(' — ');
   }
 
   phaseLabelKey(schedule: PostpartumSchedule): string {
@@ -428,6 +465,11 @@ export class PostpartumTabComponent {
     this.observationForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     // QA D86: without a care plan the backend needs the acting hospital.
     this.observationForm.hospitalId = this.actingHospitalId();
+    const outOfRange = firstOutOfRange(this.observationForm, OBSERVATION_LIMITS);
+    if (outOfRange) {
+      this.toast.error(rangeMessage(outOfRange, this.translate));
+      return;
+    }
     this.observationSaving.set(true);
     this.postpartumService
       .createObservation(patient.id, withServerDateTimes(this.observationForm, ['observationTime']))
@@ -445,7 +487,8 @@ export class PostpartumTabComponent {
         },
         error: (err: unknown) => {
           this.toast.error(
-            refusalReason(err) ?? this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
+            labelledRefusalReason(err, this.translate, OBSERVATION_LABELS) ??
+              this.translate.instant('POSTPARTUM.OBSERVATION_SAVE_ERROR'),
           );
           this.observationSaving.set(false);
         },
@@ -482,6 +525,11 @@ export class PostpartumTabComponent {
     this.assessmentForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.assessmentForm.followUpActions = [...this.selectedFollowUps];
     this.assessmentForm.hospitalId = this.actingHospitalId();
+    const outOfRange = firstOutOfRange(this.assessmentForm, NEWBORN_LIMITS);
+    if (outOfRange) {
+      this.toast.error(rangeMessage(outOfRange, this.translate));
+      return;
+    }
     this.assessmentSaving.set(true);
     this.postpartumService
       .createNewbornAssessment(
@@ -501,7 +549,8 @@ export class PostpartumTabComponent {
         },
         error: (err: unknown) => {
           this.toast.error(
-            refusalReason(err) ?? this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
+            labelledRefusalReason(err, this.translate, NEWBORN_LABELS) ??
+              this.translate.instant('POSTPARTUM.ASSESSMENT_SAVE_ERROR'),
           );
           this.assessmentSaving.set(false);
         },

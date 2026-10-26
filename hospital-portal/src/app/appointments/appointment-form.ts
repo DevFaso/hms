@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { of, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
@@ -12,6 +12,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { localDateString } from '../shared/date-utils';
 
 interface DeptOption {
   id: string;
@@ -32,6 +33,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly hospitalService = inject(HospitalService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
@@ -130,6 +132,37 @@ export class AppointmentFormComponent implements OnInit {
 
     this.initPatientSearch();
     this.initStaffSearch();
+    this.applyPrefill();
+  }
+
+  /**
+   * QA D810: the prenatal calendar's "Book" action opens this form with the
+   * patient, the recommended day, a suggested time and an antenatal reason
+   * filled in. Each value is only a suggestion the user can change; a
+   * malformed one is ignored, and a day in the past is not offered.
+   */
+  private applyPrefill(): void {
+    const params = this.route.snapshot.queryParamMap;
+    const date = params.get('date');
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= localDateString()) {
+      this.form.appointmentDate = date;
+    }
+    const time = params.get('time');
+    if (time && /^\d{2}:\d{2}$/.test(time)) {
+      this.form.startTime = time;
+      this.onStartTimeChange();
+    }
+    const reason = params.get('reason');
+    if (reason) {
+      this.form.reason = reason.trim().slice(0, 255);
+    }
+    const patientId = params.get('patientId');
+    if (patientId && /^[0-9a-f-]{36}$/i.test(patientId)) {
+      this.patientService.getById(patientId).subscribe({
+        next: (patient) => this.selectPatient(patient),
+        error: () => undefined,
+      });
+    }
   }
 
   // ── Patient search ──────────────────────────────────────

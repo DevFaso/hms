@@ -163,6 +163,21 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * QA D806/D809: a business rule about one field. The standard body, plus
+     * {@code fieldErrors} naming that field (the bean-validation shape), so the
+     * form can mark it; the reason is already translated.
+     */
+    @ExceptionHandler(FieldBusinessException.class)
+    public ResponseEntity<Object> handleFieldBusinessException(FieldBusinessException ex, WebRequest request) {
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        if (ex.getField() != null && ex.getMessage() != null) {
+            body.put(FIELD_FIELD, ex.getField());
+            body.put("fieldErrors", Map.of(ex.getField(), ex.getMessage()));
+        }
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);

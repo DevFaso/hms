@@ -240,7 +240,14 @@
     "TIME": "Time",
     "URINE_ML": "Urine (ml)",
     "UTEROTONIC_GIVEN": "Uterotonic given (AMTSL)",
-    "PICK_PATIENT_HINT": "Pick a patient to see her labour record."
+    "PICK_PATIENT_HINT": "Pick a patient to see her labour record.",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)",
+    "TEMPERATURE": "Temperature (°C)",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "BIRTH_BEFORE_LAST_ENTRY": "Time of birth: it cannot be earlier than an observation already charted on the partograph.",
+    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -9249,7 +9256,10 @@
     "POSTPARTUM_TAB": "Postpartum",
     "URGENCY_ATTACHMENT_REQUIRED": "Priority and urgent referrals require at least one supporting attachment, which this form does not support yet. Create the referral as Routine for now.",
     "VERSIONS_LOAD_ERROR": "Failed to load version history",
-    "NO_VERSIONS": "No earlier versions"
+    "NO_VERSIONS": "No earlier versions",
+    "PARA_ABOVE_GRAVIDA": "Parity (P) cannot be higher than gravidity (G): every birth counted in P is also a pregnancy counted in G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "Parity (P) plus abortions (A) cannot be higher than gravidity (G): each pregnancy ends in at most one of them.",
+    "RECORDED_FUTURE": "Recorded: the date cannot be in the future."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "All orders",
@@ -9415,7 +9425,10 @@
     "VISIT_INITIAL_INTAKE": "Initial intake",
     "VISIT_ROUTINE_CHECK": "Routine check",
     "VISIT_ULTRASOUND": "Ultrasound",
-    "VISIT_LATE_PREGNANCY": "Late pregnancy"
+    "VISIT_LATE_PREGNANCY": "Late pregnancy",
+    "BOOK": "Book",
+    "BOOK_REASON": "Antenatal visit (week {{week}})",
+    "BOOK_HINT": "Book a recommended visit to plan it as an appointment; it then shows as planned. On the day, check the patient in on the appointment to open the consultation where the visit (vital signs, examination) is recorded."
   },
   "PRO": {
     "HEADING": "Mental-health screening ({{instrument}})",
@@ -9594,7 +9607,13 @@
     "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
     "DELIVERY_LINKED": "linked to delivery",
     "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record.",
-    "PHASE_UNKNOWN": "Phase not yet set"
+    "PHASE_UNKNOWN": "Phase not yet set",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "APGAR_TEN": "APGAR at 10 min",
+    "TEMPERATURE": "Temperature (°C)",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -11175,5 +11194,10 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
+    "MIN": "{{field}}: the value must be at least {{min}}.",
+    "FIELD_REASON": "{{field}}: {{reason}}"
   }
 }

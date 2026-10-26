@@ -20,21 +20,73 @@ import {
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
-import { refusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+import { FieldLimit, firstOutOfRange, labelKeysOf, rangeMessage } from '../shared/field-limits';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { PartographChartComponent } from './partograph-chart.component';
 
 /**
  * Labor & Delivery tab (P1 #6): start a labor episode, chart WHO partograph
  * timepoints against the alert/action lines, file the delivery record.
  */
-import { withServerDateTimes } from '../shared/date-utils';
+import { fromServerDateTime, localInputInstant, withServerDateTimes } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+
+/**
+ * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
+ * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
+ * first and names the field.
+ */
+export const PARTOGRAPH_LIMITS: readonly FieldLimit[] = [
+  { field: 'fetalHeartRateBpm', labelKey: 'LABOR.FHR', min: 0, max: 300 },
+  { field: 'cervicalDilationCm', labelKey: 'LABOR.DILATION', min: 0, max: 10 },
+  { field: 'descentFifths', labelKey: 'LABOR.DESCENT', min: 0, max: 5 },
+  { field: 'contractionsPerTenMinutes', labelKey: 'LABOR.CONTRACTIONS_TEN', min: 0, max: 10 },
+  { field: 'contractionDurationSeconds', labelKey: 'LABOR.CONTRACTION_SECONDS', min: 0, max: 600 },
+  { field: 'oxytocinDropsPerMinute', labelKey: 'LABOR.OXYTOCIN_DROPS', min: 0, max: 120 },
+  { field: 'pulseBpm', labelKey: 'LABOR.PULSE', min: 0, max: 300 },
+  { field: 'systolicBpMmHg', labelKey: 'LABOR.SYSTOLIC', min: 0, max: 350 },
+  { field: 'diastolicBpMmHg', labelKey: 'LABOR.DIASTOLIC', min: 0, max: 250 },
+  { field: 'temperatureCelsius', labelKey: 'LABOR.TEMPERATURE', min: 25, max: 44 },
+  { field: 'urineOutputMl', labelKey: 'LABOR.URINE_ML', min: 0 },
+];
+
+/** QA D808: the bounds DeliveryRecordRequestDTO puts on each number (APGAR 15 was sent). */
+export const DELIVERY_LIMITS: readonly FieldLimit[] = [
+  { field: 'numberOfInfants', labelKey: 'LABOR.NUMBER_OF_INFANTS', min: 1, max: 5 },
+  { field: 'birthWeightGrams', labelKey: 'LABOR.BIRTH_WEIGHT', min: 200, max: 9000 },
+  { field: 'apgarOneMinute', labelKey: 'LABOR.APGAR_ONE', min: 0, max: 10 },
+  { field: 'apgarFiveMinute', labelKey: 'LABOR.APGAR_FIVE', min: 0, max: 10 },
+  { field: 'estimatedBloodLossMl', labelKey: 'LABOR.BLOOD_LOSS', min: 0, max: 5000 },
+];
+
+/** QA D809: the bounds LaborEpisodeRequestDTO puts on the admission's numbers. */
+export const EPISODE_LIMITS: readonly FieldLimit[] = [
+  { field: 'gestationalAgeWeeks', labelKey: 'MATERNITY.GESTATIONAL_AGE', min: 20, max: 45 },
+  { field: 'gravida', labelKey: 'MATERNITY.GRAVIDA', min: 0 },
+  { field: 'para', labelKey: 'MATERNITY.PARA', min: 0 },
+];
+
+const PARTOGRAPH_LABELS: Record<string, string> = {
+  ...labelKeysOf(PARTOGRAPH_LIMITS),
+  observationTime: 'LABOR.TIME',
+};
+const DELIVERY_LABELS: Record<string, string> = {
+  ...labelKeysOf(DELIVERY_LIMITS),
+  birthDateTime: 'LABOR.BIRTH_TIME',
+  placentaDeliveredAt: 'LABOR.PLACENTA_TIME',
+};
+const EPISODE_LABELS: Record<string, string> = {
+  ...labelKeysOf(EPISODE_LIMITS),
+  laborOnsetAt: 'LABOR.ONSET_TIME',
+};
 
 @Component({
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
     ServerTimePipe,
+    MeasurePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -165,6 +217,23 @@ export class LaborTabComponent {
     const patient = this.patient();
     // QA D295: an episode needs its onset time; the button is disabled without it.
     if (!patient || !this.startForm.laborOnsetAt) return;
+    const outOfRange = firstOutOfRange(this.startForm, EPISODE_LIMITS);
+    if (outOfRange) {
+      this.toast.error(rangeMessage(outOfRange, this.translate));
+      return;
+    }
+    // QA D809: G1 P3 was saved. P counts births, each of which ended a pregnancy counted in G.
+    const { gravida, para } = this.startForm;
+    if (
+      gravida !== undefined &&
+      gravida !== null &&
+      para !== undefined &&
+      para !== null &&
+      para > gravida
+    ) {
+      this.toast.error(this.translate.instant('MATERNITY.PARA_ABOVE_GRAVIDA'));
+      return;
+    }
     this.saving.set(true);
     this.laborService
       .startEpisode(
@@ -183,7 +252,8 @@ export class LaborTabComponent {
           // override) is shown, not hidden behind a generic failure; QA D746:
           // a field reason (an admission in the future) included.
           this.toast.error(
-            refusalReason(err) ?? this.translate.instant('LABOR.EPISODE_START_ERROR'),
+            labelledRefusalReason(err, this.translate, EPISODE_LABELS) ??
+              this.translate.instant('LABOR.EPISODE_START_ERROR'),
           );
           this.saving.set(false);
         },
@@ -215,6 +285,11 @@ export class LaborTabComponent {
       this.toast.error(this.translate.instant('LABOR.ENTRY_REQUIRED'));
       return;
     }
+    const outOfRange = firstOutOfRange(form, PARTOGRAPH_LIMITS);
+    if (outOfRange) {
+      this.toast.error(rangeMessage(outOfRange, this.translate));
+      return;
+    }
     this.saving.set(true);
     this.laborService
       .addEntry(patient.id, episode.id, withServerDateTimes(form, ['observationTime']))
@@ -234,7 +309,10 @@ export class LaborTabComponent {
           this.loadEpisodes(patient.id);
         },
         error: (err: unknown) => {
-          this.toast.error(refusalReason(err) ?? this.translate.instant('LABOR.ENTRY_SAVE_ERROR'));
+          this.toast.error(
+            labelledRefusalReason(err, this.translate, PARTOGRAPH_LABELS) ??
+              this.translate.instant('LABOR.ENTRY_SAVE_ERROR'),
+          );
           this.saving.set(false);
         },
       });
@@ -257,6 +335,11 @@ export class LaborTabComponent {
     if (!patient || !episode) return;
     if (!this.deliveryForm.deliveryMode) {
       this.toast.error(this.translate.instant('LABOR.DELIVERY_MODE_REQUIRED'));
+      return;
+    }
+    const problem = this.deliveryProblem();
+    if (problem) {
+      this.toast.error(problem);
       return;
     }
     this.saving.set(true);
@@ -283,11 +366,38 @@ export class LaborTabComponent {
         },
         error: (err: unknown) => {
           this.toast.error(
-            refusalReason(err) ?? this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'),
+            labelledRefusalReason(err, this.translate, DELIVERY_LABELS) ??
+              this.translate.instant('LABOR.DELIVERY_SAVE_ERROR'),
           );
           this.saving.set(false);
         },
       });
+  }
+
+  /**
+   * QA D806/D808: what is wrong with the delivery form before it is sent, or
+   * null. A number outside the server's bounds; a birth earlier than an
+   * observation already charted on the partograph; a placenta delivered
+   * before the birth (no birth time typed means the birth is recorded now).
+   * The server refuses the same, on the same fields.
+   */
+  private deliveryProblem(): string | null {
+    const outOfRange = firstOutOfRange(this.deliveryForm, DELIVERY_LIMITS);
+    if (outOfRange) return rangeMessage(outOfRange, this.translate);
+    const typedBirth = localInputInstant(this.deliveryForm.birthDateTime);
+    const birth = typedBirth ?? new Date();
+    const lastObservation = this.entries()
+      .map((entry) => fromServerDateTime(entry.observationTime))
+      .filter((when): when is Date => when !== null)
+      .reduce<Date | null>((latest, when) => (!latest || when > latest ? when : latest), null);
+    if (typedBirth && lastObservation && typedBirth < lastObservation) {
+      return this.translate.instant('LABOR.BIRTH_BEFORE_LAST_ENTRY');
+    }
+    const placenta = localInputInstant(this.deliveryForm.placentaDeliveredAt);
+    if (placenta && placenta < birth) {
+      return this.translate.instant('LABOR.PLACENTA_BEFORE_BIRTH');
+    }
+    return null;
   }
 
   /* ── Display helpers ───────────────────────────────────── */

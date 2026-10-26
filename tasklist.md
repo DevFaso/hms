@@ -2205,6 +2205,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D810 (round 13): a record-a-prenatal-visit flow.**
+  The prenatal calendar now books each unplanned recommended visit (a
+  "Planifier" link to the appointment form, prefilled with the patient, the
+  day and an antenatal reason the scheduler counts), and says how a booked
+  visit is recorded (check-in on the appointment opens the consultation)
+  (`fix/qa-r13-maternity`). Owed: there is no antenatal-visit record (fundal
+  height, fetal heart, presentation, oedema, BP and weight trend per visit,
+  linked to the pregnancy) and no screen for it; the backend has no entity or
+  endpoint for one, so it is a new module, not a bug fix.
+
 - **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
   The beta-lactam cross-reactivity advisory now shows at prescribing, on
   every edit, at the signature, on the eMAR row (queue chip, a card before

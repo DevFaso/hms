@@ -4,7 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { MaternityComponent } from './maternity';
+import { MaternityComponent, historyFormProblem } from './maternity';
 import { MaternityService } from '../services/maternity.service';
 import { ObgynReferralService } from '../services/obgyn-referral.service';
 import { PatientService } from '../services/patient.service';
@@ -127,5 +127,43 @@ describe('MaternityComponent — tabs', () => {
     fixture.detectChanges();
     expect(activeTab()).toBe('Échographies');
     expect(host().querySelector('app-ultrasound-tab')).not.toBeNull();
+  });
+});
+
+describe('historyFormProblem (QA D809, D821)', () => {
+  const now = new Date(2026, 9, 25, 12, 0);
+  const form = (over: Record<string, unknown>) =>
+    ({
+      patientId: 'p1',
+      hospitalId: 'h1',
+      recordedDate: '2026-10-25T11:30',
+      obstetricHistory: {},
+      ...over,
+    }) as never;
+
+  it('refuses G1 P3, as the server does', () => {
+    expect(historyFormProblem(form({ obstetricHistory: { gravida: 1, para: 3 } }), now)).toBe(
+      'MATERNITY.PARA_ABOVE_GRAVIDA',
+    );
+  });
+
+  it('refuses births plus abortions above gravidity', () => {
+    expect(
+      historyFormProblem(form({ obstetricHistory: { gravida: 3, para: 1, abortions: 3 } }), now),
+    ).toBe('MATERNITY.OUTCOMES_ABOVE_GRAVIDA');
+  });
+
+  it('refuses a record dated in the future (29 Oct seen on 25 Oct)', () => {
+    expect(historyFormProblem(form({ recordedDate: '2026-10-29T12:00' }), now)).toBe(
+      'MATERNITY.RECORDED_FUTURE',
+    );
+  });
+
+  it('accepts possible counts, blank counts and a time within the clock allowance', () => {
+    expect(
+      historyFormProblem(form({ obstetricHistory: { gravida: 3, para: 2, abortions: 1 } }), now),
+    ).toBeNull();
+    expect(historyFormProblem(form({ obstetricHistory: { para: 2 } }), now)).toBeNull();
+    expect(historyFormProblem(form({ recordedDate: '2026-10-25T12:05' }), now)).toBeNull();
   });
 });

@@ -190,6 +190,9 @@ public class LaborServiceImpl implements LaborService {
         if (request.getLaborOnsetAt().isAfter(LocalDateTime.now(java.time.ZoneId.systemDefault()).plusMinutes(5))) {
             throw new BusinessException("maternity.labor.onset.future");
         }
+        // QA D809: the typed counts are checked before an unbooked labour
+        // opens a pregnancy record from them.
+        com.example.hms.utility.ObstetricCounts.requireConsistent(request.getGravida(), request.getPara(), null, "");
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         ObstetricEligibility.requireObstetricEligible(patient);
@@ -219,6 +222,18 @@ public class LaborServiceImpl implements LaborService {
                 hospital.getId()),
             "Cross-hospital maternal history read on the treatment relationship to open a labour episode"));
 
+        Integer gravida = request.getGravida() != null ? request.getGravida()
+            : history != null ? history.getGravida() : null;
+        Integer para = request.getPara() != null ? request.getPara()
+            : history != null ? history.getPara() : null;
+        // QA D809: the admission's own counts may not describe an impossible
+        // history (G1 P3), whether both were typed or one completes the
+        // other from her record. Counts snapshotted unchanged from an earlier
+        // record do not block the admission of a woman in labour.
+        if (request.getGravida() != null || request.getPara() != null) {
+            com.example.hms.utility.ObstetricCounts.requireConsistent(gravida, para, null, "");
+        }
+
         LaborEpisode episode = LaborEpisode.builder()
             .patient(patient)
             .hospital(hospital)
@@ -231,10 +246,8 @@ public class LaborServiceImpl implements LaborService {
             .membraneStatus(request.getMembraneStatus())
             .membraneRuptureAt(request.getMembraneRuptureAt())
             .gestationalAgeWeeks(resolveGestationalAgeWeeks(request.getGestationalAgeWeeks(), history))
-            .gravida(request.getGravida() != null ? request.getGravida()
-                : history != null ? history.getGravida() : null)
-            .para(request.getPara() != null ? request.getPara()
-                : history != null ? history.getPara() : null)
+            .gravida(gravida)
+            .para(para)
             .riskNotes(riskNotes)
             .build();
 
@@ -477,10 +490,7 @@ public class LaborServiceImpl implements LaborService {
         }
 
         LocalDateTime birthAt = request.getBirthDateTime() != null ? request.getBirthDateTime() : LocalDateTime.now();
-        // QA D104: a birth cannot precede the recorded labour onset.
-        if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
-            throw new BusinessException("labor.delivery.beforeOnset");
-        }
+        requireDeliveryTimesInOrder(episode, birthAt, request.getPlacentaDeliveredAt());
         String notes = resolveRecentDeliveryOverride(episode, birthAt, request);
         Staff deliveredBy = resolveStaffOrCaller(request.getDeliveredByStaffId(), episode.getHospital(), recorderUserId);
         User documentedBy = resolveUser(recorderUserId);
@@ -521,6 +531,31 @@ public class LaborServiceImpl implements LaborService {
         publishUrgentAlerts(saved.getAlerts(), episode, documentedBy,
             com.example.hms.service.maternity.ObstetricAlertEscalationService.SOURCE_DELIVERY, saved.getId());
         return laborMapper.toDeliveryResponse(saved);
+    }
+
+    /**
+     * The times of a delivery must follow the labour they end. QA D104: not
+     * before the recorded onset. QA D806: not before an observation already
+     * charted on the episode's partograph (the partograph charts the labour
+     * up to the birth), and the placenta is delivered after the birth, never
+     * before it. Each refusal names its field.
+     */
+    private void requireDeliveryTimesInOrder(LaborEpisode episode, LocalDateTime birthAt,
+                                             LocalDateTime placentaDeliveredAt) {
+        if (episode.getLaborOnsetAt() != null && birthAt.isBefore(episode.getLaborOnsetAt())) {
+            throw new com.example.hms.exception.FieldBusinessException("birthDateTime", "labor.delivery.beforeOnset");
+        }
+        LocalDateTime lastObservation = entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episode.getId())
+            .map(LaborPartographEntry::getObservationTime)
+            .orElse(null);
+        if (lastObservation != null && birthAt.isBefore(lastObservation)) {
+            throw new com.example.hms.exception.FieldBusinessException("birthDateTime",
+                "labor.delivery.beforeLastPartograph");
+        }
+        if (placentaDeliveredAt != null && placentaDeliveredAt.isBefore(birthAt)) {
+            throw new com.example.hms.exception.FieldBusinessException("placentaDeliveredAt",
+                "labor.delivery.placentaBeforeBirth");
+        }
     }
 
     /**

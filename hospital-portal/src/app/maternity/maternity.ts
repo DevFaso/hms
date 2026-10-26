@@ -31,15 +31,67 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { refusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { nowLocalDatetime, withServerDateTimes, serverInstant } from '../shared/date-utils';
+import {
+  localInputInstant,
+  nowLocalDatetime,
+  withServerDateTimes,
+  serverInstant,
+} from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+
+/** The history form's fields the server names under `fieldErrors`. */
+const HISTORY_LABELS: Record<string, string> = {
+  recordedDate: 'MATERNITY.RECORDED',
+  'menstrualHistory.lastMenstrualPeriod': 'MATERNITY.LMP',
+  'obstetricHistory.gravida': 'MATERNITY.GRAVIDA',
+  'obstetricHistory.para': 'MATERNITY.PARA',
+  'obstetricHistory.termBirths': 'MATERNITY.TERM_BIRTHS',
+  'obstetricHistory.pretermBirths': 'MATERNITY.PRETERM_BIRTHS',
+  'obstetricHistory.abortions': 'MATERNITY.ABORTIONS',
+  'obstetricHistory.livingChildren': 'MATERNITY.LIVING_CHILDREN',
+  'obstetricHistory.previousCesareanSections': 'MATERNITY.CSECTIONS',
+};
+
+/** The charting-device clock allowance the server grants a clinical time (NotInClinicalFuture). */
+const CLOCK_SKEW_MS = 10 * 60 * 1000;
+
+/**
+ * What is wrong with a maternal history form before it is sent, as an i18n
+ * key, or null. QA D821: a record dated in the future (the server refuses it
+ * beyond its clock allowance). QA D809: "G1 P3" was saved; parity counts
+ * births, each of which ended a pregnancy counted in gravidity, and a
+ * pregnancy ends in at most one birth or one abortion. The server refuses the
+ * same, on the same fields.
+ */
+export function historyFormProblem(
+  form: MaternalHistoryRequest,
+  now: Date = new Date(),
+): string | null {
+  const recorded = localInputInstant(form.recordedDate);
+  if (recorded && recorded.getTime() > now.getTime() + CLOCK_SKEW_MS) {
+    return 'MATERNITY.RECORDED_FUTURE';
+  }
+  const counts = form.obstetricHistory ?? {};
+  const gravida = counts.gravida;
+  if (gravida === undefined || gravida === null) return null;
+  const para = counts.para ?? 0;
+  if (para > gravida) return 'MATERNITY.PARA_ABOVE_GRAVIDA';
+  if (
+    counts.abortions !== undefined &&
+    counts.abortions !== null &&
+    para + counts.abortions > gravida
+  ) {
+    return 'MATERNITY.OUTCOMES_ABOVE_GRAVIDA';
+  }
+  return null;
+}
 
 type BoardWorklist =
   'high-risk' | 'pending-review' | 'specialist-referral' | 'psychosocial' | 'all';
@@ -465,6 +517,11 @@ export class MaternityComponent implements OnInit {
       this.toast.error(this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS'));
       return;
     }
+    const problem = historyFormProblem(form);
+    if (problem) {
+      this.toast.error(this.translate.instant(problem));
+      return;
+    }
     form.hospitalId = this.hospitalId;
     form.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.historySaving.set(true);
@@ -485,7 +542,8 @@ export class MaternityComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.toast.error(
-          refusalReason(err) ?? this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
+          labelledRefusalReason(err, this.translate, HISTORY_LABELS) ??
+            this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
         );
         this.historySaving.set(false);
       },
