@@ -8633,6 +8633,9 @@
     "ROUTING_RX_SEARCH_PLACEHOLDER": "Nombre del paciente o medicamento…",
     "ROUTING_RX_QUEUE_FAILED": "No se pudieron cargar las recetas pendientes en la dispensación.",
     "ROUTING_RX_NO_MATCH": "Ninguna receta pendiente coincide con esta búsqueda.",
+    "ROUTING_RX_NO_MATCH_PARTIAL": "Ninguna coincidencia entre las {{loaded}} recetas pendientes más recientes.",
+    "ROUTING_RX_PARTIAL": "Buscando en las {{loaded}} más recientes de {{total}} recetas pendientes.",
+    "ROUTING_RX_LOAD_OLDER": "Buscar también las recetas más antiguas",
     "ROUTING_RX_SELECTED": "Receta:"
   },
   "LAB_QC": {

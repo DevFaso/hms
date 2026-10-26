@@ -8633,6 +8633,9 @@
     "ROUTING_RX_SEARCH_PLACEHOLDER": "Nom du patient ou médicament…",
     "ROUTING_RX_QUEUE_FAILED": "Les ordonnances en attente à la dispensation n'ont pas pu être chargées.",
     "ROUTING_RX_NO_MATCH": "Aucune ordonnance en attente ne correspond à cette recherche.",
+    "ROUTING_RX_NO_MATCH_PARTIAL": "Aucune correspondance parmi les {{loaded}} ordonnances en attente les plus récentes.",
+    "ROUTING_RX_PARTIAL": "Recherche dans les {{loaded}} plus récentes des {{total}} ordonnances en attente.",
+    "ROUTING_RX_LOAD_OLDER": "Rechercher aussi les ordonnances plus anciennes",
     "ROUTING_RX_SELECTED": "Ordonnance :"
   },
   "LAB_QC": {

@@ -869,13 +869,24 @@ export class PharmacyService {
 
   // ── Dispensing ──
 
+  /**
+   * The dispensing work queue. Without `sort` the endpoint orders by
+   * `createdAt` ascending (oldest first); a caller that loads a window of
+   * the queue and wants the newest orders passes `['createdAt,desc', 'id,desc']`
+   * (one `sort` parameter per key, the id as the tiebreaker that keeps
+   * pages from overlapping).
+   */
   getDispenseWorkQueue(
     page = 0,
     size = 20,
     claim: QueueClaimFilter = 'ALL',
+    sort?: string[],
   ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
     let params = new HttpParams().set('page', page).set('size', size);
     if (claim !== 'ALL') params = params.set('claim', claim);
+    for (const key of sort ?? []) {
+      params = params.append('sort', key);
+    }
     return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
       '/pharmacy/dispense/work-queue',
       { params },

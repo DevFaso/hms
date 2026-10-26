@@ -69,8 +69,38 @@
         </ul>
       } @else {
         <p class="muted" data-testid="routing-rx-no-match">
-          {{ 'PHARMACY.ROUTING_RX_NO_MATCH' | translate }}
+          @if (queuePartial()) {
+            {{ 'PHARMACY.ROUTING_RX_NO_MATCH_PARTIAL' | translate: { loaded: queue().length } }}
+          } @else {
+            {{ 'PHARMACY.ROUTING_RX_NO_MATCH' | translate }}
+          }
         </p>
+      }
+      <!-- #963 review: the search covers the newest orders loaded; say so and offer the rest. -->
+      @if (queuePartial()) {
+        <p class="muted" data-testid="routing-rx-partial">
+          {{
+            'PHARMACY.ROUTING_RX_PARTIAL'
+              | translate: { loaded: queue().length, total: queueTotal() }
+          }}
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            data-testid="routing-rx-load-older"
+            [disabled]="queueLoadingMore()"
+            (click)="loadOlderQueue()"
+          >
+            @if (queueLoadingMore()) {
+              <span class="spinner"></span>
+            }
+            {{ 'PHARMACY.ROUTING_RX_LOAD_OLDER' | translate }}
+          </button>
+        </p>
+        @if (queueMoreError()) {
+          <p class="muted" role="alert" data-testid="routing-rx-older-error">
+            {{ 'PHARMACY.ROUTING_RX_QUEUE_FAILED' | translate }}
+          </p>
+        }
       }
     }
     @if (selected(); as rx) {

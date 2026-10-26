@@ -74,6 +74,21 @@ export class StockRoutingComponent implements OnInit {
   readonly queue = signal<WorkQueuePrescription[]>([]);
   readonly queueLoading = signal(false);
   readonly queueError = signal(false);
+  /** Orders waiting in all, of which `queue()` holds the newest pages loaded. */
+  readonly queueTotal = signal(0);
+  readonly queueLoadingMore = signal(false);
+  readonly queueMoreError = signal(false);
+  /**
+   * #963 review: the search runs over the pages loaded, newest first. When
+   * the dispensary has more waiting orders than that, the page says so and
+   * offers the older ones, instead of a "nothing matches" that is false.
+   */
+  readonly queuePartial = computed(() => this.queue().length < this.queueTotal());
+  static readonly QUEUE_PAGE_SIZE = 100;
+  /** Newest first; the id breaks ties so pages never overlap or skip a row. */
+  static readonly QUEUE_SORT = ['createdAt,desc', 'id,desc'];
+  private queuePage = 0;
+  private queueSeq = 0;
   readonly rxSearch = signal('');
   readonly selected = signal<WorkQueuePrescription | null>(null);
   /** At most this many matches are listed; typing more narrows them. */
@@ -169,22 +184,82 @@ export class StockRoutingComponent implements OnInit {
     this.loadQueue();
   }
 
-  /** QA D888: the orders a pharmacist can pick from, newest first. */
+  /**
+   * QA D888: the orders a pharmacist can pick from, newest first. The
+   * endpoint's default order is oldest first, so without the explicit sort
+   * a dispensary with more than a page of waiting orders could never find
+   * its newest ones (#963 review).
+   */
   loadQueue(): void {
+    const seq = ++this.queueSeq;
+    this.queuePage = 0;
     this.queueLoading.set(true);
+    this.queueLoadingMore.set(false);
     this.queueError.set(false);
-    this.svc.getDispenseWorkQueue(0, 100).subscribe({
-      next: (res) => {
-        this.queue.set(res?.data?.content ?? []);
-        this.queueLoading.set(false);
-        this.syncSelectedFromQueue();
-      },
-      error: () => {
-        this.queue.set([]);
-        this.queueLoading.set(false);
-        this.queueError.set(true);
-      },
-    });
+    this.queueMoreError.set(false);
+    this.svc
+      .getDispenseWorkQueue(
+        0,
+        StockRoutingComponent.QUEUE_PAGE_SIZE,
+        'ALL',
+        StockRoutingComponent.QUEUE_SORT,
+      )
+      .subscribe({
+        next: (res) => {
+          if (seq !== this.queueSeq) return;
+          const rows = res?.data?.content ?? [];
+          this.queue.set(rows);
+          this.queueTotal.set(Math.max(res?.data?.totalElements ?? 0, rows.length));
+          this.queueLoading.set(false);
+          this.syncSelectedFromQueue();
+        },
+        error: () => {
+          if (seq !== this.queueSeq) return;
+          this.queue.set([]);
+          this.queueTotal.set(0);
+          this.queueLoading.set(false);
+          this.queueError.set(true);
+        },
+      });
+  }
+
+  /** The next page of older waiting orders, added to the ones searched. */
+  loadOlderQueue(): void {
+    if (this.queueLoading() || this.queueLoadingMore() || !this.queuePartial()) return;
+    const seq = this.queueSeq;
+    const page = this.queuePage + 1;
+    this.queueLoadingMore.set(true);
+    this.queueMoreError.set(false);
+    this.svc
+      .getDispenseWorkQueue(
+        page,
+        StockRoutingComponent.QUEUE_PAGE_SIZE,
+        'ALL',
+        StockRoutingComponent.QUEUE_SORT,
+      )
+      .subscribe({
+        next: (res) => {
+          if (seq !== this.queueSeq) return;
+          const known = new Set(this.queue().map((rx) => rx.id));
+          // An order filed since the first page shifts the window by one, so
+          // a row can come back twice; it is listed once.
+          const older = (res?.data?.content ?? []).filter((rx) => !known.has(rx.id));
+          const merged = [...this.queue(), ...older];
+          this.queue.set(merged);
+          this.queuePage = page;
+          // An empty page means the rest left the queue meanwhile: stop offering more.
+          this.queueTotal.set(
+            older.length ? Math.max(res?.data?.totalElements ?? 0, merged.length) : merged.length,
+          );
+          this.queueLoadingMore.set(false);
+          this.syncSelectedFromQueue();
+        },
+        error: () => {
+          if (seq !== this.queueSeq) return;
+          this.queueLoadingMore.set(false);
+          this.queueMoreError.set(true);
+        },
+      });
   }
 
   /** QA D888: picking an order runs the stock check for it. */

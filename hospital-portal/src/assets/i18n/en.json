@@ -8633,6 +8633,9 @@
     "ROUTING_RX_SEARCH_PLACEHOLDER": "Patient name or medication…",
     "ROUTING_RX_QUEUE_FAILED": "The prescriptions waiting at the dispensary could not be loaded.",
     "ROUTING_RX_NO_MATCH": "No waiting prescription matches this search.",
+    "ROUTING_RX_NO_MATCH_PARTIAL": "No match among the {{loaded}} newest waiting prescriptions.",
+    "ROUTING_RX_PARTIAL": "Searching the {{loaded}} newest of {{total}} waiting prescriptions.",
+    "ROUTING_RX_LOAD_OLDER": "Search older prescriptions too",
     "ROUTING_RX_SELECTED": "Prescription:"
   },
   "LAB_QC": {
