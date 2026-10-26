@@ -216,11 +216,30 @@ class MaternalHistoryServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(maternalHistoryRepository.existsByPatient_Id(patientId)).thenReturn(true);
 
+        // QA D826: 409 on patientId with a bundle key (translated by the
+        // conflict handler), not a 400 in English the FR/ES form showed as is.
         assertThatThrownBy(() -> maternalHistoryService.createMaternalHistory(requestDTO, username))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Maternal history already exists");
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessage("patientId:maternalHistory.alreadyExists");
 
         verify(maternalHistoryRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD826_duplicateAndPatientChangeMessagesAreTranslated() {
+        org.springframework.context.support.ResourceBundleMessageSource bundle =
+                new org.springframework.context.support.ResourceBundleMessageSource();
+        bundle.setBasename("i18n/messages-maternity");
+        bundle.setDefaultEncoding("UTF-8");
+        bundle.setFallbackToSystemLocale(false);
+        assertThat(bundle.getMessage("maternalHistory.alreadyExists", null, java.util.Locale.FRENCH))
+                .startsWith("Cette patiente a déjà un historique maternel");
+        assertThat(bundle.getMessage("maternalHistory.alreadyExists", null, java.util.Locale.forLanguageTag("es")))
+                .startsWith("Esta paciente ya tiene un historial materno");
+        assertThat(bundle.getMessage("maternalHistory.patientChange", null, java.util.Locale.FRENCH))
+                .contains("autre patiente");
+        assertThat(bundle.getMessage("maternalHistory.patientChange", null, java.util.Locale.forLanguageTag("es")))
+                .contains("otra paciente");
     }
 
     @Test
@@ -287,7 +306,8 @@ class MaternalHistoryServiceImplTest {
 
         assertThatThrownBy(() -> maternalHistoryService.updateMaternalHistory(existingId, requestDTO, username))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Cannot change patient ID");
+                .extracting(e -> ((BusinessException) e).getMessageKey())
+                .isEqualTo("maternalHistory.patientChange");
     }
 
     @Test

@@ -587,3 +587,22 @@
   margin-top: 0.75rem;
   font-size: 0.78rem;
 }
+
+/* QA D826: the picked patient already has a maternal history. */
+.history-exists {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--primary);
+  border-radius: 6px;
+  background: var(--primary-tint);
+  color: var(--primary-deep);
+
+  p {
+    margin: 0;
+  }
+}

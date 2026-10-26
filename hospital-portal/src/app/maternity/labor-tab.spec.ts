@@ -11,6 +11,8 @@ import {
 } from '../services/labor.service';
 import { ToastService } from '../core/toast.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 
 function episode(id: string, status: LaborEpisodeResponse['status']): LaborEpisodeResponse {
   return {
@@ -512,4 +514,49 @@ describe('LaborTabComponent', () => {
     expect(text).not.toContain('—°C');
     expect(text).not.toContain('— °C');
   });
+  /* ── Round 13 re-test (QA D827) ── */
+
+  for (const [lang, bundle, expected] of [
+    ['fr', fr, 'Pertes sanguines : 250 ml'],
+    ['es', es, 'Pérdida de sangre: 250 ml'],
+  ] as const) {
+    it(`QA D827 (${lang}): the delivery summary names the blood-loss unit once`, () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(lang, bundle);
+      translate.use(lang);
+      const delivered = { ...episode('e1', 'DELIVERED'), deliveryRecorded: true };
+      laborSpy.episodes.and.returnValue(of([delivered]));
+      laborSpy.delivery.and.returnValue(
+        of({
+          id: 'd1',
+          episodeId: 'e1',
+          patientId: 'p1',
+          deliveredByStaffName: null,
+          birthDateTime: '2026-10-25T10:00:00',
+          deliveryMode: 'SPONTANEOUS_VAGINAL',
+          liveBirth: true,
+          numberOfInfants: 1,
+          infantSex: null,
+          birthWeightGrams: null,
+          gestationalAgeWeeksAtBirth: null,
+          apgarOneMinute: null,
+          apgarFiveMinute: null,
+          placentaDeliveredAt: null,
+          placentaComplete: null,
+          uterotonicGiven: null,
+          estimatedBloodLossMl: 250,
+          perinealTear: null,
+          notes: null,
+          alerts: [],
+        }),
+      );
+      const fixture = TestBed.createComponent(LaborTabComponent);
+      fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+      fixture.detectChanges();
+
+      const text = ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+      expect(text).toContain(expected);
+      expect(text).not.toContain('(ml)');
+    });
+  }
 });

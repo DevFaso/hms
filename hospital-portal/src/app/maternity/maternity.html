@@ -598,6 +598,14 @@
               (selectedChange)="onHistoryPatientPicked($event)"
             />
           </div>
+          @if (existingHistory()) {
+            <div class="history-exists" role="status" data-testid="history-exists">
+              <p>{{ 'MATERNITY.HISTORY_ALREADY_EXISTS' | translate }}</p>
+              <button type="button" class="btn-secondary" (click)="openExistingHistory()">
+                {{ 'MATERNITY.OPEN_EXISTING_HISTORY' | translate }}
+              </button>
+            </div>
+          }
         }
         <div class="form-row">
           <div class="field">
@@ -899,7 +907,11 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="historySaving() || !historyForm.patientId"
+          [disabled]="
+            historySaving() ||
+            !historyForm.patientId ||
+            (!editingHistoryId() && !!existingHistory())
+          "
           (click)="submitHistory()"
         >
           {{ 'COMMON.SAVE' | translate }}

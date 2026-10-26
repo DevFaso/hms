@@ -212,6 +212,13 @@ export class MaternityComponent implements OnInit {
   historySaving = signal(false);
   historyForm: MaternalHistoryRequest = this.emptyHistoryForm();
   selectedPatient = signal<PatientResponse | null>(null);
+  /**
+   * QA D826: the current history of the patient picked in "Nouvel historique",
+   * when she already has one. The form then offers to open that record (a
+   * patient has one history, versioned by update) instead of a create the
+   * server refuses.
+   */
+  existingHistory = signal<MaternalHistoryResponse | null>(null);
   reviewBusyId = signal<string | null>(null);
 
   /* ── Referrals ── */
@@ -467,6 +474,7 @@ export class MaternityComponent implements OnInit {
     this.historyForm = this.emptyHistoryForm();
     this.editingHistoryId.set(null);
     this.selectedPatient.set(null);
+    this.existingHistory.set(null);
     this.showHistoryModal.set(true);
   }
 
@@ -492,6 +500,7 @@ export class MaternityComponent implements OnInit {
       specialistReferralReason: history.specialistReferralReason ?? '',
     };
     this.editingHistoryId.set(history.id);
+    this.existingHistory.set(null);
     this.selectedPatient.set({
       id: history.patientId,
       firstName: this.patientName(history.patientId),
@@ -508,6 +517,33 @@ export class MaternityComponent implements OnInit {
   onHistoryPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.historyForm.patientId = p?.id ?? '';
+    this.existingHistory.set(null);
+    if (p && !this.editingHistoryId()) {
+      this.lookUpExistingHistory(p.id);
+    }
+  }
+
+  /** QA D826: finds the picked patient's current history; none (404) leaves the create open. */
+  private lookUpExistingHistory(patientId: string): void {
+    this.maternityService.currentForPatient(patientId).subscribe({
+      next: (current) => {
+        // A late answer for a patient no longer picked is dropped.
+        if (current && this.historyForm.patientId === patientId && !this.editingHistoryId()) {
+          this.existingHistory.set(current);
+        }
+      },
+      error: () => {
+        /* no current history: the create stays available */
+      },
+    });
+  }
+
+  /** QA D826: from the "already has a history" notice, edit that record instead. */
+  openExistingHistory(): void {
+    const current = this.existingHistory();
+    if (current) {
+      this.openEditHistory(current);
+    }
   }
 
   submitHistory(): void {
@@ -541,11 +577,18 @@ export class MaternityComponent implements OnInit {
         this.loadBoard();
       },
       error: (err: unknown) => {
+        this.historySaving.set(false);
+        if (!editingId && (err as { status?: number } | null)?.status === 409) {
+          // QA D826: she already has a history (picked before the lookup
+          // answered, or written meanwhile): offer to open it.
+          this.toast.error(this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS'));
+          this.lookUpExistingHistory(form.patientId);
+          return;
+        }
         this.toast.error(
           labelledRefusalReason(err, this.translate, HISTORY_LABELS) ??
             this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
         );
-        this.historySaving.set(false);
       },
     });
   }

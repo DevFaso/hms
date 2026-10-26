@@ -177,8 +177,12 @@
             · APGAR {{ record.apgarOneMinute }}/{{ record.apgarFiveMinute }}
           }
           @if (record.estimatedBloodLossMl !== null) {
-            · {{ 'LABOR.BLOOD_LOSS' | translate }}:
-            {{ record.estimatedBloodLossMl | measure: 'ml' }}
+            <!-- QA D827: the form label carries "(ml)"; the summary names the unit once, after the value. -->
+            ·
+            {{
+              'LABOR.BLOOD_LOSS_VALUE'
+                | translate: { value: (record.estimatedBloodLossMl | measure: 'ml') }
+            }}
           }
         </p>
         @for (alert of record.alerts; track $index) {

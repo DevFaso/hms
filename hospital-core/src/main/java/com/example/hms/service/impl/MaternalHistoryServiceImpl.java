@@ -1,6 +1,7 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.MaternalHistoryMapper;
 import com.example.hms.model.Hospital;
@@ -79,7 +80,9 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
 
         // Check if maternal history already exists for this patient
         if (maternalHistoryRepository.existsByPatient_Id(request.getPatientId())) {
-            throw new BusinessException("Maternal history already exists for patient. Use update to create a new version.");
+            // QA D826: translated, 409 on patientId, so the form can offer to
+            // open the existing record instead of a dead-end English toast.
+            throw new ConflictException("patientId:maternalHistory.alreadyExists");
         }
         
         MaternalHistory maternalHistory = new MaternalHistory();
@@ -129,7 +132,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         // Ensure patient ID matches
         if (!existingHistory.getPatient().getId().equals(request.getPatientId())) {
-            throw new BusinessException("Cannot change patient ID when updating maternal history");
+            throw new BusinessException("maternalHistory.patientChange");
         }
         
         // Get next version number
