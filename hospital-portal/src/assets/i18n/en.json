@@ -1043,7 +1043,48 @@
     "CONSENT_YES": "Yes",
     "CONSENT_NO": "Pending",
     "COSIGNED": "Co-signed",
-    "COSIGN_PENDING": "Co-sign pending"
+    "COSIGN_PENDING": "Co-sign pending",
+    "TIMELINE_STATUS": {
+      "ENCOUNTER": {
+        "SCHEDULED": "Scheduled",
+        "ARRIVED": "Arrived",
+        "WAITING_FOR_PHYSICIAN": "Waiting for Physician",
+        "IN_PROGRESS": "In Progress",
+        "AWAITING_RESULTS": "Awaiting Results",
+        "READY_FOR_DISCHARGE": "Ready for Discharge",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled"
+      },
+      "NOTE": {
+        "SIGNED": "Signed",
+        "DRAFT": "Draft"
+      },
+      "IMAGING": {
+        "DRAFT": "Draft",
+        "ORDERED": "Ordered",
+        "PENDING_AUTHORIZATION": "Pending Authorization",
+        "SCHEDULED": "Scheduled",
+        "IN_PROGRESS": "In Progress",
+        "COMPLETED": "Completed",
+        "RESULTS_AVAILABLE": "Results Available",
+        "CANCELLED": "Cancelled",
+        "PRELIMINARY": "Preliminary",
+        "FINAL": "Final",
+        "ADDENDUM": "Addendum",
+        "CORRECTED": "Corrected",
+        "AMENDED": "Amended"
+      },
+      "PROCEDURE": {
+        "ORDERED": "Ordered",
+        "SCHEDULED": "Scheduled",
+        "PRE_OP_CLEARANCE_PENDING": "Pre-Op Clearance Pending",
+        "READY_FOR_PROCEDURE": "Ready for Procedure",
+        "IN_PROGRESS": "In Progress",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled",
+        "POSTPONED": "Postponed"
+      }
+    }
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Add item",

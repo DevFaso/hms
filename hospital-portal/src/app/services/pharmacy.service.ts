@@ -1289,6 +1289,9 @@ export interface MtmReviewRequest {
 export interface MtmReviewResponse {
   id: string;
   patientId: string;
+  /** QA D900: the patient's name and MRN at the review's hospital, so the list never shows the UUID. */
+  patientName?: string;
+  patientMrn?: string;
   hospitalId: string;
   pharmacistUserId: string;
   reviewDate: string;

@@ -740,6 +740,134 @@ class TransfusionServiceImplTest {
         verify(reactionRepository).save(any(TransfusionReaction.class));
     }
 
+    /**
+     * QA D901: administration 36dc2b02 was started at 16:18; a reaction posted
+     * with onsetAt ten days earlier was saved (7b374e6a). It is a 400 on onsetAt.
+     */
+    @Test
+    void aReactionBeforeTheTransfusionStartedIsRefusedOnItsField_D901() {
+        TransfusionAdministration admin = inProgress();
+        UUID administrationId = admin.getId();
+        TransfusionReactionRequestDTO tenDaysEarlier = TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.FEBRILE_NON_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(admin.getStartedAt().minusDays(10))
+            .signsSymptoms("Fièvre 38,6 °C")
+            .build();
+
+        assertThatThrownBy(() -> service.recordReaction(administrationId, tenDaysEarlier))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "onsetAt")
+            .hasMessage("The reaction onset cannot be before the transfusion started.");
+        verify(reactionRepository, never()).save(any());
+        assertThat(admin.getStatus()).isEqualTo(TransfusionAdministrationStatus.IN_PROGRESS);
+        assertThat(admin.getBloodUnit().getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    /** D901 must not refuse an onset at the start, or a ward clock a minute behind the server's. */
+    @Test
+    void aReactionAtTheStartOrWithinTheClockSkewIsAccepted_D901() {
+        TransfusionAdministration admin = inProgress();
+
+        service.recordReaction(admin.getId(), TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.ALLERGIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(admin.getStartedAt().minusMinutes(1))
+            .signsSymptoms("Urticaire")
+            .build());
+
+        verify(reactionRepository).save(any(TransfusionReaction.class));
+    }
+
+    /** D901: a delayed reaction, days after a completed transfusion, is still recorded. */
+    @Test
+    void aDelayedReactionAfterTheTransfusionEndedIsAccepted_D901() {
+        TransfusionAdministration admin = inProgress();
+        admin.setStartedAt(LocalDateTime.now().minusDays(6));
+        admin.setStatus(TransfusionAdministrationStatus.COMPLETED);
+        admin.setCompletedAt(LocalDateTime.now().minusDays(6).plusHours(2));
+
+        service.recordReaction(admin.getId(), TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.DELAYED_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MODERATE)
+            .onsetAt(LocalDateTime.now().minusHours(3))
+            .signsSymptoms("Ictère, chute de l'hémoglobine")
+            .build());
+
+        verify(reactionRepository).save(any(TransfusionReaction.class));
+    }
+
+    /** D901: the future-onset refusal (D858) names its field too. */
+    @Test
+    void aFutureOnsetIsRefusedOnOnsetAt_D901() {
+        TransfusionAdministration admin = inProgress();
+        UUID administrationId = admin.getId();
+        TransfusionReactionRequestDTO tomorrow = TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.FEBRILE_NON_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(LocalDateTime.now().plusDays(1))
+            .signsSymptoms("Fièvre")
+            .build();
+
+        assertThatThrownBy(() -> service.recordReaction(administrationId, tomorrow))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "onsetAt");
+    }
+
+    /** D901 sibling ordering: blood cannot be required by a time already past when it is asked for. */
+    @Test
+    void aRequestRequiredByAPastTimeIsRefused_D901() {
+        when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        TransfusionRequestRequestDTO yesterday = TransfusionRequestRequestDTO.builder()
+            .patientId(patientId)
+            .productType(BloodProductType.PACKED_RED_CELLS)
+            .unitsRequested(1)
+            .indication("Anémie sévère")
+            .urgency(TransfusionUrgency.EMERGENCY)
+            .requiredBy(LocalDateTime.now().minusDays(1))
+            .build();
+
+        assertThatThrownBy(() -> service.createRequest(yesterday))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "requiredBy")
+            .hasMessage("The time the blood is required by cannot be in the past.");
+        verify(requestRepository, never()).save(any());
+    }
+
+    @Test
+    void aRequestRequiredWithinTheHourIsAccepted_D901() {
+        when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+
+        service.createRequest(TransfusionRequestRequestDTO.builder()
+            .patientId(patientId)
+            .productType(BloodProductType.PACKED_RED_CELLS)
+            .unitsRequested(1)
+            .indication("Hémorragie")
+            .urgency(TransfusionUrgency.EMERGENCY)
+            .requiredBy(LocalDateTime.now().plusMinutes(30))
+            .build());
+
+        verify(requestRepository).save(any(TransfusionRequest.class));
+    }
+
+    @Test
+    void theNewRefusalsAreTranslated_D901() throws java.io.IOException {
+        for (String lang : List.of("fr", "es")) {
+            java.util.Properties bundle = new java.util.Properties();
+            try (var in = new java.io.InputStreamReader(
+                    getClass().getResourceAsStream("/i18n/messages-clinical_" + lang + ".properties"),
+                    java.nio.charset.StandardCharsets.UTF_8)) {
+                bundle.load(in);
+            }
+            assertThat(bundle.getProperty("transfusion.reaction.onsetBeforeStart")).as(lang).isNotBlank()
+                .doesNotContain("cannot");
+            assertThat(bundle.getProperty("transfusion.request.requiredByInPast")).as(lang).isNotBlank()
+                .doesNotContain("cannot");
+        }
+    }
+
     /** D858 sibling: a type-and-screen specimen cannot have been collected tomorrow. */
     @Test
     void aBloodGroupSpecimenCollectedInTheFutureIsRefused_D858() {

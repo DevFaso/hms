@@ -79,7 +79,7 @@
                       </span>
                       @if (event.status) {
                         <span class="chart-review__pill" [ngClass]="statusClass(event.status)">
-                          {{ event.status | enumLabel: 'status' }}
+                          {{ timelineStatus(event) }}
                         </span>
                       }
                     </div>

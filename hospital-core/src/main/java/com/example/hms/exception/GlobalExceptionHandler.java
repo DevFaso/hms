@@ -387,6 +387,68 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
+    /**
+     * QA D896: Spring's own method validation, raised for a constraint on a
+     * handler parameter that is not a single bound object, such as each
+     * element of a {@code @Valid @RequestBody List<…>} or a constrained
+     * {@code @RequestParam}. It is a {@code ResponseStatusException}, so it
+     * reached {@link #handleResponseStatus} and the caller as Spring's English
+     * "Validation failure" with no field. It now answers like a body
+     * refusal: the translated reason of the first violation as
+     * {@code message}, and every violation under {@code fieldErrors}, keyed by
+     * the body path ({@code [0].criticalHigh}) or the parameter name.
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.HandlerMethodValidationException.class)
+    public ResponseEntity<Object> handleHandlerMethodValidation(
+            org.springframework.web.method.annotation.HandlerMethodValidationException ex, WebRequest request) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (org.springframework.validation.method.ParameterValidationResult result
+                : ex.getParameterValidationResults()) {
+            String prefix = parameterPath(result);
+            if (result instanceof org.springframework.validation.method.ParameterErrors errors) {
+                for (FieldError error : errors.getFieldErrors()) {
+                    fieldErrors.putIfAbsent(joinPath(prefix, error.getField()), error.getDefaultMessage());
+                }
+                for (org.springframework.validation.ObjectError error : errors.getGlobalErrors()) {
+                    fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
+                }
+            } else {
+                for (org.springframework.context.MessageSourceResolvable error : result.getResolvableErrors()) {
+                    fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
+                }
+            }
+        }
+        String first = fieldErrors.values().stream()
+            .filter(message -> message != null && !message.isBlank())
+            .findFirst()
+            .orElse(null);
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST,
+            first != null ? first : localized("error.validation.request", "Validation errors in request"), request);
+        body.put(FIELD_ERRORS, fieldErrors);
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /** The body path of a validated parameter: empty for the request body, else its name; with the element index. */
+    private static String parameterPath(org.springframework.validation.method.ParameterValidationResult result) {
+        org.springframework.core.MethodParameter parameter = result.getMethodParameter();
+        String base = parameter.hasParameterAnnotation(org.springframework.web.bind.annotation.RequestBody.class)
+            ? ""
+            : java.util.Objects.requireNonNullElse(parameter.getParameterName(), "");
+        Integer index = result.getContainerIndex();
+        if (index != null) {
+            return base + "[" + index + "]";
+        }
+        Object key = result.getContainerKey();
+        return key != null ? base + "[" + key + "]" : base;
+    }
+
+    private static String joinPath(String prefix, String field) {
+        if (prefix.isEmpty()) {
+            return field;
+        }
+        return field == null || field.isEmpty() ? prefix : prefix + "." + field;
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
         Map<String, String> violations = ex.getConstraintViolations().stream()

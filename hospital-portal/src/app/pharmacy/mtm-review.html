@@ -21,14 +21,18 @@
       <form (ngSubmit)="submit()">
         <div class="form-row">
           <div class="field">
-            <label for="mtmPatient">{{ 'PHARMACY.PATIENT_ID' | translate }} *</label>
-            <input
-              id="mtmPatient"
-              type="text"
-              [(ngModel)]="form.patientId"
-              name="patientId"
-              required
-            />
+            @if (selectedReviewId) {
+              <span class="field-label">{{ 'PHARMACY.PATIENT' | translate }}</span>
+              <p class="readonly-value" data-testid="mtm-edit-patient">{{ editingPatientLabel }}</p>
+            } @else {
+              <label for="mtmPatient">{{ 'PHARMACY.PATIENT' | translate }} *</label>
+              <app-patient-picker
+                inputId="mtmPatient"
+                [hospitalId]="form.hospitalId || null"
+                [selected]="pickedPatient()"
+                (selectedChange)="onPatientPicked($event)"
+              />
+            }
           </div>
           <div class="field">
             <label for="mtmStatus">{{ 'PHARMACY.STATUS' | translate }}</label>
@@ -119,7 +123,7 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>{{ 'PHARMACY.PATIENT_ID' | translate }}</th>
+            <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_CHRONIC_FOCUS' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_POLYPHARMACY' | translate }}</th>
             <th>{{ 'PHARMACY.MTM_ADHERENCE' | translate }}</th>
@@ -131,7 +135,7 @@
         <tbody>
           @for (r of reviews(); track r.id) {
             <tr>
-              <td>{{ r.patientId }}</td>
+              <td [attr.data-testid]="'mtm-patient-' + r.id">{{ patientLabel(r) }}</td>
               <td>{{ r.chronicConditionFocus || '—' }}</td>
               <td>
                 @if (r.polypharmacyAlert) {

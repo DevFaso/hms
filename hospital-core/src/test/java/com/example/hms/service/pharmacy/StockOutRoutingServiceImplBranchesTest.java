@@ -83,6 +83,12 @@ class StockOutRoutingServiceImplBranchesTest {
     @Mock private com.example.hms.service.StayOrderDiscontinuation stayOrderDiscontinuation;
 
 
+
+    /** QA D899: the real dispense DRUG rule, so the stock check is tested against the matcher the fill uses. */
+    @org.mockito.Spy
+    private DispenseVerificationService dispenseVerificationService =
+        new DispenseVerificationService(java.time.Clock.systemUTC());
+
     @InjectMocks
     private StockOutRoutingServiceImpl service;
 

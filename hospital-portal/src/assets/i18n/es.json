@@ -1043,7 +1043,48 @@
     "CONSENT_YES": "Sí",
     "CONSENT_NO": "Pendiente",
     "COSIGNED": "Contrafirmada",
-    "COSIGN_PENDING": "Contrafirma pendiente"
+    "COSIGN_PENDING": "Contrafirma pendiente",
+    "TIMELINE_STATUS": {
+      "ENCOUNTER": {
+        "SCHEDULED": "Programada",
+        "ARRIVED": "Paciente presente",
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico",
+        "IN_PROGRESS": "En curso",
+        "AWAITING_RESULTS": "Esperando resultados",
+        "READY_FOR_DISCHARGE": "Lista para el alta",
+        "COMPLETED": "Completada",
+        "CANCELLED": "Cancelada"
+      },
+      "NOTE": {
+        "SIGNED": "Firmada",
+        "DRAFT": "Borrador"
+      },
+      "IMAGING": {
+        "DRAFT": "Borrador",
+        "ORDERED": "Solicitada",
+        "PENDING_AUTHORIZATION": "Pendiente de autorización",
+        "SCHEDULED": "Programada",
+        "IN_PROGRESS": "En curso",
+        "COMPLETED": "Completada",
+        "RESULTS_AVAILABLE": "Resultados disponibles",
+        "CANCELLED": "Cancelada",
+        "PRELIMINARY": "Preliminar",
+        "FINAL": "Definitiva",
+        "ADDENDUM": "Anexo",
+        "CORRECTED": "Corregida",
+        "AMENDED": "Enmendada"
+      },
+      "PROCEDURE": {
+        "ORDERED": "Solicitado",
+        "SCHEDULED": "Programado",
+        "PRE_OP_CLEARANCE_PENDING": "Autorización preoperatoria pendiente",
+        "READY_FOR_PROCEDURE": "Listo para realizar",
+        "IN_PROGRESS": "En curso",
+        "COMPLETED": "Completado",
+        "CANCELLED": "Cancelado",
+        "POSTPONED": "Pospuesto"
+      }
+    }
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Agregar elemento",

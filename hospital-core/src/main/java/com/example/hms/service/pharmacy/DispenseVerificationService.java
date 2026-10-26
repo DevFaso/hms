@@ -201,6 +201,12 @@ public class DispenseVerificationService {
      * prescription imported over HL7 may carry the other.
      */
     public boolean matchesPrescribedDrug(Prescription rx, MedicationCatalogItem item) {
+        // QA D899: the catalog item the order was written from (V221) is the
+        // drug, whatever its code or name. A UI-created item has no code, so
+        // without this the match fell to the typed name alone.
+        if (rx.getMedicationCatalogItemId() != null && rx.getMedicationCatalogItemId().equals(item.getId())) {
+            return true;
+        }
         String prescribedCode = normalize(rx.getMedicationCode());
         if (!prescribedCode.isEmpty()) {
             return prescribedCode.equals(normalize(item.getCode()))

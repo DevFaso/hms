@@ -2205,6 +2205,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D899 residual (round 15): the stock check counts expired lots.**
+  Stock routing now resolves a free-text order to the shelf by the dispense
+  DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still
+  the inventory item's `quantityOnHand`, which includes lots that have passed
+  their expiry date and that the dispense refuses. Owed: count only in-date
+  lots with stock (the FEFO query), and decide what a lot-less inventory item
+  reports. Not changed here because the same figure feeds the inventory
+  dashboard and reorder alerts, and the QA case (300 in-date units reported
+  as 0) did not involve an expired lot.
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog

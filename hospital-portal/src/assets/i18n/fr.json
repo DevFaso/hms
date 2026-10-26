@@ -1043,7 +1043,48 @@
     "CONSENT_YES": "Oui",
     "CONSENT_NO": "En attente",
     "COSIGNED": "Contresignée",
-    "COSIGN_PENDING": "Contre-signature en attente"
+    "COSIGN_PENDING": "Contre-signature en attente",
+    "TIMELINE_STATUS": {
+      "ENCOUNTER": {
+        "SCHEDULED": "Planifiée",
+        "ARRIVED": "Patient arrivé",
+        "WAITING_FOR_PHYSICIAN": "En attente du médecin",
+        "IN_PROGRESS": "En cours",
+        "AWAITING_RESULTS": "En attente des résultats",
+        "READY_FOR_DISCHARGE": "Prête pour la sortie",
+        "COMPLETED": "Terminée",
+        "CANCELLED": "Annulée"
+      },
+      "NOTE": {
+        "SIGNED": "Signée",
+        "DRAFT": "Brouillon"
+      },
+      "IMAGING": {
+        "DRAFT": "Brouillon",
+        "ORDERED": "Prescrite",
+        "PENDING_AUTHORIZATION": "En attente d’autorisation",
+        "SCHEDULED": "Planifiée",
+        "IN_PROGRESS": "En cours",
+        "COMPLETED": "Terminée",
+        "RESULTS_AVAILABLE": "Résultats disponibles",
+        "CANCELLED": "Annulée",
+        "PRELIMINARY": "Préliminaire",
+        "FINAL": "Finale",
+        "ADDENDUM": "Complément",
+        "CORRECTED": "Corrigée",
+        "AMENDED": "Amendée"
+      },
+      "PROCEDURE": {
+        "ORDERED": "Prescrite",
+        "SCHEDULED": "Planifiée",
+        "PRE_OP_CLEARANCE_PENDING": "Autorisation pré-op en attente",
+        "READY_FOR_PROCEDURE": "Prête à réaliser",
+        "IN_PROGRESS": "En cours",
+        "COMPLETED": "Terminée",
+        "CANCELLED": "Annulée",
+        "POSTPONED": "Reportée"
+      }
+    }
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Ajouter un élément",

@@ -646,15 +646,23 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * QA D831: {@code noteId} names the entry to sign. Without it, the current
-     * entry (the one created last) and nothing else: #965 review — guessing
-     * "the caller's own unsigned entry" signed a draft whose text was not on
-     * the signer's screen.
+     * QA D831: {@code noteId} names the entry to sign; the portal always sends
+     * it (the entry on screen).
+     *
+     * <p>QA D895: without it (API and mobile clients) the entry is the
+     * caller's own unsigned entry, and only when there is exactly one. The
+     * current entry used to be taken instead, so DOCTOR_A was refused 403
+     * while DOCTOR2_A's later entry was the current one, and told "already
+     * signed" once it was. The #965 concern stands: nothing is guessed. Two
+     * unsigned entries of the caller's is a 400 asking for the id, none is a
+     * 400 saying so, and nobody else's entry is ever a candidate.
      */
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, noteId);
+        EncounterNote note = noteId != null
+            ? loadNoteScoped(encounterId, noteId)
+            : loadEntryToSign(encounterId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException("encounter.note.alreadySigned");
@@ -758,6 +766,37 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
+    }
+
+    /**
+     * QA D895: the caller's single unsigned entry on the encounter, for a sign
+     * that names none. Scoped first (404-not-403 for an encounter at another
+     * hospital, as {@link #loadNoteScoped}), so the 400s below never tell a
+     * foreign caller anything about the encounter.
+     */
+    private EncounterNote loadEntryToSign(UUID encounterId) {
+        // The current entry carries the scope check exactly as before.
+        EncounterNote current = loadNoteScoped(encounterId, null);
+        List<EncounterNote> entries = encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId);
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        UUID hospitalId = current.getHospital() != null ? current.getHospital().getId() : null;
+        List<EncounterNote> own = entries.stream()
+            .filter(entry -> currentUserId != null
+                && entry.getAuthor() != null
+                && currentUserId.equals(entry.getAuthor().getId()))
+            .filter(entry -> !entry.isSigned() && entry.getSignatureValue() == null)
+            // Every entry of an encounter is at its hospital; a stray one is
+            // never signed through a scope check made on another row.
+            .filter(entry -> entry.getHospital() == null || hospitalId == null
+                || hospitalId.equals(entry.getHospital().getId()))
+            .toList();
+        if (own.isEmpty()) {
+            throw new BusinessException("encounter.note.sign.noOwnUnsigned");
+        }
+        if (own.size() > 1) {
+            throw new BusinessException("encounter.note.sign.ambiguous");
+        }
+        return own.get(0);
     }
 
     /**

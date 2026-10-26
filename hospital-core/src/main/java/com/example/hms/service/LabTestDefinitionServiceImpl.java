@@ -75,7 +75,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO create(LabTestDefinitionRequestDTO dto) {
-        requireOrderedRanges(dto.getReferenceRanges());
+        requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test creation");
@@ -167,7 +167,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     @Override
     public LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto) {
-        requireOrderedRanges(dto.getReferenceRanges());
+        requireOrderedRanges(dto.getReferenceRanges(), REFERENCE_RANGES_FIELD);
         String username = SecurityUtils.getCurrentUsername();
         if (username == null) {
             throw new AccessDeniedException("Unauthenticated access to lab test update");
@@ -675,6 +675,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     /** Statuses whose reference ranges were reviewed and may not move without a new review (QA D159). */
+    /** The request property a definition body carries its ranges under. */
+    private static final String REFERENCE_RANGES_FIELD = "referenceRanges";
+
     private static final EnumSet<LabTestDefinitionApprovalStatus> RANGES_LOCKED = EnumSet.of(
         LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
         LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
@@ -689,18 +692,32 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
      * constraints, enforced on every write path.
      */
     static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges) {
+        requireOrderedRanges(ranges, "");
+    }
+
+    /**
+     * QA D896: a critical limit is refused on its own field, with a message
+     * that names it ({@code [0].criticalHigh} for the bare list of the
+     * reference-range PUT, {@code referenceRanges[0].criticalHigh} for a
+     * definition body), as the bean constraint reports it.
+     */
+    static void requireOrderedRanges(List<LabTestReferenceRangeDTO> ranges, String listField) {
         if (ranges == null) {
             return;
         }
-        for (LabTestReferenceRangeDTO range : ranges) {
+        for (int i = 0; i < ranges.size(); i++) {
+            LabTestReferenceRangeDTO range = ranges.get(i);
             if (range == null) {
                 continue;
             }
             if (!range.isReferenceRangeOrdered()) {
                 throw new BusinessException("lab.referenceRange.inverted");
             }
-            if (!range.isCriticalRangeOrdered()) {
-                throw new BusinessException("lab.referenceRange.criticalInverted");
+            List<LabTestReferenceRangeDTO.CriticalLimitProblem> problems = range.criticalLimitProblems();
+            if (!problems.isEmpty()) {
+                LabTestReferenceRangeDTO.CriticalLimitProblem first = problems.get(0);
+                throw new com.example.hms.exception.FieldBusinessException(
+                    listField + "[" + i + "]." + first.field(), first.messageKey());
             }
             if (!range.isAgeRangeOrdered()) {
                 throw new BusinessException("lab.referenceRange.ageInverted");

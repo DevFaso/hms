@@ -13,6 +13,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { PatientResponse } from '../services/patient.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { localDateString } from '../shared/date-utils';
@@ -27,7 +29,7 @@ import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
   templateUrl: './mtm-review.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './mtm-review.scss',
@@ -49,6 +51,13 @@ export class MtmReviewComponent implements OnInit {
   /** QA D886: the status of the review being edited, to offer only the moves the server allows. */
   editingStatus: string | null = null;
   form: MtmReviewRequest = this.emptyForm();
+  /**
+   * QA D900: the patient is picked by name or MRN at the pinned hospital, not
+   * typed as a UUID. A review's patient is fixed once started (the server
+   * ignores a changed one), so an edit shows who it is for instead.
+   */
+  readonly pickedPatient = signal<PatientResponse | null>(null);
+  editingPatientLabel: string | null = null;
   /** QA D886: a follow-up is in the future; the picker stops before today. */
   minFollowUp = localDateString();
 
@@ -90,7 +99,22 @@ export class MtmReviewComponent implements OnInit {
     this.minFollowUp = localDateString();
     this.form = this.emptyForm();
     this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
+    this.pickedPatient.set(null);
+    this.editingPatientLabel = null;
     this.showForm.set(true);
+  }
+
+  onPatientPicked(patient: PatientResponse | null): void {
+    this.pickedPatient.set(patient);
+    this.form.patientId = patient?.id ?? '';
+  }
+
+  /** QA D900: "Name · MRN" for the list and the edit form; never the UUID. */
+  patientLabel(review: MtmReviewResponse): string {
+    const name = review.patientName?.trim();
+    const mrn = review.patientMrn?.trim();
+    if (name && mrn) return `${name} · ${mrn}`;
+    return name || mrn || '—';
   }
 
   /**
@@ -110,6 +134,8 @@ export class MtmReviewComponent implements OnInit {
     if (!this.canEdit(review)) return;
     this.selectedReviewId = review.id;
     this.editingStatus = review.status;
+    this.pickedPatient.set(null);
+    this.editingPatientLabel = this.patientLabel(review);
     // A kept follow-up date that has since passed stays valid (the server does not re-judge it).
     const today = localDateString();
     this.minFollowUp =
