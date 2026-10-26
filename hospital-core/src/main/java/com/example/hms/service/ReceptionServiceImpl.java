@@ -935,7 +935,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // Validate appointment is in a check-in-eligible status
         AppointmentStatus currentStatus = appointment.getStatus();
         if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
-            throw new BusinessException("reception.checkin.notEligible", String.valueOf(currentStatus));
+            throw new BusinessException("reception.checkin.notEligible", AppointmentStatus.labelOf(currentStatus));
         }
         // QA D630: a check-in is the patient at the desk TODAY. A 24 Oct
         // appointment was checked in on 23 Oct and opened an encounter dated

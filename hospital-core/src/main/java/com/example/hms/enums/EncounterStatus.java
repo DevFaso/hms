@@ -39,4 +39,25 @@ public enum EncounterStatus {
     public boolean isClosed() {
         return CLOSED.contains(this);
     }
+
+    /**
+     * QA D825: the status as the caller reads it ("Parti sans être vu"), never
+     * the raw code, for every refusal that names a visit's status. Resolved in
+     * the request's locale; the code itself only when no bundle has a label.
+     */
+    public String localizedLabel() {
+        return localizedLabel(null);
+    }
+
+    /** {@link #localizedLabel()} in an explicit locale (the request's when null). */
+    public String localizedLabel(java.util.Locale locale) {
+        String key = "encounter.statusLabel." + name();
+        String label = com.example.hms.utility.MessageUtil.resolve(locale, key);
+        return label == null || label.startsWith("[Missing translation]") ? name() : label;
+    }
+
+    /** The label of {@code status}, or a dash for a visit that carries none. */
+    public static String labelOf(EncounterStatus status) {
+        return status == null ? "—" : status.localizedLabel();
+    }
 }

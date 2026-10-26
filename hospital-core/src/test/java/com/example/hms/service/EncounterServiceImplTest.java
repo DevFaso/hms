@@ -1325,7 +1325,7 @@ class EncounterServiceImplTest {
             .thenReturn("Votre résumé de visite est disponible.");
         assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("COMPLETED");
+            .hasMessageContaining("already Completed");
 
         verify(encounterRepository, never()).save(any());
     }
@@ -1343,7 +1343,7 @@ class EncounterServiceImplTest {
         CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().build();
         assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1", true, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CANCELLED");
+            .hasMessageContaining("already Cancelled");
 
         verify(encounterRepository, never()).save(any());
     }
@@ -1535,7 +1535,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, hospitalId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Cannot start an encounter in status COMPLETED");
+                .hasMessageContaining("Cannot start an encounter in status Completed");
     }
 
     @Test
@@ -1702,7 +1702,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.completeExamination(encounterId, true, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Expected IN_PROGRESS");
+                .hasMessageContaining("Expected In progress");
     }
 
     @Test
@@ -1799,7 +1799,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, true, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Expected AWAITING_RESULTS or IN_PROGRESS");
+                .hasMessageContaining("Expected Awaiting results or In progress");
     }
 
     // ---------- updateEncounter (PUT) — COMPLETED-transition AVS persistence ----------

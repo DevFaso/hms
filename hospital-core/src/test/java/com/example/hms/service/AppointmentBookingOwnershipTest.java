@@ -191,6 +191,102 @@ class AppointmentBookingOwnershipTest {
         verify(patientRegistrationGuard, never()).requireRegisteredAt(any(), any());
     }
 
+    /** The re-test payload: date, time, clinician, hospital, department and reason, but no patient. */
+    private static AppointmentRequestDTO withoutPatient() {
+        AppointmentRequestDTO request = new AppointmentRequestDTO();
+        request.setAppointmentDate(java.time.LocalDate.now().plusDays(1));
+        request.setStartTime(java.time.LocalTime.of(9, 0));
+        request.setEndTime(java.time.LocalTime.of(9, 30));
+        request.setStaffId(UUID.randomUUID());
+        request.setHospitalId(UUID.randomUUID());
+        request.setDepartmentId(UUID.randomUUID());
+        request.setReason("Consultation");
+        return request;
+    }
+
+    private com.example.hms.exception.BusinessException businessRefusal(AppointmentRequestDTO request, User caller) {
+        return catchThrowableOfType(com.example.hms.exception.BusinessException.class,
+            () -> service.createAppointment(request, locale, caller.getUsername()));
+    }
+
+    @Test
+    @DisplayName("QA D824, the re-test call: a receptionist whose login is linked to a patient record books with no patientId -> 400, never her own record")
+    void d824_staffBookingWithoutPatientIdIsRefusedNotTheCallersOwnRecord() {
+        Patient linkedToReceptionist = new Patient();
+        linkedToReceptionist.setId(UUID.randomUUID());
+        linkedToReceptionist.setUser(receptionist);
+        when(patientRepository.findByUserId(receptionist.getId())).thenReturn(Optional.of(linkedToReceptionist));
+
+        com.example.hms.exception.BusinessException refused = businessRefusal(withoutPatient(), receptionist);
+
+        assertThat(refused).isNotNull();
+        assertThat(refused.getMessageKey()).isEqualTo("appointment.patient.required");
+        verify(patientRepository, never()).findByUserId(any());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D824: a staff account that also holds a leftover ROLE_PATIENT still has to name the patient")
+    void d824_staffWithALeftoverPatientRoleStillNamesThePatient() {
+        User dual = user("desk.and.patient", "ROLE_RECEPTIONIST");
+        Role patientRole = new Role();
+        patientRole.setCode("ROLE_PATIENT");
+        UserRole patientLink = new UserRole();
+        patientLink.setRole(patientRole);
+        dual.setUserRoles(Set.of(dual.getUserRoles().iterator().next(), patientLink));
+        when(userRepository.findByUsername(dual.getUsername())).thenReturn(Optional.of(dual));
+
+        assertThat(businessRefusal(withoutPatient(), dual).getMessageKey()).isEqualTo("appointment.patient.required");
+        verify(patientRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    @DisplayName("QA D824: a staff booking by username or e-mail only is refused too (the e-mail 'contains' match picked any patient)")
+    void d824_staffBookingByUsernameOrEmailOnlyIsRefused() {
+        AppointmentRequestDTO byUsername = withoutPatient();
+        byUsername.setPatientUsername(receptionist.getUsername());
+        AppointmentRequestDTO byEmail = withoutPatient();
+        byEmail.setPatientEmail("@example.test");
+
+        assertThat(businessRefusal(byUsername, receptionist).getMessageKey()).isEqualTo("appointment.patient.required");
+        assertThat(businessRefusal(byEmail, receptionist).getMessageKey()).isEqualTo("appointment.patient.required");
+        verify(patientRepository, never()).findByUserId(any());
+        verify(patientRepository, never()).findByEmailContainingIgnoreCase(any());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D824: a caller outside the staff list who is not a patient never defaults to a linked record")
+    void d824_nonPatientCallerOutsideTheStaffListNamesThePatient() {
+        User generic = user("generic.staff", "ROLE_STAFF");
+        when(userRepository.findByUsername(generic.getUsername())).thenReturn(Optional.of(generic));
+        Patient linked = new Patient();
+        linked.setId(UUID.randomUUID());
+        linked.setUser(generic);
+        when(patientRepository.findByUserId(generic.getId())).thenReturn(Optional.of(linked));
+
+        assertThat(businessRefusal(withoutPatient(), generic).getMessageKey()).isEqualTo("appointment.patient.required");
+        verify(patientRepository, never()).findByUserId(any());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D824: a patient booking with no patientId still books their own record (the portal and mobile path)")
+    void d824_patientWithoutPatientIdBooksTheirOwnRecord() {
+        Patient own = new Patient();
+        own.setId(UUID.randomUUID());
+        own.setUser(patientUser);
+        when(patientRepository.findByUserId(patientUser.getId())).thenReturn(Optional.of(own));
+        AppointmentRequestDTO request = withoutPatient();
+        when(hospitalRepository.findClinicalById(request.getHospitalId())).thenReturn(Optional.empty());
+
+        ResourceNotFoundException stoppedLater = refusal(request, patientUser);
+
+        assertThat(stoppedLater.getMessage())
+            .isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
+        verify(patientRepository).findByUserId(patientUser.getId());
+    }
+
     @Test
     @DisplayName("QA D351: a staff booking keeps the reason it was booked for")
     void bookingKeepsTheReason() {

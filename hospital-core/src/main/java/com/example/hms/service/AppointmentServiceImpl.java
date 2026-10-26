@@ -225,7 +225,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .anyMatch(v -> v.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED);
         if (!seen) {
             com.example.hms.enums.EncounterStatus open = visits.get(0).getStatus();
-            throw new BusinessException("appointment.complete.visitNotCompleted", String.valueOf(open));
+            throw new BusinessException("appointment.complete.visitNotCompleted", com.example.hms.enums.EncounterStatus.labelOf(open));
         }
     }
 
@@ -311,8 +311,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         // for that identifier — where it used to be a 403 for a real patient
         // beside a 404 for a made-up one, which told a patient which ids,
         // usernames and emails exist.
+        // QA D824: a staff booking names its patient by id. It used to fall
+        // back to the CALLER's own patient record when patientId was absent,
+        // so a receptionist whose account was (wrongly) linked to a patient
+        // row booked that patient without choosing anyone.
         final Patient patient = isStaffOrAdmin
-            ? resolvePatient(request, username)
+            ? resolvePatientForStaffBooking(request)
             : resolveOwnPatientForBooking(request, currentUser);
 
         // --- Hospital resolution (single block) ---
@@ -464,33 +468,28 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, String authenticatedUsername) {
-        if (request.getPatientId() != null) {
-            // Use unscoped lookup: multi-hospital patients have Patient.hospitalId set
-            // to the FIRST hospital, so the tenant-scoped findById misses them when
-            // accessed from a different hospital context.
-            return patientRepository.findByIdUnscoped(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
-        } else if (request.getPatientUsername() != null) {
-            UUID userId = userRepository.findByUsername(request.getPatientUsername())
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername()))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, request.getPatientUsername()));
-        } else if (request.getPatientEmail() != null) {
-            return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
-                .stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", request.getPatientEmail()));
+    /**
+     * The patient a staff member books for: the one named by {@code patientId},
+     * and nobody else. Never the caller's own patient record (QA D824), and
+     * never a username or an e-mail fragment, whose "contains" match picked
+     * whichever patient came first.
+     */
+    private Patient resolvePatientForStaffBooking(AppointmentRequestDTO request) {
+        if (request.getPatientId() == null) {
+            throw new BusinessException("appointment.patient.required");
         }
-        // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
-        if (authenticatedUsername != null) {
-            UUID userId = userRepository.findByUsername(authenticatedUsername)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, authenticatedUsername))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, authenticatedUsername));
-        }
-        throw new BusinessException("Patient identifier required");
+        return resolvePatient(request.getPatientId());
+    }
+
+    /**
+     * Unscoped on purpose: multi-hospital patients have Patient.hospitalId set
+     * to the FIRST hospital, so the tenant-scoped findById misses them when
+     * accessed from a different hospital context. The registration guard then
+     * scopes a staff booking to the booking hospital.
+     */
+    private Patient resolvePatient(UUID patientId) {
+        return patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     /**
@@ -504,13 +503,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             if (!patientRepository.existsByIdAndUserId(request.getPatientId(), currentUser.getId())) {
                 throw new ResourceNotFoundException("patient.notfound", request.getPatientId());
             }
-            return resolvePatient(request, currentUser.getUsername());
+            return resolvePatient(request.getPatientId());
         }
         if (request.getPatientUsername() != null) {
             if (!request.getPatientUsername().equalsIgnoreCase(currentUser.getUsername())) {
                 throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername());
             }
-            return resolvePatient(request, currentUser.getUsername());
+            return ownPatientRecord(currentUser, request.getPatientUsername());
         }
         if (request.getPatientEmail() != null) {
             Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
@@ -520,7 +519,19 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
             return named;
         }
-        return resolvePatient(request, currentUser.getUsername());
+        // No patient named (the mobile and patient-portal clients): the
+        // caller's own record -- for a patient only. Any other caller that
+        // reaches here (a role outside the staff list) names its patient.
+        if (!hasRole(currentUser, ROLE_PATIENT_CODE)) {
+            throw new BusinessException("appointment.patient.required");
+        }
+        return ownPatientRecord(currentUser, currentUser.getUsername());
+    }
+
+    /** The patient row linked to the caller's own account. */
+    private Patient ownPatientRecord(User currentUser, String named) {
+        return patientRepository.findByUserId(currentUser.getId())
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, named));
     }
 
     /**
@@ -539,7 +550,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
-        throw new BusinessException("Hospital identifier required");
+        throw new BusinessException("appointment.hospital.required");
     }
 
     private Staff resolveStaff(AppointmentRequestDTO request) {
@@ -559,7 +570,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return staffRepository.findByUserId(userId).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
         }
-        throw new BusinessException("Staff identifier required");
+        throw new BusinessException("appointment.staff.required");
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
@@ -607,13 +618,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // Null checks for required IDs
         if (request.getPatientId() == null) {
-            throw new BusinessException("Patient ID must not be null");
+            throw new BusinessException("appointment.patient.required");
         }
         if (request.getStaffId() == null) {
-            throw new BusinessException("Staff ID must not be null");
+            throw new BusinessException("appointment.staff.required");
         }
         if (request.getHospitalId() == null) {
-            throw new BusinessException("Hospital ID must not be null");
+            throw new BusinessException("appointment.hospital.required");
         }
         if (request.getAppointmentDate() == null) {
             throw new BusinessException("Appointment date must not be null");

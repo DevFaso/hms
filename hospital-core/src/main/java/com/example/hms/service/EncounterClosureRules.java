@@ -84,9 +84,9 @@ public final class EncounterClosureRules {
             return;
         }
         if (isNeverSeen(current)) {
-            throw new BusinessException("encounter.checkout.notSeen", String.valueOf(current));
+            throw new BusinessException("encounter.checkout.notSeen", EncounterStatus.labelOf(current));
         }
-        throw new BusinessException("encounter.checkout.examinationNotCompleted", current.name());
+        throw new BusinessException("encounter.checkout.examinationNotCompleted", EncounterStatus.labelOf(current));
     }
 
     /**
@@ -103,7 +103,7 @@ public final class EncounterClosureRules {
         // A closed visit is not reopened by a status write: its check-out (AVS,
         // appointment, recall) or its close-unseen reason would stay behind it.
         if (from != null && from.isClosed()) {
-            throw new BusinessException("encounter.status.closed", from.name());
+            throw new BusinessException("encounter.status.closed", from.localizedLabel());
         }
         // Cancelled and left-without-being-seen both carry a reason: only the
         // close-unseen endpoint writes them.
@@ -112,11 +112,11 @@ public final class EncounterClosureRules {
         }
         if (to == EncounterStatus.COMPLETED && !CLINICALLY_COMPLETE.contains(from)
                 && !(from == EncounterStatus.IN_PROGRESS && clinicianCaller)) {
-            throw new BusinessException("encounter.status.notCompletable", String.valueOf(from));
+            throw new BusinessException("encounter.status.notCompletable", EncounterStatus.labelOf(from));
         }
         if ((to == EncounterStatus.AWAITING_RESULTS || to == EncounterStatus.READY_FOR_DISCHARGE)
                 && isNeverSeen(from)) {
-            throw new BusinessException("encounter.status.notSeen", String.valueOf(from), to.name());
+            throw new BusinessException("encounter.status.notSeen", EncounterStatus.labelOf(from), to.localizedLabel());
         }
         // ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN, IN_PROGRESS, SCHEDULED: no closing rule.
     }
@@ -124,7 +124,7 @@ public final class EncounterClosureRules {
     /** The desk (reception, administrators) never sets a clinical status by hand. */
     public static void requireDeskTransition(EncounterStatus from, EncounterStatus to) {
         if (to != null && to != from && CLINICIAN_STATUSES.contains(to)) {
-            throw new BusinessException("encounter.status.clinicianOnly", to.name());
+            throw new BusinessException("encounter.status.clinicianOnly", to.localizedLabel());
         }
         requireDirectTransition(from, to, false);
     }

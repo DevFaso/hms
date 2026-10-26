@@ -39,6 +39,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>The QA D819 operator report lists exactly the patient records whose
  *       login is a staff account (staff record, staff assignment, or a global
  *       staff role), never a patient-only account.</li>
+ *   <li>The QA D824 operator report lists exactly the appointments a staff
+ *       account booked for its own linked patient record, never a staff
+ *       booking for another patient nor a patient's own booking.</li>
  * </ul>
  * Foreign keys are bypassed for the fixtures (session_replication_role =
  * replica); NOT NULL columns the test does not care about get a typed
@@ -84,6 +87,11 @@ class Round13PatientsEncountersSqlIT {
     private static final String P_SUPER_ADMIN = "70000000-0000-0000-0000-000000000003";
     private static final String P_PATIENT = "70000000-0000-0000-0000-000000000004";
 
+    private static final String A_SELF_BOOKED_BY_RECEPTIONIST = "80000000-0000-0000-0000-000000000001";
+    private static final String A_BOOKED_BY_RECEPTIONIST_FOR_PATIENT = "80000000-0000-0000-0000-000000000002";
+    private static final String A_SELF_BOOKED_BY_PATIENT = "80000000-0000-0000-0000-000000000003";
+    private static final String A_SELF_BOOKED_BY_STAFF_RECORD = "80000000-0000-0000-0000-000000000004";
+
     @BeforeAll
     static void migrate() throws Exception {
         try (Connection conn = newConnection()) {
@@ -101,6 +109,7 @@ class Round13PatientsEncountersSqlIT {
         try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute("SET session_replication_role = replica");
             stmt.execute("DELETE FROM clinical.encounters");
+            stmt.execute("DELETE FROM clinical.appointments");
             stmt.execute("DELETE FROM public.admissions");
             stmt.execute("DELETE FROM hospital.departments");
             stmt.execute("DELETE FROM clinical.patients");
@@ -144,6 +153,11 @@ class Round13PatientsEncountersSqlIT {
             patient(stmt, P_RECEPTIONIST, U_RECEPTIONIST, "2");
             patient(stmt, P_SUPER_ADMIN, U_SUPER_ADMIN, "3");
             patient(stmt, P_PATIENT, U_PATIENT, "4");
+
+            appointment(stmt, A_SELF_BOOKED_BY_RECEPTIONIST, P_RECEPTIONIST, U_RECEPTIONIST);
+            appointment(stmt, A_BOOKED_BY_RECEPTIONIST_FOR_PATIENT, P_PATIENT, U_RECEPTIONIST);
+            appointment(stmt, A_SELF_BOOKED_BY_PATIENT, P_PATIENT, U_PATIENT);
+            appointment(stmt, A_SELF_BOOKED_BY_STAFF_RECORD, P_STAFF_RECORD, U_STAFF_RECORD);
         }
     }
 
@@ -188,6 +202,22 @@ class Round13PatientsEncountersSqlIT {
         }
     }
 
+    @Test
+    void theD824ReportListsOnlyAppointmentsAStaffAccountBookedForItsOwnPatientRecord() throws Exception {
+        try (Connection conn = newConnection(); Statement stmt = conn.createStatement()) {
+            List<String> rows = new ArrayList<>();
+            try (ResultSet rs = stmt.executeQuery(resource("ops/d824_staff_self_booked_appointments_report.sql"))) {
+                while (rs.next()) {
+                    rows.add(rs.getString("appointment_id") + "|" + rs.getString("patient_id") + "|"
+                        + rs.getString("booked_by_user_id"));
+                }
+            }
+            assertThat(rows).containsExactlyInAnyOrder(
+                A_SELF_BOOKED_BY_RECEPTIONIST + "|" + P_RECEPTIONIST + "|" + U_RECEPTIONIST,
+                A_SELF_BOOKED_BY_STAFF_RECORD + "|" + P_STAFF_RECORD + "|" + U_STAFF_RECORD);
+        }
+    }
+
     private static String status(Statement stmt, String encounterId) throws SQLException {
         return scalar(stmt, "SELECT status FROM clinical.encounters WHERE id = '" + encounterId + "'");
     }
@@ -221,6 +251,13 @@ class Round13PatientsEncountersSqlIT {
 
     private static void admission(Statement stmt, String id, String departmentId) throws SQLException {
         insert(stmt, "public.admissions", Map.of("id", id, "hospital_id", HOSPITAL, "department_id", departmentId));
+    }
+
+    private static void appointment(Statement stmt, String id, String patientId, String bookedBy) throws SQLException {
+        insert(stmt, "clinical.appointments", Map.of("id", id, "patient_id", patientId, "created_by", bookedBy,
+            "hospital_id", HOSPITAL, "department_id", MEDICINE, "status", "SCHEDULED",
+            "appointment_date", "2026-10-26", "start_time", "09:" + id.substring(id.length() - 2),
+            "end_time", "10:" + id.substring(id.length() - 2)));
     }
 
     private static void role(Statement stmt, String id, String code) throws SQLException {

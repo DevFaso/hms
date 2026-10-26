@@ -362,7 +362,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
             throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
-                new Object[] {request.getStatus().name()}, locale));
+                new Object[] {request.getStatus().localizedLabel(locale)}, locale));
         }
 
         assertNoDuplicateEncounter(ctx, encounterDate, locale);
@@ -1922,7 +1922,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
-            throw new BusinessException("encounter.triage.submitWrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.triage.submitWrongStatus", EncounterStatus.labelOf(current));
         }
         // QA D511: no acuity, no triage — the patient would reach the doctor's
         // queue unranked. The DTO refuses it at the edge; this keeps any other
@@ -2067,7 +2067,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
                 && current != EncounterStatus.TRIAGE
                 && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.intake.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.intake.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         // Resolve recorder staff
@@ -2243,7 +2243,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
         if (current != null && current.isClosed()) {
-            throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
+            throw new BusinessException("encounter.checkout.alreadyClosed", EncounterStatus.labelOf(current));
         }
         // QA D788: and only once the clinician has completed the examination. A
         // visit nobody saw is closed through closeUnseen, never as a consultation.
@@ -2318,7 +2318,7 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
         EncounterStatus previous = encounter.getStatus();
         if (!EncounterClosureRules.isNeverSeen(previous)) {
-            throw new BusinessException("encounter.closeUnseen.wrongStatus", String.valueOf(previous));
+            throw new BusinessException("encounter.closeUnseen.wrongStatus", EncounterStatus.labelOf(previous));
         }
         String previousValues = serializeEncounter(encounter);
         LocalDateTime now = LocalDateTime.now();
@@ -2916,7 +2916,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            throw new BusinessException("encounter.start.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.start.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
@@ -2938,7 +2938,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
-            throw new BusinessException("encounter.triage.completeWrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.triage.completeWrongStatus", EncounterStatus.labelOf(current));
         }
 
         requireTriageRecorded(encounter);
@@ -3002,7 +3002,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.exam.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.exam.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
@@ -3032,14 +3032,14 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.readyForDischarge.wrongStatus", EncounterStatus.labelOf(current));
         }
         // QA D788: from IN_PROGRESS this step ends the consultation, so it is the
         // clinician's own (as the check-out of a visit IN_PROGRESS is). The desk
         // reached READY_FOR_DISCHARGE here and then checked the visit out with an
         // AVS, skipping the examination. The desk keeps AWAITING_RESULTS.
         if (current == EncounterStatus.IN_PROGRESS && !EncounterClosureRules.callerIsClinician()) {
-            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", current.name());
+            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", EncounterStatus.labelOf(current));
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
