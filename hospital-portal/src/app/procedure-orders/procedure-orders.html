@@ -260,12 +260,7 @@
             <h3>{{ 'PROCEDURES.SCHEDULE_TITLE' | translate }}</h3>
             <div class="field">
               <label for="proc-schedule">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }} *</label>
-              <input
-                id="proc-schedule"
-                type="datetime-local"
-                [min]="minScheduleDatetime"
-                [(ngModel)]="scheduleDatetime"
-              />
+              <input id="proc-schedule" type="datetime-local" [(ngModel)]="scheduleDatetime" />
             </div>
             <div class="modal-actions">
               <button type="button" class="btn-secondary" (click)="cancelAction()">
@@ -471,7 +466,6 @@
             <input
               id="proc-scheduled"
               type="datetime-local"
-              [min]="minScheduleDatetime"
               [(ngModel)]="orderForm.scheduledDatetime"
             />
           </div>

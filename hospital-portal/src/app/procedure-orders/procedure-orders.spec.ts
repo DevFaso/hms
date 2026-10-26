@@ -75,7 +75,6 @@ describe('ProcedureOrdersComponent', () => {
     spyOn(toast, 'error');
     component.viewedOrder.set({ ...order, status: 'SCHEDULED', consentObtained: true });
     component.openAction('schedule');
-    expect(component.minScheduleDatetime).toBe('2026-10-26T10:00');
     component.scheduleDatetime = '2020-01-01T09:00';
 
     component.submitSchedule();

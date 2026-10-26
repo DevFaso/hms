@@ -19,6 +19,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
+  localInputInstant,
   nowLocalDatetime,
   toLocalInputValue,
   toServerDateTime,
@@ -189,20 +190,18 @@ export class ProcedureOrdersComponent implements OnInit {
   }
 
   /**
-   * QA D857: the earliest planned time the pickers offer, set when a form
-   * opens. A procedure is not planned in the past; the server refuses it too.
+   * QA D857: whether a datetime-local value (the reader's wall clock) lies
+   * before the current minute. A procedure is not planned in the past; the
+   * server refuses it too. Compared as instants, so nothing here is sent.
    */
-  minScheduleDatetime = '';
-
-  /** QA D857: a datetime-local value before the current minute. */
-  static isPastLocal(value: string | null | undefined, now: string = nowLocalDatetime()): boolean {
-    return !!value && value < now;
+  static isPastLocal(value: string | null | undefined, nowMs: number = Date.now()): boolean {
+    const at = localInputInstant(value);
+    return at !== null && at.getTime() < nowMs - 60_000;
   }
 
   openCreate(): void {
     this.orderForm = this.emptyOrderForm();
     this.orderPatient.set(null);
-    this.minScheduleDatetime = nowLocalDatetime();
     this.showOrderModal.set(true);
   }
 
@@ -259,7 +258,6 @@ export class ProcedureOrdersComponent implements OnInit {
     const order = this.viewedOrder();
     this.detailAction.set(action);
     if (action === 'schedule') {
-      this.minScheduleDatetime = nowLocalDatetime();
       this.scheduleDatetime = order?.scheduledDatetime
         ? toLocalInputValue(order.scheduledDatetime)
         : '';
