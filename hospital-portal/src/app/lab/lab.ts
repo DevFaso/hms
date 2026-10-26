@@ -460,9 +460,15 @@ export class LabComponent implements OnInit {
     });
   }
 
-  /** QA D820: offered on this hospital's own orders, until one is voided. */
+  /**
+   * QA D820: offered on this hospital's own orders while open or completed;
+   * not on one already voided, nor on a cancelled one (already closed, and
+   * the server keeps its cancel reason).
+   */
   isVoidable(o: LabOrderResponse): boolean {
-    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+    return (
+      !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR' && o.status !== 'CANCELLED'
+    );
   }
 
   openVoid(o: LabOrderResponse): void {

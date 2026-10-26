@@ -86,7 +86,8 @@ public interface LabOrderService {
      * kept on the order; the rows are never deleted, and the results stop
      * loading anywhere. An ordering-side decision: the lab manager or lab
      * director of the ordering hospital, or a super-admin. Refused once the
-     * order is already voided.
+     * order is already voided, and for a cancelled order (already closed, its
+     * reason column holding why it was cancelled).
      */
     LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale);
 

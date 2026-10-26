@@ -90,7 +90,8 @@ class LabOrderVoidTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = LabOrderStatus.class, names = "ENTERED_IN_ERROR", mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = LabOrderStatus.class, names = {"ENTERED_IN_ERROR", "CANCELLED"},
+        mode = EnumSource.Mode.EXCLUDE)
     void anyStateBeforeCanBeVoided(LabOrderStatus from) {
         order.setStatus(from);
         when(roleValidator.isLabDirector(managerId, ordering.getId())).thenReturn(true);
@@ -170,6 +171,20 @@ class LabOrderVoidTest {
             .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
                 .isEqualTo("lab.order.alreadyVoided"));
         assertThat(order.getCancellationReason()).isEqualTo("first");
+    }
+
+    @Test
+    void aCancelledOrderKeepsItsCancelReason() {
+        order.setStatus(LabOrderStatus.CANCELLED);
+        order.setCancellationReason("Test withdrawn");
+        UUID id = order.getId();
+
+        assertThatThrownBy(() -> service.voidLabOrder(id, "Wrong patient", Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.voidCancelled"));
+        assertThat(order.getStatus()).isEqualTo(LabOrderStatus.CANCELLED);
+        assertThat(order.getCancellationReason()).isEqualTo("Test withdrawn");
     }
 
     @Test

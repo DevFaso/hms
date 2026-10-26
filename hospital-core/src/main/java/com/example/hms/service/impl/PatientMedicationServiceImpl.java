@@ -209,10 +209,11 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
 
     /** CONTROLLED wins over NOT_REFILLABLE: a controlled medicine is refused even with renewals left. */
     private String refillBlockedReason(Prescription prescription) {
+        boolean allowsRefill = prescription.allowsRefill();
         if (controlledResolver.isControlled(prescription)) {
             return REFILL_BLOCKED_CONTROLLED;
         }
-        return prescription.allowsRefill() ? null : REFILL_BLOCKED_NOT_REFILLABLE;
+        return allowsRefill ? null : REFILL_BLOCKED_NOT_REFILLABLE;
     }
 
     private static PatientMedicationResponseDTO withReadiness(

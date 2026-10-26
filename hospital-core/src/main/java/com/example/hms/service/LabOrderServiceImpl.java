@@ -1002,8 +1002,14 @@ public class LabOrderServiceImpl implements LabOrderService {
         // An ordering-side decision, like a cancel: a performing laboratory
         // does not void another hospital's order.
         requireOrderingHospital(labOrder);
-        if (labOrderRepository.findStatusById(id) == LabOrderStatus.ENTERED_IN_ERROR) {
+        LabOrderStatus committed = labOrderRepository.findStatusById(id);
+        if (committed == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.alreadyVoided");
+        }
+        // A cancelled order is already closed, and its one reason column holds
+        // why it was cancelled: a void would overwrite that reason.
+        if (committed == LabOrderStatus.CANCELLED) {
+            throw new BusinessException("lab.order.voidCancelled");
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");

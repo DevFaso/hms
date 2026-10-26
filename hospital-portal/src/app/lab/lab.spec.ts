@@ -449,6 +449,11 @@ describe('LabComponent — performing laboratory', () => {
       ).toContain('Wrong patient');
     });
 
+    it('a cancelled order is not offered a void', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'o-c', status: 'CANCELLED' })]);
+      expect(voidButton('o-c')).toBeNull();
+    });
+
     it("the performing laboratory does not void another hospital's order", async () => {
       await setup(
         ['ROLE_LAB_DIRECTOR'],
