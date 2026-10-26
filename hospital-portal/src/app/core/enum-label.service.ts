@@ -235,6 +235,7 @@ export class EnumLabelService implements OnDestroy {
       READY_FOR_DISCHARGE: 'Ready for Discharge',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      LEFT_WITHOUT_BEING_SEEN: 'Left without being seen',
     },
 
     /* ── Phase 1 — Staff scheduling: leave + shift ─────────── */
@@ -283,6 +284,7 @@ export class EnumLabelService implements OnDestroy {
       VERIFIED: 'Verified',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      ENTERED_IN_ERROR: 'Entered in error',
     },
     abnormalFlag: {
       NORMAL: 'Normal',
@@ -603,6 +605,7 @@ export class EnumLabelService implements OnDestroy {
       LAB_ORDER_CREATED: 'Lab Order Created',
       LAB_ORDER_UPDATED: 'Lab Order Updated',
       LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
+      LAB_ORDER_ENTERED_IN_ERROR: 'Lab Order Entered in Error',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',

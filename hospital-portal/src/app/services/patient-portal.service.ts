@@ -109,6 +109,12 @@ export interface MedicationSummary {
   refillsUsed?: number;
   /** False once the prescription is cancelled, discontinued, or was never signed. */
   refillable?: boolean;
+  /**
+   * QA D813: why `refillable` is false — CONTROLLED (never renewed from the
+   * portal) or NOT_REFILLABLE. The refill request is refused for the same
+   * reason, in the same words.
+   */
+  refillBlockedReason?: 'CONTROLLED' | 'NOT_REFILLABLE' | null;
   /** Where the patient's most recent request stands; absent if they never asked. */
   refillRequestStatus?: RefillRequestStatus;
   refillRequestUpdatedAt?: string;
@@ -685,7 +691,7 @@ export interface MedicationRefill {
   prescriptionId: string;
   medicationName: string;
   preferredPharmacy: string;
-  status: string;
+  status: RefillRequestStatus;
   requestedAt: string;
   updatedAt: string | null;
   notes: string;

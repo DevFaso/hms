@@ -858,7 +858,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
         // approve it.
-        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+        // QA D813: a controlled medicine says so. It used to share the "no renewals left"
+        // message, which told a patient with renewals on paper the wrong reason.
+        if (controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.controlled");
+        }
+        if (!prescription.allowsRefill()) {
             throw new BusinessException("patient.refill.notRefillable");
         }
 
@@ -1347,8 +1352,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      */
     private List<CareTeamDTO.VisitClinicianEntry> visitClinicians(UUID patientId) {
         List<com.example.hms.model.Encounter> open = encounterRepository.findOpenWithClinicianByPatientId(
-                patientId, java.util.EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
-                        com.example.hms.enums.EncounterStatus.CANCELLED));
+                patientId, com.example.hms.enums.EncounterStatus.CLOSED);
         Map<UUID, CareTeamDTO.VisitClinicianEntry> byUser = new java.util.LinkedHashMap<>();
         for (com.example.hms.model.Encounter encounter : open) {
             com.example.hms.model.User clinician = encounter.getStaff().getUser();

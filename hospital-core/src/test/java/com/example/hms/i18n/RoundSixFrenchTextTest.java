@@ -70,8 +70,10 @@ class RoundSixFrenchTextTest {
 
     @Test
     void d317_checkInOfACompletedAppointmentIsRefusedInFrench() {
-        assertThat(new BusinessException("reception.checkin.notEligible", "COMPLETED").getMessage())
-            .isEqualTo("Enregistrement de l'arrivée impossible : le rendez-vous est au statut COMPLETED. "
+        // QA D825: the status as people read it, as ReceptionServiceImpl now passes it.
+        assertThat(new BusinessException("reception.checkin.notEligible",
+                com.example.hms.enums.AppointmentStatus.labelOf(com.example.hms.enums.AppointmentStatus.COMPLETED)).getMessage())
+            .isEqualTo("Enregistrement de l'arrivée impossible : le rendez-vous est au statut Terminé. "
                 + "Seuls les rendez-vous planifiés ou confirmés peuvent être enregistrés.");
     }
 

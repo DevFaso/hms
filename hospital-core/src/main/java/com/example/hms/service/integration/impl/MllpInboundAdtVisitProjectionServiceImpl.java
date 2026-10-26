@@ -100,6 +100,11 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     // QA D515: an A03 discharge frees the bed and cancels a pending transfer
     // like every in-app discharge path.
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    // QA D804: an A02 moves the stay's encounter with the admission, as the
+    // in-app transfer does. A provider keeps the projection free of a bean
+    // cycle through the stay service.
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     /**
      * Runs in a nested transaction so a projection failure cannot roll
@@ -289,6 +294,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             : resolveTransferDepartment(destination, ctx.hospitalId);
         if (resolved != null) {
             row.setDepartment(resolved);
+            // QA D804: the encounter list showed the admitting department for
+            // the whole stay, because only the in-app transfer moved the stay's
+            // encounter, and an A03 discharge never carries the move onto it.
+            com.example.hms.service.AdmissionStayEncounterService stayService =
+                stayEncounters.getIfAvailable();
+            if (stayService != null) {
+                stayService.followStayDepartment(row);
+            }
         }
 
         emitAdmissionLifecycleAudit(

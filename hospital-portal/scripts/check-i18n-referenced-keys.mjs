@@ -43,6 +43,15 @@ const DYNAMIC_SUFFIXES = {
   'SLOT_ADMIN.STATUS_': ['OPEN', 'HELD', 'BOOKED', 'BLOCKED'],
   'SLOT_ADMIN.DAY_': ['1', '2', '3', '4', '5', '6', '7'],
   'RECEPTION.RECALL_STATUS_': ['PENDING', 'NOTIFIED', 'SCHEDULED', 'CLOSED', 'CANCELLED'],
+  // QA D807: the newborn assessment's delivery picker labels the mode in code.
+  'LABOR.MODE_': [
+    'SPONTANEOUS_VAGINAL',
+    'VACUUM_EXTRACTION',
+    'FORCEPS',
+    'CAESAREAN_ELECTIVE',
+    'CAESAREAN_EMERGENCY',
+    'ASSISTED_BREECH',
+  ],
 };
 
 function flatten(node, prefix = '', out = new Set()) {

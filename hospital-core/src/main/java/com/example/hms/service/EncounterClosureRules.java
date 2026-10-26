@@ -26,11 +26,11 @@ import java.util.Set;
  *   <li>A visit no clinician has seen (SCHEDULED, ARRIVED, TRIAGE,
  *       WAITING_FOR_PHYSICIAN) is closed as "left without being seen" or
  *       cancelled, with a reason ({@code POST /encounters/{id}/close-unseen}),
- *       and becomes CANCELLED: never a consultation.</li>
+ *       and becomes LEFT_WITHOUT_BEING_SEEN or CANCELLED: never a consultation.</li>
  *   <li>The clinical statuses (IN_PROGRESS, AWAITING_RESULTS,
  *       READY_FOR_DISCHARGE) are reached through the clinician's steps, never
  *       set by the desk on the flow board.</li>
- *   <li>A COMPLETED or CANCELLED visit is not reopened by a status write.</li>
+ *   <li>A closed visit ({@link EncounterStatus#CLOSED}) is not reopened by a status write.</li>
  * </ul>
  */
 public final class EncounterClosureRules {
@@ -84,9 +84,9 @@ public final class EncounterClosureRules {
             return;
         }
         if (isNeverSeen(current)) {
-            throw new BusinessException("encounter.checkout.notSeen", String.valueOf(current));
+            throw new BusinessException("encounter.checkout.notSeen", EncounterStatus.labelOf(current));
         }
-        throw new BusinessException("encounter.checkout.examinationNotCompleted", current.name());
+        throw new BusinessException("encounter.checkout.examinationNotCompleted", EncounterStatus.labelOf(current));
     }
 
     /**
@@ -102,19 +102,21 @@ public final class EncounterClosureRules {
         }
         // A closed visit is not reopened by a status write: its check-out (AVS,
         // appointment, recall) or its close-unseen reason would stay behind it.
-        if (from == EncounterStatus.COMPLETED || from == EncounterStatus.CANCELLED) {
-            throw new BusinessException("encounter.status.closed", from.name());
+        if (from != null && from.isClosed()) {
+            throw new BusinessException("encounter.status.closed", from.localizedLabel());
         }
-        if (to == EncounterStatus.CANCELLED) {
+        // Cancelled and left-without-being-seen both carry a reason: only the
+        // close-unseen endpoint writes them.
+        if (EncounterStatus.ENDED_UNSEEN.contains(to)) {
             throw new BusinessException("encounter.status.cancelThroughCloseUnseen");
         }
         if (to == EncounterStatus.COMPLETED && !CLINICALLY_COMPLETE.contains(from)
                 && !(from == EncounterStatus.IN_PROGRESS && clinicianCaller)) {
-            throw new BusinessException("encounter.status.notCompletable", String.valueOf(from));
+            throw new BusinessException("encounter.status.notCompletable", EncounterStatus.labelOf(from));
         }
         if ((to == EncounterStatus.AWAITING_RESULTS || to == EncounterStatus.READY_FOR_DISCHARGE)
                 && isNeverSeen(from)) {
-            throw new BusinessException("encounter.status.notSeen", String.valueOf(from), to.name());
+            throw new BusinessException("encounter.status.notSeen", EncounterStatus.labelOf(from), to.localizedLabel());
         }
         // ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN, IN_PROGRESS, SCHEDULED: no closing rule.
     }
@@ -122,7 +124,7 @@ public final class EncounterClosureRules {
     /** The desk (reception, administrators) never sets a clinical status by hand. */
     public static void requireDeskTransition(EncounterStatus from, EncounterStatus to) {
         if (to != null && to != from && CLINICIAN_STATUSES.contains(to)) {
-            throw new BusinessException("encounter.status.clinicianOnly", to.name());
+            throw new BusinessException("encounter.status.clinicianOnly", to.localizedLabel());
         }
         requireDirectTransition(from, to, false);
     }

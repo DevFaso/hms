@@ -24,6 +24,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -39,6 +40,19 @@ import java.util.UUID;
         @Index(name = "idx_lab_result_assignment", columnList = "assignment_id")
     }
 )
+/*
+ * QA D820: a result whose order was voided as entered in error no longer loads,
+ * anywhere: every repository query, findById, the order's collection, the
+ * patient portal, the chart, the critical-value sweeps, FHIR. One restriction
+ * on the entity rather than a clause on each of the dozens of reads, so a new
+ * read cannot forget it. The row is kept (never deleted); the order still
+ * reads ENTERED_IN_ERROR with its reason. No alias in the subquery: Hibernate
+ * prefixes every bare identifier with the result's own alias, which is what
+ * lab_order_id needs and an alias would break; the schema-qualified names are
+ * left as written.
+ */
+@SQLRestriction("NOT EXISTS (SELECT 1 FROM lab.lab_orders WHERE lab.lab_orders.id = lab_order_id"
+    + " AND lab.lab_orders.status = 'ENTERED_IN_ERROR')")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"labOrder", "assignment"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)

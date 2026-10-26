@@ -17,7 +17,11 @@ import {
   AssignmentBulkImportResponse,
   AssignmentResponse,
 } from '../services/assignment-admin.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
@@ -69,6 +73,25 @@ export class AdminAssignmentsComponent implements OnInit {
 
   /* Reference data */
   hospitals = signal<HospitalResponse[]>([]);
+  /**
+   * QA D818: the hospitals a NEW role may be granted at. The list filter keeps
+   * every hospital (old assignments at an archived one are still searchable);
+   * the create, multi-assign and import pickers offer only open ones, as the
+   * server refuses the rest with 409.
+   */
+  readonly assignableHospitals = computed(() => this.hospitals().filter(isOpenForAssignment));
+  /**
+   * The single-assignment form's options: the open hospitals, plus, when
+   * editing, the row's own hospital even if it has closed since, so the form
+   * shows where the assignment is rather than a blank.
+   */
+  readonly formHospitalOptions = computed(() => {
+    const open = this.assignableHospitals();
+    const currentId = this.modal() === 'edit' ? this.selected()?.hospitalId : null;
+    if (!currentId || open.some((h) => h.id === currentId)) return open;
+    const current = this.hospitals().find((h) => h.id === currentId);
+    return current ? [...open, current] : open;
+  });
   roles = signal<RoleResponse[]>([]);
   /**
    * QA D664: the create, multi-scope and import dropdowns offer only what the
@@ -203,10 +226,16 @@ export class AdminAssignmentsComponent implements OnInit {
   openCreate(): void {
     this.formUserIdentifier.set('');
     this.formRoleId.set('');
-    this.formHospitalId.set(this.filterHospitalId());
+    this.formHospitalId.set(this.filteredHospitalIfOpen());
     this.formStartDate.set('');
     this.formActive.set(true);
     this.modal.set('create');
+  }
+
+  /** QA D818: the list filter may name an archived hospital; it is no default for a grant. */
+  private filteredHospitalIfOpen(): string {
+    const filtered = this.filterHospitalId();
+    return this.assignableHospitals().some((h) => h.id === filtered) ? filtered : '';
   }
 
   openMulti(): void {
@@ -246,7 +275,7 @@ export class AdminAssignmentsComponent implements OnInit {
     this.importFileName.set('');
     this.importDelimiter.set(',');
     this.importDefaultRoleId.set('');
-    this.importDefaultHospitalId.set(this.filterHospitalId());
+    this.importDefaultHospitalId.set(this.filteredHospitalIfOpen());
     this.importDefaultActive.set(true);
     this.importSendNotifications.set(false);
     this.importSkipConflicts.set(true);

@@ -3,8 +3,10 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AdmissionStatus;
@@ -90,6 +92,51 @@ class BedAssignmentServiceTest {
         service.assignBed(admission, bed.getId());
 
         assertThat(admission.getDepartment()).isSameAs(surgery);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void d804_aTransferToAnotherDepartmentsBedMovesTheStayEncounterToo() {
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        com.example.hms.model.Department cardiology = new com.example.hms.model.Department();
+        cardiology.setId(UUID.randomUUID());
+        Ward cardioWard = Ward.builder().hospital(ward.getHospital()).name("Cardio").code("CAR01")
+            .department(cardiology).build();
+        Bed bed = Bed.builder().ward(cardioWard).bedNumber("K01").status(BedStatus.RESERVED).build();
+        bed.setId(UUID.randomUUID());
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        // the transfer completion's call (TransferServiceImpl): a RESERVED destination
+        service.assignBed(admission, bed.getId(), java.util.Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+
+        assertThat(admission.getDepartment()).isSameAs(cardiology);
+        verify(stayEncounters).followStayDepartment(admission);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void d804_aBedInAWardWithNoDepartmentLeavesTheEncounterAlone() {
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.lenient().doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        Bed next = bed("B09", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(next.getId(), hospitalId)).thenReturn(Optional.of(next));
+
+        service.assignBed(admission, next.getId());
+
+        verifyNoInteractions(stayEncounters);
     }
 
     @Test

@@ -816,6 +816,7 @@
 "enum_encounter_status_cancelled" = "Cancelled";
 "enum_encounter_status_completed" = "Completed";
 "enum_encounter_status_in_progress" = "In Progress";
+"enum_encounter_status_left_without_being_seen" = "Left without being seen";
 "enum_encounter_status_ready_for_discharge" = "Ready for Discharge";
 "enum_encounter_status_scheduled" = "Scheduled";
 "enum_encounter_status_triage" = "Triage";

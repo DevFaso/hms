@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AdmissionStatus;
-import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
@@ -68,8 +67,7 @@ public final class InpatientOrderEnd {
         }
         Encounter encounter = rx.getEncounter();
         return encounter != null && encounter.getAdmissionId() != null
-            && (encounter.getStatus() == EncounterStatus.COMPLETED
-                || encounter.getStatus() == EncounterStatus.CANCELLED);
+            && encounter.getStatus() != null && encounter.getStatus().isClosed();
     }
 
     /**

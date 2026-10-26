@@ -420,6 +420,45 @@ class ReceptionServiceImplTest {
             assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
         }
 
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+        @DisplayName("round 13: a walk-in closed unseen shows as closed, never back in the walk-in column")
+        void aWalkInClosedUnseenIsNotWaiting(EncounterStatus closedAs) {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(Collections.emptyList());
+            Encounter walkIn = makeWalkInEncounter(closedAs);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkIn));
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> all = service.getQueue(today, hospitalId, "ALL", null, null);
+            com.example.hms.payload.dto.FlowBoardDTO board = service.getFlowBoard(today, hospitalId, null);
+
+            assertThat(all).extracting(ReceptionQueueItemDTO::getStatus).containsExactly(closedAs.name());
+            assertThat(board.getWalkIn()).isEmpty();
+            assertThat(board.getArrived()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("round 13: an appointment whose visit was left without being seen reads LEFT_WITHOUT_BEING_SEEN, not the appointment's CANCELLED")
+        void anAppointmentLeftWithoutBeingSeen() {
+            Appointment appt = makeAppointment(AppointmentStatus.CANCELLED);
+            Encounter visit = makeEncounter(EncounterStatus.LEFT_WITHOUT_BEING_SEEN, appt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(visit));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(result).extracting(ReceptionQueueItemDTO::getStatus)
+                .containsExactly("LEFT_WITHOUT_BEING_SEEN");
+        }
+
         @Test
         @DisplayName("walk-in hasInsuranceIssue is true when patient has no insurance")
         void walkInInsuranceFlagSet() {
@@ -1301,6 +1340,35 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D825, the re-test call: reopening a visit left without being seen names the status in French, not its code")
+        void d825_reopeningALeftWithoutBeingSeenVisitNamesTheStatusInFrench() {
+            UUID encounterId = UUID.randomUUID();
+            Encounter encounter = encounterIn(encounterId, EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+            callerIsReceptionist("receptionist1");
+            Object previousSource = org.springframework.test.util.ReflectionTestUtils.getField(
+                com.example.hms.utility.MessageUtil.class, "messageSource");
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                assertThatThrownBy(() -> service.updateEncounterStatus(
+                        encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1"))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .hasMessage("Cette visite est déjà au statut Parti sans être vu ; elle ne se rouvre pas d'ici.");
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+                assertThatThrownBy(() -> service.updateEncounterStatus(
+                        encounterId, EncounterStatus.ARRIVED, hospitalId, "receptionist1"))
+                    .hasMessageContaining("Se fue sin ser atendido")
+                    .hasMessageNotContaining("LEFT_WITHOUT_BEING_SEEN");
+            } finally {
+                com.example.hms.utility.MessageUtil.setMessageSource(
+                    (org.springframework.context.MessageSource) previousSource);
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+            verify(encounter, never()).setStatus(any());
+            verify(encounterRepo, never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D788: the desk cannot cancel on the board either; close-unseen records the reason")
         void deskCannotCancelOnTheBoard() {
             UUID encounterId = UUID.randomUUID();
@@ -1696,7 +1764,7 @@ class ReceptionServiceImplTest {
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessageContaining("COMPLETED");
+                    .hasMessageContaining("status is Completed");
         }
 
         @Test
@@ -1717,7 +1785,7 @@ class ReceptionServiceImplTest {
 
             assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                    .hasMessageContaining("CHECKED_IN");
+                    .hasMessageContaining("status is Checked in");
         }
 
         @Test

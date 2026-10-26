@@ -20,6 +20,7 @@ import {
   IntegrationProbeResult,
 } from '../../services/integration-health.model';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
 
 interface StatusChip {
   status: IntegrationHealthStatus;
@@ -44,7 +45,7 @@ interface HistoryState {
 @Component({
   selector: 'app-integration-health',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe],
+  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe, OrgTextPipe],
   templateUrl: './integration-health.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-health.scss',

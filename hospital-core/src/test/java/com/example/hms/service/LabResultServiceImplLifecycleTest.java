@@ -209,6 +209,22 @@ class LabResultServiceImplLifecycleTest {
     // ── D49: a hand-entered result time must be possible ──────────────────
 
     @Test
+    @DisplayName("QA D820 — an order voided as entered in error takes no new result, nothing saved")
+    void aVoidedOrderTakesNoResult() {
+        when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));
+        org.mockito.Mockito.lenient().when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        bindHospitalContext(hospitalId);
+        order.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        LabResultRequestDTO request = entryRequest();
+
+        assertThatThrownBy(() -> service.createLabResult(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labResultRepository, never()).save(any(LabResult.class));
+    }
+
+    @Test
     @DisplayName("D49 — a result timed before its order is refused, nothing saved")
     void aResultTimedBeforeItsOrderIsRefused() {
         when(labOrderRepository.findById(order.getId())).thenReturn(Optional.of(order));

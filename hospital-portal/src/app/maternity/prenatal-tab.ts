@@ -1,6 +1,14 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import {
@@ -8,13 +16,14 @@ import {
   PrenatalAppointmentSummary,
   PrenatalScheduleRequest,
   PrenatalScheduleResponse,
+  PrenatalVisitRecommendation,
 } from '../services/prenatal.service';
 import { PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { refusalReason } from '../shared/refusal-reason';
-import { localDateString } from '../shared/date-utils';
+import { localDateString, serverLocalDate } from '../shared/date-utils';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -29,6 +38,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
     TranslateModule,
     PatientPickerComponent,
     EnumLabelPipe,
+    RouterLink,
   ],
   templateUrl: './prenatal-tab.html',
   styleUrl: './maternity.scss',
@@ -52,6 +62,21 @@ export class PrenatalTabComponent implements OnInit {
   notes = '';
   generating = signal(false);
   schedule = signal<PrenatalScheduleResponse | null>(null);
+
+  /**
+   * QA D810: a recommended visit read "Non planifiée" with no way to act on
+   * it. Each unplanned row links to the appointment form with the patient, the
+   * recommended day (today when that day has passed) and an antenatal reason
+   * filled in; the scheduler counts an appointment whose reason names
+   * antenatal care as that visit, so the row reads "Planifiée" once booked.
+   * Null for a row that is already planned.
+   */
+  readonly bookLinks = computed<(Record<string, string> | null)[]>(() => {
+    const s = this.schedule();
+    const patient = this.patient();
+    if (!s || !patient) return [];
+    return s.recommendations.map((r) => (r.scheduled ? null : this.bookParams(patient.id, r)));
+  });
 
   /* ── Reschedule modal ── */
   showRescheduleModal = signal(false);
@@ -110,6 +135,19 @@ export class PrenatalTabComponent implements OnInit {
         this.generating.set(false);
       },
     });
+  }
+
+  private bookParams(patientId: string, r: PrenatalVisitRecommendation): Record<string, string> {
+    const target = r.targetDate ? serverLocalDate(r.targetDate) : '';
+    const today = localDateString();
+    const params: Record<string, string> = {
+      patientId,
+      date: target && target >= today ? target : today,
+      reason: this.translate.instant('PRENATAL.BOOK_REASON', { week: r.gestationalWeek }),
+    };
+    const time = r.suggestedStartTime?.substring(0, 5);
+    if (time && /^\d{2}:\d{2}$/.test(time)) params['time'] = time;
+    return params;
   }
 
   /* ── Reschedule ── */

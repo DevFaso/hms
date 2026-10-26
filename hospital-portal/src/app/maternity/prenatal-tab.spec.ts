@@ -4,6 +4,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, throwError } from 'rxjs';
+import { provideRouter } from '@angular/router';
 
 import { PrenatalTabComponent } from './prenatal-tab';
 import { PrenatalScheduleResponse, PrenatalService } from '../services/prenatal.service';
@@ -77,6 +78,7 @@ describe('PrenatalTabComponent', () => {
       providers: [
         provideHttpClient(withXhr()),
         provideHttpClientTesting(),
+        provideRouter([]),
         { provide: PrenatalService, useValue: service },
         { provide: AuthService, useValue: auth },
         { provide: ToastService, useValue: toast },
@@ -103,6 +105,8 @@ describe('PrenatalTabComponent', () => {
         REQUIRED_FIELDS: 'La patiente et la date des dernières règles sont requises',
         GENERATE_ERROR: 'Échec de la génération du calendrier',
         RESCHEDULED: 'Rendez-vous reprogrammé',
+        BOOK: 'Planifier',
+        BOOK_REASON: 'Consultation prénatale (CPN) — {{week}} SA',
       },
     });
 
@@ -252,5 +256,58 @@ describe('PrenatalTabComponent', () => {
     );
     expect(cells[2]).toBe('10:30');
     expect(host().querySelector('[role="dialog"]')).toBeNull();
+  });
+  it('QA D810: an unplanned visit offers Book, prefilled with the patient, the day and an antenatal reason', () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 30);
+    const target = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    generateFor(
+      schedule({
+        recommendations: [
+          {
+            gestationalWeek: 24,
+            durationMinutes: 30,
+            visitType: 'ROUTINE_CHECK',
+            scheduled: false,
+            targetDate: target,
+            suggestedStartTime: '09:30:00',
+          },
+          { gestationalWeek: 28, durationMinutes: 30, visitType: 'ROUTINE_CHECK', scheduled: true },
+        ],
+      }),
+    );
+
+    const links = component.bookLinks();
+    expect(links[0]).toEqual({
+      patientId: 'p-1',
+      date: target,
+      time: '09:30',
+      reason: 'Consultation prénatale (CPN) — 24 SA',
+    });
+    // The scheduler counts a reason naming antenatal care as the visit.
+    expect(links[0]?.['reason']).toMatch(/pr[ée]natal/i);
+    expect(links[1]).toBeNull();
+    const book = host().querySelectorAll('a[href^="/appointments/new"]');
+    expect(book.length).toBe(1);
+    expect(book[0].textContent).toContain('Planifier');
+  });
+
+  it('QA D810: a recommended day already past is booked from today', () => {
+    generateFor(
+      schedule({
+        recommendations: [
+          {
+            gestationalWeek: 12,
+            durationMinutes: 30,
+            visitType: 'INITIAL_INTAKE',
+            scheduled: false,
+            targetDate: '2020-01-01',
+          },
+        ],
+      }),
+    );
+    const today = new Date();
+    const expected = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    expect(component.bookLinks()[0]?.['date']).toBe(expected);
   });
 });

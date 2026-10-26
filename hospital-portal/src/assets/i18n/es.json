@@ -145,6 +145,7 @@
     "BIRTH_TIME": "Hora de nacimiento",
     "BIRTH_WEIGHT": "Peso al nacer (g)",
     "BLOOD_LOSS": "Pérdida de sangre (ml)",
+    "BLOOD_LOSS_VALUE": "Pérdida de sangre: {{value}}",
     "CHART_X_AXIS": "Horas de fase activa",
     "CONTRACTIONS": "Contracciones",
     "CONTRACTIONS_TEN": "Contracciones /10 min",
@@ -240,7 +241,14 @@
     "TIME": "Hora",
     "URINE_ML": "Orina (ml)",
     "UTEROTONIC_GIVEN": "Uterotónico administrado (MATEP)",
-    "PICK_PATIENT_HINT": "Elija una paciente para ver su registro de parto."
+    "PICK_PATIENT_HINT": "Elija una paciente para ver su registro de parto.",
+    "SYSTOLIC": "Sistólica (mmHg)",
+    "DIASTOLIC": "Diastólica (mmHg)",
+    "TEMPERATURE": "Temperatura (°C)",
+    "APGAR_ONE": "APGAR al minuto 1",
+    "APGAR_FIVE": "APGAR al minuto 5",
+    "BIRTH_BEFORE_LAST_ENTRY": "Hora de nacimiento: no puede ser anterior a una observación ya registrada en el partograma.",
+    "PLACENTA_BEFORE_BIRTH": "Alumbramiento de la placenta: no puede ser anterior al nacimiento."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Volver a organizaciones",
@@ -1876,7 +1884,8 @@
       "AWAITING_RESULTS": "Esperando resultados",
       "READY_TO_DISCHARGE": "Listo para alta",
       "COMPLETED": "Completado",
-      "CANCELLED": "Cancelado"
+      "CANCELLED": "Cancelado",
+      "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
     },
     "FULL_CHART": "Historia completa",
     "GENERAL_VISIT": "Visita general",
@@ -2601,7 +2610,7 @@
     "PROVINCE_PLACEHOLDER": "ej. Kadiogo",
     "REGION": "Región",
     "REGION_PLACEHOLDER": "ej. Centre, Île-de-France",
-    "REQUIRED_FIELDS": "El nombre, la ciudad, el país, el teléfono y una dirección o un apartado postal son obligatorios.",
+    "REQUIRED_FIELDS": "El nombre, el teléfono, el país, la ciudad y la dirección (calle) son obligatorios.",
     "ADDRESS_OR_PO_BOX_HINT": "La dirección (calle) es obligatoria; el apartado postal es opcional.",
     "SEARCH_PLACEHOLDER": "Buscar hospitales…",
     "SECTOR": "Sector / Barrio",
@@ -2897,6 +2906,17 @@
       "PENDING_QA_REVIEW": "Pendiente de revisión de calidad",
       "REJECTED": "Rechazada",
       "RETIRED": "Retirada"
+    },
+    "CANCELLATION_REASON": "Motivo de cancelación",
+    "VOID": {
+      "ACTION": "Marcar como registrada por error",
+      "TITLE": "Marcar esta orden como registrada por error",
+      "EXPLAIN": "Úselo cuando la orden se creó por error (paciente equivocado, prueba equivocada). La orden y sus resultados se conservan, pero sus resultados ya no aparecerán en ninguna vista clínica. Orden:",
+      "REASON": "Motivo del error",
+      "REASON_PLACEHOLDER": "ej. Orden creada para el paciente equivocado",
+      "CONFIRM": "Marcar como registrada por error",
+      "DONE": "La orden está marcada como registrada por error.",
+      "FAILED": "No se pudo marcar la orden como registrada por error."
     }
   },
   "LAB_STAFF": {
@@ -3916,7 +3936,9 @@
     "TITLE": "Organizaciones",
     "TYPE": "Tipo",
     "TYPE_REQUIRED": "Elija un tipo de organización.",
-    "UPDATED": "Organización actualizada"
+    "UPDATED": "Organización actualizada",
+    "DEFAULT_ORG_NAME": "Organización sanitaria predeterminada",
+    "DEFAULT_ORG_DESCRIPTION": "Organización predeterminada para los hospitales sin una organización asignada"
   },
   "PANEL": {
     "TITLE": "Gestión de paneles",
@@ -4632,9 +4654,10 @@
       "REFILL_HISTORY": "Historial de renovaciones",
       "REQUESTED": "Solicitado",
       "COMPLETED": "Completado",
-      "NOT_REFILLABLE": "Esta receta ya no puede renovarse — solicite una nueva a su equipo de atención.",
+      "NOT_REFILLABLE": "Esta receta ya no se puede renovar. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
       "READY_AT": "Lista para recoger en {{pharmacy}}",
-      "READY_SINCE": "Desde el {{date}}"
+      "READY_SINCE": "Desde el {{date}}",
+      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta."
     },
     "LAB_RESULTS": {
       "TITLE": "Resultados de pruebas",
@@ -4707,8 +4730,9 @@
       "PAYMENT_PENDING_NOTE": "Los pagos declarados aquí los confirma el hospital antes de que cambie su saldo.",
       "PENDING_DECLARED": "Ya declarado, pendiente de confirmación",
       "LEFT_TO_DECLARE": "Queda por declarar",
-      "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}} F CFA: {{pending}} F CFA ya declarados están pendientes de confirmación.",
-      "CREDITED_TO": "Abonado en la factura {{number}}"
+      "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}}: {{pending}} ya declarados están pendientes de confirmación.",
+      "CREDITED_TO": "Abonado en la factura {{number}}",
+      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja"
     },
     "CARE_TEAM": {
       "TITLE": "Mi equipo de atención",
@@ -5020,6 +5044,7 @@
         "INACTIVE": "Inactivo",
         "INVALID": "Inválido",
         "IN_PROGRESS": "En curso",
+        "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
         "NEEDS_CLARIFICATION": "Requiere aclaración",
         "NORMAL": "Normal",
         "NOT_ELIGIBLE": "No elegible",
@@ -5219,7 +5244,8 @@
         "SCHEDULED": "Programado",
         "TRIAGE": "Triaje",
         "UNKNOWN": "Desconocido",
-        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico",
+        "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
       },
       "LEAVE_STATUS": {
         "APPROVED": "Aprobada",
@@ -5262,7 +5288,8 @@
         "PENDING": "Pendiente",
         "RECEIVED": "Recibido",
         "RESULTED": "Con resultados",
-        "VERIFIED": "Verificado"
+        "VERIFIED": "Verificado",
+        "ENTERED_IN_ERROR": "Registrada por error"
       },
       "ABNORMAL_FLAG": {
         "ABNORMAL": "Anormal",
@@ -5565,7 +5592,8 @@
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada",
         "USER_RESTORE": "Usuario restaurado",
         "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
-        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado"
+        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
+        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -6893,7 +6921,8 @@
     "WALKIN_VALIDATION_ERROR": "Seleccione un paciente, un profesional y compruebe que hay un hospital activo",
     "WALK_IN": "Registro sin cita",
     "WALK_INS": "Sin cita",
-    "WALK_INS_TODAY": "Sin cita hoy"
+    "WALK_INS_TODAY": "Sin cita hoy",
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -7351,7 +7380,8 @@
     "PRIMARY_NAV_ARIA": "Navegación principal",
     "SETTINGS": "Configuración",
     "SIGN_OUT": "Cerrar Sesión",
-    "TOGGLE_SIDEBAR": "Alternar barra lateral"
+    "TOGGLE_SIDEBAR": "Alternar barra lateral",
+    "LANGUAGE": "Idioma"
   },
   "SIGNATURES": {
     "ALGORITHM": "Algoritmo",
@@ -9178,6 +9208,9 @@
     "HISTORY_CREATED": "Antecedentes maternos registrados",
     "HISTORY_UPDATED": "Antecedentes actualizados (nueva versión)",
     "HISTORY_SAVE_ERROR": "Error al guardar los antecedentes",
+    "HISTORY_ALREADY_EXISTS": "Esta paciente ya tiene un historial materno. Ábralo y actualícelo para registrar una nueva versión.",
+    "OPEN_EXISTING_HISTORY": "Abrir y actualizar el historial",
+    "HISTORY_HELD_ELSEWHERE": "El historial materno de esta paciente lo gestiona otro establecimiento. No se puede actualizar aquí.",
     "SUM_SUBMITTED": "Enviadas",
     "SUM_ACKNOWLEDGED": "Confirmadas",
     "SUM_IN_PROGRESS": "En curso",
@@ -9249,7 +9282,10 @@
     "POSTPARTUM_TAB": "Posparto",
     "URGENCY_ATTACHMENT_REQUIRED": "Las derivaciones prioritarias y urgentes requieren al menos un adjunto de respaldo, que este formulario aún no admite. Cree la derivación como Rutinaria por ahora.",
     "VERSIONS_LOAD_ERROR": "Error al cargar el historial de versiones",
-    "NO_VERSIONS": "Sin versiones anteriores"
+    "NO_VERSIONS": "Sin versiones anteriores",
+    "PARA_ABOVE_GRAVIDA": "La paridad (P) no puede ser mayor que la gravidez (G): cada parto contado en P es también un embarazo contado en G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "La paridad (P) más los abortos (A) no pueden ser mayores que la gravidez (G): cada embarazo termina como máximo en uno de ellos.",
+    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Todas las órdenes",
@@ -9415,7 +9451,10 @@
     "VISIT_INITIAL_INTAKE": "Consulta inicial",
     "VISIT_ROUTINE_CHECK": "Control de rutina",
     "VISIT_ULTRASOUND": "Ecografía",
-    "VISIT_LATE_PREGNANCY": "Embarazo tardío"
+    "VISIT_LATE_PREGNANCY": "Embarazo tardío",
+    "BOOK": "Programar",
+    "BOOK_REASON": "Control prenatal (semana {{week}})",
+    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración)."
   },
   "PRO": {
     "HEADING": "Cribado de salud mental ({{instrument}})",
@@ -9594,7 +9633,13 @@
     "DELIVERY_LINK_NONE": "Sin vincular (nacido en otro lugar)",
     "DELIVERY_LINKED": "vinculado al parto",
     "PICK_PATIENT_HINT": "Elija una paciente para ver su seguimiento posparto.",
-    "PHASE_UNKNOWN": "Fase aún no definida"
+    "PHASE_UNKNOWN": "Fase aún no definida",
+    "APGAR_ONE": "APGAR al minuto 1",
+    "APGAR_FIVE": "APGAR al minuto 5",
+    "APGAR_TEN": "APGAR al minuto 10",
+    "TEMPERATURE": "Temperatura (°C)",
+    "SYSTOLIC": "Sistólica (mmHg)",
+    "DIASTOLIC": "Diastólica (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",
@@ -11175,5 +11220,10 @@
     "WEIGHT": "El peso debe estar entre {{min}} y {{max}} kg.",
     "HEIGHT": "La talla debe estar entre {{min}} y {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "El perímetro cefálico debe estar entre {{min}} y {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",
+    "MIN": "{{field}}: el valor debe ser como mínimo {{min}}.",
+    "FIELD_REASON": "{{field}}: {{reason}}"
   }
 }

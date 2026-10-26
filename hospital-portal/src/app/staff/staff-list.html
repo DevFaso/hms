@@ -270,7 +270,7 @@
                     required
                   >
                     <option value="">{{ 'STAFF.SELECT_HOSPITAL' | translate }}</option>
-                    @for (h of hospitals(); track h.id) {
+                    @for (h of hospitalOptions(); track h.id) {
                       <option [value]="h.name">{{ h.name }}</option>
                     }
                   </select>

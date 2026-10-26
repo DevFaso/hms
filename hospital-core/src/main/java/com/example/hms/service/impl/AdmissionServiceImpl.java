@@ -216,6 +216,8 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         if (request.getDepartmentId() != null) {
             admission.setDepartment(loadDepartmentAt(request.getDepartmentId(), admission.getHospital().getId()));
+            // QA D804: the stay's encounter moves with the admission.
+            stayEncounters.followStayDepartment(admission);
         }
 
         if (request.getAttendingPhysicianId() != null) {

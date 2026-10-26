@@ -27,7 +27,11 @@ import {
 } from '../services/pharmacy.service';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -507,7 +511,7 @@ export class PrescriptionsComponent implements OnInit {
           // cannot take a new order (the server refuses it), so it is not
           // offered. An edit keeps its own encounter as "linked encounter".
           list
-            .filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED')
+            .filter((e) => !isClosedEncounterStatus(e.status))
             .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },

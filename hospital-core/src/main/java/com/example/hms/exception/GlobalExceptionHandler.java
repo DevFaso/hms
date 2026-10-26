@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
+    private static final String FIELD_ERRORS = "fieldErrors";
+
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /** Shared response-body field names — kept as constants for Sonar S1192. */
@@ -160,6 +162,21 @@ public class GlobalExceptionHandler {
         body.put(FIELD_MESSAGE, ex.getMessage());
         body.put("cdsAdvisories", ex.getCards());
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * QA D806/D809: a business rule about one field. The standard body, plus
+     * {@code fieldErrors} naming that field (the bean-validation shape), so the
+     * form can mark it; the reason is already translated.
+     */
+    @ExceptionHandler(FieldBusinessException.class)
+    public ResponseEntity<Object> handleFieldBusinessException(FieldBusinessException ex, WebRequest request) {
+        Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
+        if (ex.getField() != null && ex.getMessage() != null) {
+            body.put(FIELD_FIELD, ex.getField());
+            body.put(FIELD_ERRORS, Map.of(ex.getField(), ex.getMessage()));
+        }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
@@ -364,7 +381,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
         body.put(FIELD_MESSAGE, localized("error.validation.request", "Validation errors in request"));
-        body.put("fieldErrors", fieldErrors);
+        body.put(FIELD_ERRORS, fieldErrors);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
@@ -384,7 +401,7 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
         body.put(FIELD_MESSAGE, localized("error.validation.parameters", "Constraint violation in request parameters"));
-        body.put("fieldErrors", violations);
+        body.put(FIELD_ERRORS, violations);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }

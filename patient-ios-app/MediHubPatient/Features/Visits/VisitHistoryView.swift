@@ -79,7 +79,7 @@ struct EncounterRowView: View {
     private var statusColor: String {
         switch encounter.status?.uppercased() {
         case "COMPLETED": return "green"
-        case "CANCELLED": return "red"
+        case "CANCELLED", "LEFT_WITHOUT_BEING_SEEN": return "red"
         case "IN_PROGRESS", "TRIAGE", "WAITING_FOR_PHYSICIAN": return "blue"
         default: return "gray"
         }

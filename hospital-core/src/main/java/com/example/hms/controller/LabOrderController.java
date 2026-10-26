@@ -196,6 +196,40 @@ public class LabOrderController {
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
+    /**
+     * QA D820: void an order entered in error (the wrong patient, the wrong
+     * test), from any state including COMPLETED, with a stated reason. Never a
+     * delete: the order and its results are kept, the results stop loading,
+     * and the order reads ENTERED_IN_ERROR. The service admits the ordering
+     * hospital's lab manager or lab director, or a super-admin, as for a cancel.
+     */
+    @PostMapping("/{id}/void")
+    @PreAuthorize("hasAnyRole('LAB_MANAGER', 'LAB_DIRECTOR', 'SUPER_ADMIN')")
+    @Operation(summary = "Void Lab Order (entered in error)",
+               description = "Marks the lab order and every result on it as entered in error, with a required "
+                   + "reason. The rows are kept; the results no longer appear in any clinical view.")
+    @ApiResponse(responseCode = "200", description = "Lab order voided")
+    @ApiResponse(responseCode = "400", description = "Reason missing, or the order is already voided")
+    @ApiResponse(responseCode = "404", description = "Lab order not found")
+    public ResponseEntity<ApiResponseWrapper<LabOrderResponseDTO>> voidLabOrder(
+        @PathVariable UUID id,
+        @RequestBody(required = false) VoidLabOrderRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+
+        LabOrderResponseDTO result = labOrderService.voidLabOrder(id,
+            request == null ? null : request.getReason(), locale);
+        auditLabOrder(AuditEventType.LAB_ORDER_ENTERED_IN_ERROR, result);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    /** QA D820: the body of a void. The reason is required (checked by the service, localised). */
+    private static class VoidLabOrderRequestDTO {
+        private String reason;
+
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
+    }
+
     /** Request DTO for transitioning a lab order's status. */
     private static class TransitionLabOrderStatusRequestDTO {
         @NotBlank(message = "Request body must include a 'status' field.")

@@ -97,6 +97,12 @@ export class DoctorPatientFlowComponent implements OnInit, OnDestroy {
         icon: 'cancel',
         color: '#94a3b8',
       },
+      {
+        key: 'LEFT_WITHOUT_BEING_SEEN',
+        label: t('DASHBOARD.FLOW_COL.LEFT_WITHOUT_BEING_SEEN'),
+        icon: 'directions_walk',
+        color: '#94a3b8',
+      },
     ];
   });
 

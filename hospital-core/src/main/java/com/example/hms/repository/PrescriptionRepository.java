@@ -152,10 +152,10 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) ",
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) ",
         countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) ")
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) ")
     Page<Prescription> findWorkQueue(@Param("hospitalId") UUID hospitalId,
                                      @Param("statuses") List<PrescriptionStatus> statuses,
                                      Pageable pageable);
@@ -169,12 +169,12 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
             + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)",
         countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
             + "and exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedBy.id = :userId and c.claimedAt > :activeAfter)")
     Page<Prescription> findWorkQueueClaimedBy(@Param("hospitalId") UUID hospitalId,
@@ -192,14 +192,14 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
     @Query(value = "select p from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
             + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedAt > :activeAfter) "
             + "and not exists (select d.id from Dispense d where d.prescription = p "
             + "and d.status = com.example.hms.enums.DispenseStatus.PENDING)",
         countQuery = "select count(p) from Prescription p where p.hospital.id = :hospitalId and p.status in :statuses "
             + "and (p.takeHome = true or not exists (select se.id from Encounter se where se = p.encounter "
-            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED))) "
+            + "and se.admissionId is not null and se.status in (com.example.hms.enums.EncounterStatus.COMPLETED, com.example.hms.enums.EncounterStatus.CANCELLED, com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN))) "
             + "and not exists (select c.id from PrescriptionQueueClaim c where c.prescription = p "
             + "and c.claimedAt > :activeAfter) "
             + "and not exists (select d.id from Dispense d where d.prescription = p "

@@ -31,15 +31,67 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { refusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { nowLocalDatetime, withServerDateTimes, serverInstant } from '../shared/date-utils';
+import {
+  localInputInstant,
+  nowLocalDatetime,
+  withServerDateTimes,
+  serverInstant,
+} from '../shared/date-utils';
 import { UltrasoundTabComponent } from './ultrasound-tab';
 import { BirthPlanTabComponent } from './birth-plan-tab';
 import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+
+/** The history form's fields the server names under `fieldErrors`. */
+const HISTORY_LABELS: Record<string, string> = {
+  recordedDate: 'MATERNITY.RECORDED',
+  'menstrualHistory.lastMenstrualPeriod': 'MATERNITY.LMP',
+  'obstetricHistory.gravida': 'MATERNITY.GRAVIDA',
+  'obstetricHistory.para': 'MATERNITY.PARA',
+  'obstetricHistory.termBirths': 'MATERNITY.TERM_BIRTHS',
+  'obstetricHistory.pretermBirths': 'MATERNITY.PRETERM_BIRTHS',
+  'obstetricHistory.abortions': 'MATERNITY.ABORTIONS',
+  'obstetricHistory.livingChildren': 'MATERNITY.LIVING_CHILDREN',
+  'obstetricHistory.previousCesareanSections': 'MATERNITY.CSECTIONS',
+};
+
+/** The charting-device clock allowance the server grants a clinical time (NotInClinicalFuture). */
+const CLOCK_SKEW_MS = 10 * 60 * 1000;
+
+/**
+ * What is wrong with a maternal history form before it is sent, as an i18n
+ * key, or null. QA D821: a record dated in the future (the server refuses it
+ * beyond its clock allowance). QA D809: "G1 P3" was saved; parity counts
+ * births, each of which ended a pregnancy counted in gravidity, and a
+ * pregnancy ends in at most one birth or one abortion. The server refuses the
+ * same, on the same fields.
+ */
+export function historyFormProblem(
+  form: MaternalHistoryRequest,
+  now: Date = new Date(),
+): string | null {
+  const recorded = localInputInstant(form.recordedDate);
+  if (recorded && recorded.getTime() > now.getTime() + CLOCK_SKEW_MS) {
+    return 'MATERNITY.RECORDED_FUTURE';
+  }
+  const counts = form.obstetricHistory ?? {};
+  const gravida = counts.gravida;
+  if (gravida === undefined || gravida === null) return null;
+  const para = counts.para ?? 0;
+  if (para > gravida) return 'MATERNITY.PARA_ABOVE_GRAVIDA';
+  if (
+    counts.abortions !== undefined &&
+    counts.abortions !== null &&
+    para + counts.abortions > gravida
+  ) {
+    return 'MATERNITY.OUTCOMES_ABOVE_GRAVIDA';
+  }
+  return null;
+}
 
 type BoardWorklist =
   'high-risk' | 'pending-review' | 'specialist-referral' | 'psychosocial' | 'all';
@@ -160,6 +212,19 @@ export class MaternityComponent implements OnInit {
   historySaving = signal(false);
   historyForm: MaternalHistoryRequest = this.emptyHistoryForm();
   selectedPatient = signal<PatientResponse | null>(null);
+  /**
+   * QA D826: the current history of the patient picked in "Nouvel historique",
+   * when she already has one. The form then offers to open that record (a
+   * patient has one history, versioned by update) instead of a create the
+   * server refuses.
+   */
+  existingHistory = signal<MaternalHistoryResponse | null>(null);
+  /**
+   * QA D826 (#958 review): the patient's history is held by another facility.
+   * The update only writes over a record of the acting hospital, so this form
+   * cannot record a new version: it says so and keeps Save disabled.
+   */
+  historyHeldElsewhere = signal(false);
   reviewBusyId = signal<string | null>(null);
 
   /* ── Referrals ── */
@@ -415,6 +480,8 @@ export class MaternityComponent implements OnInit {
     this.historyForm = this.emptyHistoryForm();
     this.editingHistoryId.set(null);
     this.selectedPatient.set(null);
+    this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
     this.showHistoryModal.set(true);
   }
 
@@ -440,6 +507,8 @@ export class MaternityComponent implements OnInit {
       specialistReferralReason: history.specialistReferralReason ?? '',
     };
     this.editingHistoryId.set(history.id);
+    this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
     this.selectedPatient.set({
       id: history.patientId,
       firstName: this.patientName(history.patientId),
@@ -456,13 +525,74 @@ export class MaternityComponent implements OnInit {
   onHistoryPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.historyForm.patientId = p?.id ?? '';
+    this.existingHistory.set(null);
+    this.historyHeldElsewhere.set(false);
+    if (p && !this.editingHistoryId()) {
+      this.lookUpExistingHistory(p.id);
+    }
+  }
+
+  /**
+   * QA D826: finds the picked patient's current history; none (404) leaves the
+   * create open. Only a record of this hospital can be updated here (the server
+   * refuses an update of another facility's record), so a current history held
+   * elsewhere gets the "held by another facility" notice instead of an edit
+   * that would fail. After a 409 the server has proved a history exists, so a
+   * lookup that finds nothing readable (404) means it is held elsewhere too.
+   */
+  private lookUpExistingHistory(patientId: string, afterConflict = false): void {
+    this.maternityService.currentForPatient(patientId).subscribe({
+      next: (current) => {
+        // A late answer for a patient no longer picked is dropped.
+        if (this.historyForm.patientId !== patientId || this.editingHistoryId()) return;
+        if (current && current.hospitalId === this.hospitalId) {
+          this.existingHistory.set(current);
+          if (afterConflict) {
+            this.toast.error(this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS'));
+          }
+        } else if (current || afterConflict) {
+          this.markHistoryHeldElsewhere(afterConflict);
+        }
+      },
+      error: (err: unknown) => {
+        if (this.historyForm.patientId !== patientId || this.editingHistoryId()) return;
+        if (afterConflict && (err as { status?: number } | null)?.status === 404) {
+          this.markHistoryHeldElsewhere(true);
+        } else if (afterConflict) {
+          this.toast.error(this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'));
+        }
+        /* before any save, no current history: the create stays available */
+      },
+    });
+  }
+
+  private markHistoryHeldElsewhere(announce: boolean): void {
+    this.historyHeldElsewhere.set(true);
+    if (announce) {
+      this.toast.error(this.translate.instant('MATERNITY.HISTORY_HELD_ELSEWHERE'));
+    }
+  }
+
+  /** QA D826: from the "already has a history" notice, edit that record instead. */
+  openExistingHistory(): void {
+    const current = this.existingHistory();
+    if (current) {
+      this.openEditHistory(current);
+    }
   }
 
   submitHistory(): void {
     if (!this.hospitalId) return;
+    // QA D826: a history held by another facility cannot be written here.
+    if (!this.editingHistoryId() && this.historyHeldElsewhere()) return;
     const form = this.historyForm;
     if (!form.patientId || !form.recordedDate) {
       this.toast.error(this.translate.instant('MATERNITY.HISTORY_REQUIRED_FIELDS'));
+      return;
+    }
+    const problem = historyFormProblem(form);
+    if (problem) {
+      this.toast.error(this.translate.instant(problem));
       return;
     }
     form.hospitalId = this.hospitalId;
@@ -484,10 +614,18 @@ export class MaternityComponent implements OnInit {
         this.loadBoard();
       },
       error: (err: unknown) => {
-        this.toast.error(
-          refusalReason(err) ?? this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
-        );
         this.historySaving.set(false);
+        if (!editingId && (err as { status?: number } | null)?.status === 409) {
+          // QA D826: she already has a history (picked before the lookup
+          // answered, written meanwhile, or held by another facility): the
+          // lookup decides between "open it" and "held elsewhere", and says so.
+          this.lookUpExistingHistory(form.patientId, true);
+          return;
+        }
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, HISTORY_LABELS) ??
+            this.translate.instant('MATERNITY.HISTORY_SAVE_ERROR'),
+        );
       },
     });
   }

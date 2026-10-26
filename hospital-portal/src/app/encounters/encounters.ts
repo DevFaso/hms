@@ -803,6 +803,7 @@ export class EncountersComponent implements OnInit {
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+      case 'LEFT_WITHOUT_BEING_SEEN':
         return 'status-cancelled';
       default:
         return '';

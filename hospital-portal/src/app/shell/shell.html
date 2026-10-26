@@ -154,6 +154,20 @@
             <span class="user-name-mini">{{ userName() }}</span>
             <span class="user-role-mini">{{ userRole() | roleLabel }}</span>
           </div>
+          <!--
+            D812: on a phone the drawer is the menu, so sign-out lives here
+            too. The topbar's profile menu stays the desktop path.
+          -->
+          <button
+            type="button"
+            class="sidebar-logout"
+            data-testid="sidebar-logout"
+            (click)="logout()"
+            [attr.aria-label]="'SHELL.SIGN_OUT' | translate"
+            [title]="'SHELL.SIGN_OUT' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+          </button>
         </div>
       }
     </div>
@@ -185,7 +199,23 @@
       </div>
 
       <div class="topbar-right">
-        <!-- Language Switcher -->
+        <!--
+          Language Switcher. D812: a narrow topbar (a phone) swaps the three
+          buttons for one select, so the profile button stays on screen.
+          Container queries in shell.scss pick which one shows.
+        -->
+        <label class="sr-only" for="topbar-lang-select">{{ 'SHELL.LANGUAGE' | translate }}</label>
+        <select
+          id="topbar-lang-select"
+          class="lang-select"
+          data-testid="lang-select"
+          [value]="currentLang()"
+          (change)="onLangSelect($event)"
+        >
+          <option value="fr">FR</option>
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
         <div class="lang-switcher">
           <button
             class="lang-btn"

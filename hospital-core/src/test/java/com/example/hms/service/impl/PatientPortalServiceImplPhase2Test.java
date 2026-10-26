@@ -815,11 +815,14 @@ class PatientPortalServiceImplPhase2Test {
             prescription.setStatus(PrescriptionStatus.DISPENSED);
             prescription.setControlledSubstance(true);
             when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            // The real resolver answers true for the prescriber's tick.
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
 
             MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            // QA D813: named as a controlled medicine, not as "no renewals left".
             assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> "patient.refill.notRefillable".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+                    .matches(e -> "patient.refill.controlled".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));
         }
 
@@ -837,7 +840,27 @@ class PatientPortalServiceImplPhase2Test {
             MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
             assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
                     .isInstanceOf(BusinessException.class)
-                    .matches(e -> "patient.refill.notRefillable".equals(((BusinessException) e).getMessageKey()));
+                    .matches(e -> "patient.refill.controlled".equals(((BusinessException) e).getMessageKey()));
+            verify(refillRequestRepository, never()).save(any(RefillRequest.class));
+        }
+
+        @Test
+        @DisplayName("QA D813: catalog-controlled morphine with renewals left on paper is refused as controlled")
+        void requestRefill_controlledWithRenewalsLeftSaysControlled() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStatus(PrescriptionStatus.DISPENSED);
+            prescription.setControlledSubstance(false);
+            prescription.setRefillsAllowed(3);
+            prescription.setRefillsRemaining(3);
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(controlledResolver.isControlled(prescription)).thenReturn(true);
+
+            MedicationRefillRequestDTO request = MedicationRefillRequestDTO.builder().prescriptionId(rxId).build();
+            assertThatThrownBy(() -> service.requestMedicationRefill(auth, request))
+                    .isInstanceOf(BusinessException.class)
+                    .matches(e -> "patient.refill.controlled".equals(((BusinessException) e).getMessageKey()));
             verify(refillRequestRepository, never()).save(any(RefillRequest.class));
         }
 

@@ -3,13 +3,14 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { LabComponent } from './lab';
 import {
   LabService,
   LabOrderResponse,
+  LabSpecimen,
   LabTestDefinition,
   PerformingLab,
 } from '../services/lab.service';
@@ -36,6 +37,7 @@ describe('LabComponent — performing laboratory', () => {
   let labService: jasmine.SpyObj<LabService>;
   let auth: jasmine.SpyObj<AuthService>;
   let scope: RoleContextStub;
+  let toast: jasmine.SpyObj<ToastService>;
 
   const labs: PerformingLab[] = [
     { id: LAB_B, name: 'Central Laboratory B', code: 'LABB' },
@@ -79,6 +81,7 @@ describe('LabComponent — performing laboratory', () => {
       'createOrder',
       'updateOrder',
       'deleteOrder',
+      'voidOrder',
       'listSpecimens',
       'createSpecimen',
       'receiveSpecimen',
@@ -103,7 +106,7 @@ describe('LabComponent — performing laboratory', () => {
       'getAssignments',
     ]);
     profileService.getAssignments.and.returnValue(of([]));
-    const toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
     const printService = jasmine.createSpyObj<PrintLabelService>('PrintLabelService', [
       'getSpecimenLabelPdf',
       'openForPrint',
@@ -196,6 +199,49 @@ describe('LabComponent — performing laboratory', () => {
     component.openSpecimens(order({ labTestCode: 'CBC' }));
 
     expect(component.specimenForm.specimenType).toBe('Sang total EDTA');
+  });
+
+  it('QA D820: a voided order offers neither Receive nor Collect in its specimens modal', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    const collected = {
+      id: 'sp-1',
+      labOrderId: 'o-void',
+      accessionNumber: 'ACC-1',
+      barcodeValue: 'LAB-ACC-1',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'COLLECTED',
+      notes: null,
+    } as LabSpecimen;
+    labService.listSpecimens.and.returnValue(of([collected]));
+    const receiveLabel = (): HTMLElement | undefined =>
+      Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('.modal-body button'),
+      ).find((b) => b.textContent?.includes('LAB.RECEIVE'));
+
+    component.openSpecimens(order({ id: 'o-void', status: 'ENTERED_IN_ERROR' }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(component.canReceive(collected)).toBeFalse();
+    expect(receiveLabel())
+      .withContext('receive answers 400 and would queue an OML')
+      .toBeUndefined();
+    expect(host.querySelector('#specimen-type')).withContext('no collect form').toBeNull();
+    expect(host.querySelector('.modal-actions .btn-primary')).withContext('no Collect').toBeNull();
+    component.specimenForm.specimenType = 'BLOOD';
+    component.collectSpecimen();
+    expect(labService.createSpecimen).not.toHaveBeenCalled();
+
+    // The same specimen on an open order is still received, and the form shown.
+    component.closeSpecimens();
+    component.openSpecimens(order({ id: 'o-open', status: 'COLLECTED' }));
+    fixture.detectChanges();
+    expect(component.canReceive(collected)).toBeTrue();
+    expect(receiveLabel()).toBeDefined();
+    expect(host.querySelector('#specimen-type')).not.toBeNull();
   });
 
   it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {
@@ -371,6 +417,109 @@ describe('LabComponent — performing laboratory', () => {
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
 
+  describe('QA D820: void a COMPLETED order as entered in error', () => {
+    const voidButton = (id: string) =>
+      fixture.nativeElement.querySelector(
+        `[data-testid="lab-void-${id}"]`,
+      ) as HTMLButtonElement | null;
+
+    it('the lab director voids the COMPLETED order, with a reason, never a delete', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'lab-35', status: 'COMPLETED' })]);
+      labService.voidOrder.and.returnValue(of(order({ id: 'lab-35', status: 'ENTERED_IN_ERROR' })));
+
+      voidButton('lab-35')!.click();
+      fixture.detectChanges();
+      const confirm = fixture.nativeElement.querySelector(
+        '[data-testid="lab-void-confirm"]',
+      ) as HTMLButtonElement;
+      expect(confirm.disabled).withContext('no reason yet').toBeTrue();
+
+      const reason = fixture.nativeElement.querySelector(
+        '[data-testid="lab-void-reason"]',
+      ) as HTMLTextAreaElement;
+      reason.value = '   ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(confirm.disabled).withContext('spaces are no reason').toBeTrue();
+
+      reason.value = '  Wrong patient  ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(confirm.disabled).toBeFalse();
+      labService.listOrders.calls.reset();
+      confirm.click();
+      fixture.detectChanges();
+
+      expect(labService.voidOrder).toHaveBeenCalledOnceWith('lab-35', 'Wrong patient');
+      expect(labService.deleteOrder).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalled();
+      expect(labService.listOrders).toHaveBeenCalled();
+      expect(component.voidingOrder()).toBeNull();
+    });
+
+    it('a lab manager and a super-admin are offered it too', async () => {
+      await setup(['ROLE_LAB_MANAGER'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      expect(voidButton('o-1')).not.toBeNull();
+      TestBed.resetTestingModule();
+      await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      expect(voidButton('o-1')).not.toBeNull();
+    });
+
+    it('the ordering clinician and the bench are not, as the endpoint refuses them', async () => {
+      for (const role of [
+        'ROLE_DOCTOR',
+        'ROLE_NURSE',
+        'ROLE_LAB_TECHNICIAN',
+        'ROLE_LAB_SCIENTIST',
+      ]) {
+        TestBed.resetTestingModule();
+        await setup([role], [order({ id: 'o-1', status: 'COMPLETED' })]);
+        expect(voidButton('o-1')).withContext(role).toBeNull();
+      }
+    });
+
+    it('a voided order is not voided again, and reads as entered in error', async () => {
+      await setup(
+        ['ROLE_LAB_DIRECTOR'],
+        [order({ id: 'o-v', status: 'ENTERED_IN_ERROR', cancellationReason: 'Wrong patient' })],
+      );
+      expect(voidButton('o-v')).toBeNull();
+      expect(component.getStatusClass('ENTERED_IN_ERROR')).toBe('status-badge status-cancelled');
+      component.viewOrder(component.orders()[0]);
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement.querySelector('[data-testid="lab-order-reason"]') as HTMLElement)
+          .textContent,
+      ).toContain('Wrong patient');
+    });
+
+    it('a cancelled order is not offered a void', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'o-c', status: 'CANCELLED' })]);
+      expect(voidButton('o-c')).toBeNull();
+    });
+
+    it("the performing laboratory does not void another hospital's order", async () => {
+      await setup(
+        ['ROLE_LAB_DIRECTOR'],
+        [order({ id: 'o-in', status: 'COMPLETED', performingHospitalId: LAB_B })],
+        LAB_B,
+      );
+      expect(voidButton('o-in')).toBeNull();
+    });
+
+    it('shows the server refusal as written', async () => {
+      await setup(['ROLE_LAB_DIRECTOR'], [order({ id: 'o-1', status: 'COMPLETED' })]);
+      labService.voidOrder.and.returnValue(
+        throwError(() => ({ error: { message: 'Déjà déclarée saisie par erreur.' } })),
+      );
+      component.openVoid(component.orders()[0]);
+      component.voidReason.set('Wrong test');
+      component.executeVoid();
+      expect(toast.error).toHaveBeenCalledWith('Déjà déclarée saisie par erreur.');
+      expect(component.voidingOrder()).not.toBeNull();
+    });
+  });
+
   it('QA D616: the lab technician sees no trash icon on an ORDERED or a COMPLETED order', async () => {
     await setup(
       ['ROLE_LAB_TECHNICIAN'],
@@ -391,6 +540,26 @@ describe('LabComponent — performing laboratory', () => {
 
     TestBed.resetTestingModule();
     await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
+  it('QA D820: a voided order offers neither Edit nor Delete, which the server refuses', async () => {
+    // Voided before any result: the results-stage check alone let the trash through (409).
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })]);
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
+      .withContext('the voided order is rendered')
+      .toBeGreaterThanOrEqual(1);
+    expect(fixture.nativeElement.querySelector('.edit-link'))
+      .withContext('edit answers 400 lab.order.enteredInError')
+      .toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link'))
+      .withContext('delete answers 409 lab.order.deleteClosed')
+      .toBeNull();
+
+    // The same caller on an open order is still offered both.
+    TestBed.resetTestingModule();
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
 
@@ -504,6 +673,8 @@ describe('LabComponent worklist tabs', () => {
     'VERIFIED',
     'COMPLETED',
     'CANCELLED',
+    // QA D820
+    'ENTERED_IN_ERROR',
   ];
 
   it('QA D601/D616: never offers delete on an order that carries results', () => {
@@ -549,7 +720,7 @@ describe('LabComponent worklist tabs', () => {
     for (const status of lifecycle) {
       const o = order(status);
       const tabs = Number(component.isPending(o)) + Number(component.isCompleted(o));
-      expect(tabs).toBe(status === 'CANCELLED' ? 0 : 1, status);
+      expect(tabs).toBe(status === 'CANCELLED' || status === 'ENTERED_IN_ERROR' ? 0 : 1, status);
     }
   });
 

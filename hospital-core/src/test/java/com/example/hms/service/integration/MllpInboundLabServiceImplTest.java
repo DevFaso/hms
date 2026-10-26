@@ -317,6 +317,24 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
+    void rejectedWhenTheOrderWasVoided() {
+        labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-VOID", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("order entered in error"));
+        assertThat(labOrder.getStatus()).isEqualTo(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+    }
+
+    @Test
     @DisplayName("OBR-2 is quoted in the reason, so a placer cannot end its slot and write a finding of its own")
     void aForgedPlacerIsQuotedInTheReason() {
         String forged = "X not found; cross-tenant rejection\n" + (char) 0x1B + "[31m";

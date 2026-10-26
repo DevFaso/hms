@@ -42,6 +42,9 @@ class ServiceRequestFhirMapperTest {
             .isEqualTo(ServiceRequest.ServiceRequestStatus.COMPLETED);
         assertThat(mapper.toFhir(labOrder(LabOrderStatus.CANCELLED, "ROUTINE")).getStatus())
             .isEqualTo(ServiceRequest.ServiceRequestStatus.REVOKED);
+        // QA D820: a voided order is entered-in-error.
+        assertThat(mapper.toFhir(labOrder(LabOrderStatus.ENTERED_IN_ERROR, "ROUTINE")).getStatus())
+            .isEqualTo(ServiceRequest.ServiceRequestStatus.ENTEREDINERROR);
     }
 
     @Test

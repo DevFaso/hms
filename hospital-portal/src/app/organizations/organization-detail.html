@@ -12,7 +12,7 @@
   } @else if (organization(); as org) {
     <div class="page-header">
       <div>
-        <h1 class="page-title">{{ org.name }}</h1>
+        <h1 class="page-title">{{ org.name | orgText: org.code }}</h1>
         <p class="page-subtitle">
           <span class="code-badge">{{ org.code }}</span>
           @if (lifecycle(); as lc) {

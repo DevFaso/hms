@@ -12,7 +12,24 @@ export type EncounterStatus =
   | 'AWAITING_RESULTS'
   | 'READY_FOR_DISCHARGE'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  /** Round 13: the patient left before a clinician saw them; never a consultation. */
+  | 'LEFT_WITHOUT_BEING_SEEN';
+
+/**
+ * Every closed encounter status (EncounterStatus.CLOSED on the server): a
+ * closed visit takes no new order, triage or intake. One list, so a new closed
+ * status cannot be missed by one of the open-visit filters.
+ */
+export const CLOSED_ENCOUNTER_STATUSES: readonly string[] = [
+  'COMPLETED',
+  'CANCELLED',
+  'LEFT_WITHOUT_BEING_SEEN',
+];
+
+export function isClosedEncounterStatus(status: string | null | undefined): boolean {
+  return !!status && CLOSED_ENCOUNTER_STATUSES.includes(status);
+}
 /**
  * The eight constants EncounterType.java declares. TELEHEALTH was missing
  * here, so the API could send a value this type said was impossible and the

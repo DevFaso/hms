@@ -81,6 +81,7 @@
     "src/app/lab/lab-release-worklist/lab-release-worklist.html::row.observationResultStatus",
     "src/app/lab/lab-test-config/lab-test-config.html::def.category",
     "src/app/lab/lab.html::<option>p",
+    "src/app/lab/lab.html::o.cancellationReason",
     "src/app/lab/lab.html::o.orderChannel",
     "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences.backupDeliveryMethod",
     "src/app/maternity/birth-plan-tab.html::p.deliveryPreferences?.preferredDeliveryMethod",

@@ -362,7 +362,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
             throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
-                new Object[] {request.getStatus().name()}, locale));
+                new Object[] {request.getStatus().localizedLabel(locale)}, locale));
         }
 
         assertNoDuplicateEncounter(ctx, encounterDate, locale);
@@ -762,7 +762,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private static boolean isClosedStatus(EncounterStatus status) {
-        return status == EncounterStatus.COMPLETED || status == EncounterStatus.CANCELLED;
+        return status != null && status.isClosed();
     }
 
     private boolean hasExistingNote(Encounter encounter) {
@@ -1922,7 +1922,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Guard: only ARRIVED or TRIAGE encounters may receive triage
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
-            throw new BusinessException("encounter.triage.submitWrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.triage.submitWrongStatus", EncounterStatus.labelOf(current));
         }
         // QA D511: no acuity, no triage — the patient would reach the doctor's
         // queue unranked. The DTO refuses it at the edge; this keeps any other
@@ -2067,7 +2067,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
                 && current != EncounterStatus.TRIAGE
                 && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.intake.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.intake.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         // Resolve recorder staff
@@ -2242,8 +2242,8 @@ public class EncounterServiceImpl implements EncounterService {
 
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
-        if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
-            throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
+        if (current != null && current.isClosed()) {
+            throw new BusinessException("encounter.checkout.alreadyClosed", EncounterStatus.labelOf(current));
         }
         // QA D788: and only once the clinician has completed the examination. A
         // visit nobody saw is closed through closeUnseen, never as a consultation.
@@ -2318,12 +2318,19 @@ public class EncounterServiceImpl implements EncounterService {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
         EncounterStatus previous = encounter.getStatus();
         if (!EncounterClosureRules.isNeverSeen(previous)) {
-            throw new BusinessException("encounter.closeUnseen.wrongStatus", String.valueOf(previous));
+            throw new BusinessException("encounter.closeUnseen.wrongStatus", EncounterStatus.labelOf(previous));
         }
         String previousValues = serializeEncounter(encounter);
         LocalDateTime now = LocalDateTime.now();
 
-        encounter.setStatus(EncounterStatus.CANCELLED);
+        // Product decision (round 13): a visit the patient walked out of is its
+        // own status, never the staff's "Cancelled", so the reports can count
+        // it apart. Neither is a consultation. The outcome is kept in the
+        // extra fields as well, as before (and as V236 reads it).
+        EncounterStatus closedAs = request.getOutcome() == com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN
+            ? EncounterStatus.LEFT_WITHOUT_BEING_SEEN
+            : EncounterStatus.CANCELLED;
+        encounter.setStatus(closedAs);
         java.util.Map<String, Object> extra = encounter.getExtraFields() != null
             ? new java.util.LinkedHashMap<>(encounter.getExtraFields())
             : new java.util.LinkedHashMap<>();
@@ -2333,7 +2340,7 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
         trackerEventPublisher.publishStatusTransition(saved,
-            previous != null ? previous.name() : null, EncounterStatus.CANCELLED.name());
+            previous != null ? previous.name() : null, closedAs.name());
 
         // The appointment was not honoured as a consultation either. QA D788: an
         // appointment the desk had already marked COMPLETED by hand (before the
@@ -2909,7 +2916,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            throw new BusinessException("encounter.start.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.start.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
@@ -2931,7 +2938,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
-            throw new BusinessException("encounter.triage.completeWrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.triage.completeWrongStatus", EncounterStatus.labelOf(current));
         }
 
         requireTriageRecorded(encounter);
@@ -2975,7 +2982,9 @@ public class EncounterServiceImpl implements EncounterService {
             java.util.EnumSet.of(
                     com.example.hms.enums.LabOrderStatus.COMPLETED,
                     com.example.hms.enums.LabOrderStatus.VERIFIED,
-                    com.example.hms.enums.LabOrderStatus.CANCELLED);
+                    com.example.hms.enums.LabOrderStatus.CANCELLED,
+                    // QA D820: a voided order holds nothing open.
+                    com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
 
     /** Terminal statuses for procedure orders. */
     private static final java.util.Set<com.example.hms.enums.ProcedureOrderStatus> PROC_TERMINAL =
@@ -2995,7 +3004,7 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.exam.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.exam.wrongStatus", EncounterStatus.labelOf(current));
         }
 
         boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
@@ -3025,14 +3034,14 @@ public class EncounterServiceImpl implements EncounterService {
             return encounterMapper.toEncounterResponseDTO(encounter);
         }
         if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
-            throw new BusinessException("encounter.readyForDischarge.wrongStatus", String.valueOf(current));
+            throw new BusinessException("encounter.readyForDischarge.wrongStatus", EncounterStatus.labelOf(current));
         }
         // QA D788: from IN_PROGRESS this step ends the consultation, so it is the
         // clinician's own (as the check-out of a visit IN_PROGRESS is). The desk
         // reached READY_FOR_DISCHARGE here and then checked the visit out with an
         // AVS, skipping the examination. The desk keeps AWAITING_RESULTS.
         if (current == EncounterStatus.IN_PROGRESS && !EncounterClosureRules.callerIsClinician()) {
-            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", current.name());
+            throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", EncounterStatus.labelOf(current));
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);

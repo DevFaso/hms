@@ -15,7 +15,11 @@ import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { grantableRoles } from '../core/grantable-roles';
 import { RoleService, RoleResponse } from '../services/role.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
@@ -268,8 +272,11 @@ export class UserListComponent implements OnInit, OnDestroy {
     // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe({
+        // QA D818: a new user's role is never granted at an archived hospital.
         next: (hospitals: HospitalResponse[]) =>
-          this.availableHospitals.set(hospitals.map((h) => ({ id: h.id, name: h.name }))),
+          this.availableHospitals.set(
+            hospitals.filter(isOpenForAssignment).map((h) => ({ id: h.id, name: h.name })),
+          ),
         error: () => {
           /* silent */
         },

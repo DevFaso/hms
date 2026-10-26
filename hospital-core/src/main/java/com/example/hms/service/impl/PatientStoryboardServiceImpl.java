@@ -59,8 +59,7 @@ public class PatientStoryboardServiceImpl implements PatientStoryboardService {
     static final int MAX_PROBLEMS = 8;
     static final int MAX_DIRECTIVES = 5;
 
-    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES =
-        Set.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES = EncounterStatus.CLOSED;
 
     private static final Set<AllergySeverity> HIGH_SEVERITY =
         Set.of(AllergySeverity.SEVERE, AllergySeverity.LIFE_THREATENING);

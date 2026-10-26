@@ -2205,6 +2205,37 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D819 (round 13): the reverse of the patient-only-account rule.**
+  Every path that writes `Patient.user` now refuses a staff account or one
+  already linked to another record (`PatientAccountLinkGuard`, 409 on
+  `userId`; `fix/qa-r13-patients-encounters`), and
+  `ops/d819_staff_linked_patients_report.sql` lists the existing staff-linked
+  records for the operator (relink or delete is a decision per row). Owed:
+  `POST /assignments` can still grant a staff role to an account that is
+  already a patient's login, which reaches the same state from the other
+  side. Refusing it is a product decision (an employee registered as a
+  patient with their own e-mail must then get a second account, and staff
+  onboarding by licence may land on that account), so it is a new rule for
+  the assignment flow, not a fix to the patient paths this defect named.
+- **QA D810 (round 13): a record-a-prenatal-visit flow.**
+  The prenatal calendar now books each unplanned recommended visit (a
+  "Planifier" link to the appointment form, prefilled with the patient, the
+  day and an antenatal reason the scheduler counts), and says how a booked
+  visit is recorded (check-in on the appointment opens the consultation)
+  (`fix/qa-r13-maternity`). Owed: there is no antenatal-visit record (fundal
+  height, fetal heart, presentation, oedema, BP and weight trend per visit,
+  linked to the pregnancy) and no screen for it; the backend has no entity or
+  endpoint for one, so it is a new module, not a bug fix.
+
+- **QA D813 (round 13): the native apps do not read why a refill is blocked.**
+  The portal now names a controlled medicine's refusal as controlled, on the
+  row (`refillBlockedReason` on `GET /me/patient/medications`) and in the
+  refill refusal (`patient.refill.controlled`), in the same words
+  (`fix/qa-r13-portal-admin`). The Android and iOS apps decode neither
+  `refillable` nor `refillBlockedReason`: they still offer the refill on a
+  controlled medicine and show the server's refusal, which now names the right
+  reason. Owed: decode the field and say it on the row. Deferred because it
+  is a change to both store apps and their release, not to the portal.
 - **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
   The beta-lactam cross-reactivity advisory now shows at prescribing, on
   every edit, at the signature, on the eMAR row (queue chip, a card before

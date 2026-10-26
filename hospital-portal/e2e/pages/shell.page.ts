@@ -44,9 +44,9 @@ export class ShellPage {
     this.profileBtn = page.locator('.profile-btn');
     this.profileName = page.locator('.profile-name');
     this.profileMenu = page.locator('.profile-menu');
-    this.logoutBtn = page.locator(
-      'button:has-text("Logout"), button:has-text("Sign Out"), .logout-btn',
-    );
+    // Scoped to the profile menu: the phone drawer carries its own
+    // sign-out button too (D812), which would make this locator ambiguous.
+    this.logoutBtn = page.locator('.profile-menu button.logout');
     this.mobileToggle = page.locator('.mobile-toggle');
 
     // Notification Panel

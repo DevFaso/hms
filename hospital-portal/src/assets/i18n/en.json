@@ -145,6 +145,7 @@
     "BIRTH_TIME": "Time of birth",
     "BIRTH_WEIGHT": "Birth weight (g)",
     "BLOOD_LOSS": "Blood loss (ml)",
+    "BLOOD_LOSS_VALUE": "Blood loss: {{value}}",
     "CHART_X_AXIS": "Hours of active phase",
     "CONTRACTIONS": "Contractions",
     "CONTRACTIONS_TEN": "Contractions /10 min",
@@ -240,7 +241,14 @@
     "TIME": "Time",
     "URINE_ML": "Urine (ml)",
     "UTEROTONIC_GIVEN": "Uterotonic given (AMTSL)",
-    "PICK_PATIENT_HINT": "Pick a patient to see her labour record."
+    "PICK_PATIENT_HINT": "Pick a patient to see her labour record.",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)",
+    "TEMPERATURE": "Temperature (°C)",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "BIRTH_BEFORE_LAST_ENTRY": "Time of birth: it cannot be earlier than an observation already charted on the partograph.",
+    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -1876,7 +1884,8 @@
       "AWAITING_RESULTS": "Awaiting Results",
       "READY_TO_DISCHARGE": "Ready to Discharge",
       "COMPLETED": "Completed",
-      "CANCELLED": "Cancelled"
+      "CANCELLED": "Cancelled",
+      "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
     },
     "FULL_CHART": "Full Chart",
     "GENERAL_VISIT": "General visit",
@@ -2601,7 +2610,7 @@
     "PROVINCE_PLACEHOLDER": "e.g., Kadiogo",
     "REGION": "Region",
     "REGION_PLACEHOLDER": "e.g., Centre, Île-de-France",
-    "REQUIRED_FIELDS": "Name, city, country, phone number, and an address or a P.O. box are required.",
+    "REQUIRED_FIELDS": "Name, phone number, country, city and street address are required.",
     "ADDRESS_OR_PO_BOX_HINT": "The street address is required; the P.O. box is optional.",
     "SEARCH_PLACEHOLDER": "Search hospitals…",
     "SECTOR": "Sector / Neighborhood",
@@ -2897,6 +2906,17 @@
       "PENDING_QA_REVIEW": "Pending QA review",
       "REJECTED": "Rejected",
       "RETIRED": "Retired"
+    },
+    "CANCELLATION_REASON": "Cancellation reason",
+    "VOID": {
+      "ACTION": "Mark as entered in error",
+      "TITLE": "Mark this order as entered in error",
+      "EXPLAIN": "Use this when the order was placed by mistake (wrong patient, wrong test). The order and its results are kept for the record, but its results will no longer appear in any clinical view. Order:",
+      "REASON": "Reason for the error",
+      "REASON_PLACEHOLDER": "e.g. Ordered for the wrong patient",
+      "CONFIRM": "Mark as entered in error",
+      "DONE": "The order is marked as entered in error.",
+      "FAILED": "The order could not be marked as entered in error."
     }
   },
   "LAB_STAFF": {
@@ -3916,7 +3936,9 @@
     "TITLE": "Organizations",
     "TYPE": "Type",
     "TYPE_REQUIRED": "Choose an organization type.",
-    "UPDATED": "Organization updated"
+    "UPDATED": "Organization updated",
+    "DEFAULT_ORG_NAME": "Default Healthcare Organization",
+    "DEFAULT_ORG_DESCRIPTION": "Default organization for hospitals without specific organization assignment"
   },
   "PANEL": {
     "TITLE": "Panel Management",
@@ -4632,9 +4654,10 @@
       "REFILL_HISTORY": "Refill History",
       "REQUESTED": "Requested",
       "COMPLETED": "Completed",
-      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one.",
+      "NOT_REFILLABLE": "This prescription can no longer be refilled. Please contact your care team for a new prescription.",
       "READY_AT": "Ready for collection at {{pharmacy}}",
-      "READY_SINCE": "Since {{date}}"
+      "READY_SINCE": "Since {{date}}",
+      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",
@@ -4707,8 +4730,9 @@
       "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes.",
       "PENDING_DECLARED": "Already declared, awaiting confirmation",
       "LEFT_TO_DECLARE": "Left to declare",
-      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}} F CFA: {{pending}} F CFA already declared is awaiting confirmation.",
-      "CREDITED_TO": "Credited to invoice {{number}}"
+      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
+      "CREDITED_TO": "Credited to invoice {{number}}",
+      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -5020,6 +5044,7 @@
         "INACTIVE": "Inactive",
         "INVALID": "Invalid",
         "IN_PROGRESS": "In Progress",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
         "NEEDS_CLARIFICATION": "Needs Clarification",
         "NORMAL": "Normal",
         "NOT_ELIGIBLE": "Not Eligible",
@@ -5219,7 +5244,8 @@
         "SCHEDULED": "Scheduled",
         "TRIAGE": "Triage",
         "UNKNOWN": "Unknown",
-        "WAITING_FOR_PHYSICIAN": "Waiting for Physician"
+        "WAITING_FOR_PHYSICIAN": "Waiting for Physician",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
       },
       "LEAVE_STATUS": {
         "APPROVED": "Approved",
@@ -5262,7 +5288,8 @@
         "PENDING": "Pending",
         "RECEIVED": "Received",
         "RESULTED": "Resulted",
-        "VERIFIED": "Verified"
+        "VERIFIED": "Verified",
+        "ENTERED_IN_ERROR": "Entered in error"
       },
       "ABNORMAL_FLAG": {
         "ABNORMAL": "Abnormal",
@@ -5565,7 +5592,8 @@
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
         "USER_RESTORE": "User Restored",
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
-        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released"
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
+        "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6893,7 +6921,8 @@
     "WALKIN_VALIDATION_ERROR": "Please select a patient, provider, and ensure a hospital is active",
     "WALK_IN": "Walk-in Registration",
     "WALK_INS": "Walk-ins",
-    "WALK_INS_TODAY": "Walk-ins Today"
+    "WALK_INS_TODAY": "Walk-ins Today",
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -7351,7 +7380,8 @@
     "PRIMARY_NAV_ARIA": "Primary navigation",
     "SETTINGS": "Settings",
     "SIGN_OUT": "Sign Out",
-    "TOGGLE_SIDEBAR": "Toggle sidebar"
+    "TOGGLE_SIDEBAR": "Toggle sidebar",
+    "LANGUAGE": "Language"
   },
   "SIGNATURES": {
     "ALGORITHM": "Algorithm",
@@ -9178,6 +9208,9 @@
     "HISTORY_CREATED": "Maternal history recorded",
     "HISTORY_UPDATED": "Maternal history updated (new version)",
     "HISTORY_SAVE_ERROR": "Failed to save maternal history",
+    "HISTORY_ALREADY_EXISTS": "This patient already has a maternal history. Open it and update it to record a new version.",
+    "OPEN_EXISTING_HISTORY": "Open and update the history",
+    "HISTORY_HELD_ELSEWHERE": "This patient's maternal history is held by another facility. It cannot be updated here.",
     "SUM_SUBMITTED": "Submitted",
     "SUM_ACKNOWLEDGED": "Acknowledged",
     "SUM_IN_PROGRESS": "In progress",
@@ -9249,7 +9282,10 @@
     "POSTPARTUM_TAB": "Postpartum",
     "URGENCY_ATTACHMENT_REQUIRED": "Priority and urgent referrals require at least one supporting attachment, which this form does not support yet. Create the referral as Routine for now.",
     "VERSIONS_LOAD_ERROR": "Failed to load version history",
-    "NO_VERSIONS": "No earlier versions"
+    "NO_VERSIONS": "No earlier versions",
+    "PARA_ABOVE_GRAVIDA": "Parity (P) cannot be higher than gravidity (G): every birth counted in P is also a pregnancy counted in G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "Parity (P) plus abortions (A) cannot be higher than gravidity (G): each pregnancy ends in at most one of them.",
+    "RECORDED_FUTURE": "Recorded: the date cannot be in the future."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "All orders",
@@ -9415,7 +9451,10 @@
     "VISIT_INITIAL_INTAKE": "Initial intake",
     "VISIT_ROUTINE_CHECK": "Routine check",
     "VISIT_ULTRASOUND": "Ultrasound",
-    "VISIT_LATE_PREGNANCY": "Late pregnancy"
+    "VISIT_LATE_PREGNANCY": "Late pregnancy",
+    "BOOK": "Book",
+    "BOOK_REASON": "Antenatal visit (week {{week}})",
+    "BOOK_HINT": "Book a recommended visit to plan it as an appointment; it then shows as planned. On the day, check the patient in on the appointment to open the consultation where the visit (vital signs, examination) is recorded."
   },
   "PRO": {
     "HEADING": "Mental-health screening ({{instrument}})",
@@ -9594,7 +9633,13 @@
     "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
     "DELIVERY_LINKED": "linked to delivery",
     "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record.",
-    "PHASE_UNKNOWN": "Phase not yet set"
+    "PHASE_UNKNOWN": "Phase not yet set",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "APGAR_TEN": "APGAR at 10 min",
+    "TEMPERATURE": "Temperature (°C)",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -11175,5 +11220,10 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
+    "MIN": "{{field}}: the value must be at least {{min}}.",
+    "FIELD_REASON": "{{field}}: {{reason}}"
   }
 }

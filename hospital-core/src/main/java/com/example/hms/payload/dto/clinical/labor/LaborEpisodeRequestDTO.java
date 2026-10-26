@@ -39,7 +39,13 @@ public class LaborEpisodeRequestDTO {
     @jakarta.validation.constraints.Min(20)
     @jakarta.validation.constraints.Max(45)
     private Integer gestationalAgeWeeks;
+    /**
+     * QA D809: counts are never negative, and P may not exceed G (checked by
+     * the service). A woman admitted in labour is pregnant, so G is at least 1.
+     */
+    @jakarta.validation.constraints.Min(1)
     private Integer gravida;
+    @jakarta.validation.constraints.PositiveOrZero
     private Integer para;
 
     private String riskNotes;

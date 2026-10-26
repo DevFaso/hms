@@ -67,6 +67,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
     private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String INVALID_TRANSITION_KEY = "appointment.status.invalidTransition";
 
     @Override
     @Transactional(readOnly = true)
@@ -149,6 +150,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String ROLE_NURSE_CODE = "ROLE_NURSE";
     private static final String ROLE_RECEPTIONIST_CODE = "ROLE_RECEPTIONIST";
 
+    /**
+     * QA D823: every role that books FOR a patient, i.e. every role
+     * {@code AppointmentController.APPOINTMENT_BOOK_ROLES} admits except
+     * PATIENT. This list used to name only admin, doctor, nurse and
+     * receptionist, so a midwife (or a STAFF account) the controller let in was
+     * treated as a patient booking for herself, and her booking for a patient
+     * she can read answered 404 "patient not found". Guarded by
+     * {@code AppointmentBookingRolesGuardTest}: a role added to the controller
+     * without being added here fails the build.
+     */
+    static final List<String> STAFF_BOOKING_ROLES = List.of(
+        ROLE_SUPER_ADMIN_CODE, "ROLE_HOSPITAL_ADMIN", ROLE_ADMIN_CODE, "ROLE_STAFF",
+        ROLE_RECEPTIONIST_CODE, ROLE_DOCTOR_CODE, ROLE_NURSE_CODE, "ROLE_MIDWIFE");
+
     /** Allowed status transitions: current → set of valid next statuses. */
     private static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
     static {
@@ -196,8 +211,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(requested)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", current, requested));
+            throw new BusinessException(INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(current), AppointmentStatus.labelOf(requested));
         }
     }
 
@@ -225,7 +240,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .anyMatch(v -> v.getStatus() == com.example.hms.enums.EncounterStatus.COMPLETED);
         if (!seen) {
             com.example.hms.enums.EncounterStatus open = visits.get(0).getStatus();
-            throw new BusinessException("appointment.complete.visitNotCompleted", String.valueOf(open));
+            throw new BusinessException("appointment.complete.visitNotCompleted", com.example.hms.enums.EncounterStatus.labelOf(open));
         }
     }
 
@@ -254,6 +269,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         return hospitals;
+    }
+
+    /** Holds any of {@link #STAFF_BOOKING_ROLES}, by the same active-assignment rule as {@link #hasRole}. */
+    private boolean isStaffBooker(User user) {
+        if (user == null) {
+            return false;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findAllByUserId(user.getId());
+        return STAFF_BOOKING_ROLES.stream().anyMatch(code -> EffectiveRoles.holds(user, assignments, code));
     }
 
     private boolean hasRole(User user, String roleCode) {
@@ -288,22 +312,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
-        boolean isStaffOrAdmin = isSuperAdmin(currentUser)
-            || hasRole(currentUser, "ROLE_HOSPITAL_ADMIN")
-            || hasRole(currentUser, ROLE_ADMIN_CODE)
-            || hasRole(currentUser, ROLE_DOCTOR_CODE)
-            || hasRole(currentUser, ROLE_NURSE_CODE)
-            || hasRole(currentUser, ROLE_RECEPTIONIST_CODE);
-
-        log.debug("🔐 Authorization check: user={}, isStaffOrAdmin={}, isSuperAdmin={}, hasAdmin={}, hasDoctor={}, hasNurse={}, hasReceptionist={}",
-            currentUser.getUsername(),
-            isStaffOrAdmin,
-            isSuperAdmin(currentUser),
-            hasRole(currentUser, ROLE_ADMIN_CODE),
-            hasRole(currentUser, ROLE_DOCTOR_CODE),
-            hasRole(currentUser, ROLE_NURSE_CODE),
-            hasRole(currentUser, ROLE_RECEPTIONIST_CODE));
+        // Authorization: staff book for any patient registered at the booking
+        // hospital; a pure patient books only for themselves (QA D823: one list
+        // for every staff booking role, so a midwife is not taken for a patient).
+        boolean isStaffOrAdmin = isStaffBooker(currentUser);
 
         // --- Patient resolution (falls back to authenticated user) ---
         // A pure patient books only for themselves. Naming anyone else answers
@@ -311,8 +323,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         // for that identifier — where it used to be a 403 for a real patient
         // beside a 404 for a made-up one, which told a patient which ids,
         // usernames and emails exist.
+        // QA D824: a staff booking names its patient by id. It used to fall
+        // back to the CALLER's own patient record when patientId was absent,
+        // so a receptionist whose account was (wrongly) linked to a patient
+        // row booked that patient without choosing anyone.
         final Patient patient = isStaffOrAdmin
-            ? resolvePatient(request, username)
+            ? resolvePatientForStaffBooking(request)
             : resolveOwnPatientForBooking(request, currentUser);
 
         // --- Hospital resolution (single block) ---
@@ -464,33 +480,28 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, String authenticatedUsername) {
-        if (request.getPatientId() != null) {
-            // Use unscoped lookup: multi-hospital patients have Patient.hospitalId set
-            // to the FIRST hospital, so the tenant-scoped findById misses them when
-            // accessed from a different hospital context.
-            return patientRepository.findByIdUnscoped(request.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", request.getPatientId()));
-        } else if (request.getPatientUsername() != null) {
-            UUID userId = userRepository.findByUsername(request.getPatientUsername())
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername()))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, request.getPatientUsername()));
-        } else if (request.getPatientEmail() != null) {
-            return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
-                .stream().findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("patient.notFoundByIdentifier", request.getPatientEmail()));
+    /**
+     * The patient a staff member books for: the one named by {@code patientId},
+     * and nobody else. Never the caller's own patient record (QA D824), and
+     * never a username or an e-mail fragment, whose "contains" match picked
+     * whichever patient came first.
+     */
+    private Patient resolvePatientForStaffBooking(AppointmentRequestDTO request) {
+        if (request.getPatientId() == null) {
+            throw new BusinessException("appointment.patient.required");
         }
-        // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
-        if (authenticatedUsername != null) {
-            UUID userId = userRepository.findByUsername(authenticatedUsername)
-                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, authenticatedUsername))
-                .getId();
-            return patientRepository.findByUserId(userId)
-                .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, authenticatedUsername));
-        }
-        throw new BusinessException("Patient identifier required");
+        return resolvePatient(request.getPatientId());
+    }
+
+    /**
+     * Unscoped on purpose: multi-hospital patients have Patient.hospitalId set
+     * to the FIRST hospital, so the tenant-scoped findById misses them when
+     * accessed from a different hospital context. The registration guard then
+     * scopes a staff booking to the booking hospital.
+     */
+    private Patient resolvePatient(UUID patientId) {
+        return patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
     }
 
     /**
@@ -504,13 +515,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             if (!patientRepository.existsByIdAndUserId(request.getPatientId(), currentUser.getId())) {
                 throw new ResourceNotFoundException("patient.notfound", request.getPatientId());
             }
-            return resolvePatient(request, currentUser.getUsername());
+            return resolvePatient(request.getPatientId());
         }
         if (request.getPatientUsername() != null) {
             if (!request.getPatientUsername().equalsIgnoreCase(currentUser.getUsername())) {
                 throw new ResourceNotFoundException(USER_NOT_FOUND_BY_USERNAME_KEY, request.getPatientUsername());
             }
-            return resolvePatient(request, currentUser.getUsername());
+            return ownPatientRecord(currentUser, request.getPatientUsername());
         }
         if (request.getPatientEmail() != null) {
             Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
@@ -520,7 +531,19 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
             return named;
         }
-        return resolvePatient(request, currentUser.getUsername());
+        // No patient named (the mobile and patient-portal clients): the
+        // caller's own record -- for a patient only. Any other caller that
+        // reaches here (a role outside the staff list) names its patient.
+        if (!hasRole(currentUser, ROLE_PATIENT_CODE)) {
+            throw new BusinessException("appointment.patient.required");
+        }
+        return ownPatientRecord(currentUser, currentUser.getUsername());
+    }
+
+    /** The patient row linked to the caller's own account. */
+    private Patient ownPatientRecord(User currentUser, String named) {
+        return patientRepository.findByUserId(currentUser.getId())
+            .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_FOR_USER_KEY, named));
     }
 
     /**
@@ -539,7 +562,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return hospitalRepository.findClinicalByNameIgnoreCase(request.getHospitalName())
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", request.getHospitalName()));
         }
-        throw new BusinessException("Hospital identifier required");
+        throw new BusinessException("appointment.hospital.required");
     }
 
     private Staff resolveStaff(AppointmentRequestDTO request) {
@@ -559,7 +582,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             return staffRepository.findByUserId(userId).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("staff.notFoundByIdentifier", request.getStaffUsername()));
         }
-        throw new BusinessException("Staff identifier required");
+        throw new BusinessException("appointment.staff.required");
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
@@ -607,13 +630,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // Null checks for required IDs
         if (request.getPatientId() == null) {
-            throw new BusinessException("Patient ID must not be null");
+            throw new BusinessException("appointment.patient.required");
         }
         if (request.getStaffId() == null) {
-            throw new BusinessException("Staff ID must not be null");
+            throw new BusinessException("appointment.staff.required");
         }
         if (request.getHospitalId() == null) {
-            throw new BusinessException("Hospital ID must not be null");
+            throw new BusinessException("appointment.hospital.required");
         }
         if (request.getAppointmentDate() == null) {
             throw new BusinessException("Appointment date must not be null");
@@ -779,15 +802,15 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "reschedule" -> newStatus = AppointmentStatus.RESCHEDULED;
             case "in_progress"-> newStatus = AppointmentStatus.IN_PROGRESS;
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
-            default -> throw new BusinessException("Invalid action: " + action);
+            default -> throw new BusinessException("appointment.invalidAction", action);
         }
 
         // ── Validate status transition ──
         AppointmentStatus currentStatus = appointment.getStatus();
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
         if (!allowed.contains(newStatus)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+            throw new BusinessException(INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(currentStatus), AppointmentStatus.labelOf(newStatus));
         }
         requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
@@ -796,9 +819,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             LocalDateTime appointmentStart = LocalDateTime.of(
                 appointment.getAppointmentDate(), appointment.getStartTime());
             if (LocalDateTime.now().isBefore(appointmentStart)) {
-                throw new BusinessException(
-                    String.format("Cannot mark appointment as %s before its scheduled start time (%s)",
-                        newStatus, appointmentStart));
+                throw new BusinessException("appointment.status.notStartedYet",
+                    AppointmentStatus.labelOf(newStatus),
+                    appointmentStart.format(java.time.format.DateTimeFormatter
+                        .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+                        .withLocale(LocaleContextHolder.getLocale())));
             }
         }
 
