@@ -9827,7 +9827,7 @@
     "DEACTIVATED": "Assignment deactivated",
     "DELETE_CONFIRM": "Permanently delete this assignment? Prefer Deactivate to keep the history.",
     "DELETED": "Assignment deleted",
-    "DELETE_CONFLICT": "Cannot delete: a staff record still references this assignment. Deactivate it instead.",
+    "DELETE_CONFLICT": "Cannot delete: other records still use this assignment. Deactivate it instead.",
     "IMPORT_FILE_REQUIRED": "Choose a CSV file first",
     "IMPORT_ERROR": "The import failed",
     "PATIENT_ACTIVATES_ITSELF": "A patient assignment is activated by the patient's own verification, not here."

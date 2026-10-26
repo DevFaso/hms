@@ -42,10 +42,12 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.service.support.AssignmentReferences;
 import com.example.hms.service.support.UserAccountAccess;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -201,6 +203,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final UserAccountAccess accountAccess;
     /** Role/facility compatibility and one kind of facility per user (provider plan §3.2, §3.2a). */
     private final FacilityAssignmentGuard facilityAssignmentGuard;
+    /** Every other kind of record that still points at an assignment (QA round 14). */
+    private final AssignmentReferences assignmentReferences;
 
     /* ===================== Create ===================== */
 
@@ -1179,9 +1183,36 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (encounterRepository.existsByAssignment_Id(id)) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolveOrRaw("users.assignment.deleteHasEncounters"));
         }
-        assignmentRepository.deleteById(id);
+        // QA round 14: a department (and twenty-odd other records) can name
+        // the assignment too, and the delete reached the foreign key and came
+        // back as a 500. Every kind of record that still points at it is named.
+        List<String> stillUsedBy = assignmentReferences.referencingEntities(id);
+        if (!stillUsedBy.isEmpty()) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                "users.assignment.deleteStillReferenced", referenceLabels(stillUsedBy)));
+        }
+        try {
+            assignmentRepository.deleteById(id);
+            // Flushed here so a key the metamodel cannot see (a row hidden by a
+            // soft-delete restriction, a column only the database knows) is
+            // refused in words too, not at commit as a 500.
+            assignmentRepository.flush();
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("Assignment {} is still referenced by a database key the pre-check did not see", id);
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                "users.assignment.deleteStillReferenced",
+                com.example.hms.utility.MessageUtil.resolve("users.assignment.reference.other")));
+        }
         dropUserRoleWhenLastAssignment(doomed);
         log.info("🗑️ Deleted assignment ID '{}'", id);
+    }
+
+    /** The referencing entities in the caller's language, e.g. "departments, prescriptions". */
+    private static String referenceLabels(List<String> entities) {
+        return entities.stream()
+            .map(entity -> com.example.hms.utility.MessageUtil.resolve("users.assignment.reference." + entity))
+            .distinct()
+            .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /**

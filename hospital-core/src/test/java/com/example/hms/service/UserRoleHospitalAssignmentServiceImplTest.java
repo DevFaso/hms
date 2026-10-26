@@ -68,6 +68,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     /** The caller rules have their own tests (UserAccountAccessTest, AssignmentGrantScopeTest); here a super-admin's scope. */
     @Mock private com.example.hms.service.support.UserAccountAccess accountAccess;
     @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.example.hms.service.support.AssignmentReferences assignmentReferences;
 
     @InjectMocks
     private UserRoleHospitalAssignmentServiceImpl service;
@@ -923,6 +924,33 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
             .hasMessageContaining("encounters were recorded under it");
         verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void anAssignmentADepartmentStillNamesIsRefusedInWordsNotAtTheForeignKey() {
+        // QA round 14: the department's fk_department_assignment came back as a 500.
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(assignmentReferences.referencingEntities(id))
+            .thenReturn(java.util.List.of("Department", "DepartmentTranslation"));
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("still used by departments, department translations");
+        verify(assignmentRepository, never()).deleteById(any());
+    }
+
+    @Test
+    void aKeyThePreCheckCannotSeeIsStillRefusedAsAConflict() {
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+            .when(assignmentRepository).flush();
+
+        assertThatThrownBy(() -> service.deleteAssignment(id))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("still used by other records");
+        verify(userRepository, never()).save(any());
     }
 
     @Test

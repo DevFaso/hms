@@ -201,6 +201,23 @@ class WebhookDeliveryDispatchServiceTest {
     }
 
     @Test
+    @DisplayName("a delivery refused before sending (the host now resolves inside) is terminal at once")
+    void refusedBeforeSendingIsTerminalOnTheFirstAttempt() {
+        sweepFindsTheDelivery();
+        claimSucceeds(); // first attempt of three
+        when(transport.post(anyString(), anyString(), anyString(), anyLong(),
+                anyString(), anyString()))
+            .thenReturn(new WebhookDeliveryTransport.Result(null,
+                "Refused before sending: receiver.example resolves to a non-public address", true));
+
+        service.dispatchPending();
+
+        assertThat(delivery.getStatus()).isEqualTo(WebhookDeliveryStatus.ERROR);
+        assertThat(delivery.getLastError()).contains("non-public address");
+        assertThat(endpoint.getConsecutiveFailures()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("at the strike threshold the endpoint auto-disables with an actor-less audit row")
     void strikeThresholdAutoDisables() {
         endpoint.setConsecutiveFailures(1); // one more terminal failure hits the threshold of 2

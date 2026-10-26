@@ -9827,7 +9827,7 @@
     "DEACTIVATED": "Asignación desactivada",
     "DELETE_CONFIRM": "¿Eliminar permanentemente esta asignación? Prefiera desactivarla para conservar el historial.",
     "DELETED": "Asignación eliminada",
-    "DELETE_CONFLICT": "No se puede eliminar: un registro de personal aún referencia esta asignación. Desactívela en su lugar.",
+    "DELETE_CONFLICT": "No se puede eliminar: otros registros aún usan esta asignación. Desactívela en su lugar.",
     "IMPORT_FILE_REQUIRED": "Elija primero un archivo CSV",
     "IMPORT_ERROR": "La importación falló",
     "PATIENT_ACTIVATES_ITSELF": "Una asignación de paciente se activa con la verificación del propio paciente, no aquí."

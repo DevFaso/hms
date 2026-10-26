@@ -1,7 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 
 import { AdminAssignmentsComponent } from './admin-assignments';
 import { AssignmentAdminService, AssignmentResponse } from '../services/assignment-admin.service';
@@ -264,5 +265,69 @@ describe('AdminAssignmentsComponent — no archived hospital in a granting picke
       ...OPEN,
       'h-archived',
     ]);
+  });
+});
+
+/**
+ * QA round 14: a 409 on delete said "a staff record still references this
+ * assignment" whatever was in the way (a department, encounters...). The
+ * server names it in the reader's language; the toast shows that.
+ */
+describe('AdminAssignmentsComponent — delete refusal names what still uses the assignment', () => {
+  let component: AdminAssignmentsComponent;
+  let service: jasmine.SpyObj<AssignmentAdminService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  const row = { id: 'a-1' } as AssignmentResponse;
+
+  beforeEach(() => {
+    service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', ['delete']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: {} },
+        { provide: RoleService, useValue: {} },
+        { provide: RoleContextService, useValue: {} },
+        { provide: ToastService, useValue: toast },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: ActivatedRoute, useValue: {} },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+    spyOn(window, 'confirm').and.returnValue(true);
+  });
+
+  it("shows the server's sentence on a 409", () => {
+    service.delete.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { message: 'Impossible de supprimer l’affectation : … des services.' },
+          }),
+      ),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith(
+      'Impossible de supprimer l’affectation : … des services.',
+    );
+  });
+
+  it('falls back to the generic conflict text when the 409 has no message', () => {
+    service.delete.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 409, error: null })),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.DELETE_CONFLICT');
+  });
+
+  it('keeps the generic error for anything other than a 409', () => {
+    service.delete.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'Internal Server Error' } }),
+      ),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.ACTION_ERROR');
   });
 });

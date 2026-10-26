@@ -434,10 +434,17 @@ export class AdminAssignmentsComponent implements OnInit {
         this.rows.update((list) => list.filter((r) => r.id !== row.id));
       },
       error: (err: HttpErrorResponse) => {
+        // QA round 14: the server names what still uses the assignment
+        // (staff, encounters, departments...), in the reader's language.
+        if (err.status !== 409) {
+          this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR'));
+          return;
+        }
+        const serverMessage: unknown = err.error?.message;
         this.toast.error(
-          err.status === 409
-            ? this.translate.instant('ASSIGN_ADMIN.DELETE_CONFLICT')
-            : this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR'),
+          typeof serverMessage === 'string' && serverMessage.trim()
+            ? serverMessage
+            : this.translate.instant('ASSIGN_ADMIN.DELETE_CONFLICT'),
         );
       },
     });
