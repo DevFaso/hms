@@ -119,6 +119,46 @@ describe('UserListComponent registration', () => {
     expect(users.update.calls.mostRecent().args[1].roleNames).toBeUndefined();
   });
 
+  it('QA D838: the edit dialog shows the registered hospital, job title and employment type, read-only', () => {
+    users.getById.and.returnValue(
+      of({
+        id: 'u7',
+        phoneNumber: '+22670303030',
+        roles: [{ code: 'ROLE_NURSE' }],
+        staffHospitalId: 'h-wp',
+        staffHospitalName: 'Wend-Panga',
+        jobTitle: 'NURSE',
+        employmentType: 'FULL_TIME',
+      } as unknown as UserDetail),
+    );
+    users.update.and.returnValue(of({ id: 'u7' } as UserDetail));
+    component.openEdit({
+      id: 'u7',
+      username: 'boukary',
+      email: 'b@hopital.bf',
+      firstName: 'Boukary',
+      lastName: 'Sawadogo',
+      roleName: 'ROLE_NURSE',
+      deleted: false,
+    } as never);
+    fixture.detectChanges();
+
+    expect(component.createForm.jobTitle).toBe('NURSE');
+    expect(component.createForm.employmentType).toBe('FULL_TIME');
+    expect(component.createForm.hospitalId).toBe('h-wp');
+    const hospital = fixture.debugElement.query(By.css('[data-testid="edit-staff-hospital"]'));
+    expect(hospital.nativeElement.textContent).toContain('Wend-Panga');
+
+    // Editing only the phone sends none of them: PUT /users does not change them.
+    component.createForm.phoneNumber = '+22670404040';
+    component.submitCreate();
+    const sent = users.update.calls.mostRecent().args[1];
+    expect(sent.phoneNumber).toBe('+22670404040');
+    expect(sent.jobTitle).toBeUndefined();
+    expect(sent.employmentType).toBeUndefined();
+    expect(sent.hospitalId).toBeUndefined();
+  });
+
   it('D765 path re-verified: create still offers role checkboxes and sends the roles', () => {
     openCreateWith(['ROLE_DOCTOR']);
     component.createForm.email = 'awa@hopital.bf';
@@ -405,5 +445,48 @@ describe('UserListComponent — the Profil column is labelled (QA D528/D663)', (
     expect(cells).toContain('Personal');
     expect(cells).toContain('Paciente');
     expect(cells).not.toContain('STAFF');
+  });
+});
+
+/** QA D818: a new user's role is never granted at an archived hospital. */
+describe('UserListComponent — no archived hospital in the create picker (QA D818)', () => {
+  it('lists only open hospitals for a super-admin', () => {
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: {
+            list: () =>
+              of([
+                { id: 'h1', name: 'CMA Pissy', lifecycleState: 'ACTIVE' },
+                { id: 'h2', name: 'Ancien CMA', lifecycleState: 'ARCHIVED' },
+                { id: 'h3', name: 'CMA à purger', lifecycleState: 'PENDING_PURGE' },
+              ]),
+            getMyHospitalAsResponse: () => of(null),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'warning',
+          ]),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const component = TestBed.createComponent(UserListComponent).componentInstance;
+    component.loadHospitals();
+    expect(component.availableHospitals().map((h) => h.id)).toEqual(['h1']);
   });
 });

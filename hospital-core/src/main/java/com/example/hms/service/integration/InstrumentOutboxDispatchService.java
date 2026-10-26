@@ -1,9 +1,11 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.enums.InstrumentOutboxStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.hl7.mllp.MllpOutboundSender;
 import com.example.hms.model.InstrumentOutbox;
+import com.example.hms.model.LabOrder;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -76,6 +78,17 @@ public class InstrumentOutboxDispatchService {
     }
 
     private boolean dispatchOne(InstrumentOutbox message) {
+        // QA D820: an order voided as entered in error after its message was
+        // queued must not reach the analyzer. Terminal, not retried, and
+        // nothing is transmitted.
+        LabOrder order = message.getLabOrder();
+        if (order != null && order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            message.setStatus(InstrumentOutboxStatus.ERROR);
+            message.setLastError("Not sent: the lab order was entered in error");
+            outboxRepository.save(message);
+            log.info("Instrument outbox {} not sent: its lab order was voided", message.getId());
+            return false;
+        }
         message.setAttempts(message.getAttempts() + 1);
         message.setLastAttemptAt(LocalDateTime.now(clock));
 

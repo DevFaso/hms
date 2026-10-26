@@ -44,7 +44,11 @@ import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { fromServerDateTime, localDateString, toServerDateTime } from '../shared/date-utils';
-import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
 import { AuthService } from '../auth/auth.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
@@ -1009,7 +1013,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.encounterService.list({ patientId }).subscribe({
       next: (encounters) => {
         this.encounterLookupInProgress.set(false);
-        const open = encounters.filter((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        const open = encounters.filter((e) => !isClosedEncounterStatus(e.status));
         // An inpatient stay's encounter is never the outpatient visit a
         // triage or an intake is about (D179).
         const visits = open.filter((e) => e.encounterType !== 'INPATIENT');

@@ -300,6 +300,28 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+// D812: sign-out in the drawer, the phone's only menu.
+.sidebar-logout {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 6px;
+  color: $sidebar-text;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fca5a5;
+  }
 }
 
 .user-name-mini {
@@ -335,15 +357,28 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   padding: 0 1.5rem;
   flex-shrink: 0;
   z-index: 50;
+  // D812: the topbar sizes its children by its OWN width, not the
+  // viewport's, so a narrow main area (a phone, or a desktop with the
+  // sidebar open on a small window) compacts the controls instead of
+  // pushing the profile menu off-screen. Inline-size containment also
+  // stops the topbar's content from widening the main area. No
+  // fixed-position element lives inside the topbar (the notification
+  // panel and the profile menu are its siblings), so containment moves
+  // nothing else.
+  container: topbar / inline-size;
+  min-width: 0;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .mobile-toggle {
@@ -364,12 +399,30 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   font-weight: 600;
   color: #1e293b;
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+// Narrow-topbar language picker (D812); the button group is the wide one.
+.lang-select {
+  display: none;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #1e293b;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 4px;
+  cursor: pointer;
 }
 
 // ---------- Language Switcher ----------
@@ -496,14 +549,38 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
 .profile-name {
   font-size: 0.8125rem;
   font-weight: 500;
-
-  @media (max-width: 600px) {
-    display: none;
-  }
 }
 
 .dropdown-arrow {
   font-size: 18px;
+}
+
+// D812: placed after every rule it overrides, which source order decides.
+@container topbar (max-width: 600px) {
+  .topbar-right {
+    gap: 0.25rem;
+  }
+
+  .lang-switcher,
+  .profile-name {
+    display: none;
+  }
+
+  .lang-select {
+    display: block;
+  }
+
+  .profile-btn {
+    padding: 4px;
+    border-color: transparent;
+  }
+}
+
+// A phone: the sidebar header already names the app.
+@container topbar (max-width: 400px) {
+  .page-title {
+    display: none;
+  }
 }
 
 // ---------- Content ----------
@@ -940,11 +1017,6 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
 
   .page-title {
     font-size: 0.875rem;
-  }
-
-  .profile-btn {
-    padding: 4px;
-    border: none;
   }
 }
 

@@ -27,7 +27,7 @@ public final class LabOrderLifecycle {
 
     /** States the workflow never leaves on its own. */
     private static final Set<LabOrderStatus> TERMINAL =
-        EnumSet.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED);
+        EnumSet.of(LabOrderStatus.COMPLETED, LabOrderStatus.CANCELLED, LabOrderStatus.ENTERED_IN_ERROR);
 
     /**
      * How far through the workflow each state is.
@@ -53,7 +53,9 @@ public final class LabOrderLifecycle {
             LabOrderStatus.RESULTED, 5,
             LabOrderStatus.VERIFIED, 6,
             LabOrderStatus.COMPLETED, 7,
-            LabOrderStatus.CANCELLED, 7));
+            LabOrderStatus.CANCELLED, 7,
+            // QA D820: terminal like CANCELLED, and never re-opened by a result.
+            LabOrderStatus.ENTERED_IN_ERROR, 7));
 
     /** The workflow position of {@code status}; visible for the coverage test. */
     static Integer rankOf(LabOrderStatus status) {
@@ -102,7 +104,8 @@ public final class LabOrderLifecycle {
      * means the row is gone, which is not this path's business to repair.
      */
     public static LabOrderStatus statusAfterNewResult(LabOrderStatus current) {
-        if (current == null || current == LabOrderStatus.CANCELLED) {
+        if (current == null || current == LabOrderStatus.CANCELLED
+                || current == LabOrderStatus.ENTERED_IN_ERROR) {
             return null;
         }
         if (REOPENABLE.contains(current)) {
@@ -149,7 +152,8 @@ public final class LabOrderLifecycle {
      *         side effect of a specimen or a result)
      */
     public static LabOrderStatus statusAfterForwardStep(LabOrderStatus current, LabOrderStatus target) {
-        if (target == null || target == LabOrderStatus.CANCELLED) {
+        if (target == null || target == LabOrderStatus.CANCELLED
+                || target == LabOrderStatus.ENTERED_IN_ERROR) {
             return null;
         }
         Integer targetRank = RANK.get(target);

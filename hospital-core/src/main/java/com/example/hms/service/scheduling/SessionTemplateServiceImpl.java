@@ -1,6 +1,7 @@
 package com.example.hms.service.scheduling;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Department;
 import com.example.hms.model.Staff;
@@ -112,18 +113,18 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
 
     private void validateWindow(SessionTemplateRequestDTO request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("A session must end after it starts.");
+            // QA D854: bundle keys about the field at fault.
+            throw new FieldBusinessException("endTime", "sessionTemplate.window.inverted");
         }
         if (request.getStartTime().plusMinutes(request.getSlotMinutes())
                 .isAfter(request.getEndTime())) {
             // A template whose window cannot fit even one slot would generate
             // nothing, silently — the exact failure mode this feature closes.
-            throw new BusinessException(
-                "The session window is shorter than one slot; nothing would ever be generated.");
+            throw new FieldBusinessException("slotMinutes", "sessionTemplate.window.shorterThanSlot");
         }
         if (request.getEffectiveTo() != null
             && request.getEffectiveTo().isBefore(request.getEffectiveFrom())) {
-            throw new BusinessException("The template cannot end before it takes effect.");
+            throw new FieldBusinessException("effectiveTo", "sessionTemplate.effective.inverted");
         }
     }
 
@@ -160,8 +161,7 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
             throw new ResourceNotFoundException("visitType.notFound", visitTypeId);
         }
         if (!visitType.isActive()) {
-            throw new BusinessException(
-                "That visit type is retired; reactivate it before scheduling sessions with it.");
+            throw new FieldBusinessException("visitTypeId", "sessionTemplate.visitType.retired");
         }
         return visitType;
     }
@@ -169,7 +169,7 @@ public class SessionTemplateServiceImpl implements SessionTemplateService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to manage session templates.");
+            throw new BusinessException("sessionTemplate.hospitalRequired");
         }
         return hospitalId;
     }

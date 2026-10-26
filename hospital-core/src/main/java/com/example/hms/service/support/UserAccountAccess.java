@@ -202,6 +202,24 @@ public class UserAccountAccess {
             && assignments.stream().map(UserAccountAccess::hospitalIdOf).anyMatch(administered::contains);
     }
 
+    /**
+     * QA D838: may the caller read the details of the target's staff profile
+     * held at {@code hospitalId} (hospital, job title, employment type)? Self;
+     * a super-admin; or an admin of THAT hospital. {@link #canView} admits a
+     * hospital admin for an account active at their hospital, but the staff
+     * profile can belong to another hospital, whose details are not theirs.
+     */
+    public boolean canViewStaffDetailsAt(User target, UUID hospitalId) {
+        if (target == null) {
+            return false;
+        }
+        Caller caller = caller();
+        if (caller.superAdmin() || target.getId().equals(caller.id())) {
+            return true;
+        }
+        return hospitalId != null && administeredHospitals(caller).contains(hospitalId);
+    }
+
     /** May the caller edit another person's account, or restore it? */
     public boolean canAdminister(User target) {
         if (target == null) {

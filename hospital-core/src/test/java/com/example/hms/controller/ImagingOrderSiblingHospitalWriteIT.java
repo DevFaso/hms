@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.imaging.ImagingOrderRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderSignatureRequestDTO;
 import com.example.hms.payload.dto.imaging.ImagingOrderStatusUpdateRequestDTO;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.OrganizationRepository;
@@ -92,6 +93,7 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private ImagingOrderRepository imagingOrderRepository;
     @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private DepartmentRepository departmentRepository;
 
     private Organization organization;
     private Hospital hospitalA;
@@ -517,6 +519,10 @@ class ImagingOrderSiblingHospitalWriteIT extends BaseIT {
         imagingOrderRepository.deleteAll();
         registrationRepository.deleteAll();
         patientRepository.deleteAll();
+        // A sibling class sharing this JVM's database can leave departments
+        // (DepartmentControllerIT did); each pins its assignment through
+        // fk_department_assignment, so they go before the assignments.
+        departmentRepository.deleteAll();
         assignmentRepository.deleteAll();
         userRepository.deleteAll();
         roleRepository.deleteAll();

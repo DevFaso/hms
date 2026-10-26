@@ -32,6 +32,8 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ActionKey, actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-referrals',
@@ -410,7 +412,31 @@ export class ReferralsComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /** QA D890: the referral's required fields, by the label the form shows them under. */
+  private static readonly FIELD_LABELS: Readonly<Record<string, string>> = {
+    patientId: 'PATIENTS.PATIENT',
+    hospitalId: 'REFERRALS.SOURCE_HOSPITAL',
+    referringProviderId: 'REFERRALS.REFERRING_PROVIDER',
+    targetSpecialty: 'REFERRALS.TARGET_SPECIALTY',
+    urgency: 'REFERRALS.URGENCY',
+    referralType: 'REFERRALS.REFERRAL_TYPE',
+    referralReason: 'REFERRALS.REFERRAL_REASON',
+  };
+
   submitForm(): void {
+    // QA D890: an empty form was posted, and the refusal named the field
+    // "targetSpecialty". The missing fields are named by their labels instead.
+    const missing = missingRequiredMessage(
+      this.translate,
+      Object.entries(ReferralsComponent.FIELD_LABELS).map(([field, labelKey]) => ({
+        labelKey,
+        value: (this.form as unknown as Record<string, unknown>)[field],
+      })),
+    );
+    if (missing) {
+      this.toast.error(missing);
+      return;
+    }
     this.saving.set(true);
     this.referralService.create(this.form).subscribe({
       next: () => {
@@ -420,7 +446,13 @@ export class ReferralsComponent implements OnInit {
         this.load();
       },
       error: (err: unknown) => {
-        this.toast.error(this.refusal(err, 'REFERRALS.SAVE_FAILED'));
+        // A validation refusal names its fields by their labels; anything
+        // else (403 included) keeps the existing refusal text.
+        const validation =
+          (err as { error?: { error?: unknown } } | null)?.error?.error === 'Validation Failed'
+            ? labelledRefusalReason(err, this.translate, ReferralsComponent.FIELD_LABELS)
+            : null;
+        this.toast.error(validation ?? this.refusal(err, 'REFERRALS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });

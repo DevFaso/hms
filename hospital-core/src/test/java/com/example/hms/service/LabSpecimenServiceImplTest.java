@@ -120,6 +120,24 @@ class LabSpecimenServiceImplTest {
         verify(labSpecimenRepository, never()).save(any());
     }
 
+    /** QA D820: an order voided as entered in error takes no specimen. */
+    @Test
+    void createSpecimen_onAVoidedOrder_isRefused() {
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
     @Test
     void createSpecimen_noLabOrderId_throwsBusinessException() {
         LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder().build(); // labOrderId is null
@@ -268,6 +286,51 @@ class LabSpecimenServiceImplTest {
             labOrderId, LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED);
         verify(labOrderRepository, never()).save(any(LabOrder.class));
         verify(instrumentOutboxService).enqueueSpecimenReceived(specimen);
+    }
+
+    /**
+     * QA D820: a specimen collected, then its order voided as entered in error.
+     * Receiving it must save nothing and queue no OML^O21 work order.
+     */
+    @Test
+    void receiveSpecimen_onAVoidedOrder_isRefused() {
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        assertThat(specimen.getStatus()).isEqualTo(LabSpecimenStatus.COLLECTED);
+        verify(labSpecimenRepository, never()).save(any());
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
+    }
+
+    /** QA D820: a void that commits after the check is seen under the order lock. */
+    @Test
+    void receiveSpecimen_whenTheOrderIsVoidedConcurrently_queuesNothing() {
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        when(labSpecimenRepository.save(specimen)).thenReturn(specimen);
+        givenCommittedOrderStatus(LabOrderStatus.ENTERED_IN_ERROR);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
     }
 
     @Test

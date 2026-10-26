@@ -411,7 +411,13 @@
           </div>
           <div class="field">
             <label for="tx-units">{{ 'TRANSFUSION.UNITS' | translate }}</label>
-            <input id="tx-units" type="number" min="1" [(ngModel)]="requestForm.unitsRequested" />
+            <input
+              id="tx-units"
+              type="number"
+              min="1"
+              [max]="maxUnitsPerRequest"
+              [(ngModel)]="requestForm.unitsRequested"
+            />
           </div>
           <div class="field">
             <label for="tx-urgency">{{ 'TRANSFUSION.URGENCY' | translate }}</label>
@@ -559,11 +565,22 @@
         <div class="field-row">
           <div class="field">
             <label for="u-volume">{{ 'TRANSFUSION.VOLUME' | translate }}</label>
-            <input id="u-volume" type="number" min="1" [(ngModel)]="unitForm.volumeMl" />
+            <input
+              id="u-volume"
+              type="number"
+              min="1"
+              [max]="maxUnitVolumeMl"
+              [(ngModel)]="unitForm.volumeMl"
+            />
           </div>
           <div class="field">
             <label for="u-collected">{{ 'TRANSFUSION.COLLECTED_ON' | translate }}</label>
-            <input id="u-collected" type="date" [(ngModel)]="unitForm.collectedOn" />
+            <input
+              id="u-collected"
+              type="date"
+              [max]="maxCollectedOn"
+              [(ngModel)]="unitForm.collectedOn"
+            />
           </div>
           <div class="field">
             <label for="u-expires">{{ 'TRANSFUSION.EXPIRES' | translate }} *</label>
@@ -723,7 +740,12 @@
         </div>
         <div class="field">
           <label for="rx-onset">{{ 'TRANSFUSION.ONSET' | translate }} *</label>
-          <input id="rx-onset" type="datetime-local" [(ngModel)]="reactionForm.onsetAt" />
+          <input
+            id="rx-onset"
+            type="datetime-local"
+            [max]="maxOnsetAt"
+            [(ngModel)]="reactionForm.onsetAt"
+          />
         </div>
         <div class="field">
           <label for="rx-signs">{{ 'TRANSFUSION.SIGNS' | translate }} *</label>

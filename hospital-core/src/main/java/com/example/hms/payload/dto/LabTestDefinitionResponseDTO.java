@@ -34,6 +34,8 @@ public class LabTestDefinitionResponseDTO {
     private String loincDisplay;
     private String sampleType;
     private String preparationInstructions;
+    /** QA D834: the expected answer of a qualitative test. */
+    private String expectedResult;
     private Integer turnaroundTime;
 
     @JsonProperty("isActive")

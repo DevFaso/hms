@@ -30,6 +30,15 @@ public class IntegrationHealthRowDTO {
 
     private boolean enabled;
 
+    /**
+     * QA D851: a connectivity probe is registered, so "Test connection" can
+     * run. The console hides the button otherwise.
+     */
+    private boolean probeSupported;
+
+    /** QA D851: a re-sync is registered, so "Re-sync" can run. */
+    private boolean resyncSupported;
+
     @Builder.Default
     private List<String> capabilities = List.of();
 

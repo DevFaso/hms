@@ -2205,6 +2205,63 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D868 (round 14): a permission catalogue the roles page can edit.**
+  The roles page now titles a system role in the reader's language and says
+  "built-in access" instead of "0 permissions"; the permissions dialog
+  explains that there is no catalogue and offers no save
+  (`fix/qa-r14-access-admin`). Owed: `/api/permissions` is empty because
+  access is decided by role codes in `@PreAuthorize` and `SecurityConfig`,
+  and `security.permissions` rows hang off one assignment each. A catalogue
+  that an administrator edits per role (and that the guards then read) is a
+  new authorization model, not a fix to this page.
+- **QA D851 (round 14): the partner connectors have no row in the integration console.**
+  History, re-sync and test connection now know every integration the console
+  lists, and each row says which of the two actions it has, so the console
+  shows only buttons that work (`fix/qa-r14-platform-integrations`). Owed: the
+  four partner connector stubs (`partner.nhis`, `partner.nhia`,
+  `partner.cnamgs`, `partner.mutuelle`) register a probe and a re-sync but no
+  inventory row, so those actions are reachable by URL only. Listing them is a
+  new console section (names, provider, per-organization status for a payer
+  that is not configured yet), not the defect, which was about the four rows
+  already listed.
+- **QA D855 (round 14): the scheduled-report e-mail itself is in English.**
+  A malformed recipient is now refused at creation and before a run, in the
+  admin's language, on the recipients field (`fix/qa-r14-platform-integrations`).
+  Owed: the subject and body of the e-mail the run sends are still built in
+  English in `ScheduledReportService`; translating them needs a language per
+  report definition (the recipients are not users with a stored locale), which
+  is a new column and a choice on the form.
+- **QA D819 (round 13): the reverse of the patient-only-account rule.**
+  Every path that writes `Patient.user` now refuses a staff account or one
+  already linked to another record (`PatientAccountLinkGuard`, 409 on
+  `userId`; `fix/qa-r13-patients-encounters`), and
+  `ops/d819_staff_linked_patients_report.sql` lists the existing staff-linked
+  records for the operator (relink or delete is a decision per row). Owed:
+  `POST /assignments` can still grant a staff role to an account that is
+  already a patient's login, which reaches the same state from the other
+  side. Refusing it is a product decision (an employee registered as a
+  patient with their own e-mail must then get a second account, and staff
+  onboarding by licence may land on that account), so it is a new rule for
+  the assignment flow, not a fix to the patient paths this defect named.
+- **QA D810 (round 13): a record-a-prenatal-visit flow.**
+  The prenatal calendar now books each unplanned recommended visit (a
+  "Planifier" link to the appointment form, prefilled with the patient, the
+  day and an antenatal reason the scheduler counts), and says how a booked
+  visit is recorded (check-in on the appointment opens the consultation)
+  (`fix/qa-r13-maternity`). Owed: there is no antenatal-visit record (fundal
+  height, fetal heart, presentation, oedema, BP and weight trend per visit,
+  linked to the pregnancy) and no screen for it; the backend has no entity or
+  endpoint for one, so it is a new module, not a bug fix.
+
+- **QA D813 (round 13): the native apps do not read why a refill is blocked.**
+  The portal now names a controlled medicine's refusal as controlled, on the
+  row (`refillBlockedReason` on `GET /me/patient/medications`) and in the
+  refill refusal (`patient.refill.controlled`), in the same words
+  (`fix/qa-r13-portal-admin`). The Android and iOS apps decode neither
+  `refillable` nor `refillBlockedReason`: they still offer the refill on a
+  controlled medicine and show the server's refusal, which now names the right
+  reason. Owed: decode the field and say it on the row. Deferred because it
+  is a change to both store apps and their release, not to the portal.
 - **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
   The beta-lactam cross-reactivity advisory now shows at prescribing, on
   every edit, at the signature, on the eMAR row (queue chip, a card before

@@ -174,6 +174,17 @@ class TreatmentRelationshipResolverImplTest {
         assertThat(r.actorDirectlyAttached()).isTrue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+        names = {"CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+    @DisplayName("round 13: a visit nobody saw (cancelled or left without being seen) is no treatment relationship, never an open one")
+    void aVisitNobodySawIsNoRelationship(EncounterStatus closedAs) {
+        when(encounters.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(encounter(closedAs, null)));
+
+        assertThat(resolver.resolve(patientId, hospitalId, actorUserId)).isEmpty();
+    }
+
     @Test
     @DisplayName("a COMPLETED encounter keeps the tail from checkout, then lapses")
     void completedEncounterTail() {

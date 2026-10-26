@@ -9,6 +9,7 @@ import com.example.hms.security.CustomUserDetails;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.utility.RoleNames;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.BreakGlassService;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -102,6 +103,8 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
      */
     private final PatientAccessDedupe dedupe;
     private final ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider;
+    /** QA D840: counts a read made under a live break-the-glass session. Lazy for the slices, like the rest. */
+    private final ObjectProvider<BreakGlassService> breakGlassServiceProvider;
 
     @Value("${hms.audit.patient-access.enabled:true}")
     private boolean enabled;
@@ -110,17 +113,27 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
     public PatientAccessAuditInterceptor(
             ObjectProvider<AuditEventLogService> auditServiceProvider,
             ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider,
+            ObjectProvider<BreakGlassService> breakGlassServiceProvider,
             @Value("${hms.audit.patient-access.window-minutes:30}") long windowMinutes,
             @Value("${hms.audit.patient-access.max-tracked:50000}") int maxTracked) {
         this.auditServiceProvider = auditServiceProvider;
         this.assignmentRepositoryProvider = assignmentRepositoryProvider;
+        this.breakGlassServiceProvider = breakGlassServiceProvider;
         this.dedupe = new PatientAccessDedupe(windowMinutes, maxTracked);
+    }
+
+    /** No break-the-glass counting. Kept for slices that wire the audit service and assignments only. */
+    public PatientAccessAuditInterceptor(
+            ObjectProvider<AuditEventLogService> auditServiceProvider,
+            ObjectProvider<UserRoleHospitalAssignmentRepository> assignmentRepositoryProvider,
+            long windowMinutes, int maxTracked) {
+        this(auditServiceProvider, assignmentRepositoryProvider, null, windowMinutes, maxTracked);
     }
 
     /** No assignment lookup: rows are global. Kept for slices that wire the audit service only. */
     public PatientAccessAuditInterceptor(
             ObjectProvider<AuditEventLogService> auditServiceProvider, long windowMinutes, int maxTracked) {
-        this(auditServiceProvider, null, windowMinutes, maxTracked);
+        this(auditServiceProvider, null, null, windowMinutes, maxTracked);
     }
 
     @Override
@@ -167,6 +180,10 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         }
 
         UUID actorId = principal.getUserId();
+        // QA D840: every read under a live break-the-glass session is counted
+        // on the session and audited as BREAK_GLASS_ACCESS, BEFORE the
+        // PATIENT_ACCESS dedupe below (which keeps one row per half hour).
+        recordBreakGlassRead(actorId, patientId, request);
         if (!dedupe.shouldRecord(actorId, patientId, System.currentTimeMillis())) {
             return;
         }
@@ -197,6 +214,23 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
             .ipAddress(request.getRemoteAddr())
             .eventDescription("Patient record viewed")
             .build());
+    }
+
+    private void recordBreakGlassRead(UUID actorId, UUID patientId, HttpServletRequest request) {
+        BreakGlassService breakGlass = breakGlassServiceProvider == null ? null : breakGlassServiceProvider.getIfAvailable();
+        if (breakGlass == null || actorId == null) {
+            return;
+        }
+        // The route template, never the concrete URI: no id, no query string.
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        try {
+            breakGlass.consumeReadIfLive(patientId, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(),
+                "GET " + (pattern != null ? pattern : "(patient record)"));
+        } catch (RuntimeException failure) {
+            // Never at the cost of the ordinary PATIENT_ACCESS row written next.
+            log.warn("[PATIENT-ACCESS] Failed to count a break-the-glass read for {}: {}",
+                pattern, failure.getMessage());
+        }
     }
 
     private boolean isSuccessfulRead(HttpServletRequest request, HttpServletResponse response) {

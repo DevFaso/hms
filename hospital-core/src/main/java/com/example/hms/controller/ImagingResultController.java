@@ -48,7 +48,7 @@ import java.util.UUID;
 @RequestMapping("/imaging/results")
 @Validated
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
 @Tag(name = "Imaging Results", description = "Author, sign, and read radiology reports; acknowledge critical findings")
 public class ImagingResultController {
 
@@ -95,7 +95,7 @@ public class ImagingResultController {
     // ── Reads ────────────────────────────────────────────────────────────
 
     @GetMapping("/{reportId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
     @Operation(summary = "Get imaging report by ID",
                description = "Retrieve full imaging report with findings, impression, and PACS viewer URL")
     public ResponseEntity<ImagingReportResponseDTO> getReport(@PathVariable UUID reportId) {
@@ -104,7 +104,7 @@ public class ImagingResultController {
     }
 
     @GetMapping("/order/{orderId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')")
     @Operation(summary = "Get latest report for imaging order",
                description = "Retrieve the most recent report version for a specific imaging order")
     public ResponseEntity<ImagingReportResponseDTO> getLatestReportForOrder(@PathVariable UUID orderId) {
@@ -119,7 +119,9 @@ public class ImagingResultController {
     // latest report, which may itself be PRELIMINARY, so withholding the
     // history never implemented "no unconfirmed reads for non-physicians";
     // that policy would be a filter on report status, not on this endpoint.
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST','NURSE')")
+    // QA D856: MIDWIFE too. A midwife orders and lists imaging (ImagingOrderController
+    // admits her on both), so the order detail she opens must read its reports.
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR','RADIOLOGIST','NURSE','MIDWIFE')")
     @Operation(summary = "Get all report versions for imaging order",
                description = "Retrieve complete history of report versions (preliminary, final, addenda)")
     public ResponseEntity<List<ImagingReportResponseDTO>> getAllReportsForOrder(@PathVariable UUID orderId) {

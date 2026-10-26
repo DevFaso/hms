@@ -24,6 +24,13 @@ export interface DrugInteractionEntry {
   severity: InteractionSeverity;
   description?: string;
   recommendation: string;
+  /**
+   * QA D887: what to SHOW, in the reader's language (the seeded advice is
+   * translated; a row someone has edited comes back as typed). Read-only:
+   * the edit form writes `description` / `recommendation`.
+   */
+  displayDescription?: string;
+  displayRecommendation?: string;
   mechanism?: string;
   clinicalEffects?: string;
   /** Derived server-side from severity — read-only in any UI. */

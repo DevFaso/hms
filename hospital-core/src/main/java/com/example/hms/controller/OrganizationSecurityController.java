@@ -57,6 +57,7 @@ public class OrganizationSecurityController {
     private final OrganizationSecurityService organizationSecurityService;
     private final OrganizationSecurityPolicyMapper policyMapper;
     private final OrganizationSecurityRuleMapper ruleMapper;
+    private final com.example.hms.security.tenant.OrganizationReadScope organizationReadScope;
 
     @GetMapping("/compliance")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN')")
@@ -68,6 +69,8 @@ public class OrganizationSecurityController {
             @Parameter(description = "Organization ID") @PathVariable UUID organizationId) {
         
         // Verify organization exists
+        // QA D845: a hospital administrator reads only an organisation they administer.
+        organizationReadScope.requireReadable(organizationId);
         var organization = organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
@@ -120,6 +123,8 @@ public class OrganizationSecurityController {
             @RequestParam(defaultValue = "true") boolean activeOnly) {
         
         // Verify organization exists
+        // QA D845: a hospital administrator reads only an organisation they administer.
+        organizationReadScope.requireReadable(organizationId);
         organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 
@@ -208,6 +213,8 @@ public class OrganizationSecurityController {
             @Parameter(description = "Pagination parameters") Pageable pageable) {
         
         // Verify organization exists
+        // QA D845: a hospital administrator reads only an organisation they administer.
+        organizationReadScope.requireReadable(organizationId);
         organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, organizationId));
 

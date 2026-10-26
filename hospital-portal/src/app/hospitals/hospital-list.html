@@ -73,7 +73,9 @@
               <td>{{ h.phoneNumber || '—' }}</td>
               <td>
                 @if (h.organizationName) {
-                  <span class="org-chip">{{ h.organizationName }}</span>
+                  <span class="org-chip">{{
+                    h.organizationName | orgText: h.organizationCode
+                  }}</span>
                 } @else {
                   <span class="text-muted">{{ 'HOSPITALS.UNASSIGNED' | translate }}</span>
                 }
@@ -172,6 +174,8 @@
                 <label for="hName">{{ 'DEPARTMENTS.NAME' | translate }} *</label>
                 <input
                   id="hName"
+                  [class.invalid]="isMissing('name')"
+                  [attr.aria-invalid]="isMissing('name') || null"
                   type="text"
                   [(ngModel)]="form.name"
                   name="name"
@@ -183,12 +187,13 @@
                 <label for="hPhone">{{ 'PATIENTS.PHONE' | translate }} *</label>
                 <input
                   id="hPhone"
+                  [class.invalid]="isMissing('phoneNumber')"
+                  [attr.aria-invalid]="isMissing('phoneNumber') || null"
                   type="tel"
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'HOSPITALS.PHONE_PLACEHOLDER' | translate"
-                  minlength="10"
-                  maxlength="15"
+                  maxlength="30"
                   required
                 />
               </div>
@@ -224,6 +229,8 @@
                 <label for="hCountry">{{ 'HOSPITALS.COUNTRY' | translate }} *</label>
                 <input
                   id="hCountry"
+                  [class.invalid]="isMissing('country')"
+                  [attr.aria-invalid]="isMissing('country') || null"
                   type="text"
                   [(ngModel)]="form.country"
                   name="country"
@@ -235,6 +242,8 @@
                 <label for="hCity">{{ 'HOSPITALS.CITY' | translate }} *</label>
                 <input
                   id="hCity"
+                  [class.invalid]="isMissing('city')"
+                  [attr.aria-invalid]="isMissing('city') || null"
                   type="text"
                   [(ngModel)]="form.city"
                   name="city"
@@ -284,6 +293,8 @@
                 <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }} *</label>
                 <input
                   id="hAddress"
+                  [class.invalid]="isMissing('address')"
+                  [attr.aria-invalid]="isMissing('address') || null"
                   type="text"
                   [(ngModel)]="form.address"
                   required
@@ -336,7 +347,9 @@
                 <select id="hOrgId" [(ngModel)]="form.organizationId" name="organizationId">
                   <option value="">{{ 'HOSPITALS.NONE_UNASSIGNED' | translate }}</option>
                   @for (org of organizations(); track org.id) {
-                    <option [value]="org.id">{{ org.name }} ({{ org.code }})</option>
+                    <option [value]="org.id">
+                      {{ org.name | orgText: org.code }} ({{ org.code }})
+                    </option>
                   }
                 </select>
               </div>

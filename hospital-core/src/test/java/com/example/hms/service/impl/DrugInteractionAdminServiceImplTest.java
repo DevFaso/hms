@@ -215,4 +215,47 @@ class DrugInteractionAdminServiceImplTest {
         assertThat(captor.getValue().getNotes()).contains("BNF 86");
         assertThat(captor.getValue().getMonitoringIntervalHours()).isEqualTo(48);
     }
+
+    /**
+     * QA D887: PHARMACIST_A opened /pharmacy/drug-interactions in French and
+     * Spanish and read every seeded recommendation in English. GET
+     * /admin/drug-interactions (the page's list) carries the seeded text in the
+     * reader's language, and leaves the stored text the edit form writes back.
+     */
+    @Test
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void theListShowsTheSeededAdviceInTheReadersLanguage_D887() {
+        DrugInteraction seeded = new DrugInteraction();
+        seeded.setDrug1Code("1191");
+        seeded.setDrug1Name("aspirin");
+        seeded.setDrug2Code("11289");
+        seeded.setDrug2Name("warfarin");
+        seeded.setSeverity(InteractionSeverity.MAJOR);
+        seeded.setDescription("Warfarin + aspirin: additive bleeding risk.");
+        seeded.setRecommendation("Avoid unless the indication is documented (e.g. cardiac stent); monitor INR weekly "
+            + "and reinforce bleeding-precaution counselling.");
+        seeded.setActive(true);
+        DrugInteraction edited = new DrugInteraction();
+        edited.setDrug1Code("5640");
+        edited.setDrug2Code("11289");
+        edited.setSeverity(InteractionSeverity.MAJOR);
+        edited.setDescription("Texte revu par la pharmacie.");
+        edited.setRecommendation("Paracétamol en première intention.");
+        edited.setActive(true);
+        when(repository.findAll()).thenReturn(java.util.List.of(seeded, edited));
+
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        java.util.List<DrugInteractionDTO> fr = service.list(null, true);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+        java.util.List<DrugInteractionDTO> es = service.list(null, true);
+
+        assertThat(fr.get(0).getDisplayRecommendation()).startsWith("À éviter sauf indication documentée");
+        assertThat(fr.get(0).getDisplayDescription()).isEqualTo("Warfarine + aspirine : risque hémorragique additif.");
+        assertThat(es.get(0).getDisplayRecommendation()).startsWith("Evitar salvo indicación documentada");
+        // The stored text is untouched: it is what an edit writes back.
+        assertThat(fr.get(0).getRecommendation()).startsWith("Avoid unless the indication is documented");
+        // A row a person has edited is shown exactly as they typed it.
+        assertThat(fr.get(1).getDisplayRecommendation()).isEqualTo("Paracétamol en première intention.");
+        assertThat(es.get(1).getDisplayDescription()).isEqualTo("Texte revu par la pharmacie.");
+    }
 }

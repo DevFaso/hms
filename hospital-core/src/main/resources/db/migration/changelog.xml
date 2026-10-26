@@ -3095,4 +3095,27 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V236 (round 13): encounters closed unseen with outcome
+         LEFT_WITHOUT_BEING_SEEN move from CANCELLED to the new status
+         LEFT_WITHOUT_BEING_SEEN; stay encounters take their admission's
+         current department (QA D804). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V236-encounter-left-without-being-seen" author="hms-team" runOnChange="false">
+        <sqlFile path="V236__encounter_left_without_being_seen.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V238 (round 14): one encounter note row per entry, the per-encounter
+         unique key dropped where a generated schema had it (QA D831); the
+         expected result of a qualitative lab test (QA D834). Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V238-note-entries-and-qualitative-lab-tests" author="hms-team" runOnChange="false">
+        <sqlFile path="V238__note_entries_and_qualitative_lab_tests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

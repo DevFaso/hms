@@ -115,11 +115,28 @@ export class MyFamilyAccessComponent implements OnInit {
         this.granting.set(false);
         this.toast.success(this.translate.instant('PORTAL.FAMILY.ACCESS_GRANTED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.granting.set(false);
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.GRANT_FAILED'));
+        this.toast.error(this.grantFailureMessage(err));
       },
     });
+  }
+
+  /**
+   * QA D893: a refused grant says what the patient can fix. The server's own
+   * message (already in the reader's language: unknown username, yourself,
+   * already granted) for a 4xx; an unknown username without one still names
+   * the problem; anything else stays the generic failure.
+   */
+  private grantFailureMessage(err: unknown): string {
+    const status = (err as { status?: number } | null)?.status ?? 0;
+    const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+    if (status >= 400 && status < 500 && typeof message === 'string' && message.trim()) {
+      return message;
+    }
+    return this.translate.instant(
+      status === 404 ? 'PORTAL.FAMILY.USER_NOT_FOUND' : 'PORTAL.FAMILY.GRANT_FAILED',
+    );
   }
 
   revokeAccess(proxyId: string): void {

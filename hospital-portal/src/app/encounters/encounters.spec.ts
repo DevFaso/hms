@@ -410,6 +410,164 @@ describe('EncountersComponent', () => {
     expect(component.showNoteForm()).toBeFalse();
   });
 
+  /* ── QA D831: one note entry per author on a stay ── */
+
+  const draftA = {
+    id: 'note-a',
+    authorName: 'Abdoulaye Ouédraogo',
+    documentedAt: '2026-10-25T08:00:00',
+    signedAt: null,
+  } as unknown as EncounterNoteResponse;
+  const entryB = {
+    id: 'note-b',
+    authorName: 'Issouf Compaoré',
+    documentedAt: '2026-10-26T08:00:00',
+    signedAt: null,
+  } as unknown as EncounterNoteResponse;
+
+  it("QA D831: the first doctor's draft is listed as its own entry beside the second doctor's", () => {
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.earlierNoteEntries().map((e) => e.id)).toEqual(['note-a']);
+  });
+
+  it('QA D831: an earlier entry is signed by its id, and only that entry changes', () => {
+    encounterSpy.signNote.and.returnValue(
+      of({ ...draftA, signedAt: '2026-10-26T09:00:00' } as EncounterNoteResponse),
+    );
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    component.signNoteEntry(draftA);
+
+    expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'note-a');
+    expect(component.earlierNoteEntries()[0].signedAt).toBe('2026-10-26T09:00:00');
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.noteState()?.signedAt).toBeNull();
+  });
+
+  for (const [label, admissionId, offered] of [
+    ['a stay', 'adm-1', true],
+    ['a visit', null, false],
+  ] as const) {
+    it(`QA D831: after the current entry is signed, ${label} ${offered ? 'still offers' : 'no longer offers'} a new note`, () => {
+      const fixture = TestBed.createComponent(EncountersComponent);
+      const page = fixture.componentInstance;
+      page.selectEncounter(
+        mockEncounter({
+          admissionId,
+          note: { ...draftA, signedAt: '2026-10-25T09:00:00' } as EncounterNoteResponse,
+        }),
+      );
+      fixture.detectChanges();
+
+      const addNote = (fixture.nativeElement as HTMLElement).querySelector(
+        'button[title="ENCOUNTERS.ADD_NOTE"]',
+      );
+      expect(!!addNote).toBe(offered);
+    });
+  }
+
+  it("#965 review (k5.js replay): Sign under DOCTOR2_A's J1 names J1, never DOCTOR_A's J0", () => {
+    encounterSpy.signNote.and.returnValue(
+      throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+    );
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    component.signNote();
+
+    expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'note-b');
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(toastSpy.error).toHaveBeenCalledWith("Only the note's author can sign it.");
+  });
+
+  it('#965 review: an earlier entry shows its text, and one awaiting co-signature is co-signed by its id', () => {
+    const signedA = {
+      ...draftA,
+      subjective: 'QA R13 J0 toux fébrile',
+      assessment: 'Pneumopathie',
+      signedAt: '2026-10-25T09:00:00',
+      requiresCosign: true,
+      cosignedAt: null,
+    } as unknown as EncounterNoteResponse;
+    encounterSpy.cosignNote.and.returnValue(
+      of({ ...signedA, cosignedAt: '2026-10-26T10:00:00' } as EncounterNoteResponse),
+    );
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const sections = Array.from(host.querySelectorAll('[data-testid="note-entry-section"]')).map(
+      (el) => el.textContent ?? '',
+    );
+    expect(sections.some((t) => t.includes('QA R13 J0 toux fébrile'))).toBeTrue();
+    expect(sections.some((t) => t.includes('Pneumopathie'))).toBeTrue();
+    const cosign = host.querySelector<HTMLButtonElement>('[data-testid="cosign-note-entry"]');
+    expect(cosign).not.toBeNull();
+
+    cosign!.click();
+
+    expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'note-a');
+    expect(page.earlierNoteEntries()[0].cosignedAt).toBe('2026-10-26T10:00:00');
+    expect(page.noteState()?.id).toBe('note-b');
+  });
+
+  it("#965 review (k5.js replay): an addendum opened on DOCTOR_A's signed J0 is filed under J0, not J1", () => {
+    const signedA = { ...draftA, signedAt: '2026-10-25T09:00:00' } as EncounterNoteResponse;
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-note-entry"]')!.click();
+    fixture.detectChanges();
+
+    // The form opens under J0, the entry it corrects.
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).not.toBeNull();
+    page.addendumContent = 'Correction J0 : T 38.4, non 39.4';
+    page.addAddendum();
+
+    const [id, payload, noteId] = encounterSpy.addAddendum.calls.mostRecent().args;
+    expect(id).toBe('e1');
+    expect(payload.content).toBe('Correction J0 : T 38.4, non 39.4');
+    expect(noteId).toBe('note-a');
+    expect(page.showAddendumForm()).toBeFalse();
+    expect(page.addendumTargetId()).toBeNull();
+  });
+
+  it('QA D831: the addendum button under the current entry names the current entry', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).toBeNull();
+    expect(host.querySelector('[data-testid="addendum-content"]')).not.toBeNull();
+    page.addendumContent = 'Ajout';
+    page.addAddendum();
+
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
+  });
+
+  it('QA D831: a save that starts a new stay entry keeps the previous one listed', () => {
+    encounterSpy.addNote.and.returnValue(of(entryB));
+    component.selectEncounter(mockEncounter({ note: draftA }));
+
+    component.saveStructuredNote({ subjective: 'QA R13 J1 apyrétique' } as never);
+
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(component.earlierNoteEntries().map((e) => e.id)).toEqual(['note-a']);
+  });
+
   it('status transition guards follow the encounter lifecycle', () => {
     expect(component.canCompleteExamination(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
     expect(component.canCompleteExamination(mockEncounter({ status: 'SCHEDULED' }))).toBeFalse();
@@ -499,7 +657,7 @@ describe('EncountersComponent', () => {
 
       component.signNote();
 
-      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.signedAt).toBeTruthy();
       expect(component.signingNote()).toBeFalse();
     });
@@ -533,7 +691,7 @@ describe('EncountersComponent', () => {
 
       component.cosignNote();
 
-      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.cosignedAt).toBeTruthy();
     });
 

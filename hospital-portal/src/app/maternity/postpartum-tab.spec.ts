@@ -458,4 +458,54 @@ describe('PostpartumTabComponent — screening', () => {
     // what the maternal domain would have produced for APGAR.
     expect(textNow()).not.toContain('Apgar ');
   });
+  /* ── Round 13 browser walk (QA D807, D808) ── */
+
+  it('QA D807: the delivery picker shows the translated mode, never the raw code', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { LABOR: { MODE_SPONTANEOUS_VAGINAL: 'Voie basse spontanée' } });
+    translate.use('fr');
+
+    const label = component.deliveryLabel({
+      id: 'd1',
+      birthDateTime: '2026-10-25T18:23:00',
+      deliveryMode: 'SPONTANEOUS_VAGINAL',
+    } as never);
+
+    expect(label).toContain('Voie basse spontanée');
+    expect(label).not.toContain('SPONTANEOUS_VAGINAL');
+  });
+
+  it('QA D808: a newborn APGAR of 15 is refused before sending, naming the field', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      FIELD_LIMITS: { RANGE: '{{field}} : entre {{min}} et {{max}}.' },
+      POSTPARTUM: { APGAR_ONE: 'APGAR à 1 min' },
+    });
+    translate.use('fr');
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openAssessment();
+    component.assessmentForm.apgarOneMinute = 15;
+
+    component.submitAssessment();
+
+    expect(postpartumSpy.createNewbornAssessment).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('APGAR à 1 min : entre 0 et 10.');
+  });
+
+  it('QA D808 (sibling): a pain score of 15 is refused before sending, naming the field', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      FIELD_LIMITS: { RANGE: '{{field}} : entre {{min}} et {{max}}.' },
+      POSTPARTUM: { PAIN: 'Douleur' },
+    });
+    translate.use('fr');
+    component.onPatientPicked({ id: 'p1' } as PatientResponse);
+    component.openObservation();
+    component.observationForm.painScore = 15;
+
+    component.submitObservation();
+
+    expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('Douleur : entre 0 et 10.');
+  });
 });

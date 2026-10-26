@@ -1370,9 +1370,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // QA D525 (D431): an order written into a hospital stay after the
             // discharge closed it was accepted, and would surface as a due
             // dose for a patient who has gone home.
-            if (isHospitalStay(named)
-                    && (named.getStatus() == EncounterStatus.COMPLETED
-                        || named.getStatus() == EncounterStatus.CANCELLED)) {
+            if (isHospitalStay(named) && isClosedEncounter(named)) {
                 throw new BusinessException("prescription.encounter.stayClosed");
             }
             // QA D739 (r10 re-test 3): the same rule for every encounter type.
@@ -1397,7 +1395,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Optional<Encounter> stay = encounterRepository
             .findFirstByPatient_IdAndStaff_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
                 patient.getId(), staff.getId(), hospitalId,
-                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+                EncounterStatus.CLOSED);
         if (stay.isPresent()) {
             return stay.get();
         }
@@ -1409,7 +1407,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         Optional<Encounter> anyStay = encounterRepository
             .findFirstByPatient_IdAndHospital_IdAndAdmissionIdIsNotNullAndStatusNotInOrderByEncounterDateDesc(
                 patient.getId(), hospitalId,
-                java.util.EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED));
+                EncounterStatus.CLOSED);
         // The caller must be on that stay's care team: ensureContextConsistency
         // refuses anyone else (verification GAP-1) for every path, this one too.
         if (anyStay.isPresent()) {
@@ -1443,8 +1441,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     private static boolean isClosedEncounter(Encounter encounter) {
-        return encounter.getStatus() == EncounterStatus.COMPLETED
-            || encounter.getStatus() == EncounterStatus.CANCELLED;
+        return encounter.getStatus() != null && encounter.getStatus().isClosed();
     }
 
     /**
@@ -1515,8 +1512,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private static boolean isReusableOutpatientAnchor(Encounter encounter) {
         EncounterStatus status = encounter.getStatus();
         return !isHospitalStay(encounter)
-            && status != EncounterStatus.COMPLETED
-            && status != EncounterStatus.CANCELLED;
+            && (status == null || !status.isClosed());
     }
 
     /** A stay's encounter: linked to an admission, or an INPATIENT one from before V193 linked them. */

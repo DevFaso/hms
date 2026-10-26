@@ -46,26 +46,29 @@
     "COL_ENABLED": "Enabled",
     "FIELD": {
       "HOSPITAL_PICKER": "Hospital",
-      "PROVIDER": "Admitting provider",
-      "PROVIDER_PLACEHOLDER": "— Select a provider —",
+      "PROVIDER": "Admitting physician",
+      "PROVIDER_PLACEHOLDER": "— Select a physician —",
       "DEPARTMENT": "Department (optional)",
       "DEPARTMENT_PLACEHOLDER": "— Select a department —",
       "ASSIGNMENT_ID": "Default assignment id (required for A04)",
-      "ASSIGNMENT_HINT": "Required only when this hospital opts into ADT^A04 Encounter auto-create. Leave blank for A01-only setups.",
+      "ASSIGNMENT_HINT": "Needed only when this hospital creates ADT^A04 encounters automatically: the admitting physician's own assignment, under which the encounters are recorded.",
       "ADMISSION_TYPE": "Default admission type",
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",
       "CHIEF_COMPLAINT": "Default chief complaint",
-      "ENABLED": "Enable auto-create for this hospital"
+      "ENABLED": "Enable auto-create for this hospital",
+      "ASSIGNMENT": "Default assignment (required for A04)",
+      "ASSIGNMENT_NONE": "— None (A01 only) —"
     },
     "CONFIRM_DELETE": "Delete ADT intake config for {{hospital}}?",
     "SELECTED_HOSPITAL": "Selected hospital:",
     "HOSPITAL_SEARCHING": "Searching hospitals…",
     "HOSPITAL_NO_MATCH": "No hospitals match this search.",
-    "PROVIDER_NO_OPTIONS": "No active staff at this hospital.",
+    "PROVIDER_NO_OPTIONS": "No active doctor or surgeon at this hospital.",
     "DEPARTMENT_NO_OPTIONS": "No departments at this hospital.",
     "PLACEHOLDER": {
-      "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…"
+      "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…",
+      "CHIEF_COMPLAINT": "Leave empty for \"Admitted automatically from an ADT message\""
     },
     "VALIDATION": {
       "REQUIRED": "Hospital and admitting provider are required."
@@ -145,6 +148,7 @@
     "BIRTH_TIME": "Time of birth",
     "BIRTH_WEIGHT": "Birth weight (g)",
     "BLOOD_LOSS": "Blood loss (ml)",
+    "BLOOD_LOSS_VALUE": "Blood loss: {{value}}",
     "CHART_X_AXIS": "Hours of active phase",
     "CONTRACTIONS": "Contractions",
     "CONTRACTIONS_TEN": "Contractions /10 min",
@@ -240,7 +244,14 @@
     "TIME": "Time",
     "URINE_ML": "Urine (ml)",
     "UTEROTONIC_GIVEN": "Uterotonic given (AMTSL)",
-    "PICK_PATIENT_HINT": "Pick a patient to see her labour record."
+    "PICK_PATIENT_HINT": "Pick a patient to see her labour record.",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)",
+    "TEMPERATURE": "Temperature (°C)",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "BIRTH_BEFORE_LAST_ENTRY": "Time of birth: it cannot be earlier than an observation already charted on the partograph.",
+    "PLACENTA_BEFORE_BIRTH": "Placenta delivered at: the placenta cannot be delivered before the birth."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Back to organizations",
@@ -524,12 +535,14 @@
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
       "FEATURE_KEYS": "Feature keys",
-      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys"
+      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys",
+      "PRICE": "Monthly price ({{currency}})"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Name and tier code are required.",
       "SAVE_FAILED": "Save failed.",
-      "DEACTIVATE_FAILED": "Deactivation failed."
+      "DEACTIVATE_FAILED": "Deactivation failed.",
+      "WHOLE_UNITS": "This currency has no subunit: enter a whole amount."
     }
   },
   "ORG_REGION": {
@@ -649,13 +662,18 @@
       "EXPORT_HELP": "Leave empty to fall back to the global export-format default.",
       "DEPLOYMENT": "Target deployment URL",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "When set, new tenants in this region must be provisioned remotely via TenantProvisioningClient. Leave empty to provision locally.",
-      "DEPLOYMENT_DISABLED_HELP": "Disabled — no remote TenantProvisioningClient is wired into this deployment.",
-      "DEPLOYMENT_DISABLED_TOOLTIP": "Register a real TenantProvisioningClient bean before setting this URL — the stub client cannot honour remote provisioning."
+      "DEPLOYMENT_HELP": "When set, new tenants in this region are provisioned on that remote deployment. Leave empty to provision them here.",
+      "DEPLOYMENT_DISABLED_HELP": "Disabled: this deployment cannot provision tenants remotely.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "Remote provisioning must be set up on the server before a deployment URL can be saved."
     },
-    "REMOTE_STUB_BANNER": "Remote provisioning is disabled: only the stub TenantProvisioningClient is wired into this deployment, so target deployment URLs cannot be saved.",
+    "REMOTE_STUB_BANNER": "Remote provisioning is not set up on this deployment, so target deployment URLs cannot be saved.",
     "ERROR": {
       "UPDATE_FAILED": "Region policy update failed. Try again."
+    },
+    "SYSTEM_ACTOR": "Platform",
+    "EXPORT_FORMAT": {
+      "STANDARD": "Standard format",
+      "GDPR_PORTABILITY": "GDPR portability"
     }
   },
   "INTEGRATION_MESSAGES": {
@@ -739,13 +757,15 @@
       "BUSY": "Working…",
       "OK": "OK",
       "FAIL": "Failed",
-      "ERROR": "The action could not be completed."
+      "ERROR": "The action could not be completed.",
+      "NONE": "No connection test or resynchronization for this integration."
     },
     "PROBE": {
       "ERROR": "Probe failed."
     },
     "RESYNC": {
-      "ERROR": "Re-sync failed."
+      "ERROR": "Re-sync failed.",
+      "ACCEPTED": "Resynchronization started: the result will appear in the history."
     },
     "HISTORY": {
       "TITLE": "Last 24 hours",
@@ -855,6 +875,16 @@
       "MONTHLY": "Monthly",
       "WEEKLY": "Weekly",
       "YEARLY": "Yearly"
+    },
+    "AUTH_MODE": {
+      "PAT": "Personal access token",
+      "BASIC": "User name and password"
+    },
+    "RUN_STATUS": {
+      "PENDING": "Pending",
+      "SUCCESS": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed"
     }
   },
   "BREAK_GLASS": {
@@ -908,7 +938,8 @@
     "RE_REVIEW": "Change the review",
     "SIGN_OFF": "Sign off",
     "SUBTITLE": "Every emergency-access session at this hospital, to be signed off by an administrator.",
-    "TITLE": "Break-glass review"
+    "TITLE": "Break-glass review",
+    "MRN": "MRN"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
@@ -1061,7 +1092,45 @@
     "SEARCH_PLACEHOLDER": "Search order sets…",
     "SYNONYMS_PLACEHOLDER": "Comma-separated alternates (e.g. Tylenol, paracetamol)",
     "VERSION_HISTORY": "Version history",
-    "VERSION_RETIRED": "retired"
+    "VERSION_RETIRED": "retired",
+    "NAME_REQUIRED": "Give the order set a name.",
+    "ITEM_NAME_REQUIRED": "This item needs a name.",
+    "ITEM_TYPE": {
+      "MEDICATION": "Medication",
+      "LAB": "Lab test",
+      "IMAGING": "Imaging",
+      "DIET": "Diet",
+      "ACTIVITY": "Activity",
+      "MONITORING": "Monitoring"
+    },
+    "DOSE_UNIT": {
+      "MCG": "mcg",
+      "IU": "IU",
+      "TABLET": "tablet",
+      "PUFF": "puff",
+      "DROP": "drop",
+      "UNIT": "unit"
+    },
+    "FREQUENCY": {
+      "QD": "Once daily (QD)",
+      "BID": "Twice daily (BID)",
+      "TID": "Three times daily (TID)",
+      "QID": "Four times daily (QID)",
+      "Q4H": "Every 4 hours (Q4H)",
+      "Q6H": "Every 6 hours (Q6H)",
+      "Q8H": "Every 8 hours (Q8H)",
+      "PRN": "As needed (PRN)"
+    },
+    "ROUTE": {
+      "PO": "Oral (PO)",
+      "IV": "Intravenous (IV)",
+      "IM": "Intramuscular (IM)",
+      "SC": "Subcutaneous (SC)",
+      "PR": "Rectal (PR)",
+      "INH": "Inhaled (INH)",
+      "TOPICAL": "Topical",
+      "NASAL": "Nasal"
+    }
   },
   "REFILLS": {
     "QUEUE_TITLE": "Refill requests",
@@ -1195,7 +1264,11 @@
       "NO_SHOW_RATE_LABEL": "No-show rate",
       "MEDIAN_LABEL": "Median",
       "TREND_LABEL": "30-day trend",
-      "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points"
+      "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points",
+      "NO_DATA_IN_WINDOW": "No data in this period",
+      "NO_APPOINTMENTS_IN_WINDOW": "No appointments in this period",
+      "SAMPLE_SIZE": "{{count}} measurements",
+      "NO_SHOW_RATIO": "{{noShow}} no-shows out of {{total}} appointments"
     },
     "CARD": {
       "TOTAL_PATIENTS": "Total Patients",
@@ -1401,7 +1474,15 @@
       "ROLE_ASSIGNMENT_REFUSED": "Role assignment refused: the caller may not grant this role there",
       "ROLE_ASSIGNED": "Role {{role}} assigned to {{name}}",
       "ASSIGNMENT_CONFIRMED": "Assignment {{role}} confirmed for {{name}}",
-      "LAB_DEFINITION_STEP": "Lab test definition {{code}}: approval step {{step}}, new status {{status}}."
+      "LAB_DEFINITION_STEP": "Lab test definition {{code}}: approval step {{step}}, new status {{status}}.",
+      "HOSPITAL_SCOPE_REFUSED": "Hospital access refused ({{reason}})"
+    },
+    "SCOPE_REFUSAL": {
+      "NOT_PERMITTED": "no active role at this hospital",
+      "NO_LONGER_PERMITTED": "the role at this hospital has ended",
+      "AMBIGUOUS": "several hospitals, none chosen",
+      "NO_LOCAL_USER": "sign-in not linked to an account",
+      "NO_HOSPITAL": "no hospital selected"
     }
   },
   "BILLING": {
@@ -1685,7 +1766,8 @@
     "SYSTEM": "System",
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Hospital Management System",
-    "PATIENT_PICKER_NO_MATCH": "No patient matches this search."
+    "PATIENT_PICKER_NO_MATCH": "No patient matches this search.",
+    "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -1876,7 +1958,8 @@
       "AWAITING_RESULTS": "Awaiting Results",
       "READY_TO_DISCHARGE": "Ready to Discharge",
       "COMPLETED": "Completed",
-      "CANCELLED": "Cancelled"
+      "CANCELLED": "Cancelled",
+      "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
     },
     "FULL_CHART": "Full Chart",
     "GENERAL_VISIT": "General visit",
@@ -2286,8 +2369,8 @@
     "SUBTITLE": "Search the master patient index by name + DOB + sex + national ID. Confirm the match if the breakdown looks right, or create a new patient if no candidate is the same person.",
     "SEARCH": "Search candidates",
     "SEARCHING": "Searching…",
-    "ERROR": "EMPI candidate search failed. The probabilistic match flag may be off — see docs/runbooks/empi-probabilistic-matching.md.",
-    "DISABLED": "Duplicate-patient matching is not enabled for this deployment. Ask an administrator to enable app.empi.probabilistic.enabled.",
+    "ERROR": "The duplicate-patient check could not be completed. Try again; if it keeps failing, contact your administrator.",
+    "DISABLED": "Duplicate-patient matching is not enabled at this facility. Contact your administrator.",
     "NO_MATCHES": "No candidates met the configured score threshold.",
     "NOT_THIS_ONE": "None of the candidates above is the same person?",
     "CREATE_NEW_PATIENT": "Create a new patient instead",
@@ -2479,7 +2562,8 @@
     "START": "Start visit",
     "STARTED": "Visit started",
     "CHECK_OUT": "Check out",
-    "NOT_FOUND": "Encounter not found"
+    "NOT_FOUND": "Encounter not found",
+    "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -2601,7 +2685,7 @@
     "PROVINCE_PLACEHOLDER": "e.g., Kadiogo",
     "REGION": "Region",
     "REGION_PLACEHOLDER": "e.g., Centre, Île-de-France",
-    "REQUIRED_FIELDS": "Name, city, country, phone number, and an address or a P.O. box are required.",
+    "REQUIRED_FIELDS": "Name, phone number, country, city and street address are required.",
     "ADDRESS_OR_PO_BOX_HINT": "The street address is required; the P.O. box is optional.",
     "SEARCH_PLACEHOLDER": "Search hospitals…",
     "SECTOR": "Sector / Neighborhood",
@@ -2897,6 +2981,17 @@
       "PENDING_QA_REVIEW": "Pending QA review",
       "REJECTED": "Rejected",
       "RETIRED": "Retired"
+    },
+    "CANCELLATION_REASON": "Cancellation reason",
+    "VOID": {
+      "ACTION": "Mark as entered in error",
+      "TITLE": "Mark this order as entered in error",
+      "EXPLAIN": "Use this when the order was placed by mistake (wrong patient, wrong test). The order and its results are kept for the record, but its results will no longer appear in any clinical view. Order:",
+      "REASON": "Reason for the error",
+      "REASON_PLACEHOLDER": "e.g. Ordered for the wrong patient",
+      "CONFIRM": "Mark as entered in error",
+      "DONE": "The order is marked as entered in error.",
+      "FAILED": "The order could not be marked as entered in error."
     }
   },
   "LAB_STAFF": {
@@ -3022,7 +3117,13 @@
     "PLACEHOLDER_SAMPLE": "e.g. Blood",
     "PLACEHOLDER_MINUTES": "Minutes",
     "CRITICAL_LOW": "Critical low (below)",
-    "CRITICAL_HIGH": "Critical high (above)"
+    "CRITICAL_HIGH": "Critical high (above)",
+    "LOINC_PLACEHOLDER": "e.g. 718-7 (haemoglobin)",
+    "CRITICAL_LIMITS_HINT": "Critical limits are the panic values: a result beyond them is graded CRITICAL and pages the ordering doctor. A result that is only outside the reference range is graded high or low and pages nobody. Leave them empty when the test has no panic value.",
+    "EXPECTED_RESULT": "Expected result (qualitative test)",
+    "EXPECTED_RESULT_PLACEHOLDER": "e.g. Negative",
+    "EXPECTED_RESULT_HINT": "For a test answered in words (a rapid test, a culture), give the normal answer instead of a numeric range. The patient sees it beside the result.",
+    "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
   },
   "LAB_RESULTS": {
     "TITLE": "Lab Results",
@@ -3109,7 +3210,8 @@
     "CORRECTION": "Correction",
     "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
     "SUPERSEDED": "Superseded",
-    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value."
+    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value.",
+    "EXPECTED_RESULT": "Expected result"
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",
@@ -3474,7 +3576,9 @@
     "PROVIDER_HOME": "Home",
     "PROVIDER_PROFILE": "Profile",
     "PROVIDER_STAFF": "Staff",
-    "PROVIDER_AUDIT": "Audit trail"
+    "PROVIDER_AUDIT": "Audit trail",
+    "DHIS2": "DHIS2 export",
+    "ADT_INTAKE": "ADT intake"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -3916,7 +4020,10 @@
     "TITLE": "Organizations",
     "TYPE": "Type",
     "TYPE_REQUIRED": "Choose an organization type.",
-    "UPDATED": "Organization updated"
+    "UPDATED": "Organization updated",
+    "DEFAULT_ORG_NAME": "Default Healthcare Organization",
+    "DEFAULT_ORG_DESCRIPTION": "Default organization for hospitals without specific organization assignment",
+    "PHONE_PLACEHOLDER": "e.g. +226 25 30 00 00"
   },
   "PANEL": {
     "TITLE": "Panel Management",
@@ -4632,9 +4739,10 @@
       "REFILL_HISTORY": "Refill History",
       "REQUESTED": "Requested",
       "COMPLETED": "Completed",
-      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one.",
+      "NOT_REFILLABLE": "This prescription can no longer be refilled. Please contact your care team for a new prescription.",
       "READY_AT": "Ready for collection at {{pharmacy}}",
-      "READY_SINCE": "Since {{date}}"
+      "READY_SINCE": "Since {{date}}",
+      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",
@@ -4707,8 +4815,9 @@
       "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes.",
       "PENDING_DECLARED": "Already declared, awaiting confirmation",
       "LEFT_TO_DECLARE": "Left to declare",
-      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}} F CFA: {{pending}} F CFA already declared is awaiting confirmation.",
-      "CREDITED_TO": "Credited to invoice {{number}}"
+      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
+      "CREDITED_TO": "Credited to invoice {{number}}",
+      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -4767,7 +4876,9 @@
       "QUICK_LINKS": "Quick Links",
       "UPCOMING_APPOINTMENTS": "Upcoming Appointments",
       "MEDICAL_HISTORY": "Medical & Family History",
-      "CARE_TEAM": "My Care Team"
+      "CARE_TEAM": "My Care Team",
+      "RECORD_NUMBERS": "My record numbers",
+      "UNKNOWN_HOSPITAL": "Unnamed hospital"
     },
     "SHARING": {
       "TITLE": "Who accessed my record",
@@ -4891,7 +5002,8 @@
         "TEST": "Test",
         "TITLE": "{{name}}'s Health Data",
         "TITLE_FALLBACK": "Shared Health Data"
-      }
+      },
+      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Medical and Family History",
@@ -5020,6 +5132,7 @@
         "INACTIVE": "Inactive",
         "INVALID": "Invalid",
         "IN_PROGRESS": "In Progress",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
         "NEEDS_CLARIFICATION": "Needs Clarification",
         "NORMAL": "Normal",
         "NOT_ELIGIBLE": "Not Eligible",
@@ -5219,7 +5332,8 @@
         "SCHEDULED": "Scheduled",
         "TRIAGE": "Triage",
         "UNKNOWN": "Unknown",
-        "WAITING_FOR_PHYSICIAN": "Waiting for Physician"
+        "WAITING_FOR_PHYSICIAN": "Waiting for Physician",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
       },
       "LEAVE_STATUS": {
         "APPROVED": "Approved",
@@ -5262,7 +5376,8 @@
         "PENDING": "Pending",
         "RECEIVED": "Received",
         "RESULTED": "Resulted",
-        "VERIFIED": "Verified"
+        "VERIFIED": "Verified",
+        "ENTERED_IN_ERROR": "Entered in error"
       },
       "ABNORMAL_FLAG": {
         "ABNORMAL": "Abnormal",
@@ -5565,7 +5680,8 @@
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
         "USER_RESTORE": "User Restored",
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
-        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released"
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
+        "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6138,6 +6254,13 @@
         "ACTIVATE": "Activate",
         "REJECT": "Reject",
         "RETIRE": "Retire"
+      },
+      "ACUITY_LEVEL": {
+        "LEVEL_1_MINIMAL": "Level 1 - minimal",
+        "LEVEL_2_MODERATE": "Level 2 - moderate",
+        "LEVEL_3_MAJOR": "Level 3 - major",
+        "LEVEL_4_SEVERE": "Level 4 - severe",
+        "LEVEL_5_CRITICAL": "Level 5 - critical"
       }
     },
     "DOCUMENTS": {
@@ -6893,7 +7016,8 @@
     "WALKIN_VALIDATION_ERROR": "Please select a patient, provider, and ensure a hospital is active",
     "WALK_IN": "Walk-in Registration",
     "WALK_INS": "Walk-ins",
-    "WALK_INS_TODAY": "Walk-ins Today"
+    "WALK_INS_TODAY": "Walk-ins Today",
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -7160,7 +7284,9 @@
       "SURGEON": "Surgical specialist performing operations, managing surgical plans, and post-operative care",
       "TECHNICIAN": "Medical or IT technician responsible for equipment maintenance and technical support",
       "USER": "Standard system user with basic access permissions"
-    }
+    },
+    "BUILT_IN_ACCESS": "Built-in access",
+    "NO_PERMISSION_CATALOGUE": "No permission catalogue is defined: this role's access is built into the platform and is not edited here."
   },
   "SCHEDULING": {
     "AFTERNOON": "Afternoon",
@@ -7351,7 +7477,8 @@
     "PRIMARY_NAV_ARIA": "Primary navigation",
     "SETTINGS": "Settings",
     "SIGN_OUT": "Sign Out",
-    "TOGGLE_SIDEBAR": "Toggle sidebar"
+    "TOGGLE_SIDEBAR": "Toggle sidebar",
+    "LANGUAGE": "Language"
   },
   "SIGNATURES": {
     "ALGORITHM": "Algorithm",
@@ -7681,7 +7808,8 @@
     "USERNAME": "Username",
     "USERS_PLURAL": "Users",
     "USER_SINGULAR": "User",
-    "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page."
+    "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page.",
+    "STAFF_FIELDS_EDIT_HINT": "Hospital, job title, employment type, specialization and licence are those registered for this staff member. They are changed from the staff record, not here."
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",
@@ -7787,7 +7915,7 @@
     "NUMERIC_ANSWER_TITLE": "Numeric answer",
     "PHONE": "Phone Number",
     "PHONE_LABEL": "Phone",
-    "PHONE_PLACEHOLDER": "e.g. (555) 123-4567",
+    "PHONE_PLACEHOLDER": "e.g. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires Completed",
     "STATE": "State",
     "STEPS_NAV_LABEL": "Pre-check-in steps",
@@ -7801,7 +7929,8 @@
     "TITLE": "Pre-Check-In",
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
-    "ZIP": "Zip Code"
+    "ZIP": "Zip Code",
+    "DATE_AT_TIME": "{{date}} at {{time}}"
   },
   "TRACKER": {
     "TITLE": "Patient Tracker Board",
@@ -8161,7 +8290,8 @@
     "VERIF_REFUTED": "Refuted",
     "VERIF_UNCONFIRMED": "Unconfirmed",
     "LAB_STATUS_QUALITATIVE": "Qualitative result: read by your clinician",
-    "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range"
+    "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range",
+    "CODE_PLACEHOLDER": "e.g. B54 (malaria)"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -8485,7 +8615,7 @@
     "WITNESSED_BY": "witness: {{name}}",
     "TYPE": "Type",
     "UNIT": "Unit",
-    "UNIT_CODE_PLACEHOLDER": "e.g., TABLET",
+    "UNIT_CODE_PLACEHOLDER": "e.g. tablet",
     "UNIT_COST": "Unit Cost",
     "UNIT_PLACEHOLDER": "e.g. tablets, ml",
     "UNKNOWN_ITEM": "Unknown item",
@@ -8556,7 +8686,20 @@
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
     "PRICE_SAVE_FAILED": "The price could not be saved.",
-    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative."
+    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative.",
+    "EDIT_PRICE": "Change the unit price",
+    "MTM_CLOSED": "Closed",
+    "ROUTING_RX_SEARCH": "Find the prescription",
+    "ROUTING_RX_SEARCH_PLACEHOLDER": "Patient name or medication…",
+    "ROUTING_RX_QUEUE_FAILED": "The prescriptions waiting at the dispensary could not be loaded.",
+    "ROUTING_RX_NO_MATCH": "No waiting prescription matches this search.",
+    "ROUTING_RX_NO_MATCH_PARTIAL": "No match among the {{loaded}} newest waiting prescriptions.",
+    "ROUTING_RX_PARTIAL": "Searching the {{loaded}} newest of {{total}} waiting prescriptions.",
+    "ROUTING_RX_LOAD_OLDER": "Search older prescriptions too",
+    "ROUTING_RX_SELECTED": "Prescription:",
+    "ATC_PLACEHOLDER": "e.g. J01CA04 (amoxicillin)",
+    "STRENGTH_PLACEHOLDER": "e.g. 500",
+    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -8839,7 +8982,8 @@
     "URGENCY_ROUTINE": "Routine",
     "URGENCY_ELECTIVE": "Elective",
     "URGENCY_URGENT": "Urgent",
-    "URGENCY_EMERGENT": "Emergent"
+    "URGENCY_EMERGENT": "Emergent",
+    "PAST_DATE": "The planned date and time cannot be in the past."
   },
   "REGISTRATIONS": {
     "TITLE": "Hospital Registrations",
@@ -9178,6 +9322,9 @@
     "HISTORY_CREATED": "Maternal history recorded",
     "HISTORY_UPDATED": "Maternal history updated (new version)",
     "HISTORY_SAVE_ERROR": "Failed to save maternal history",
+    "HISTORY_ALREADY_EXISTS": "This patient already has a maternal history. Open it and update it to record a new version.",
+    "OPEN_EXISTING_HISTORY": "Open and update the history",
+    "HISTORY_HELD_ELSEWHERE": "This patient's maternal history is held by another facility. It cannot be updated here.",
     "SUM_SUBMITTED": "Submitted",
     "SUM_ACKNOWLEDGED": "Acknowledged",
     "SUM_IN_PROGRESS": "In progress",
@@ -9249,7 +9396,10 @@
     "POSTPARTUM_TAB": "Postpartum",
     "URGENCY_ATTACHMENT_REQUIRED": "Priority and urgent referrals require at least one supporting attachment, which this form does not support yet. Create the referral as Routine for now.",
     "VERSIONS_LOAD_ERROR": "Failed to load version history",
-    "NO_VERSIONS": "No earlier versions"
+    "NO_VERSIONS": "No earlier versions",
+    "PARA_ABOVE_GRAVIDA": "Parity (P) cannot be higher than gravidity (G): every birth counted in P is also a pregnancy counted in G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "Parity (P) plus abortions (A) cannot be higher than gravidity (G): each pregnancy ends in at most one of them.",
+    "RECORDED_FUTURE": "Recorded: the date cannot be in the future."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "All orders",
@@ -9415,7 +9565,10 @@
     "VISIT_INITIAL_INTAKE": "Initial intake",
     "VISIT_ROUTINE_CHECK": "Routine check",
     "VISIT_ULTRASOUND": "Ultrasound",
-    "VISIT_LATE_PREGNANCY": "Late pregnancy"
+    "VISIT_LATE_PREGNANCY": "Late pregnancy",
+    "BOOK": "Book",
+    "BOOK_REASON": "Antenatal visit (week {{week}})",
+    "BOOK_HINT": "Book a recommended visit to plan it as an appointment; it then shows as planned. On the day, check the patient in on the appointment to open the consultation where the visit (vital signs, examination) is recorded."
   },
   "PRO": {
     "HEADING": "Mental-health screening ({{instrument}})",
@@ -9594,7 +9747,13 @@
     "DELIVERY_LINK_NONE": "Not linked (born elsewhere)",
     "DELIVERY_LINKED": "linked to delivery",
     "PICK_PATIENT_HINT": "Pick a patient to see her postpartum record.",
-    "PHASE_UNKNOWN": "Phase not yet set"
+    "PHASE_UNKNOWN": "Phase not yet set",
+    "APGAR_ONE": "APGAR at 1 min",
+    "APGAR_FIVE": "APGAR at 5 min",
+    "APGAR_TEN": "APGAR at 10 min",
+    "TEMPERATURE": "Temperature (°C)",
+    "SYSTOLIC": "Systolic (mmHg)",
+    "DIASTOLIC": "Diastolic (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -10321,7 +10480,8 @@
     "PERIOD_MONTHLY": "Monthly",
     "RUN_GENERATING": "Generating",
     "RUN_SUCCEEDED": "Sent",
-    "RUN_FAILED": "Failed"
+    "RUN_FAILED": "Failed",
+    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
   },
   "SLOT_ADMIN": {
     "ACTIONS": "Actions",
@@ -11151,7 +11311,8 @@
     "DISPENSE_PICK": "Dispense to collect",
     "DISPENSE_PICK_PLACEHOLDER": "Choose a dispense",
     "NO_DISPENSES": "No dispense to collect at this pharmacy.",
-    "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded."
+    "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded.",
+    "ALREADY_PAID": "This dispense has already been paid. No second payment is taken."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",
@@ -11175,5 +11336,10 @@
     "WEIGHT": "Weight must be between {{min}} and {{max}} kg.",
     "HEIGHT": "Height must be between {{min}} and {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Head circumference must be between {{min}} and {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
+    "MIN": "{{field}}: the value must be at least {{min}}.",
+    "FIELD_REASON": "{{field}}: {{reason}}"
   }
 }

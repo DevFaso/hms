@@ -428,9 +428,11 @@ public class EncounterController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Close a visit no clinician has seen (left without being seen, or cancelled)",
-        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The encounter becomes "
-            + "CANCELLED with the outcome and the reason, its appointment is cancelled, and no After-Visit "
-            + "Summary is produced: it is never counted as a consultation. A seen visit is checked out instead."
+        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The outcome sets the "
+            + "encounter's status: LEFT_WITHOUT_BEING_SEEN for a patient who left before being seen, CANCELLED "
+            + "for a cancelled visit; the outcome and the reason are kept on the encounter. Its appointment is "
+            + "cancelled, and no After-Visit Summary is produced: it is never counted as a consultation. A seen "
+            + "visit is checked out instead."
     )
     public ResponseEntity<EncounterResponseDTO> closeUnseen(
         @PathVariable UUID encounterId,
@@ -492,6 +494,7 @@ public class EncounterController {
                            "Original note remains unchanged; addendum is clearly marked.")
     public ResponseEntity<EncounterNoteAddendumResponseDTO> addEncounterNoteAddendum(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         @Valid @RequestBody EncounterNoteAddendumRequestDTO request,
         Locale locale,
         Authentication auth,
@@ -499,8 +502,10 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        // QA D831: on a stay each progress note is its own entry; noteId names
+        // the one the addendum corrects (none = the current entry).
         EncounterNoteAddendumResponseDTO response =
-            encounterService.addEncounterNoteAddendum(encounterId, request, locale, isSuperAdmin, hospitalId);
+            encounterService.addEncounterNoteAddendum(encounterId, noteId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity
             .created(URI.create("/encounters/" + encounterId + "/notes/addendums"))
             .body(response);
@@ -520,9 +525,11 @@ public class EncounterController {
                    + "A signature cannot be asserted in the note body.")
     public ResponseEntity<EncounterNoteResponseDTO> signEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, locale));
+        // QA D831: a stay holds one entry per progress note; noteId names one.
+        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, noteId, locale));
     }
 
     /**
@@ -539,9 +546,10 @@ public class EncounterController {
                    + "profile at the note's hospital.")
     public ResponseEntity<EncounterNoteResponseDTO> cosignEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, locale));
+        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, noteId, locale));
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)

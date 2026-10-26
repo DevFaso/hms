@@ -958,6 +958,7 @@
     <string name="encounter_status_ready_for_discharge">Ready for Discharge</string>
     <string name="encounter_status_completed">Completed</string>
     <string name="encounter_status_cancelled">Cancelled</string>
+    <string name="encounter_status_left_without_being_seen">Left without being seen</string>
     <string name="encounter_status_unknown">Status unavailable</string>
     <string name="discharge_disposition_home">Home</string>
     <string name="discharge_disposition_home_with_home_health">Home with Home Health</string>

@@ -57,7 +57,9 @@ describe('SchedulingComponent', () => {
       'listShifts',
       'listLeaves',
       'bulkScheduleShifts',
+      'capabilities',
     ]);
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: true }));
     schedulingSpy.listShifts.and.returnValue(of([mockShift()]));
     schedulingSpy.listLeaves.and.returnValue(
       of([mockLeave(), mockLeave({ id: 'l2', status: 'APPROVED' })]),
@@ -104,6 +106,32 @@ describe('SchedulingComponent', () => {
     expect(schedulingSpy.listLeaves).toHaveBeenCalled();
     expect(component.shifts().length).toBe(1);
     expect(component.leaves().length).toBe(2);
+  });
+
+  it('QA D878: hides bulk planning from a doctor whose planning writes the server refuses', () => {
+    schedulingSpy.capabilities.and.returnValue(of({ canManageSchedules: false }));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(component.canManageSchedules()).toBeFalse();
+    expect(el.querySelector('.page-actions .btn-primary')).toBeNull();
+    component.openBulkModal();
+    expect(component.bulkModalOpen()).toBeFalse();
+  });
+
+  it('QA D878: a capability failure hides bulk planning rather than offering a refused write', () => {
+    schedulingSpy.capabilities.and.returnValue(throwError(() => new Error('down')));
+    fixture.detectChanges();
+    expect(component.canManageSchedules()).toBeFalse();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('.page-actions .btn-primary'),
+    ).toBeNull();
+  });
+
+  it('QA D878: offers bulk planning to an administrator or a department head', () => {
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(schedulingSpy.capabilities).toHaveBeenCalled();
+    expect(el.querySelector('.page-actions .btn-primary')).not.toBeNull();
   });
 
   it('requests a Monday-to-Sunday week range', () => {
@@ -211,6 +239,7 @@ describe('SchedulingComponent', () => {
   });
 
   it('openBulkModal loads the staff list once', () => {
+    component.canManageSchedules.set(true);
     component.openBulkModal();
     expect(staffSpy.list).toHaveBeenCalledTimes(1);
     component.closeBulkModal();

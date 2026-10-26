@@ -958,6 +958,7 @@
     <string name="encounter_status_ready_for_discharge">Prêt pour la sortie</string>
     <string name="encounter_status_completed">Terminé</string>
     <string name="encounter_status_cancelled">Annulé</string>
+    <string name="encounter_status_left_without_being_seen">Parti sans être vu</string>
     <string name="encounter_status_unknown">Statut indisponible</string>
     <string name="discharge_disposition_home">Domicile</string>
     <string name="discharge_disposition_home_with_home_health">Domicile avec soins à domicile</string>

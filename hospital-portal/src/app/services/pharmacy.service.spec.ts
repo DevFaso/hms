@@ -39,4 +39,19 @@ describe('PharmacyService', () => {
     expect(bare.request.params.has('sort')).toBeFalse();
     bare.flush({ success: true, data: null });
   });
+
+  it('sends the work-queue sort keys one per parameter, and none by default (#963 review)', () => {
+    service.getDispenseWorkQueue(0, 100, 'ALL', ['createdAt,desc', 'id,desc']).subscribe();
+    const sorted = http.expectOne((r) => r.url === '/pharmacy/dispense/work-queue');
+    expect(sorted.request.params.getAll('sort')).toEqual(['createdAt,desc', 'id,desc']);
+    expect(sorted.request.params.get('size')).toBe('100');
+    expect(sorted.request.params.has('claim')).toBeFalse();
+    sorted.flush({ success: true, data: { content: [], totalElements: 0, totalPages: 0 } });
+
+    service.getDispenseWorkQueue(1, 20, 'MINE').subscribe();
+    const bare = http.expectOne((r) => r.url === '/pharmacy/dispense/work-queue');
+    expect(bare.request.params.has('sort')).toBeFalse();
+    expect(bare.request.params.get('claim')).toBe('MINE');
+    bare.flush({ success: true, data: null });
+  });
 });

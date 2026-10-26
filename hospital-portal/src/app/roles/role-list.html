@@ -37,7 +37,7 @@
               <span class="material-symbols-outlined">shield</span>
             </div>
             <div>
-              <h4>{{ role.name }}</h4>
+              <h4>{{ roleTitle(role) }}</h4>
               <span class="role-authority">{{ role.authority }}</span>
             </div>
           </div>
@@ -53,7 +53,13 @@
           <div class="role-footer">
             <span class="perm-count">
               <span class="material-symbols-outlined">lock</span>
-              {{ role.permissions.length }} {{ 'ROLES.PERMISSIONS' | translate }}
+              <!-- QA D868: no permission rows is not "0 permissions": the access
+                   of a role with none is the platform's built-in access for it. -->
+              @if (role.permissions.length > 0) {
+                {{ role.permissions.length }} {{ 'ROLES.PERMISSIONS' | translate }}
+              } @else {
+                {{ 'ROLES.BUILT_IN_ACCESS' | translate }}
+              }
             </span>
             <div class="role-actions">
               <button
@@ -186,7 +192,10 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRole()?.name }}</h2>
+          <h2>
+            {{ 'ROLES.MANAGE_PERMISSIONS' | translate }} —
+            {{ selectedRole() ? roleTitle(selectedRole()!) : '' }}
+          </h2>
           <button class="modal-close" (click)="closePermissions()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -197,6 +206,10 @@
               <div class="spinner"></div>
               <p>{{ 'ROLES.LOADING_PERMISSIONS' | translate }}</p>
             </div>
+          } @else if (allPermissions().length === 0) {
+            <p class="perm-empty" data-testid="no-permission-catalogue">
+              {{ 'ROLES.NO_PERMISSION_CATALOGUE' | translate }}
+            </p>
           } @else {
             <div class="perm-list">
               @for (perm of allPermissions(); track perm.id) {
@@ -224,7 +237,7 @@
           <button
             type="button"
             class="btn-primary"
-            [disabled]="saving()"
+            [disabled]="saving() || allPermissions().length === 0"
             (click)="savePermissions()"
           >
             {{ saving() ? ('COMMON.SAVING' | translate) : ('ROLES.SAVE_PERMISSIONS' | translate) }}

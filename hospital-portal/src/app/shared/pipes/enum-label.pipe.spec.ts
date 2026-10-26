@@ -115,6 +115,44 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('A_B_C')).toBe('A B C');
   });
 
+  it('QA D836: shows free text as typed instead of title-casing it', () => {
+    // A lab sample type is free text; /lab-test-config, the approval queue and
+    // the definition list read "Sang total (edta)" for "Sang total (EDTA)".
+    expect(pipe.transform('Sang total (EDTA)', 'specimenType')).toBe('Sang total (EDTA)');
+    expect(pipe.transform('Sang (plasma fluoré)', 'specimenType')).toBe('Sang (plasma fluoré)');
+    // A code is still labelled or prettified.
+    expect(pipe.transform('BLOOD', 'specimenType')).toBe('Blood');
+    expect(pipe.transform('SOMETHING_NEW', 'specimenType')).toBe('Something New');
+  });
+
+  it('QA D836: a one-word sample type stays as typed on the free-text sites', () => {
+    // EDTA / LCR / ECBU look like codes, so the default prettifier read them
+    // "Edta" / "Lcr" / "Ecbu" — the exact symptom QA filed. The sample-type
+    // sites pass 'asTyped': a curated code is still labelled, the rest is the
+    // lab's own text.
+    expect(pipe.transform('EDTA', 'specimenType', 'asTyped')).toBe('EDTA');
+    expect(pipe.transform('LCR', 'specimenType', 'asTyped')).toBe('LCR');
+    expect(pipe.transform('ECBU', 'specimenType', 'asTyped')).toBe('ECBU');
+    expect(pipe.transform('Sang total (EDTA)', 'specimenType', 'asTyped')).toBe(
+      'Sang total (EDTA)',
+    );
+    expect(pipe.transform('SERUM', 'specimenType', 'asTyped')).toBe('Serum');
+    // A word that is a code in ANOTHER group is still the lab's text.
+    expect(pipe.transform('ACTIVE', 'specimenType', 'asTyped')).toBe('ACTIVE');
+    expect(pipe.transform('', 'specimenType', 'asTyped')).toBe('');
+    // The global prettifier is unchanged for real enum codes.
+    expect(pipe.transform('EDTA', 'specimenType')).toBe('Edta');
+  });
+
+  it('QA D836: a curated sample-type code is translated in French', () => {
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { SPECIMEN_TYPE: { SERUM: 'Sérum' } } },
+    });
+    translate.use('fr');
+    expect(pipe.transform('SERUM', 'specimenType', 'asTyped')).toBe('Sérum');
+    expect(pipe.transform('LCR', 'specimenType', 'asTyped')).toBe('LCR');
+  });
+
   it('NEVER renders the raw i18n key path', () => {
     // The most important regression guard. ngx-translate returns the key
     // verbatim when the translation is missing. The pipe MUST NOT propagate

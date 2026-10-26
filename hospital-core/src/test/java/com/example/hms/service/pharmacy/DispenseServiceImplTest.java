@@ -130,6 +130,7 @@ class DispenseServiceImplTest {
 
     /** QA D404: the money follows a cancelled dispense. */
     @Mock private PharmacyPaymentVoider paymentVoider;
+    @Mock private com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
     /** QA D654: the controlled-stock witness rule. */
     @Mock private ControlledStockWitness controlledStockWitness;
 
@@ -1672,6 +1673,23 @@ class DispenseServiceImplTest {
             DispenseResponseDTO result = service.getDispense(dispenseId);
 
             assertThat(result.getId()).isEqualTo(dispenseId);
+            assertThat(result.getPaid()).isFalse();
+        }
+
+        /** QA D843: the checkout opens a paid fill and must be told it is paid. */
+        @Test
+        @DisplayName("getDispense says when the fill is already paid (D843)")
+        void getDispenseSaysWhenPaid_D843() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder().id(dispenseId).build();
+
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseMapper.toResponseDTO(dispense)).thenReturn(responseDTO);
+            when(paymentRepository.existsByDispense_IdAndStatus(
+                    dispense.getId(), com.example.hms.enums.PharmacyPaymentStatus.POSTED)).thenReturn(true);
+
+            assertThat(service.getDispense(dispenseId).getPaid()).isTrue();
         }
 
         @Test
@@ -2300,6 +2318,35 @@ class DispenseServiceImplTest {
 
             Page<DispenseResponseDTO> result = service.listByPharmacy(pharmacyId, pageable);
             assertThat(result.getContent()).hasSize(1);
+        }
+
+        /**
+         * QA D843: BILLING_A opened /pharmacy/checkout and dispense e9a33ec4,
+         * paid 3 600 F CFA cash, was still listed with nothing saying so. The
+         * list the checkout reads says which rows are paid, in one query.
+         */
+        @Test
+        @DisplayName("listByPharmacy marks the rows that already carry a posted payment (D843)")
+        void listByPharmacyMarksPaidRows_D843() {
+            Pageable pageable = PageRequest.of(0, 50);
+            Dispense paidFill = buildDispense(DispenseStatus.COMPLETED);
+            Dispense openFill = buildDispense(DispenseStatus.COMPLETED);
+            openFill.setId(UUID.randomUUID());
+            DispenseResponseDTO paidDto = DispenseResponseDTO.builder().id(paidFill.getId()).build();
+            DispenseResponseDTO openDto = DispenseResponseDTO.builder().id(openFill.getId()).build();
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findByPharmacyId(pharmacyId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(paidFill, openFill)));
+            when(dispenseMapper.toResponseDTO(paidFill)).thenReturn(paidDto);
+            when(dispenseMapper.toResponseDTO(openFill)).thenReturn(openDto);
+            when(paymentRepository.findPaidDispenseIds(List.of(paidFill.getId(), openFill.getId())))
+                    .thenReturn(List.of(paidFill.getId()));
+
+            Page<DispenseResponseDTO> result = service.listByPharmacy(pharmacyId, pageable);
+
+            assertThat(result.getContent()).extracting(DispenseResponseDTO::getPaid).containsExactly(true, false);
         }
 
         @Test

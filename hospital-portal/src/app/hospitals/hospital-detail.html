@@ -9,7 +9,9 @@
         }
       </h1>
       @if (hospital(); as h) {
-        <p class="page-subtitle">{{ h.code }} · {{ h.organizationName }}</p>
+        <p class="page-subtitle">
+          {{ h.code }} · {{ h.organizationName | orgText: h.organizationCode }}
+        </p>
       }
     </div>
     <a class="back-link" routerLink="/hospitals">

@@ -157,6 +157,7 @@ public class HospitalServiceImpl implements HospitalService {
     public HospitalResponseDTO createHospital(HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
         validateAddressFields(dto, null, locale);
+        dto.setPhoneNumber(requireFacilityPhone(dto.getPhoneNumber(), dto.getCountry()));
         // QA D285: "Clinique  X " and "clinique x" are one hospital; the name
         // is stored as typed, minus stray blanks, and checked the same way.
         dto.setName(normalizeName(dto.getName()));
@@ -186,6 +187,21 @@ public class HospitalServiceImpl implements HospitalService {
     }
 
 
+    /**
+     * QA D833: the number to store (E.164 when it can be), or a refusal on the
+     * phone field. A blank stays as sent: {@code @NotBlank} answers for it.
+     */
+    static String requireFacilityPhone(String raw, String country) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String normalized = com.example.hms.utility.PhoneNumbers.normalizeFacilityPhone(raw, country);
+        if (normalized == null) {
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "hospital.phoneNumber.invalid");
+        }
+        return normalized;
+    }
+
     /** Trims and collapses inner runs of blanks; null stays null. */
     static String normalizeName(String name) {
         return name == null ? null : name.trim().replaceAll("\\s+", " ");
@@ -201,6 +217,13 @@ public class HospitalServiceImpl implements HospitalService {
         validateSuperAdminOrThrow(locale);
         Hospital hospital = getClinicalHospitalOrThrow(id);
         validateAddressFields(dto, hospital.getAddress(), locale);
+        // An unchanged number is left as stored: a value saved before the
+        // rule existed does not block an edit of another field.
+        if (dto.getPhoneNumber() != null
+                && !dto.getPhoneNumber().trim().equals(hospital.getPhoneNumber())) {
+            dto.setPhoneNumber(requireFacilityPhone(dto.getPhoneNumber(),
+                dto.getCountry() != null ? dto.getCountry() : hospital.getCountry()));
+        }
         // The create rule holds on update too: renaming onto another
         // hospital's name and zip code is a 409, not a silent duplicate (D223).
         if (dto.getName() != null) {

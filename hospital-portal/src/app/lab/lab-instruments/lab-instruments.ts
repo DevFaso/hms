@@ -17,6 +17,7 @@ import {
 } from '../../services/lab-instrument.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-lab-instruments',
@@ -135,7 +136,11 @@ export class LabInstrumentsComponent implements OnInit {
       },
       error: (err) => {
         console.error('Save instrument failed', err);
-        this.toast.error(this.translate.instant('LAB_INSTRUMENTS.SAVE_ERROR'));
+        // QA D879: the server's reason (a duplicate serial number, a field
+        // limit) is what the user needs; the generic text is the fallback.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_INSTRUMENTS.SAVE_ERROR'),
+        );
         this.saving.set(false);
       },
     });
@@ -151,7 +156,9 @@ export class LabInstrumentsComponent implements OnInit {
       },
       error: (err) => {
         console.error('Deactivate instrument failed', err);
-        this.toast.error(this.translate.instant('LAB_INSTRUMENTS.DEACTIVATE_ERROR'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_INSTRUMENTS.DEACTIVATE_ERROR'),
+        );
       },
     });
   }

@@ -17,6 +17,34 @@ import java.util.UUID;
 @Repository
 public interface OrganizationRepository extends JpaRepository<Organization, UUID> {
 
+    /**
+     * QA D845: the organisations of the hospitals this user holds an ACTIVE
+     * ROLE_HOSPITAL_ADMIN assignment at — the only organisations a hospital
+     * administrator may read through /organizations.
+     */
+    @Query("SELECT DISTINCT h.organization.id FROM UserRoleHospitalAssignment a JOIN a.hospital h "
+        + "WHERE a.user.id = :userId AND a.active = true AND h.organization IS NOT NULL "
+        + "AND UPPER(a.role.code) = 'ROLE_HOSPITAL_ADMIN'")
+    java.util.Set<UUID> findAdministeredOrganizationIds(@Param("userId") UUID userId);
+
+    /**
+     * QA D845: one page of the organisations a hospital administrator may read,
+     * with their hospitals fetched (open-in-view is off, so a lazy set would
+     * reach the mapper uninitialized and list no hospitals).
+     */
+    @EntityGraph(attributePaths = "hospitals")
+    @Query(value = "SELECT o FROM Organization o WHERE o.id IN :ids",
+           countQuery = "SELECT COUNT(o) FROM Organization o WHERE o.id IN :ids")
+    org.springframework.data.domain.Page<Organization> findByIdInWithHospitals(
+        @Param("ids") Collection<UUID> ids, org.springframework.data.domain.Pageable pageable);
+
+    /** QA D845: the active ones among them, hospitals fetched. */
+    @EntityGraph(attributePaths = "hospitals")
+    @Query(value = "SELECT o FROM Organization o WHERE o.id IN :ids AND o.active = true",
+           countQuery = "SELECT COUNT(o) FROM Organization o WHERE o.id IN :ids AND o.active = true")
+    org.springframework.data.domain.Page<Organization> findActiveByIdInWithHospitals(
+        @Param("ids") Collection<UUID> ids, org.springframework.data.domain.Pageable pageable);
+
     Optional<Organization> findByCode(String code);
 
     Optional<Organization> findByNameIgnoreCase(String name);

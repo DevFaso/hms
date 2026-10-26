@@ -22,6 +22,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -51,6 +52,16 @@ import java.util.UUID;
         @Index(name = "idx_micro_culture_status",   columnList = "status")
     }
 )
+/*
+ * QA D820: a culture report on an order voided as entered in error loads
+ * nowhere, exactly like the order's LabResult rows (see LabResult): not on the
+ * patient's chart, not in the microbiology worklist, not over FHIR, and not
+ * through findById, so no edit, isolate, susceptibility or finalize reaches
+ * it either. The row is kept. Same unaliased subquery shape as LabResult:
+ * Hibernate prefixes the bare lab_order_id with this entity's alias.
+ */
+@SQLRestriction("NOT EXISTS (SELECT 1 FROM lab.lab_orders WHERE lab.lab_orders.id = lab_order_id"
+    + " AND lab.lab_orders.status = 'ENTERED_IN_ERROR')")
 @Getter
 @Setter
 @NoArgsConstructor

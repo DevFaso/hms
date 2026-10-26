@@ -42,6 +42,18 @@ public class BedAssignmentService {
     private final BedRepository bedRepository;
     private final AdmissionRepository admissionRepository;
     private final TransferOrderRepository transferOrderRepository;
+    /**
+     * QA D804: the stay's encounter follows the admission's department. Set
+     * after construction through an ObjectProvider, so the callers that build
+     * this service by hand keep their constructor and no new bean cycle forms
+     * around the bed service; absent, the encounter is moved at discharge.
+     */
+    private org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> stayEncounters;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setStayEncounters(org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> stayEncounters) {
+        this.stayEncounters = stayEncounters;
+    }
 
     /**
      * Assign a bed to an admission: the bed must be active, AVAILABLE, and
@@ -106,6 +118,10 @@ public class BedAssignmentService {
         // admission kept the first department and every worklist kept showing it.
         if (bed.getWard() != null && bed.getWard().getDepartment() != null) {
             admission.setDepartment(bed.getWard().getDepartment());
+            // QA D804: and the stay's encounter with it.
+            if (stayEncounters != null) {
+                stayEncounters.ifAvailable(service -> service.followStayDepartment(admission));
+            }
         }
         log.info("Bed {} assigned to admission {}", bedLabel(bed), admission.getId());
     }

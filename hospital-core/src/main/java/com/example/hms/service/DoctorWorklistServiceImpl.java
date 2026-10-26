@@ -423,6 +423,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
             case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
             case CANCELLED -> "CANCELLED";
+            case LEFT_WITHOUT_BEING_SEEN -> "LEFT_WITHOUT_BEING_SEEN";
         };
     }
 

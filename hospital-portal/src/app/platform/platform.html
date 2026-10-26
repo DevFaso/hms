@@ -207,7 +207,7 @@
           (ngModelChange)="selectOrg($event)"
         >
           @for (org of organizations(); track org.id) {
-            <option [value]="org.id">{{ org.name }}</option>
+            <option [value]="org.id">{{ org.name | orgText: org.code }}</option>
           }
         </select>
       </div>
@@ -1260,7 +1260,7 @@
               >
                 <option [ngValue]="null">{{ 'PLATFORM.PROVISION_CHOOSE_ORG' | translate }}</option>
                 @for (org of organizations(); track org.id) {
-                  <option [ngValue]="org.id">{{ org.name }}</option>
+                  <option [ngValue]="org.id">{{ org.name | orgText: org.code }}</option>
                 }
               </select>
             </div>

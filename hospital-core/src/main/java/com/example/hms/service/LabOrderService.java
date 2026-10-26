@@ -80,6 +80,17 @@ public interface LabOrderService {
      */
     LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason, Locale locale);
 
+    /**
+     * QA D820: marks the order, and with it every result on it, as entered in
+     * error, from any state including COMPLETED. The reason is required and
+     * kept on the order; the rows are never deleted, and the results stop
+     * loading anywhere. An ordering-side decision: the lab manager or lab
+     * director of the ordering hospital, or a super-admin. Refused once the
+     * order is already voided, and for a cancelled order (already closed, its
+     * reason column holding why it was cancelled).
+     */
+    LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale);
+
     /** B1: the laboratories the caller may route an order to — every active hospital but the acting one. */
     List<com.example.hms.payload.dto.PerformingLabOptionDTO> listPerformingLabs();
 }

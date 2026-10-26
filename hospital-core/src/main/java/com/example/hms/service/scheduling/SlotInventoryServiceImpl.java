@@ -3,6 +3,7 @@ package com.example.hms.service.scheduling;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
@@ -48,6 +49,9 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
 
     private static final int MAX_SEARCH_RESULTS = 200;
 
+    private static final String SLOT_UNAVAILABLE = "slot.unavailable";
+    private static final String SLOT_IN_PAST = "slot.inPast";
+
     private final SessionTemplateRepository templateRepository;
     private final AppointmentSlotRepository slotRepository;
     private final AppointmentRepository appointmentRepository;
@@ -69,11 +73,11 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         LocalDate end = to != null ? to : start.plusWeeks(4);
 
         if (end.isBefore(start)) {
-            throw new BusinessException("The generation window ends before it starts.");
+            // QA D854: bundle keys, in the admin's language.
+            throw new FieldBusinessException("to", "slot.generation.windowInverted");
         }
         if (start.plusDays(MAX_GENERATION_DAYS).isBefore(end)) {
-            throw new BusinessException(
-                "Generate at most " + MAX_GENERATION_DAYS + " days at a time.");
+            throw new FieldBusinessException("to", "slot.generation.tooLong", MAX_GENERATION_DAYS);
         }
 
         List<SessionTemplate> templates = templateRepository.findByHospital_IdAndActiveTrue(hospitalId);
@@ -159,10 +163,10 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         LocalDateTime now = LocalDateTime.now(clock);
 
         if (!slot.isOfferable(now)) {
-            throw new BusinessException("That slot is no longer available.");
+            throw new BusinessException(SLOT_UNAVAILABLE);
         }
         if (slot.getStartAt().isBefore(now)) {
-            throw new BusinessException("That slot is in the past.");
+            throw new BusinessException(SLOT_IN_PAST);
         }
 
         int minutes = holdMinutes > 0 ? holdMinutes : 10;
@@ -179,8 +183,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (slot.getStatus() == SlotStatus.BOOKED) {
             // Releasing a booked slot would silently strand the appointment
             // pointing at it. Cancelling the appointment is the way back.
-            throw new BusinessException(
-                "That slot is booked. Cancel the appointment to free it.");
+            throw new BusinessException("slot.booked.release");
         }
         clearHold(slot);
         slot.setStatus(SlotStatus.OPEN);
@@ -192,8 +195,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     public AppointmentSlotDTO block(UUID slotId, String reason) {
         AppointmentSlot slot = loadScoped(slotId);
         if (slot.getStatus() == SlotStatus.BOOKED) {
-            throw new BusinessException(
-                "That slot is booked. Cancel the appointment before blocking the time.");
+            throw new BusinessException("slot.booked.block");
         }
         clearHold(slot);
         slot.setStatus(SlotStatus.BLOCKED);
@@ -231,30 +233,28 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             && slot.getHeldUntil().isAfter(now)
             && Objects.equals(slot.getHeldByUserId(), currentUserId);
         if (!slot.isOfferable(now) && !heldByCaller) {
-            throw new BusinessException("That slot is no longer available.");
+            throw new BusinessException(SLOT_UNAVAILABLE);
         }
         if (slot.getStartAt().isBefore(now)) {
-            throw new BusinessException("That slot is in the past.");
+            throw new BusinessException(SLOT_IN_PAST);
         }
 
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         UUID hospitalId = slot.getHospital().getId();
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("The patient is not registered at this hospital.");
+            throw new BusinessException("slot.patient.notRegistered");
         }
 
         Staff staff = slot.getStaff();
         if (staff.getUser() == null) {
-            throw new BusinessException(
-                "The slot's clinician has no user account, so an appointment cannot be created.");
+            throw new BusinessException("slot.clinician.noUser");
         }
         // Same contract as AppointmentServiceImpl: the assignment is mandatory,
         // and a missing one is a refusal, not a degraded appointment.
         UserRoleHospitalAssignment assignment = assignmentRepository
             .findActiveStaffAssignment(staff.getUser().getId(), hospitalId)
-            .orElseThrow(() -> new BusinessException(
-                "The clinician has no role assignment at this hospital."));
+            .orElseThrow(() -> new BusinessException("slot.clinician.noAssignment"));
 
         Appointment appointment = appointmentRepository.save(Appointment.builder()
             .patient(patient)
@@ -279,7 +279,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             // rollback takes the appointment insert with it.
             return toDto(slotRepository.saveAndFlush(slot));
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException("That slot was just taken. Pick another time.");
+            throw new BusinessException("slot.justTaken");
         }
     }
 
@@ -324,7 +324,7 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (hospitalId == null) {
             // Slot inventory is inherently per-hospital: a super-admin has no
             // rota of their own, so there is nothing sensible to answer.
-            throw new BusinessException("An active hospital is required to work with slots.");
+            throw new BusinessException("slot.hospitalRequired");
         }
         return hospitalId;
     }

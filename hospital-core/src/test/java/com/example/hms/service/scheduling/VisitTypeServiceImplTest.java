@@ -93,7 +93,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already exists");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.code.duplicate");
         verify(visitTypeRepository, never()).save(any());
     }
 
@@ -107,7 +107,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reactivate");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.code.retired");
     }
 
     @Test
@@ -119,7 +119,7 @@ class VisitTypeServiceImplTest {
         VisitTypeRequestDTO request = valid();
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasFieldOrPropertyWithValue("messageKey", "visitType.hospitalRequired");
     }
 
     @Test

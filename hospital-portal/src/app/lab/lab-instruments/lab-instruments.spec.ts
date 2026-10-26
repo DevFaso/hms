@@ -7,6 +7,7 @@ import { LabInstrumentsComponent } from './lab-instruments';
 import { AuthService } from '../../auth/auth.service';
 import { LabInstrumentResponse } from '../../services/lab-instrument.service';
 import { PagedResponse } from '../../services/staff.service';
+import { ToastService } from '../../core/toast.service';
 
 function mockInstrument(overrides: Partial<LabInstrumentResponse> = {}): LabInstrumentResponse {
   return {
@@ -228,6 +229,50 @@ describe('LabInstrumentsComponent', () => {
     req.error(new ProgressEvent('error'));
 
     expect(component.saving()).toBeFalse();
+  });
+
+  it('QA D879: a duplicate serial shows the server message, not the generic toast', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    fixture.detectChanges();
+    flushInstruments();
+
+    component.openCreate();
+    component.form.name = 'Analyseur QA';
+    component.form.serialNumber = 'QA-R13-SN-1001';
+    component.save();
+
+    const req = httpMock.expectOne((r) => r.method === 'POST');
+    req.flush(
+      { message: 'Un instrument porte déjà ce numéro de série dans cet établissement.' },
+      { status: 409, statusText: 'Conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'Un instrument porte déjà ce numéro de série dans cet établissement.',
+    );
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('QA D879: a server failure keeps the generic toast, never a 5xx body', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    fixture.detectChanges();
+    flushInstruments();
+
+    component.openCreate();
+    component.form.name = 'Analyseur QA';
+    component.form.serialNumber = 'QA-R13-SN-1002';
+    component.save();
+
+    httpMock
+      .expectOne((r) => r.method === 'POST')
+      .flush(
+        { message: 'NullPointerException at ...' },
+        { status: 500, statusText: 'Server Error' },
+      );
+
+    expect(toast.error).toHaveBeenCalledWith('LAB_INSTRUMENTS.SAVE_ERROR');
   });
 
   it('should deactivate instrument', () => {

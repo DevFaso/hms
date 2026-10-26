@@ -30,6 +30,20 @@ export interface PatientProfileDTO {
   profileImageUrl: string | null;
   hospitalId?: string;
   hospitalName?: string;
+  /** The medical record number at {@link hospitalId}. */
+  mrn?: string | null;
+  /**
+   * QA D841: one entry per hospital the patient is registered at, each with
+   * the record number THAT hospital gave them (they quote it at the desk).
+   */
+  hospitalRecords?: PatientHospitalRecord[];
+}
+
+/** One hospital registration as the patient profile carries it. */
+export interface PatientHospitalRecord {
+  hospitalId: string;
+  hospitalName?: string | null;
+  mrn?: string | null;
 }
 
 export interface HealthSummaryDTO {
@@ -109,6 +123,12 @@ export interface MedicationSummary {
   refillsUsed?: number;
   /** False once the prescription is cancelled, discontinued, or was never signed. */
   refillable?: boolean;
+  /**
+   * QA D813: why `refillable` is false — CONTROLLED (never renewed from the
+   * portal) or NOT_REFILLABLE. The refill request is refused for the same
+   * reason, in the same words.
+   */
+  refillBlockedReason?: 'CONTROLLED' | 'NOT_REFILLABLE' | null;
   /** Where the patient's most recent request stands; absent if they never asked. */
   refillRequestStatus?: RefillRequestStatus;
   refillRequestUpdatedAt?: string;
@@ -685,7 +705,7 @@ export interface MedicationRefill {
   prescriptionId: string;
   medicationName: string;
   preferredPharmacy: string;
-  status: string;
+  status: RefillRequestStatus;
   requestedAt: string;
   updatedAt: string | null;
   notes: string;

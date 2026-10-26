@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 
 type LifecycleAction = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -87,7 +88,15 @@ const ACTION_CONFIG: Record<LifecycleAction, ActionConfig> = {
 @Component({
   selector: 'app-organization-detail',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, DatePipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    OrgTextPipe,
+  ],
   templateUrl: './organization-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-detail.scss',

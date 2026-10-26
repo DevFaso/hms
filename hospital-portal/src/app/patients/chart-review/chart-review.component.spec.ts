@@ -263,6 +263,30 @@ describe('ChartReviewComponent', () => {
     }
   });
 
+  for (const [lang, label] of [
+    ['en', 'Inpatient-en'],
+    ['es', 'Hospitalizado-es'],
+    ['fr', 'Hospitalisé-fr'],
+  ] as const) {
+    it(`QA D829: labels the timeline encounter type in ${lang}, never the raw code`, () => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation(lang, {
+        PORTAL: { ENUM: { ENCOUNTER_TYPE: { INPATIENT: label } } },
+      });
+      translate.use(lang);
+      chartSpy.getChartReview.and.returnValue(of(populatedChart()));
+
+      setPatient('p-829');
+
+      const title = (
+        fixture.nativeElement.querySelector('[data-testid="timeline-encounter-title"]')
+          ?.textContent ?? ''
+      ).replace(/\s+/g, ' ');
+      expect(title).toContain(`${label} — Internal Medicine`);
+      expect(title).not.toContain('INPATIENT');
+    });
+  }
+
   it('QA D777: shows the zone-less UTC server time in the reader zone, like every other screen', () => {
     const chart = populatedChart();
     chart.timeline = [

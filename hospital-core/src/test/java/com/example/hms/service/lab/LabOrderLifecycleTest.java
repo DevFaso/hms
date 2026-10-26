@@ -126,6 +126,19 @@ class LabOrderLifecycleTest {
     }
 
     @Test
+    @DisplayName("QA D820: an order voided as entered in error is never moved, re-opened or completed")
+    void aVoidedOrderIsTerminal() {
+        assertThat(LabOrderLifecycle.statusAfterNewResult(LabOrderStatus.ENTERED_IN_ERROR)).isNull();
+        assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(LabOrderStatus.ENTERED_IN_ERROR)).isNull();
+        for (LabOrderStatus target : LabOrderStatus.values()) {
+            assertThat(LabOrderLifecycle.statusAfterForwardStep(LabOrderStatus.ENTERED_IN_ERROR, target))
+                .as("from ENTERED_IN_ERROR to %s", target).isNull();
+            assertThat(LabOrderLifecycle.statusAfterForwardStep(target, LabOrderStatus.ENTERED_IN_ERROR))
+                .as("a workflow step never voids, from %s", target).isNull();
+        }
+    }
+
+    @Test
     @DisplayName("no verdict method moves an order whose status is absent")
     void nullsAreTolerated() {
         // Consistent across all three: a status the database does not hold

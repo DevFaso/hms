@@ -456,6 +456,41 @@ class HospitalServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D833: '+226 25 36 12 40' is stored whole, as E.164 (was cut to '+226 25 36 12 4')")
+        void burkinaPhoneWithSpacesIsStoredWhole() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("Clinique du Nord");
+            dto.setCountry("Burkina Faso");
+            dto.setPhoneNumber("+226 25 36 12 40");
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> {
+                Hospital h = inv.getArgument(0);
+                h.setId(UUID.randomUUID());
+                return h;
+            });
+
+            hospitalService.createHospital(dto, Locale.FRENCH);
+
+            org.mockito.ArgumentCaptor<Hospital> saved = org.mockito.ArgumentCaptor.forClass(Hospital.class);
+            verify(hospitalRepository).save(saved.capture());
+            assertEquals("+22625361240", saved.getValue().getPhoneNumber());
+        }
+
+        @Test
+        @DisplayName("QA D833: a Burkina number one digit short is refused on the phone field, not saved")
+        void truncatedBurkinaPhoneIsRefused() {
+            setSuperAdmin();
+            HospitalRequestDTO dto = buildUSRequest("Clinique du Nord");
+            dto.setCountry("Burkina Faso");
+            dto.setPhoneNumber("+226 25 36 12 4");
+
+            com.example.hms.exception.FieldBusinessException refusal = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> hospitalService.createHospital(dto, Locale.FRENCH));
+            assertEquals("phoneNumber", refusal.getField());
+            verify(hospitalRepository, never()).save(any(Hospital.class));
+        }
+
+        @Test
         @DisplayName("QA D167: a duplicate hospital is a ConflictException (409), not a 500")
         void duplicate() {
             setSuperAdmin();
@@ -529,6 +564,31 @@ class HospitalServiceImplTest {
             HospitalResponseDTO result = hospitalService.updateHospital(id, dto, Locale.ENGLISH);
             assertNotNull(result);
             verify(hospitalRepository).save(hospital);
+        }
+
+        @Test
+        @DisplayName("QA D833: an unchanged legacy phone does not block an edit; a new one is normalised")
+        void phoneIsNormalisedOnlyWhenChanged() {
+            setSuperAdmin();
+            UUID id = UUID.randomUUID();
+            Hospital hospital = buildHospital(id, "Clinique du Nord", "CDN-01");
+            hospital.setCountry("Burkina Faso");
+            hospital.setPhoneNumber("+226 25 36 12 4");
+            hospital.setAddress("Avenue de la Nation");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.of(hospital));
+            when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            HospitalRequestDTO unchanged = HospitalRequestDTO.builder().phoneNumber("+226 25 36 12 4").build();
+            hospitalService.updateHospital(id, unchanged, Locale.FRENCH);
+            assertEquals("+226 25 36 12 4", hospital.getPhoneNumber());
+
+            HospitalRequestDTO corrected = HospitalRequestDTO.builder().phoneNumber("+226 25 36 12 40").build();
+            hospitalService.updateHospital(id, corrected, Locale.FRENCH);
+            assertEquals("+22625361240", hospital.getPhoneNumber());
+
+            HospitalRequestDTO shortAgain = HospitalRequestDTO.builder().phoneNumber("25 36 12 4").build();
+            assertThrows(com.example.hms.exception.FieldBusinessException.class,
+                () -> hospitalService.updateHospital(id, shortAgain, Locale.FRENCH));
         }
 
         @Test
@@ -1174,7 +1234,7 @@ class HospitalServiceImplTest {
             setSuperAdmin();
             HospitalRequestDTO dto = HospitalRequestDTO.builder()
                     .name("Foreign PO").city("Ouaga").country("BF").address("Avenue Kwame Nkrumah")
-                    .poBox("BP 123").phoneNumber("1234567890").active(true).build();
+                    .poBox("BP 123").phoneNumber("+226 25 30 00 00").active(true).build();
 
             when(hospitalRepository.existsByNameIgnoreCaseAndZipCode(any(), any())).thenReturn(false);
             when(hospitalRepository.save(any(Hospital.class))).thenAnswer(inv -> {

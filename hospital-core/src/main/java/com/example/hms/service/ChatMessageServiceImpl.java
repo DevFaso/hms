@@ -108,7 +108,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         boolean hasContent = dto.getContent() != null && !dto.getContent().isBlank();
         boolean hasAttachments = dto.getAttachments() != null && !dto.getAttachments().isEmpty();
         if (!hasContent && !hasAttachments) {
-            throw new IllegalArgumentException("A message must carry either content or at least one attachment");
+            // QA D877: refusals are bundle keys, read in the sender's language.
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.message.empty"));
         }
 
         UUID currentUserId = getCurrentUserId(); // Sender ID
@@ -127,11 +128,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientEmail()));
         } else {
-            throw new IllegalArgumentException("Either recipientId or recipientEmail is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.required"));
         }
 
         if (sender.getId().equals(recipient.getId())) {
-            throw new IllegalArgumentException("Cannot send a chat message to yourself.");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.self"));
         }
 
         // Enforce role-based messaging hierarchy. Sender roles are
@@ -211,27 +212,26 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         }
         if (incoming.size() > MAX_ATTACHMENTS_PER_MESSAGE) {
             throw new IllegalArgumentException(
-                "A chat message may carry at most " + MAX_ATTACHMENTS_PER_MESSAGE + " attachments");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.tooMany", MAX_ATTACHMENTS_PER_MESSAGE));
         }
 
         List<ChatAttachment> persisted = new ArrayList<>(incoming.size());
         for (ChatAttachmentDTO dto : incoming) {
             if (dto == null) {
-                throw new IllegalArgumentException("Attachment payload is required");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.required"));
             }
             if (dto.getKind() == null) {
-                throw new IllegalArgumentException("Attachment kind is required");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.kindRequired"));
             }
             FileUploadService.StoredFileDescriptor descriptor;
             try {
                 descriptor = fileUploadService.resolveChatAttachment(dto.getStorageKey(), dto.getKind());
             } catch (java.io.IOException ex) {
-                throw new IllegalArgumentException("Failed to resolve chat attachment", ex);
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.unresolvable"), ex);
             }
             Integer duration = clampAudioDuration(dto.getKind(), dto.getDurationSeconds());
             if (chatAttachmentRepository.existsByStorageKey(descriptor.storageKey())) {
-                throw new IllegalArgumentException(
-                    "Attachment storageKey already linked to another message");
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.alreadyLinked"));
             }
             ChatAttachment attachment = ChatAttachment.builder()
                 .message(message)
@@ -247,8 +247,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             try {
                 persisted.add(chatAttachmentRepository.saveAndFlush(attachment));
             } catch (org.springframework.dao.DataIntegrityViolationException ex) {
-                throw new IllegalArgumentException(
-                    "Attachment storageKey already linked to another message", ex);
+                throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.attachment.alreadyLinked"), ex);
             }
         }
         return persisted;
@@ -259,12 +258,11 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             return null;
         }
         if (durationSeconds == null) {
-            throw new IllegalArgumentException("Voice memo duration is required");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.voiceMemo.durationRequired"));
         }
         if (durationSeconds < MIN_AUDIO_DURATION_SECONDS || durationSeconds > MAX_AUDIO_DURATION_SECONDS) {
-            throw new IllegalArgumentException(
-                "Voice memo duration must be between " + MIN_AUDIO_DURATION_SECONDS
-                    + " and " + MAX_AUDIO_DURATION_SECONDS + " seconds");
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.voiceMemo.durationRange",
+                MIN_AUDIO_DURATION_SECONDS, MAX_AUDIO_DURATION_SECONDS));
         }
         return durationSeconds;
     }

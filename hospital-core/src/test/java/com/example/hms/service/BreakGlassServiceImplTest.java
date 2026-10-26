@@ -532,6 +532,74 @@ class BreakGlassServiceImplTest {
         }
     }
 
+    // -------------------------------------------------------------------- QA D840 / D839
+
+    @Nested
+    @DisplayName("QA D840: consumeReadIfLive (the patient-read path)")
+    class RecordRead {
+        @Test
+        @DisplayName("a read at the session's hospital counts and is audited")
+        void countsAReadAtTheSessionsHospital() {
+            BreakGlassSession session = liveSession();
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(session));
+            when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
+
+            Optional<BreakGlassSessionResponseDTO> out =
+                service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}");
+
+            assertThat(out).isPresent();
+            assertThat(out.get().getAuditCount()).isEqualTo(1);
+            verify(sessionRepository).incrementAuditCount(session.getId());
+            verify(auditService).logEvent(org.mockito.ArgumentMatchers.argThat(e -> e.getEventType() == com.example.hms.enums.AuditEventType.BREAK_GLASS_ACCESS));
+        }
+
+        @Test
+        @DisplayName("a session declared at another hospital does not count a read made here")
+        void ignoresASessionDeclaredElsewhere() {
+            when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+                .thenReturn(List.of(liveSession()));
+
+            assertThat(service.consumeReadIfLive(patientId, userId, UUID.randomUUID(), "GET /patients/{id}")).isEmpty();
+            verify(sessionRepository, never()).incrementAuditCount(any());
+            verify(auditService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("no user, no patient: nothing is looked up")
+        void nullsShortCircuit() {
+            assertThat(service.consumeReadIfLive(null, userId, hospitalId, "x")).isEmpty();
+            assertThat(service.consumeReadIfLive(patientId, null, hospitalId, "x")).isEmpty();
+            verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
+        }
+    }
+
+    @Test
+    @DisplayName("QA D839: the register names the patient (with the hospital's MRN) and the declarer, not ids")
+    void theRegisterCarriesNamesNotIds() {
+        caller.setFirstName("Kadi");
+        caller.setLastName("Sanogo");
+        patient.setFirstName("Salif");
+        patient.setLastName("Kaboré");
+        com.example.hms.model.PatientHospitalRegistration registration =
+            new com.example.hms.model.PatientHospitalRegistration();
+        registration.setHospital(hospital);
+        registration.setPatient(patient);
+        registration.setMrn("CNK4035");
+        patient.setHospitalRegistrations(new java.util.HashSet<>(java.util.Set.of(registration)));
+        BreakGlassSession session = liveSession();
+        when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
+            .thenReturn(List.of(session));
+        when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
+
+        BreakGlassSessionResponseDTO dto =
+            service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}").orElseThrow();
+
+        assertThat(dto.getPatientName()).isEqualTo("Salif Kaboré");
+        assertThat(dto.getPatientMrn()).isEqualTo("CNK4035");
+        assertThat(dto.getUserDisplayName()).isEqualTo("Kadi Sanogo");
+    }
+
     // -------------------------------------------------------------------- list / find
 
     @Nested

@@ -80,12 +80,12 @@
                     [disabled]="saving()"
                   >
                     @for (role of assignableRoles; track role.code) {
-                      <option [value]="role.code">{{ role.labelKey | translate }}</option>
+                      <option [value]="role.code">{{ role.code | roleLabel }}</option>
                     }
                   </select>
                 } @else {
                   <span class="role-badge" [ngClass]="roleBadgeClass(member.roleCode)">
-                    {{ member.roleName ?? member.roleCode | roleLabel }}
+                    {{ member.roleCode ?? member.roleName | roleLabel }}
                   </span>
                 }
               </td>

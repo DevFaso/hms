@@ -2904,7 +2904,7 @@
                   }}</span>
                   <span class="appt-time">
                     <span class="material-symbols-outlined" style="font-size: 14px">schedule</span>
-                    {{ appt.startTime }}
+                    {{ appt.startTime | clockTime }}
                   </span>
                 </div>
                 <span class="appt-status-chip" [attr.data-status]="appt.status">

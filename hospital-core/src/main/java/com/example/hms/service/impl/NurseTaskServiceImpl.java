@@ -391,8 +391,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         com.example.hms.model.Encounter encounter = rx.getEncounter();
         return encounter != null
             && encounter.getEncounterType() == com.example.hms.enums.EncounterType.EMERGENCY
-            && encounter.getStatus() != com.example.hms.enums.EncounterStatus.COMPLETED
-            && encounter.getStatus() != com.example.hms.enums.EncounterStatus.CANCELLED;
+            && encounter.getStatus() != null
+            && !encounter.getStatus().isClosed();
     }
 
     /** QA D136: the shared rule ({@link com.example.hms.service.InpatientOrderEnd}). */

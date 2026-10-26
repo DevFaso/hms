@@ -243,6 +243,31 @@ export function datetimeLocalFields(text) {
   return found;
 }
 
+const LIMIT_BINDING =
+  /\[(?:attr\.)?(?:min|max)\]="([^"]+)"|\b(?:min|max)="\{\{\s*([^"}]+?)\s*\}\}"/g;
+
+/**
+ * The fields bound to the `[min]` / `[max]` limit of each `datetime-local`
+ * input of one template (`[max]="maxOnsetAt"` → `maxOnsetAt`). A limit is
+ * compared by the browser with the picker's own wall-clock value, so it must
+ * be wall clock too: these fields are local-input targets for the helper gate
+ * below, never values sent to the API.
+ *
+ * @returns {{ line: number, field: string }[]}
+ */
+export function datetimeLocalLimitFields(text) {
+  const found = [];
+  for (const m of text.matchAll(DATETIME_LOCAL_INPUT)) {
+    const line = text.slice(0, m.index).split('\n').length;
+    for (const b of m[0].matchAll(LIMIT_BINDING)) {
+      const bound = (b[1] ?? b[2]).trim();
+      const field = /([\w$]+)(\(\))?$/.exec(bound)?.[1];
+      if (field) found.push({ line, field });
+    }
+  }
+  return found;
+}
+
 /** Whether `source` converts `field` with toServerDateTime or withServerDateTimes. */
 export function convertsBeforeSending(source, field) {
   return (
@@ -511,7 +536,11 @@ function localInputTarget(call) {
   if (ts.isCallExpression(parent) && parent.expression.getText() === 'toServerDateTime') {
     return { converted: true };
   }
-  if (ts.isPropertyAssignment(parent) && unwrap(parent.initializer) === node) {
+  if (
+    (ts.isPropertyAssignment(parent) || ts.isPropertyDeclaration(parent)) &&
+    parent.initializer &&
+    unwrap(parent.initializer) === node
+  ) {
     return { field: parent.name.getText() };
   }
   if (

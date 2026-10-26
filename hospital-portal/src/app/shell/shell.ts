@@ -959,6 +959,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         translationKey: 'NAV.WEBHOOKS',
         route: '/webhooks',
       });
+      // QA D876: the DHIS2 export page had a route and no menu entry. Same
+      // roles as its RoleGuard; the route's hospital-scope gate still asks a
+      // super-admin in global view to pick a hospital first.
+      items.push({
+        icon: 'ios_share',
+        label: 'DHIS2 export',
+        translationKey: 'NAV.DHIS2',
+        route: '/admin/integrations/dhis2',
+        roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+      });
     }
     // Break-the-glass review (E8 #54) — mirrors the /break-glass-review RoleGuard.
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'])) {
@@ -1450,6 +1460,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       translationKey: 'NAV.INTEGRATION_MESSAGES',
       route: '/super-admin/integration-messages',
     });
+    // QA D876: the ADT auto-create defaults had a route and no menu entry
+    // (SUPER_ADMIN only, as AdtIntakeProviderConfigController).
+    items.push({
+      icon: 'input',
+      label: 'ADT intake',
+      translationKey: 'NAV.ADT_INTAKE',
+      route: '/admin/adt-intake-configs',
+    });
     items.push({
       icon: 'payments',
       label: 'Cost / Chargeback',
@@ -1926,6 +1944,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
   dismissToast(id: number): void {
     this.toast.dismiss(id);
+  }
+
+  onLangSelect(event: Event): void {
+    this.switchLang((event.target as HTMLSelectElement).value);
   }
 
   switchLang(lang: string): void {

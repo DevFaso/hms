@@ -1,9 +1,11 @@
 package com.example.hms.service.integration;
 
 import com.example.hms.enums.InstrumentOutboxStatus;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.hl7.mllp.MllpOutboundProperties;
 import com.example.hms.hl7.mllp.MllpOutboundSender;
 import com.example.hms.model.InstrumentOutbox;
+import com.example.hms.model.LabOrder;
 import com.example.hms.repository.InstrumentOutboxRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -80,6 +82,20 @@ class InstrumentOutboxDispatchServiceTest {
         assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ACK);
         assertThat(message.getSentAt()).isNotNull();
         assertThat(message.getLastError()).isNull();
+    }
+
+    /** QA D820: an order voided after its work order was queued is never transmitted. */
+    @Test
+    void aMessageForAVoidedOrderIsNeverSent() throws Exception {
+        LabOrder order = new LabOrder();
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        message.setLabOrder(order);
+
+        assertThat(service.dispatchPending()).isZero();
+        verify(sender, never()).send(anyString());
+        assertThat(message.getStatus()).isEqualTo(InstrumentOutboxStatus.ERROR);
+        assertThat(message.getAttempts()).isZero();
+        assertThat(message.getLastError()).contains("entered in error");
     }
 
     @Test

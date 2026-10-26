@@ -157,14 +157,22 @@ class ProviderAdminServiceImplTest {
         admin();
         for (String invalid : List.of(
                 "{\"phoneNumber\":\" \",\"email\":\"nope\"}",
-                "{\"phoneNumber\":\"+226701\"}",
-                "{\"phoneNumber\":\"+2267011223344556\"}",
                 "{\"phoneNumber\":\"+22670112233\",\"website\":\"javascript:alert(1)\"}",
                 "{\"phoneNumber\":\"+22670112233\",\"website\":\"data:text/html,x\"}",
                 "{\"phoneNumber\":\"+22670112233\",\"website\":\"pharmacy.test\"}",
                 "{\"phoneNumber\":\"+22670112233\",\"website\":\"https://\"}")) {
             assertThatThrownBy(() -> service.updateProfile(invalid)).as(invalid)
                 .isInstanceOf(ConstraintViolationException.class);
+        }
+        // QA D833: a number that is not one is refused on the phone field
+        // (the length limit counts typed spaces, so it no longer catches these).
+        for (String badPhone : List.of(
+                "{\"phoneNumber\":\"+226701\"}",
+                "{\"phoneNumber\":\"+2267011223344556\"}",
+                "{\"phoneNumber\":\"+226 70 11 22 3\"}")) {
+            assertThatThrownBy(() -> service.updateProfile(badPhone)).as(badPhone)
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "phoneNumber");
         }
         assertThatThrownBy(() -> service.updateProfile(null)).isInstanceOf(ConstraintViolationException.class);
         assertThatThrownBy(() -> service.updateProfile("{not json")).isInstanceOf(IllegalArgumentException.class);

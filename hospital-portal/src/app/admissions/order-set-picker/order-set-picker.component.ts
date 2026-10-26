@@ -28,6 +28,7 @@ import {
   OrderSetSummary,
 } from '../../services/order-set.service';
 import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
 
@@ -45,7 +46,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
 @Component({
   selector: 'app-order-set-picker',
   standalone: true,
-  imports: [FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [FormsModule, TranslateModule, CdsCardListComponent, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-picker" data-testid="order-set-picker" [attr.data-state]="state()">
@@ -87,7 +88,8 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
                 {{ os.name }} <small>v{{ os.version }}</small>
               </div>
               <div class="order-set-picker__item-meta">
-                {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} · {{ os.admissionType }}
+                {{ os.orderCount }} {{ 'ORDER_SETS.ITEMS' | translate }} ·
+                {{ os.admissionType | enumLabel: 'admissionType' }}
               </div>
             </li>
           }

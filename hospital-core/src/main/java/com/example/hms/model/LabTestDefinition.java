@@ -105,6 +105,16 @@ public class LabTestDefinition extends BaseEntity {
     @Column(name = "turnaround_time_minutes")
     private Integer turnaroundTimeMinutes;
 
+    /**
+     * QA D834: the expected (normal) answer of a qualitative test ("Négatif").
+     * A qualitative test has no numeric reference range; it goes through review
+     * and activation with this instead, and a result that reads the same is
+     * graded normal.
+     */
+    @Size(max = 255)
+    @Column(name = "expected_result", length = 255)
+    private String expectedResult;
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private boolean active = true;
@@ -179,6 +189,18 @@ public class LabTestDefinition extends BaseEntity {
     private String rejectionReason;
 
     /**
+     * QA D834: a qualitative test states the answer it expects instead of a numeric range.
+     */
+    public boolean hasExpectedResult() {
+        return expectedResult != null && !expectedResult.isBlank();
+    }
+
+    /** QA D213 / D834: something a result can be graded against, a reference range or an expected answer. */
+    public boolean hasGradingBasis() {
+        return (referenceRanges != null && !referenceRanges.isEmpty()) || hasExpectedResult();
+    }
+
+    /**
      * D48: a test may be ordered only once the approval workflow has made it
      * ACTIVE (and nobody has switched it off). A DRAFT, a definition still in
      * review, a rejected or a retired one is not orderable, whatever the
@@ -194,8 +216,14 @@ public class LabTestDefinition extends BaseEntity {
         // Normalize key fields for consistency
         if (testCode != null) testCode = testCode.trim().toUpperCase();
         if (name != null) name = name.trim();
-        if (category != null) category = category.trim().toUpperCase();
-        if (sampleType != null) sampleType = sampleType.trim().toUpperCase();
+        // QA D836: a category and a sample type are labels, kept as typed
+        // ("Hématologie", "Sang total (EDTA)"); only the code is normalised.
+        if (category != null) category = category.trim();
+        if (sampleType != null) sampleType = sampleType.trim();
+        if (expectedResult != null) {
+            String trimmed = expectedResult.trim();
+            expectedResult = trimmed.isEmpty() ? null : trimmed;
+        }
         if (loincCode != null) {
             String trimmed = loincCode.trim();
             loincCode = trimmed.isEmpty() ? null : trimmed;

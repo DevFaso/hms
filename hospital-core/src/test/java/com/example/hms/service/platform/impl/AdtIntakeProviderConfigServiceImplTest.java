@@ -3,6 +3,9 @@ package com.example.hms.service.platform.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,12 +13,22 @@ import static org.mockito.Mockito.when;
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.enums.EncounterType;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.platform.AdtIntakeProviderConfigRequestDTO;
 import com.example.hms.payload.dto.platform.AdtIntakeProviderConfigResponseDTO;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.service.platform.AdtIntakeProviderConfigService;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import java.util.List;
 import java.util.Locale;
@@ -26,7 +39,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,8 +47,13 @@ class AdtIntakeProviderConfigServiceImplTest {
 
     @Mock private AdtIntakeProviderConfigRepository repository;
     @Mock private HospitalRepository hospitalRepository;
+    @Mock private StaffRepository staffRepository;
+    @Mock private DepartmentRepository departmentRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
 
-    @InjectMocks private AdtIntakeProviderConfigServiceImpl service;
+    private AdtIntakeProviderConfigServiceImpl service;
+    private Staff provider;
+    private UUID providerUserId;
 
     private Hospital hospital;
     private UUID hospitalId;
@@ -54,6 +71,84 @@ class AdtIntakeProviderConfigServiceImplTest {
         hospital = new Hospital();
         hospital.setId(hospitalId);
         hospital.setName("Test Hospital");
+
+        service = new AdtIntakeProviderConfigServiceImpl(repository, hospitalRepository,
+            staffRepository, departmentRepository, assignmentRepository, TestMessageSources.bundles());
+
+        // QA D852: by default the provider is an active physician of the
+        // hospital, and the department and assignment belong to it.
+        providerUserId = UUID.randomUUID();
+        User user = new User();
+        user.setId(providerUserId);
+        provider = new Staff();
+        provider.setId(providerId);
+        provider.setHospital(hospital);
+        provider.setUser(user);
+        provider.setActive(true);
+        Department department = new Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(assignmentId);
+        assignment.setHospital(hospital);
+        assignment.setActive(true);
+        assignment.setUser(user);
+        assignment.setRole(role("ROLE_DOCTOR"));
+        lenient().when(staffRepository.findById(providerId)).thenReturn(Optional.of(provider));
+        lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(providerUserId), eq(hospitalId), anySet())).thenReturn(true);
+        lenient().when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+        lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+    }
+
+    private static com.example.hms.model.Role role(String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        role.setName(code);
+        return role;
+    }
+
+    private void assertAssignmentRefused(UserRoleHospitalAssignment assignment) {
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(ex -> {
+                assertThat(((FieldBusinessException) ex).getField()).isEqualTo("defaultAssignmentId");
+                assertThat(((FieldBusinessException) ex).getMessageKey())
+                    .isEqualTo("adtIntakeProviderConfig.assignment.notProvider");
+            });
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D852/D872: another doctor's assignment cannot be the provider's A04 default")
+    void anotherDoctorsAssignmentIsRefused() {
+        User otherDoctor = new User();
+        otherDoctor.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment theirs = new UserRoleHospitalAssignment();
+        theirs.setId(assignmentId);
+        theirs.setHospital(hospital);
+        theirs.setActive(true);
+        theirs.setUser(otherDoctor);
+        theirs.setRole(role("ROLE_DOCTOR"));
+        assertAssignmentRefused(theirs);
+    }
+
+    @Test
+    @DisplayName("QA D852: a receptionist or hospital-admin assignment is refused, even the provider's own")
+    void nonPhysicianAssignmentIsRefused() {
+        UserRoleHospitalAssignment desk = new UserRoleHospitalAssignment();
+        desk.setId(assignmentId);
+        desk.setHospital(hospital);
+        desk.setActive(true);
+        desk.setUser(provider.getUser());
+        desk.setRole(role("ROLE_RECEPTIONIST"));
+        assertAssignmentRefused(desk);
+        desk.setRole(role("ROLE_HOSPITAL_ADMIN"));
+        assertAssignmentRefused(desk);
     }
 
     private AdtIntakeProviderConfigRequestDTO sampleRequest(Boolean enabled, String chiefComplaint) {
@@ -159,8 +254,123 @@ class AdtIntakeProviderConfigServiceImplTest {
         ArgumentCaptor<AdtIntakeProviderConfig> saved =
             ArgumentCaptor.forClass(AdtIntakeProviderConfig.class);
         verify(repository).save(saved.capture());
+        // QA D872: the default reason is written in the admin's language.
         assertThat(saved.getValue().getDefaultChiefComplaint())
-            .isEqualTo("Auto-created from ADT^A01");
+            .isEqualTo("Admitted automatically from an ADT message");
+    }
+
+    @Test
+    @DisplayName("QA D872: a French admin's blank complaint is stored in French, not in English")
+    void defaultChiefComplaintFollowsTheAdminLanguage() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(repository.findByHospital_Id(hospitalId)).thenReturn(Optional.empty());
+        when(repository.save(any(AdtIntakeProviderConfig.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.upsert(sampleRequest(true, null), Locale.FRENCH);
+
+        ArgumentCaptor<AdtIntakeProviderConfig> saved =
+            ArgumentCaptor.forClass(AdtIntakeProviderConfig.class);
+        verify(repository).save(saved.capture());
+        assertThat(saved.getValue().getDefaultChiefComplaint())
+            .isEqualTo("Admission créée automatiquement depuis un message ADT");
+    }
+
+    @Test
+    @DisplayName("QA D852: the hospital admin picked as admitting provider is refused, nothing saved")
+    void nonPhysicianAdmittingProviderIsRefused() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            providerUserId, hospitalId, AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES))
+            .thenReturn(false);
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(ex -> {
+                FieldBusinessException refusal = (FieldBusinessException) ex;
+                assertThat(refusal.getField()).isEqualTo("admittingProviderId");
+                assertThat(refusal.getMessageKey())
+                    .isEqualTo("adtIntakeProviderConfig.admittingProvider.notPhysician");
+            });
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D852: the role check asks for doctor, physician or surgeon at THAT hospital")
+    void roleCheckIsHospitalScopedAndPhysicianOnly() {
+        assertThat(AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES)
+            .contains("ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON")
+            .doesNotContain("ROLE_HOSPITAL_ADMIN", "ROLE_NURSE", "ROLE_RECEPTIONIST");
+    }
+
+    @Test
+    @DisplayName("QA D852: a staff member of another hospital is refused as admitting provider")
+    void foreignProviderIsRefused() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        provider.setHospital(other);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting(ex -> ((FieldBusinessException) ex).getMessageKey())
+            .isEqualTo("adtIntakeProviderConfig.admittingProvider.notAtHospital");
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D852: an inactive staff member is refused as admitting provider")
+    void inactiveProviderIsRefused() {
+        provider.setActive(false);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting(ex -> ((FieldBusinessException) ex).getField())
+            .isEqualTo("admittingProviderId");
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D872: a default assignment of another hospital is refused on its own field")
+    void foreignAssignmentIsRefused() {
+        UserRoleHospitalAssignment foreign = new UserRoleHospitalAssignment();
+        foreign.setId(assignmentId);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        foreign.setActive(true);
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting(ex -> ((FieldBusinessException) ex).getField())
+            .isEqualTo("defaultAssignmentId");
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D852: a department of another hospital is refused on its own field")
+    void foreignDepartmentIsRefused() {
+        Department foreign = new Department();
+        foreign.setId(departmentId);
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        foreign.setHospital(other);
+        when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(foreign));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting(ex -> ((FieldBusinessException) ex).getField())
+            .isEqualTo("departmentId");
+        verify(repository, never()).save(any());
     }
 
     @Test

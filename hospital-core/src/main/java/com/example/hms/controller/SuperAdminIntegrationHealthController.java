@@ -56,6 +56,12 @@ public class SuperAdminIntegrationHealthController {
         @PathVariable String integrationId,
         @RequestParam(value = "organizationId", required = false) UUID organizationId
     ) {
+        requireKnown(integrationId);
+        // QA D851: a listed integration with no probe is a refusal the
+        // console can explain, not "integration not found".
+        if (!actionService.supportsProbe(integrationId)) {
+            throw BusinessRuleException.ofKey("integration.probe.unsupported", integrationId);
+        }
         return ResponseEntity.ok(actionService.testConnection(integrationId, organizationId));
     }
 
@@ -66,12 +72,9 @@ public class SuperAdminIntegrationHealthController {
         @PathVariable String integrationId,
         @RequestParam(value = "organizationId", required = false) UUID organizationId
     ) {
-        if (!actionService.isKnownIntegration(integrationId)) {
-            throw new ResourceNotFoundException("integration.health.notfound", integrationId);
-        }
+        requireKnown(integrationId);
         if (!actionService.supportsResync(integrationId)) {
-            throw new BusinessRuleException(
-                "Integration " + integrationId + " does not support re-sync.");
+            throw BusinessRuleException.ofKey("integration.resync.unsupported", integrationId);
         }
         actionService.resync(integrationId, organizationId);
         return ResponseEntity.accepted().build();
@@ -88,9 +91,19 @@ public class SuperAdminIntegrationHealthController {
         // an unknown integration id, while /probe and /resync 404'd on
         // the same id. API consumers couldn't distinguish "no history
         // yet" from "integration does not exist". Now consistent.
-        if (!actionService.isKnownIntegration(integrationId)) {
+        requireKnown(integrationId);
+        return ResponseEntity.ok(actionService.getHistory(integrationId, windowHours));
+    }
+
+    /**
+     * QA D851: an integration is known when the inventory lists it OR a probe
+     * or re-sync bean is registered for it. Before, only the beans counted,
+     * so every integration the console listed answered 404 on history and
+     * re-sync.
+     */
+    private void requireKnown(String integrationId) {
+        if (!actionService.isKnownIntegration(integrationId) && !service.isListed(integrationId)) {
             throw new ResourceNotFoundException("integration.health.notfound", integrationId);
         }
-        return ResponseEntity.ok(actionService.getHistory(integrationId, windowHours));
     }
 }

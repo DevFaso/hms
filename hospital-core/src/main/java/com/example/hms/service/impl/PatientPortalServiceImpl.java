@@ -858,7 +858,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // patient's request is accepted, the whole care team is emailed, and the
         // prescriber only discovers the prescription is dead when they try to
         // approve it.
-        if (!prescription.allowsRefill() || controlledResolver.isControlled(prescription)) {
+        // QA D813: a controlled medicine says so. It used to share the "no renewals left"
+        // message, which told a patient with renewals on paper the wrong reason.
+        if (controlledResolver.isControlled(prescription)) {
+            throw new BusinessException("patient.refill.controlled");
+        }
+        if (!prescription.allowsRefill()) {
             throw new BusinessException("patient.refill.notRefillable");
         }
 
@@ -1347,8 +1352,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      */
     private List<CareTeamDTO.VisitClinicianEntry> visitClinicians(UUID patientId) {
         List<com.example.hms.model.Encounter> open = encounterRepository.findOpenWithClinicianByPatientId(
-                patientId, java.util.EnumSet.of(com.example.hms.enums.EncounterStatus.COMPLETED,
-                        com.example.hms.enums.EncounterStatus.CANCELLED));
+                patientId, com.example.hms.enums.EncounterStatus.CLOSED);
         Map<UUID, CareTeamDTO.VisitClinicianEntry> byUser = new java.util.LinkedHashMap<>();
         for (com.example.hms.model.Encounter encounter : open) {
             com.example.hms.model.User clinician = encounter.getStaff().getUser();
@@ -1406,19 +1410,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public ProxyResponseDTO grantProxy(Authentication auth, ProxyGrantRequestDTO dto) {
         Patient patient = findPatient(auth);
 
-        User proxyUser = userRepository.findByUsername(dto.getProxyUsername())
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFound", dto.getProxyUsername()));
+        // QA D893: an unknown username said "User not found with ID: <username>."
+        // (the by-id key) and the portal showed only a generic failure. Each
+        // refusal now names what the patient can fix, in their language.
+        String proxyUsername = dto.getProxyUsername() == null ? null : dto.getProxyUsername().trim();
+        User proxyUser = userRepository.findByUsername(proxyUsername)
+                .orElseThrow(() -> new ResourceNotFoundException("portal.proxy.userNotFound", proxyUsername));
 
         // Prevent granting proxy to yourself
         if (patient.getUser() != null && patient.getUser().getId().equals(proxyUser.getId())) {
-            throw new BusinessException("You cannot grant proxy access to yourself");
+            throw new BusinessException("portal.proxy.self");
         }
 
         // Prevent duplicate active proxy
         patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
-            throw new BusinessException("An active proxy already exists for this user");
+            throw new BusinessException("portal.proxy.duplicate");
         });
 
         PatientProxy proxy = PatientProxy.builder()

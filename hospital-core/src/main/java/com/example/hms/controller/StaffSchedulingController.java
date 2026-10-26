@@ -95,6 +95,15 @@ public class StaffSchedulingController {
         return ResponseEntity.ok(schedulingService.findShifts(hospitalId, departmentId, staffId, startDate, endDate, locale));
     }
 
+    @Operation(summary = "What the caller may do on the planning page",
+        description = "QA D878: canManageSchedules is true for an administrator of the acting hospital "
+            + "or a department head, the callers whose shift and bulk-planning writes succeed.")
+    @GetMapping("/capabilities")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_STAFF','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
+    public ResponseEntity<java.util.Map<String, Boolean>> capabilities() {
+        return ResponseEntity.ok(java.util.Map.of("canManageSchedules", schedulingService.canManageSchedules()));
+    }
+
     @Operation(summary = "Submit a leave request")
     @PostMapping("/leaves")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_STAFF','ROLE_RECEPTIONIST','ROLE_PHARMACIST','ROLE_RADIOLOGIST','ROLE_LAB_SCIENTIST')")

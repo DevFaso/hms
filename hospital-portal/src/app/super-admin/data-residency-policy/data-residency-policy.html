@@ -66,14 +66,24 @@
               }}
             </td>
             <td>
-              {{ row.defaultExportFormat || ('REGION_POLICY.GLOBAL_FALLBACK' | translate) }}
+              @if (!row.defaultExportFormat) {
+                {{ 'REGION_POLICY.GLOBAL_FALLBACK' | translate }}
+              } @else if (exportFormatKey(row.defaultExportFormat); as key) {
+                {{ key | translate }}
+              } @else {
+                {{ row.defaultExportFormat }}
+              }
             </td>
             <td>
               {{ row.targetDeploymentUrl || ('REGION_POLICY.LOCAL_DEPLOYMENT' | translate) }}
             </td>
             <td class="updated-cell">
-              <div>{{ row.updatedAt }}</div>
-              <small>{{ row.updatedBy }}</small>
+              <div>{{ row.updatedAt | serverTime | date: 'short' }}</div>
+              <small>{{
+                isSystemActor(row.updatedBy)
+                  ? ('REGION_POLICY.SYSTEM_ACTOR' | translate)
+                  : row.updatedBy
+              }}</small>
             </td>
             <td>
               <button
@@ -108,12 +118,18 @@
 
         <label class="field">
           <span>{{ 'REGION_POLICY.FIELD.EXPORT' | translate }}</span>
-          <input
-            type="text"
+          <select
+            data-test="export-format-select"
             [ngModel]="edit.defaultExportFormat"
             (ngModelChange)="patchEdit('defaultExportFormat', $event)"
-            [placeholder]="'REGION_POLICY.FIELD.EXPORT_PLACEHOLDER' | translate"
-          />
+          >
+            <option value="">{{ 'REGION_POLICY.GLOBAL_FALLBACK' | translate }}</option>
+            @for (format of exportFormatOptions(edit.defaultExportFormat); track format) {
+              <option [value]="format">
+                {{ exportFormatKey(format) ? (exportFormatKey(format)! | translate) : format }}
+              </option>
+            }
+          </select>
           <small>{{ 'REGION_POLICY.FIELD.EXPORT_HELP' | translate }}</small>
         </label>
 

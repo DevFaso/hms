@@ -971,6 +971,10 @@ export const routes: Routes = [
         path: 'bed-management',
         canActivate: [RoleGuard],
         data: {
+          // QA D853: one hospital's wards; in global view the table mixed every
+          // hospital's wards and 'Nouvelle unité' could only fail (400, no
+          // X-Hospital-Id). The shell gate asks a super-admin to pick first.
+          requiresHospitalScope: true,
           // ADMIN removed per role audit C1 — the bed backend rejects it.
           roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },

@@ -235,6 +235,7 @@ export class EnumLabelService implements OnDestroy {
       READY_FOR_DISCHARGE: 'Ready for Discharge',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      LEFT_WITHOUT_BEING_SEEN: 'Left without being seen',
     },
 
     /* ── Phase 1 — Staff scheduling: leave + shift ─────────── */
@@ -283,6 +284,7 @@ export class EnumLabelService implements OnDestroy {
       VERIFIED: 'Verified',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      ENTERED_IN_ERROR: 'Entered in error',
     },
     abnormalFlag: {
       NORMAL: 'Normal',
@@ -603,6 +605,7 @@ export class EnumLabelService implements OnDestroy {
       LAB_ORDER_CREATED: 'Lab Order Created',
       LAB_ORDER_UPDATED: 'Lab Order Updated',
       LAB_ORDER_CANCELLED: 'Lab Order Cancelled',
+      LAB_ORDER_ENTERED_IN_ERROR: 'Lab Order Entered in Error',
       LAB_SPECIMEN_UPDATED: 'Lab Specimen Updated',
       LAB_RESULT_CREATED: 'Lab Result Created',
       LAB_RESULT_ACKNOWLEDGED: 'Lab Result Acknowledged',
@@ -963,6 +966,14 @@ export class EnumLabelService implements OnDestroy {
       ORTHO_IMAGING: 'Orthopaedic imaging',
       RESP_TELEMED: 'Respiratory telemedicine',
     },
+    // QA D871: the ADT intake form's default acuity.
+    acuityLevel: {
+      LEVEL_1_MINIMAL: 'Level 1 - minimal',
+      LEVEL_2_MODERATE: 'Level 2 - moderate',
+      LEVEL_3_MAJOR: 'Level 3 - major',
+      LEVEL_4_SEVERE: 'Level 4 - severe',
+      LEVEL_5_CRITICAL: 'Level 5 - critical',
+    },
     // QA D528/D663: tier-2 English for the domains #928 declared.
     profileType: {
       STAFF: 'Staff',
@@ -1035,12 +1046,46 @@ export class EnumLabelService implements OnDestroy {
     return result;
   }
 
+  /**
+   * QA D836: the label for a FREE-TEXT value that may also be one of the
+   * domain's curated codes — a lab sample type is typed by the lab ("EDTA",
+   * "LCR", "Sang total (EDTA)") but older rows carry a code ("SERUM").
+   * The domain's translated or curated label wins when the value is one of
+   * its codes; anything else is shown exactly as typed. Never prettified:
+   * a one-word abbreviation looks like a code, and title-casing it read
+   * "Edta" / "Lcr". Other enum groups are not scanned either — a typed word
+   * that happens to be a status code elsewhere is still the lab's text.
+   */
+  labelOrAsTyped(value: string | null | undefined, domain: string): string {
+    if (!value) return '';
+    const lang = this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    // '=' cannot start a domain name, so this never collides with transform()'s keys.
+    const memoKey = `${lang}|=${domain}|${value}`;
+    const cached = this.memo.get(memoKey);
+    if (cached !== undefined) return cached;
+
+    const path = `PORTAL.ENUM.${EnumLabelService.toUpperSnake(domain)}.${value}`;
+    const translated: unknown = this.translate.instant(path);
+    let result = value;
+    if (typeof translated === 'string' && translated && translated !== path) {
+      result = translated;
+    } else {
+      const curated = EnumLabelService.LABELS[domain]?.[value];
+      if (curated) result = curated;
+    }
+    this.memo.set(memoKey, result);
+    return result;
+  }
+
   /** Convert camelCase domain → UPPER_SNAKE_CASE for the JSON path lookup. */
   private static toUpperSnake(camel: string): string {
     return camel.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();
   }
 
   private static readonly ENUM_ROOT = ['PORTAL', 'ENUM'].join('.');
+
+  /** QA D836: what an enum code looks like (letters, digits, underscores, one word). */
+  private static readonly CODE_LIKE = /^\w+$/;
 
   /** The value's label in the generic STATUS group, else in the first group that has it. */
   private lookupAnyGroup(value: string): string | null {
@@ -1096,7 +1141,12 @@ export class EnumLabelService implements OnDestroy {
       if (map[value]) return map[value];
     }
 
-    // 3) Prettify — UPPER_SNAKE_CASE → Title Case
+    // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
+    // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
+    // type) is shown as typed: title-casing it read "Sang total (edta)".
+    if (!EnumLabelService.CODE_LIKE.test(value)) {
+      return value;
+    }
     return value
       .split('_')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())

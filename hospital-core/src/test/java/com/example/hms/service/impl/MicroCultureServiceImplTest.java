@@ -205,6 +205,16 @@ class MicroCultureServiceImplTest {
             .hasMessageContaining("cancelled");
     }
 
+    @Test
+    void createRefusesAnOrderVoidedAsEnteredInError() {
+        // QA D820.
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+
+        assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+            .isInstanceOf(BusinessException.class);
+    }
+
     /* ── lifecycle ─────────────────────────────────────────────────────── */
 
     @Test
@@ -261,6 +271,36 @@ class MicroCultureServiceImplTest {
             org.mockito.ArgumentMatchers.contains("Escherichia coli"),
             eq("dr.traore"),
             eq("POSITIVE_CULTURE_RESULT"));
+    }
+
+    @Test
+    void aVoidedOrdersCultureTakesNoChangeAndNotifiesNobody() {
+        // QA D820, self-review of #960: the order was voided as entered in error
+        // after a PRELIMINARY growth culture was started. Already loaded in the
+        // persistence context, so the entity restriction does not stand between
+        // the request and the row: the service must refuse every change itself.
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(storedIsolate()));
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureUpdateDTO update = MicroCultureUpdateDTO.builder().gramStain("GPC in clusters").build();
+        MicroIsolateRequestDTO isolate = MicroIsolateRequestDTO.builder().organismName("Klebsiella").build();
+
+        assertThatThrownBy(() -> service.finalizeCulture(cultureId, hospitalId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.updateCulture(cultureId, hospitalId, update))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.addIsolate(cultureId, hospitalId, isolate))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getCulture(cultureId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThat(culture.getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
+        assertThat(culture.getGramStain()).isNull();
+        verify(cultureRepository, never()).save(any(MicroCultureResult.class));
+        verify(isolateRepository, never()).save(any(MicroIsolate.class));
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
     }
 
     @Test

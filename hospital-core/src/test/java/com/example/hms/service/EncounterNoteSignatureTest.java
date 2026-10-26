@@ -39,6 +39,7 @@ import org.springframework.context.MessageSource;
 import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -147,7 +148,11 @@ class EncounterNoteSignatureTest {
 
         when(encounterRepository.existsById(encounterId)).thenReturn(true);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(encounterNoteRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.of(note));
+        // QA D831: one row per note entry; the current entry and the entry list.
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.of(note));
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note));
         when(encounterNoteRepository.save(any(EncounterNote.class))).thenAnswer(i -> i.getArgument(0));
         when(roleValidator.getCurrentUserId()).thenReturn(authorUserId);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
@@ -431,6 +436,20 @@ class EncounterNoteSignatureTest {
         assertThat(history.getValue().getChangeType()).isEqualTo("NOTE_UPDATED");
     }
 
+    /** The entry the service saved last: a stay's new progress entry is a new row. */
+    private EncounterNote lastSavedEntry() {
+        org.mockito.ArgumentCaptor<EncounterNote> saved = org.mockito.ArgumentCaptor.forClass(EncounterNote.class);
+        verify(encounterNoteRepository, org.mockito.Mockito.atLeastOnce()).save(saved.capture());
+        return saved.getAllValues().get(saved.getAllValues().size() - 1);
+    }
+
+    private List<com.example.hms.model.encounter.EncounterNoteHistory> historyRows(int expected) {
+        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
+        verify(encounterNoteHistoryRepository, times(expected)).save(history.capture());
+        return history.getAllValues();
+    }
+
     @Test
     void d711_aSecondProgressNoteOnAStayIsANewEntryWithoutYesterdaysSections() {
         // QA D711: the second POST /notes on the stay was a NOTE_UPDATED and
@@ -444,40 +463,37 @@ class EncounterNoteSignatureTest {
 
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
-        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
-        assertThat(note.getObjective()).isNull();
-        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
-        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
-        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
+        EncounterNote dayTwo = lastSavedEntry();
+        assertThat(dayTwo).isNotSameAs(note);
+        assertThat(dayTwo.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(dayTwo.getObjective()).isNull();
+        // QA D831: day 1 is its own row, kept exactly as written.
+        assertThat(note.getObjective()).isEqualTo("Day 1: febrile 39.2");
+        assertThat(note.getAssessment()).isEqualTo("Day 1 assessment");
+        List<com.example.hms.model.encounter.EncounterNoteHistory> rows = historyRows(1);
+        assertThat(rows.get(0).getChangeType()).isEqualTo("NOTE_CREATED");
+        assertThat(encounter.getEncounterNotes()).containsExactly(note, dayTwo);
+        assertThat(encounter.getEncounterNote()).isSameAs(dayTwo);
     }
 
     @Test
     void d711_aDayOneAddendumStaysWithDayOneNotUnderTheDayTwoEntry() {
-        // #940 review: stay entries cleared the sections but not the addenda,
-        // so a day-1 correction showed under the day-2 entry and author, and
-        // the history kept only the addenda count.
+        // #940 review: a day-1 correction must not show under the day-2 entry.
+        // QA D831: it stays on the day-1 row, which the new entry never touches.
         encounter.setEncounterNote(note);
         encounter.setAdmissionId(UUID.randomUUID());
         note.setAssessment("Day 1 assessment");
         note.addAddendum(com.example.hms.model.encounter.EncounterNoteAddendum.builder()
             .author(authorUser).authorName("Day 1 author")
             .content("Correction: dose was 500 mg").documentedAt(LocalDateTime.now().minusHours(18)).build());
-        tools.jackson.databind.ObjectMapper realMapper = tools.jackson.databind.json.JsonMapper.builder().build();
-        when(objectMapper.writeValueAsString(any())).thenAnswer(inv -> realMapper.writeValueAsString(inv.getArgument(0)));
         EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
 
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
-        assertThat(note.getAddenda()).isEmpty();
-        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
-        String dayOne = history.getAllValues().get(0).getContentSnapshot();
-        assertThat(dayOne).contains("Day 1 assessment").contains("Correction: dose was 500 mg").contains("Day 1 author");
-        String dayTwo = history.getAllValues().get(1).getContentSnapshot();
-        assertThat(dayTwo).contains("Day 2: afebrile").doesNotContain("Correction: dose was 500 mg");
+        EncounterNote dayTwo = lastSavedEntry();
+        assertThat(note.getAddenda()).hasSize(1);
+        assertThat(note.getAddenda().iterator().next().getContent()).isEqualTo("Correction: dose was 500 mg");
+        assertThat(dayTwo.getAddenda() == null || dayTwo.getAddenda().isEmpty()).isTrue();
     }
 
     @Test
@@ -487,15 +503,20 @@ class EncounterNoteSignatureTest {
         encounter.setEncounterNote(note);
         encounter.setAdmissionId(UUID.randomUUID());
         note.setAssessment("Day 1 assessment");
-        note.setSignedAt(LocalDateTime.now().minusHours(20));
+        LocalDateTime signedAt = LocalDateTime.now().minusHours(20);
+        note.setSignedAt(signedAt);
         note.setSignedByName("Issa Ouédraogo");
         EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Day 2: afebrile").build();
 
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
-        assertThat(note.getAssessment()).isEqualTo("Day 2: afebrile");
-        assertThat(note.isSigned()).isFalse();
-        assertThat(note.getSignedByName()).isNull();
+        EncounterNote dayTwo = lastSavedEntry();
+        assertThat(dayTwo.getAssessment()).isEqualTo("Day 2: afebrile");
+        assertThat(dayTwo.isSigned()).isFalse();
+        assertThat(dayTwo.getSignedByName()).isNull();
+        // The day-1 signature stays on the day-1 entry.
+        assertThat(note.getSignedAt()).isEqualTo(signedAt);
+        assertThat(note.getAssessment()).isEqualTo("Day 1 assessment");
     }
 
     @Test
@@ -510,14 +531,19 @@ class EncounterNoteSignatureTest {
 
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
-        assertThat(note.getAssessment()).isEqualTo("Night: stable");
-        assertThat(note.getAuthorStaff()).isEqualTo(covering);
+        EncounterNote night = lastSavedEntry();
+        assertThat(night.getAssessment()).isEqualTo("Night: stable");
+        assertThat(night.getAuthorStaff()).isEqualTo(covering);
+        assertThat(note.getAuthorStaff()).isEqualTo(authorStaff);
+        assertThat(note.getAssessment()).isEqualTo("Day 1 assessment");
     }
 
     @Test
-    void d738_theClosingEntrysSnapshotIsAttributedToItsAuthorNotToTheNextOne() {
+    void d738_eachEntrysHistoryRowNamesItsOwnAuthor() {
         // QA D738 (r10 re-test s5.js): MULTI_A wrote J2, DOCTOR2_A posted J3;
-        // the NOTE_UPDATED row holding the J2 text named DOCTOR2_A.
+        // the row holding the J2 text named DOCTOR2_A. QA D831: J2 is no
+        // longer rewritten at all, so the only row this POST writes is J3's
+        // NOTE_CREATED, in the name of the clinician who wrote J3.
         encounter.setEncounterNote(note);
         encounter.setAdmissionId(UUID.randomUUID());
         authorUser.setEmail("doctor@example.test");
@@ -527,13 +553,261 @@ class EncounterNoteSignatureTest {
 
         service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
 
-        org.mockito.ArgumentCaptor<com.example.hms.model.encounter.EncounterNoteHistory> history =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.model.encounter.EncounterNoteHistory.class);
-        verify(encounterNoteHistoryRepository, times(2)).save(history.capture());
-        assertThat(history.getAllValues().get(0).getChangeType()).isEqualTo("NOTE_UPDATED");
-        assertThat(history.getAllValues().get(0).getChangedBy()).isEqualTo("doctor@example.test");
-        assertThat(history.getAllValues().get(1).getChangeType()).isEqualTo("NOTE_CREATED");
-        assertThat(history.getAllValues().get(1).getChangedBy()).isEqualTo("nurse@example.test");
+        List<com.example.hms.model.encounter.EncounterNoteHistory> rows = historyRows(1);
+        assertThat(rows.get(0).getChangeType()).isEqualTo("NOTE_CREATED");
+        assertThat(rows.get(0).getChangedBy()).isEqualTo("nurse@example.test");
+        assertThat(note.getAssessment()).isEqualTo("J2: improving");
+    }
+
+    /* ── QA D831: a second doctor never overwrites the first doctor's draft ── */
+
+    /** DOCTOR2_A of the round-13 inpatient journey (k5.js). */
+    private Staff secondDoctor() {
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        doctor2.setFirstName("Issouf");
+        doctor2.setLastName("Compaoré");
+        doctor2.setEmail("doctor2@example.test");
+        Staff staff = Staff.builder().user(doctor2).hospital(encounter.getHospital()).build();
+        staff.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor2.getId());
+        when(staffRepository.findByUserIdAndHospitalId(doctor2.getId(), hospitalId)).thenReturn(Optional.of(staff));
+        return staff;
+    }
+
+    @Test
+    void d831_theSecondDoctorsProgressNoteIsItsOwnRowAndTheFirstDraftIsUntouched() {
+        // k5.js: DOCTOR_A posts an unsigned SOAP note on the stay, then
+        // DOCTOR2_A posts his J1 progress note on the same encounter. The one
+        // row came to hold DOCTOR2_A's text under his name, and DOCTOR_A's
+        // findings survived only as a NOTE_UPDATED snapshot.
+        encounter.setAdmissionId(UUID.randomUUID());
+        encounter.setEncounterNote(note);
+        authorUser.setEmail("doctor@example.test");
+        note.setTemplate(com.example.hms.enums.EncounterNoteTemplate.SOAP);
+        note.setSubjective("QA R13 J0 toux fébrile");
+        note.setObjective("T 39.4, crépitants base droite");
+        note.setAssessment("Pneumopathie");
+        note.setPlan("Ceftriaxone IV, paracétamol");
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        Staff doctor2 = secondDoctor();
+        EncounterNoteRequestDTO j1 = EncounterNoteRequestDTO.builder()
+            .template(com.example.hms.enums.EncounterNoteTemplate.SOAP)
+            .subjective("QA R13 J1 apyrétique").assessment("Amélioration").plan("Poursuivre")
+            .build();
+
+        service.upsertEncounterNote(encounterId, j1, LOCALE, false, hospitalId);
+
+        EncounterNote second = lastSavedEntry();
+        assertThat(second).isNotSameAs(note);
+        assertThat(second.getAuthorStaff()).isEqualTo(doctor2);
+        assertThat(second.getAuthor()).isEqualTo(doctor2.getUser());
+        assertThat(second.getSubjective()).isEqualTo("QA R13 J1 apyrétique");
+        assertThat(second.getObjective()).isNull();
+        // DOCTOR_A's draft: same author, same text, still unsigned and signable.
+        assertThat(note.getAuthor()).isEqualTo(authorUser);
+        assertThat(note.getAuthorStaff()).isEqualTo(authorStaff);
+        assertThat(note.getSubjective()).isEqualTo("QA R13 J0 toux fébrile");
+        assertThat(note.getObjective()).isEqualTo("T 39.4, crépitants base droite");
+        assertThat(note.getAssessment()).isEqualTo("Pneumopathie");
+        assertThat(note.isSigned()).isFalse();
+        // One NOTE_CREATED, for the new entry, by DOCTOR2_A; nothing rewrites DOCTOR_A's.
+        List<com.example.hms.model.encounter.EncounterNoteHistory> rows = historyRows(1);
+        assertThat(rows.get(0).getChangeType()).isEqualTo("NOTE_CREATED");
+        assertThat(rows.get(0).getChangedBy()).isEqualTo("doctor2@example.test");
+        assertThat(encounter.getEncounterNotes()).hasSize(2);
+        assertThat(encounter.getEncounterNote()).isSameAs(second);
+    }
+
+    @Test
+    void d831_aSignWithoutAnEntryNeverReachesADraftThatIsNotOnScreen() {
+        // #965 review, k5.js replay: DOCTOR_A clicks Sign under DOCTOR2_A's J1
+        // (the current entry on screen). The server used to sign DOCTOR_A's
+        // J0 instead, a text the signer was not shown. Without a note id only
+        // the current entry is a candidate, so the author-only refusal stands;
+        // DOCTOR_A signs J0 by naming it.
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote secondEntry = EncounterNote.builder()
+            .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
+            .author(doctor2).authorName("Issouf Compaoré").documentedAt(LocalDateTime.now()).build();
+        secondEntry.setId(UUID.randomUUID());
+        secondEntry.setCreatedAt(LocalDateTime.now());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, secondEntry));
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(AccessDeniedException.class);
+        assertThat(note.isSigned()).isFalse();
+        assertThat(secondEntry.isSigned()).isFalse();
+
+        service.signEncounterNote(encounterId, note.getId(), LOCALE);
+
+        assertThat(note.isSigned()).isTrue();
+        assertThat(note.getSignedByUserId()).isEqualTo(authorUserId);
+        assertThat(secondEntry.isSigned()).isFalse();
+    }
+
+    @Test
+    void d831_aNamedEntryIsSignedAndAnEntryOfAnotherEncounterIs404() {
+        EncounterNote other = EncounterNote.builder().author(authorUser).documentedAt(LocalDateTime.now()).build();
+        other.setId(UUID.randomUUID());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, other));
+
+        service.signEncounterNote(encounterId, note.getId(), LOCALE);
+        assertThat(note.isSigned()).isTrue();
+        assertThat(other.isSigned()).isFalse();
+
+        UUID foreign = UUID.randomUUID();
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, foreign, LOCALE))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void d831_anotherDoctorStillCannotSignADraftThatIsNotTheirs() {
+        // Path re-verified: with no own entry, the current entry is chosen and
+        // the author-only refusal stands.
+        secondDoctor();
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(AccessDeniedException.class);
+        assertThat(note.isSigned()).isFalse();
+    }
+
+    @Test
+    void d831_cosignActsOnTheNamedEntryNeverOnOneThatIsNotOnScreen() {
+        // #965 review: without a note id the co-sign used to reach back to an
+        // earlier entry the attending was not shown; it now acts on the
+        // current entry only, and an earlier entry is co-signed by its id.
+        makeSignedRequiringCosign();
+        note.setCreatedAt(LocalDateTime.now().minusHours(3));
+        EncounterNote laterDraft = EncounterNote.builder().author(authorUser).documentedAt(LocalDateTime.now()).build();
+        laterDraft.setId(UUID.randomUUID());
+        laterDraft.setCreatedAt(LocalDateTime.now());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, laterDraft));
+        UUID attendingUserId = UUID.randomUUID();
+        User attendingUser = new User();
+        attendingUser.setId(attendingUserId);
+        Staff attending = Staff.builder().user(attendingUser).build();
+        attending.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(attendingUserId);
+        when(staffRepository.findByUserIdAndHospitalId(attendingUserId, hospitalId)).thenReturn(Optional.of(attending));
+
+        assertThatThrownBy(() -> service.cosignEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class);
+        assertThat(note.getCosignedBy()).isNull();
+
+        service.cosignEncounterNote(encounterId, note.getId(), LOCALE);
+
+        assertThat(note.getCosignedBy()).isEqualTo(attending);
+        assertThat(laterDraft.getCosignedBy()).isNull();
+    }
+
+    @Test
+    void d831_anAddendumNamingAnEarlierEntryLandsOnThatEntryAndNotOnTheLatest() {
+        // #965 review, k5.js replay: DOCTOR_A signs J0, DOCTOR2_A posts J1 (an
+        // unsigned draft), then DOCTOR_A writes an addendum to correct J0. It
+        // was filed under J1, DOCTOR2_A's entry, and its history row named J1:
+        // J0, signed and locked, could never be corrected.
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setSubjective("QA R13 J0 toux fébrile");
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        service.signEncounterNote(encounterId, note.getId(), LOCALE);
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote j1 = EncounterNote.builder()
+            .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
+            .author(doctor2).authorName("Issouf Compaoré").subjective("QA R13 J1 apyrétique")
+            .documentedAt(LocalDateTime.now()).build();
+        j1.setId(UUID.randomUUID());
+        j1.setCreatedAt(LocalDateTime.now());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, j1));
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.of(j1));
+        when(encounterNoteAddendumRepository.save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder()
+                .content("Correction J0 : T 38.4, non 39.4")
+                .attestAccuracy(true)
+                .build();
+
+        service.addEncounterNoteAddendum(encounterId, note.getId(), request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAddenda()).hasSize(1);
+        assertThat(note.getAddenda().get(0).getNote()).isSameAs(note);
+        assertThat(note.getAddenda().get(0).getContent()).isEqualTo("Correction J0 : T 38.4, non 39.4");
+        assertThat(j1.getAddenda()).isEmpty();
+        // J0's text and signature are as signed; J1 is untouched.
+        assertThat(note.getSubjective()).isEqualTo("QA R13 J0 toux fébrile");
+        assertThat(note.isSigned()).isTrue();
+        assertThat(j1.getSubjective()).isEqualTo("QA R13 J1 apyrétique");
+        // The NOTE_ADDENDUM row names J0 (the sign wrote the first row).
+        List<com.example.hms.model.encounter.EncounterNoteHistory> rows = historyRows(2);
+        assertThat(rows.get(1).getChangeType()).isEqualTo("NOTE_ADDENDUM");
+        assertThat(rows.get(1).getNoteId()).isEqualTo(note.getId());
+    }
+
+    @Test
+    void d831_anAddendumWithoutAnEntryGoesToTheCurrentOneAndAForeignEntryIs404() {
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote j1 = EncounterNote.builder()
+            .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
+            .author(doctor2).documentedAt(LocalDateTime.now()).build();
+        j1.setId(UUID.randomUUID());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, j1));
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.of(j1));
+        when(encounterNoteAddendumRepository.save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder().content("Ajout").build();
+
+        service.addEncounterNoteAddendum(encounterId, null, request, LOCALE, false, hospitalId);
+
+        assertThat(j1.getAddenda()).hasSize(1);
+        assertThat(note.getAddenda()).isEmpty();
+
+        UUID foreign = UUID.randomUUID();
+        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, foreign, request, LOCALE, false, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(note.getAddenda()).isEmpty();
+        assertThat(j1.getAddenda()).hasSize(1);
+    }
+
+    @Test
+    void d831_anAddendumToAnEntryAtAnotherHospitalIs404() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        note.setHospital(elsewhere);
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder().content("Ajout").build();
+
+        UUID noteId = note.getId();
+        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, noteId, request, LOCALE, false, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(note.getAddenda()).isEmpty();
+        verify(encounterNoteAddendumRepository, never()).save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class));
+    }
+
+    @Test
+    void d831_aSecondNoteOnAnOutpatientVisitStillEditsTheOneNote() {
+        // Path re-verified: off a stay the visit keeps one note, revised in place.
+        encounter.setEncounterNote(note);
+        encounter.setAdmissionId(null);
+        EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().assessment("Revised").build();
+
+        service.upsertEncounterNote(encounterId, request, LOCALE, false, hospitalId);
+
+        assertThat(lastSavedEntry()).isSameAs(note);
+        assertThat(encounter.getEncounterNotes()).containsExactly(note);
     }
 
     @Test
@@ -563,7 +837,8 @@ class EncounterNoteSignatureTest {
     @Test
     void d406_aNurseWritesTheFirstNoteInHerOwnName() {
         encounter.setEncounterNote(null);
-        when(encounterNoteRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.empty());
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.empty());
         Staff nurse = nurseStaff();
         EncounterNoteRequestDTO request = EncounterNoteRequestDTO.builder().subjective("Patiente calme").build();
 

@@ -10,6 +10,8 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { roleDescriptionKey } from './role-description';
+import { EnumLabelService } from '../core/enum-label.service';
+import { bareRole } from '../core/role-token';
 
 @Component({
   selector: 'app-role-list',
@@ -23,6 +25,30 @@ export class RoleListComponent implements OnInit {
   private readonly roleService = inject(RoleService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
+
+  /**
+   * QA D868: the card title in the reader's language. A system role's name is
+   * its code (ROLE_DOCTOR), so the card read "ROLE_DOCTOR ROLE_DOCTOR"; it is
+   * shown through the role label. A custom role keeps the name its author typed.
+   *
+   * Whether a label exists is decided by the KEY, not by comparing the label
+   * with a prettified code: in English the real labels are often exactly that
+   * ('Doctor', 'Nurse'), and the comparison sent the English card back to
+   * 'ROLE_DOCTOR'.
+   */
+  roleTitle(role: RoleResponse): string {
+    const code = bareRole(role.code || role.authority || role.name);
+    if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) return role.name;
+    const key = `PORTAL.ENUM.ROLE.${code}`;
+    const label: unknown = this.translate.instant(key);
+    if (typeof label === 'string' && label && label !== key) return label;
+    // No label in the bundle: a name that is only the code is still a code,
+    // never what an author typed, so it gets the readable fallback.
+    const name = role.name?.trim() ?? '';
+    if (!name || bareRole(name) === code) return this.enumLabels.transform(code, 'role');
+    return role.name;
+  }
 
   roles = signal<RoleResponse[]>([]);
   loading = signal(true);

@@ -127,6 +127,25 @@ class LabWriteAuditTest {
     }
 
     @Test
+    @DisplayName("QA D820: a void is LAB_ORDER_ENTERED_IN_ERROR, naming the order and the patient")
+    void voidedOrder() throws Exception {
+        bindRequest("/lab-orders/{id}/void");
+        LabOrderService service = mock(LabOrderService.class);
+        when(service.voidLabOrder(any(), any(), any())).thenReturn(
+            LabOrderResponseDTO.builder().id(RECORD.toString()).patientId(PATIENT.toString()).build());
+        LabOrderController controller = new LabOrderController(service, mock(MessageSource.class));
+        Method handler = java.util.Arrays.stream(LabOrderController.class.getMethods())
+            .filter(m -> m.getName().equals("voidLabOrder")).findFirst().orElseThrow();
+        handler.invoke(controller, RECORD, null, Locale.ENGLISH);
+
+        AuditEventRequestDTO row = recordedAfter(controller, handler);
+        assertThat(row.getEventType()).isEqualTo(AuditEventType.LAB_ORDER_ENTERED_IN_ERROR);
+        assertThat(row.getPatientId()).isEqualTo(PATIENT);
+        assertThat(row.getResourceId()).isEqualTo(RECORD.toString());
+        assertThat(row.getEntityType()).isEqualTo("LAB_ORDER");
+    }
+
+    @Test
     @DisplayName("a super admin's lab order is recorded the same way")
     void superAdminOrder() throws Exception {
         bindRequest("/super-admin/lab-orders");

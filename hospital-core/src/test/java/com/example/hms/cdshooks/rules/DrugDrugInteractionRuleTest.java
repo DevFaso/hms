@@ -127,4 +127,27 @@ class DrugDrugInteractionRuleTest {
     void hasStableId() {
         assertThat(rule.id()).isEqualTo("drug-drug-interaction");
     }
+
+    /** QA D887: the seeded advice reaches a French prescriber in French, on the CDS card too. */
+    @Test
+    @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
+    void theSeededAdviceIsInTheReadersLanguage_D887() {
+        DrugInteraction di = DrugInteraction.builder()
+            .drug1Code("2551").drug1Name("clarithromycin")
+            .drug2Code("36567").drug2Name("simvastatin")
+            .severity(InteractionSeverity.CONTRAINDICATED)
+            .description("Simvastatin + clarithromycin: CYP3A4 inhibition raises rhabdomyolysis risk.")
+            .recommendation("Switch macrolide (azithromycin) or hold statin during the antibiotic course.")
+            .active(true)
+            .build();
+        when(repo.findInteractionBetween("2551", "36567")).thenReturn(Optional.of(di));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+
+        List<CdsCard> cards = rule.evaluate(contextWith("36567", "2551"));
+
+        assertThat(cards.get(0).detail())
+            .contains("l'inhibition du CYP3A4 augmente le risque de rhabdomyolyse")
+            .contains("Changer de macrolide (azithromycine)")
+            .doesNotContain("Switch macrolide");
+    }
 }

@@ -34,11 +34,11 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private final EncounterRepository encounterRepository;
     private final AdmissionRepository admissionRepository;
 
-    /** Column order for the flow board (9 lanes matching frontend). */
+    /** Column order for the flow board (10 lanes matching frontend). */
     private static final List<String> FLOW_COLUMNS = List.of(
             "SCHEDULED", "ARRIVED", "TRIAGE", "WAITING_FOR_PHYSICIAN",
             "IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE",
-            "COMPLETED", "CANCELLED"
+            "COMPLETED", "CANCELLED", "LEFT_WITHOUT_BEING_SEEN"
     );
 
     /** Admission status → flow lane mapping. */

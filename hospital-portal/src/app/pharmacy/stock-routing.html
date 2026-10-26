@@ -11,25 +11,27 @@
        disabled rather than offered and refused. -->
   <app-hospital-scope-hint />
 
-  <!-- Prescription lookup -->
+  <!-- Prescription lookup: QA D888, picked from a search, never typed as an id -->
   <div class="form-card form-card-accent">
     <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>
-    <label class="sr-only" for="prescriptionIdInput">
-      {{ 'PHARMACY.PRESCRIPTION_ID' | translate }}
-    </label>
+    <label for="rxSearchInput">{{ 'PHARMACY.ROUTING_RX_SEARCH' | translate }}</label>
     <div class="lookup-row">
       <input
-        id="prescriptionIdInput"
-        type="text"
+        id="rxSearchInput"
+        type="search"
         class="form-control"
-        [(ngModel)]="prescriptionId"
-        [placeholder]="'PHARMACY.PRESCRIPTION_ID' | translate"
-        (keyup.enter)="checkStock()"
+        autocomplete="off"
+        data-testid="routing-rx-search"
+        [ngModel]="rxSearch()"
+        (ngModelChange)="rxSearch.set($event)"
+        [placeholder]="'PHARMACY.ROUTING_RX_SEARCH_PLACEHOLDER' | translate"
+        (keyup.enter)="pickFirstMatch()"
       />
       <button
         class="btn btn-primary"
         (click)="checkStock()"
         [disabled]="checking() || !prescriptionId.trim()"
+        data-testid="routing-recheck"
       >
         @if (checking()) {
           <span class="spinner"></span>
@@ -37,6 +39,79 @@
         {{ 'PHARMACY.CHECK' | translate }}
       </button>
     </div>
+    @if (queueLoading()) {
+      <p class="muted" role="status">{{ 'COMMON.LOADING' | translate }}</p>
+    } @else if (queueError()) {
+      <p class="muted" role="alert" data-testid="routing-rx-queue-error">
+        {{ 'PHARMACY.ROUTING_RX_QUEUE_FAILED' | translate }}
+      </p>
+    } @else if (rxSearch().trim()) {
+      @if (matches().length > 0) {
+        <ul class="rx-matches" data-testid="routing-rx-matches">
+          @for (rx of matches(); track rx.id) {
+            <li>
+              <button
+                type="button"
+                class="rx-match"
+                [attr.data-testid]="'routing-rx-' + rx.id"
+                (click)="pickPrescription(rx)"
+              >
+                <span class="rx-patient">{{ patientLabel(rx) || '—' }}</span>
+                <span class="rx-med">
+                  {{ rx.medicationName }}
+                  @if (rx.dosage) {
+                    · {{ rx.dosage }}
+                  }
+                </span>
+              </button>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted" data-testid="routing-rx-no-match">
+          @if (queuePartial()) {
+            {{ 'PHARMACY.ROUTING_RX_NO_MATCH_PARTIAL' | translate: { loaded: queue().length } }}
+          } @else {
+            {{ 'PHARMACY.ROUTING_RX_NO_MATCH' | translate }}
+          }
+        </p>
+      }
+      <!-- #963 review: the search covers the newest orders loaded; say so and offer the rest. -->
+      @if (queuePartial()) {
+        <p class="muted" data-testid="routing-rx-partial">
+          {{
+            'PHARMACY.ROUTING_RX_PARTIAL'
+              | translate: { loaded: queue().length, total: queueTotal() }
+          }}
+          <!-- The server reads at most 2000 rows at once; past that the note stays, the button goes. -->
+          @if (!queueAtLimit()) {
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              data-testid="routing-rx-load-older"
+              [disabled]="queueLoadingMore()"
+              (click)="loadOlderQueue()"
+            >
+              @if (queueLoadingMore()) {
+                <span class="spinner"></span>
+              }
+              {{ 'PHARMACY.ROUTING_RX_LOAD_OLDER' | translate }}
+            </button>
+          }
+        </p>
+        @if (queueMoreError()) {
+          <p class="muted" role="alert" data-testid="routing-rx-older-error">
+            {{ 'PHARMACY.ROUTING_RX_QUEUE_FAILED' | translate }}
+          </p>
+        }
+      }
+    }
+    @if (selected(); as rx) {
+      <p class="rx-selected" data-testid="routing-rx-selected">
+        {{ 'PHARMACY.ROUTING_RX_SELECTED' | translate }}
+        <strong>{{ patientLabel(rx) || '—' }}</strong> · {{ rx.medicationName }}
+      </p>
+    }
   </div>
 
   <!-- Stock check result -->

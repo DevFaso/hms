@@ -100,6 +100,11 @@ public class MllpInboundAdtVisitProjectionServiceImpl
     // QA D515: an A03 discharge frees the bed and cancels a pending transfer
     // like every in-app discharge path.
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    // QA D804: an A02 moves the stay's encounter with the admission, as the
+    // in-app transfer does. A provider keeps the projection free of a bean
+    // cycle through the stay service.
+    private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     /**
      * Runs in a nested transaction so a projection failure cannot roll
@@ -289,6 +294,14 @@ public class MllpInboundAdtVisitProjectionServiceImpl
             : resolveTransferDepartment(destination, ctx.hospitalId);
         if (resolved != null) {
             row.setDepartment(resolved);
+            // QA D804: the encounter list showed the admitting department for
+            // the whole stay, because only the in-app transfer moved the stay's
+            // encounter, and an A03 discharge never carries the move onto it.
+            com.example.hms.service.AdmissionStayEncounterService stayService =
+                stayEncounters.getIfAvailable();
+            if (stayService != null) {
+                stayService.followStayDepartment(row);
+            }
         }
 
         emitAdmissionLifecycleAudit(
@@ -489,6 +502,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 hospitalId);
             return Optional.empty();
         }
+        // QA D852: a config saved before the write rule existed may name a
+        // non-physician; it must not admit anyone under that name.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (providerUserId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                providerUserId, hospitalId,
+                com.example.hms.service.platform.AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES)) {
+            log.warn("ADT auto-create skipped — admittingProviderId {} in intake config for hospital {} holds no doctor, physician or surgeon role there",
+                provider.getId(), hospitalId);
+            return Optional.empty();
+        }
         return Optional.of(provider);
     }
 
@@ -596,7 +619,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         }
 
         Optional<UserRoleHospitalAssignment> assignmentOpt =
-            resolveAssignment(ac.config(), ctx.hospitalId);
+            resolveAssignment(ac.config(), ac.provider(), ctx.hospitalId);
         if (assignmentOpt.isEmpty()) return Optional.empty();
 
         Encounter encounter = buildEncounter(
@@ -617,7 +640,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      * {@code Encounter#validate}.
      */
     private Optional<UserRoleHospitalAssignment> resolveAssignment(
-        AdtIntakeProviderConfig config, UUID hospitalId
+        AdtIntakeProviderConfig config, Staff provider, UUID hospitalId
     ) {
         Optional<UserRoleHospitalAssignment> opt =
             assignmentRepository.findById(config.getDefaultAssignmentId());
@@ -633,6 +656,17 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 assignment.getId(),
                 assignment.getHospital() != null ? assignment.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
+            return Optional.empty();
+        }
+        // QA D852/D872: a config saved before the write rule existed may pair
+        // the physician with another person's assignment, or with a
+        // non-physician one; no encounter is recorded under that pairing.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (!Boolean.TRUE.equals(assignment.getActive())
+            || !com.example.hms.service.platform.AdtIntakeProviderConfigService
+                .isAdmittingAssignmentOf(assignment, providerUserId)) {
+            log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} in intake config for hospital {} is not an active physician assignment of admitting provider {}",
+                assignment.getId(), hospitalId, provider.getId());
             return Optional.empty();
         }
         return Optional.of(assignment);

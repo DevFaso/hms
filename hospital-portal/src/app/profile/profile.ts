@@ -147,6 +147,16 @@ export class ProfileComponent implements OnInit {
   isSuperAdmin = computed(() => this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
 
   /**
+   * QA D844: a patient-only session (every role is ROLE_PATIENT). The header's
+   * roles / assignments / security % counters are staff ideas and are hidden
+   * for it; every staff role, listed in isStaffOrAdmin or not, keeps them.
+   */
+  isPatientOnly = computed(() => {
+    const roles = this.auth.getRoles();
+    return roles.length > 0 && roles.every((r) => r === 'ROLE_PATIENT');
+  });
+
+  /**
    * The profile-type label to display — derived from the JWT session roles,
    * never from the raw `profileType` DB field returned by the API.
    * A Super Admin who also happens to have a patient record should see

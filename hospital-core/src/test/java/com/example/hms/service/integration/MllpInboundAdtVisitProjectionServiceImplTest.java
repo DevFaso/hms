@@ -13,6 +13,7 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
@@ -44,8 +45,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -63,6 +67,8 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
 
@@ -81,6 +87,11 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
 
         // Flag ON unless a specific test flips it off.
         properties.setEnabled(true);
+
+        // QA D852: the configured provider is a physician at the receiving
+        // hospital unless a test says otherwise.
+        lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            any(), eq(hospital.getId()), anySet())).thenReturn(true);
     }
 
     private ParsedAdtMessage adt(String trigger, String visit) {
@@ -556,6 +567,33 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         verifyNoInteractions(auditEventLogService);
     }
 
+    @Test
+    @DisplayName("QA D852: a config naming a non-physician (saved before the rule) admits nobody")
+    void autoCreateRejectedWhenProviderIsNotAPhysician() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        Staff hospitalAdmin = staff(config.getAdmittingProviderId());
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(hospitalAdmin));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            hospitalAdmin.getUser().getId(), hospital.getId(),
+            com.example.hms.service.platform.AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES))
+            .thenReturn(false);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A01", "V-AC-NP"), patient, hospital, "REG", "HOSP1", "MSG-AC-NP");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        verify(admissionRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
     // ── Row-24 A04 follow-on: Encounter auto-create ─────────────────────
 
     @Test
@@ -569,7 +607,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff provider = staff(config.getAdmittingProviderId());
         Department department = department(config.getDepartmentId());
         UserRoleHospitalAssignment assignment =
-            assignment(config.getDefaultAssignmentId(), hospital);
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
 
         when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
@@ -652,7 +690,48 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // 3% duplication cap on new code. The load-bearing assertions —
         // assignment lookup not performed, no Encounter saved, no audit —
         // still hold.
-        verifyNoInteractions(assignmentRepository);
+        // (The physician check of QA D852 reads assignments by role; the A04
+        // default-assignment lookup is what must not run.)
+        verify(assignmentRepository, never()).findById(any());
+        verify(encounterRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("QA D852/D872: an A04 is not recorded as Dr B under Dr A's, a receptionist's or an inactive assignment")
+    void a04RejectedWhenAssignmentIsNotTheProvidersPhysicianRole() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        config.setDefaultAssignmentId(UUID.randomUUID());
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+        User drA = new User();
+        drA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment inactiveOwn =
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
+        inactiveOwn.setActive(false);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(config.getDepartmentId()))
+            .thenReturn(Optional.of(department));
+        when(assignmentRepository.findById(config.getDefaultAssignmentId())).thenReturn(
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, drA, "ROLE_DOCTOR")),
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_RECEPTIONIST")),
+            Optional.of(inactiveOwn));
+
+        for (int i = 0; i < 3; i++) {
+            VisitProjectionResult result = service.projectVisit(
+                adt("A04", "V-A04-PAIR-" + i), patient, hospital, "REG", "HOSP1", "MSG-A04-PAIR-" + i);
+            assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        }
+        verify(assignmentRepository, times(3)).findById(config.getDefaultAssignmentId());
         verify(encounterRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);
     }
@@ -904,6 +983,67 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D804: an A02 transfer moves the stay's open encounter to the destination department")
+    void d804_anA02TransferMovesTheStayEncounter() {
+        Department admitting = department(UUID.randomUUID(), hospital);
+        Department destination = department(UUID.randomUUID(), hospital);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        row.setDepartment(admitting);
+        row.setHospital(hospital);
+        // The stay encounter a ward order opened, still in the admitting department.
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(row.getId());
+        stay.setDepartment(admitting);
+        stay.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "WARD-B"))
+            .thenReturn(Optional.of(destination));
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(row.getId()))
+            .thenReturn(Optional.of(stay));
+        // The real stay service: only its encounter repository is reached here.
+        com.example.hms.service.AdmissionStayEncounterService stayService =
+            new com.example.hms.service.AdmissionStayEncounterService(
+                encounterRepository, null, null, null, null, null, null, null, null);
+        when(stayEncounters.getIfAvailable()).thenReturn(stayService);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02", "WARD-B^ROOM-3^BED-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Encounter> savedEncounter = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(savedEncounter.capture());
+        assertThat(savedEncounter.getValue()).isSameAs(stay);
+        assertThat(stay.getDepartment()).isSameAs(destination);
+    }
+
+    @Test
+    @DisplayName("QA D804: an unresolvable A02 destination leaves the stay encounter where it is")
+    void d804_anUnresolvedA02DoesNotTouchTheStayEncounter() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A02", "V-A02", "", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        verifyNoInteractions(stayEncounters);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("A02 transfer falls back to name lookup when code lookup misses")
     void a02TransferFallsBackToNameLookup() {
         Admission row = new Admission();
@@ -1040,6 +1180,9 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff s = new Staff();
         s.setId(id);
         s.setHospital(hospital);
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        s.setUser(user);
         return s;
     }
 
@@ -1058,6 +1201,16 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
         a.setId(id);
         a.setHospital(h);
+        return a;
+    }
+
+    private UserRoleHospitalAssignment assignment(UUID id, Hospital h, User user, String roleCode) {
+        UserRoleHospitalAssignment a = assignment(id, h);
+        a.setUser(user);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(roleCode);
+        role.setName(roleCode);
+        a.setRole(role);
         return a;
     }
 

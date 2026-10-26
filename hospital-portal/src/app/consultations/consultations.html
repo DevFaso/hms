@@ -551,7 +551,7 @@
             }
           </div>
           <div class="field">
-            <label for="con-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
+            <label for="con-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
             @if (hospitalLocked) {
               <div class="locked-field">
                 <span class="material-symbols-outlined locked-icon">business</span>
@@ -575,7 +575,7 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="con-type">{{ 'CONSULTATIONS.TYPE' | translate }}</label>
+            <label for="con-type">{{ 'CONSULTATIONS.TYPE' | translate }} *</label>
             <select
               id="con-type"
               [(ngModel)]="form.consultationType"
@@ -587,7 +587,7 @@
             </select>
           </div>
           <div class="field">
-            <label for="con-urgency">{{ 'CONSULTATIONS.URGENCY' | translate }}</label>
+            <label for="con-urgency">{{ 'CONSULTATIONS.URGENCY' | translate }} *</label>
             <select
               id="con-urgency"
               [(ngModel)]="form.urgency"
@@ -601,7 +601,9 @@
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label for="con-specialty">{{ 'CONSULTATIONS.SPECIALTY_REQUESTED' | translate }}</label>
+            <label for="con-specialty"
+              >{{ 'CONSULTATIONS.SPECIALTY_REQUESTED' | translate }} *</label
+            >
             <input
               id="con-specialty"
               type="text"
@@ -612,7 +614,7 @@
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label for="con-reason">{{ 'CONSULTATIONS.REASON_FOR_CONSULT' | translate }}</label>
+            <label for="con-reason">{{ 'CONSULTATIONS.REASON_FOR_CONSULT' | translate }} *</label>
             <textarea
               id="con-reason"
               [(ngModel)]="form.reasonForConsult"

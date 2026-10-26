@@ -26,6 +26,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
@@ -41,7 +42,7 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
 @Component({
   selector: 'app-slot-admin',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ClockTimePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './slot-admin.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './slot-admin.scss',

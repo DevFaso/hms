@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,6 +19,7 @@ import {
   StockCheckResult,
   PartnerOption,
   RoutingDecisionResponse,
+  WorkQueuePrescription,
 } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
@@ -56,6 +64,59 @@ export class StockRoutingComponent implements OnInit {
   // Prescription lookup
   prescriptionId = '';
   checking = signal(false);
+
+  /**
+   * QA D888: the page only offered a box for a raw prescription UUID, which
+   * nobody at a counter has. The pharmacist now searches the orders waiting
+   * at this hospital's dispensary (the work queue) by patient or medication
+   * and picks one; the deep link from the dispensing queue still fills it in.
+   */
+  readonly queue = signal<WorkQueuePrescription[]>([]);
+  readonly queueLoading = signal(false);
+  readonly queueError = signal(false);
+  /** Orders waiting in all, of which `queue()` holds the newest pages loaded. */
+  readonly queueTotal = signal(0);
+  readonly queueLoadingMore = signal(false);
+  readonly queueMoreError = signal(false);
+  /**
+   * #963 review: the search runs over the pages loaded, newest first. When
+   * the dispensary has more waiting orders than that, the page says so and
+   * offers the older ones, instead of a "nothing matches" that is false.
+   */
+  readonly queuePartial = computed(() => this.queue().length < this.queueTotal());
+  static readonly QUEUE_PAGE_SIZE = 100;
+  /**
+   * The most rows one read returns: the server's page-size ceiling (Spring
+   * Data's default, 2000), which it clamps a larger size to silently.
+   */
+  static readonly QUEUE_MAX_WINDOW = 2000;
+  /**
+   * Newest first, with the id as the tiebreaker so the order is total. That
+   * alone does not make offset pages safe: an order that leaves the queue
+   * between two reads shifts every later row back by one, and the row that
+   * was 101st slides onto a page already loaded. So "load older" never asks
+   * for page N; it re-reads the whole window from the start in one request
+   * (#963 review round 2), and one read is one consistent snapshot.
+   */
+  static readonly QUEUE_SORT = ['createdAt,desc', 'id,desc'];
+  /** Rows the last read asked for: the newest `queueWindow` orders. */
+  private queueWindow = StockRoutingComponent.QUEUE_PAGE_SIZE;
+  /** True once the window reached the server's ceiling: nothing older can be read. */
+  readonly queueAtLimit = signal(false);
+  private queueSeq = 0;
+  readonly rxSearch = signal('');
+  readonly selected = signal<WorkQueuePrescription | null>(null);
+  /** At most this many matches are listed; typing more narrows them. */
+  static readonly MAX_MATCHES = 8;
+  readonly matches = computed(() => {
+    const term = this.rxSearch().trim().toLocaleLowerCase();
+    if (!term) {
+      return [];
+    }
+    return this.queue()
+      .filter((rx) => this.searchText(rx).includes(term))
+      .slice(0, StockRoutingComponent.MAX_MATCHES);
+  });
   stockResult = signal<StockCheckResult | null>(null);
 
   /**
@@ -134,6 +195,125 @@ export class StockRoutingComponent implements OnInit {
     if (idFromRoute) {
       this.prescriptionId = idFromRoute;
       this.checkStock();
+    }
+    this.loadQueue();
+  }
+
+  /**
+   * QA D888: the orders a pharmacist can pick from, newest first. The
+   * endpoint's default order is oldest first, so without the explicit sort
+   * a dispensary with more than a page of waiting orders could never find
+   * its newest ones (#963 review).
+   */
+  loadQueue(): void {
+    const seq = ++this.queueSeq;
+    this.queueWindow = StockRoutingComponent.QUEUE_PAGE_SIZE;
+    this.queueAtLimit.set(false);
+    this.queueLoading.set(true);
+    this.queueLoadingMore.set(false);
+    this.queueError.set(false);
+    this.queueMoreError.set(false);
+    this.svc
+      .getDispenseWorkQueue(
+        0,
+        StockRoutingComponent.QUEUE_PAGE_SIZE,
+        'ALL',
+        StockRoutingComponent.QUEUE_SORT,
+      )
+      .subscribe({
+        next: (res) => {
+          if (seq !== this.queueSeq) return;
+          const rows = res?.data?.content ?? [];
+          this.queue.set(rows);
+          this.queueTotal.set(Math.max(res?.data?.totalElements ?? 0, rows.length));
+          this.queueLoading.set(false);
+          this.syncSelectedFromQueue();
+        },
+        error: () => {
+          if (seq !== this.queueSeq) return;
+          this.queue.set([]);
+          this.queueTotal.set(0);
+          this.queueLoading.set(false);
+          this.queueError.set(true);
+        },
+      });
+  }
+
+  /**
+   * The next hundred older waiting orders. Re-reads the newest
+   * `queueWindow + 100` from the start in ONE request and replaces the list,
+   * rather than fetching page N and appending: between two offset reads an
+   * order can be dispensed, cancelled or routed out, and then the row that
+   * was 101st lands on page 0, which is never read again — while the smaller
+   * total made the search claim the whole queue was covered (#963 review
+   * round 2). A single read cannot skip a row, and its total matches its rows.
+   */
+  loadOlderQueue(): void {
+    if (
+      this.queueLoading() ||
+      this.queueLoadingMore() ||
+      this.queueAtLimit() ||
+      !this.queuePartial()
+    ) {
+      return;
+    }
+    const seq = this.queueSeq;
+    const size = Math.min(
+      this.queueWindow + StockRoutingComponent.QUEUE_PAGE_SIZE,
+      StockRoutingComponent.QUEUE_MAX_WINDOW,
+    );
+    this.queueLoadingMore.set(true);
+    this.queueMoreError.set(false);
+    this.svc.getDispenseWorkQueue(0, size, 'ALL', StockRoutingComponent.QUEUE_SORT).subscribe({
+      next: (res) => {
+        if (seq !== this.queueSeq) return;
+        const rows = res?.data?.content ?? [];
+        this.queue.set(rows);
+        this.queueWindow = size;
+        this.queueTotal.set(Math.max(res?.data?.totalElements ?? 0, rows.length));
+        this.queueAtLimit.set(size >= StockRoutingComponent.QUEUE_MAX_WINDOW);
+        this.queueLoadingMore.set(false);
+        this.syncSelectedFromQueue();
+      },
+      error: () => {
+        if (seq !== this.queueSeq) return;
+        this.queueLoadingMore.set(false);
+        this.queueMoreError.set(true);
+      },
+    });
+  }
+
+  /** QA D888: picking an order runs the stock check for it. */
+  pickPrescription(rx: WorkQueuePrescription): void {
+    this.selected.set(rx);
+    this.rxSearch.set('');
+    this.prescriptionId = rx.id;
+    this.checkStock();
+  }
+
+  /** Enter in the search box takes the first match, when there is one. */
+  pickFirstMatch(): void {
+    const first = this.matches()[0];
+    if (first) {
+      this.pickPrescription(first);
+    }
+  }
+
+  patientLabel(rx: WorkQueuePrescription): string {
+    return [rx.patient?.firstName, rx.patient?.lastName].filter((p) => !!p).join(' ');
+  }
+
+  private searchText(rx: WorkQueuePrescription): string {
+    return [this.patientLabel(rx), rx.medicationName, rx.dosage]
+      .filter((p) => !!p)
+      .join(' ')
+      .toLocaleLowerCase();
+  }
+
+  /** A deep-linked order is named once the queue arrives, instead of shown as an id. */
+  private syncSelectedFromQueue(): void {
+    if (this.prescriptionId && !this.selected()) {
+      this.selected.set(this.queue().find((rx) => rx.id === this.prescriptionId) ?? null);
     }
   }
 

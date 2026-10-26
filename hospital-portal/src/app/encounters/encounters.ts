@@ -20,7 +20,7 @@ import {
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
-import { NoteHistoryView, toNoteHistoryView } from './note-history-view';
+import { NoteHistoryView, noteEntrySections, toNoteHistoryView } from './note-history-view';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -116,11 +116,47 @@ export class EncountersComponent implements OnInit {
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
      note payload and is replaced by each ceremony response. */
   noteState = signal<EncounterNoteResponse | null>(null);
+  /**
+   * QA D831: an inpatient stay keeps one note entry per progress note and
+   * author. A second doctor's entry no longer replaces the first doctor's
+   * unsigned draft; the earlier entries are listed here, each signable by
+   * its own author.
+   */
+  noteEntries = signal<EncounterNoteResponse[]>([]);
+  readonly earlierNoteEntries = computed(() => {
+    const currentId = this.noteState()?.id;
+    return this.noteEntries().filter((entry) => entry.id !== currentId);
+  });
+  /**
+   * #965 review: each entry's text is shown above its sign/co-sign button, so
+   * a clinician never signs or attests an entry they were not shown.
+   */
+  readonly earlierNoteEntryViews = computed(() =>
+    this.earlierNoteEntries().map((entry) => ({ entry, sections: noteEntrySections(entry) })),
+  );
+  readonly currentNoteSections = computed(() => noteEntrySections(this.noteState()));
+  signingEntryId = signal<string | null>(null);
+  cosigningEntryId = signal<string | null>(null);
   signingNote = signal(false);
   cosigningNote = signal(false);
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /**
+   * QA D831 (#965 review): the entry the open addendum form corrects. On a
+   * stay an earlier entry is signed and locked, so an addendum is its only
+   * correction route; it must be filed under that entry, never the latest.
+   */
+  addendumTargetId = signal<string | null>(null);
+  /** The addendum form is open under one of the stay's earlier entries, not the current one. */
+  readonly addendumOnEarlierEntry = computed(() => {
+    const target = this.addendumTargetId();
+    return (
+      this.showAddendumForm() &&
+      target !== null &&
+      this.earlierNoteEntries().some((entry) => entry.id === target)
+    );
+  });
 
   /* Status transitions + AVS */
   transitioning = signal(false);
@@ -538,8 +574,10 @@ export class EncountersComponent implements OnInit {
     this.selectedEncounter.set(enc);
     this.showNoteForm.set(false);
     this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
     this.addendumContent = '';
     this.noteState.set(enc.note ?? null);
+    this.noteEntries.set(enc.noteEntries ?? []);
     this.loadNoteHistory(enc.id);
   }
 
@@ -559,6 +597,7 @@ export class EncountersComponent implements OnInit {
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SAVED'));
         this.savingNote.set(false);
         this.showNoteForm.set(false);
+        this.keepEarlierEntry(this.noteState(), note ?? null);
         this.noteState.set(note ?? null);
         this.loadNoteHistory(enc.id);
       },
@@ -581,12 +620,16 @@ export class EncountersComponent implements OnInit {
    *  and its refusal is surfaced verbatim. */
   signNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.signingNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.signingNote()) return;
     this.signingNote.set(true);
-    this.encounterService.signNote(enc.id).subscribe({
+    // #965 review: the entry on screen, by id — without it the server picked
+    // the caller's own unsigned entry, a text that was not displayed.
+    this.encounterService.signNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.signingNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {
@@ -598,14 +641,79 @@ export class EncountersComponent implements OnInit {
     });
   }
 
+  /** QA D831: signs one earlier entry of the stay, by its id (the server checks the author). */
+  signNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.signingEntryId()) return;
+    this.signingEntryId.set(entry.id);
+    this.encounterService.signNote(enc.id, entry.id).subscribe({
+      next: (signed) => {
+        this.signingEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        this.replaceEntry(signed ?? null);
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.signingEntryId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** #965 review: co-signs one earlier entry of the stay, by its id (the server checks who may). */
+  cosignNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.cosigningEntryId()) return;
+    this.cosigningEntryId.set(entry.id);
+    this.encounterService.cosignNote(enc.id, entry.id).subscribe({
+      next: (cosigned) => {
+        this.cosigningEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(cosigned ?? null);
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.cosigningEntryId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Puts a ceremony response in place of the entry it answers, in the list of the stay's entries. */
+  private replaceEntry(updated: EncounterNoteResponse | null): void {
+    if (!updated?.id) return;
+    this.noteEntries.update((list) => list.map((e) => (e.id === updated.id ? updated : e)));
+  }
+
+  /**
+   * QA D831: when a save on a stay starts a new entry, the entry shown until
+   * now stays in the list of the stay's entries instead of disappearing.
+   */
+  private keepEarlierEntry(
+    previous: EncounterNoteResponse | null,
+    saved: EncounterNoteResponse | null,
+  ): void {
+    if (!previous?.id || !saved?.id || previous.id === saved.id) return;
+    this.noteEntries.update((list) => {
+      const others = list.filter((e) => e.id !== previous.id && e.id !== saved.id);
+      return [...others, previous, saved];
+    });
+  }
+
   cosignNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.cosigningNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.cosigningNote()) return;
     this.cosigningNote.set(true);
-    this.encounterService.cosignNote(enc.id).subscribe({
+    this.encounterService.cosignNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.cosigningNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {
@@ -643,17 +751,31 @@ export class EncountersComponent implements OnInit {
     });
   }
 
+  /** Opens the addendum form for one entry: an earlier entry of the stay, or the current one. */
+  openAddendumForm(entryId: string | null | undefined): void {
+    this.addendumTargetId.set(entryId ?? null);
+    this.addendumContent = '';
+    this.showAddendumForm.set(true);
+  }
+
+  closeAddendumForm(): void {
+    this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
+    this.addendumContent = '';
+  }
+
   addAddendum(): void {
     const enc = this.selectedEncounter();
     if (!enc || !this.addendumContent.trim()) return;
+    // QA D831: the entry the form was opened for; the current entry when none was named.
+    const noteId = this.addendumTargetId() ?? this.noteState()?.id ?? undefined;
     this.addendumSaving.set(true);
     this.encounterService
-      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })
+      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
-          this.addendumContent = '';
-          this.showAddendumForm.set(false);
+          this.closeAddendumForm();
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },
@@ -803,6 +925,7 @@ export class EncountersComponent implements OnInit {
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+      case 'LEFT_WITHOUT_BEING_SEEN':
         return 'status-cancelled';
       default:
         return '';

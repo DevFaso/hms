@@ -786,7 +786,7 @@
                   <td class="date-cell">
                     {{ appt.appointmentDate | serverTime | date: 'mediumDate' }}
                   </td>
-                  <td>{{ appt.startTime }} – {{ appt.endTime }}</td>
+                  <td>{{ appt.startTime | clockTime }} – {{ appt.endTime | clockTime }}</td>
                   <td>{{ appt.staffName || '—' }}</td>
                   <td>{{ appt.reason || '—' }}</td>
                   <td>

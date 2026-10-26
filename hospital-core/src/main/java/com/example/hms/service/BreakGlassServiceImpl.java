@@ -302,9 +302,35 @@ public class BreakGlassServiceImpl implements BreakGlassService {
             }
             userId = caller.getId();
         }
+        return consumeLive(patientId, userId, null, purpose);
+    }
+
+    /**
+     * QA D840: a read made under a live session counts on that session. The
+     * banner promised "every read is logged", but nothing on the read path
+     * called {@link #consumeIfLive}, so auditCount stayed 0 and the reads were
+     * filed only as ordinary PATIENT_ACCESS. The patient-read interceptor now
+     * calls this for every successful patient-scoped GET. A session declared
+     * at another hospital does not count for a read made here (the
+     * {@link com.example.hms.service.recordaccess.BreakGlassGate} rule).
+     */
+    @Override
+    @Transactional
+    public Optional<BreakGlassSessionResponseDTO> consumeReadIfLive(UUID patientId, UUID userId,
+                                                                    UUID actingHospitalId, String purpose) {
+        if (patientId == null || userId == null) {
+            return Optional.empty();
+        }
+        return consumeLive(patientId, userId, actingHospitalId, purpose);
+    }
+
+    private Optional<BreakGlassSessionResponseDTO> consumeLive(UUID patientId, UUID userId,
+                                                               UUID actingHospitalId, String purpose) {
         Optional<BreakGlassSession> maybe = sessionRepository
             .findLiveForUserAndPatient(userId, patientId, LocalDateTime.now(clock))
             .stream()
+            .filter(s -> actingHospitalId == null
+                || (s.getHospital() != null && actingHospitalId.equals(s.getHospital().getId())))
             .findFirst();
         if (maybe.isEmpty()) {
             return Optional.empty();
@@ -418,12 +444,27 @@ public class BreakGlassServiceImpl implements BreakGlassService {
         }
     }
 
+    /** QA D839: "First Last", or null when the account carries neither. */
+    private static String displayName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String first = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        String last = user.getLastName() == null ? "" : user.getLastName().trim();
+        String full = (first + " " + last).trim();
+        return full.isEmpty() ? null : full;
+    }
+
     private BreakGlassSessionResponseDTO toDto(BreakGlassSession s) {
         return BreakGlassSessionResponseDTO.builder()
             .id(s.getId())
             .userId(s.getUser() != null ? s.getUser().getId() : null)
             .userName(s.getUser() != null ? s.getUser().getUsername() : null)
+            .userDisplayName(displayName(s.getUser()))
             .patientId(s.getPatient() != null ? s.getPatient().getId() : null)
+            .patientName(s.getPatient() != null ? s.getPatient().getFullName() : null)
+            .patientMrn(s.getPatient() != null && s.getHospital() != null
+                ? s.getPatient().getMrnForHospital(s.getHospital().getId()) : null)
             .hospitalId(s.getHospital() != null ? s.getHospital().getId() : null)
             .hospitalName(s.getHospital() != null ? s.getHospital().getName() : null)
             .reason(s.getReason())

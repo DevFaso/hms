@@ -736,6 +736,90 @@ class GeneralReferralServiceImplTest {
         assertEquals("ICU", dto.getSourceDepartmentName());
     }
 
+    /**
+     * QA D889: /referrals printed r.patientMrn under the patient's name and the
+     * response had no such field, so the line was blank. It carries the MRN at
+     * the referring hospital, else at the receiving one, never another's.
+     */
+    @Test
+    void d889_theResponseCarriesThePatientsMrnAtTheReferringHospital() {
+        GeneralReferral referral = buildReferral(UUID.randomUUID());
+        Hospital receiving = buildHospital(UUID.randomUUID(), "Destination Hospital");
+        referral.setReceivingHospital(receiving);
+        Patient patient = referral.getPatient();
+        Hospital third = buildHospital(UUID.randomUUID(), "Third Hospital");
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(
+            registration(patient, third, "MRN-THIRD"),
+            registration(patient, referral.getHospital(), "MRN-A-0042"))));
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId())).thenReturn(List.of(referral));
+
+        GeneralReferralResponseDTO dto = generalReferralService.getReferralsByPatient(patient.getId()).get(0);
+
+        assertEquals("MRN-A-0042", dto.getPatientMrn());
+
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(registration(patient, receiving, "MRN-B-7"))));
+        assertEquals("MRN-B-7", generalReferralService.getReferralsByPatient(patient.getId()).get(0).getPatientMrn());
+
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(registration(patient, third, "MRN-THIRD"))));
+        assertThat(generalReferralService.getReferralsByPatient(patient.getId()).get(0).getPatientMrn()).isNull();
+    }
+
+    /**
+     * #965 review: the receiving hospital's list of incoming referrals showed
+     * the referring hospital's MRN under the patient's name although the
+     * patient has an MRN at the receiving hospital, the one acting.
+     */
+    @Test
+    void d889_anIncomingReferralShowsTheMrnAtTheReadersHospital() {
+        GeneralReferral referral = buildReferral(UUID.randomUUID());
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        referral.setSubmittedAt(LocalDateTime.now());
+        Hospital receiving = buildHospital(UUID.randomUUID(), "Destination Hospital");
+        referral.setReceivingHospital(receiving);
+        Patient patient = referral.getPatient();
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(
+            registration(patient, referral.getHospital(), "MRN-A-0042"),
+            registration(patient, receiving, "MRN-B-7"))));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(receiving.getId());
+        when(roleValidator.getCurrentHospitalId()).thenReturn(receiving.getId());
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(receiving.getId())).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(receiving.getId()))
+            .thenReturn(List.of(referral));
+
+        List<GeneralReferralResponseDTO> incoming = generalReferralService.getReferralsByHospital(receiving.getId(), null);
+
+        assertThat(incoming).hasSize(1);
+        assertEquals("MRN-B-7", incoming.get(0).getPatientMrn());
+
+        // Path re-verified: no MRN at the reader's hospital → the referring one's.
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(
+            registration(patient, referral.getHospital(), "MRN-A-0042"))));
+        assertEquals("MRN-A-0042",
+            generalReferralService.getReferralsByHospital(receiving.getId(), null).get(0).getPatientMrn());
+
+        // The sending side reads its own MRN, not the receiving one's.
+        UUID sendingId = referral.getHospital().getId();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(sendingId);
+        when(roleValidator.getCurrentHospitalId()).thenReturn(sendingId);
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(sendingId)).thenReturn(List.of(referral));
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(sendingId)).thenReturn(List.of());
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(
+            registration(patient, referral.getHospital(), "MRN-A-0042"),
+            registration(patient, receiving, "MRN-B-7"))));
+        assertEquals("MRN-A-0042",
+            generalReferralService.getReferralsByHospital(sendingId, null).get(0).getPatientMrn());
+    }
+
+    private static com.example.hms.model.PatientHospitalRegistration registration(Patient patient, Hospital hospital,
+                                                                                 String mrn) {
+        com.example.hms.model.PatientHospitalRegistration reg = new com.example.hms.model.PatientHospitalRegistration();
+        reg.setId(UUID.randomUUID());
+        reg.setPatient(patient);
+        reg.setHospital(hospital);
+        reg.setMrn(mrn);
+        return reg;
+    }
+
     // ── Tenant isolation tests ──
 
     @Test

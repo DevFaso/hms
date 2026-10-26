@@ -12,6 +12,7 @@ import {
 } from '../services/org-security.service';
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
+import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 
 /**
  * Org security policies + rules via the flat CRUD controllers
@@ -22,7 +23,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, OrgTextPipe],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

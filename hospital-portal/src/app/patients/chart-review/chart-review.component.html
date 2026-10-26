@@ -83,7 +83,26 @@
                         </span>
                       }
                     </div>
-                    @if (event.title) {
+                    @if (event.section === 'ENCOUNTER' && encountersById().get(event.id); as enc) {
+                      <p
+                        class="chart-review__timeline-title"
+                        data-testid="timeline-encounter-title"
+                      >
+                        {{
+                          enc.encounterType
+                            ? (enc.encounterType | enumLabel: 'encounterType')
+                            : '—'
+                        }}{{ enc.departmentName ? ' — ' + enc.departmentName : '' }}
+                      </p>
+                    } @else if (
+                      event.section === 'IMAGING' && imagingById().get(event.id);
+                      as img
+                    ) {
+                      <p class="chart-review__timeline-title">
+                        {{ img.modality ? (img.modality | enumLabel: 'imagingModality') : '—'
+                        }}{{ img.studyType ? ' — ' + img.studyType : '' }}
+                      </p>
+                    } @else if (event.title) {
                       <p class="chart-review__timeline-title">{{ event.title }}</p>
                     }
                     @if (event.summary) {

@@ -42,6 +42,8 @@ public class LabResultResponseDTO {
     private LocalDateTime resultDate;
     private String notes;
     private List<LabResultReferenceRangeDTO> referenceRanges;
+    /** QA D834: the expected answer of a qualitative test ("Négatif"), shown where it has no range. */
+    private String expectedResult;
     private List<LabResultTrendPointDTO> trendHistory;
     private String severityFlag;
     /**

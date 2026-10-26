@@ -32,6 +32,8 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant, toServerDateTime } from '../shared/date-utils';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -307,20 +309,55 @@ export class ConsultationsComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /** QA D890: the request's required fields, by the label the form shows them under. */
+  private static readonly FIELD_LABELS: Readonly<Record<string, string>> = {
+    patientId: 'PATIENTS.PATIENT',
+    hospitalId: 'ENCOUNTERS.HOSPITAL',
+    consultationType: 'CONSULTATIONS.TYPE',
+    urgency: 'CONSULTATIONS.URGENCY',
+    specialtyRequested: 'CONSULTATIONS.SPECIALTY_REQUESTED',
+    reasonForConsult: 'CONSULTATIONS.REASON_FOR_CONSULT',
+  };
+
   submitForm(): void {
+    // QA D890: an empty form was posted and answered with a generic toast.
+    const missing = missingRequiredMessage(this.translate, [
+      { labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+      { labelKey: 'CONSULTATIONS.TYPE', value: this.form.consultationType },
+      { labelKey: 'CONSULTATIONS.URGENCY', value: this.form.urgency },
+      { labelKey: 'CONSULTATIONS.SPECIALTY_REQUESTED', value: this.form.specialtyRequested },
+      { labelKey: 'CONSULTATIONS.REASON_FOR_CONSULT', value: this.form.reasonForConsult },
+    ]);
+    if (missing) {
+      this.toast.error(missing);
+      return;
+    }
     this.saving.set(true);
     this.consultService.create(this.form).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.CREATE_SUCCESS'));
         this.closeModal();
         this.saving.set(false);
-        this.load();
+        this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, ConsultationsComponent.FIELD_LABELS) ??
+            this.translate.instant('CONSULTATIONS.CREATE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * QA D891: after a change the list AND the stat cards are fetched again;
+   * the cards kept the counts of the page load until a reload.
+   */
+  reload(): void {
+    this.load();
+    this.loadStats();
   }
 
   confirmCancel(c: ConsultationResponse): void {
@@ -344,7 +381,7 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();
         this.deleting.set(false);
-        this.load();
+        this.reload();
       },
       error: () => {
         this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_FAILED'));
@@ -534,7 +571,7 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.REASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
-          this.load();
+          this.reload();
         },
         error: () => {
           this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'));
@@ -547,7 +584,7 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.ASSIGN_SUCCESS'));
           this.closeAssignModal();
           this.assigning.set(false);
-          this.load();
+          this.reload();
         },
         error: () => {
           this.toast.error(this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'));
@@ -640,7 +677,7 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.SCHEDULE_SUCCESS'));
           this.closeScheduleModal();
           this.scheduling.set(false);
-          this.load();
+          this.reload();
         },
         error: () => {
           this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'));
@@ -654,7 +691,7 @@ export class ConsultationsComponent implements OnInit {
     this.consultService.acknowledge(c.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.ACK_SUCCESS'));
-        this.load();
+        this.reload();
       },
       error: () => this.toast.error(this.translate.instant('CONSULTATIONS.ACK_FAILED')),
     });
@@ -665,7 +702,7 @@ export class ConsultationsComponent implements OnInit {
     this.consultService.start(c.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('CONSULTATIONS.START_SUCCESS'));
-        this.load();
+        this.reload();
       },
       error: () => this.toast.error(this.translate.instant('CONSULTATIONS.START_FAILED')),
     });
@@ -706,7 +743,7 @@ export class ConsultationsComponent implements OnInit {
           this.toast.success(this.translate.instant('CONSULTATIONS.COMPLETE_SUCCESS'));
           this.closeCompleteModal();
           this.completing.set(false);
-          this.load();
+          this.reload();
         },
         error: () => {
           this.toast.error(this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'));
@@ -739,7 +776,7 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.DECLINE_SUCCESS'));
         this.closeDeclineModal();
         this.declining.set(false);
-        this.load();
+        this.reload();
       },
       error: () => {
         this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_FAILED'));

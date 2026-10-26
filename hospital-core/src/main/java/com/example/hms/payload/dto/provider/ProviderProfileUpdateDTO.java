@@ -35,7 +35,8 @@ public class ProviderProfileUpdateDTO {
 
     /** A hospital's phone rule ({@code HospitalRequestDTO}): 10 to 15 characters. */
     @NotBlank(message = "{hospital.phoneNumber.required}")
-    @Size(min = 10, max = 15, message = "{hospital.phoneNumber.size}")
+    // QA D833: same rule as the hospital form (PhoneNumbers.normalizeFacilityPhone).
+    @Size(max = 30, message = "{hospital.phoneNumber.size}")
     private String phoneNumber;
 
     @Email(message = "{hospital.email.invalid}")

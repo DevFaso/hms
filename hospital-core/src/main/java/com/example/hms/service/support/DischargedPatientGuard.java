@@ -50,7 +50,7 @@ public class DischargedPatientGuard {
             .max(Comparator.naturalOrder())
             .orElse(null);
         boolean openVisit = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
-                EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED)).stream()
+                EncounterStatus.CLOSED).stream()
             .anyMatch(e -> lastDischarge == null || startedAfter(e, lastDischarge));
         if (!openVisit) {
             throw new BusinessException(messageKey);

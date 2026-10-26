@@ -280,6 +280,44 @@ class AdmissionServiceImplTest {
     }
 
     @Test
+    void d804_updateAdmissionToAnotherDepartmentMovesTheStayEncounter() {
+        com.example.hms.model.Hospital stayHospital = new com.example.hms.model.Hospital();
+        stayHospital.setId(UUID.randomUUID());
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setHospital(stayHospital);
+        com.example.hms.model.Department cardiology = new com.example.hms.model.Department();
+        cardiology.setId(UUID.randomUUID());
+        cardiology.setHospital(stayHospital);
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setDepartmentId(cardiology.getId());
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(departmentRepository.findById(cardiology.getId())).thenReturn(Optional.of(cardiology));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        service.updateAdmission(admissionId, request);
+
+        assertThat(admission.getDepartment()).isSameAs(cardiology);
+        verify(stayEncounters).followStayDepartment(admission);
+    }
+
+    @Test
+    void d804_anUpdateThatKeepsTheDepartmentDoesNotTouchTheStayEncounter() {
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
+        request.setRoomBed("Room 102");
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        service.updateAdmission(admissionId, request);
+
+        verify(stayEncounters, never()).followStayDepartment(any());
+    }
+
+    @Test
     void cancelAdmission_success() {
         Admission admission = new Admission();
         admission.setId(admissionId);

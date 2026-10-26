@@ -102,21 +102,24 @@
           </div>
         </div>
 
-        <!-- Quick Stats (desktop) -->
-        <div class="header-stats">
-          <div class="stat-item">
-            <span class="stat-value">{{ allRoles().length }}</span>
-            <span class="stat-label">{{ 'PROFILE.ROLES' | translate }}</span>
+        <!-- Quick Stats (desktop). QA D844: staff counters only — a patient
+             has no assignments, and the bare security % meant nothing to them. -->
+        @if (!isPatientOnly()) {
+          <div class="header-stats">
+            <div class="stat-item">
+              <span class="stat-value">{{ allRoles().length }}</span>
+              <span class="stat-label">{{ 'PROFILE.ROLES' | translate }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ assignments().length }}</span>
+              <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ securityScore() }}%</span>
+              <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ assignments().length }}</span>
-            <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ securityScore() }}%</span>
-            <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
-          </div>
-        </div>
+        }
       </div>
     </div>
 
