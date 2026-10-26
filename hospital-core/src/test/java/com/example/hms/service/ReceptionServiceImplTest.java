@@ -420,6 +420,45 @@ class ReceptionServiceImplTest {
             assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
         }
 
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
+            names = {"CANCELLED", "LEFT_WITHOUT_BEING_SEEN"})
+        @DisplayName("round 13: a walk-in closed unseen shows as closed, never back in the walk-in column")
+        void aWalkInClosedUnseenIsNotWaiting(EncounterStatus closedAs) {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(Collections.emptyList());
+            Encounter walkIn = makeWalkInEncounter(closedAs);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkIn));
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> all = service.getQueue(today, hospitalId, "ALL", null, null);
+            com.example.hms.payload.dto.FlowBoardDTO board = service.getFlowBoard(today, hospitalId, null);
+
+            assertThat(all).extracting(ReceptionQueueItemDTO::getStatus).containsExactly(closedAs.name());
+            assertThat(board.getWalkIn()).isEmpty();
+            assertThat(board.getArrived()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("round 13: an appointment whose visit was left without being seen reads LEFT_WITHOUT_BEING_SEEN, not the appointment's CANCELLED")
+        void anAppointmentLeftWithoutBeingSeen() {
+            Appointment appt = makeAppointment(AppointmentStatus.CANCELLED);
+            Encounter visit = makeEncounter(EncounterStatus.LEFT_WITHOUT_BEING_SEEN, appt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(visit));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(result).extracting(ReceptionQueueItemDTO::getStatus)
+                .containsExactly("LEFT_WITHOUT_BEING_SEEN");
+        }
+
         @Test
         @DisplayName("walk-in hasInsuranceIssue is true when patient has no insurance")
         void walkInInsuranceFlagSet() {

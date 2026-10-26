@@ -2912,7 +2912,7 @@ class EncounterServiceImplTest {
         }
 
         @Test
-        @DisplayName("close-unseen: a never-seen visit becomes CANCELLED with its outcome and reason, no AVS")
+        @DisplayName("round 13, the QA call: close-unseen LEFT_WITHOUT_BEING_SEEN gives its own status (not Cancelled), with its outcome and reason, no AVS")
         void closeUnseenCancelsWithAReason() {
             Encounter encounter = visit(EncounterStatus.ARRIVED);
             when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -2923,7 +2923,7 @@ class EncounterServiceImplTest {
                     .reason("  Parti avant l'appel  ").build(),
                 "receptionist1", true, null);
 
-            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
             assertThat(encounter.getExtraFields())
                 .containsEntry("unseenOutcome", "LEFT_WITHOUT_BEING_SEEN")
                 .containsEntry("unseenReason", "Parti avant l'appel");
@@ -2932,7 +2932,37 @@ class EncounterServiceImplTest {
             verify(dischargeSummaryRepository, never()).save(any());
             verify(checkOutMapper, never()).toAfterVisitSummary(any(), any(), any());
             verify(encounterHistoryRepository).save(any());
-            verify(trackerEventPublisher).publishStatusTransition(encounter, "ARRIVED", "CANCELLED");
+            verify(trackerEventPublisher).publishStatusTransition(encounter, "ARRIVED", "LEFT_WITHOUT_BEING_SEEN");
+        }
+
+        @Test
+        @DisplayName("round 13: close-unseen CANCELLED stays the staff's Cancelled, never left-without-being-seen")
+        void closeUnseenCancelledStaysCancelled() {
+            Encounter encounter = visit(EncounterStatus.TRIAGE);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.CANCELLED)
+                    .reason("Inscrit par erreur").build(),
+                "receptionist1", true, null);
+
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+            assertThat(encounter.getExtraFields()).containsEntry("unseenOutcome", "CANCELLED");
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+            verify(trackerEventPublisher).publishStatusTransition(encounter, "TRIAGE", "CANCELLED");
+        }
+
+        @Test
+        @DisplayName("round 13: a visit left without being seen is closed: no check-out, no second close-unseen")
+        void aLeftWithoutBeingSeenVisitIsClosed() {
+            Encounter encounter = visit(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+
+            assertThatThrownBy(() -> service.checkOut(encounter.getId(), CheckOutRequestDTO.builder().build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.checkout.alreadyClosed"));
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+            verify(encounterRepository, never()).save(any());
         }
 
         @Test
@@ -2948,14 +2978,15 @@ class EncounterServiceImplTest {
                     .reason("Parti avant l'appel").build(),
                 "receptionist1", true, null);
 
-            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.CANCELLED);
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
             verify(appointmentRepository).save(appointment);
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
         @org.junit.jupiter.params.provider.EnumSource(value = EncounterStatus.class,
-            names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED"})
+            names = {"IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED",
+                "LEFT_WITHOUT_BEING_SEEN"})
         @DisplayName("close-unseen refuses a visit a clinician has seen, or one already closed")
         void closeUnseenRefusesASeenVisit(EncounterStatus status) {
             Encounter encounter = visit(status);
@@ -2984,6 +3015,20 @@ class EncounterServiceImplTest {
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
                 EncounterStatus.ARRIVED, EncounterStatus.CANCELLED, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        // Round 13: left-without-being-seen carries a reason too: only close-unseen writes it,
+        // and a visit closed that way is not reopened by a status write (PUT, the flow board).
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.ARRIVED, EncounterStatus.LEFT_WITHOUT_BEING_SEEN, true))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDeskTransition(
+                EncounterStatus.WAITING_FOR_PHYSICIAN, EncounterStatus.LEFT_WITHOUT_BEING_SEEN))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDeskTransition(
+                EncounterStatus.LEFT_WITHOUT_BEING_SEEN, EncounterStatus.ARRIVED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDirectTransition(
+                EncounterStatus.LEFT_WITHOUT_BEING_SEEN, EncounterStatus.IN_PROGRESS, true))
             .isInstanceOf(com.example.hms.exception.BusinessException.class);
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> EncounterClosureRules.requireDeskTransition(
                 EncounterStatus.COMPLETED, EncounterStatus.ARRIVED))

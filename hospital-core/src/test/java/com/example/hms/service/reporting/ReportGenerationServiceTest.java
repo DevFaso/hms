@@ -110,16 +110,21 @@ class ReportGenerationServiceTest {
         Encounter cancelled = new Encounter();
         cancelled.setEncounterDate(LocalDateTime.of(2026, 8, 21, 11, 0));
         cancelled.setStatus(EncounterStatus.CANCELLED);
+        // Round 13: a patient who left without being seen is counted apart:
+        // not a consultation (completed), not a staff cancellation.
+        Encounter walkedOut = new Encounter();
+        walkedOut.setEncounterDate(LocalDateTime.of(2026, 8, 21, 12, 0));
+        walkedOut.setStatus(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
         when(encounterRepository.findVisitsByHospitalAndDateBetween(
             eq(hospital.getId()), any(), any(), any()))
-            .thenReturn(new PageImpl<>(List.of(completed, cancelled)));
+            .thenReturn(new PageImpl<>(List.of(completed, cancelled, walkedOut)));
 
         GeneratedReport report = service.generate(
             definition(ReportType.ENCOUNTER_ACTIVITY, ReportPeriod.DAILY), "2026-08-21");
 
         String csv = new String(report.content(), StandardCharsets.UTF_8);
-        assertThat(csv).contains("date,encounters_total,completed,cancelled");
-        assertThat(csv).contains("2026-08-21,2,1,1");
+        assertThat(csv).contains("date,encounters_total,completed,cancelled,left_without_being_seen");
+        assertThat(csv).contains("2026-08-21,3,1,1,1");
         assertThat(report.rowCount()).isEqualTo(1);
         assertThat(report.filename()).isEqualTo("encounter_activity_20260821.csv");
     }

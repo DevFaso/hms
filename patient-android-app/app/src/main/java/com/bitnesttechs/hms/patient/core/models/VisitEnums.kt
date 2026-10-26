@@ -52,6 +52,8 @@ enum class EncounterStatus {
     READY_FOR_DISCHARGE,
     COMPLETED,
     CANCELLED,
+    /** The patient left before a clinician saw them (its own status since V236). */
+    LEFT_WITHOUT_BEING_SEEN,
     UNKNOWN;
 
     @get:StringRes
@@ -66,6 +68,7 @@ enum class EncounterStatus {
             READY_FOR_DISCHARGE -> R.string.encounter_status_ready_for_discharge
             COMPLETED -> R.string.encounter_status_completed
             CANCELLED -> R.string.encounter_status_cancelled
+            LEFT_WITHOUT_BEING_SEEN -> R.string.encounter_status_left_without_being_seen
             UNKNOWN -> R.string.encounter_status_unknown
         }
 

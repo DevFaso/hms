@@ -87,6 +87,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_LEFT_WITHOUT_BEING_SEEN = "LEFT_WITHOUT_BEING_SEEN";
     private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
     private final AppointmentRepository appointmentRepo;
@@ -383,6 +384,11 @@ public class ReceptionServiceImpl implements ReceptionService {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private String computeStatus(Appointment appt, Encounter encounter) {
+        // Round 13: a patient who walked out is shown as such, not as the
+        // appointment's CANCELLED the close-unseen also writes.
+        if (encounter != null && encounter.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN) {
+            return STATUS_LEFT_WITHOUT_BEING_SEEN;
+        }
         if (appt.getStatus() == AppointmentStatus.NO_SHOW) return "NO_SHOW";
         if (appt.getStatus() == AppointmentStatus.CANCELLED) return "CANCELLED";
         if (appt.getStatus() == AppointmentStatus.COMPLETED && encounter == null) return STATUS_COMPLETED;
@@ -394,6 +400,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
             case CANCELLED -> "CANCELLED";
+            case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> appt.getStatus().name();
         };
     }
@@ -521,6 +528,10 @@ public class ReceptionServiceImpl implements ReceptionService {
             case ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN -> STATUS_ARRIVED;
             case IN_PROGRESS, AWAITING_RESULTS, READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
+            // A walk-in closed without a consultation is closed: it went back
+            // to the walk-in column as if it were still waiting.
+            case CANCELLED -> "CANCELLED";
+            case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> STATUS_WALK_IN;
         };
     }

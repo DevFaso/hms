@@ -158,7 +158,39 @@ public class AdmissionStayEncounterService {
         closePendingNursingTasks(admission);
     }
 
+    /**
+     * QA D804: the stay's encounter follows the admission to its current
+     * department (a transfer, a bed in another department's ward, an edit of
+     * the admission). The encounter kept the department it was opened in, so
+     * the encounter list showed the admitting department while the
+     * after-visit summary named the discharging one. Only an open stay
+     * encounter moves here; the discharge carries the last move onto it.
+     */
+    @Transactional
+    public void followStayDepartment(Admission admission) {
+        if (admission == null || admission.getId() == null) {
+            return;
+        }
+        encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId())
+            .filter(enc -> enc.getStatus() == null || !enc.getStatus().isClosed())
+            .filter(enc -> moveToStayDepartment(enc, admission))
+            .ifPresent(encounterRepository::save);
+    }
+
+    /** @return whether the encounter's department changed */
+    private static boolean moveToStayDepartment(Encounter enc, Admission admission) {
+        com.example.hms.model.Department department = departmentOf(admission);
+        if (department == null || (enc.getDepartment() != null
+            && java.util.Objects.equals(enc.getDepartment().getId(), department.getId()))) {
+            return false;
+        }
+        enc.setDepartment(department);
+        return true;
+    }
+
     private void fillStayEncounter(Encounter enc, Admission admission, String dischargeDiagnosis) {
+        // QA D804: the encounter is closed in the department the stay ends in.
+        moveToStayDepartment(enc, admission);
         if (!isBlank(dischargeDiagnosis)) {
             enc.setDischargeDiagnoses(toJsonArray(truncate(dischargeDiagnosis, 2000)));
         }

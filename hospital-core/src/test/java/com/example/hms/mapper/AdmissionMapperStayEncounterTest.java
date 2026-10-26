@@ -99,4 +99,28 @@ class AdmissionMapperStayEncounterTest {
         assertThat(dto.getEncounterId()).isNull();
         assertThat(dto.getCurrentEncounterId()).isEqualTo(open.getId());
     }
+
+    @Test
+    void d803_theDischargeDiagnosisTravelsWithTheAdmission_inEveryShapeTheEncounterKeepsIt() {
+        Encounter stay = stay(EncounterStatus.COMPLETED);
+        stay.setDischargeDiagnoses("[\"J18.9 Pneumopathie, sans précision\",\" I10 HTA \",\"\"]");
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        assertThat(mapper.toResponseDTO(admission).getDischargeDiagnosis())
+            .isEqualTo("J18.9 Pneumopathie, sans précision; I10 HTA");
+        // text that is not a JSON array is shown as it is, as the after-visit summary does
+        assertThat(AdmissionMapper.joinDiagnoses(" Paludisme grave ")).isEqualTo("Paludisme grave");
+        assertThat(AdmissionMapper.joinDiagnoses("[]")).isNull();
+        assertThat(AdmissionMapper.joinDiagnoses(null)).isNull();
+    }
+
+    @Test
+    void d803_anOpenStayHasNoDischargeDiagnosisYet() {
+        Encounter stay = stay(EncounterStatus.IN_PROGRESS);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+
+        assertThat(mapper.toResponseDTO(admission).getDischargeDiagnosis()).isNull();
+    }
 }

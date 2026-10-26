@@ -158,17 +158,20 @@ public class ReportGenerationService {
             current.forEach(encounter -> {
                 if (encounter.getEncounterDate() == null) return;
                 int[] counts = byDay.computeIfAbsent(
-                    encounter.getEncounterDate().toLocalDate(), d -> new int[3]);
+                    encounter.getEncounterDate().toLocalDate(), d -> new int[4]);
                 counts[0]++;
                 if (encounter.getStatus() == EncounterStatus.COMPLETED) counts[1]++;
                 if (encounter.getStatus() == EncounterStatus.CANCELLED) counts[2]++;
+                // Round 13: a patient who left without being seen is counted
+                // apart, never as a consultation nor as a staff cancellation.
+                if (encounter.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN) counts[3]++;
             });
             page++;
         } while (current.hasNext());
 
         return toCsv(definition, periodToken,
-            List.of("date", "encounters_total", "completed", "cancelled"),
-            byDay, 3);
+            List.of("date", "encounters_total", "completed", "cancelled", "left_without_being_seen"),
+            byDay, 4);
     }
 
     private GeneratedReport appointmentActivity(ReportDefinition definition, PeriodRange range,

@@ -93,6 +93,51 @@ class BedAssignmentServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void d804_aTransferToAnotherDepartmentsBedMovesTheStayEncounterToo() {
+        AdmissionStayEncounterService stayEncounters = org.mockito.Mockito.mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        com.example.hms.model.Department cardiology = new com.example.hms.model.Department();
+        cardiology.setId(UUID.randomUUID());
+        Ward cardioWard = Ward.builder().hospital(ward.getHospital()).name("Cardio").code("CAR01")
+            .department(cardiology).build();
+        Bed bed = Bed.builder().ward(cardioWard).bedNumber("K01").status(BedStatus.RESERVED).build();
+        bed.setId(UUID.randomUUID());
+        when(bedRepository.findByIdAndWard_Hospital_Id(bed.getId(), hospitalId)).thenReturn(Optional.of(bed));
+
+        // the transfer completion's call (TransferServiceImpl): a RESERVED destination
+        service.assignBed(admission, bed.getId(), java.util.Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
+
+        assertThat(admission.getDepartment()).isSameAs(cardiology);
+        org.mockito.Mockito.verify(stayEncounters).followStayDepartment(admission);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void d804_aBedInAWardWithNoDepartmentLeavesTheEncounterAlone() {
+        AdmissionStayEncounterService stayEncounters = org.mockito.Mockito.mock(AdmissionStayEncounterService.class);
+        org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
+            org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+        org.mockito.Mockito.lenient().doAnswer(inv -> {
+            ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
+            return null;
+        }).when(provider).ifAvailable(org.mockito.ArgumentMatchers.any());
+        service.setStayEncounters(provider);
+        Bed next = bed("B09", BedStatus.AVAILABLE);
+        when(bedRepository.findByIdAndWard_Hospital_Id(next.getId(), hospitalId)).thenReturn(Optional.of(next));
+
+        service.assignBed(admission, next.getId());
+
+        org.mockito.Mockito.verifyNoInteractions(stayEncounters);
+    }
+
+    @Test
     void assignBedReleasesPreviousBed() {
         Bed previous = bed("B01", BedStatus.OCCUPIED);
         admission.setBed(previous);

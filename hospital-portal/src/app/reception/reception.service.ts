@@ -24,6 +24,7 @@ export type QueueStatus =
   | 'COMPLETED'
   | 'WALK_IN'
   | 'CANCELLED'
+  | 'LEFT_WITHOUT_BEING_SEEN'
   | string;
 
 export interface ReceptionQueueItem {

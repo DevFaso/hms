@@ -205,6 +205,10 @@ class PatientServiceImplTest {
     @Mock
     private com.example.hms.service.allergy.PatientAllergySummarySync allergySummarySync;
 
+    /** QA D819 — the linked-account guard; its own rules are PatientAccountLinkGuardTest's. */
+    @Mock
+    private PatientAccountLinkGuard accountLinkGuard;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -446,7 +450,6 @@ class PatientServiceImplTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(patientMapper.toPatient(request, user)).thenReturn(savedPatient);
         when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
@@ -482,7 +485,6 @@ class PatientServiceImplTest {
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(pending));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(patientMapper.toPatient(request, pending)).thenReturn(savedPatient);
         when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
@@ -517,7 +519,8 @@ class PatientServiceImplTest {
 
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+        when(patientMapper.toPatient(request, user)).thenReturn(patient);
+        when(patientRepository.save(patient)).thenReturn(patient);
         when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "+22670707070")).thenReturn(true);
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
@@ -528,7 +531,8 @@ class PatientServiceImplTest {
         patientService.createPatientByStaff(request, Locale.ENGLISH);
 
         assertThat(patient.getPhoneVerifiedAt()).isNotNull();
-        verify(patientRepository).save(patient);
+        // Once for the new record, once for the stamp.
+        verify(patientRepository, org.mockito.Mockito.times(2)).save(patient);
     }
 
     @Test
@@ -546,7 +550,8 @@ class PatientServiceImplTest {
 
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+        when(patientMapper.toPatient(request, user)).thenReturn(patient);
+        when(patientRepository.save(patient)).thenReturn(patient);
         when(phoneVerificationService.consumeVerifiedChallenge(any(), any())).thenReturn(false);
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
             .thenReturn(Optional.of(new PatientHospitalRegistration()));
@@ -557,7 +562,8 @@ class PatientServiceImplTest {
         patientService.createPatientByStaff(request, Locale.ENGLISH);
 
         assertThat(patient.getPhoneVerifiedAt()).isNull();
-        verify(patientRepository, never()).save(patient);
+        // Only the new record's own save: no stamp.
+        verify(patientRepository, org.mockito.Mockito.times(1)).save(patient);
     }
 
     @Test
@@ -1628,6 +1634,121 @@ class PatientServiceImplTest {
     }
 
     @Test
+    @org.junit.jupiter.api.DisplayName("QA D819: POST /patients with a staff account's userId is refused before any record is written")
+    void createPatientByStaffRefusesAStaffAccount() {
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(userId).hospitalId(hospitalId).build();
+        User staffUser = new User();
+        staffUser.setId(userId);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+            .when(accountLinkGuard).requireLinkable(staffUser, null);
+
+        assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessage("userId:patient.account.staffAccount");
+
+        verify(patientRepository, never()).save(any());
+        verify(registrationRepository, never()).save(any());
+        verify(patientInsuranceService, never()).addInsuranceToPatient(any(), any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D819 (and D725): an account already linked to a record is refused, never re-used with the typed fields dropped")
+    void createPatientByStaffRefusesAnAlreadyLinkedAccount() {
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(userId).hospitalId(hospitalId).build();
+        User user = new User();
+        user.setId(userId);
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.alreadyLinked"))
+            .when(accountLinkGuard).requireLinkable(user, null);
+
+        assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(patientRepository, never()).save(any());
+        verify(patientRepository, never()).findByUserId(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D819: createPatient (the backfill's path) runs the same guard")
+    void createPatientRunsTheGuard() {
+        UUID userId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(userId).hospitalId(hospitalId).build();
+        User staffUser = new User();
+        staffUser.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+            .when(accountLinkGuard).requireLinkable(staffUser, null);
+
+        assertThatThrownBy(() -> patientService.createPatient(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(patientRepository, never()).save(any());
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D819: PUT /patients relinking the record to another account runs the guard for that account")
+    void updatePatientRelinkRunsTheGuard() {
+        UUID newUserId = UUID.randomUUID();
+        User current = new User();
+        current.setId(UUID.randomUUID());
+        patient.setUser(current);
+        User staffUser = new User();
+        staffUser.setId(newUserId);
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(newUserId).build();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(newUserId)).thenReturn(Optional.of(staffUser));
+        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+            .when(accountLinkGuard).requireLinkable(staffUser, patientId);
+
+        assertThatThrownBy(() -> patientService.updatePatient(patientId, request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(patientMapper, never()).updatePatientFromDto(any(), any(), any());
+        verify(patientRepository, never()).save(any());
+        assertThat(patient.getUser()).isSameAs(current);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D819: PUT /patients keeping the record's own account is not re-checked (a demographic edit)")
+    void updatePatientKeepingItsAccountSkipsTheGuard() {
+        User current = new User();
+        current.setId(UUID.randomUUID());
+        patient.setUser(current);
+        PatientRequestDTO request = PatientRequestDTO.builder().userId(current.getId()).build();
+        org.springframework.test.util.ReflectionTestUtils.setField(patientService, "addressHistoryRecorder",
+            org.mockito.Mockito.mock(PatientAddressHistoryRecorder.class));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(userRepository.findById(current.getId())).thenReturn(Optional.of(current));
+        when(patientRepository.save(patient)).thenReturn(patient);
+        org.mockito.Mockito.lenient().when(patientMapper.toPatientDTO(any(), any()))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        org.mockito.Mockito.lenient().when(patientVitalSignService.getLatestSnapshot(any(), any()))
+            .thenReturn(Optional.empty());
+
+        patientService.updatePatient(patientId, request, Locale.ENGLISH);
+
+        verify(accountLinkGuard, never()).requireLinkable(any(), any());
+        verify(patientRepository).save(patient);
+    }
+
+    @Test
+    @org.junit.jupiter.api.DisplayName("QA D819: the backfill never gives a staff account that also holds PATIENT a patient record")
+    void backfillSkipsAStaffAccount() {
+        User staffUser = new User();
+        staffUser.setId(UUID.randomUUID());
+        when(userRepository.findUsersWithRolePatientButNoPatientEntry()).thenReturn(List.of(staffUser));
+        when(accountLinkGuard.isStaffAccount(staffUser)).thenReturn(true);
+
+        patientService.backfillMissingPatients();
+
+        verify(userRepository, never()).findById(any());
+        verify(patientRepository, never()).save(any());
+    }
+
+    @Test
     void createPatientImportsFreeTextAllergiesAsStructuredRows() {
         // E9 #56 — the registration form's free text becomes UNCONFIRMED rows at
         // the registering hospital; the mapper no longer writes the column.
@@ -1648,7 +1769,6 @@ class PatientServiceImplTest {
         registration.setMrn("HSP0002");
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(patientRepository.findByUserId(userId)).thenReturn(Optional.empty());
         when(patientMapper.toPatient(request, user)).thenReturn(savedPatient);
         when(patientRepository.save(savedPatient)).thenReturn(savedPatient);
         when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))

@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -38,8 +37,7 @@ import java.util.UUID;
 @Slf4j
 public class EncounterAutoCompletionService {
 
-    private static final Set<EncounterStatus> TERMINAL_STATUSES = EnumSet.of(
-            EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> TERMINAL_STATUSES = EncounterStatus.CLOSED;
     private static final String AUDIT_ENTITY_TYPE = "ENCOUNTER";
 
     private final EncounterRepository encounterRepository;

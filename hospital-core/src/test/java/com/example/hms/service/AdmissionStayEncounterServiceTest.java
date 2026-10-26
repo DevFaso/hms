@@ -417,4 +417,112 @@ class AdmissionStayEncounterServiceTest {
 
         verify(dischargeSummaryRepository, never()).save(any());
     }
+
+    // ── QA D803 / D804 (round 13) ───────────────────────────────────────
+
+    private Department department(String name, Hospital owner) {
+        Department department = new Department();
+        department.setId(UUID.randomUUID());
+        department.setName(name);
+        department.setHospital(owner);
+        return department;
+    }
+
+    private Encounter openStayIn(Department department) {
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(admission.getId());
+        stay.setHospital(hospital);
+        stay.setDepartment(department);
+        stay.setStatus(EncounterStatus.IN_PROGRESS);
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(admission.getId()))
+            .thenReturn(Optional.of(stay));
+        return stay;
+    }
+
+    @Test
+    void d803_theQaCall_theDischargeDiagnosisIsOnTheAdmissionResponseAfterDischarge() {
+        Encounter stay = openStayIn(null);
+
+        service.recordDischarge(admission, "J18.9 Pneumopathie, sans précision");
+        com.example.hms.payload.dto.AdmissionResponseDTO dto =
+            new com.example.hms.mapper.AdmissionMapper(encounterRepository).toResponseDTO(admission);
+
+        assertThat(stay.getDischargeDiagnoses()).isEqualTo("[\"J18.9 Pneumopathie, sans précision\"]");
+        assertThat(dto.getDischargeDiagnosis()).isEqualTo("J18.9 Pneumopathie, sans précision");
+    }
+
+    @Test
+    void d803_aDischargeWithNoStatedDiagnosisShowsTheWorkingOneTheSummaryShows() {
+        Encounter stay = openStayIn(null);
+        admission.setPrimaryDiagnosisDescription("Paludisme grave");
+
+        service.recordDischarge(admission);
+        com.example.hms.payload.dto.AdmissionResponseDTO dto =
+            new com.example.hms.mapper.AdmissionMapper(encounterRepository).toResponseDTO(admission);
+
+        assertThat(dto.getDischargeDiagnosis()).isEqualTo("Paludisme grave");
+        assertThat(stay.getDischargeDiagnoses()).isEqualTo("[\"Paludisme grave\"]");
+    }
+
+    @Test
+    void d804_theQaCall_aTransferThenTheDischargeCloseTheEncounterInTheNewDepartment() {
+        Department admitting = department("Médecine générale", hospital);
+        Department cardiology = department("Cardiologie", hospital);
+        admission.setDepartment(admitting);
+        Encounter stay = openStayIn(admitting);
+
+        // the transfer: BedAssignmentService / updateAdmission move the admission
+        admission.setDepartment(cardiology);
+        service.followStayDepartment(admission);
+        assertThat(stay.getDepartment()).isSameAs(cardiology);
+
+        service.recordDischarge(admission, "J18.9 Pneumopathie, sans précision");
+        assertThat(stay.getDepartment()).isSameAs(cardiology);
+    }
+
+    @Test
+    void d804_theDischargeAloneCarriesAMoveNoHookSaw() {
+        Department admitting = department("Médecine générale", hospital);
+        Department cardiology = department("Cardiologie", hospital);
+        Encounter stay = openStayIn(admitting);
+        admission.setDepartment(cardiology);
+
+        service.recordDischarge(admission, "Insuffisance cardiaque");
+
+        ArgumentCaptor<Encounter> saved = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(saved.capture());
+        assertThat(saved.getValue().getDepartment()).isSameAs(cardiology);
+        assertThat(stay.getDepartment()).isSameAs(cardiology);
+    }
+
+    @Test
+    void d804_aClosedEncounterIsNotMovedByALaterEdit_andTheSameDepartmentWritesNothing() {
+        Department admitting = department("Médecine générale", hospital);
+        Encounter stay = openStayIn(admitting);
+        admission.setDepartment(admitting);
+
+        service.followStayDepartment(admission);
+        verify(encounterRepository, never()).save(any());
+
+        stay.setStatus(EncounterStatus.COMPLETED);
+        admission.setDepartment(department("Cardiologie", hospital));
+        service.followStayDepartment(admission);
+        verify(encounterRepository, never()).save(any());
+        assertThat(stay.getDepartment()).isSameAs(admitting);
+    }
+
+    @Test
+    void d804_anotherHospitalsDepartmentNeverReachesTheEncounter() {
+        Department admitting = department("Médecine générale", hospital);
+        Hospital other = Hospital.builder().build();
+        other.setId(UUID.randomUUID());
+        Encounter stay = openStayIn(admitting);
+        admission.setDepartment(department("Cardiologie", other));
+
+        service.followStayDepartment(admission);
+
+        verify(encounterRepository, never()).save(any());
+        assertThat(stay.getDepartment()).isSameAs(admitting);
+    }
 }

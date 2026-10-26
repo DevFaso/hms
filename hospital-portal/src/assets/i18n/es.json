@@ -1876,7 +1876,8 @@
       "AWAITING_RESULTS": "Esperando resultados",
       "READY_TO_DISCHARGE": "Listo para alta",
       "COMPLETED": "Completado",
-      "CANCELLED": "Cancelado"
+      "CANCELLED": "Cancelado",
+      "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
     },
     "FULL_CHART": "Historia completa",
     "GENERAL_VISIT": "Visita general",
@@ -5219,7 +5220,8 @@
         "SCHEDULED": "Programado",
         "TRIAGE": "Triaje",
         "UNKNOWN": "Desconocido",
-        "WAITING_FOR_PHYSICIAN": "Esperando al médico"
+        "WAITING_FOR_PHYSICIAN": "Esperando al médico",
+        "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
       },
       "LEAVE_STATUS": {
         "APPROVED": "Aprobada",
@@ -6893,7 +6895,8 @@
     "WALKIN_VALIDATION_ERROR": "Seleccione un paciente, un profesional y compruebe que hay un hospital activo",
     "WALK_IN": "Registro sin cita",
     "WALK_INS": "Sin cita",
-    "WALK_INS_TODAY": "Sin cita hoy"
+    "WALK_INS_TODAY": "Sin cita hoy",
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",

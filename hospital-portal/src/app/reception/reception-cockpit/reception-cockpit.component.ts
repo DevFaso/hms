@@ -181,6 +181,7 @@ export class ReceptionCockpitComponent implements OnInit {
       COMPLETED: 'badge-completed',
       WALK_IN: 'badge-walk-in',
       CANCELLED: 'badge-cancelled',
+      LEFT_WITHOUT_BEING_SEEN: 'badge-cancelled',
     };
     return 'status-badge ' + (map[status] ?? 'badge-default');
   }

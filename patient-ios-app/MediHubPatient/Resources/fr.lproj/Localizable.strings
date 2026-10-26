@@ -815,6 +815,7 @@
 "enum_encounter_status_cancelled" = "Annulé";
 "enum_encounter_status_completed" = "Terminé";
 "enum_encounter_status_in_progress" = "En cours";
+"enum_encounter_status_left_without_being_seen" = "Parti sans être vu";
 "enum_encounter_status_ready_for_discharge" = "Prêt pour la sortie";
 "enum_encounter_status_scheduled" = "Planifié";
 "enum_encounter_status_triage" = "Triage";

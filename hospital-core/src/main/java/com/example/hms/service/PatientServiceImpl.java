@@ -234,6 +234,8 @@ public class PatientServiceImpl implements PatientService {
     private final ObjectMapper objectMapper;
     private final PatientMrnGenerator mrnGenerator;
     private final RoleValidator roleValidator;
+    /** QA D819: the linked account is a patient-only account, linked to no other record. */
+    private final PatientAccountLinkGuard accountLinkGuard;
 
     @Override
     @Transactional(readOnly = true)
@@ -327,9 +329,10 @@ public class PatientServiceImpl implements PatientService {
         Hospital hospital = hospitalRepository.findClinicalById(dto.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, dto.getHospitalId()));
 
-        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
-        Patient patient = existing
-            .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
+        // QA D819: a staff account, or one that already logs in to another
+        // record, is refused (409) instead of becoming this patient's login.
+        accountLinkGuard.requireLinkable(user, null);
+        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
 
         // The record's active flag is its administrative soft-delete, not the
         // portal account's state: a patient whose account still waits for
@@ -340,7 +343,7 @@ public class PatientServiceImpl implements PatientService {
 
         // E9 #56 — the registration form's free-text allergies become structured
         // rows at the registering hospital; the column is a derived summary now.
-        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+        if (dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
             legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
                 LegacyAllergyTextImporter.SOURCE_REGISTRATION);
         }
@@ -396,6 +399,12 @@ public class PatientServiceImpl implements PatientService {
 
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
+        // QA D819: relinking the record to another account is a link like the
+        // create's; keeping the account it already has is not re-checked.
+        UUID currentUserId = patient.getUser() != null ? patient.getUser().getId() : null;
+        if (!Objects.equals(currentUserId, user.getId())) {
+            accountLinkGuard.requireLinkable(user, patient.getId());
+        }
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
@@ -567,6 +576,12 @@ public class PatientServiceImpl implements PatientService {
     public void backfillMissingPatients() {
         List<User> users = userRepository.findUsersWithRolePatientButNoPatientEntry();
         for (User user : users) {
+            // QA D819: a staff account that also holds PATIENT is never given a
+            // patient record here; createPatient would refuse it with a 409.
+            if (accountLinkGuard.isStaffAccount(user)) {
+                log.warn("[backfillMissingPatients] skipped staff account {}", user.getId());
+                continue;
+            }
             PatientRequestDTO dto = PatientRequestDTO.builder()
                 .userId(user.getId())
                 .firstName(Optional.ofNullable(user.getFirstName()).orElse(DEFAULT_UNKNOWN))
@@ -602,9 +617,13 @@ public class PatientServiceImpl implements PatientService {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_KEY, dto.getUserId()));
 
-        Optional<Patient> existing = patientRepository.findByUserId(user.getId());
-        Patient patient = existing
-            .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
+        // QA D819: POST /patients took any userId, so a receptionist's own staff
+        // account became a patient's login. A staff account, or one already
+        // linked to another record (which used to be re-used silently, the
+        // typed fields thrown away: QA D725), is a 409. A second hospital links
+        // the existing record through POST /registrations.
+        accountLinkGuard.requireLinkable(user, null);
+        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
         // this exact number. Single-use server-side check — a forged/mismatched
@@ -625,7 +644,7 @@ public class PatientServiceImpl implements PatientService {
         ensurePatientRegistration(patient, hospital);
 
         // E9 #56 — see createPatient: free-text allergies become structured rows.
-        if (existing.isEmpty() && dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
+        if (dto.getAllergies() != null && !dto.getAllergies().isBlank()) {
             legacyAllergyTextImporter.importFreeText(patient, hospital, null, dto.getAllergies(),
                 LegacyAllergyTextImporter.SOURCE_REGISTRATION);
         }

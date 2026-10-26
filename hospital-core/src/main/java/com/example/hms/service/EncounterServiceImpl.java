@@ -762,7 +762,7 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     private static boolean isClosedStatus(EncounterStatus status) {
-        return status == EncounterStatus.COMPLETED || status == EncounterStatus.CANCELLED;
+        return status != null && status.isClosed();
     }
 
     private boolean hasExistingNote(Encounter encounter) {
@@ -2242,7 +2242,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         // Guard: only non-terminal encounters may be checked out
         EncounterStatus current = encounter.getStatus();
-        if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
+        if (current != null && current.isClosed()) {
             throw new BusinessException("encounter.checkout.alreadyClosed", current.name());
         }
         // QA D788: and only once the clinician has completed the examination. A
@@ -2323,7 +2323,14 @@ public class EncounterServiceImpl implements EncounterService {
         String previousValues = serializeEncounter(encounter);
         LocalDateTime now = LocalDateTime.now();
 
-        encounter.setStatus(EncounterStatus.CANCELLED);
+        // Product decision (round 13): a visit the patient walked out of is its
+        // own status, never the staff's "Cancelled", so the reports can count
+        // it apart. Neither is a consultation. The outcome is kept in the
+        // extra fields as well, as before (and as V236 reads it).
+        EncounterStatus closedAs = request.getOutcome() == com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN
+            ? EncounterStatus.LEFT_WITHOUT_BEING_SEEN
+            : EncounterStatus.CANCELLED;
+        encounter.setStatus(closedAs);
         java.util.Map<String, Object> extra = encounter.getExtraFields() != null
             ? new java.util.LinkedHashMap<>(encounter.getExtraFields())
             : new java.util.LinkedHashMap<>();
@@ -2333,7 +2340,7 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
         trackerEventPublisher.publishStatusTransition(saved,
-            previous != null ? previous.name() : null, EncounterStatus.CANCELLED.name());
+            previous != null ? previous.name() : null, closedAs.name());
 
         // The appointment was not honoured as a consultation either. QA D788: an
         // appointment the desk had already marked COMPLETED by hand (before the

@@ -88,6 +88,12 @@ public class AdmissionResponseDTO {
 
     // Discharge info
     private DischargeDisposition dischargeDisposition;
+    /**
+     * QA D803: the diagnosis at discharge. The discharge stores it on the
+     * stay's encounter (QA D218), which the after-visit summary reads; the
+     * admission response never carried it. Diagnoses joined with "; ".
+     */
+    private String dischargeDiagnosis;
     private String dischargeSummary;
     private String dischargeInstructions;
     

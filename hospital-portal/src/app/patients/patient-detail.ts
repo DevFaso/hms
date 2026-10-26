@@ -653,6 +653,7 @@ export class PatientDetailComponent implements OnInit {
       case 'IN_PROGRESS':
         return 'status-badge scheduled';
       case 'CANCELLED':
+      case 'LEFT_WITHOUT_BEING_SEEN':
         return 'status-badge cancelled';
       default:
         return 'status-badge';

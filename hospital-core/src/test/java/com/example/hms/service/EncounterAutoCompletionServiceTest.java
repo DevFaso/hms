@@ -40,6 +40,21 @@ class EncounterAutoCompletionServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void round13_aVisitLeftWithoutBeingSeenIsNeverAutoCompletedIntoAConsultation() {
+        when(encounterRepository.findByAdmissionIdAndStatusNotIn(eq(admissionId), anyCollection()))
+                .thenReturn(List.of());
+
+        service.completeAdmissionEncounters(admissionId);
+
+        org.mockito.ArgumentCaptor<java.util.Collection<EncounterStatus>> excluded =
+                org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(encounterRepository).findByAdmissionIdAndStatusNotIn(eq(admissionId), excluded.capture());
+        assertThat(excluded.getValue()).containsExactlyInAnyOrder(
+                EncounterStatus.COMPLETED, EncounterStatus.CANCELLED, EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+    }
+
+    @Test
     void completesActiveEncountersAndPublishesTrackerEvents() {
         Encounter active = new Encounter();
         active.setId(UUID.randomUUID());

@@ -14,10 +14,12 @@ import com.example.hms.payload.dto.AdmissionResponseDTO;
 import com.example.hms.persistence.JpaProxyUtils;
 import com.example.hms.repository.EncounterRepository;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.util.StringUtils;
 
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -30,8 +32,9 @@ import java.util.UUID;
 public class AdmissionMapper {
 
     /** Encounter statuses that are terminal — excluded from the active lookup. */
-    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES =
-        EnumSet.of(EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
+    private static final Set<EncounterStatus> TERMINAL_ENCOUNTER_STATUSES = EncounterStatus.CLOSED;
+
+    private static final ObjectMapper DIAGNOSES_READER = new ObjectMapper();
 
     /** Owning-entity label used in {@link JpaProxyUtils#safeInit} log lines. */
     private static final String OWNER = "Admission";
@@ -228,7 +231,30 @@ public class AdmissionMapper {
             }
             dto.setEncounterId(stay.getId());
             dto.setEncounterCode(stay.getCode());
+            // QA D803: the discharge diagnosis lives on the stay's encounter.
+            dto.setDischargeDiagnosis(joinDiagnoses(stay.getDischargeDiagnoses()));
             dto.setCurrentEncounterId(TERMINAL_ENCOUNTER_STATUSES.contains(stay.getStatus()) ? null : stay.getId());
+        }
+
+        /**
+         * The encounter keeps its discharge diagnoses as a JSON array of
+         * strings (the check-out's and the discharge's shape); text that is not
+         * one is shown as it is, as the after-visit summary does.
+         */
+        static String joinDiagnoses(String json) {
+            if (!StringUtils.hasText(json)) {
+                return null;
+            }
+            try {
+                List<String> diagnoses = DIAGNOSES_READER.readValue(json, new TypeReference<List<String>>() { });
+                String joined = diagnoses == null ? "" : diagnoses.stream()
+                    .filter(StringUtils::hasText)
+                    .map(String::trim)
+                    .collect(java.util.stream.Collectors.joining("; "));
+                return joined.isEmpty() ? null : joined;
+            } catch (JacksonException notAnArray) {
+                return json.trim();
+            }
         }
 
         private UUID resolveCurrentEncounterId(Patient patient, Hospital hospital) {

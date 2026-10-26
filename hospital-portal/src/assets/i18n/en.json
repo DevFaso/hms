@@ -1876,7 +1876,8 @@
       "AWAITING_RESULTS": "Awaiting Results",
       "READY_TO_DISCHARGE": "Ready to Discharge",
       "COMPLETED": "Completed",
-      "CANCELLED": "Cancelled"
+      "CANCELLED": "Cancelled",
+      "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
     },
     "FULL_CHART": "Full Chart",
     "GENERAL_VISIT": "General visit",
@@ -5219,7 +5220,8 @@
         "SCHEDULED": "Scheduled",
         "TRIAGE": "Triage",
         "UNKNOWN": "Unknown",
-        "WAITING_FOR_PHYSICIAN": "Waiting for Physician"
+        "WAITING_FOR_PHYSICIAN": "Waiting for Physician",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
       },
       "LEAVE_STATUS": {
         "APPROVED": "Approved",
@@ -6893,7 +6895,8 @@
     "WALKIN_VALIDATION_ERROR": "Please select a patient, provider, and ensure a hospital is active",
     "WALK_IN": "Walk-in Registration",
     "WALK_INS": "Walk-ins",
-    "WALK_INS_TODAY": "Walk-ins Today"
+    "WALK_INS_TODAY": "Walk-ins Today",
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

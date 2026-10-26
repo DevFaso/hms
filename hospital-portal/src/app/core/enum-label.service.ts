@@ -235,6 +235,7 @@ export class EnumLabelService implements OnDestroy {
       READY_FOR_DISCHARGE: 'Ready for Discharge',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
+      LEFT_WITHOUT_BEING_SEEN: 'Left without being seen',
     },
 
     /* ── Phase 1 — Staff scheduling: leave + shift ─────────── */

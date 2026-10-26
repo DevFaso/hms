@@ -26,11 +26,11 @@ import java.util.Set;
  *   <li>A visit no clinician has seen (SCHEDULED, ARRIVED, TRIAGE,
  *       WAITING_FOR_PHYSICIAN) is closed as "left without being seen" or
  *       cancelled, with a reason ({@code POST /encounters/{id}/close-unseen}),
- *       and becomes CANCELLED: never a consultation.</li>
+ *       and becomes LEFT_WITHOUT_BEING_SEEN or CANCELLED: never a consultation.</li>
  *   <li>The clinical statuses (IN_PROGRESS, AWAITING_RESULTS,
  *       READY_FOR_DISCHARGE) are reached through the clinician's steps, never
  *       set by the desk on the flow board.</li>
- *   <li>A COMPLETED or CANCELLED visit is not reopened by a status write.</li>
+ *   <li>A closed visit ({@link EncounterStatus#CLOSED}) is not reopened by a status write.</li>
  * </ul>
  */
 public final class EncounterClosureRules {
@@ -102,10 +102,12 @@ public final class EncounterClosureRules {
         }
         // A closed visit is not reopened by a status write: its check-out (AVS,
         // appointment, recall) or its close-unseen reason would stay behind it.
-        if (from == EncounterStatus.COMPLETED || from == EncounterStatus.CANCELLED) {
+        if (from != null && from.isClosed()) {
             throw new BusinessException("encounter.status.closed", from.name());
         }
-        if (to == EncounterStatus.CANCELLED) {
+        // Cancelled and left-without-being-seen both carry a reason: only the
+        // close-unseen endpoint writes them.
+        if (EncounterStatus.ENDED_UNSEEN.contains(to)) {
             throw new BusinessException("encounter.status.cancelThroughCloseUnseen");
         }
         if (to == EncounterStatus.COMPLETED && !CLINICALLY_COMPLETE.contains(from)

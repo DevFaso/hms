@@ -68,8 +68,7 @@ public final class InpatientOrderEnd {
         }
         Encounter encounter = rx.getEncounter();
         return encounter != null && encounter.getAdmissionId() != null
-            && (encounter.getStatus() == EncounterStatus.COMPLETED
-                || encounter.getStatus() == EncounterStatus.CANCELLED);
+            && encounter.getStatus() != null && encounter.getStatus().isClosed();
     }
 
     /**

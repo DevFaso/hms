@@ -52,7 +52,9 @@ public class EncounterFhirMapper {
                  AWAITING_RESULTS,
                  READY_FOR_DISCHARGE  -> org.hl7.fhir.r4.model.Encounter.EncounterStatus.INPROGRESS;
             case COMPLETED            -> org.hl7.fhir.r4.model.Encounter.EncounterStatus.FINISHED;
-            case CANCELLED            -> org.hl7.fhir.r4.model.Encounter.EncounterStatus.CANCELLED;
+            // FHIR R4: "cancelled — the Encounter has ended before it has begun".
+            case CANCELLED,
+                 LEFT_WITHOUT_BEING_SEEN -> org.hl7.fhir.r4.model.Encounter.EncounterStatus.CANCELLED;
         };
     }
 

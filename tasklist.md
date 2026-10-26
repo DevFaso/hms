@@ -2205,6 +2205,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D819 (round 13): the reverse of the patient-only-account rule.**
+  Every path that writes `Patient.user` now refuses a staff account or one
+  already linked to another record (`PatientAccountLinkGuard`, 409 on
+  `userId`; `fix/qa-r13-patients-encounters`), and
+  `ops/d819_staff_linked_patients_report.sql` lists the existing staff-linked
+  records for the operator (relink or delete is a decision per row). Owed:
+  `POST /assignments` can still grant a staff role to an account that is
+  already a patient's login, which reaches the same state from the other
+  side. Refusing it is a product decision (an employee registered as a
+  patient with their own e-mail must then get a second account, and staff
+  onboarding by licence may land on that account), so it is a new rule for
+  the assignment flow, not a fix to the patient paths this defect named.
+
 - **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
   The beta-lactam cross-reactivity advisory now shows at prescribing, on
   every edit, at the signature, on the eMAR row (queue chip, a card before

@@ -958,6 +958,7 @@
     <string name="encounter_status_ready_for_discharge">Listo para el alta</string>
     <string name="encounter_status_completed">Completado</string>
     <string name="encounter_status_cancelled">Cancelado</string>
+    <string name="encounter_status_left_without_being_seen">Se fue sin ser atendido</string>
     <string name="encounter_status_unknown">Estado no disponible</string>
     <string name="discharge_disposition_home">Domicilio</string>
     <string name="discharge_disposition_home_with_home_health">Domicilio con atención domiciliaria</string>
