@@ -2,6 +2,7 @@ package com.example.hms.payload.dto.transfusion;
 
 import com.example.hms.enums.BloodProductType;
 import com.example.hms.enums.TransfusionUrgency;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -29,8 +30,10 @@ public class TransfusionRequestRequestDTO {
     @NotNull
     private BloodProductType productType;
 
+    /** QA D884: 500 units was accepted; one request covers at most 20 (a massive-transfusion round is far fewer). */
     @NotNull
     @Min(1)
+    @Max(value = 20, message = "{transfusion.request.unitsMax}")
     private Integer unitsRequested;
 
     @NotBlank
