@@ -58,7 +58,7 @@ class StatusRefusalLabelGuardTest {
         "new\\s+(?:\\w+\\.)*(?:Business|BusinessRule)Exception\\s*\\(");
     private static final Pattern RAW_STATUS_ARGUMENT = Pattern.compile(
         "\\.name\\(\\)|getStatus\\(\\)\\s*[,)]"
-            + "|String\\.valueOf\\(\\s*\\w*(?i:status|current|previous|from|open)\\w*\\s*\\)");
+            + "|String\\.valueOf\\(\\s*+(?=\\w*?(?i:status|current|previous|from|open))\\w++\\s*+\\)");
     /** A sentence composed in code: {@code String.format}, {@code .formatted}, or a {@code +} join with a literal. */
     private static final Pattern COMPOSED = Pattern.compile("String\\.format\\(|\\.formatted\\(|\"\\s*\\+|\\+\\s*\"");
     private static final Pattern LITERAL = Pattern.compile("\"(?:[^\"\\\\]|\\\\.)*\"");
