@@ -83,8 +83,8 @@ public class OrganizationController {
                 organizations = Page.empty(pageable);
             } else {
                 organizations = activeOnly
-                    ? organizationRepository.findByIdInAndActiveTrue(readable, pageable)
-                    : organizationRepository.findByIdIn(readable, pageable);
+                    ? organizationRepository.findActiveByIdInWithHospitals(readable, pageable)
+                    : organizationRepository.findByIdInWithHospitals(readable, pageable);
             }
         }
 

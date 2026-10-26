@@ -282,6 +282,32 @@ class UserAccountAccessTest {
         }
 
         @Test
+        @DisplayName("QA D838: an admin of A who views an account sees staff details at A only, never at B")
+        void staffDetailsFollowTheProfileHospitalNotTheAccount() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true));
+            User colleague = account(UUID.randomUUID());
+
+            assertThat(access.canViewStaffDetailsAt(colleague, hospitalA.getId())).isTrue();
+            assertThat(access.canViewStaffDetailsAt(colleague, hospitalB.getId())).isFalse();
+            assertThat(access.canViewStaffDetailsAt(colleague, null)).isFalse();
+            assertThat(access.canViewStaffDetailsAt(null, hospitalA.getId())).isFalse();
+            // Self always sees their own profile; so does a verified super-admin.
+            assertThat(access.canViewStaffDetailsAt(account(callerId), hospitalB.getId())).isTrue();
+            signIn(true, "ROLE_SUPER_ADMIN");
+            assertThat(access.canViewStaffDetailsAt(colleague, hospitalB.getId())).isTrue();
+        }
+
+        @Test
+        @DisplayName("QA D838: a doctor at B who is admin of A sees no B staff details through A")
+        void anAssignmentAtBIsNotAdministeringB() {
+            signIn(false, "ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR");
+            callerHolds(assignment("ROLE_HOSPITAL_ADMIN", hospitalA, true), assignment("ROLE_DOCTOR", hospitalB, true));
+
+            assertThat(access.canViewStaffDetailsAt(account(UUID.randomUUID()), hospitalB.getId())).isFalse();
+        }
+
+        @Test
         @DisplayName("canView edges: no target, a super-admin's account, an inactive row nowhere administered")
         void canViewEdges() {
             signIn(false, "ROLE_HOSPITAL_ADMIN");

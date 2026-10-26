@@ -101,11 +101,17 @@ class OrganizationReadScopeIT extends BaseIT {
         mockMvc.perform(get(API + "/organizations").with(hospitalAdmin(adminB, nabaKoom)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.totalElements").value(1))
-            .andExpect(jsonPath("$.content[*].id", containsInAnyOrder(rsf.getId().toString())));
+            .andExpect(jsonPath("$.content[*].id", containsInAnyOrder(rsf.getId().toString())))
+            // open-in-view is off: the scoped page must fetch the hospitals, or
+            // the admin's own organisation lists none (organization-list.html).
+            .andExpect(jsonPath("$.content[0].hospitals", hasSize(1)))
+            .andExpect(jsonPath("$.content[0].hospitals[0].id").value(nabaKoom.getId().toString()));
         // hospital-list.ts asks for the active ones: the same scope.
         mockMvc.perform(get(API + "/organizations").param("active", "true").with(hospitalAdmin(adminB, nabaKoom)))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.content", hasSize(1)));
+            .andExpect(jsonPath("$.content", hasSize(1)))
+            .andExpect(jsonPath("$.content[0].hospitals", hasSize(1)))
+            .andExpect(jsonPath("$.content[0].hospitals[0].id").value(nabaKoom.getId().toString()));
     }
 
     @Test

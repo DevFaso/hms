@@ -72,6 +72,32 @@ describe('RoleListComponent (QA D868)', () => {
     expect(titles).toEqual(['Médecin', 'Chef de garde']);
   });
 
+  it('titles a system role in English too, where the label equals the prettified code', () => {
+    // en.json: PORTAL.ENUM.ROLE.DOCTOR is 'Doctor' — exactly the prettified
+    // code. The label exists, so the card must not fall back to 'ROLE_DOCTOR'.
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', {
+      PORTAL: { ENUM: { ROLE: { DOCTOR: 'Doctor' } } },
+      ROLES: { PERMISSIONS: 'permissions', BUILT_IN_ACCESS: 'Built-in role access' },
+    });
+    translate.use('en');
+    fixture.detectChanges();
+    const titles = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.role-card h4'),
+    ).map((h) => h.textContent?.trim());
+    expect(titles).toEqual(['Doctor', 'Chef de garde']);
+    expect(titles.join(' ')).not.toContain('ROLE_');
+  });
+
+  it('never shows a bare code as the title of a role with no label', () => {
+    const component = fixture.componentInstance;
+    expect(
+      component.roleTitle(
+        role({ name: 'ROLE_CHEF_GARDE', authority: 'ROLE_CHEF_GARDE', code: 'ROLE_CHEF_GARDE' }),
+      ),
+    ).toBe('Chef Garde');
+  });
+
   it('says built-in access, not 0 permissions, for a role with no permission rows', () => {
     const counts = Array.from(
       (fixture.nativeElement as HTMLElement).querySelectorAll('.perm-count'),

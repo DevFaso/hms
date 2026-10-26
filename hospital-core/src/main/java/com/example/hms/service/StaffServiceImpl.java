@@ -143,6 +143,7 @@ public class StaffServiceImpl implements StaffService {
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
+    private final com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
 
     @Override
@@ -548,6 +549,30 @@ public class StaffServiceImpl implements StaffService {
             .map(staffMapper::toStaffDTO);
     }
 
+    /** The roles that may change a lab role, held at the staff member's own hospital. */
+    private static final Set<String> LAB_ROLE_ADMINISTERING_CODES = Set.of(
+        "ROLE_HOSPITAL_ADMIN", "HOSPITAL_ADMIN", "ROLE_LAB_DIRECTOR", "LAB_DIRECTOR"
+    );
+
+    /**
+     * QA D846: a lab director at hospital A who is a doctor or technician at
+     * hospital B passes {@link #requireHospitalScope} for B (any assignment
+     * there puts B in scope) and holds ROLE_LAB_DIRECTOR (from A). Only a
+     * verified super-admin, or an ACTIVE hospital-admin / lab-director
+     * assignment at the staff member's hospital, may change a lab role there.
+     */
+    private void requireLabRoleAuthorityAt(UUID hospitalId, Locale locale) {
+        if (actingScopeResolver.isVerifiedSuperAdmin()) {
+            return;
+        }
+        UUID callerId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        if (callerId == null || hospitalId == null
+            || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                callerId, hospitalId, LAB_ROLE_ADMINISTERING_CODES)) {
+            throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+        }
+    }
+
     @Override
     @Transactional
     public StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale) {
@@ -560,8 +585,12 @@ public class StaffServiceImpl implements StaffService {
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, staffId));
 
-        // Verify the staff belongs to the caller's hospital scope
+        // Verify the staff belongs to the caller's hospital scope, and that the
+        // caller holds an administering role AT THAT hospital: the scope covers
+        // every hospital with any assignment of the caller's, while the
+        // ROLE_LAB_DIRECTOR / ROLE_HOSPITAL_ADMIN authority is global (QA D846).
         requireHospitalScope(staff.getHospital().getId());
+        requireLabRoleAuthorityAt(staff.getHospital().getId(), locale);
 
         // Verify current role is a lab role (cannot change non-lab staff)
         UserRoleHospitalAssignment assignment = staff.getAssignment();

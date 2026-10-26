@@ -61,6 +61,7 @@ class StaffServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleRepository roleRepository;
+    @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
     @InjectMocks
     private StaffServiceImpl staffService;
@@ -102,6 +103,7 @@ class StaffServiceImplTest {
         // Set up super admin context so hospital scoping does not block
         HospitalContext ctx = HospitalContext.builder().superAdmin(true).build();
         HospitalContextHolder.setContext(ctx);
+        org.mockito.Mockito.lenient().when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(true);
     }
 
     @AfterEach
@@ -1164,5 +1166,68 @@ class StaffServiceImplTest {
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasFieldOrPropertyWithValue("messageKey", "staff.lab.role.notFound");
+    }
+
+    /** A lab technician at {@code hospital}, the staff member whose lab role is changed. */
+    private UserRoleHospitalAssignment labTechnicianAssignment() {
+        Role currentRole = new Role();
+        currentRole.setId(UUID.randomUUID());
+        currentRole.setCode("ROLE_LAB_TECHNICIAN");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(currentRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+        return assignment;
+    }
+
+    @Test
+    void updateStaffLabRole_labDirectorElsewhere_withAnyAssignmentHere_isRefused() {
+        // QA D846: lab director at A, doctor at B. B is in the caller's scope
+        // (any assignment there counts) and ROLE_LAB_DIRECTOR is a global
+        // authority, but neither makes them a lab director AT B.
+        UUID callerId = UUID.randomUUID();
+        HospitalContextHolder.clear();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(false)
+            .principalUserId(callerId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build());
+        when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(false);
+        labTechnicianAssignment();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId), any()))
+            .thenReturn(false);
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateStaffLabRole_labDirectorAtTheStaffHospital_changesRole() {
+        UUID callerId = UUID.randomUUID();
+        HospitalContextHolder.clear();
+        HospitalContextHolder.setContext(HospitalContext.builder()
+            .superAdmin(false)
+            .principalUserId(callerId)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build());
+        when(actingScopeResolver.isVerifiedSuperAdmin()).thenReturn(false);
+        UserRoleHospitalAssignment assignment = labTechnicianAssignment();
+        Role newRole = new Role();
+        newRole.setId(UUID.randomUUID());
+        newRole.setCode("ROLE_LAB_SCIENTIST");
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId), any()))
+            .thenReturn(true);
+        when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.of(newRole));
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale);
+
+        verify(assignmentRepository).save(assignment);
+        verify(assignmentRepository).existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId),
+            org.mockito.ArgumentMatchers.argThat(codes -> codes.contains("ROLE_LAB_DIRECTOR")
+                && codes.contains("ROLE_HOSPITAL_ADMIN") && !codes.contains("ROLE_DOCTOR")));
     }
 }

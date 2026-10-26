@@ -1335,7 +1335,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
         UserResponseDTO dto = userMapper.toResponseDTO(user, assignments);
-        withStaffDetails(dto, user.getStaffProfile());
+        withStaffDetails(dto, user, user.getStaffProfile());
         return dto;
     }
 
@@ -1344,9 +1344,17 @@ public class UserServiceImpl implements UserService {
      * employment type empty, because this read never carried them. They live on
      * the staff profile; the dialog shows them read-only (PUT /users does not
      * change them).
+     *
+     * <p>Only when the caller may see that profile's hospital: being allowed to
+     * read the ACCOUNT (an assignment at the caller's hospital) says nothing
+     * about a staff profile held at another hospital.
      */
-    private static void withStaffDetails(UserResponseDTO dto, com.example.hms.model.Staff staff) {
+    private void withStaffDetails(UserResponseDTO dto, User user, com.example.hms.model.Staff staff) {
         if (dto == null || staff == null) {
+            return;
+        }
+        UUID staffHospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        if (!accountAccess.canViewStaffDetailsAt(user, staffHospitalId)) {
             return;
         }
         if (staff.getHospital() != null) {
