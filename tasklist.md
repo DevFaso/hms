@@ -2214,6 +2214,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   reports. Not changed here because the same figure feeds the inventory
   dashboard and reorder alerts, and the QA case (300 in-date units reported
   as 0) did not involve an expired lot.
+- **QA D901 residual (round 15): the portal cannot record a transfusion
+  reaction.** The API now refuses a reaction dated before the administration
+  started (`fix/qa-r15-clinical-pharmacy`), but the portal has no
+  administration panel: the transfusion page can start an administration and
+  nothing more. No list of a patient's administrations, no complete or stop
+  action, and the existing reaction modal (`openReaction`) is reached only
+  from its spec. Owed: an administrations panel (list per patient via
+  `GET /transfusions/administrations/patient/{id}`, complete, stop, and a
+  report-reaction action that opens the existing modal), with the onset picker
+  bounded by `min` = the administration's start. Not changed here because it
+  is a new screen, not a fix: there is no administration list to put a button
+  on. Until it ships, the D901 refusal protects API clients only.
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog
