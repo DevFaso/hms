@@ -76,6 +76,18 @@ public class MessageUtil {
      * key no bundle knows is still better shown as written than behind a
      * "[Missing translation]" marker. Free text is never looked up at all.
      */
+    /**
+     * The message for {@code key} in {@code locale}, or null when there is no
+     * source or no bundle carries the key (QA D887: a stored text is
+     * translated only when a bundle actually knows it).
+     */
+    public static String resolveOrNull(java.util.Locale locale, String key) {
+        if (messageSource == null || key == null) {
+            return null;
+        }
+        return messageSource.getMessage(key, null, null, locale != null ? locale : LocaleContextHolder.getLocale());
+    }
+
     public static String resolveOrRaw(String text, Object... args) {
         if (!isMessageKey(text) || messageSource == null) {
             return text;

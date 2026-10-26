@@ -92,6 +92,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final MedicationCatalogItemRepository medicationCatalogItemRepository;
     private final RefillRequestRepository refillRequestRepository;
     private final DispenseMapper dispenseMapper;
+    /** QA D843: the checkout must know which fills are already paid. */
+    private final com.example.hms.repository.pharmacy.PharmacyPaymentRepository paymentRepository;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final DispenseVerificationService dispenseVerificationService;
@@ -1260,6 +1262,9 @@ public class DispenseServiceImpl implements DispenseService {
         }
         // QA D264: the checkout takes the amount from here, not from a typed figure.
         dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
+        // QA D843: a paid fill was offered at the checkout with nothing saying so.
+        dto.setPaid(paymentRepository.existsByDispense_IdAndStatus(
+                dispense.getId(), com.example.hms.enums.PharmacyPaymentStatus.POSTED));
         return dto;
     }
 
@@ -1347,8 +1352,17 @@ public class DispenseServiceImpl implements DispenseService {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
                 .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         enforceHospitalScope(pharmacy);
-        return dispenseRepository.findByPharmacyId(pharmacyId, pageable)
-                .map(dispenseMapper::toResponseDTO);
+        Page<Dispense> page = dispenseRepository.findByPharmacyId(pharmacyId, pageable);
+        // QA D843: the checkout lists this page; one query says which rows are paid.
+        java.util.Set<UUID> paid = page.isEmpty()
+                ? java.util.Set.of()
+                : new java.util.HashSet<>(paymentRepository.findPaidDispenseIds(
+                        page.getContent().stream().map(Dispense::getId).toList()));
+        return page.map(d -> {
+            DispenseResponseDTO dto = dispenseMapper.toResponseDTO(d);
+            dto.setPaid(paid.contains(d.getId()));
+            return dto;
+        });
     }
 
     @Override

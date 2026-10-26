@@ -507,8 +507,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .drug2Code(interaction.getDrug2Code())
             .drug2Name(interaction.getDrug2Name())
             .severity(interaction.getSeverity())
-            .description(interaction.getDescription())
-            .recommendation(interaction.getRecommendation())
+            // QA D887: read-only display, so the reader's language.
+            .description(com.example.hms.service.support.DrugInteractionText.description(interaction))
+            .recommendation(com.example.hms.service.support.DrugInteractionText.recommendation(interaction))
             .mechanism(interaction.getMechanism())
             .clinicalEffects(interaction.getClinicalEffects())
             .requiresAvoidance(interaction.isRequiresAvoidance())

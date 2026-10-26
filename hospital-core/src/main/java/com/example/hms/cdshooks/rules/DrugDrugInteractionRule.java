@@ -94,10 +94,13 @@ public class DrugDrugInteractionRule implements CdsRule {
 
     private String composeDetail(DrugInteraction di) {
         StringBuilder detail = new StringBuilder();
-        if (di.getDescription() != null) detail.append(di.getDescription());
-        if (di.getRecommendation() != null) {
+        // QA D887: the seeded texts in the reader's language.
+        String description = com.example.hms.service.support.DrugInteractionText.description(di);
+        String recommendation = com.example.hms.service.support.DrugInteractionText.recommendation(di);
+        if (description != null) detail.append(description);
+        if (recommendation != null) {
             if (!detail.isEmpty()) detail.append(' ');
-            detail.append(text.get("cds.ddi.recommendation", "Recommendation: {0}", di.getRecommendation()));
+            detail.append(text.get("cds.ddi.recommendation", "Recommendation: {0}", recommendation));
         }
         return detail.isEmpty() ? null : detail.toString();
     }

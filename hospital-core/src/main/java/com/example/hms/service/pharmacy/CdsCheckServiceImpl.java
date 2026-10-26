@@ -138,8 +138,10 @@ public class CdsCheckServiceImpl implements CdsCheckService {
     }
 
     private static String formatInteractionAlert(DrugInteraction interaction) {
-        String desc = interaction.getDescription() != null && !interaction.getDescription().isBlank()
-                ? interaction.getDescription()
+        // QA D887: the seeded description in the pharmacist's language.
+        String localized = com.example.hms.service.support.DrugInteractionText.description(interaction);
+        String desc = localized != null && !localized.isBlank()
+                ? localized
                 : "Interaction médicamenteuse détectée";
         return String.format("[%s] %s ↔ %s : %s",
                 interaction.getSeverity(),

@@ -44,6 +44,13 @@ public class DispenseResponseDTO {
     private BigDecimal quantityDispensed;
     /** QA D264: what the dispense costs (quantity x the item's unit price), or null when no price is set. */
     private BigDecimal chargeAmount;
+    /**
+     * QA D843: whether a payment is POSTED against this dispense, so the
+     * checkout can leave a paid one out instead of offering it again. Set by
+     * the reads the checkout uses (one dispense, a pharmacy's list); null on
+     * the reads that do not compute it.
+     */
+    private Boolean paid;
     private String unit;
     private boolean substitution;
     private String substitutionReason;
