@@ -67,6 +67,14 @@ public interface EncounterService {
                                                               boolean isSuperAdmin,
                                                               UUID callerHospitalId);
 
+    /** QA D831: files the addendum under the named note entry; a null id means the current (latest) entry. */
+    EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
+                                                              UUID noteId,
+                                                              EncounterNoteAddendumRequestDTO request,
+                                                              Locale locale,
+                                                              boolean isSuperAdmin,
+                                                              UUID callerHospitalId);
+
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
 
     /** Server-side note signing ceremony (P3 #20): author-only, digest-backed, locks the note. */

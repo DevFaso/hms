@@ -514,6 +514,50 @@ describe('EncountersComponent', () => {
     expect(page.noteState()?.id).toBe('note-b');
   });
 
+  it("#965 review (k5.js replay): an addendum opened on DOCTOR_A's signed J0 is filed under J0, not J1", () => {
+    const signedA = { ...draftA, signedAt: '2026-10-25T09:00:00' } as EncounterNoteResponse;
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-note-entry"]')!.click();
+    fixture.detectChanges();
+
+    // The form opens under J0, the entry it corrects.
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).not.toBeNull();
+    page.addendumContent = 'Correction J0 : T 38.4, non 39.4';
+    page.addAddendum();
+
+    const [id, payload, noteId] = encounterSpy.addAddendum.calls.mostRecent().args;
+    expect(id).toBe('e1');
+    expect(payload.content).toBe('Correction J0 : T 38.4, non 39.4');
+    expect(noteId).toBe('note-a');
+    expect(page.showAddendumForm()).toBeFalse();
+    expect(page.addendumTargetId()).toBeNull();
+  });
+
+  it('QA D831: the addendum button under the current entry names the current entry', () => {
+    encounterSpy.addAddendum.and.returnValue(of({ id: 'a1' } as EncounterNoteAddendumResponse));
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+    fixture.detectChanges();
+
+    expect(host.querySelector('[data-testid="note-entry-addendum-form"]')).toBeNull();
+    expect(host.querySelector('[data-testid="addendum-content"]')).not.toBeNull();
+    page.addendumContent = 'Ajout';
+    page.addAddendum();
+
+    expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
+  });
+
   it('QA D831: a save that starts a new stay entry keeps the previous one listed', () => {
     encounterSpy.addNote.and.returnValue(of(entryB));
     component.selectEncounter(mockEncounter({ note: draftA }));

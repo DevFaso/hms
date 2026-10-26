@@ -707,6 +707,96 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
+    void d831_anAddendumNamingAnEarlierEntryLandsOnThatEntryAndNotOnTheLatest() {
+        // #965 review, k5.js replay: DOCTOR_A signs J0, DOCTOR2_A posts J1 (an
+        // unsigned draft), then DOCTOR_A writes an addendum to correct J0. It
+        // was filed under J1, DOCTOR2_A's entry, and its history row named J1:
+        // J0, signed and locked, could never be corrected.
+        encounter.setAdmissionId(UUID.randomUUID());
+        authorUser.setEmail("doctor@example.test");
+        note.setSubjective("QA R13 J0 toux fébrile");
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        service.signEncounterNote(encounterId, note.getId(), LOCALE);
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote j1 = EncounterNote.builder()
+            .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
+            .author(doctor2).authorName("Issouf Compaoré").subjective("QA R13 J1 apyrétique")
+            .documentedAt(LocalDateTime.now()).build();
+        j1.setId(UUID.randomUUID());
+        j1.setCreatedAt(LocalDateTime.now());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, j1));
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.of(j1));
+        when(encounterNoteAddendumRepository.save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder()
+                .content("Correction J0 : T 38.4, non 39.4")
+                .attestAccuracy(true)
+                .build();
+
+        service.addEncounterNoteAddendum(encounterId, note.getId(), request, LOCALE, false, hospitalId);
+
+        assertThat(note.getAddenda()).hasSize(1);
+        assertThat(note.getAddenda().get(0).getNote()).isSameAs(note);
+        assertThat(note.getAddenda().get(0).getContent()).isEqualTo("Correction J0 : T 38.4, non 39.4");
+        assertThat(j1.getAddenda()).isEmpty();
+        // J0's text and signature are as signed; J1 is untouched.
+        assertThat(note.getSubjective()).isEqualTo("QA R13 J0 toux fébrile");
+        assertThat(note.isSigned()).isTrue();
+        assertThat(j1.getSubjective()).isEqualTo("QA R13 J1 apyrétique");
+        // The NOTE_ADDENDUM row names J0 (the sign wrote the first row).
+        List<com.example.hms.model.encounter.EncounterNoteHistory> rows = historyRows(2);
+        assertThat(rows.get(1).getChangeType()).isEqualTo("NOTE_ADDENDUM");
+        assertThat(rows.get(1).getNoteId()).isEqualTo(note.getId());
+    }
+
+    @Test
+    void d831_anAddendumWithoutAnEntryGoesToTheCurrentOneAndAForeignEntryIs404() {
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote j1 = EncounterNote.builder()
+            .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
+            .author(doctor2).documentedAt(LocalDateTime.now()).build();
+        j1.setId(UUID.randomUUID());
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, j1));
+        when(encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounterId))
+            .thenReturn(Optional.of(j1));
+        when(encounterNoteAddendumRepository.save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class)))
+            .thenAnswer(i -> i.getArgument(0));
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder().content("Ajout").build();
+
+        service.addEncounterNoteAddendum(encounterId, null, request, LOCALE, false, hospitalId);
+
+        assertThat(j1.getAddenda()).hasSize(1);
+        assertThat(note.getAddenda()).isEmpty();
+
+        UUID foreign = UUID.randomUUID();
+        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, foreign, request, LOCALE, false, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(note.getAddenda()).isEmpty();
+        assertThat(j1.getAddenda()).hasSize(1);
+    }
+
+    @Test
+    void d831_anAddendumToAnEntryAtAnotherHospitalIs404() {
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        note.setHospital(elsewhere);
+        com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
+            com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder().content("Ajout").build();
+
+        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, note.getId(), request, LOCALE, false, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThat(note.getAddenda()).isEmpty();
+        verify(encounterNoteAddendumRepository, never()).save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class));
+    }
+
+    @Test
     void d831_aSecondNoteOnAnOutpatientVisitStillEditsTheOneNote() {
         // Path re-verified: off a stay the visit keeps one note, revised in place.
         encounter.setEncounterNote(note);

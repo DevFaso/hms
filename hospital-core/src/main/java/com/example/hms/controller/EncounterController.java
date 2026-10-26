@@ -494,6 +494,7 @@ public class EncounterController {
                            "Original note remains unchanged; addendum is clearly marked.")
     public ResponseEntity<EncounterNoteAddendumResponseDTO> addEncounterNoteAddendum(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         @Valid @RequestBody EncounterNoteAddendumRequestDTO request,
         Locale locale,
         Authentication auth,
@@ -501,8 +502,10 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        // QA D831: on a stay each progress note is its own entry; noteId names
+        // the one the addendum corrects (none = the current entry).
         EncounterNoteAddendumResponseDTO response =
-            encounterService.addEncounterNoteAddendum(encounterId, request, locale, isSuperAdmin, hospitalId);
+            encounterService.addEncounterNoteAddendum(encounterId, noteId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity
             .created(URI.create("/encounters/" + encounterId + "/notes/addendums"))
             .body(response);

@@ -340,6 +340,32 @@
             </div>
           }
 
+          <!-- QA D831 (#965 review): one addendum form, shown under the entry it corrects. -->
+          <ng-template #addendumForm>
+            <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+            <textarea
+              class="note-input"
+              data-testid="addendum-content"
+              [(ngModel)]="addendumContent"
+              rows="3"
+              [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
+              [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
+            ></textarea>
+            <div class="note-actions">
+              <button
+                class="btn-primary"
+                data-testid="addendum-save"
+                (click)="addAddendum()"
+                [disabled]="!addendumContent.trim() || addendumSaving()"
+              >
+                {{ 'COMMON.SAVE' | translate }}
+              </button>
+              <button class="btn-secondary" (click)="closeAddendumForm()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+            </div>
+          </ng-template>
+
           @if (earlierNoteEntries().length > 0) {
             <!-- QA D831: each progress entry of the stay is its own, signed by its author and co-signed by id. -->
             <div class="detail-section" data-testid="note-earlier-entries">
@@ -396,6 +422,21 @@
                           : 'ENCOUNTERS.COSIGN_NOTE'
                         ) | translate
                       }}
+                    </button>
+                  }
+                  <!-- #965 review: a signed earlier entry is corrected by an addendum filed under it. -->
+                  @if (addendumOnEarlierEntry() && addendumTargetId() === view.entry.id) {
+                    <div data-testid="note-entry-addendum-form">
+                      <ng-container *ngTemplateOutlet="addendumForm"></ng-container>
+                    </div>
+                  } @else {
+                    <button
+                      class="btn-secondary"
+                      data-testid="addendum-note-entry"
+                      (click)="openAddendumForm(view.entry.id)"
+                    >
+                      <span class="material-symbols-outlined">post_add</span>
+                      {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
                     </button>
                   }
                 </div>
@@ -515,36 +556,19 @@
           }
 
           <div class="detail-section">
-            @if (!showAddendumForm()) {
+            @if (showAddendumForm() && !addendumOnEarlierEntry()) {
+              <ng-container *ngTemplateOutlet="addendumForm"></ng-container>
+            } @else {
+              <!-- QA D831: this button corrects the current entry, the one shown above. -->
               <button
                 class="btn-secondary"
+                data-testid="addendum-current-entry"
                 [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
-                (click)="showAddendumForm.set(true)"
+                (click)="openAddendumForm(noteState()?.id)"
               >
                 <span class="material-symbols-outlined">post_add</span>
                 {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
               </button>
-            } @else {
-              <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
-              <textarea
-                class="note-input"
-                [(ngModel)]="addendumContent"
-                rows="3"
-                [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
-                [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
-              ></textarea>
-              <div class="note-actions">
-                <button
-                  class="btn-primary"
-                  (click)="addAddendum()"
-                  [disabled]="!addendumContent.trim() || addendumSaving()"
-                >
-                  {{ 'COMMON.SAVE' | translate }}
-                </button>
-                <button class="btn-secondary" (click)="showAddendumForm.set(false)">
-                  {{ 'COMMON.CANCEL' | translate }}
-                </button>
-              </div>
             }
           </div>
         </div>

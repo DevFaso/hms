@@ -142,6 +142,21 @@ export class EncountersComponent implements OnInit {
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /**
+   * QA D831 (#965 review): the entry the open addendum form corrects. On a
+   * stay an earlier entry is signed and locked, so an addendum is its only
+   * correction route; it must be filed under that entry, never the latest.
+   */
+  addendumTargetId = signal<string | null>(null);
+  /** The addendum form is open under one of the stay's earlier entries, not the current one. */
+  readonly addendumOnEarlierEntry = computed(() => {
+    const target = this.addendumTargetId();
+    return (
+      this.showAddendumForm() &&
+      target !== null &&
+      this.earlierNoteEntries().some((entry) => entry.id === target)
+    );
+  });
 
   /* Status transitions + AVS */
   transitioning = signal(false);
@@ -559,6 +574,7 @@ export class EncountersComponent implements OnInit {
     this.selectedEncounter.set(enc);
     this.showNoteForm.set(false);
     this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
     this.addendumContent = '';
     this.noteState.set(enc.note ?? null);
     this.noteEntries.set(enc.noteEntries ?? []);
@@ -735,17 +751,31 @@ export class EncountersComponent implements OnInit {
     });
   }
 
+  /** Opens the addendum form for one entry: an earlier entry of the stay, or the current one. */
+  openAddendumForm(entryId: string | null | undefined): void {
+    this.addendumTargetId.set(entryId ?? null);
+    this.addendumContent = '';
+    this.showAddendumForm.set(true);
+  }
+
+  closeAddendumForm(): void {
+    this.showAddendumForm.set(false);
+    this.addendumTargetId.set(null);
+    this.addendumContent = '';
+  }
+
   addAddendum(): void {
     const enc = this.selectedEncounter();
     if (!enc || !this.addendumContent.trim()) return;
+    // QA D831: the entry the form was opened for; the current entry when none was named.
+    const noteId = this.addendumTargetId() ?? this.noteState()?.id ?? undefined;
     this.addendumSaving.set(true);
     this.encounterService
-      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true })
+      .addAddendum(enc.id, { content: this.addendumContent.trim(), attestAccuracy: true }, noteId)
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('ENCOUNTERS.ADDENDUM_RECORDED'));
-          this.addendumContent = '';
-          this.showAddendumForm.set(false);
+          this.closeAddendumForm();
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },

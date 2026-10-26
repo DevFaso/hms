@@ -551,14 +551,31 @@ public class EncounterServiceImpl implements EncounterService {
                                                                      Locale locale,
                                                                      boolean isSuperAdmin,
                                                                      UUID callerHospitalId) {
+        return addEncounterNoteAddendum(encounterId, null, request, locale, isSuperAdmin, callerHospitalId);
+    }
+
+    /**
+     * QA D831 (#965 review): {@code noteId} names the entry the addendum
+     * corrects. On a stay an earlier entry is its own signed, locked row, and
+     * an addendum is its only correction route: attaching every addendum to
+     * the latest entry filed DOCTOR_A's correction of J0 under DOCTOR2_A's J1.
+     * Without an id, the current entry (the one the encounter panel shows).
+     */
+    @Override
+    @Transactional
+    public EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
+                                                                     UUID noteId,
+                                                                     EncounterNoteAddendumRequestDTO request,
+                                                                     Locale locale,
+                                                                     boolean isSuperAdmin,
+                                                                     UUID callerHospitalId) {
         if (request == null) {
             throw new BusinessException(messageSource.getMessage("encounter.note.payload.required", null, locale));
         }
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        EncounterNote note = currentNoteEntry(encounter)
-            .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
+        EncounterNote note = resolveAddendumEntry(encounter, noteId, isSuperAdmin, callerHospitalId, locale);
 
         NoteAuthor author = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
             request.getAuthorUserId(), request.getAuthorName(), locale);
@@ -756,6 +773,27 @@ public class EncounterServiceImpl implements EncounterService {
             return entries.stream().filter(entry -> noteId.equals(entry.getId())).findFirst();
         }
         return Optional.of(entries.get(entries.size() - 1));
+    }
+
+    /**
+     * QA D831: the entry an addendum is filed under. A named entry must be one
+     * of this encounter's, and at the caller's hospital (404-not-403, as in
+     * {@link #loadNoteScoped}); no name means the current entry.
+     */
+    private EncounterNote resolveAddendumEntry(Encounter encounter, UUID noteId, boolean isSuperAdmin,
+                                               UUID callerHospitalId, Locale locale) {
+        if (noteId == null) {
+            return currentNoteEntry(encounter)
+                .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
+        }
+        EncounterNote note = pickNoteEntry(
+                encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId()), noteId)
+            .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
+        UUID noteHospitalId = note.getHospital() != null ? note.getHospital().getId() : null;
+        if (!isSuperAdmin && noteHospitalId != null && !isAtCallerHospital(noteHospitalId, callerHospitalId)) {
+            throw encounterNotFound(encounter.getId());
+        }
+        return note;
     }
 
     /** QA D751: a history actor for a session-resolved user, in the format the other note rows use. */

@@ -424,10 +424,14 @@ export class EncounterService {
   addAddendum(
     encounterId: string,
     req: EncounterNoteAddendumRequest,
+    noteId?: string,
   ): Observable<EncounterNoteAddendumResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the
+    // entry the addendum corrects. Without it the server takes the current entry.
     return this.http.post<EncounterNoteAddendumResponse>(
       `${this.baseUrl}/${encounterId}/notes/addendums`,
       req,
+      noteId ? { params: { noteId } } : {},
     );
   }
 
