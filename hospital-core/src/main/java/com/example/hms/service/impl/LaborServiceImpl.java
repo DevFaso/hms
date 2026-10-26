@@ -222,10 +222,14 @@ public class LaborServiceImpl implements LaborService {
                 hospital.getId()),
             "Cross-hospital maternal history read on the treatment relationship to open a labour episode"));
 
-        Integer gravida = request.getGravida() != null ? request.getGravida()
-            : history != null ? history.getGravida() : null;
-        Integer para = request.getPara() != null ? request.getPara()
-            : history != null ? history.getPara() : null;
+        Integer gravida = request.getGravida();
+        if (gravida == null && history != null) {
+            gravida = history.getGravida();
+        }
+        Integer para = request.getPara();
+        if (para == null && history != null) {
+            para = history.getPara();
+        }
         // QA D809: the admission's own counts may not describe an impossible
         // history (G1 P3), whether both were typed or one completes the
         // other from her record. Counts snapshotted unchanged from an earlier

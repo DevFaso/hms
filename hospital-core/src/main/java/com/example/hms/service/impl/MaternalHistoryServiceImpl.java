@@ -348,12 +348,6 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     }
 
     /**
-     * QA D162 (D104 family): the due date was never derived, so the labour
-     * episode's gestational age stayed blank. When the clinician gives an LMP
-     * that can date a current pregnancy and no due date, Naegele's rule fills it.
-     * An explicit due date always wins.
-     */
-    /**
      * QA D809: "G1 P3" was saved. The counts of a new record or a new version
      * must describe one possible history; the refusal names the form field.
      */
@@ -362,6 +356,12 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
             history.getGravida(), history.getPara(), history.getAbortions(), "obstetricHistory.");
     }
 
+    /**
+     * QA D162 (D104 family): the due date was never derived, so the labour
+     * episode's gestational age stayed blank. When the clinician gives an LMP
+     * that can date a current pregnancy and no due date, Naegele's rule fills it.
+     * An explicit due date always wins.
+     */
     private void deriveEstimatedDueDate(MaternalHistory history) {
         if (history.getEstimatedDueDate() != null
             || !GestationalDating.isPlausibleCurrentLmp(history.getLastMenstrualPeriod(), java.time.LocalDate.now())) {
