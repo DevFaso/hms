@@ -38,7 +38,7 @@ public final class DrugInteractionText {
                 interaction.getRecommendation());
     }
 
-    static String localized(String code1, String code2, String field, String stored) {
+    public static String localized(String code1, String code2, String field, String stored) {
         if (stored == null || code1 == null || code2 == null) {
             return stored;
         }

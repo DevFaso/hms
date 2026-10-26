@@ -139,7 +139,9 @@ public class CdsCheckServiceImpl implements CdsCheckService {
 
     private static String formatInteractionAlert(DrugInteraction interaction) {
         // QA D887: the seeded description in the pharmacist's language.
-        String localized = com.example.hms.service.support.DrugInteractionText.description(interaction);
+        String localized = com.example.hms.service.support.DrugInteractionText.localized(
+                interaction.getDrug1Code(), interaction.getDrug2Code(), "description",
+                interaction.getDescription());
         String desc = localized != null && !localized.isBlank()
                 ? localized
                 : "Interaction médicamenteuse détectée";

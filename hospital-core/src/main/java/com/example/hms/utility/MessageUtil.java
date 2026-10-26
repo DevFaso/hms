@@ -67,16 +67,6 @@ public class MessageUtil {
     }
 
     /**
-     * Resolves {@code text} as a message key in the caller's locale (the
-     * request's {@code Accept-Language}, via {@link LocaleContextHolder}) when
-     * it is one, and returns it unchanged otherwise.
-     *
-     * <p>Unlike {@link #resolve}, an unknown key is not decorated: this is for
-     * exceptions that have always carried free text as well as keys, where a
-     * key no bundle knows is still better shown as written than behind a
-     * "[Missing translation]" marker. Free text is never looked up at all.
-     */
-    /**
      * The message for {@code key} in {@code locale}, or null when there is no
      * source or no bundle carries the key (QA D887: a stored text is
      * translated only when a bundle actually knows it).
@@ -88,6 +78,16 @@ public class MessageUtil {
         return messageSource.getMessage(key, null, null, locale != null ? locale : LocaleContextHolder.getLocale());
     }
 
+    /**
+     * Resolves {@code text} as a message key in the caller's locale (the
+     * request's {@code Accept-Language}, via {@link LocaleContextHolder}) when
+     * it is one, and returns it unchanged otherwise.
+     *
+     * <p>Unlike {@link #resolve}, an unknown key is not decorated: this is for
+     * exceptions that have always carried free text as well as keys, where a
+     * key no bundle knows is still better shown as written than behind a
+     * "[Missing translation]" marker. Free text is never looked up at all.
+     */
     public static String resolveOrRaw(String text, Object... args) {
         if (!isMessageKey(text) || messageSource == null) {
             return text;
