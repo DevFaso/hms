@@ -83,6 +83,6 @@ public interface BreakGlassService {
      * named, and only a session declared at {@code actingHospitalId} counts
      * (any hospital when it is {@code null}, e.g. a super-admin in global view).
      */
-    Optional<BreakGlassSessionResponseDTO> recordReadIfLive(UUID patientId, UUID userId,
+    Optional<BreakGlassSessionResponseDTO> consumeReadIfLive(UUID patientId, UUID userId,
                                                             UUID actingHospitalId, String purpose);
 }

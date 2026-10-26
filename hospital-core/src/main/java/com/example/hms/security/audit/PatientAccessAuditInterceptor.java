@@ -224,7 +224,7 @@ public class PatientAccessAuditInterceptor implements HandlerInterceptor {
         // The route template, never the concrete URI: no id, no query string.
         Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
         try {
-            breakGlass.recordReadIfLive(patientId, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(),
+            breakGlass.consumeReadIfLive(patientId, actorId, ActingScopeResolver.pinnedHospitalIdOrNull(),
                 "GET " + (pattern != null ? pattern : "(patient record)"));
         } catch (RuntimeException failure) {
             // Never at the cost of the ordinary PATIENT_ACCESS row written next.

@@ -172,7 +172,7 @@ class PatientAccessAuditInterceptorTest {
         }
 
         verify(breakGlass, org.mockito.Mockito.times(3))
-            .recordReadIfLive(PATIENT, DOCTOR, hospitalB, "GET /patients/{id}");
+            .consumeReadIfLive(PATIENT, DOCTOR, hospitalB, "GET /patients/{id}");
         // The ordinary access row is still deduped to one.
         verify(auditService, org.mockito.Mockito.times(1)).logEvent(org.mockito.ArgumentMatchers.any());
     }
@@ -181,7 +181,7 @@ class PatientAccessAuditInterceptorTest {
     @DisplayName("QA D840: a break-the-glass counting failure never costs the ordinary access row")
     void aCountingFailureStillRecordsTheAccess() throws Exception {
         com.example.hms.service.BreakGlassService breakGlass = mock(com.example.hms.service.BreakGlassService.class);
-        when(breakGlass.recordReadIfLive(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+        when(breakGlass.consumeReadIfLive(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
             .thenThrow(new IllegalStateException("db down"));
         @SuppressWarnings("unchecked")

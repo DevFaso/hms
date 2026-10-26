@@ -316,7 +316,7 @@ public class BreakGlassServiceImpl implements BreakGlassService {
      */
     @Override
     @Transactional
-    public Optional<BreakGlassSessionResponseDTO> recordReadIfLive(UUID patientId, UUID userId,
+    public Optional<BreakGlassSessionResponseDTO> consumeReadIfLive(UUID patientId, UUID userId,
                                                                     UUID actingHospitalId, String purpose) {
         if (patientId == null || userId == null) {
             return Optional.empty();

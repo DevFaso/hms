@@ -535,7 +535,7 @@ class BreakGlassServiceImplTest {
     // -------------------------------------------------------------------- QA D840 / D839
 
     @Nested
-    @DisplayName("QA D840: recordReadIfLive (the patient-read path)")
+    @DisplayName("QA D840: consumeReadIfLive (the patient-read path)")
     class RecordRead {
         @Test
         @DisplayName("a read at the session's hospital counts and is audited")
@@ -546,7 +546,7 @@ class BreakGlassServiceImplTest {
             when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
 
             Optional<BreakGlassSessionResponseDTO> out =
-                service.recordReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}");
+                service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}");
 
             assertThat(out).isPresent();
             assertThat(out.get().getAuditCount()).isEqualTo(1);
@@ -560,7 +560,7 @@ class BreakGlassServiceImplTest {
             when(sessionRepository.findLiveForUserAndPatient(eq(userId), eq(patientId), any()))
                 .thenReturn(List.of(liveSession()));
 
-            assertThat(service.recordReadIfLive(patientId, userId, UUID.randomUUID(), "GET /patients/{id}")).isEmpty();
+            assertThat(service.consumeReadIfLive(patientId, userId, UUID.randomUUID(), "GET /patients/{id}")).isEmpty();
             verify(sessionRepository, never()).incrementAuditCount(any());
             verify(auditService, never()).logEvent(any());
         }
@@ -568,8 +568,8 @@ class BreakGlassServiceImplTest {
         @Test
         @DisplayName("no user, no patient: nothing is looked up")
         void nullsShortCircuit() {
-            assertThat(service.recordReadIfLive(null, userId, hospitalId, "x")).isEmpty();
-            assertThat(service.recordReadIfLive(patientId, null, hospitalId, "x")).isEmpty();
+            assertThat(service.consumeReadIfLive(null, userId, hospitalId, "x")).isEmpty();
+            assertThat(service.consumeReadIfLive(patientId, null, hospitalId, "x")).isEmpty();
             verify(sessionRepository, never()).findLiveForUserAndPatient(any(), any(), any());
         }
     }
@@ -593,7 +593,7 @@ class BreakGlassServiceImplTest {
         when(sessionRepository.incrementAuditCount(session.getId())).thenReturn(1);
 
         BreakGlassSessionResponseDTO dto =
-            service.recordReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}").orElseThrow();
+            service.consumeReadIfLive(patientId, userId, hospitalId, "GET /patients/{id}").orElseThrow();
 
         assertThat(dto.getPatientName()).isEqualTo("Salif Kaboré");
         assertThat(dto.getPatientMrn()).isEqualTo("CNK4035");
