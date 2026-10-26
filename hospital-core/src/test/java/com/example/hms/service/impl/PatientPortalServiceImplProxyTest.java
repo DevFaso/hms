@@ -257,7 +257,7 @@ class PatientPortalServiceImplProxyTest {
                     .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
                     .hasMessage("Aucun compte ne porte l'identifiant inconnu.xyz. Vérifiez l'orthographe "
                         + "auprès de la personne à qui vous voulez donner accès.");
-            verify(patientProxyRepository, org.mockito.Mockito.never()).save(any());
+            verify(patientProxyRepository, never()).save(any());
         }
     }
 

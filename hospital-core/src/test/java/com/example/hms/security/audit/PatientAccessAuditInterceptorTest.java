@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -171,10 +172,10 @@ class PatientAccessAuditInterceptorTest {
             com.example.hms.security.context.HospitalContextHolder.clear();
         }
 
-        verify(breakGlass, org.mockito.Mockito.times(3))
+        verify(breakGlass, times(3))
             .consumeReadIfLive(PATIENT, DOCTOR, hospitalB, "GET /patients/{id}");
         // The ordinary access row is still deduped to one.
-        verify(auditService, org.mockito.Mockito.times(1)).logEvent(org.mockito.ArgumentMatchers.any());
+        verify(auditService, times(1)).logEvent(org.mockito.ArgumentMatchers.any());
     }
 
     @Test

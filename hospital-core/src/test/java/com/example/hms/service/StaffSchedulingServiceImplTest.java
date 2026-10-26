@@ -601,7 +601,7 @@ class StaffSchedulingServiceImplTest {
             when(roleValidator.isHospitalAdmin(adminUserId, hospitalId)).thenReturn(true);
 
             assertThat(service.canManageSchedules()).isTrue();
-            verify(departmentRepository, org.mockito.Mockito.never()).existsByHeadOfDepartmentId(any());
+            verify(departmentRepository, never()).existsByHeadOfDepartmentId(any());
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();
         }

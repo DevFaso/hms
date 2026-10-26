@@ -61,19 +61,15 @@ class OrganizationControllerIT extends BaseIT {
      * live context), not just the authority on the mock user, so this suite
      * acts with that context, as the real filters would build it.
      */
-    @BeforeEach
-    void actAsVerifiedSuperAdmin() {
-        com.example.hms.security.context.HospitalContextHolder.setContext(
-            com.example.hms.security.context.HospitalContext.builder().superAdmin(true).build());
-    }
-
     @org.junit.jupiter.api.AfterEach
     void clearScope() {
         com.example.hms.security.context.HospitalContextHolder.clear();
     }
 
     @BeforeEach
-    void cleanDatabase() {
+    void cleanDatabaseAndActAsVerifiedSuperAdmin() {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().superAdmin(true).build());
         departmentRepository.deleteAll();
         assignmentRepository.deleteAll();
         securityRuleRepository.deleteAll();
