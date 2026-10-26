@@ -40,6 +40,7 @@ public class EncounterMapper {
         UUID encounterId = e.getId();
         dto.setId(encounterId);
         dto.setCode(e.getCode());
+        dto.setAdmissionId(e.getAdmissionId());
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());
@@ -90,6 +91,15 @@ public class EncounterMapper {
             JpaProxyUtils.safeInit(e.getAppointment(), OWNER, encounterId, "appointment"));
 
         dto.setNote(toEncounterNoteResponseDTO(e.getEncounterNote()));
+        // QA D831: the earlier entries of a stay stay readable (and signable).
+        java.util.List<EncounterNote> entries = e.getEncounterNotes();
+        if (entries != null && entries.size() > 1) {
+            dto.setNoteEntries(entries.stream()
+                .sorted(java.util.Comparator.comparing(EncounterNote::getCreatedAt,
+                    java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                .map(this::toEncounterNoteResponseDTO)
+                .toList());
+        }
 
         return dto;
     }
@@ -134,6 +144,9 @@ public class EncounterMapper {
         }
         return EncounterNoteResponseDTO.builder()
             .id(note.getId())
+            .authorUserId(note.getAuthor() != null ? note.getAuthor().getId() : null)
+            .authorName(nullSafe(note.getAuthorName()))
+            .authorCredentials(nullSafe(note.getAuthorCredentials()))
             .template(note.getTemplate())
             .chiefComplaint(nullSafe(note.getChiefComplaint()))
             .historyOfPresentIllness(nullSafe(note.getHistoryOfPresentIllness()))

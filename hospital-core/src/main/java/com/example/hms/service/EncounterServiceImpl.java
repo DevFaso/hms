@@ -557,7 +557,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
-        EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
+        EncounterNote note = currentNoteEntry(encounter)
             .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
 
         NoteAuthor author = resolveSessionNoteAuthor(encounter, request.getAuthorStaffId(),
@@ -623,7 +623,19 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId);
+        return signEncounterNote(encounterId, null, locale);
+    }
+
+    /**
+     * QA D831: {@code noteId} names the entry to sign. Without it, the caller's
+     * own latest unsigned entry on the encounter is signed (an inpatient stay
+     * holds one entry per progress note, so the latest entry may be another
+     * clinician's), else the current entry as before.
+     */
+    @Override
+    @Transactional
+    public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale) {
+        EncounterNote note = loadNoteScoped(encounterId, noteId, NoteTarget.SIGN);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException("encounter.note.alreadySigned");
@@ -667,7 +679,17 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId);
+        return cosignEncounterNote(encounterId, null, locale);
+    }
+
+    /**
+     * QA D831: {@code noteId} names the entry to co-sign. Without it, the latest
+     * signed entry still awaiting its co-signature, else the current entry.
+     */
+    @Override
+    @Transactional
+    public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, UUID noteId, Locale locale) {
+        EncounterNote note = loadNoteScoped(encounterId, noteId, NoteTarget.COSIGN);
 
         if (!note.isRequiresCosign()) {
             throw new BusinessException("encounter.note.noCosignRequirement");
@@ -702,12 +724,16 @@ public class EncounterServiceImpl implements EncounterService {
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
+    /** QA D831: which entry a sign or co-sign without a note id acts on. */
+    private enum NoteTarget { SIGN, COSIGN }
+
     /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
-    private EncounterNote loadNoteScoped(UUID encounterId) {
+    private EncounterNote loadNoteScoped(UUID encounterId, UUID noteId, NoteTarget target) {
         if (!encounterRepository.existsById(encounterId)) {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
-        EncounterNote note = encounterNoteRepository.findByEncounter_Id(encounterId)
+        List<EncounterNote> entries = encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId);
+        EncounterNote note = pickNoteEntry(entries, noteId, target)
             .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
@@ -716,6 +742,34 @@ public class EncounterServiceImpl implements EncounterService {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         return note;
+    }
+
+    /**
+     * QA D831: the entry a sign or co-sign acts on. A named entry must belong to
+     * the encounter. Otherwise a sign takes the caller's own latest unsigned
+     * entry and a co-sign the latest signed entry awaiting its co-signature;
+     * failing that, the current entry, so the refusals stay what they were.
+     */
+    private Optional<EncounterNote> pickNoteEntry(List<EncounterNote> entries, UUID noteId, NoteTarget target) {
+        if (entries == null || entries.isEmpty()) {
+            return Optional.empty();
+        }
+        if (noteId != null) {
+            return entries.stream().filter(entry -> noteId.equals(entry.getId())).findFirst();
+        }
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            EncounterNote entry = entries.get(i);
+            boolean candidate = target == NoteTarget.SIGN
+                ? !entry.isSigned() && entry.getSignatureValue() == null
+                    && currentUserId != null && entry.getAuthor() != null
+                    && currentUserId.equals(entry.getAuthor().getId())
+                : entry.isRequiresCosign() && entry.isSigned() && entry.getCosignedAt() == null;
+            if (candidate) {
+                return Optional.of(entry);
+            }
+        }
+        return Optional.of(entries.get(entries.size() - 1));
     }
 
     /** QA D751: a history actor for a session-resolved user, in the format the other note rows use. */
@@ -767,7 +821,16 @@ public class EncounterServiceImpl implements EncounterService {
 
     private boolean hasExistingNote(Encounter encounter) {
         return encounter.getEncounterNote() != null
-            || encounterNoteRepository.findByEncounter_Id(encounter.getId()).isPresent();
+            || encounterNoteRepository.existsByEncounter_Id(encounter.getId());
+    }
+
+    /** QA D831: the encounter's current note entry (the one created last), if any. */
+    private Optional<EncounterNote> currentNoteEntry(Encounter encounter) {
+        EncounterNote loaded = encounter.getEncounterNote();
+        if (loaded != null) {
+            return Optional.of(loaded);
+        }
+        return encounterNoteRepository.findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(encounter.getId());
     }
 
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
@@ -786,22 +849,26 @@ public class EncounterServiceImpl implements EncounterService {
         }
         validateAuthorScope(encounter, author.staff(), locale);
 
-        EncounterNote note = Optional.ofNullable(encounter.getEncounterNote())
-            .orElseGet(() -> encounterNoteRepository.findByEncounter_Id(encounter.getId()).orElse(new EncounterNote()));
-
-        boolean isNew = note.getId() == null;
+        EncounterNote current = currentNoteEntry(encounter).orElse(null);
         // QA D711: on an inpatient stay each POST is the day's progress entry,
-        // not an edit of yesterday's. A section the new entry leaves out is
-        // empty, never yesterday's text under today's assessment; the earlier
-        // entry stays whole in the note history (NOTE_CREATED per entry).
-        // Decided BEFORE the edit locks: a new entry edits nothing, so a signed
-        // day-1 note or another clinician's earlier entry does not block it.
-        boolean newStayEntry = progressEntryPost && !isNew && encounter.getAdmissionId() != null;
+        // not an edit of yesterday's: a section the new entry leaves out is
+        // empty, never yesterday's text under today's assessment.
+        // QA D831: and it is a NEW ROW. D711 recycled the encounter's single
+        // note row for each entry, keeping the earlier one only as a history
+        // snapshot, so a second doctor's entry replaced the first doctor's
+        // unsigned draft: the draft left the record unsigned and could never
+        // be signed. Each entry now keeps its own author, text, signature and
+        // addenda; the earlier ones are left exactly as they are. A new entry
+        // edits nothing, so a signed day-1 note or another clinician's earlier
+        // entry does not block it.
+        boolean newStayEntry = progressEntryPost && current != null && encounter.getAdmissionId() != null;
+        EncounterNote note = current == null || newStayEntry ? new EncounterNote() : current;
+        boolean isNew = note.getId() == null;
         // The lock the sign ceremony creates (P3 #20). Includes pre-V125
         // client-asserted signatures: the note form always promised signing
         // "closes the note for further edits", and until now the upsert
         // silently rewrote signed notes anyway.
-        if (!isNew && !newStayEntry) {
+        if (!isNew) {
             assertNoteEditable(note, author);
         }
         if (isNew) {
@@ -809,16 +876,6 @@ public class EncounterServiceImpl implements EncounterService {
             note.setPatient(encounter.getPatient());
             note.setHospital(encounter.getHospital());
             note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
-        }
-        if (newStayEntry) {
-            // #940 review: the closing entry's addenda and links belong to it.
-            // Snapshot them (full content) into its history before detaching,
-            // or a day-1 correction shows under the day-2 entry and author.
-            // QA D738: that snapshot is the closing entry's text, so its row
-            // names that entry's author, never the clinician starting the next.
-            recordNoteHistory(encounter, note, NOTE_HISTORY_UPDATED,
-                closingEntryActor(note, historyActor(author, actorOverride)));
-            startNewStayEntry(note, request);
         }
 
         applyNoteFields(note, request, author);
@@ -831,7 +888,7 @@ public class EncounterServiceImpl implements EncounterService {
         encounter.setEncounterNote(saved);
 
         // A session author is the history's actor; a body-supplied name is not.
-        recordNoteHistory(encounter, saved, isNew || newStayEntry ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED,
+        recordNoteHistory(encounter, saved, isNew ? NOTE_HISTORY_CREATED : NOTE_HISTORY_UPDATED,
             historyActor(author, actorOverride));
         return saved;
     }
@@ -852,39 +909,6 @@ public class EncounterServiceImpl implements EncounterService {
     private String historyActor(NoteAuthor author, String actorOverride) {
         String override = trimToNull(actorOverride);
         return !author.sessionResolved() && override != null ? override : author.actorIdentifier();
-    }
-
-    /** QA D738: the author of the stay entry being closed; the current actor only when none is recorded. */
-    private String closingEntryActor(EncounterNote closing, String fallback) {
-        String actor = determineActorIdentifier(trimToNull(closing.getAuthorName()), closing.getAuthor(),
-            closing.getAuthorStaff(), null);
-        return actor != null ? actor : fallback;
-    }
-
-    /** QA D711: clears the previous stay entry's sections and timing before the new entry is applied. */
-    private static void startNewStayEntry(EncounterNote note, EncounterNoteRequestDTO request) {
-        NOTE_TEXT_FIELDS.forEach(mapping -> mapping.noteSetter().accept(note, null));
-        note.setLateEntry(false);
-        note.setEventOccurredAt(null);
-        note.setDocumentedAt(request.getDocumentedAt() != null ? request.getDocumentedAt() : LocalDateTime.now());
-        note.setAttestAccuracy(false);
-        note.setAttestNoAbbreviations(false);
-        note.setAttestSpellCheck(false);
-        // The previous entry's signature and co-signature belong to that
-        // entry (kept in the note history), never to the new unsigned text.
-        note.setSignedAt(null);
-        note.setSignedByName(null);
-        note.setSignedByCredentials(null);
-        note.setSignedByUserId(null);
-        note.setSignatureAlgorithm(null);
-        note.setSignatureValue(null);
-        note.setCosignedBy(null);
-        note.setCosignedAt(null);
-        // Addenda and links were snapshotted into the closing entry's history.
-        if (note.getAddenda() != null) {
-            note.getAddenda().clear();
-        }
-        note.clearLinks();
     }
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
@@ -2557,7 +2581,7 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D744: the patient reads this row, so it carries the signed note's
         // instructions and plan exactly as the staff AVS does.
         summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
-            encounter.getFollowUpInstructions(), encounter.getEncounterNote()));
+            encounter.getFollowUpInstructions(), encounter.getLatestSignedEncounterNote()));
         // QA D224: the AVS texts the clinician wrote at checkout outlive the request.
         // A synthetic checkout (PUT to COMPLETED) carries none and keeps what is there.
         if (request != null) {

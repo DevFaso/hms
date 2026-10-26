@@ -19,13 +19,14 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ClockTimePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',

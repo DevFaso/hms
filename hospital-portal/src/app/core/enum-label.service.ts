@@ -1045,6 +1045,9 @@ export class EnumLabelService implements OnDestroy {
 
   private static readonly ENUM_ROOT = ['PORTAL', 'ENUM'].join('.');
 
+  /** QA D836: what an enum code looks like (letters, digits, underscores, one word). */
+  private static readonly CODE_LIKE = /^\w+$/;
+
   /** The value's label in the generic STATUS group, else in the first group that has it. */
   private lookupAnyGroup(value: string): string | null {
     // The whole subtree, not a leaf key: held in a constant so the
@@ -1099,7 +1102,12 @@ export class EnumLabelService implements OnDestroy {
       if (map[value]) return map[value];
     }
 
-    // 3) Prettify — UPPER_SNAKE_CASE → Title Case
+    // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
+    // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
+    // type) is shown as typed: title-casing it read "Sang total (edta)".
+    if (!EnumLabelService.CODE_LIKE.test(value)) {
+      return value;
+    }
     return value
       .split('_')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())

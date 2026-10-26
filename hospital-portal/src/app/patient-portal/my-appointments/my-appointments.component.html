@@ -214,7 +214,7 @@
               }}</span>
               <span class="pac-time">
                 <span class="material-symbols-outlined" style="font-size: 14px">schedule</span>
-                {{ appt.startTime }} {{ appt.location ? '· ' + appt.location : '' }}
+                {{ appt.startTime | clockTime }} {{ appt.location ? '· ' + appt.location : '' }}
               </span>
             </div>
             <span class="pac-status" [attr.data-status]="appt.status">{{
@@ -232,7 +232,8 @@
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
                   <span class="adv"
-                    >{{ appt.startTime }}{{ appt.endTime ? ' – ' + appt.endTime : '' }}</span
+                    >{{ appt.startTime | clockTime
+                    }}{{ appt.endTime ? ' – ' + (appt.endTime | clockTime) : '' }}</span
                   >
                 </div>
                 <div class="appt-detail-item">
@@ -353,7 +354,8 @@
                 <div class="appt-detail-item">
                   <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
                   <span class="adv"
-                    >{{ appt.startTime }}{{ appt.endTime ? ' – ' + appt.endTime : '' }}</span
+                    >{{ appt.startTime | clockTime
+                    }}{{ appt.endTime ? ' – ' + (appt.endTime | clockTime) : '' }}</span
                   >
                 </div>
                 <div class="appt-detail-item">
@@ -436,7 +438,7 @@
           </p>
           <p class="appt-modal-target">
             <strong>{{ target.date | serverTime | date: 'fullDate' }}</strong>
-            {{ target.startTime }}
+            {{ target.startTime | clockTime }}
             {{ target.providerName ? '· ' + target.providerName : '' }}
           </p>
 
@@ -513,7 +515,7 @@
 
           <p class="appt-modal-target">
             <strong>{{ target.date | serverTime | date: 'fullDate' }}</strong>
-            {{ target.startTime }}
+            {{ target.startTime | clockTime }}
             {{ target.providerName ? '· ' + target.providerName : '' }}
           </p>
 

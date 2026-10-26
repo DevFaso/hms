@@ -347,6 +347,26 @@
   padding: 1.5rem;
 }
 
+// QA D832: what the critical limits do, above the range rows.
+.critical-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+// QA D834: a qualitative test's expected answer, where a range count would be.
+.expected-result {
+  font-size: 0.8125rem;
+  color: #334155;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
 .range-row {
   display: flex;
   flex-wrap: wrap;

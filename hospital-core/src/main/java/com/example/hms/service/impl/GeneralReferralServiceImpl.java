@@ -586,6 +586,32 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     private static final String OWNER = "GeneralReferral";
 
+    /**
+     * QA D889: the referral list and detail print the patient's MRN under the
+     * name, and the response never carried one, so the line was blank. The
+     * MRN at the referring hospital, else at the receiving one. A registration
+     * row pointing at a hard-deleted hospital leaves it unknown, never a 500.
+     */
+    private String resolvePatientMrn(Patient patient, Hospital hospital, Hospital receivingHospital,
+                                     java.util.UUID referralId) {
+        if (patient == null) {
+            return null;
+        }
+        try {
+            String mrn = hospital != null && hospital.getId() != null
+                ? patient.getMrnForHospital(hospital.getId()) : null;
+            if ((mrn == null || mrn.isBlank()) && receivingHospital != null && receivingHospital.getId() != null) {
+                mrn = patient.getMrnForHospital(receivingHospital.getId());
+            }
+            return mrn == null || mrn.isBlank() ? null : mrn;
+        } catch (jakarta.persistence.EntityNotFoundException
+                 | org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex) {
+            org.slf4j.LoggerFactory.getLogger(GeneralReferralServiceImpl.class)
+                .warn("Referral {}: patient registration points at a missing hospital; MRN unavailable.", referralId);
+            return null;
+        }
+    }
+
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {
         GeneralReferralResponseDTO dto = new GeneralReferralResponseDTO();
         java.util.UUID referralId = referral.getId();
@@ -611,6 +637,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         dto.setPatientId(patient != null ? patient.getId() : null);
         dto.setPatientName(extractPatientName(patient));
+        dto.setPatientMrn(resolvePatientMrn(patient, hospital, receivingHospital, referralId));
         dto.setHospitalId(hospital != null ? hospital.getId() : null);
         dto.setHospitalName(hospital != null ? hospital.getName() : null);
         dto.setReceivingHospitalId(receivingHospital != null ? receivingHospital.getId() : null);

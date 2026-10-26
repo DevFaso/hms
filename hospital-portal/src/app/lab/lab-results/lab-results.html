@@ -438,6 +438,16 @@
                 }
               </div>
             </div>
+          } @else if (r.expectedResult) {
+            <!-- QA D834: a qualitative test has no range, it has an expected answer. -->
+            <div class="detail-section" data-testid="result-expected">
+              <span class="field-label">{{ 'LAB_RESULTS.EXPECTED_RESULT' | translate }}</span>
+              <div class="detail-list">
+                <div class="detail-list-item">
+                  <div class="range-main">{{ r.expectedResult }}</div>
+                </div>
+              </div>
+            </div>
           }
 
           @if (sortedTrendHistory(r).length) {

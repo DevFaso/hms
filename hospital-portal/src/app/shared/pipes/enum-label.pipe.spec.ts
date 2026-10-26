@@ -115,6 +115,16 @@ describe('EnumLabelPipe', () => {
     expect(pipe.transform('A_B_C')).toBe('A B C');
   });
 
+  it('QA D836: shows free text as typed instead of title-casing it', () => {
+    // A lab sample type is free text; /lab-test-config, the approval queue and
+    // the definition list read "Sang total (edta)" for "Sang total (EDTA)".
+    expect(pipe.transform('Sang total (EDTA)', 'specimenType')).toBe('Sang total (EDTA)');
+    expect(pipe.transform('Sang (plasma fluoré)', 'specimenType')).toBe('Sang (plasma fluoré)');
+    // A code is still labelled or prettified.
+    expect(pipe.transform('BLOOD', 'specimenType')).toBe('Blood');
+    expect(pipe.transform('SOMETHING_NEW', 'specimenType')).toBe('Something New');
+  });
+
   it('NEVER renders the raw i18n key path', () => {
     // The most important regression guard. ngx-translate returns the key
     // verbatim when the translation is missing. The pipe MUST NOT propagate

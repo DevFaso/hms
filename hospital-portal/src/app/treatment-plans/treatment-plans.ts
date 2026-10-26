@@ -19,6 +19,8 @@ import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { missingRequiredMessage } from '../shared/required-fields';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-treatment-plans',
@@ -226,7 +228,26 @@ export class TreatmentPlansComponent implements OnInit {
     this.showModal.set(false);
   }
 
+  /** QA D890: the plan's required fields, by the label the form shows them under. */
+  private static readonly FIELD_LABELS: Readonly<Record<string, string>> = {
+    patientId: 'PATIENTS.PATIENT',
+    hospitalId: 'ENCOUNTERS.HOSPITAL',
+    authorStaffId: 'TREATMENT.AUTHOR_STAFF',
+    problemStatement: 'TREATMENT.PROBLEM_STATEMENT',
+  };
+
   submitForm(): void {
+    // QA D890: an empty form was posted and answered with a generic toast.
+    const missing = missingRequiredMessage(this.translate, [
+      { labelKey: 'PATIENTS.PATIENT', value: this.form.patientId },
+      { labelKey: 'ENCOUNTERS.HOSPITAL', value: this.form.hospitalId },
+      { labelKey: 'TREATMENT.AUTHOR_STAFF', value: this.form.authorStaffId },
+      { labelKey: 'TREATMENT.PROBLEM_STATEMENT', value: this.form.problemStatement },
+    ]);
+    if (missing) {
+      this.toast.error(missing);
+      return;
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.tpService.update(this.editId, this.form)
@@ -242,8 +263,11 @@ export class TreatmentPlansComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('TREATMENT.SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, TreatmentPlansComponent.FIELD_LABELS) ??
+            this.translate.instant('TREATMENT.SAVE_FAILED'),
+        );
         this.saving.set(false);
       },
     });

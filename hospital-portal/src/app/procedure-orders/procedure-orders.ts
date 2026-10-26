@@ -24,6 +24,7 @@ import {
   toServerDateTime,
   withServerDateTimes,
 } from '../shared/date-utils';
+import { refusalReason } from '../shared/refusal-reason';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -187,9 +188,21 @@ export class ProcedureOrdersComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D857: the earliest planned time the pickers offer, set when a form
+   * opens. A procedure is not planned in the past; the server refuses it too.
+   */
+  minScheduleDatetime = '';
+
+  /** QA D857: a datetime-local value before the current minute. */
+  static isPastLocal(value: string | null | undefined, now: string = nowLocalDatetime()): boolean {
+    return !!value && value < now;
+  }
+
   openCreate(): void {
     this.orderForm = this.emptyOrderForm();
     this.orderPatient.set(null);
+    this.minScheduleDatetime = nowLocalDatetime();
     this.showOrderModal.set(true);
   }
 
@@ -208,6 +221,10 @@ export class ProcedureOrdersComponent implements OnInit {
       this.toast.error(this.translate.instant('PROCEDURES.REQUIRED_FIELDS'));
       return;
     }
+    if (ProcedureOrdersComponent.isPastLocal(form.scheduledDatetime)) {
+      this.toast.error(this.translate.instant('PROCEDURES.PAST_DATE'));
+      return;
+    }
     form.hospitalId = this.hospitalId ?? '';
     this.orderSaving.set(true);
     // #948 review: the datetime-local is the user's wall clock; the server keeps
@@ -219,8 +236,8 @@ export class ProcedureOrdersComponent implements OnInit {
         this.closeOrderModal();
         this.orders.update((list) => [created, ...list]);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PROCEDURES.SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.SAVE_ERROR'));
         this.orderSaving.set(false);
       },
     });
@@ -242,6 +259,7 @@ export class ProcedureOrdersComponent implements OnInit {
     const order = this.viewedOrder();
     this.detailAction.set(action);
     if (action === 'schedule') {
+      this.minScheduleDatetime = nowLocalDatetime();
       this.scheduleDatetime = order?.scheduledDatetime
         ? toLocalInputValue(order.scheduledDatetime)
         : '';
@@ -261,6 +279,11 @@ export class ProcedureOrdersComponent implements OnInit {
   submitSchedule(): void {
     const order = this.viewedOrder();
     if (!order || !this.scheduleDatetime) return;
+    // QA D857: 01/01/2020 was accepted and offered "Débuter la procédure".
+    if (ProcedureOrdersComponent.isPastLocal(this.scheduleDatetime)) {
+      this.toast.error(this.translate.instant('PROCEDURES.PAST_DATE'));
+      return;
+    }
     // Backend auto-promotes ORDERED→SCHEDULED; send the status explicitly so
     // rescheduling from POSTPONED also lands back on SCHEDULED.
     this.applyUpdate(
@@ -313,8 +336,8 @@ export class ProcedureOrdersComponent implements OnInit {
         this.detailAction.set(null);
         this.replaceOrder(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PROCEDURES.UPDATE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.UPDATE_ERROR'));
         this.actionBusy.set(false);
       },
     });
@@ -332,8 +355,8 @@ export class ProcedureOrdersComponent implements OnInit {
         this.detailAction.set(null);
         this.replaceOrder(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PROCEDURES.CANCEL_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROCEDURES.CANCEL_ERROR'));
         this.actionBusy.set(false);
       },
     });

@@ -57,6 +57,8 @@ export interface LabResultResponse {
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
+  /** QA D834: the expected answer of a qualitative test, shown where it has no range. */
+  expectedResult?: string | null;
   trendHistory?: LabResultTrendPoint[];
   severityFlag: string | null;
   /**
@@ -149,6 +151,8 @@ export interface LabTestDefinition {
   loincCode: string | null;
   loincDisplay: string | null;
   preparationInstructions: string | null;
+  /** QA D834: the expected answer of a qualitative test ("Négatif"), which has no numeric range. */
+  expectedResult?: string | null;
   turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
 }
@@ -303,6 +307,8 @@ export interface LabTestDefinitionRequest {
   loincDisplay?: string;
   sampleType?: string;
   preparationInstructions?: string;
+  /** QA D834: the expected answer of a qualitative test. */
+  expectedResult?: string;
   turnaroundTime?: number;
   isActive?: boolean;
   assignmentId?: string;

@@ -116,6 +116,18 @@ export class EncountersComponent implements OnInit {
   /* Note sign/co-sign ceremony (P3 #20). State comes from the encounter's
      note payload and is replaced by each ceremony response. */
   noteState = signal<EncounterNoteResponse | null>(null);
+  /**
+   * QA D831: an inpatient stay keeps one note entry per progress note and
+   * author. A second doctor's entry no longer replaces the first doctor's
+   * unsigned draft; the earlier entries are listed here, each signable by
+   * its own author.
+   */
+  noteEntries = signal<EncounterNoteResponse[]>([]);
+  readonly earlierNoteEntries = computed(() => {
+    const currentId = this.noteState()?.id;
+    return this.noteEntries().filter((entry) => entry.id !== currentId);
+  });
+  signingEntryId = signal<string | null>(null);
   signingNote = signal(false);
   cosigningNote = signal(false);
   addendumContent = '';
@@ -540,6 +552,7 @@ export class EncountersComponent implements OnInit {
     this.showAddendumForm.set(false);
     this.addendumContent = '';
     this.noteState.set(enc.note ?? null);
+    this.noteEntries.set(enc.noteEntries ?? []);
     this.loadNoteHistory(enc.id);
   }
 
@@ -559,6 +572,7 @@ export class EncountersComponent implements OnInit {
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SAVED'));
         this.savingNote.set(false);
         this.showNoteForm.set(false);
+        this.keepEarlierEntry(this.noteState(), note ?? null);
         this.noteState.set(note ?? null);
         this.loadNoteHistory(enc.id);
       },
@@ -595,6 +609,44 @@ export class EncountersComponent implements OnInit {
           err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
+    });
+  }
+
+  /** QA D831: signs one earlier entry of the stay, by its id (the server checks the author). */
+  signNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.signingEntryId()) return;
+    this.signingEntryId.set(entry.id);
+    this.encounterService.signNote(enc.id, entry.id).subscribe({
+      next: (signed) => {
+        this.signingEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        if (signed) {
+          this.noteEntries.update((list) => list.map((e) => (e.id === signed.id ? signed : e)));
+        }
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.signingEntryId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /**
+   * QA D831: when a save on a stay starts a new entry, the entry shown until
+   * now stays in the list of the stay's entries instead of disappearing.
+   */
+  private keepEarlierEntry(
+    previous: EncounterNoteResponse | null,
+    saved: EncounterNoteResponse | null,
+  ): void {
+    if (!previous?.id || !saved?.id || previous.id === saved.id) return;
+    this.noteEntries.update((list) => {
+      const others = list.filter((e) => e.id !== previous.id && e.id !== saved.id);
+      return [...others, previous, saved];
     });
   }
 

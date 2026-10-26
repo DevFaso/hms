@@ -281,8 +281,14 @@
           <h4>{{ 'PRE_CHECKIN.APPOINTMENT_SECTION' | translate }}</h4>
           <p>
             {{ appointment?.department }} —
-            {{ appointment?.date | serverTime | date: 'fullDate' }} at
-            {{ appointment?.startTime }}
+            {{
+              'PRE_CHECKIN.DATE_AT_TIME'
+                | translate
+                  : {
+                      date: (appointment?.date | serverTime | date: 'fullDate'),
+                      time: (appointment?.startTime | clockTime),
+                    }
+            }}
           </p>
         </div>
 

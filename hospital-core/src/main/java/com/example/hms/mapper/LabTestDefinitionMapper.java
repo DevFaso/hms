@@ -32,6 +32,7 @@ public class LabTestDefinitionMapper {
             .loincCode(dto.getLoincCode())
             .loincDisplay(dto.getLoincDisplay())
             .preparationInstructions(dto.getPreparationInstructions())
+            .expectedResult(dto.getExpectedResult())
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
             // QA D535: a new definition is a DRAFT, and a DRAFT is not active;
             // only the approval workflow's ACTIVATE step switches it on.
@@ -55,6 +56,7 @@ public class LabTestDefinitionMapper {
                 .loincDisplay(entity.getLoincDisplay())
                 .sampleType(entity.getSampleType())
                 .preparationInstructions(entity.getPreparationInstructions())
+                .expectedResult(entity.getExpectedResult())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
                 // QA D535: "active" means orderable - a DRAFT (or any status
                 // short of ACTIVE) is never reported active, even for rows
@@ -86,6 +88,7 @@ public class LabTestDefinitionMapper {
         entity.setLoincCode(dto.getLoincCode());
         entity.setLoincDisplay(dto.getLoincDisplay());
         entity.setPreparationInstructions(dto.getPreparationInstructions());
+        entity.setExpectedResult(dto.getExpectedResult());
         if (dto.getTurnaroundTime() != null) {
             entity.setTurnaroundTimeMinutes(dto.getTurnaroundTime());
         }

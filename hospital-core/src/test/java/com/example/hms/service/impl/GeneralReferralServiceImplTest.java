@@ -736,6 +736,44 @@ class GeneralReferralServiceImplTest {
         assertEquals("ICU", dto.getSourceDepartmentName());
     }
 
+    /**
+     * QA D889: /referrals printed r.patientMrn under the patient's name and the
+     * response had no such field, so the line was blank. It carries the MRN at
+     * the referring hospital, else at the receiving one, never another's.
+     */
+    @Test
+    void d889_theResponseCarriesThePatientsMrnAtTheReferringHospital() {
+        GeneralReferral referral = buildReferral(UUID.randomUUID());
+        Hospital receiving = buildHospital(UUID.randomUUID(), "Destination Hospital");
+        referral.setReceivingHospital(receiving);
+        Patient patient = referral.getPatient();
+        Hospital third = buildHospital(UUID.randomUUID(), "Third Hospital");
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(
+            registration(patient, third, "MRN-THIRD"),
+            registration(patient, referral.getHospital(), "MRN-A-0042"))));
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(patient.getId())).thenReturn(List.of(referral));
+
+        GeneralReferralResponseDTO dto = generalReferralService.getReferralsByPatient(patient.getId()).get(0);
+
+        assertEquals("MRN-A-0042", dto.getPatientMrn());
+
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(registration(patient, receiving, "MRN-B-7"))));
+        assertEquals("MRN-B-7", generalReferralService.getReferralsByPatient(patient.getId()).get(0).getPatientMrn());
+
+        patient.setHospitalRegistrations(new java.util.HashSet<>(List.of(registration(patient, third, "MRN-THIRD"))));
+        assertThat(generalReferralService.getReferralsByPatient(patient.getId()).get(0).getPatientMrn()).isNull();
+    }
+
+    private static com.example.hms.model.PatientHospitalRegistration registration(Patient patient, Hospital hospital,
+                                                                                 String mrn) {
+        com.example.hms.model.PatientHospitalRegistration reg = new com.example.hms.model.PatientHospitalRegistration();
+        reg.setId(UUID.randomUUID());
+        reg.setPatient(patient);
+        reg.setHospital(hospital);
+        reg.setMrn(mrn);
+        return reg;
+    }
+
     // ── Tenant isolation tests ──
 
     @Test

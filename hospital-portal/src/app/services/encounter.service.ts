@@ -53,6 +53,9 @@ export interface EncounterNoteResponse {
   content: string;
   authorName: string;
   createdAt: string;
+  /** QA D831: when the entry was documented (a stay holds one entry per progress note). */
+  documentedAt?: string | null;
+  authorUserId?: string | null;
   /* Ceremony evidence (P3 #20), present on EncounterNoteResponseDTO payloads
      (encounter.note, addNote/sign/cosign responses). signatureValue null on a
      signed note means "asserted before V125, unverifiable". */
@@ -121,6 +124,13 @@ export interface EncounterResponse {
   createdBy: string;
   updatedBy: string;
   note: EncounterNoteResponse;
+  /**
+   * QA D831: every note entry of the encounter, oldest first, when it has more
+   * than one (an inpatient stay's progress notes). `note` is the last of them.
+   */
+  noteEntries?: EncounterNoteResponse[] | null;
+  /** QA D831: set on an inpatient stay, whose notes are progress entries. */
+  admissionId?: string | null;
   patientFullName: string;
   staffFullName: string;
   nursingIntakeTimestamp: string | null;
@@ -415,8 +425,14 @@ export class EncounterService {
 
   /** Author-only signing ceremony (P3 #20) — the backend resolves the signer
    *  and refuses non-authors; empty body by design. */
-  signNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/sign`, {});
+  signNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the one
+    // to sign. Without it the server signs the caller's own unsigned entry.
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/sign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
   /** Attending co-signature — backend refuses the note's own author. */

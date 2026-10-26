@@ -18,12 +18,10 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -50,17 +48,19 @@ import java.util.Objects;
     indexes = {
         @Index(name = "idx_encounter_notes_patient", columnList = "patient_id"),
         @Index(name = "idx_encounter_notes_hospital", columnList = "hospital_id"),
-        @Index(name = "idx_encounter_notes_documented", columnList = "documented_at")
-    },
-    uniqueConstraints = {
-        @UniqueConstraint(name = "uk_encounter_note_encounter", columnNames = "encounter_id")
+        @Index(name = "idx_encounter_notes_documented", columnList = "documented_at"),
+        // QA D831: one row per note entry. An inpatient stay holds one entry
+        // per progress note and author; the per-encounter unique key is gone
+        // (V238), so a second clinician's entry never replaces the first's.
+        @Index(name = "idx_encounter_notes_encounter", columnList = "encounter_id")
     }
 )
 @EqualsAndHashCode(callSuper = true, exclude = {"encounter", "patient", "hospital", "author", "authorStaff", "addenda", "links"})
 @ToString(exclude = {"encounter", "patient", "hospital", "author", "authorStaff", "addenda", "links"})
 public class EncounterNote extends BaseEntity {
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    /** QA D831: many entries per encounter (a stay's progress notes), not one. */
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "encounter_id", nullable = false, foreignKey = @ForeignKey(name = "fk_encounter_note_encounter"))
     private Encounter encounter;
 

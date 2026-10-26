@@ -112,7 +112,14 @@
                 </span>
               </td>
               <td class="range-count">
-                {{ def.referenceRanges?.length ?? 0 }}
+                @if (!def.referenceRanges?.length && def.expectedResult) {
+                  <span class="expected-result" data-testid="def-expected-result">{{
+                    'LAB_TEST_CONFIG.EXPECTED_RESULT_SHORT'
+                      | translate: { value: def.expectedResult }
+                  }}</span>
+                } @else {
+                  {{ def.referenceRanges?.length ?? 0 }}
+                }
               </td>
               <td>
                 @if (!isRetired(def)) {
@@ -189,6 +196,9 @@
         </div>
 
         <div class="modal-body">
+          <p class="critical-hint" data-testid="critical-limits-hint">
+            {{ 'LAB_TEST_CONFIG.CRITICAL_LIMITS_HINT' | translate }}
+          </p>
           @if (editRanges().length === 0) {
             <p class="no-ranges">{{ 'LAB_TEST_CONFIG.NO_RANGES' | translate }}</p>
           }
@@ -449,6 +459,23 @@
               rows="2"
               [placeholder]="'LAB_TEST_CONFIG.PREP_PLACEHOLDER' | translate"
             ></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label for="defExpectedResult">
+              {{ 'LAB_TEST_CONFIG.EXPECTED_RESULT' | translate }}
+              <span class="optional-hint">{{ 'COMMON.OPTIONAL' | translate }}</span>
+            </label>
+            <input
+              id="defExpectedResult"
+              type="text"
+              maxlength="255"
+              [(ngModel)]="defForm.expectedResult"
+              [readonly]="clinicalFieldsLocked()"
+              [placeholder]="'LAB_TEST_CONFIG.EXPECTED_RESULT_PLACEHOLDER' | translate"
+            />
+            <small class="field-hint">{{
+              'LAB_TEST_CONFIG.EXPECTED_RESULT_HINT' | translate
+            }}</small>
           </div>
           <div class="form-group form-check-group">
             <label>
