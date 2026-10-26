@@ -14,12 +14,18 @@ import { StaffService, StaffResponse } from '../../services/staff.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
+import { EnumLabelService } from '../../core/enum-label.service';
+import { bareRole } from '../../core/role-token';
 
-/** Lab roles that can be assigned via the role-update endpoint. */
-const ASSIGNABLE_LAB_ROLES = [
-  { code: 'ROLE_LAB_TECHNICIAN', labelKey: 'LAB_STAFF.LAB_TECHNICIAN' },
-  { code: 'ROLE_LAB_SCIENTIST', labelKey: 'LAB_STAFF.LAB_SCIENTIST' },
-  { code: 'ROLE_LAB_MANAGER', labelKey: 'LAB_STAFF.LAB_MANAGER' },
+/**
+ * Lab roles that can be assigned via the role-update endpoint. QA D881: they
+ * are labelled through the same role label as the list's badge, so the
+ * dropdown no longer says 'Scientifique' where the list says 'Biologiste'.
+ */
+const ASSIGNABLE_LAB_ROLES: readonly { code: string }[] = [
+  { code: 'ROLE_LAB_TECHNICIAN' },
+  { code: 'ROLE_LAB_SCIENTIST' },
+  { code: 'ROLE_LAB_MANAGER' },
 ];
 
 @Component({
@@ -35,6 +41,7 @@ export class LabStaffListComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -115,7 +122,7 @@ export class LabStaffListComponent implements OnInit {
         this.staff.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
         this.toast.success(
           this.translate.instant('LAB_STAFF.ROLE_UPDATED', {
-            role: updated.roleName ?? newCode,
+            role: this.enumLabels.transform(bareRole(updated.roleCode ?? newCode), 'role'),
           }),
         );
         this.saving.set(false);

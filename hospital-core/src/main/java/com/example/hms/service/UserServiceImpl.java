@@ -1334,7 +1334,28 @@ public class UserServiceImpl implements UserService {
                 .filter(accountAccess::canView)
                 .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
-        return userMapper.toResponseDTO(user, assignments);
+        UserResponseDTO dto = userMapper.toResponseDTO(user, assignments);
+        withStaffDetails(dto, user.getStaffProfile());
+        return dto;
+    }
+
+    /**
+     * QA D838: the user edit dialog showed the hospital, job title and
+     * employment type empty, because this read never carried them. They live on
+     * the staff profile; the dialog shows them read-only (PUT /users does not
+     * change them).
+     */
+    private static void withStaffDetails(UserResponseDTO dto, com.example.hms.model.Staff staff) {
+        if (dto == null || staff == null) {
+            return;
+        }
+        if (staff.getHospital() != null) {
+            dto.setStaffHospitalId(staff.getHospital().getId());
+            dto.setStaffHospitalName(staff.getHospital().getName());
+        }
+        dto.setJobTitle(staff.getJobTitle() != null ? staff.getJobTitle().name() : null);
+        dto.setEmploymentType(staff.getEmploymentType() != null ? staff.getEmploymentType().name() : null);
+        dto.setSpecialization(staff.getSpecialization());
     }
 
     @Override

@@ -57,21 +57,35 @@ public class OrganizationController {
     private final OrganizationMapper organizationMapper;
     private final OrganizationSecurityPolicyMapper policyMapper;
     private final OrganizationPlatformBootstrapService organizationPlatformBootstrapService;
+    private final com.example.hms.security.tenant.OrganizationReadScope organizationReadScope;
 
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Get all organizations", 
-               description = "Retrieve a paginated list of all organizations")
+               description = "Retrieve a paginated list of organizations: every one for a super-admin, "
+                   + "only those of the hospitals the caller administers for a hospital administrator (QA D845)")
     @ApiResponse(responseCode = "200", description = "Organizations retrieved successfully")
     public ResponseEntity<Page<OrganizationResponseDTO>> getAllOrganizations(
             @Parameter(description = "Pagination parameters") Pageable pageable,
             @RequestParam(required = false) Boolean active) {
         
+        boolean activeOnly = active != null && active;
         Page<Organization> organizations;
-        if (active != null && active) {
-            organizations = organizationRepository.findAllActiveWithHospitals(pageable);
+        if (organizationReadScope.readsEveryOrganization()) {
+            organizations = activeOnly
+                ? organizationRepository.findAllActiveWithHospitals(pageable)
+                : organizationRepository.findAllWithHospitals(pageable);
         } else {
-            organizations = organizationRepository.findAllWithHospitals(pageable);
+            // QA D845: a hospital administrator lists only the organisations
+            // of the hospitals they administer, never every tenant.
+            java.util.Set<UUID> readable = organizationReadScope.administeredOrganizationIds();
+            if (readable.isEmpty()) {
+                organizations = Page.empty(pageable);
+            } else {
+                organizations = activeOnly
+                    ? organizationRepository.findByIdInAndActiveTrue(readable, pageable)
+                    : organizationRepository.findByIdIn(readable, pageable);
+            }
         }
 
         Page<OrganizationResponseDTO> responsePage = organizations.map(organizationMapper::toResponseDTO);
@@ -89,7 +103,9 @@ public class OrganizationController {
     public ResponseEntity<OrganizationResponseDTO> getOrganizationById(
             @Parameter(description = "Organization ID") @PathVariable UUID id,
             @RequestParam(defaultValue = "false") boolean includePolicies) {
-        
+
+        // QA D845: a hospital administrator reads only an organisation they administer.
+        organizationReadScope.requireReadable(id);
         Organization organization = organizationRepository.findByIdWithHospitals(id)
             .orElseThrow(() -> new ResourceNotFoundException(ORGANIZATION_NOT_FOUND_KEY, id));
 

@@ -77,4 +77,12 @@ public interface BreakGlassService {
      * the caller observes the new value without a re-fetch.
      */
     Optional<BreakGlassSessionResponseDTO> consumeIfLive(UUID patientId, UUID sessionUserId, String purpose);
+
+    /**
+     * QA D840: {@link #consumeIfLive} for the patient-read path. The user is
+     * named, and only a session declared at {@code actingHospitalId} counts
+     * (any hospital when it is {@code null}, e.g. a super-admin in global view).
+     */
+    Optional<BreakGlassSessionResponseDTO> recordReadIfLive(UUID patientId, UUID userId,
+                                                            UUID actingHospitalId, String purpose);
 }

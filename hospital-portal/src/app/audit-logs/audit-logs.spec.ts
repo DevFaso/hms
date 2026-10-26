@@ -34,7 +34,9 @@ describe('AuditLogsComponent (QA D330)', () => {
           PATIENT_RECORD_VIEWED: 'Dossier patient consulté',
           ROLE_ASSIGNED: 'Rôle {{role}} attribué à {{name}}',
           LAB_DEFINITION_STEP: 'Examen {{code}} : étape {{step}}, statut {{status}}.',
+          HOSPITAL_SCOPE_REFUSED: 'Accès à l’hôpital refusé ({{reason}})',
         },
+        SCOPE_REFUSAL: { NOT_PERMITTED: 'aucun rôle actif dans cet hôpital' },
       },
       LAB: { APPROVAL_STATUS: { PENDING_QA_REVIEW: 'En attente de revue qualité' } },
       PORTAL: {
@@ -72,6 +74,14 @@ describe('AuditLogsComponent (QA D330)', () => {
     expect(component.describe(row({ eventDescription: 'Lab test definition approval step' }))).toBe(
       'Lab test definition approval step',
     );
+  });
+
+  it('QA D869: a hospital-scope refusal reads in the reader language, never as a raw enum', () => {
+    const text = component.describe(
+      row({ eventDescription: 'Hospital scope refused (NOT_PERMITTED)' }),
+    );
+    expect(text).toBe('Accès à l’hôpital refusé (aucun rôle actif dans cet hôpital)');
+    expect(text).not.toContain('NOT_PERMITTED');
   });
 
   it('D774: reads a known English description in the reader language', () => {

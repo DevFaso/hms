@@ -17,6 +17,24 @@ import java.util.UUID;
 @Repository
 public interface OrganizationRepository extends JpaRepository<Organization, UUID> {
 
+    /**
+     * QA D845: the organisations of the hospitals this user holds an ACTIVE
+     * ROLE_HOSPITAL_ADMIN assignment at — the only organisations a hospital
+     * administrator may read through /organizations.
+     */
+    @Query("SELECT DISTINCT h.organization.id FROM UserRoleHospitalAssignment a JOIN a.hospital h "
+        + "WHERE a.user.id = :userId AND a.active = true AND h.organization IS NOT NULL "
+        + "AND UPPER(a.role.code) = 'ROLE_HOSPITAL_ADMIN'")
+    java.util.Set<UUID> findAdministeredOrganizationIds(@Param("userId") UUID userId);
+
+    /** QA D845: one page of the organisations a hospital administrator may read. */
+    org.springframework.data.domain.Page<Organization> findByIdIn(
+        Collection<UUID> ids, org.springframework.data.domain.Pageable pageable);
+
+    /** QA D845: the active ones among them. */
+    org.springframework.data.domain.Page<Organization> findByIdInAndActiveTrue(
+        Collection<UUID> ids, org.springframework.data.domain.Pageable pageable);
+
     Optional<Organization> findByCode(String code);
 
     Optional<Organization> findByNameIgnoreCase(String name);

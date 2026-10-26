@@ -63,6 +63,13 @@ export interface UserDetail {
   newAccount?: boolean;
   /** Patient registrations only: the patient record created with the account (QA D626). */
   patientId?: string;
+  /** QA D838: the staff profile, shown read-only on the edit dialog. */
+  staffHospitalId?: string;
+  staffHospitalName?: string;
+  jobTitle?: string;
+  employmentType?: string;
+  specialization?: string;
+  licenseNumber?: string;
 }
 
 export interface AdminRegisterRequest {

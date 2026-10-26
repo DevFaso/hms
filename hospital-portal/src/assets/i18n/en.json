@@ -916,7 +916,8 @@
     "RE_REVIEW": "Change the review",
     "SIGN_OFF": "Sign off",
     "SUBTITLE": "Every emergency-access session at this hospital, to be signed off by an administrator.",
-    "TITLE": "Break-glass review"
+    "TITLE": "Break-glass review",
+    "MRN": "MRN"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
@@ -1409,7 +1410,15 @@
       "ROLE_ASSIGNMENT_REFUSED": "Role assignment refused: the caller may not grant this role there",
       "ROLE_ASSIGNED": "Role {{role}} assigned to {{name}}",
       "ASSIGNMENT_CONFIRMED": "Assignment {{role}} confirmed for {{name}}",
-      "LAB_DEFINITION_STEP": "Lab test definition {{code}}: approval step {{step}}, new status {{status}}."
+      "LAB_DEFINITION_STEP": "Lab test definition {{code}}: approval step {{step}}, new status {{status}}.",
+      "HOSPITAL_SCOPE_REFUSED": "Hospital access refused ({{reason}})"
+    },
+    "SCOPE_REFUSAL": {
+      "NOT_PERMITTED": "no active role at this hospital",
+      "NO_LONGER_PERMITTED": "the role at this hospital has ended",
+      "AMBIGUOUS": "several hospitals, none chosen",
+      "NO_LOCAL_USER": "sign-in not linked to an account",
+      "NO_HOSPITAL": "no hospital selected"
     }
   },
   "BILLING": {
@@ -4915,7 +4924,8 @@
         "TEST": "Test",
         "TITLE": "{{name}}'s Health Data",
         "TITLE_FALLBACK": "Shared Health Data"
-      }
+      },
+      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Medical and Family History",
@@ -7189,7 +7199,9 @@
       "SURGEON": "Surgical specialist performing operations, managing surgical plans, and post-operative care",
       "TECHNICIAN": "Medical or IT technician responsible for equipment maintenance and technical support",
       "USER": "Standard system user with basic access permissions"
-    }
+    },
+    "BUILT_IN_ACCESS": "Built-in access",
+    "NO_PERMISSION_CATALOGUE": "No permission catalogue is defined: this role's access is built into the platform and is not edited here."
   },
   "SCHEDULING": {
     "AFTERNOON": "Afternoon",
@@ -7711,7 +7723,8 @@
     "USERNAME": "Username",
     "USERS_PLURAL": "Users",
     "USER_SINGULAR": "User",
-    "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page."
+    "ROLES_EDIT_HINT": "Roles are granted and retired per hospital from the role assignments page.",
+    "STAFF_FIELDS_EDIT_HINT": "Hospital, job title, employment type, specialization and licence are those registered for this staff member. They are changed from the staff record, not here."
   },
   "TRIAGE": {
     "ACUITY": "Acuity Level",

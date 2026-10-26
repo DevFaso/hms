@@ -2205,6 +2205,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D868 (round 14): a permission catalogue the roles page can edit.**
+  The roles page now titles a system role in the reader's language and says
+  "built-in access" instead of "0 permissions"; the permissions dialog
+  explains that there is no catalogue and offers no save
+  (`fix/qa-r14-access-admin`). Owed: `/api/permissions` is empty because
+  access is decided by role codes in `@PreAuthorize` and `SecurityConfig`,
+  and `security.permissions` rows hang off one assignment each. A catalogue
+  that an administrator edits per role (and that the guards then read) is a
+  new authorization model, not a fix to this page.
 - **QA D819 (round 13): the reverse of the patient-only-account rule.**
   Every path that writes `Patient.user` now refuses a staff account or one
   already linked to another record (`PatientAccountLinkGuard`, 409 on

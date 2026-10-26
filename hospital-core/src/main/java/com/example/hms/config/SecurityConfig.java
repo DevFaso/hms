@@ -728,6 +728,13 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_STAFF)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D846: a lab director sets a lab staff member's lab role
+                // (StaffController#updateLabRole admits them, the service holds
+                // it to the caller's hospital). Narrow matcher FIRST: the blanket
+                // PUT /staff/** below refused them before the annotation ran.
+                .requestMatchers(HttpMethod.PUT, API_STAFF + "/*/lab-role")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_LAB_DIRECTOR)
+
                 .requestMatchers(HttpMethod.PUT, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 

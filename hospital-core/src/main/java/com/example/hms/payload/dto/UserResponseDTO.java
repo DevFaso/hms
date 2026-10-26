@@ -81,6 +81,21 @@ public class UserResponseDTO {
     @Schema(description = "Linked staff profile ID when applicable")
     private UUID staffId;
 
+    @Schema(description = "QA D838: the hospital of the linked staff profile (read-only on the user edit dialog)")
+    private UUID staffHospitalId;
+
+    @Schema(description = "QA D838: that hospital's name")
+    private String staffHospitalName;
+
+    @Schema(description = "QA D838: the staff profile's job title")
+    private String jobTitle;
+
+    @Schema(description = "QA D838: the staff profile's employment type")
+    private String employmentType;
+
+    @Schema(description = "QA D838: the staff profile's specialization")
+    private String specialization;
+
     @Schema(description = "Count of active roles across all hospitals")
     private Integer roleCount;
 

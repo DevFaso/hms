@@ -2213,6 +2213,31 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D838: GET by id carries the staff profile's hospital, job title and employment type for the edit dialog")
+        void getByIdCarriesTheStaffDetailsTheEditDialogPrefills() {
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            hospital.setName("Wend-Panga");
+            com.example.hms.model.Staff staff = new com.example.hms.model.Staff();
+            staff.setHospital(hospital);
+            staff.setJobTitle(com.example.hms.enums.JobTitle.values()[0]);
+            staff.setEmploymentType(com.example.hms.enums.EmploymentType.values()[0]);
+            staff.setSpecialization("Pediatrics");
+            user.setStaffProfile(staff);
+            when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canView(user)).thenReturn(true);
+            when(userMapper.toResponseDTO(any(User.class), any())).thenReturn(new UserResponseDTO());
+
+            UserResponseDTO dto = userService.getUserById(userId);
+
+            assertThat(dto.getStaffHospitalId()).isEqualTo(hospital.getId());
+            assertThat(dto.getStaffHospitalName()).isEqualTo("Wend-Panga");
+            assertThat(dto.getJobTitle()).isEqualTo(com.example.hms.enums.JobTitle.values()[0].name());
+            assertThat(dto.getEmploymentType()).isEqualTo(com.example.hms.enums.EmploymentType.values()[0].name());
+            assertThat(dto.getSpecialization()).isEqualTo("Pediatrics");
+        }
+
+        @Test
         @DisplayName("a registration the caller may not grant: 403, one FAILURE row with actor id and role codes only, nothing written")
         void refusedGrantIsAuditedAndWritesNothing() {
             UUID actorId = UUID.randomUUID();

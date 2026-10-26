@@ -916,7 +916,8 @@
     "RE_REVIEW": "Modifier la revue",
     "SIGN_OFF": "Valider",
     "SUBTITLE": "Chaque session d'accès d'urgence de cet hôpital, à valider par un administrateur.",
-    "TITLE": "Revue des accès d'urgence"
+    "TITLE": "Revue des accès d'urgence",
+    "MRN": "N° de dossier"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
@@ -1409,7 +1410,15 @@
       "ROLE_ASSIGNMENT_REFUSED": "Attribution de rôle refusée : l’auteur ne peut pas attribuer ce rôle dans cet établissement",
       "ROLE_ASSIGNED": "Rôle {{role}} attribué à {{name}}",
       "ASSIGNMENT_CONFIRMED": "Affectation {{role}} confirmée pour {{name}}",
-      "LAB_DEFINITION_STEP": "Examen de laboratoire {{code}} : étape d’approbation {{step}}, nouveau statut {{status}}."
+      "LAB_DEFINITION_STEP": "Examen de laboratoire {{code}} : étape d’approbation {{step}}, nouveau statut {{status}}.",
+      "HOSPITAL_SCOPE_REFUSED": "Accès à l’hôpital refusé ({{reason}})"
+    },
+    "SCOPE_REFUSAL": {
+      "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
+      "NO_LONGER_PERMITTED": "le rôle dans cet hôpital a pris fin",
+      "AMBIGUOUS": "plusieurs hôpitaux, aucun choisi",
+      "NO_LOCAL_USER": "connexion non liée à un compte",
+      "NO_HOSPITAL": "aucun hôpital sélectionné"
     }
   },
   "BILLING": {
@@ -4915,7 +4924,8 @@
         "TEST": "Analyse",
         "TITLE": "Données de santé de {{name}}",
         "TITLE_FALLBACK": "Données de santé partagées"
-      }
+      },
+      "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès."
     },
     "SUMMARIES": {
       "TITLE": "Résumés après visite",
@@ -7189,7 +7199,9 @@
       "SURGEON": "Chirurgien(ne) réalisant les interventions, gérant les plans opératoires et les soins postopératoires",
       "TECHNICIAN": "Technicien biomédical ou informatique chargé de la maintenance des équipements et du support technique",
       "USER": "Utilisateur standard disposant des droits d'accès de base"
-    }
+    },
+    "BUILT_IN_ACCESS": "Accès intégré au rôle",
+    "NO_PERMISSION_CATALOGUE": "Aucun catalogue de permissions n'est défini : les accès de ce rôle sont intégrés à la plateforme et ne se modifient pas ici."
   },
   "SCHEDULING": {
     "AFTERNOON": "Après-midi",
@@ -7711,7 +7723,8 @@
     "USERNAME": "Nom d'utilisateur",
     "USERS_PLURAL": "Utilisateurs",
     "USER_SINGULAR": "Utilisateur",
-    "ROLES_EDIT_HINT": "Les rôles s’attribuent et se retirent par établissement depuis la page des affectations de rôles."
+    "ROLES_EDIT_HINT": "Les rôles s’attribuent et se retirent par établissement depuis la page des affectations de rôles.",
+    "STAFF_FIELDS_EDIT_HINT": "L’hôpital, la fonction, le type d’emploi, la spécialité et la licence sont ceux enregistrés pour ce membre du personnel. Ils se modifient depuis sa fiche du personnel, pas ici."
   },
   "TRIAGE": {
     "ACUITY": "Niveau d'acuité",

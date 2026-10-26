@@ -85,6 +85,32 @@ describe('BreakGlassReviewComponent', () => {
     expect(component.unreviewedCount()).toBe(1);
   });
 
+  it('QA D839: names the patient with the hospital MRN and the declarer, not a UUID and a username', () => {
+    service.listForHospital.and.returnValue(
+      of({
+        content: [
+          session({
+            patientName: 'Salif Kaboré',
+            patientMrn: 'CNK4035',
+            userName: 'k.sanogo',
+            userDisplayName: 'Kadi Sanogo',
+          }),
+        ],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    );
+    component.reload();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const patient = el.querySelector('[data-testid="patient"]')?.textContent ?? '';
+    const declarer = el.querySelector('[data-testid="declarer"]')?.textContent ?? '';
+    expect(patient).toContain('Salif Kaboré');
+    expect(patient).toContain('CNK4035');
+    expect(patient).not.toContain('22222222');
+    expect(declarer.trim().startsWith('Kadi Sanogo')).toBeTrue();
+  });
+
   it('switches to the whole register when the queue filter is turned off', () => {
     component.setQueueOnly(false);
     expect(service.listForHospital).toHaveBeenCalledWith(h1, 0, 20, undefined);

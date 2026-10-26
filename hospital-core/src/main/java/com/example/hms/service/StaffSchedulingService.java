@@ -27,6 +27,9 @@ public interface StaffSchedulingService {
      */
     BulkShiftResultDTO bulkScheduleShifts(BulkShiftRequestDTO dto, Locale locale);
 
+    /** QA D878: true when the caller's shift-planning writes for others can succeed (administrator or department head). */
+    boolean canManageSchedules();
+
     StaffShiftResponseDTO updateShift(UUID shiftId, StaffShiftRequestDTO dto, Locale locale);
 
     StaffShiftResponseDTO updateShiftStatus(UUID shiftId, StaffShiftStatusUpdateDTO dto, Locale locale);

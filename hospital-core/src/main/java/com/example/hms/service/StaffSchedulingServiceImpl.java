@@ -479,7 +479,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                             Department department,
                                             Locale locale) {
         UUID currentUserId = requireCurrentUserId(locale);
-        if (roleValidator.isSuperAdminFromAuth() || roleValidator.isHospitalAdmin(currentUserId, hospitalId)) {
+        if (isSchedulingAdministrator(currentUserId, hospitalId)) {
             return;
         }
         Optional<Staff> actorStaffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId);
@@ -492,6 +492,34 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         // QA D541: a permission refusal is a 403, as on every other cross-hospital write,
         // not a 400 that reads like a validation error.
         throw new com.example.hms.exception.ClientSafeAccessDeniedException(message("schedule.staff.permissionDenied", locale));
+    }
+
+    /** A verified super-admin, or a hospital administrator of the hospital (when one is known). */
+    private boolean isSchedulingAdministrator(UUID userId, UUID hospitalId) {
+        return roleValidator.isSuperAdminFromAuth()
+            || (hospitalId != null && roleValidator.isHospitalAdmin(userId, hospitalId));
+    }
+
+    /**
+     * QA D878: whether the caller may plan other people's shifts at all, so the
+     * portal offers bulk planning only to someone whose writes
+     * {@link #ensureSchedulerPermissions} accepts: an administrator of the
+     * acting hospital, or the head of a department (who plans that department).
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean canManageSchedules() {
+        UUID userId = roleValidator.getCurrentUserId();
+        if (userId == null) {
+            return false;
+        }
+        if (isSchedulingAdministrator(userId, com.example.hms.security.tenant.ActingScopeResolver.pinnedHospitalIdOrNull())) {
+            return true;
+        }
+        // The same actor row the write check reads.
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+            .map(actor -> departmentRepository.existsByHeadOfDepartmentId(actor.getId()))
+            .orElse(false);
     }
 
     private void ensureLeaveRequestPermissions(Staff staff,

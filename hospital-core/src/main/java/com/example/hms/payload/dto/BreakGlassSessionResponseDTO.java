@@ -23,8 +23,17 @@ public class BreakGlassSessionResponseDTO {
     @Schema(description = "Patient whose chart is unlocked under the override.")
     private UUID patientId;
 
+    @Schema(description = "QA D839: the patient's name, so the reviewer reads who, not an id.")
+    private String patientName;
+
+    @Schema(description = "QA D839: the patient's MRN at the session's hospital; null when not registered there.")
+    private String patientMrn;
+
     @Schema(description = "User who declared the override.")
     private UUID userId;
+
+    @Schema(description = "QA D839: the declarer's name (first and last), not their username.")
+    private String userDisplayName;
 
     @Schema(description = "Display name of the declaring user (denormalised for the audit screen).")
     private String userName;

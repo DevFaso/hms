@@ -119,6 +119,46 @@ describe('UserListComponent registration', () => {
     expect(users.update.calls.mostRecent().args[1].roleNames).toBeUndefined();
   });
 
+  it('QA D838: the edit dialog shows the registered hospital, job title and employment type, read-only', () => {
+    users.getById.and.returnValue(
+      of({
+        id: 'u7',
+        phoneNumber: '+22670303030',
+        roles: [{ code: 'ROLE_NURSE' }],
+        staffHospitalId: 'h-wp',
+        staffHospitalName: 'Wend-Panga',
+        jobTitle: 'NURSE',
+        employmentType: 'FULL_TIME',
+      } as unknown as UserDetail),
+    );
+    users.update.and.returnValue(of({ id: 'u7' } as UserDetail));
+    component.openEdit({
+      id: 'u7',
+      username: 'boukary',
+      email: 'b@hopital.bf',
+      firstName: 'Boukary',
+      lastName: 'Sawadogo',
+      roleName: 'ROLE_NURSE',
+      deleted: false,
+    } as never);
+    fixture.detectChanges();
+
+    expect(component.createForm.jobTitle).toBe('NURSE');
+    expect(component.createForm.employmentType).toBe('FULL_TIME');
+    expect(component.createForm.hospitalId).toBe('h-wp');
+    const hospital = fixture.debugElement.query(By.css('[data-testid="edit-staff-hospital"]'));
+    expect(hospital.nativeElement.textContent).toContain('Wend-Panga');
+
+    // Editing only the phone sends none of them: PUT /users does not change them.
+    component.createForm.phoneNumber = '+22670404040';
+    component.submitCreate();
+    const sent = users.update.calls.mostRecent().args[1];
+    expect(sent.phoneNumber).toBe('+22670404040');
+    expect(sent.jobTitle).toBeUndefined();
+    expect(sent.employmentType).toBeUndefined();
+    expect(sent.hospitalId).toBeUndefined();
+  });
+
   it('D765 path re-verified: create still offers role checkboxes and sends the roles', () => {
     openCreateWith(['ROLE_DOCTOR']);
     component.createForm.email = 'awa@hopital.bf';

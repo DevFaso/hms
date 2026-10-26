@@ -99,6 +99,24 @@ describe('ProfileComponent — editing the profile', () => {
   const byId = (id: string): HTMLInputElement | null =>
     fixture.nativeElement.querySelector(`#${id}`);
 
+  it('QA D844: a patient sees no staff counters (roles, assignments, security %) in the header', () => {
+    // PATIENT_B1 holds ROLE_PATIENT only.
+    auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+    const patientFixture = TestBed.createComponent(ProfileComponent);
+    patientFixture.detectChanges();
+    expect(patientFixture.nativeElement.querySelector('.header-stats')).toBeNull();
+
+    // Any staff role keeps them, including one isStaffOrAdmin does not list.
+    for (const role of ['ROLE_DOCTOR', 'ROLE_PHARMACIST']) {
+      auth.getRoles.and.returnValue([role]);
+      const staffFixture = TestBed.createComponent(ProfileComponent);
+      staffFixture.detectChanges();
+      expect(staffFixture.nativeElement.querySelector('.header-stats'))
+        .withContext(role)
+        .not.toBeNull();
+    }
+  });
+
   it('saves names and phone through the profile PUT, sending the email back unchanged', () => {
     component.updateField('firstName', 'Aminata');
     component.saveProfile();

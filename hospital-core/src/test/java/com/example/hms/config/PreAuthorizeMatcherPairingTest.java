@@ -124,6 +124,18 @@ public class PreAuthorizeMatcherPairingTest extends BaseIT {
         assertThat(matcherAdmits("DELETE", hospital, "ROLE_SUPER_ADMIN")).isTrue();
     }
 
+    @Test
+    @DisplayName("QA D846: a lab director passes the edge on PUT /staff/{id}/lab-role, and only there under /staff")
+    void labDirectorReachesTheLabRoleEditOnly() {
+        String staff = "/staff/" + SAMPLE_ID;
+        assertThat(matcherAdmits("PUT", staff + "/lab-role", "ROLE_LAB_DIRECTOR")).isTrue();
+        assertThat(matcherAdmits("PUT", staff + "/lab-role", "ROLE_HOSPITAL_ADMIN")).isTrue();
+        assertThat(matcherAdmits("PUT", staff + "/lab-role", "ROLE_LAB_TECHNICIAN")).isFalse();
+        // The narrow matcher widens nothing else: editing the staff row stays administrators-only.
+        assertThat(matcherAdmits("PUT", staff, "ROLE_LAB_DIRECTOR")).isFalse();
+        assertThat(matcherAdmits("DELETE", staff, "ROLE_LAB_DIRECTOR")).isFalse();
+    }
+
     /** Every {@code ROLE_*} the expression names, as a role call or an authority call. */
     public static Set<String> rolesAdmittedBy(String expression) {
         Set<String> roles = new LinkedHashSet<>();
@@ -201,9 +213,6 @@ public class PreAuthorizeMatcherPairingTest extends BaseIT {
         accepted.put("PUT /patients/{id}/allergies/{allergyId} ROLE_PHARMACIST", chartUpdate);
         accepted.put("GET /lab-qc-events/summary ROLE_ADMIN", labPr);
         accepted.put("GET /lab-specimens/{specimenId}/label.pdf ROLE_HOSPITAL_ADMIN", labPr);
-        accepted.put("PUT /staff/{id}/lab-role ROLE_LAB_DIRECTOR", "Found by this ratchet: the annotation lets a "
-            + "lab director set a staff member's lab role, the /staff matcher refuses it; a product decision, "
-            + "recorded on the PR");
         return accepted;
     }
 }

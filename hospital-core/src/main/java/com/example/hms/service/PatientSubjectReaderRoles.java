@@ -64,12 +64,14 @@ public final class PatientSubjectReaderRoles {
     /**
      * {@code GET /imaging/results/{reportId}} and
      * {@code GET /imaging/results/order/{orderId}} — both
-     * {@code hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','RADIOLOGIST','PATIENT')}.
+     * {@code hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE','RADIOLOGIST','PATIENT')}
+     * (QA D856: MIDWIFE, who orders and lists imaging).
      */
     public static final Set<String> IMAGING_REPORT_READS = Set.of(
         SecurityConstants.ROLE_SUPER_ADMIN,
         SecurityConstants.ROLE_DOCTOR,
         SecurityConstants.ROLE_NURSE,
+        SecurityConstants.ROLE_MIDWIFE,
         SecurityConstants.ROLE_RADIOLOGIST);
 
     /**

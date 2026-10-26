@@ -10,6 +10,8 @@ import {
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { roleDescriptionKey } from './role-description';
+import { EnumLabelService } from '../core/enum-label.service';
+import { bareRole } from '../core/role-token';
 
 @Component({
   selector: 'app-role-list',
@@ -23,6 +25,23 @@ export class RoleListComponent implements OnInit {
   private readonly roleService = inject(RoleService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
+
+  /**
+   * QA D868: the card title in the reader's language. A system role's name is
+   * its code (ROLE_DOCTOR), so the card read "ROLE_DOCTOR ROLE_DOCTOR"; it is
+   * shown through the role label. A custom role keeps the name its author typed.
+   */
+  roleTitle(role: RoleResponse): string {
+    const code = bareRole(role.code || role.authority || role.name);
+    if (!code || !/^[A-Z][A-Z0-9_]*$/.test(code)) return role.name;
+    const label = this.enumLabels.transform(code, 'role');
+    const prettified = code
+      .split('_')
+      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
+    return label && label !== prettified ? label : role.name;
+  }
 
   roles = signal<RoleResponse[]>([]);
   loading = signal(true);

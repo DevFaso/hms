@@ -916,7 +916,8 @@
     "RE_REVIEW": "Cambiar la revisión",
     "SIGN_OFF": "Firmar",
     "SUBTITLE": "Cada sesión de acceso de emergencia de este hospital, pendiente de la firma de un administrador.",
-    "TITLE": "Revisión de accesos de emergencia"
+    "TITLE": "Revisión de accesos de emergencia",
+    "MRN": "N.º de historia"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
@@ -1409,7 +1410,15 @@
       "ROLE_ASSIGNMENT_REFUSED": "Asignación de rol rechazada: el autor no puede asignar este rol en este hospital",
       "ROLE_ASSIGNED": "Rol {{role}} asignado a {{name}}",
       "ASSIGNMENT_CONFIRMED": "Asignación {{role}} confirmada para {{name}}",
-      "LAB_DEFINITION_STEP": "Prueba de laboratorio {{code}}: paso de aprobación {{step}}, nuevo estado {{status}}."
+      "LAB_DEFINITION_STEP": "Prueba de laboratorio {{code}}: paso de aprobación {{step}}, nuevo estado {{status}}.",
+      "HOSPITAL_SCOPE_REFUSED": "Acceso al hospital denegado ({{reason}})"
+    },
+    "SCOPE_REFUSAL": {
+      "NOT_PERMITTED": "ningún rol activo en este hospital",
+      "NO_LONGER_PERMITTED": "el rol en este hospital ha finalizado",
+      "AMBIGUOUS": "varios hospitales, ninguno elegido",
+      "NO_LOCAL_USER": "inicio de sesión no vinculado a una cuenta",
+      "NO_HOSPITAL": "ningún hospital seleccionado"
     }
   },
   "BILLING": {
@@ -4915,7 +4924,8 @@
         "TEST": "Prueba",
         "TITLE": "Datos de salud de {{name}}",
         "TITLE_FALLBACK": "Datos de salud compartidos"
-      }
+      },
+      "USER_NOT_FOUND": "Ninguna cuenta tiene este nombre de usuario. Compruebe la ortografía con la persona a la que quiere dar acceso."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Antecedentes médicos y familiares",
@@ -7189,7 +7199,9 @@
       "SURGEON": "Cirujano(a) que realiza intervenciones, gestiona los planes quirúrgicos y los cuidados posoperatorios",
       "TECHNICIAN": "Técnico biomédico o informático encargado del mantenimiento de equipos y del soporte técnico",
       "USER": "Usuario estándar con permisos de acceso básicos"
-    }
+    },
+    "BUILT_IN_ACCESS": "Acceso integrado del rol",
+    "NO_PERMISSION_CATALOGUE": "No hay ningún catálogo de permisos definido: el acceso de este rol está integrado en la plataforma y no se modifica aquí."
   },
   "SCHEDULING": {
     "AFTERNOON": "Tarde",
@@ -7711,7 +7723,8 @@
     "USERNAME": "Nombre de usuario",
     "USERS_PLURAL": "Usuarios",
     "USER_SINGULAR": "Usuario",
-    "ROLES_EDIT_HINT": "Los roles se asignan y retiran por hospital desde la página de asignaciones de roles."
+    "ROLES_EDIT_HINT": "Los roles se asignan y retiran por hospital desde la página de asignaciones de roles.",
+    "STAFF_FIELDS_EDIT_HINT": "El hospital, el cargo, el tipo de empleo, la especialidad y la licencia son los registrados para este miembro del personal. Se modifican desde su ficha de personal, no aquí."
   },
   "TRIAGE": {
     "ACUITY": "Nivel de agudeza",

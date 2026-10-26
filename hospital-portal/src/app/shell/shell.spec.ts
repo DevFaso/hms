@@ -1432,6 +1432,9 @@ describe('ShellComponent — route-level hospital scope gate', () => {
         'reception',
         'registrations',
         'reports',
+        // QA D853: one hospital's wards; in global view it mixed every
+        // hospital's wards and 'Nouvelle unité' could only fail.
+        'bed-management',
       ].sort(),
     );
   });
