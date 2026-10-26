@@ -29,9 +29,12 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.IsoFields;
 import java.time.temporal.WeekFields;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * CSV generation for the canned scheduled reports (P3 #25a).
@@ -47,6 +50,8 @@ import java.util.TreeMap;
 public class ReportGenerationService {
 
     private static final int PAGE_SIZE = 500;
+    /** Bound on an IN list of appointment ids, well under the driver's parameter cap. */
+    private static final int APPOINTMENT_ID_BATCH = 1000;
     private static final DateTimeFormatter MONTH_TOKEN = DateTimeFormatter.ofPattern("yyyyMM");
 
     private final EncounterRepository encounterRepository;
@@ -180,18 +185,46 @@ public class ReportGenerationService {
         List<Appointment> appointments = appointmentRepository
             .findByHospital_IdAndAppointmentDateBetween(
                 definition.getHospital().getId(), range.start(), range.end());
+        Set<UUID> leftUnseen = appointmentsLeftWithoutBeingSeen(appointments);
         for (Appointment appointment : appointments) {
             if (appointment.getAppointmentDate() == null) continue;
-            int[] counts = byDay.computeIfAbsent(appointment.getAppointmentDate(), d -> new int[4]);
+            int[] counts = byDay.computeIfAbsent(appointment.getAppointmentDate(), d -> new int[5]);
             counts[0]++;
             if (appointment.getStatus() == AppointmentStatus.COMPLETED) counts[1]++;
-            if (appointment.getStatus() == AppointmentStatus.CANCELLED) counts[2]++;
             if (appointment.getStatus() == AppointmentStatus.NO_SHOW) counts[3]++;
+            if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+                // Round 13: closing a visit unseen cancels its appointment, but a
+                // patient who walked out is not a staff cancellation. The visit's
+                // own status tells them apart.
+                if (leftUnseen.contains(appointment.getId())) counts[4]++;
+                else counts[2]++;
+            }
         }
 
         return toCsv(definition, periodToken,
-            List.of("date", "appointments_total", "completed", "cancelled", "no_show"),
-            byDay, 4);
+            List.of("date", "appointments_total", "completed", "cancelled", "no_show",
+                "left_without_being_seen"),
+            byDay, 5);
+    }
+
+    /** The cancelled appointments whose visit was closed as left without being seen. */
+    private Set<UUID> appointmentsLeftWithoutBeingSeen(List<Appointment> appointments) {
+        List<UUID> cancelledIds = appointments.stream()
+            .filter(a -> a.getStatus() == AppointmentStatus.CANCELLED && a.getId() != null)
+            .map(Appointment::getId)
+            .toList();
+        Set<UUID> leftUnseen = new HashSet<>();
+        for (int from = 0; from < cancelledIds.size(); from += APPOINTMENT_ID_BATCH) {
+            List<UUID> batch = cancelledIds.subList(
+                from, Math.min(from + APPOINTMENT_ID_BATCH, cancelledIds.size()));
+            for (Encounter encounter : encounterRepository.findByAppointmentIdIn(batch)) {
+                if (encounter.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN
+                        && encounter.getAppointment() != null) {
+                    leftUnseen.add(encounter.getAppointment().getId());
+                }
+            }
+        }
+        return leftUnseen;
     }
 
     /**

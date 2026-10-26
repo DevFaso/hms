@@ -5021,6 +5021,7 @@
         "INACTIVE": "Inactive",
         "INVALID": "Invalid",
         "IN_PROGRESS": "In Progress",
+        "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
         "NEEDS_CLARIFICATION": "Needs Clarification",
         "NORMAL": "Normal",
         "NOT_ELIGIBLE": "Not Eligible",

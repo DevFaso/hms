@@ -148,10 +148,48 @@ class ReportGenerationServiceTest {
             definition(ReportType.APPOINTMENT_ACTIVITY, ReportPeriod.MONTHLY), "202607");
 
         String csv = new String(report.content(), StandardCharsets.UTF_8);
-        assertThat(csv).contains("date,appointments_total,completed,cancelled,no_show");
-        assertThat(csv).contains("2026-07-03,2,1,0,1");
-        assertThat(csv).contains("2026-07-04,1,0,0,0");
+        assertThat(csv).contains(
+            "date,appointments_total,completed,cancelled,no_show,left_without_being_seen");
+        assertThat(csv).contains("2026-07-03,2,1,0,1,0");
+        assertThat(csv).contains("2026-07-04,1,0,0,0,0");
         assertThat(report.rowCount()).isEqualTo(2);
+    }
+
+    @Test
+    void appointmentActivityCountsAWalkOutApartFromAStaffCancellation() {
+        // Round 13: closing a visit "left without being seen" cancels its
+        // appointment too; the report must not count that as a cancellation.
+        Appointment walkedOut = new Appointment();
+        walkedOut.setId(UUID.randomUUID());
+        walkedOut.setAppointmentDate(LocalDate.of(2026, 7, 3));
+        walkedOut.setStatus(AppointmentStatus.CANCELLED);
+        Appointment staffCancelled = new Appointment();
+        staffCancelled.setId(UUID.randomUUID());
+        staffCancelled.setAppointmentDate(LocalDate.of(2026, 7, 3));
+        staffCancelled.setStatus(AppointmentStatus.CANCELLED);
+        // Closed unseen with the CANCELLED outcome: still a cancellation.
+        Appointment closedCancelled = new Appointment();
+        closedCancelled.setId(UUID.randomUUID());
+        closedCancelled.setAppointmentDate(LocalDate.of(2026, 7, 3));
+        closedCancelled.setStatus(AppointmentStatus.CANCELLED);
+        when(appointmentRepository.findByHospital_IdAndAppointmentDateBetween(
+            eq(hospital.getId()), any(), any()))
+            .thenReturn(List.of(walkedOut, staffCancelled, closedCancelled));
+
+        Encounter walkedOutVisit = new Encounter();
+        walkedOutVisit.setAppointment(walkedOut);
+        walkedOutVisit.setStatus(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
+        Encounter cancelledVisit = new Encounter();
+        cancelledVisit.setAppointment(closedCancelled);
+        cancelledVisit.setStatus(EncounterStatus.CANCELLED);
+        when(encounterRepository.findByAppointmentIdIn(any()))
+            .thenReturn(List.of(walkedOutVisit, cancelledVisit));
+
+        GeneratedReport report = service.generate(
+            definition(ReportType.APPOINTMENT_ACTIVITY, ReportPeriod.MONTHLY), "202607");
+
+        String csv = new String(report.content(), StandardCharsets.UTF_8);
+        assertThat(csv).contains("2026-07-03,3,0,2,0,1");
     }
 
     @Test

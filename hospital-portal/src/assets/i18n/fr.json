@@ -4987,6 +4987,7 @@
         "INACTIVE": "Inactif",
         "INVALID": "Invalide",
         "IN_PROGRESS": "En cours",
+        "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",
         "NEEDS_CLARIFICATION": "Clarification requise",
         "NORMAL": "Normal",
         "NOT_ELIGIBLE": "Non éligible",

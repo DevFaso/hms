@@ -428,9 +428,11 @@ public class EncounterController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Close a visit no clinician has seen (left without being seen, or cancelled)",
-        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The encounter becomes "
-            + "CANCELLED with the outcome and the reason, its appointment is cancelled, and no After-Visit "
-            + "Summary is produced: it is never counted as a consultation. A seen visit is checked out instead."
+        description = "Only from SCHEDULED, ARRIVED, TRIAGE or WAITING_FOR_PHYSICIAN. The outcome sets the "
+            + "encounter's status: LEFT_WITHOUT_BEING_SEEN for a patient who left before being seen, CANCELLED "
+            + "for a cancelled visit; the outcome and the reason are kept on the encounter. Its appointment is "
+            + "cancelled, and no After-Visit Summary is produced: it is never counted as a consultation. A seen "
+            + "visit is checked out instead."
     )
     public ResponseEntity<EncounterResponseDTO> closeUnseen(
         @PathVariable UUID encounterId,

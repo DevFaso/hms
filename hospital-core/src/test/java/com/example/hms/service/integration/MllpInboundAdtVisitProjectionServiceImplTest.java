@@ -63,6 +63,8 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
+    @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AdmissionStayEncounterService>
+        stayEncounters;
 
     @Spy private AdtVisitSyncProperties properties = new AdtVisitSyncProperties();
 
@@ -901,6 +903,67 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
             ArgumentCaptor.forClass(AuditEventRequestDTO.class);
         verify(auditEventLogService).logEvent(audit.capture());
         assertThat(audit.getValue().getEventType()).isEqualTo(AuditEventType.ADMISSION_TRANSFERRED);
+    }
+
+    @Test
+    @DisplayName("QA D804: an A02 transfer moves the stay's open encounter to the destination department")
+    void d804_anA02TransferMovesTheStayEncounter() {
+        Department admitting = department(UUID.randomUUID(), hospital);
+        Department destination = department(UUID.randomUUID(), hospital);
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        row.setDepartment(admitting);
+        row.setHospital(hospital);
+        // The stay encounter a ward order opened, still in the admitting department.
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(row.getId());
+        stay.setDepartment(admitting);
+        stay.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+        when(departmentRepository
+            .findByHospitalIdAndCodeIgnoreCase(hospital.getId(), "WARD-B"))
+            .thenReturn(Optional.of(destination));
+        when(encounterRepository.findFirstByAdmissionIdOrderByEncounterDateDesc(row.getId()))
+            .thenReturn(Optional.of(stay));
+        // The real stay service: only its encounter repository is reached here.
+        com.example.hms.service.AdmissionStayEncounterService stayService =
+            new com.example.hms.service.AdmissionStayEncounterService(
+                encounterRepository, null, null, null, null, null, null, null, null);
+        when(stayEncounters.getIfAvailable()).thenReturn(stayService);
+
+        VisitProjectionResult result = service.projectVisit(
+            adt("A02", "V-A02", "WARD-B^ROOM-3^BED-1", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        assertThat(result).isEqualTo(VisitProjectionResult.ADMISSION_TRANSFERRED);
+        ArgumentCaptor<Encounter> savedEncounter = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(savedEncounter.capture());
+        assertThat(savedEncounter.getValue()).isSameAs(stay);
+        assertThat(stay.getDepartment()).isSameAs(destination);
+    }
+
+    @Test
+    @DisplayName("QA D804: an unresolvable A02 destination leaves the stay encounter where it is")
+    void d804_anUnresolvedA02DoesNotTouchTheStayEncounter() {
+        Admission row = new Admission();
+        row.setId(UUID.randomUUID());
+        row.setStatus(AdmissionStatus.ACTIVE);
+        when(admissionRepository
+            .findFirstByExternalSendingApplicationAndExternalSendingFacilityAndExternalVisitNumberAndHospitalId(
+                any(), any(), any(), any()))
+            .thenReturn(Optional.of(row));
+
+        service.projectVisit(adt("A02", "V-A02", "", null, null),
+            patient, hospital, "REG", "HOSP1", "MSG-A02");
+
+        verifyNoInteractions(stayEncounters);
+        verify(encounterRepository, never()).save(any());
     }
 
     @Test
