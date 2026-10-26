@@ -795,7 +795,7 @@
             <input
               id="problem-code"
               type="text"
-              placeholder="e.g. E11.9"
+              [placeholder]="'CHART.CODE_PLACEHOLDER' | translate"
               [(ngModel)]="problemForm.problemCode"
             />
           </div>

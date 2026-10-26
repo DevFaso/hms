@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { SubscriptionsComponent } from './subscriptions';
@@ -79,5 +79,80 @@ describe('SubscriptionsComponent', () => {
     cmp.submit();
 
     expect(cmp.formError()).toBe('SUBSCRIPTIONS.ERROR.SAVE_FAILED');
+  });
+
+  it('QA D865: a new plan is priced in F CFA, typed in francs, stored in hundredths', () => {
+    service.createPlan.and.returnValue(of({} as SubscriptionPlan));
+    const cmp = setup();
+    cmp.startCreate();
+    expect(cmp.form().currency).toBe('XOF');
+    expect(cmp.priceStep()).toBe(1);
+
+    cmp.updateForm('name', 'Essentiel');
+    cmp.updateForm('tierCode', 'ESS');
+    cmp.updatePrice(25000);
+    expect(cmp.priceAmount()).toBe(25000);
+    cmp.submit();
+
+    expect(service.createPlan).toHaveBeenCalledWith(
+      jasmine.objectContaining({ currency: 'XOF', monthlyPriceCents: 2_500_000 }),
+    );
+  });
+
+  it('QA D865: a fractional franc is refused before the call; euros keep their cents', () => {
+    const cmp = setup();
+    cmp.startCreate();
+    cmp.updateForm('name', 'Essentiel');
+    cmp.updateForm('tierCode', 'ESS');
+    cmp.updatePrice(25000.5);
+    cmp.submit();
+    expect(service.createPlan).not.toHaveBeenCalled();
+    expect(cmp.formError()).toBe('SUBSCRIPTIONS.ERROR.WHOLE_UNITS');
+
+    cmp.updateForm('currency', 'EUR');
+    expect(cmp.priceStep()).toBe(0.01);
+    cmp.updatePrice(49.99);
+    expect(cmp.form().monthlyPriceCents).toBe(4999);
+  });
+
+  it('QA D621: the price label names francs CFA as F CFA, never the raw XOF code', () => {
+    const cmp = setup();
+    expect(cmp.currencyUnit('XOF')).toBe('F CFA');
+    expect(cmp.currencyUnit('xof')).toBe('F CFA');
+    expect(cmp.currencyUnit('EUR')).toBe('EUR');
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      SUBSCRIPTIONS: { FORM: { PRICE: 'Prix mensuel ({{currency}})' } },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(SubscriptionsComponent);
+    fixture.componentInstance.startCreate();
+    fixture.detectChanges();
+    const text: string = fixture.nativeElement.textContent;
+    expect(text).toContain('Prix mensuel (F CFA)');
+    expect(text).not.toContain('(XOF)');
+  });
+
+  it('QA D865: the currency is picked from ISO codes; a legacy code stays selectable', () => {
+    const cmp = setup();
+    cmp.startCreate();
+    expect(cmp.currencyOptions()).toContain('XOF');
+    expect(cmp.currencyOptions()).not.toContain('ZZZZ');
+
+    cmp.updateForm('currency', 'ZZZZ');
+    expect(cmp.currencyOptions()).toContain('ZZZZ');
+  });
+
+  it('QA D850: a refused deactivation shows the server reason', () => {
+    const reason = "Cette formule est encore l'abonnement actif de 1 organisation(s).";
+    service.deactivatePlan.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 409, error: { message: reason } })),
+    );
+    const cmp = setup();
+    cmp.deactivate({ id: 'p1', active: true } as SubscriptionPlan);
+
+    expect(cmp.deactivateError()).toBe(reason);
+    expect(service.listPlans).toHaveBeenCalledTimes(1);
   });
 });

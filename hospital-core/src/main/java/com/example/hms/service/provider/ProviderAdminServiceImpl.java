@@ -95,6 +95,16 @@ public class ProviderAdminServiceImpl implements ProviderAdminService {
             throw new ConstraintViolationException(violations);
         }
         Hospital facility = seat.facility();
+        // QA D833: the facility number is stored like the super-admin form stores it.
+        if (body.getPhoneNumber() != null && !body.getPhoneNumber().equals(facility.getPhoneNumber())) {
+            String phone = com.example.hms.utility.PhoneNumbers.normalizeFacilityPhone(
+                body.getPhoneNumber(), facility.getCountry());
+            if (phone == null) {
+                throw new com.example.hms.exception.FieldBusinessException(
+                    "phoneNumber", "hospital.phoneNumber.invalid");
+            }
+            body.setPhoneNumber(phone);
+        }
         facility.setPhoneNumber(body.getPhoneNumber());
         facility.setEmail(body.getEmail());
         facility.setWebsite(body.getWebsite());

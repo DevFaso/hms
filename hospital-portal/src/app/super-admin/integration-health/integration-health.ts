@@ -9,7 +9,7 @@ import {
 import { CommonModule, DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { catchError, of } from 'rxjs';
+import { catchError, map, of } from 'rxjs';
 
 import { IntegrationHealthService } from '../../services/integration-health.service';
 import {
@@ -21,6 +21,8 @@ import {
 } from '../../services/integration-health.model';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../../shared/pipes/org-text.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface StatusChip {
   status: IntegrationHealthStatus;
@@ -31,8 +33,17 @@ interface StatusChip {
 interface RowAction {
   busy: boolean;
   result: IntegrationProbeResult | null;
+  /** A re-sync was accepted (202): the outcome lands in the history later. */
+  resyncAccepted: boolean;
+  /** A translation key, or the server's own (already translated) reason. */
   errorKey: string | null;
 }
+
+/** What a finished action left: a probe result, an accepted re-sync, or a refusal. */
+type ActionOutcome =
+  | { kind: 'probe'; result: IntegrationProbeResult }
+  | { kind: 'resync' }
+  | { kind: 'error'; reason: string };
 
 interface HistoryState {
   loading: boolean;
@@ -45,7 +56,15 @@ interface HistoryState {
 @Component({
   selector: 'app-integration-health',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, RouterLink, TranslateModule, DatePipe, OrgTextPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    OrgTextPipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './integration-health.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './integration-health.scss',
@@ -148,6 +167,7 @@ export class IntegrationHealthComponent implements OnInit {
       this.rowActions()[integrationId] ?? {
         busy: false,
         result: null,
+        resyncAccepted: false,
         errorKey: null,
       }
     );
@@ -158,47 +178,56 @@ export class IntegrationHealthComponent implements OnInit {
     this.beginAction(integrationId);
     this.service
       .probe(integrationId)
-      .pipe(catchError(() => of(null)))
-      .subscribe((result) => this.finishAction(integrationId, 'probe', result));
+      .pipe(
+        map((result): ActionOutcome => ({ kind: 'probe', result })),
+        catchError((err) =>
+          of<ActionOutcome>({
+            kind: 'error',
+            reason: refusalReason(err) ?? 'INTEGRATION_HEALTH.PROBE.ERROR',
+          }),
+        ),
+      )
+      .subscribe((outcome) => this.finishAction(integrationId, outcome));
   }
 
   resync(event: Event, integrationId: string): void {
     event.stopPropagation();
     this.beginAction(integrationId);
+    // QA D851: the re-sync answers 202 with no body; that empty body is the
+    // success, not a failure.
     this.service
       .resync(integrationId)
-      .pipe(catchError(() => of(null)))
-      .subscribe((result) => this.finishAction(integrationId, 'resync', result));
+      .pipe(
+        map((): ActionOutcome => ({ kind: 'resync' })),
+        catchError((err) =>
+          of<ActionOutcome>({
+            kind: 'error',
+            reason: refusalReason(err) ?? 'INTEGRATION_HEALTH.RESYNC.ERROR',
+          }),
+        ),
+      )
+      .subscribe((outcome) => this.finishAction(integrationId, outcome));
   }
 
   private beginAction(integrationId: string): void {
     this.rowActions.update((current) => ({
       ...current,
-      [integrationId]: { busy: true, result: null, errorKey: null },
+      [integrationId]: { busy: true, result: null, resyncAccepted: false, errorKey: null },
     }));
   }
 
-  private finishAction(
-    integrationId: string,
-    kind: 'probe' | 'resync',
-    result: IntegrationProbeResult | null,
-  ): void {
-    // Copilot review fix — surface a kind-specific error key so a
-    // resync failure doesn't claim "Probe failed".
-    const errorKey =
-      result === null
-        ? kind === 'probe'
-          ? 'INTEGRATION_HEALTH.PROBE.ERROR'
-          : 'INTEGRATION_HEALTH.RESYNC.ERROR'
-        : null;
-    this.rowActions.update((current) => ({
-      ...current,
-      [integrationId]: { busy: false, result, errorKey },
-    }));
+  private finishAction(integrationId: string, outcome: ActionOutcome): void {
+    const next: RowAction = {
+      busy: false,
+      result: outcome.kind === 'probe' ? outcome.result : null,
+      resyncAccepted: outcome.kind === 'resync',
+      errorKey: outcome.kind === 'error' ? outcome.reason : null,
+    };
+    this.rowActions.update((current) => ({ ...current, [integrationId]: next }));
     // After a probe / resync the inventory may have moved; re-fetch
     // the recorder snapshot in the background so the chips and per-row
     // status pill stay in sync.
-    if (result !== null) {
+    if (outcome.kind !== 'error') {
       this.silentRefresh();
       // Refresh history if the drawer is open for this row.
       if (this.expandedIntegrationId() === integrationId) {
@@ -263,7 +292,7 @@ export class IntegrationHealthComponent implements OnInit {
    * Build an SVG `<polyline points="…">` value from the bucket counts.
    * Coordinate space is 0..100 wide, 0..30 tall (matches the inline
    * SVG viewBox in the template). Each bucket plots its failure-ratio:
-   *   ratio = failing / max(1, healthy + degraded + failing)
+   *   ratio = failures / max(1, successes + failures)
    * which maps 0 → bottom (good), 1 → top (bad). NO_HISTORY buckets
    * (zero on every counter) are plotted at the bottom so a quiet
    * window doesn't look like a spike.
@@ -277,8 +306,8 @@ export class IntegrationHealthComponent implements OnInit {
     const stepX = buckets.length === 1 ? 0 : w / (buckets.length - 1);
     return buckets
       .map((b, i) => {
-        const total = b.healthyCount + b.degradedCount + b.failingCount;
-        const ratio = total === 0 ? 0 : b.failingCount / total;
+        const total = b.successCount + b.failureCount;
+        const ratio = total === 0 ? 0 : b.failureCount / total;
         const x = i * stepX;
         const y = h - ratio * h;
         return `${x.toFixed(2)},${y.toFixed(2)}`;

@@ -14,13 +14,21 @@ import { KpiSparklineComponent } from './kpi-sparkline.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { localDateString } from '../../shared/date-utils';
 
+interface KpiSub {
+  key: string;
+  params?: Record<string, number>;
+}
+
 interface KpiCard {
   /** Translation key prefix; the template appends ".label" and ".help". */
   i18nKey: string;
   /** Formatted main value (or em-dash if no sample). */
   display: string;
-  /** Secondary line — "n=<sample>" or "<noShow>/<total>". */
-  sub: string;
+  /**
+   * Secondary line, as a translation key and its parameters (QA D866: it was
+   * English text built here, "no data in window", in every language).
+   */
+  sub: KpiSub;
   /** Material-icons name. */
   icon: string;
   /** Card accent color. */
@@ -148,13 +156,19 @@ export class KpiCardsComponent implements OnInit {
     }).format(value);
   }
 
-  private formatSampleSize(n: number | undefined): string {
+  private formatSampleSize(n: number | undefined): KpiSub {
     const v = n ?? 0;
-    return v === 0 ? 'no data in window' : `n=${v}`;
+    return v === 0
+      ? { key: 'ANALYTICS.KPI.NO_DATA_IN_WINDOW' }
+      : { key: 'ANALYTICS.KPI.SAMPLE_SIZE', params: { count: v } };
   }
 
-  private formatNoShowSub(no: KpiDashboard['noShowRate'] | undefined): string {
-    if (!no || no.totalAppointments === 0) return 'no appointments in window';
-    return `${no.noShowCount}/${no.totalAppointments}`;
+  private formatNoShowSub(no: KpiDashboard['noShowRate'] | undefined): KpiSub {
+    if (!no || no.totalAppointments === 0)
+      return { key: 'ANALYTICS.KPI.NO_APPOINTMENTS_IN_WINDOW' };
+    return {
+      key: 'ANALYTICS.KPI.NO_SHOW_RATIO',
+      params: { noShow: no.noShowCount, total: no.totalAppointments },
+    };
   }
 }

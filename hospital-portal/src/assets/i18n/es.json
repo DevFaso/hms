@@ -46,26 +46,29 @@
     "COL_ENABLED": "Habilitada",
     "FIELD": {
       "HOSPITAL_PICKER": "Hospital",
-      "PROVIDER": "Proveedor admitente",
-      "PROVIDER_PLACEHOLDER": "— Seleccione un proveedor —",
+      "PROVIDER": "Médico de ingreso",
+      "PROVIDER_PLACEHOLDER": "— Seleccione un médico —",
       "DEPARTMENT": "Departamento (opcional)",
       "DEPARTMENT_PLACEHOLDER": "— Seleccione un departamento —",
       "ASSIGNMENT_ID": "Identificador de asignación por defecto (requerido para A04)",
-      "ASSIGNMENT_HINT": "Requerido solo si este hospital habilita la creación automática de encuentros ADT^A04. Déjelo en blanco para configuraciones solo A01.",
+      "ASSIGNMENT_HINT": "Necesaria solo si este hospital crea automáticamente los encuentros ADT^A04: la asignación propia del médico que admite, bajo la que se registran.",
       "ADMISSION_TYPE": "Tipo de admisión predeterminado",
       "ACUITY": "Nivel de agudeza predeterminado",
       "ENCOUNTER_TYPE": "Tipo de encuentro predeterminado",
       "CHIEF_COMPLAINT": "Queja principal predeterminada",
-      "ENABLED": "Habilitar la creación automática para este hospital"
+      "ENABLED": "Habilitar la creación automática para este hospital",
+      "ASSIGNMENT": "Asignación por defecto (requerida para A04)",
+      "ASSIGNMENT_NONE": "— Ninguna (solo A01) —"
     },
     "CONFIRM_DELETE": "¿Eliminar la configuración ADT para {{hospital}}?",
     "SELECTED_HOSPITAL": "Hospital seleccionado:",
     "HOSPITAL_SEARCHING": "Buscando hospitales…",
     "HOSPITAL_NO_MATCH": "Ningún hospital coincide con esta búsqueda.",
-    "PROVIDER_NO_OPTIONS": "No hay personal activo en este hospital.",
+    "PROVIDER_NO_OPTIONS": "No hay ningún médico ni cirujano activo en este hospital.",
     "DEPARTMENT_NO_OPTIONS": "No hay departamentos en este hospital.",
     "PLACEHOLDER": {
-      "HOSPITAL_SEARCH": "Escriba al menos 2 caracteres del nombre o código del hospital…"
+      "HOSPITAL_SEARCH": "Escriba al menos 2 caracteres del nombre o código del hospital…",
+      "CHIEF_COMPLAINT": "Dejar vacío para «Ingreso creado automáticamente desde un mensaje ADT»"
     },
     "VALIDATION": {
       "REQUIRED": "Hospital y proveedor admitente son obligatorios."
@@ -532,12 +535,14 @@
       "CURRENCY": "Moneda",
       "INCLUDED_SEATS": "Asientos incluidos",
       "FEATURE_KEYS": "Claves de funcionalidad",
-      "FEATURE_KEYS_PLACEHOLDER": "claves separadas por comas"
+      "FEATURE_KEYS_PLACEHOLDER": "claves separadas por comas",
+      "PRICE": "Precio mensual ({{currency}})"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "El nombre y el código de nivel son obligatorios.",
       "SAVE_FAILED": "Error al guardar.",
-      "DEACTIVATE_FAILED": "Error al desactivar."
+      "DEACTIVATE_FAILED": "Error al desactivar.",
+      "WHOLE_UNITS": "Esta moneda no tiene céntimos: introduzca un importe entero."
     }
   },
   "ORG_REGION": {
@@ -657,13 +662,18 @@
       "EXPORT_HELP": "Dejar vacío para usar el formato de exportación global.",
       "DEPLOYMENT": "URL de despliegue objetivo",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "Cuando se establece, los nuevos inquilinos de esta región deben aprovisionarse de forma remota. Dejar vacío para aprovisionar localmente.",
-      "DEPLOYMENT_DISABLED_HELP": "Deshabilitado — ningún TenantProvisioningClient remoto está conectado a este despliegue.",
-      "DEPLOYMENT_DISABLED_TOOLTIP": "Registre un bean TenantProvisioningClient real antes de establecer esta URL — el cliente de reemplazo no puede atender el aprovisionamiento remoto."
+      "DEPLOYMENT_HELP": "Si se indica, los nuevos establecimientos de esta región se aprovisionan en ese despliegue remoto. Déjela vacía para aprovisionarlos aquí.",
+      "DEPLOYMENT_DISABLED_HELP": "Desactivado: este despliegue no puede aprovisionar establecimientos a distancia.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "El aprovisionamiento remoto debe configurarse en el servidor antes de poder guardar una URL de despliegue."
     },
-    "REMOTE_STUB_BANNER": "Aprovisionamiento remoto deshabilitado: solo el TenantProvisioningClient de reemplazo está conectado, las URL de despliegue objetivo no se pueden guardar.",
+    "REMOTE_STUB_BANNER": "El aprovisionamiento remoto no está configurado en este despliegue: no se pueden guardar las URL de despliegue de destino.",
     "ERROR": {
       "UPDATE_FAILED": "Error al actualizar la política regional. Reintente."
+    },
+    "SYSTEM_ACTOR": "Plataforma",
+    "EXPORT_FORMAT": {
+      "STANDARD": "Formato estándar",
+      "GDPR_PORTABILITY": "Portabilidad RGPD"
     }
   },
   "INTEGRATION_MESSAGES": {
@@ -747,13 +757,15 @@
       "BUSY": "Procesando…",
       "OK": "OK",
       "FAIL": "Falló",
-      "ERROR": "No se pudo completar la acción."
+      "ERROR": "No se pudo completar la acción.",
+      "NONE": "Sin prueba de conexión ni resincronización para esta integración."
     },
     "PROBE": {
       "ERROR": "Error en la prueba."
     },
     "RESYNC": {
-      "ERROR": "Error en la resincronización."
+      "ERROR": "Error en la resincronización.",
+      "ACCEPTED": "Resincronización iniciada: el resultado aparecerá en el historial."
     },
     "HISTORY": {
       "TITLE": "Últimas 24 horas",
@@ -863,6 +875,16 @@
       "MONTHLY": "Mensual",
       "WEEKLY": "Semanal",
       "YEARLY": "Anual"
+    },
+    "AUTH_MODE": {
+      "PAT": "Token de acceso personal",
+      "BASIC": "Usuario y contraseña"
+    },
+    "RUN_STATUS": {
+      "PENDING": "Pendiente",
+      "SUCCESS": "Correcto",
+      "PARTIAL": "Parcial",
+      "FAILED": "Fallido"
     }
   },
   "BREAK_GLASS": {
@@ -1204,7 +1226,11 @@
       "NO_SHOW_RATE_LABEL": "Tasa de inasistencia",
       "MEDIAN_LABEL": "Mediana",
       "TREND_LABEL": "Tendencia 30 días",
-      "SPARKLINE_ARIA": "Tendencia {{label}}, {{count}} puntos de datos"
+      "SPARKLINE_ARIA": "Tendencia {{label}}, {{count}} puntos de datos",
+      "NO_DATA_IN_WINDOW": "Sin datos en el periodo",
+      "NO_APPOINTMENTS_IN_WINDOW": "Sin citas en el periodo",
+      "SAMPLE_SIZE": "{{count}} mediciones",
+      "NO_SHOW_RATIO": "{{noShow}} ausencias de {{total}} citas"
     },
     "CARD": {
       "TOTAL_PATIENTS": "Total de pacientes",
@@ -3054,6 +3080,7 @@
     "PLACEHOLDER_MINUTES": "Minutos",
     "CRITICAL_LOW": "Límite crítico bajo (inferior a)",
     "CRITICAL_HIGH": "Límite crítico alto (superior a)",
+    "LOINC_PLACEHOLDER": "ej. 718-7 (hemoglobina)",
     "CRITICAL_LIMITS_HINT": "Los límites críticos son los valores de alarma: un resultado más allá de ellos se clasifica como CRÍTICO y avisa al médico solicitante. Un resultado que solo está fuera del rango de referencia se clasifica como alto o bajo y no avisa a nadie. Déjelos vacíos si la prueba no tiene valor de alarma.",
     "EXPECTED_RESULT": "Resultado esperado (prueba cualitativa)",
     "EXPECTED_RESULT_PLACEHOLDER": "p. ej. Negativo",
@@ -3511,7 +3538,9 @@
     "PROVIDER_HOME": "Inicio",
     "PROVIDER_PROFILE": "Perfil",
     "PROVIDER_STAFF": "Personal",
-    "PROVIDER_AUDIT": "Registro de auditoría"
+    "PROVIDER_AUDIT": "Registro de auditoría",
+    "DHIS2": "Exportación DHIS2",
+    "ADT_INTAKE": "Ingresos ADT automáticos"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Alerta crítica",
@@ -3955,7 +3984,8 @@
     "TYPE_REQUIRED": "Elija un tipo de organización.",
     "UPDATED": "Organización actualizada",
     "DEFAULT_ORG_NAME": "Organización sanitaria predeterminada",
-    "DEFAULT_ORG_DESCRIPTION": "Organización predeterminada para los hospitales sin una organización asignada"
+    "DEFAULT_ORG_DESCRIPTION": "Organización predeterminada para los hospitales sin una organización asignada",
+    "PHONE_PLACEHOLDER": "ej. +226 25 30 00 00"
   },
   "PANEL": {
     "TITLE": "Gestión de paneles",
@@ -6184,6 +6214,13 @@
         "ACTIVATE": "Activación",
         "REJECT": "Rechazo",
         "RETIRE": "Retiro"
+      },
+      "ACUITY_LEVEL": {
+        "LEVEL_1_MINIMAL": "Nivel 1 - mínimo",
+        "LEVEL_2_MODERATE": "Nivel 2 - moderado",
+        "LEVEL_3_MAJOR": "Nivel 3 - mayor",
+        "LEVEL_4_SEVERE": "Nivel 4 - grave",
+        "LEVEL_5_CRITICAL": "Nivel 5 - crítico"
       }
     },
     "DOCUMENTS": {
@@ -7838,7 +7875,7 @@
     "NUMERIC_ANSWER_TITLE": "Respuesta numérica",
     "PHONE": "Número de teléfono",
     "PHONE_LABEL": "Teléfono",
-    "PHONE_PLACEHOLDER": "ej. (555) 123-4567",
+    "PHONE_PLACEHOLDER": "ej. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Cuestionarios completados",
     "STATE": "Estado/Provincia",
     "STEPS_NAV_LABEL": "Pasos del pre-registro",
@@ -8213,7 +8250,8 @@
     "VERIF_REFUTED": "Refutada",
     "VERIF_UNCONFIRMED": "Sin confirmar",
     "LAB_STATUS_QUALITATIVE": "Resultado cualitativo: lo interpreta el clínico",
-    "LAB_STATUS_NOT_INTERPRETED": "Sin interpretar: sin intervalo de referencia"
+    "LAB_STATUS_NOT_INTERPRETED": "Sin interpretar: sin intervalo de referencia",
+    "CODE_PLACEHOLDER": "ej. B54 (paludismo)"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -8537,7 +8575,7 @@
     "WITNESSED_BY": "testigo: {{name}}",
     "TYPE": "Tipo",
     "UNIT": "Unidad",
-    "UNIT_CODE_PLACEHOLDER": "ej.: TABLET",
+    "UNIT_CODE_PLACEHOLDER": "ej.: comprimido",
     "UNIT_COST": "Costo unitario",
     "UNIT_PLACEHOLDER": "p. ej. comprimidos, ml",
     "UNKNOWN_ITEM": "Artículo desconocido",
@@ -8608,7 +8646,10 @@
     "PRICE_SAVED": "Precio guardado.",
     "PRICE_INVALID": "El precio debe ser un número entero de francos, cero o más.",
     "PRICE_SAVE_FAILED": "No se pudo guardar el precio.",
-    "UNIT_COST_NEGATIVE": "El costo unitario no puede ser negativo."
+    "UNIT_COST_NEGATIVE": "El costo unitario no puede ser negativo.",
+    "ATC_PLACEHOLDER": "ej. J01CA04 (amoxicilina)",
+    "STRENGTH_PLACEHOLDER": "ej. 500",
+    "CATEGORY_PLACEHOLDER": "ej. Antibiótico"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -10389,7 +10430,8 @@
     "PERIOD_MONTHLY": "Mensual",
     "RUN_GENERATING": "Generando",
     "RUN_SUCCEEDED": "Enviado",
-    "RUN_FAILED": "Fallido"
+    "RUN_FAILED": "Fallido",
+    "RECIPIENT_INVALID": "«{{address}}» no es una dirección de correo electrónico válida."
   },
   "SLOT_ADMIN": {
     "ACTIONS": "Acciones",

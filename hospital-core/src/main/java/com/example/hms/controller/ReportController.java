@@ -68,13 +68,13 @@ public class ReportController {
         UUID hospitalId = requireHospital();
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-        validateRecipients(request.getRecipients());
+        String recipients = ScheduledReportService.requireDeliverableRecipients(request.getRecipients());
         ReportDefinition definition = definitionRepository.save(ReportDefinition.builder()
                 .hospital(hospital)
                 .name(request.getName().trim())
                 .reportType(request.getReportType())
                 .period(request.getPeriod())
-                .recipients(request.getRecipients().trim())
+                .recipients(recipients)
                 .createdBy(principal != null ? principal.getUsername() : "system")
                 .build());
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(definition));
@@ -143,21 +143,9 @@ public class ReportController {
         UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required to manage scheduled reports.");
+            throw new BusinessException("reportDefinition.hospitalRequired");
         }
         return hospitalId;
-    }
-
-    /** Light shape check — the mail server is the real authority. */
-    private static void validateRecipients(String recipients) {
-        for (String email : recipients.split(",")) {
-            String trimmed = email.trim();
-            if (trimmed.isEmpty()) continue;
-            if (!trimmed.contains("@") || trimmed.length() > 254) {
-                throw new BusinessException("'" + trimmed + "' is not a valid email address.");
-            }
-        }
     }
 
     private static ReportDefinitionResponseDTO toDto(ReportDefinition definition) {
@@ -180,7 +168,8 @@ public class ReportController {
                 .periodToken(run.getPeriodToken())
                 .status(run.getStatus())
                 .rowCount(run.getRowCount())
-                .errorMessage(run.getErrorMessage())
+                // QA D855: stored as a key, read in the reader's language.
+                .errorMessage(com.example.hms.service.reporting.ReportRunReason.resolve(run.getErrorMessage()))
                 .generatedAt(run.getGeneratedAt())
                 .createdAt(run.getCreatedAt())
                 .build();

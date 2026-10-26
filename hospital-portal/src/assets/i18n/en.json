@@ -46,26 +46,29 @@
     "COL_ENABLED": "Enabled",
     "FIELD": {
       "HOSPITAL_PICKER": "Hospital",
-      "PROVIDER": "Admitting provider",
-      "PROVIDER_PLACEHOLDER": "— Select a provider —",
+      "PROVIDER": "Admitting physician",
+      "PROVIDER_PLACEHOLDER": "— Select a physician —",
       "DEPARTMENT": "Department (optional)",
       "DEPARTMENT_PLACEHOLDER": "— Select a department —",
       "ASSIGNMENT_ID": "Default assignment id (required for A04)",
-      "ASSIGNMENT_HINT": "Required only when this hospital opts into ADT^A04 Encounter auto-create. Leave blank for A01-only setups.",
+      "ASSIGNMENT_HINT": "Needed only when this hospital creates ADT^A04 encounters automatically: the admitting physician's own assignment, under which the encounters are recorded.",
       "ADMISSION_TYPE": "Default admission type",
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",
       "CHIEF_COMPLAINT": "Default chief complaint",
-      "ENABLED": "Enable auto-create for this hospital"
+      "ENABLED": "Enable auto-create for this hospital",
+      "ASSIGNMENT": "Default assignment (required for A04)",
+      "ASSIGNMENT_NONE": "— None (A01 only) —"
     },
     "CONFIRM_DELETE": "Delete ADT intake config for {{hospital}}?",
     "SELECTED_HOSPITAL": "Selected hospital:",
     "HOSPITAL_SEARCHING": "Searching hospitals…",
     "HOSPITAL_NO_MATCH": "No hospitals match this search.",
-    "PROVIDER_NO_OPTIONS": "No active staff at this hospital.",
+    "PROVIDER_NO_OPTIONS": "No active doctor or surgeon at this hospital.",
     "DEPARTMENT_NO_OPTIONS": "No departments at this hospital.",
     "PLACEHOLDER": {
-      "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…"
+      "HOSPITAL_SEARCH": "Type at least 2 characters of a hospital name or code…",
+      "CHIEF_COMPLAINT": "Leave empty for \"Admitted automatically from an ADT message\""
     },
     "VALIDATION": {
       "REQUIRED": "Hospital and admitting provider are required."
@@ -532,12 +535,14 @@
       "CURRENCY": "Currency",
       "INCLUDED_SEATS": "Included seats",
       "FEATURE_KEYS": "Feature keys",
-      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys"
+      "FEATURE_KEYS_PLACEHOLDER": "comma-separated keys",
+      "PRICE": "Monthly price ({{currency}})"
     },
     "ERROR": {
       "REQUIRED_FIELDS": "Name and tier code are required.",
       "SAVE_FAILED": "Save failed.",
-      "DEACTIVATE_FAILED": "Deactivation failed."
+      "DEACTIVATE_FAILED": "Deactivation failed.",
+      "WHOLE_UNITS": "This currency has no subunit: enter a whole amount."
     }
   },
   "ORG_REGION": {
@@ -657,13 +662,18 @@
       "EXPORT_HELP": "Leave empty to fall back to the global export-format default.",
       "DEPLOYMENT": "Target deployment URL",
       "DEPLOYMENT_PLACEHOLDER": "https://eu.hms.example/api",
-      "DEPLOYMENT_HELP": "When set, new tenants in this region must be provisioned remotely via TenantProvisioningClient. Leave empty to provision locally.",
-      "DEPLOYMENT_DISABLED_HELP": "Disabled — no remote TenantProvisioningClient is wired into this deployment.",
-      "DEPLOYMENT_DISABLED_TOOLTIP": "Register a real TenantProvisioningClient bean before setting this URL — the stub client cannot honour remote provisioning."
+      "DEPLOYMENT_HELP": "When set, new tenants in this region are provisioned on that remote deployment. Leave empty to provision them here.",
+      "DEPLOYMENT_DISABLED_HELP": "Disabled: this deployment cannot provision tenants remotely.",
+      "DEPLOYMENT_DISABLED_TOOLTIP": "Remote provisioning must be set up on the server before a deployment URL can be saved."
     },
-    "REMOTE_STUB_BANNER": "Remote provisioning is disabled: only the stub TenantProvisioningClient is wired into this deployment, so target deployment URLs cannot be saved.",
+    "REMOTE_STUB_BANNER": "Remote provisioning is not set up on this deployment, so target deployment URLs cannot be saved.",
     "ERROR": {
       "UPDATE_FAILED": "Region policy update failed. Try again."
+    },
+    "SYSTEM_ACTOR": "Platform",
+    "EXPORT_FORMAT": {
+      "STANDARD": "Standard format",
+      "GDPR_PORTABILITY": "GDPR portability"
     }
   },
   "INTEGRATION_MESSAGES": {
@@ -747,13 +757,15 @@
       "BUSY": "Working…",
       "OK": "OK",
       "FAIL": "Failed",
-      "ERROR": "The action could not be completed."
+      "ERROR": "The action could not be completed.",
+      "NONE": "No connection test or resynchronization for this integration."
     },
     "PROBE": {
       "ERROR": "Probe failed."
     },
     "RESYNC": {
-      "ERROR": "Re-sync failed."
+      "ERROR": "Re-sync failed.",
+      "ACCEPTED": "Resynchronization started: the result will appear in the history."
     },
     "HISTORY": {
       "TITLE": "Last 24 hours",
@@ -863,6 +875,16 @@
       "MONTHLY": "Monthly",
       "WEEKLY": "Weekly",
       "YEARLY": "Yearly"
+    },
+    "AUTH_MODE": {
+      "PAT": "Personal access token",
+      "BASIC": "User name and password"
+    },
+    "RUN_STATUS": {
+      "PENDING": "Pending",
+      "SUCCESS": "Succeeded",
+      "PARTIAL": "Partial",
+      "FAILED": "Failed"
     }
   },
   "BREAK_GLASS": {
@@ -1204,7 +1226,11 @@
       "NO_SHOW_RATE_LABEL": "No-show rate",
       "MEDIAN_LABEL": "Median",
       "TREND_LABEL": "30-day trend",
-      "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points"
+      "SPARKLINE_ARIA": "{{label}} trend, {{count}} data points",
+      "NO_DATA_IN_WINDOW": "No data in this period",
+      "NO_APPOINTMENTS_IN_WINDOW": "No appointments in this period",
+      "SAMPLE_SIZE": "{{count}} measurements",
+      "NO_SHOW_RATIO": "{{noShow}} no-shows out of {{total}} appointments"
     },
     "CARD": {
       "TOTAL_PATIENTS": "Total Patients",
@@ -3054,6 +3080,7 @@
     "PLACEHOLDER_MINUTES": "Minutes",
     "CRITICAL_LOW": "Critical low (below)",
     "CRITICAL_HIGH": "Critical high (above)",
+    "LOINC_PLACEHOLDER": "e.g. 718-7 (haemoglobin)",
     "CRITICAL_LIMITS_HINT": "Critical limits are the panic values: a result beyond them is graded CRITICAL and pages the ordering doctor. A result that is only outside the reference range is graded high or low and pages nobody. Leave them empty when the test has no panic value.",
     "EXPECTED_RESULT": "Expected result (qualitative test)",
     "EXPECTED_RESULT_PLACEHOLDER": "e.g. Negative",
@@ -3511,7 +3538,9 @@
     "PROVIDER_HOME": "Home",
     "PROVIDER_PROFILE": "Profile",
     "PROVIDER_STAFF": "Staff",
-    "PROVIDER_AUDIT": "Audit trail"
+    "PROVIDER_AUDIT": "Audit trail",
+    "DHIS2": "DHIS2 export",
+    "ADT_INTAKE": "ADT intake"
   },
   "NOTIFICATIONS": {
     "CRITICAL_ALERT": "Critical alert",
@@ -3955,7 +3984,8 @@
     "TYPE_REQUIRED": "Choose an organization type.",
     "UPDATED": "Organization updated",
     "DEFAULT_ORG_NAME": "Default Healthcare Organization",
-    "DEFAULT_ORG_DESCRIPTION": "Default organization for hospitals without specific organization assignment"
+    "DEFAULT_ORG_DESCRIPTION": "Default organization for hospitals without specific organization assignment",
+    "PHONE_PLACEHOLDER": "e.g. +226 25 30 00 00"
   },
   "PANEL": {
     "TITLE": "Panel Management",
@@ -6184,6 +6214,13 @@
         "ACTIVATE": "Activate",
         "REJECT": "Reject",
         "RETIRE": "Retire"
+      },
+      "ACUITY_LEVEL": {
+        "LEVEL_1_MINIMAL": "Level 1 - minimal",
+        "LEVEL_2_MODERATE": "Level 2 - moderate",
+        "LEVEL_3_MAJOR": "Level 3 - major",
+        "LEVEL_4_SEVERE": "Level 4 - severe",
+        "LEVEL_5_CRITICAL": "Level 5 - critical"
       }
     },
     "DOCUMENTS": {
@@ -7838,7 +7875,7 @@
     "NUMERIC_ANSWER_TITLE": "Numeric answer",
     "PHONE": "Phone Number",
     "PHONE_LABEL": "Phone",
-    "PHONE_PLACEHOLDER": "e.g. (555) 123-4567",
+    "PHONE_PLACEHOLDER": "e.g. +226 70 12 34 56",
     "QUESTIONNAIRES_COMPLETED": "Questionnaires Completed",
     "STATE": "State",
     "STEPS_NAV_LABEL": "Pre-check-in steps",
@@ -8213,7 +8250,8 @@
     "VERIF_REFUTED": "Refuted",
     "VERIF_UNCONFIRMED": "Unconfirmed",
     "LAB_STATUS_QUALITATIVE": "Qualitative result: read by your clinician",
-    "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range"
+    "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range",
+    "CODE_PLACEHOLDER": "e.g. B54 (malaria)"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -8537,7 +8575,7 @@
     "WITNESSED_BY": "witness: {{name}}",
     "TYPE": "Type",
     "UNIT": "Unit",
-    "UNIT_CODE_PLACEHOLDER": "e.g., TABLET",
+    "UNIT_CODE_PLACEHOLDER": "e.g. tablet",
     "UNIT_COST": "Unit Cost",
     "UNIT_PLACEHOLDER": "e.g. tablets, ml",
     "UNKNOWN_ITEM": "Unknown item",
@@ -8608,7 +8646,10 @@
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
     "PRICE_SAVE_FAILED": "The price could not be saved.",
-    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative."
+    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative.",
+    "ATC_PLACEHOLDER": "e.g. J01CA04 (amoxicillin)",
+    "STRENGTH_PLACEHOLDER": "e.g. 500",
+    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -10389,7 +10430,8 @@
     "PERIOD_MONTHLY": "Monthly",
     "RUN_GENERATING": "Generating",
     "RUN_SUCCEEDED": "Sent",
-    "RUN_FAILED": "Failed"
+    "RUN_FAILED": "Failed",
+    "RECIPIENT_INVALID": "\"{{address}}\" is not a valid email address."
   },
   "SLOT_ADMIN": {
     "ACTIONS": "Actions",

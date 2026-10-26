@@ -280,6 +280,26 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     expect(items.filter((i) => i.route === '/users').length).toBe(1);
   });
 
+  it('QA D876: DHIS2 export and ADT intake are reachable from the menu, by their guards', () => {
+    const superAdmin = createComponent({
+      activeRole: 'ROLE_SUPER_ADMIN',
+      roles: ['ROLE_SUPER_ADMIN'],
+      wildcardPermission: true,
+    }).items.map((i) => i.route);
+    expect(superAdmin).toContain('/admin/integrations/dhis2');
+    expect(superAdmin).toContain('/admin/adt-intake-configs');
+    TestBed.resetTestingModule();
+
+    const hospitalAdmin = createComponent({
+      activeRole: 'ROLE_HOSPITAL_ADMIN',
+      roles: ['ROLE_HOSPITAL_ADMIN'],
+      wildcardPermission: false,
+    }).items.map((i) => i.route);
+    expect(hospitalAdmin).toContain('/admin/integrations/dhis2');
+    // ADT intake is SUPER_ADMIN only, on the route and on the controller.
+    expect(hospitalAdmin).not.toContain('/admin/adt-intake-configs');
+  });
+
   it('hides the duplicate-patient panel from roles outside its route guard', () => {
     const { items } = createComponent({
       activeRole: 'ROLE_PHARMACIST',

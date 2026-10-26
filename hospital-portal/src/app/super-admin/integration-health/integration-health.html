@@ -51,7 +51,9 @@
               <h2 class="integration-name">{{ row.displayName }}</h2>
               <p class="integration-sub">
                 @if (row.serviceType) {
-                  <span class="badge">{{ row.serviceType }}</span>
+                  <span class="badge">{{
+                    row.serviceType | enumLabel: 'platformServiceType'
+                  }}</span>
                 }
                 @if (row.provider) {
                   <span class="provider">{{ row.provider }}</span>
@@ -80,27 +82,37 @@
           </button>
 
           <!-- MVP-3b — row-level Test connection / Re-sync controls. -->
+          <!-- QA D851: a button only where the integration has the action. -->
           <div class="row-actions" [attr.data-test]="'row-actions-' + row.integrationId">
-            <button
-              type="button"
-              class="action-btn"
-              [disabled]="rowAction(row.integrationId).busy"
-              (click)="probe($event, row.integrationId)"
-              [attr.data-test]="'probe-' + row.integrationId"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true">network_check</span>
-              {{ 'INTEGRATION_HEALTH.ACTION.TEST' | translate }}
-            </button>
-            <button
-              type="button"
-              class="action-btn"
-              [disabled]="rowAction(row.integrationId).busy"
-              (click)="resync($event, row.integrationId)"
-              [attr.data-test]="'resync-' + row.integrationId"
-            >
-              <span class="material-symbols-outlined" aria-hidden="true">sync</span>
-              {{ 'INTEGRATION_HEALTH.ACTION.RESYNC' | translate }}
-            </button>
+            @if (row.probeSupported) {
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="rowAction(row.integrationId).busy"
+                (click)="probe($event, row.integrationId)"
+                [attr.data-test]="'probe-' + row.integrationId"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">network_check</span>
+                {{ 'INTEGRATION_HEALTH.ACTION.TEST' | translate }}
+              </button>
+            }
+            @if (row.resyncSupported) {
+              <button
+                type="button"
+                class="action-btn"
+                [disabled]="rowAction(row.integrationId).busy"
+                (click)="resync($event, row.integrationId)"
+                [attr.data-test]="'resync-' + row.integrationId"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">sync</span>
+                {{ 'INTEGRATION_HEALTH.ACTION.RESYNC' | translate }}
+              </button>
+            }
+            @if (!row.probeSupported && !row.resyncSupported) {
+              <span class="action-status" [attr.data-test]="'no-actions-' + row.integrationId">
+                {{ 'INTEGRATION_HEALTH.ACTION.NONE' | translate }}
+              </span>
+            }
 
             @if (rowAction(row.integrationId).busy) {
               <span class="action-status busy">
@@ -120,8 +132,28 @@
                     ({{ result.latencyMs }} ms)
                   }
                 } @else {
-                  {{ result.errorMessage || ('INTEGRATION_HEALTH.ACTION.FAIL' | translate) }}
+                  <!-- The probe's own text is the connector's English diagnostic:
+                       the label stays in the reader's language, the detail is a tooltip
+                       (as lastErrorMessage in the history table). -->
+                  {{ 'INTEGRATION_HEALTH.ACTION.FAIL' | translate }}
+                  @if (result.message) {
+                    <span
+                      class="err-tooltip"
+                      [title]="result.message"
+                      [attr.data-test]="'probe-detail-' + row.integrationId"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                    </span>
+                  }
                 }
+              </span>
+            } @else if (rowAction(row.integrationId).resyncAccepted) {
+              <span
+                class="action-status ok"
+                [attr.data-test]="'resync-accepted-' + row.integrationId"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                {{ 'INTEGRATION_HEALTH.RESYNC.ACCEPTED' | translate }}
               </span>
             } @else if (rowAction(row.integrationId).errorKey; as errorKey) {
               <span class="action-status fail">

@@ -1,6 +1,7 @@
 package com.example.hms.service.integration.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.integration.Dhis2DataElementMappingMapper;
 import com.example.hms.mapper.integration.Dhis2FacilityConfigMapper;
@@ -36,6 +38,9 @@ import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class Dhis2ConfigServiceImplTest {
+
+    /** An IP literal, so the public-host check needs no DNS in CI. */
+    private static final String PUBLIC_URL = "https://93.184.216.34";
 
     @Mock private Dhis2FacilityConfigRepository facilityConfigRepository;
     @Mock private Dhis2DataElementMappingRepository mappingRepository;
@@ -72,7 +77,7 @@ class Dhis2ConfigServiceImplTest {
         var dto = service.getFacilityConfig(hospitalId);
         assertThat(dto).isPresent();
         assertThat(dto.get().hospitalId()).isEqualTo(hospitalId);
-        assertThat(dto.get().baseUrl()).isEqualTo("https://dhis2.example.org");
+        assertThat(dto.get().baseUrl()).isEqualTo(PUBLIC_URL);
     }
 
     @Test
@@ -84,7 +89,7 @@ class Dhis2ConfigServiceImplTest {
 
         var dto = service.upsertFacilityConfig(hospitalId, request());
 
-        assertThat(dto.baseUrl()).isEqualTo("https://dhis2.example.org");
+        assertThat(dto.baseUrl()).isEqualTo(PUBLIC_URL);
         verify(facilityConfigRepository, times(1)).save(any());
     }
 
@@ -99,8 +104,39 @@ class Dhis2ConfigServiceImplTest {
 
         var dto = service.upsertFacilityConfig(hospitalId, request());
 
-        assertThat(dto.baseUrl()).isEqualTo("https://dhis2.example.org");
+        assertThat(dto.baseUrl()).isEqualTo(PUBLIC_URL);
         verify(facilityConfigRepository, times(1)).save(existing);
+    }
+
+    @Test
+    @DisplayName("QA D898: an internal or plain-http base URL is refused on baseUrl and never saved")
+    void upsertFacilityRefusesInternalBaseUrls() {
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        String[][] cases = {
+            {"https://169.254.169.254/latest", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://localhost/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://10.0.0.5/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://192.168.1.20/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://127.0.0.1/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://[::1]/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://[fd00::1]/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://0.0.0.0/dhis", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"https://dhis.internal/api", "dhis2FacilityConfig.baseUrl.publicHostRequired"},
+            {"http://93.184.216.34", "dhis2FacilityConfig.baseUrl.httpsRequired"},
+            {"https://admin:pw@93.184.216.34", "dhis2FacilityConfig.baseUrl.credentials"},
+        };
+        for (String[] c : cases) {
+            Dhis2FacilityConfigRequestDTO refused = request(c[0]);
+            assertThatThrownBy(() -> service.upsertFacilityConfig(hospitalId, refused))
+                .as(c[0])
+                .isInstanceOf(FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "baseUrl")
+                .hasFieldOrPropertyWithValue("messageKey", c[1]);
+        }
+        verify(facilityConfigRepository, never()).save(any());
+        // A public HTTPS host is still accepted (the create/update tests save it).
+        assertThatCode(() -> Dhis2ConfigServiceImpl.requireCallableBaseUrl(PUBLIC_URL + "/dhis"))
+            .doesNotThrowAnyException();
     }
 
     @Test
@@ -169,7 +205,7 @@ class Dhis2ConfigServiceImplTest {
     private Dhis2FacilityConfig facility() {
         return Dhis2FacilityConfig.builder()
             .hospital(hospital)
-            .baseUrl("https://dhis2.example.org")
+            .baseUrl(PUBLIC_URL)
             .authMode(Dhis2AuthMode.PAT)
             .authSecretEnvVar("DHIS2_TOKEN")
             .defaultPeriodType(Dhis2PeriodType.MONTHLY)
@@ -178,8 +214,12 @@ class Dhis2ConfigServiceImplTest {
     }
 
     private Dhis2FacilityConfigRequestDTO request() {
+        return request(PUBLIC_URL);
+    }
+
+    private Dhis2FacilityConfigRequestDTO request(String baseUrl) {
         return new Dhis2FacilityConfigRequestDTO(
-            "https://dhis2.example.org", Dhis2AuthMode.PAT, "DHIS2_TOKEN",
+            baseUrl, Dhis2AuthMode.PAT, "DHIS2_TOKEN",
             Dhis2PeriodType.MONTHLY, "DS00000DEFK", true);
     }
 

@@ -31,6 +31,8 @@ public class StaffResponseDTO {
     private String departmentName;
     private String departmentEmail;
     private String departmentPhoneNumber;
+    /** The staff member's role assignment at this hospital (QA D872). */
+    private String assignmentId;
     private String roleCode;
     private String roleName;
     private JobTitle jobTitle;
