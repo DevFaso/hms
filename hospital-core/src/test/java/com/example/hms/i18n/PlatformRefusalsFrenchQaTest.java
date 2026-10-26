@@ -1,6 +1,7 @@
 package com.example.hms.i18n;
 
 import com.example.hms.exception.FieldBusinessException;
+import com.example.hms.service.integration.impl.Dhis2ConfigServiceImpl;
 import com.example.hms.service.reporting.ScheduledReportService;
 import com.example.hms.service.webhook.WebhookUrlValidator;
 import com.example.hms.utility.MessageUtil;
@@ -45,6 +46,28 @@ class PlatformRefusalsFrenchQaTest {
         assertThatThrownBy(() -> WebhookUrlValidator.requireDeliverable("https://localhost/hook"))
             .hasMessage("Une URL de webhook doit désigner un serveur accessible sur Internet, "
                 + "pas une adresse locale ou privée.");
+    }
+
+    @Test
+    @DisplayName("D898: an internal DHIS2 base URL is refused in French, English and Spanish, on baseUrl")
+    void dhis2BaseUrlRefusalIsTranslated() {
+        assertThatThrownBy(() -> Dhis2ConfigServiceImpl.requireCallableBaseUrl("https://169.254.169.254/latest"))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "baseUrl")
+            .hasMessage("L'URL de base DHIS2 doit désigner un serveur accessible sur Internet, "
+                + "pas une adresse locale ou privée.");
+        assertThatThrownBy(() -> Dhis2ConfigServiceImpl.requireCallableBaseUrl("http://93.184.216.34"))
+            .hasMessage("L'URL de base DHIS2 doit commencer par https://.");
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        assertThatThrownBy(() -> Dhis2ConfigServiceImpl.requireCallableBaseUrl("https://localhost/dhis"))
+            .hasMessage("The DHIS2 base URL must point to a server reachable on the Internet, "
+                + "not to a local or private address.");
+
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        assertThatThrownBy(() -> Dhis2ConfigServiceImpl.requireCallableBaseUrl("https://10.0.0.5/dhis"))
+            .hasMessage("La URL base de DHIS2 debe apuntar a un servidor accesible en Internet, "
+                + "no a una dirección local o privada.");
     }
 
     @Test

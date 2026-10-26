@@ -1,6 +1,7 @@
 package com.example.hms.service.integration.impl;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.integration.Dhis2ExportRun;
 import com.example.hms.model.integration.Dhis2FacilityConfig;
@@ -92,6 +93,18 @@ public class DhisAdxExportServiceImpl implements DhisAdxExportService {
             datasetUid,
             aggregated.values(),
             OffsetDateTime.now());
+
+        // QA D898: re-check the base URL at push time, not only when it was
+        // saved — a row saved before the check existed, or a name that now
+        // resolves to a private address, must not be called. A refusal is a
+        // FAILED run the admin sees in the history, with no request sent.
+        try {
+            Dhis2ConfigServiceImpl.requireCallableBaseUrl(config.getBaseUrl());
+        } catch (FieldBusinessException refused) {
+            log.warn("DHIS2 export run {}: base URL refused for hospital={} ({})",
+                run.getId(), hospitalId, refused.getMessageKey());
+            return persistence.finalizeFailed(run, 0, refused.getMessage());
+        }
 
         final DhisHttpResponse response;
         try {
