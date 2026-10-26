@@ -554,9 +554,15 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
   // — operator sees a "no staff at this hospital" hint instead of a
   // silent dropdown.
   protected readonly staffOptions = signal<StaffOption[]>([]);
-  /** QA D872: the default-assignment picker: the physicians that have one. */
+  /** The admitting physician picked in the form (the form object itself is not a signal). */
+  private readonly selectedProviderId = signal('');
+  /**
+   * QA D852/D872: the default-assignment picker offers the selected
+   * physician's own assignment only. The server refuses any other pairing:
+   * the encounter is recorded under that staff AND that assignment.
+   */
   protected readonly assignmentOptions = computed(() =>
-    this.staffOptions().filter((s) => !!s.assignmentId),
+    this.staffOptions().filter((s) => !!s.assignmentId && s.id === this.selectedProviderId()),
   );
   /** The server's refusal of the last save, and the field it is about. */
   protected readonly saveError = signal<string | null>(null);
@@ -634,6 +640,8 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     // clear them so a stale provider UUID can't sneak through.
     this.form.admittingProviderId = '';
     this.form.departmentId = '';
+    this.form.defaultAssignmentId = '';
+    this.selectedProviderId.set('');
     this.loadHospitalDependents(option.id);
   }
 
@@ -685,12 +693,16 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     return staff.id;
   }
 
-  /** QA D872: picking the admitting physician offers their assignment as the A04 default. */
+  /**
+   * QA D852/D872: the A04 default assignment follows the admitting physician.
+   * It used to keep the previous physician's assignment when the provider
+   * changed, so encounters were recorded as Dr B under Dr A's assignment.
+   */
   protected onProviderChange(providerId: string): void {
     this.clearSaveError();
-    if (this.form.defaultAssignmentId) return;
+    this.selectedProviderId.set(providerId ?? '');
     const chosen = this.staffOptions().find((s) => s.id === providerId);
-    if (chosen?.assignmentId) this.form.defaultAssignmentId = chosen.assignmentId;
+    this.form.defaultAssignmentId = chosen?.assignmentId ?? '';
   }
 
   /** The server's reason when the last save was refused on {@code field}. */
@@ -720,6 +732,7 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
       defaultChiefComplaint: cfg.defaultChiefComplaint,
       enabled: cfg.enabled,
     };
+    this.selectedProviderId.set(cfg.admittingProviderId ?? '');
     this.selectedHospitalLabel.set(cfg.hospitalName || cfg.hospitalId);
     this.hospitalSearchTerm.set(cfg.hospitalName || cfg.hospitalId);
     // Pre-load the dependents so the provider / department selects
@@ -732,6 +745,7 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     this.clearSaveError();
     this.editingId.set(null);
     this.form = { ...EMPTY_FORM };
+    this.selectedProviderId.set('');
     this.selectedHospitalLabel.set('');
     this.hospitalSearchTerm.set('');
     this.hospitalOptions.set([]);

@@ -606,7 +606,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         Staff provider = staff(config.getAdmittingProviderId());
         Department department = department(config.getDepartmentId());
         UserRoleHospitalAssignment assignment =
-            assignment(config.getDefaultAssignmentId(), hospital);
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
 
         when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
             .thenReturn(Optional.of(config));
@@ -692,6 +692,45 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         // (The physician check of QA D852 reads assignments by role; the A04
         // default-assignment lookup is what must not run.)
         verify(assignmentRepository, never()).findById(any());
+        verify(encounterRepository, never()).save(any());
+        verifyNoInteractions(auditEventLogService);
+    }
+
+    @Test
+    @DisplayName("QA D852/D872: an A04 is not recorded as Dr B under Dr A's, a receptionist's or an inactive assignment")
+    void a04RejectedWhenAssignmentIsNotTheProvidersPhysicianRole() {
+        properties.getAutoCreate().setEnabled(true);
+        stubNoMatchOnReconciliation();
+
+        AdtIntakeProviderConfig config = intakeConfig();
+        config.setDefaultAssignmentId(UUID.randomUUID());
+        Staff provider = staff(config.getAdmittingProviderId());
+        Department department = department(config.getDepartmentId());
+        User drA = new User();
+        drA.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment inactiveOwn =
+            assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_DOCTOR");
+        inactiveOwn.setActive(false);
+
+        when(intakeConfigRepository.findByHospital_IdAndEnabledTrue(hospital.getId()))
+            .thenReturn(Optional.of(config));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(
+            patient.getId(), hospital.getId())).thenReturn(true);
+        when(staffRepository.findById(config.getAdmittingProviderId()))
+            .thenReturn(Optional.of(provider));
+        when(departmentRepository.findById(config.getDepartmentId()))
+            .thenReturn(Optional.of(department));
+        when(assignmentRepository.findById(config.getDefaultAssignmentId())).thenReturn(
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, drA, "ROLE_DOCTOR")),
+            Optional.of(assignment(config.getDefaultAssignmentId(), hospital, provider.getUser(), "ROLE_RECEPTIONIST")),
+            Optional.of(inactiveOwn));
+
+        for (int i = 0; i < 3; i++) {
+            VisitProjectionResult result = service.projectVisit(
+                adt("A04", "V-A04-PAIR-" + i), patient, hospital, "REG", "HOSP1", "MSG-A04-PAIR-" + i);
+            assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
+        }
+        verify(assignmentRepository, org.mockito.Mockito.times(3)).findById(config.getDefaultAssignmentId());
         verify(encounterRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);
     }
@@ -1161,6 +1200,16 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
         UserRoleHospitalAssignment a = new UserRoleHospitalAssignment();
         a.setId(id);
         a.setHospital(h);
+        return a;
+    }
+
+    private UserRoleHospitalAssignment assignment(UUID id, Hospital h, User user, String roleCode) {
+        UserRoleHospitalAssignment a = assignment(id, h);
+        a.setUser(user);
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(roleCode);
+        role.setName(roleCode);
+        a.setRole(role);
         return a;
     }
 

@@ -179,7 +179,8 @@ public class ReportController {
                 .periodToken(run.getPeriodToken())
                 .status(run.getStatus())
                 .rowCount(run.getRowCount())
-                .errorMessage(run.getErrorMessage())
+                // QA D855: stored as a key, read in the reader's language.
+                .errorMessage(com.example.hms.service.reporting.ReportRunReason.resolve(run.getErrorMessage()))
                 .generatedAt(run.getGeneratedAt())
                 .createdAt(run.getCreatedAt())
                 .build();

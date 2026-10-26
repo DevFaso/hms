@@ -22,7 +22,10 @@ import com.example.hms.repository.ReportDefinitionRepository;
 import com.example.hms.repository.ReportRunRepository;
 import com.example.hms.service.EmailService;
 import com.example.hms.service.reporting.ReportGenerationService.GeneratedReport;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.utility.MessageUtil;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,13 +33,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * The exactly-once report engine (P3 #25a): insert-first claim, per-run
  * failure isolation, and the manual retry/refusal contract.
  */
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class ScheduledReportServiceTest {
 
     @Mock private ReportDefinitionRepository definitionRepository;
@@ -127,7 +133,52 @@ class ScheduledReportServiceTest {
         ReportRun run = service.execute(definition, "202607", false);
 
         assertThat(run.getStatus()).isEqualTo(ReportRunStatus.FAILED);
-        assertThat(run.getErrorMessage()).contains("query exploded");
+        // QA D855: an unexpected failure is stored as the generic, translatable
+        // reason; its English technical text is not frozen into the history.
+        assertThat(run.getErrorMessage()).isEqualTo("i18n:" + ReportRunReason.GENERIC_FAILURE_KEY);
+    }
+
+    @Test
+    void qaD855AScheduledFailureIsReadInTheReadersLanguageAndNeverLogsTheAddress(CapturedOutput output) {
+        definition.setRecipients("accueil.clinique@@example");
+        Locale jvmDefault = Locale.getDefault();
+        Locale.setDefault(Locale.ENGLISH);
+        LocaleContextHolder.setLocale(Locale.ENGLISH); // the scheduler thread: no request, English JVM
+        MessageUtil.setMessageSource(TestMessageSources.bundles());
+        try {
+            ReportRun run = service.execute(definition, "202607", false);
+
+            assertThat(run.getStatus()).isEqualTo(ReportRunStatus.FAILED);
+            // Stored as the key and its argument, not as an English sentence.
+            assertThat(run.getErrorMessage())
+                .startsWith("i18n:reportDefinition.recipients.invalid")
+                .doesNotContain("not a valid");
+            // A French admin reading the history reads French; an English one, English.
+            LocaleContextHolder.setLocale(Locale.FRENCH);
+            assertThat(ReportRunReason.resolve(run.getErrorMessage()))
+                .contains("accueil.clinique@@example", "n'est pas une adresse e-mail valide");
+            LocaleContextHolder.setLocale(Locale.ENGLISH);
+            assertThat(ReportRunReason.resolve(run.getErrorMessage()))
+                .isEqualTo("\"accueil.clinique@@example\" is not a valid email address.");
+            // The log names the definition and the key, never the address.
+            assertThat(output.getAll())
+                .contains(definition.getId().toString())
+                .contains("reportDefinition.recipients.invalid")
+                .doesNotContain("accueil.clinique@@example");
+            verify(emailService, never()).sendWithAttachment(
+                anyList(), anyList(), anyList(), anyString(), anyString(),
+                any(byte[].class), anyString(), anyString());
+        } finally {
+            Locale.setDefault(jvmDefault);
+            LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    void qaD855ARowWrittenBeforeTheKeyFormIsShownAsWritten() {
+        assertThat(ReportRunReason.resolve("boom")).isEqualTo("boom");
+        assertThat(ReportRunReason.resolve(null)).isNull();
+        assertThat(ReportRunReason.keyOf("boom")).isNull();
     }
 
     @Test

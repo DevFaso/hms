@@ -93,11 +93,62 @@ class AdtIntakeProviderConfigServiceImplTest {
         assignment.setId(assignmentId);
         assignment.setHospital(hospital);
         assignment.setActive(true);
+        assignment.setUser(user);
+        assignment.setRole(role("ROLE_DOCTOR"));
         lenient().when(staffRepository.findById(providerId)).thenReturn(Optional.of(provider));
         lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
             eq(providerUserId), eq(hospitalId), anySet())).thenReturn(true);
         lenient().when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
         lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+    }
+
+    private static com.example.hms.model.Role role(String code) {
+        com.example.hms.model.Role role = new com.example.hms.model.Role();
+        role.setCode(code);
+        role.setName(code);
+        return role;
+    }
+
+    private void assertAssignmentRefused(UserRoleHospitalAssignment assignment) {
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+            .isInstanceOf(FieldBusinessException.class)
+            .satisfies(ex -> {
+                assertThat(((FieldBusinessException) ex).getField()).isEqualTo("defaultAssignmentId");
+                assertThat(((FieldBusinessException) ex).getMessageKey())
+                    .isEqualTo("adtIntakeProviderConfig.assignment.notProvider");
+            });
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D852/D872: another doctor's assignment cannot be the provider's A04 default")
+    void anotherDoctorsAssignmentIsRefused() {
+        User otherDoctor = new User();
+        otherDoctor.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment theirs = new UserRoleHospitalAssignment();
+        theirs.setId(assignmentId);
+        theirs.setHospital(hospital);
+        theirs.setActive(true);
+        theirs.setUser(otherDoctor);
+        theirs.setRole(role("ROLE_DOCTOR"));
+        assertAssignmentRefused(theirs);
+    }
+
+    @Test
+    @DisplayName("QA D852: a receptionist or hospital-admin assignment is refused, even the provider's own")
+    void nonPhysicianAssignmentIsRefused() {
+        UserRoleHospitalAssignment desk = new UserRoleHospitalAssignment();
+        desk.setId(assignmentId);
+        desk.setHospital(hospital);
+        desk.setActive(true);
+        desk.setUser(provider.getUser());
+        desk.setRole(role("ROLE_RECEPTIONIST"));
+        assertAssignmentRefused(desk);
+        desk.setRole(role("ROLE_HOSPITAL_ADMIN"));
+        assertAssignmentRefused(desk);
     }
 
     private AdtIntakeProviderConfigRequestDTO sampleRequest(Boolean enabled, String chiefComplaint) {

@@ -132,14 +132,19 @@ public class ScheduledReportService {
             return runRepository.save(run);
         } catch (RuntimeException ex) {
             run.setStatus(ReportRunStatus.FAILED);
-            String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            run.setErrorMessage(message.length() > 1000 ? message.substring(0, 1000) : message);
+            // QA D855: the key and its arguments, put into words when the
+            // history is read. A scheduled run has no request locale, so a
+            // resolved message was frozen in the JVM default language.
+            String reason = ReportRunReason.toStored(ex);
+            run.setErrorMessage(reason);
             runRepository.save(run);
             if (manual) {
                 throw ex; // the operator asked; surface the refusal verbatim
             }
-            log.warn("Report generation failed for definition {} period {}: {}",
-                definition.getId(), periodToken, message);
+            // The key only: the arguments (and the exception's own text) can
+            // quote a recipient address, which is never logged.
+            log.warn("Report generation failed for definition {} period {}: {} ({})",
+                definition.getId(), periodToken, ReportRunReason.keyOf(reason), ex.getClass().getSimpleName());
             return run;
         }
     }

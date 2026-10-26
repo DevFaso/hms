@@ -51,7 +51,7 @@
       "DEPARTMENT": "Departamento (opcional)",
       "DEPARTMENT_PLACEHOLDER": "— Seleccione un departamento —",
       "ASSIGNMENT_ID": "Identificador de asignación por defecto (requerido para A04)",
-      "ASSIGNMENT_HINT": "Necesaria solo si este hospital crea automáticamente los encuentros ADT^A04: elija el médico bajo el que se registran.",
+      "ASSIGNMENT_HINT": "Necesaria solo si este hospital crea automáticamente los encuentros ADT^A04: la asignación propia del médico que admite, bajo la que se registran.",
       "ADMISSION_TYPE": "Tipo de admisión predeterminado",
       "ACUITY": "Nivel de agudeza predeterminado",
       "ENCOUNTER_TYPE": "Tipo de encuentro predeterminado",

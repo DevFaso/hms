@@ -51,7 +51,7 @@
       "DEPARTMENT": "Department (optional)",
       "DEPARTMENT_PLACEHOLDER": "— Select a department —",
       "ASSIGNMENT_ID": "Default assignment id (required for A04)",
-      "ASSIGNMENT_HINT": "Needed only when this hospital creates ADT^A04 encounters automatically: choose the physician the encounters are recorded under.",
+      "ASSIGNMENT_HINT": "Needed only when this hospital creates ADT^A04 encounters automatically: the admitting physician's own assignment, under which the encounters are recorded.",
       "ADMISSION_TYPE": "Default admission type",
       "ACUITY": "Default acuity level",
       "ENCOUNTER_TYPE": "Default encounter type",

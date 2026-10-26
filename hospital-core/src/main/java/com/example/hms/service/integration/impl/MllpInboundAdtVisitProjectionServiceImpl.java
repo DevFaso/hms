@@ -619,7 +619,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
         }
 
         Optional<UserRoleHospitalAssignment> assignmentOpt =
-            resolveAssignment(ac.config(), ctx.hospitalId);
+            resolveAssignment(ac.config(), ac.provider(), ctx.hospitalId);
         if (assignmentOpt.isEmpty()) return Optional.empty();
 
         Encounter encounter = buildEncounter(
@@ -640,7 +640,7 @@ public class MllpInboundAdtVisitProjectionServiceImpl
      * {@code Encounter#validate}.
      */
     private Optional<UserRoleHospitalAssignment> resolveAssignment(
-        AdtIntakeProviderConfig config, UUID hospitalId
+        AdtIntakeProviderConfig config, Staff provider, UUID hospitalId
     ) {
         Optional<UserRoleHospitalAssignment> opt =
             assignmentRepository.findById(config.getDefaultAssignmentId());
@@ -656,6 +656,17 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 assignment.getId(),
                 assignment.getHospital() != null ? assignment.getHospital().getId() : NULL_HOSPITAL_PLACEHOLDER,
                 hospitalId);
+            return Optional.empty();
+        }
+        // QA D852/D872: a config saved before the write rule existed may pair
+        // the physician with another person's assignment, or with a
+        // non-physician one; no encounter is recorded under that pairing.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (!Boolean.TRUE.equals(assignment.getActive())
+            || !com.example.hms.service.platform.AdtIntakeProviderConfigService
+                .isAdmittingAssignmentOf(assignment, providerUserId)) {
+            log.warn("ADT A04 auto-create skipped — defaultAssignmentId {} in intake config for hospital {} is not an active physician assignment of admitting provider {}",
+                assignment.getId(), hospitalId, provider.getId());
             return Optional.empty();
         }
         return Optional.of(assignment);

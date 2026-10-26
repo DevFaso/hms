@@ -180,10 +180,46 @@ describe('AdtIntakeConfigComponent', () => {
     const c = fixture.componentInstance as unknown as Exposed;
     c.selectHospital({ id: 'h1', label: 'Hospital A' });
 
-    expect(c.assignmentOptions().map((o) => o.assignmentId)).toEqual(['a-doc']);
+    // Nothing to pick until a physician is chosen: the assignment is theirs.
+    expect(c.assignmentOptions()).toEqual([]);
     c.form['admittingProviderId'] = 'doc';
     c.onProviderChange('doc');
+    expect(c.assignmentOptions().map((o) => o.assignmentId)).toEqual(['a-doc']);
     expect(c.form['defaultAssignmentId']).toBe('a-doc');
+  });
+
+  it('QA D852/D872: changing the physician replaces the A04 assignment with the new one', () => {
+    staff.list.and.returnValue(
+      of([
+        member('docA', 'ROLE_DOCTOR', 'a-docA'),
+        member('docB', 'ROLE_DOCTOR', 'a-docB'),
+        member('docC', 'ROLE_SURGEON'),
+      ]),
+    );
+    fixture.detectChanges();
+    const c = fixture.componentInstance as unknown as Exposed;
+    c.selectHospital({ id: 'h1', label: 'Hospital A' });
+
+    c.form['admittingProviderId'] = 'docA';
+    c.onProviderChange('docA');
+    expect(c.form['defaultAssignmentId']).toBe('a-docA');
+
+    // Was: Dr A's assignment kept, so the encounter read "Dr B under Dr A".
+    c.form['admittingProviderId'] = 'docB';
+    c.onProviderChange('docB');
+    expect(c.form['defaultAssignmentId']).toBe('a-docB');
+    expect(c.assignmentOptions().map((o) => o.assignmentId)).toEqual(['a-docB']);
+
+    // A physician with no assignment leaves none, never the previous one.
+    c.form['admittingProviderId'] = 'docC';
+    c.onProviderChange('docC');
+    expect(c.form['defaultAssignmentId']).toBe('');
+    expect(c.assignmentOptions()).toEqual([]);
+
+    // Picking another hospital clears the assignment along with the physician.
+    c.onProviderChange('docB');
+    c.selectHospital({ id: 'h2', label: 'Hospital B' });
+    expect(c.form['defaultAssignmentId']).toBe('');
   });
 
   it('QA D872: a blank complaint is sent as null so the server writes it in the admin language', () => {

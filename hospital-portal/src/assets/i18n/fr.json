@@ -51,7 +51,7 @@
       "DEPARTMENT": "Département (facultatif)",
       "DEPARTMENT_PLACEHOLDER": "— Sélectionner un département —",
       "ASSIGNMENT_ID": "Identifiant d'affectation par défaut (requis pour A04)",
-      "ASSIGNMENT_HINT": "Nécessaire seulement si cet hôpital crée automatiquement les consultations ADT^A04 : choisissez le médecin sous lequel elles sont enregistrées.",
+      "ASSIGNMENT_HINT": "Nécessaire seulement si cet hôpital crée automatiquement les consultations ADT^A04 : l’affectation du médecin admettant, sous laquelle elles sont enregistrées.",
       "ADMISSION_TYPE": "Type d'admission par défaut",
       "ACUITY": "Niveau d'acuité par défaut",
       "ENCOUNTER_TYPE": "Type de rencontre par défaut",

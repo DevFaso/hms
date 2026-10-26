@@ -121,6 +121,20 @@ class PhoneNumbersTest {
     }
 
     @Test
+    @DisplayName("QA D833: an 8-digit number for an unlisted country is not given the Burkina prefix")
+    void facilityPhoneForAnUnlistedCountryKeepsItsDigits() {
+        // Was "+22662123456": the 226 default applied to any country not in the table.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", "Tchad")).isEqualTo("62123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("622 12 34 56", "Tchad")).isEqualTo("622123456");
+        // An explicit international form is still checked and stored as E.164.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+235 62 12 34 56", "Tchad")).isEqualTo("+23562123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("00235 62 12 34 56", "Tchad")).isEqualTo("+23562123456");
+        // With no country at all, the deployment default (Burkina Faso) still applies.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", null)).isEqualTo("+22662123456");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("62 12 34 56", " ")).isEqualTo("+22662123456");
+    }
+
+    @Test
     @DisplayName("QA D833: a number one digit short, or not a number, is refused rather than stored")
     void facilityPhoneIsRefused() {
         assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 4", "Burkina Faso")).isNull();

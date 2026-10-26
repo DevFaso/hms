@@ -81,18 +81,24 @@ public final class PhoneNumbers {
      * number, and counting them against a length limit cut the last digit off.
      * A number for a country this class knows, or one written with an
      * international prefix, must be a valid E.164 number; a national number
-     * for any other country is kept as its digits.
+     * for any other country is kept as its digits. The Burkina Faso calling
+     * code is assumed only when no country is given: an eight-digit number for
+     * a country this class does not know ({@code "Tchad"}) is not a Burkina
+     * number, and prefixing it with {@code +226} stored a wrong subscriber.
      */
     public static String normalizeFacilityPhone(String raw, String country) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
-        String e164 = toE164(raw, callingCodeForCountry(country));
-        if (e164 != null) {
-            return e164;
-        }
         String compact = FORMATTING.matcher(raw.trim()).replaceAll("");
         boolean international = compact.startsWith("+") || compact.startsWith("00");
+        boolean unlistedCountry = country != null && !country.isBlank() && !isKnownCountry(country);
+        if (international || !unlistedCountry) {
+            String e164 = toE164(raw, callingCodeForCountry(country));
+            if (e164 != null) {
+                return e164;
+            }
+        }
         if (international || isKnownCountry(country) || !NATIONAL_DIGITS.matcher(compact).matches()) {
             return null;
         }

@@ -103,7 +103,8 @@ public class AdtIntakeProviderConfigServiceImpl
      * QA D852: every id the config carries is checked against the hospital it
      * is for. The admitting provider must be an active staff member there
      * holding a doctor, physician or surgeon role; the department and the
-     * default assignment must belong there too. Before, any staff id was
+     * default assignment must belong there too, and be the provider's own
+     * doctor, physician or surgeon assignment. Before, any staff id was
      * saved, and the auto-create path only discovered a foreign or
      * non-physician id when an ADT message arrived.
      */
@@ -135,6 +136,12 @@ public class AdtIntakeProviderConfigServiceImpl
                     || !hospitalId.equals(assignment.getHospital().getId())) {
                 throw new FieldBusinessException("defaultAssignmentId",
                     "adtIntakeProviderConfig.assignment.notAtHospital");
+            }
+            // QA D852/D872: the encounter is recorded under the provider AND
+            // this assignment, so it must be the provider's own physician role.
+            if (!AdtIntakeProviderConfigService.isAdmittingAssignmentOf(assignment, userId)) {
+                throw new FieldBusinessException("defaultAssignmentId",
+                    "adtIntakeProviderConfig.assignment.notProvider");
             }
         }
     }
