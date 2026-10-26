@@ -72,13 +72,13 @@ public interface EncounterService {
     /** Server-side note signing ceremony (P3 #20): author-only, digest-backed, locks the note. */
     EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale);
 
-    /** QA D831: signs the named note entry; a null id picks the caller's own latest unsigned entry. */
+    /** QA D831: signs the named note entry; a null id means the current (latest) entry only. */
     EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale);
 
     /** Attending co-signature (P3 #20): requires a signed note that declared requiresCosign. */
     EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale);
 
-    /** QA D831: co-signs the named note entry; a null id picks the latest entry awaiting co-signature. */
+    /** QA D831: co-signs the named note entry; a null id means the current (latest) entry only. */
     EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, UUID noteId, Locale locale);
 
     /**

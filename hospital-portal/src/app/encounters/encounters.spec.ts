@@ -468,6 +468,52 @@ describe('EncountersComponent', () => {
     });
   }
 
+  it("#965 review (k5.js replay): Sign under DOCTOR2_A's J1 names J1, never DOCTOR_A's J0", () => {
+    encounterSpy.signNote.and.returnValue(
+      throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+    );
+    component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+
+    component.signNote();
+
+    expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'note-b');
+    expect(component.noteState()?.id).toBe('note-b');
+    expect(toastSpy.error).toHaveBeenCalledWith("Only the note's author can sign it.");
+  });
+
+  it('#965 review: an earlier entry shows its text, and one awaiting co-signature is co-signed by its id', () => {
+    const signedA = {
+      ...draftA,
+      subjective: 'QA R13 J0 toux fébrile',
+      assessment: 'Pneumopathie',
+      signedAt: '2026-10-25T09:00:00',
+      requiresCosign: true,
+      cosignedAt: null,
+    } as unknown as EncounterNoteResponse;
+    encounterSpy.cosignNote.and.returnValue(
+      of({ ...signedA, cosignedAt: '2026-10-26T10:00:00' } as EncounterNoteResponse),
+    );
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [signedA, entryB] }));
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const sections = Array.from(host.querySelectorAll('[data-testid="note-entry-section"]')).map(
+      (el) => el.textContent ?? '',
+    );
+    expect(sections.some((t) => t.includes('QA R13 J0 toux fébrile'))).toBeTrue();
+    expect(sections.some((t) => t.includes('Pneumopathie'))).toBeTrue();
+    const cosign = host.querySelector<HTMLButtonElement>('[data-testid="cosign-note-entry"]');
+    expect(cosign).not.toBeNull();
+
+    cosign!.click();
+
+    expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'note-a');
+    expect(page.earlierNoteEntries()[0].cosignedAt).toBe('2026-10-26T10:00:00');
+    expect(page.noteState()?.id).toBe('note-b');
+  });
+
   it('QA D831: a save that starts a new stay entry keeps the previous one listed', () => {
     encounterSpy.addNote.and.returnValue(of(entryB));
     component.selectEncounter(mockEncounter({ note: draftA }));
@@ -567,7 +613,7 @@ describe('EncountersComponent', () => {
 
       component.signNote();
 
-      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.signNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.signedAt).toBeTruthy();
       expect(component.signingNote()).toBeFalse();
     });
@@ -601,7 +647,7 @@ describe('EncountersComponent', () => {
 
       component.cosignNote();
 
-      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1');
+      expect(encounterSpy.cosignNote).toHaveBeenCalledWith('e1', 'n1');
       expect(component.noteState()?.cosignedAt).toBeTruthy();
     });
 

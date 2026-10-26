@@ -341,35 +341,59 @@
           }
 
           @if (earlierNoteEntries().length > 0) {
-            <!-- QA D831: each progress entry of the stay is its own, signable by its author. -->
+            <!-- QA D831: each progress entry of the stay is its own, signed by its author and co-signed by id. -->
             <div class="detail-section" data-testid="note-earlier-entries">
               <h3>{{ 'ENCOUNTERS.NOTE_EARLIER_ENTRIES' | translate }}</h3>
-              @for (entry of earlierNoteEntries(); track entry.id) {
+              @for (view of earlierNoteEntryViews(); track view.entry.id) {
                 <div class="note-history-item" data-testid="note-entry">
                   <span class="note-meta">
-                    @if (entry.authorName) {
-                      <strong>{{ entry.authorName }}</strong> —
+                    @if (view.entry.authorName) {
+                      <strong>{{ view.entry.authorName }}</strong> —
                     }
-                    {{ entry.documentedAt | serverTime | date: 'short' }} ·
-                    @if (entry.signedAt) {
+                    {{ view.entry.documentedAt | serverTime | date: 'short' }} ·
+                    @if (view.entry.signedAt) {
                       {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
-                      {{ entry.signedAt | serverTime | date: 'short' }}
+                      {{ view.entry.signedAt | serverTime | date: 'short' }}
                     } @else {
                       {{ 'ENCOUNTERS.NOTE_UNSIGNED' | translate }}
                     }
                   </span>
-                  @if (!entry.signedAt) {
+                  <!-- #965 review: the entry's text, read before it is signed or co-signed. -->
+                  @for (section of view.sections; track section.labelKey) {
+                    <p class="notes-content" data-testid="note-entry-section">
+                      <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                    </p>
+                  }
+                  @if (!view.entry.signedAt) {
                     <button
                       class="btn-secondary"
                       data-testid="sign-note-entry"
-                      (click)="signNoteEntry(entry)"
+                      (click)="signNoteEntry(view.entry)"
                       [disabled]="signingEntryId() !== null"
                     >
                       <span class="material-symbols-outlined">draw</span>
                       {{
-                        (signingEntryId() === entry.id
+                        (signingEntryId() === view.entry.id
                           ? 'ENCOUNTERS.NOTE_SIGNING'
                           : 'ENCOUNTERS.SIGN_NOTE'
+                        ) | translate
+                      }}
+                    </button>
+                  } @else if (view.entry.requiresCosign && !view.entry.cosignedAt) {
+                    <span class="note-meta cosign-pending">
+                      {{ 'ENCOUNTERS.NOTE_COSIGN_PENDING' | translate }}
+                    </span>
+                    <button
+                      class="btn-secondary"
+                      data-testid="cosign-note-entry"
+                      (click)="cosignNoteEntry(view.entry)"
+                      [disabled]="cosigningEntryId() !== null"
+                    >
+                      <span class="material-symbols-outlined">approval</span>
+                      {{
+                        (cosigningEntryId() === view.entry.id
+                          ? 'ENCOUNTERS.NOTE_COSIGNING'
+                          : 'ENCOUNTERS.COSIGN_NOTE'
                         ) | translate
                       }}
                     </button>
@@ -382,6 +406,14 @@
           @if (noteState(); as note) {
             <div class="detail-section" data-testid="note-signature-section">
               <h3>{{ 'ENCOUNTERS.NOTE_SIGNATURE' | translate }}</h3>
+              @if (!note.signedAt || (note.requiresCosign && !note.cosignedAt)) {
+                <!-- #965 review: the text of the entry the buttons below act on. -->
+                @for (section of currentNoteSections(); track section.labelKey) {
+                  <p class="notes-content" data-testid="note-current-section">
+                    <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                  </p>
+                }
+              }
               @if (note.signedAt) {
                 <p class="note-meta" data-testid="note-signed-line">
                   {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}

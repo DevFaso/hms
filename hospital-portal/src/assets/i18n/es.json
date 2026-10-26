@@ -2296,7 +2296,7 @@
     "SUBTITLE": "Buscar en el índice maestro de pacientes por nombre + fecha de nacimiento + sexo + identificación nacional. Confirme la coincidencia si el desglose se ve correcto, o cree un nuevo paciente si ningún candidato corresponde.",
     "SEARCH": "Buscar candidatos",
     "SEARCHING": "Buscando…",
-    "ERROR": "La búsqueda EMPI falló. La bandera de coincidencia probabilística puede estar desactivada — consulte docs/runbooks/empi-probabilistic-matching.md.",
+    "ERROR": "No se pudo completar la verificación de pacientes duplicados. Inténtelo de nuevo; si el problema continúa, póngase en contacto con su administrador.",
     "DISABLED": "La detección de pacientes duplicados no está habilitada en este establecimiento. Póngase en contacto con su administrador.",
     "NO_MATCHES": "Ningún candidato alcanzó el umbral de puntuación configurado.",
     "NOT_THIS_ONE": "¿Ninguno de los candidatos anteriores es la misma persona?",

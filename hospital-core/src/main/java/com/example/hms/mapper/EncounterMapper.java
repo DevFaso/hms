@@ -104,6 +104,26 @@ public class EncounterMapper {
         return dto;
     }
 
+    /**
+     * The encounter as the patient reads it (GET /me/patient/encounters).
+     * #965 review: the staff list of a stay's earlier entries carries other
+     * clinicians' unsigned drafts and their user ids; none of it reaches the
+     * patient. The entries are withheld and the note carries no user id.
+     */
+    public EncounterResponseDTO toPatientPortalEncounterResponseDTO(Encounter e) {
+        EncounterResponseDTO dto = toEncounterResponseDTO(e);
+        if (dto == null) {
+            return null;
+        }
+        dto.setNoteEntries(null);
+        EncounterNoteResponseDTO note = dto.getNote();
+        if (note != null) {
+            note.setAuthorUserId(null);
+            note.setSignedByUserId(null);
+        }
+        return dto;
+    }
+
     private void populatePatient(EncounterResponseDTO dto, Patient p) {
         if (p == null) return;
         dto.setPatientId(p.getId());

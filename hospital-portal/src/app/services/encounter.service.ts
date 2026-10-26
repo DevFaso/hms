@@ -65,6 +65,20 @@ export interface EncounterNoteResponse {
   requiresCosign?: boolean;
   cosignedAt?: string | null;
   cosignedByName?: string | null;
+  /* The note sections (EncounterNoteResponseDTO), shown before a clinician
+     signs or co-signs an entry (#965 review). */
+  chiefComplaint?: string | null;
+  historyOfPresentIllness?: string | null;
+  reviewOfSystems?: string | null;
+  physicalExam?: string | null;
+  diagnosticResults?: string | null;
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  implementation?: string | null;
+  evaluation?: string | null;
+  patientInstructions?: string | null;
 }
 
 /**
@@ -427,7 +441,7 @@ export class EncounterService {
    *  and refuses non-authors; empty body by design. */
   signNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
     // QA D831: a stay holds one entry per progress note; noteId names the one
-    // to sign. Without it the server signs the caller's own unsigned entry.
+    // on screen. Without it the server takes the current entry only.
     return this.http.post<EncounterNoteResponse>(
       `${this.baseUrl}/${encounterId}/notes/sign`,
       {},
@@ -435,9 +449,16 @@ export class EncounterService {
     );
   }
 
-  /** Attending co-signature — backend refuses the note's own author. */
-  cosignNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/cosign`, {});
+  /**
+   * Attending co-signature — backend refuses the note's own author. noteId
+   * names the entry on screen; without it the server takes the current entry.
+   */
+  cosignNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/cosign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
   submitTriage(

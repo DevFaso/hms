@@ -627,15 +627,15 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * QA D831: {@code noteId} names the entry to sign. Without it, the caller's
-     * own latest unsigned entry on the encounter is signed (an inpatient stay
-     * holds one entry per progress note, so the latest entry may be another
-     * clinician's), else the current entry as before.
+     * QA D831: {@code noteId} names the entry to sign. Without it, the current
+     * entry (the one created last) and nothing else: #965 review — guessing
+     * "the caller's own unsigned entry" signed a draft whose text was not on
+     * the signer's screen.
      */
     @Override
     @Transactional
     public EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, noteId, NoteTarget.SIGN);
+        EncounterNote note = loadNoteScoped(encounterId, noteId);
 
         if (note.isSigned() || note.getSignatureValue() != null) {
             throw new BusinessException("encounter.note.alreadySigned");
@@ -683,13 +683,13 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * QA D831: {@code noteId} names the entry to co-sign. Without it, the latest
-     * signed entry still awaiting its co-signature, else the current entry.
+     * QA D831: {@code noteId} names the entry to co-sign. Without it, the
+     * current entry only (#965 review: never an entry the co-signer was not shown).
      */
     @Override
     @Transactional
     public EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, UUID noteId, Locale locale) {
-        EncounterNote note = loadNoteScoped(encounterId, noteId, NoteTarget.COSIGN);
+        EncounterNote note = loadNoteScoped(encounterId, noteId);
 
         if (!note.isRequiresCosign()) {
             throw new BusinessException("encounter.note.noCosignRequirement");
@@ -724,16 +724,13 @@ public class EncounterServiceImpl implements EncounterService {
         return encounterMapper.toEncounterNoteResponseDTO(saved);
     }
 
-    /** QA D831: which entry a sign or co-sign without a note id acts on. */
-    private enum NoteTarget { SIGN, COSIGN }
-
     /** 404-not-403: a note at another hospital is indistinguishable from a missing one. */
-    private EncounterNote loadNoteScoped(UUID encounterId, UUID noteId, NoteTarget target) {
+    private EncounterNote loadNoteScoped(UUID encounterId, UUID noteId) {
         if (!encounterRepository.existsById(encounterId)) {
             throw new ResourceNotFoundException(MSG_ENCOUNTER_NOT_FOUND, encounterId);
         }
         List<EncounterNote> entries = encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId);
-        EncounterNote note = pickNoteEntry(entries, noteId, target)
+        EncounterNote note = pickNoteEntry(entries, noteId)
             .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
@@ -746,28 +743,17 @@ public class EncounterServiceImpl implements EncounterService {
 
     /**
      * QA D831: the entry a sign or co-sign acts on. A named entry must belong to
-     * the encounter. Otherwise a sign takes the caller's own latest unsigned
-     * entry and a co-sign the latest signed entry awaiting its co-signature;
-     * failing that, the current entry, so the refusals stay what they were.
+     * the encounter. Without a name, the current entry (the last one created),
+     * which is the one the encounter panel shows: #965 review — picking "the
+     * caller's own unsigned entry" or "the latest awaiting co-signature" acted
+     * on an entry whose text was not on the clinician's screen.
      */
-    private Optional<EncounterNote> pickNoteEntry(List<EncounterNote> entries, UUID noteId, NoteTarget target) {
+    private Optional<EncounterNote> pickNoteEntry(List<EncounterNote> entries, UUID noteId) {
         if (entries == null || entries.isEmpty()) {
             return Optional.empty();
         }
         if (noteId != null) {
             return entries.stream().filter(entry -> noteId.equals(entry.getId())).findFirst();
-        }
-        UUID currentUserId = roleValidator.getCurrentUserId();
-        for (int i = entries.size() - 1; i >= 0; i--) {
-            EncounterNote entry = entries.get(i);
-            boolean candidate = target == NoteTarget.SIGN
-                ? !entry.isSigned() && entry.getSignatureValue() == null
-                    && currentUserId != null && entry.getAuthor() != null
-                    && currentUserId.equals(entry.getAuthor().getId())
-                : entry.isRequiresCosign() && entry.isSigned() && entry.getCosignedAt() == null;
-            if (candidate) {
-                return Optional.of(entry);
-            }
         }
         return Optional.of(entries.get(entries.size() - 1));
     }
@@ -1878,7 +1864,9 @@ public class EncounterServiceImpl implements EncounterService {
             // QA D759: a prescription's anchor is not a visit; five of them
             // read as five consultations for one real visit.
             .filter(e -> !e.isPrescriptionAnchor())
-            .map(encounterMapper::toEncounterResponseDTO)
+            // #965 review: never the staff list of a stay's entries (other
+            // clinicians' unsigned drafts) nor clinician user ids.
+            .map(encounterMapper::toPatientPortalEncounterResponseDTO)
             .toList();
     }
 

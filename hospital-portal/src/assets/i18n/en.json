@@ -2296,7 +2296,7 @@
     "SUBTITLE": "Search the master patient index by name + DOB + sex + national ID. Confirm the match if the breakdown looks right, or create a new patient if no candidate is the same person.",
     "SEARCH": "Search candidates",
     "SEARCHING": "Searching…",
-    "ERROR": "EMPI candidate search failed. The probabilistic match flag may be off — see docs/runbooks/empi-probabilistic-matching.md.",
+    "ERROR": "The duplicate-patient check could not be completed. Try again; if it keeps failing, contact your administrator.",
     "DISABLED": "Duplicate-patient matching is not enabled at this facility. Contact your administrator.",
     "NO_MATCHES": "No candidates met the configured score threshold.",
     "NOT_THIS_ONE": "None of the candidates above is the same person?",

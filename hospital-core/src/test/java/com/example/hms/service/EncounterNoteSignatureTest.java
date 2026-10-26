@@ -620,9 +620,12 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
-    void d831_theFirstDoctorSignsTheirOwnDraftAfterTheSecondEntry() {
-        // The sign call names no entry: it signs the caller's own unsigned
-        // entry, not the latest one (which is DOCTOR2_A's).
+    void d831_aSignWithoutAnEntryNeverReachesADraftThatIsNotOnScreen() {
+        // #965 review, k5.js replay: DOCTOR_A clicks Sign under DOCTOR2_A's J1
+        // (the current entry on screen). The server used to sign DOCTOR_A's
+        // J0 instead, a text the signer was not shown. Without a note id only
+        // the current entry is a candidate, so the author-only refusal stands;
+        // DOCTOR_A signs J0 by naming it.
         note.setCreatedAt(LocalDateTime.now().minusHours(2));
         User doctor2 = new User();
         doctor2.setId(UUID.randomUUID());
@@ -634,7 +637,12 @@ class EncounterNoteSignatureTest {
         when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
             .thenReturn(List.of(note, secondEntry));
 
-        service.signEncounterNote(encounterId, LOCALE);
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(AccessDeniedException.class);
+        assertThat(note.isSigned()).isFalse();
+        assertThat(secondEntry.isSigned()).isFalse();
+
+        service.signEncounterNote(encounterId, note.getId(), LOCALE);
 
         assertThat(note.isSigned()).isTrue();
         assertThat(note.getSignedByUserId()).isEqualTo(authorUserId);
@@ -669,7 +677,10 @@ class EncounterNoteSignatureTest {
     }
 
     @Test
-    void d831_cosignPicksTheSignedEntryAwaitingItNotALaterDraft() {
+    void d831_cosignActsOnTheNamedEntryNeverOnOneThatIsNotOnScreen() {
+        // #965 review: without a note id the co-sign used to reach back to an
+        // earlier entry the attending was not shown; it now acts on the
+        // current entry only, and an earlier entry is co-signed by its id.
         makeSignedRequiringCosign();
         note.setCreatedAt(LocalDateTime.now().minusHours(3));
         EncounterNote laterDraft = EncounterNote.builder().author(authorUser).documentedAt(LocalDateTime.now()).build();
@@ -685,7 +696,11 @@ class EncounterNoteSignatureTest {
         when(roleValidator.getCurrentUserId()).thenReturn(attendingUserId);
         when(staffRepository.findByUserIdAndHospitalId(attendingUserId, hospitalId)).thenReturn(Optional.of(attending));
 
-        service.cosignEncounterNote(encounterId, LOCALE);
+        assertThatThrownBy(() -> service.cosignEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class);
+        assertThat(note.getCosignedBy()).isNull();
+
+        service.cosignEncounterNote(encounterId, note.getId(), LOCALE);
 
         assertThat(note.getCosignedBy()).isEqualTo(attending);
         assertThat(laterDraft.getCosignedBy()).isNull();

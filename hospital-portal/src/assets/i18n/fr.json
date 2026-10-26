@@ -2296,7 +2296,7 @@
     "SUBTITLE": "Rechercher dans l'index principal des patients par nom + date de naissance + sexe + identifiant national. Confirmez la correspondance si la ventilation semble correcte, ou créez un nouveau patient si aucun candidat ne correspond.",
     "SEARCH": "Rechercher des candidats",
     "SEARCHING": "Recherche…",
-    "ERROR": "La recherche EMPI a échoué. L'indicateur de correspondance probabiliste est peut-être désactivé — voir docs/runbooks/empi-probabilistic-matching.md.",
+    "ERROR": "La vérification des doublons de patients n'a pas pu aboutir. Réessayez ; si le problème persiste, contactez votre administrateur.",
     "DISABLED": "La détection des doublons de patients n'est pas activée dans cet établissement. Contactez votre administrateur.",
     "NO_MATCHES": "Aucun candidat n'a atteint le seuil de score configuré.",
     "NOT_THIS_ONE": "Aucun des candidats ci-dessus n'est la même personne ?",

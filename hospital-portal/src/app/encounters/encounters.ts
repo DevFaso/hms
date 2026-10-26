@@ -20,7 +20,7 @@ import {
   AfterVisitSummary,
   EncounterNoteRequest,
 } from '../services/encounter.service';
-import { NoteHistoryView, toNoteHistoryView } from './note-history-view';
+import { NoteHistoryView, noteEntrySections, toNoteHistoryView } from './note-history-view';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -127,7 +127,16 @@ export class EncountersComponent implements OnInit {
     const currentId = this.noteState()?.id;
     return this.noteEntries().filter((entry) => entry.id !== currentId);
   });
+  /**
+   * #965 review: each entry's text is shown above its sign/co-sign button, so
+   * a clinician never signs or attests an entry they were not shown.
+   */
+  readonly earlierNoteEntryViews = computed(() =>
+    this.earlierNoteEntries().map((entry) => ({ entry, sections: noteEntrySections(entry) })),
+  );
+  readonly currentNoteSections = computed(() => noteEntrySections(this.noteState()));
   signingEntryId = signal<string | null>(null);
+  cosigningEntryId = signal<string | null>(null);
   signingNote = signal(false);
   cosigningNote = signal(false);
   addendumContent = '';
@@ -595,12 +604,16 @@ export class EncountersComponent implements OnInit {
    *  and its refusal is surfaced verbatim. */
   signNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.signingNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.signingNote()) return;
     this.signingNote.set(true);
-    this.encounterService.signNote(enc.id).subscribe({
+    // #965 review: the entry on screen, by id — without it the server picked
+    // the caller's own unsigned entry, a text that was not displayed.
+    this.encounterService.signNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.signingNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {
@@ -621,9 +634,7 @@ export class EncountersComponent implements OnInit {
       next: (signed) => {
         this.signingEntryId.set(null);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_SIGN_SUCCESS'));
-        if (signed) {
-          this.noteEntries.update((list) => list.map((e) => (e.id === signed.id ? signed : e)));
-        }
+        this.replaceEntry(signed ?? null);
         this.loadNoteHistory(enc.id);
       },
       error: (err) => {
@@ -633,6 +644,33 @@ export class EncountersComponent implements OnInit {
         );
       },
     });
+  }
+
+  /** #965 review: co-signs one earlier entry of the stay, by its id (the server checks who may). */
+  cosignNoteEntry(entry: EncounterNoteResponse): void {
+    const enc = this.selectedEncounter();
+    if (!enc || this.cosigningEntryId()) return;
+    this.cosigningEntryId.set(entry.id);
+    this.encounterService.cosignNote(enc.id, entry.id).subscribe({
+      next: (cosigned) => {
+        this.cosigningEntryId.set(null);
+        this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(cosigned ?? null);
+        this.loadNoteHistory(enc.id);
+      },
+      error: (err) => {
+        this.cosigningEntryId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+        );
+      },
+    });
+  }
+
+  /** Puts a ceremony response in place of the entry it answers, in the list of the stay's entries. */
+  private replaceEntry(updated: EncounterNoteResponse | null): void {
+    if (!updated?.id) return;
+    this.noteEntries.update((list) => list.map((e) => (e.id === updated.id ? updated : e)));
   }
 
   /**
@@ -652,12 +690,14 @@ export class EncountersComponent implements OnInit {
 
   cosignNote(): void {
     const enc = this.selectedEncounter();
-    if (!enc || this.cosigningNote()) return;
+    const current = this.noteState();
+    if (!enc || !current?.id || this.cosigningNote()) return;
     this.cosigningNote.set(true);
-    this.encounterService.cosignNote(enc.id).subscribe({
+    this.encounterService.cosignNote(enc.id, current.id).subscribe({
       next: (note) => {
         this.cosigningNote.set(false);
         this.toast.success(this.translate.instant('ENCOUNTERS.NOTE_COSIGN_SUCCESS'));
+        this.replaceEntry(note ?? null);
         this.noteState.set(note ?? null);
       },
       error: (err) => {

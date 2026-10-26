@@ -23,6 +23,40 @@ class EncounterMapperCodeTest {
     }
 
     @Test
+    void d831_thePatientNeverReceivesTheStaysEntriesNorClinicianIds() {
+        // #965 review: GET /me/patient/encounters returned every entry of the
+        // stay, another doctor's unsigned draft included, with user ids.
+        com.example.hms.model.User doctorA = new com.example.hms.model.User();
+        doctorA.setId(UUID.randomUUID());
+        com.example.hms.model.User doctor2 = new com.example.hms.model.User();
+        doctor2.setId(UUID.randomUUID());
+        Encounter stay = new Encounter();
+        stay.setId(UUID.randomUUID());
+        stay.setAdmissionId(UUID.randomUUID());
+        com.example.hms.model.encounter.EncounterNote j0 = com.example.hms.model.encounter.EncounterNote.builder()
+            .author(doctorA).assessment("J0 brouillon non signé").build();
+        j0.setId(UUID.randomUUID());
+        j0.setCreatedAt(java.time.LocalDateTime.now().minusHours(4));
+        com.example.hms.model.encounter.EncounterNote j1 = com.example.hms.model.encounter.EncounterNote.builder()
+            .author(doctor2).assessment("J1 signé").signedAt(java.time.LocalDateTime.now())
+            .signedByUserId(doctor2.getId()).build();
+        j1.setId(UUID.randomUUID());
+        j1.setCreatedAt(java.time.LocalDateTime.now());
+        stay.setEncounterNote(j0);
+        stay.setEncounterNote(j1);
+        EncounterMapper mapper = new EncounterMapper();
+
+        // Path re-verified: the clinician still reads both entries.
+        assertThat(mapper.toEncounterResponseDTO(stay).getNoteEntries()).hasSize(2);
+
+        EncounterResponseDTO portal = mapper.toPatientPortalEncounterResponseDTO(stay);
+        assertThat(portal.getNoteEntries()).isNull();
+        assertThat(portal.getNote().getId()).isEqualTo(j1.getId());
+        assertThat(portal.getNote().getAuthorUserId()).isNull();
+        assertThat(portal.getNote().getSignedByUserId()).isNull();
+    }
+
+    @Test
     void d759_theAnchorsEnglishBookkeepingNoteIsNotShownAsIs() {
         Encounter anchor = new Encounter();
         anchor.setId(UUID.randomUUID());
