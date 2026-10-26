@@ -85,9 +85,24 @@ export class StockRoutingComponent implements OnInit {
    */
   readonly queuePartial = computed(() => this.queue().length < this.queueTotal());
   static readonly QUEUE_PAGE_SIZE = 100;
-  /** Newest first; the id breaks ties so pages never overlap or skip a row. */
+  /**
+   * The most rows one read returns: the server's page-size ceiling (Spring
+   * Data's default, 2000), which it clamps a larger size to silently.
+   */
+  static readonly QUEUE_MAX_WINDOW = 2000;
+  /**
+   * Newest first, with the id as the tiebreaker so the order is total. That
+   * alone does not make offset pages safe: an order that leaves the queue
+   * between two reads shifts every later row back by one, and the row that
+   * was 101st slides onto a page already loaded. So "load older" never asks
+   * for page N; it re-reads the whole window from the start in one request
+   * (#963 review round 2), and one read is one consistent snapshot.
+   */
   static readonly QUEUE_SORT = ['createdAt,desc', 'id,desc'];
-  private queuePage = 0;
+  /** Rows the last read asked for: the newest `queueWindow` orders. */
+  private queueWindow = StockRoutingComponent.QUEUE_PAGE_SIZE;
+  /** True once the window reached the server's ceiling: nothing older can be read. */
+  readonly queueAtLimit = signal(false);
   private queueSeq = 0;
   readonly rxSearch = signal('');
   readonly selected = signal<WorkQueuePrescription | null>(null);
@@ -192,7 +207,8 @@ export class StockRoutingComponent implements OnInit {
    */
   loadQueue(): void {
     const seq = ++this.queueSeq;
-    this.queuePage = 0;
+    this.queueWindow = StockRoutingComponent.QUEUE_PAGE_SIZE;
+    this.queueAtLimit.set(false);
     this.queueLoading.set(true);
     this.queueLoadingMore.set(false);
     this.queueError.set(false);
@@ -223,43 +239,48 @@ export class StockRoutingComponent implements OnInit {
       });
   }
 
-  /** The next page of older waiting orders, added to the ones searched. */
+  /**
+   * The next hundred older waiting orders. Re-reads the newest
+   * `queueWindow + 100` from the start in ONE request and replaces the list,
+   * rather than fetching page N and appending: between two offset reads an
+   * order can be dispensed, cancelled or routed out, and then the row that
+   * was 101st lands on page 0, which is never read again — while the smaller
+   * total made the search claim the whole queue was covered (#963 review
+   * round 2). A single read cannot skip a row, and its total matches its rows.
+   */
   loadOlderQueue(): void {
-    if (this.queueLoading() || this.queueLoadingMore() || !this.queuePartial()) return;
+    if (
+      this.queueLoading() ||
+      this.queueLoadingMore() ||
+      this.queueAtLimit() ||
+      !this.queuePartial()
+    ) {
+      return;
+    }
     const seq = this.queueSeq;
-    const page = this.queuePage + 1;
+    const size = Math.min(
+      this.queueWindow + StockRoutingComponent.QUEUE_PAGE_SIZE,
+      StockRoutingComponent.QUEUE_MAX_WINDOW,
+    );
     this.queueLoadingMore.set(true);
     this.queueMoreError.set(false);
-    this.svc
-      .getDispenseWorkQueue(
-        page,
-        StockRoutingComponent.QUEUE_PAGE_SIZE,
-        'ALL',
-        StockRoutingComponent.QUEUE_SORT,
-      )
-      .subscribe({
-        next: (res) => {
-          if (seq !== this.queueSeq) return;
-          const known = new Set(this.queue().map((rx) => rx.id));
-          // An order filed since the first page shifts the window by one, so
-          // a row can come back twice; it is listed once.
-          const older = (res?.data?.content ?? []).filter((rx) => !known.has(rx.id));
-          const merged = [...this.queue(), ...older];
-          this.queue.set(merged);
-          this.queuePage = page;
-          // An empty page means the rest left the queue meanwhile: stop offering more.
-          this.queueTotal.set(
-            older.length ? Math.max(res?.data?.totalElements ?? 0, merged.length) : merged.length,
-          );
-          this.queueLoadingMore.set(false);
-          this.syncSelectedFromQueue();
-        },
-        error: () => {
-          if (seq !== this.queueSeq) return;
-          this.queueLoadingMore.set(false);
-          this.queueMoreError.set(true);
-        },
-      });
+    this.svc.getDispenseWorkQueue(0, size, 'ALL', StockRoutingComponent.QUEUE_SORT).subscribe({
+      next: (res) => {
+        if (seq !== this.queueSeq) return;
+        const rows = res?.data?.content ?? [];
+        this.queue.set(rows);
+        this.queueWindow = size;
+        this.queueTotal.set(Math.max(res?.data?.totalElements ?? 0, rows.length));
+        this.queueAtLimit.set(size >= StockRoutingComponent.QUEUE_MAX_WINDOW);
+        this.queueLoadingMore.set(false);
+        this.syncSelectedFromQueue();
+      },
+      error: () => {
+        if (seq !== this.queueSeq) return;
+        this.queueLoadingMore.set(false);
+        this.queueMoreError.set(true);
+      },
+    });
   }
 
   /** QA D888: picking an order runs the stock check for it. */

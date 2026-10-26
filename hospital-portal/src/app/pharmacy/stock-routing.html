@@ -83,18 +83,21 @@
             'PHARMACY.ROUTING_RX_PARTIAL'
               | translate: { loaded: queue().length, total: queueTotal() }
           }}
-          <button
-            type="button"
-            class="btn btn-secondary btn-sm"
-            data-testid="routing-rx-load-older"
-            [disabled]="queueLoadingMore()"
-            (click)="loadOlderQueue()"
-          >
-            @if (queueLoadingMore()) {
-              <span class="spinner"></span>
-            }
-            {{ 'PHARMACY.ROUTING_RX_LOAD_OLDER' | translate }}
-          </button>
+          <!-- The server reads at most 2000 rows at once; past that the note stays, the button goes. -->
+          @if (!queueAtLimit()) {
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              data-testid="routing-rx-load-older"
+              [disabled]="queueLoadingMore()"
+              (click)="loadOlderQueue()"
+            >
+              @if (queueLoadingMore()) {
+                <span class="spinner"></span>
+              }
+              {{ 'PHARMACY.ROUTING_RX_LOAD_OLDER' | translate }}
+            </button>
+          }
         </p>
         @if (queueMoreError()) {
           <p class="muted" role="alert" data-testid="routing-rx-older-error">

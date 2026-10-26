@@ -873,8 +873,10 @@ export class PharmacyService {
    * The dispensing work queue. Without `sort` the endpoint orders by
    * `createdAt` ascending (oldest first); a caller that loads a window of
    * the queue and wants the newest orders passes `['createdAt,desc', 'id,desc']`
-   * (one `sort` parameter per key, the id as the tiebreaker that keeps
-   * pages from overlapping).
+   * (one `sort` parameter per key, the id as the tiebreaker that gives one
+   * fixed order). Offset pages still shift when an order leaves the queue
+   * between two reads, so a caller that widens its window re-reads it from
+   * page 0 in one request instead of appending page N.
    */
   getDispenseWorkQueue(
     page = 0,

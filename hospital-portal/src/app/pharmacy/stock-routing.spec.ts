@@ -189,13 +189,13 @@ describe('StockRoutingComponent', () => {
       fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]'),
     ).not.toBeNull();
 
-    // Page 2 repeats one row of page 1 (an order filed meanwhile shifted the window).
+    // "Load older" re-reads the newest 200 from the start in one request.
     pharmacySvc.getDispenseWorkQueue.and.returnValue(
       of({
         data: {
-          content: [rx('rx-new-99', 'Issa', 'Ibuprofène'), rx('rx-old', 'Mariam', 'Fer')],
+          content: [...first, rx('rx-old', 'Mariam', 'Fer')],
           totalElements: 101,
-          totalPages: 2,
+          totalPages: 1,
         },
       } as any),
     );
@@ -204,7 +204,7 @@ describe('StockRoutingComponent', () => {
     ).click();
     fixture.detectChanges();
 
-    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(1, 100, 'ALL', [
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 200, 'ALL', [
       'createdAt,desc',
       'id,desc',
     ]);
@@ -212,6 +212,83 @@ describe('StockRoutingComponent', () => {
     expect(component.matches().map((r) => r.id)).toEqual(['rx-old']);
     expect(component.queuePartial()).toBeFalse();
     expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]')).toBeNull();
+  });
+
+  it('#963 review round 2: an order leaving the queue between reads cannot hide the 101st', () => {
+    const rx = (id: string, firstName: string, medicationName: string) => ({
+      id,
+      medicationName,
+      status: 'SIGNED',
+      patient: { id: `p-${id}`, firstName, lastName: 'Sawadogo' },
+    });
+    // 150 orders waiting, newest first: R1..R100 on the first read.
+    const all = Array.from({ length: 150 }, (_, i) =>
+      i === 100 ? rx('rx-101', 'Mariam', 'Fer') : rx(`rx-${i + 1}`, 'Issa', 'Ibuprofène'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: all.slice(0, 100), totalElements: 150, totalPages: 2 } } as any),
+    );
+    component.loadQueue();
+    fixture.detectChanges();
+    expect(component.queuePartial()).toBeTrue();
+
+    // R50 is dispensed meanwhile: 149 remain and R101 is now the 100th row.
+    const remaining = all.filter((r) => r.id !== 'rx-50');
+    pharmacySvc.getDispenseWorkQueue.and.callFake(((page: number, size: number) =>
+      of({
+        data: {
+          content: remaining.slice(page * size, page * size + size),
+          totalElements: 149,
+          totalPages: Math.ceil(149 / size),
+        },
+      } as any)) as any);
+    component.loadOlderQueue();
+    component.rxSearch.set('mariam');
+    fixture.detectChanges();
+
+    // An offset read of page 1 would start at R102 and never see R101.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 200, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+    expect(component.queue().length).toBe(149);
+    expect(component.queueTotal()).toBe(149);
+    expect(component.queuePartial()).toBeFalse();
+    expect(component.matches().map((r) => r.id)).toEqual(['rx-101']);
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]')).toBeNull();
+  });
+
+  it('#963 review round 2: at the server ceiling the note stays and the button goes', () => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      id: `rx-${i}`,
+      medicationName: 'Ibuprofène',
+      status: 'SIGNED',
+      patient: { id: `p-${i}`, firstName: 'Issa', lastName: 'Zongo' },
+    }));
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: rows, totalElements: 2500, totalPages: 25 } } as any),
+    );
+    pharmacySvc.getDispenseWorkQueue.calls.reset();
+    component.loadQueue();
+    for (let i = 0; i < 25; i++) {
+      component.loadOlderQueue();
+    }
+    component.rxSearch.set('mariam');
+    fixture.detectChanges();
+
+    // 100 → 2000 in 19 steps; the 20th and later calls ask for nothing.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 2000, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(20);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.mostRecent().args[1]).toBe(2000);
+    expect(component.queueAtLimit()).toBeTrue();
+    expect(component.queuePartial()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-load-older"]')).toBeNull();
   });
 
   it('#963 review: a whole queue says plainly that nothing matches, and a failed older page keeps the rows', () => {
